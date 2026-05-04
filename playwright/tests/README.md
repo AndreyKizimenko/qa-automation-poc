@@ -9,27 +9,33 @@ read like a user flow, not like raw Playwright API calls.
 ```
 tests/
 ├── auth/             # Login, logout, forgot-password flows
-├── hosts/            # Hosts page smoke tests
 ├── smoke/            # End-to-end smoke tests, grouped by feature area
 │   ├── mdm/
 │   ├── orchestration/
 │   ├── security-and-compliance/
 │   └── software/
-└── performance/      # Page load / search timing tests (tagged @loadtest)
+├── loadtest/         # Page load / search timing tests (tagged @loadtest)
+└── api-verify/       # Pure-API gitops drift checks (no browser)
 ```
 
-### smoke vs performance
+### smoke vs loadtest vs api-verify
 
 - **Smoke** — "Does this feature work for the user?" Runs in the
   `premium` (default) and `free` projects, depending on tags. Uses
   click-through flows, verifies the UI renders and the user can
   complete a task.
 
-- **Performance** — "How fast does this load under high-scale data?"
+- **Loadtest** — "How fast does this load under high-scale data?"
   Runs in the `loadtest` project against a high-scale QA instance. Uses
   `measureNav` / `measureSearch` from `@helpers/perf` to time
   user-perceived page loads. Tagged `@loadtest` so the premium and free
   projects skip them.
+
+- **API verify** — "Does the live instance match the gitops config?"
+  Runs in the `api-verify` project (no browser, just the request
+  fixture). Loads the gitops target via `_config.ts` and asserts org
+  settings, profiles, policies, scripts, labels, and reports match.
+  Driven by the nightly orchestrators between gitops apply steps.
 
 ## Writing a new test
 
@@ -121,3 +127,5 @@ builds up `softwareByOS` across ordered tests).
 | `@loadtest` | loadtest |
 
 The grep matrix in `playwright.config.ts` is the source of truth.
+`api-verify` doesn't use grep — it has its own `testDir` and runs every
+spec under `tests/api-verify/`.

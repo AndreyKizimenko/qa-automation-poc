@@ -1,21 +1,72 @@
 # Fleet QA Automation
 
-POC for combined Fleet QA tooling.
+Combined Fleet QA tooling: GitOps configs, the Playwright browser + API
+suite, and the GitHub Actions that wire them together.
 
 ## Layout
 
 ```
 .
 ├── gitops/
-│   ├── premium-fleetqa/   # fleetctl gitops config for the premium QA instance
-│   └── free-fleetqa/      # fleetctl gitops config for the free QA instance
-├── playwright/            # Playwright browser + API test suite
-└── .github/workflows/     # CI (workflow_dispatch only, for now)
+│   ├── lib/                    # Shared profiles, policies, scripts, labels, reports
+│   ├── free-fleetqa/           # Baseline gitops config for the free QA instance
+│   ├── free-fleetqa-min/       # Trimmed variant — used by api-verify
+│   ├── premium-fleetqa/        # Baseline gitops config for the premium QA instance
+│   └── premium-fleetqa-min/    # Trimmed variant — used by api-verify
+├── playwright/                 # Playwright browser + API test suite
+└── .github/
+    ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
+    └── workflows/              # CI workflows (see below)
 ```
 
 ## Running locally
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
-- **GitOps** — `fleetctl gitops -f gitops/premium-fleetqa/default.yml` (env vars for that instance must be set).
+- **GitOps (free)** — `fleetctl gitops -f gitops/free-fleetqa/default.yml`
+- **GitOps (premium)** —
+  ```bash
+  fleetctl gitops \
+    -f gitops/premium-fleetqa/default.yml \
+    -f gitops/premium-fleetqa/fleets/workstations.yml \
+    --delete-other-fleets
+  ```
 
-Loadtest runs are local-only — credentials change per run, so they are not stored as GitHub Actions secrets.
+Source the matching `playwright/.env.<tier>` first so `FLEET_URL` /
+`FLEET_API_TOKEN` (and the SSO / VPP / ABM env vars used by gitops) are
+in the environment.
+
+Loadtest runs are local-only — credentials change per run, so they are
+not stored as GitHub Actions secrets.
+
+## CI
+
+All workflows live in [.github/workflows/](.github/workflows/). Every
+workflow supports `workflow_dispatch`; reusable ones also expose
+`workflow_call`.
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `render-deploy.yml` | 04:00 UTC daily, manual | Hits Render deploy hooks so the free + premium instances pick up the latest Fleet release before nightly runs. |
+| `gitops-free.yml` / `gitops-premium.yml` | Manual, `workflow_call` | Apply the baseline gitops config to the matching instance via the `gitops-action` composite. |
+| `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by api-verify to confirm gitops actually mutates the live instance. |
+| `api-verify.yml` | Manual, `workflow_call` | Runs the Playwright `api-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
+| `nightly-qa-gitops-free.yml` | 05:00 UTC daily, manual | Free chain: apply baseline → verify → apply min → verify → restore baseline. |
+| `nightly-qa-gitops-premium.yml` | 05:00 UTC daily, manual | Premium chain: same as free, plus parallel verify of the Workstations team. |
+| `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual | Runs the Playwright suite (scope dropdown — currently `smoke`) against the matching instance. |
+
+Nightly ordering: Render redeploy at 04:00 UTC → gitops orchestrators at
+05:00 UTC → Playwright at 05:30 UTC.
+
+### Required secrets
+
+| Secret | Used by |
+|---|---|
+| `FLEET_FREE_URL`, `FLEET_FREE_API_TOKEN` | gitops-free, api-verify, playwright-free |
+| `FLEET_FREE_ADMIN_EMAIL`, `FLEET_FREE_ADMIN_PASSWORD` | playwright-free |
+| `FLEET_FREE_ENROLL_SECRET` | gitops-free (enroll secret managed via gitops on free) |
+| `FLEET_PREMIUM_URL`, `FLEET_PREMIUM_API_TOKEN` | gitops-premium, api-verify, playwright-premium |
+| `FLEET_PREMIUM_ADMIN_EMAIL`, `FLEET_PREMIUM_ADMIN_PASSWORD` | playwright-premium |
+| `FLEET_SSO_METADATA_URL` | gitops (free + premium) |
+| `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium |
+| `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec) |
+| `RENDER_FREE_DEPLOY_HOOK`, `RENDER_PREMIUM_DEPLOY_HOOK` | render-deploy |
