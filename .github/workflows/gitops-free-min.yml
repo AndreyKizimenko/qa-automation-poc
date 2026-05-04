@@ -1,0 +1,56 @@
+name: GitOps — Free (min variant)
+
+# Applies the trimmed `free-fleetqa-min` config — used by the API-verify
+# tests to confirm `fleetctl gitops` actually mutates the live instance.
+#
+# Trigger manually after the baseline `gitops-free` has run, or chain
+# them in CI:
+#   1. gitops-free       (baseline)   → API-verify against free-fleetqa
+#   2. gitops-free-min   (variant)    → API-verify against free-fleetqa-min
+#   3. gitops-free       (re-baseline)
+#
+# Not on a schedule. Manual / on-demand only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gitops/free-fleetqa-min/**'
+      - '.github/workflows/gitops-free-min.yml'
+      - '.github/gitops-action/**'
+  pull_request:
+    paths:
+      - 'gitops/free-fleetqa-min/**'
+      - '.github/workflows/gitops-free-min.yml'
+      - '.github/gitops-action/**'
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: gitops-free # share the lock with gitops-free.yml — same target instance
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply latest configuration to Fleet
+        uses: ./.github/gitops-action
+        with:
+          config-file: gitops/free-fleetqa-min/default.yml
+          dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        env:
+          FLEET_URL:              ${{ secrets.FLEET_FREE_URL }}
+          FLEET_API_TOKEN:        ${{ secrets.FLEET_FREE_API_TOKEN }}
+          FLEET_ENROLL_SECRET:    ${{ secrets.FLEET_FREE_ENROLL_SECRET }}
+          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_SSO_METADATA_URL }}

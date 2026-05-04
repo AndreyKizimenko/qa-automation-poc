@@ -19,3 +19,6 @@ Icon
 *.log
 
 # Playwright-suite ignores live in playwright/.gitignore
+
+auth
+loadtest

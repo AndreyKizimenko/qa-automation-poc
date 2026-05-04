@@ -1,0 +1,19 @@
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.auth/
+.perf-results/
+.perf-history/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Local environment — never commit real credentials
+.env
+.env.premium
+.env.free
+.env.loadtest

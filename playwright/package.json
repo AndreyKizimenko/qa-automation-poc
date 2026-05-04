@@ -1,0 +1,44 @@
+{
+  "name": "playwright",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test:premium": "playwright test --project=premium",
+    "test:premium:headed": "playwright test --project=premium --headed",
+    "test:premium:ui": "playwright test --project=premium --ui",
+    "test:premium:smoke": "playwright test tests/smoke/ --project=premium",
+    "test:free": "SUITE=free playwright test --project=free",
+    "test:free:headed": "SUITE=free playwright test --project=free --headed",
+    "test:free:ui": "SUITE=free playwright test --project=free --ui",
+    "test:free:smoke": "SUITE=free playwright test tests/smoke/ --project=free",
+    "test:loadtest": "SUITE=loadtest playwright test --project=loadtest",
+    "test:loadtest:headed": "SUITE=loadtest playwright test --project=loadtest --headed",
+    "test:loadtest:ui": "SUITE=loadtest playwright test --project=loadtest --ui",
+    "test:api-verify:free": "SUITE=free playwright test --project=api-verify",
+    "test:api-verify:free-min": "SUITE=free GITOPS_DIR=../gitops/free-fleetqa-min playwright test --project=api-verify",
+    "test:all": "npm run test:premium && npm run test:free",
+    "test:smoke": "npm run test:premium:smoke && npm run test:free:smoke",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.6.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-playwright": "^2.10.1",
+    "js-yaml": "^4.1.1",
+    "nats": "^2.29.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.58.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1"
+  }
+}

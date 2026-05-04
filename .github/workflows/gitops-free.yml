@@ -13,11 +13,11 @@ on:
       - '.github/workflows/gitops-free.yml'
       - '.github/gitops-action/**'
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *' # 00:00 UTC — 60 min after Render redeploy at 23:00 UTC
+  workflow_call:
+  # Schedule lives on nightly.yml (the orchestrator).
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: gitops-free # shared with gitops-free-min — same target instance
   cancel-in-progress: false
 
 defaults:

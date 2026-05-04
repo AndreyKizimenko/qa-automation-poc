@@ -1,0 +1,71 @@
+name: API Verify — Free
+
+# Reads a GitOps directory and asserts the live free Fleet instance matches.
+# Used right after gitops-free or gitops-free-min to confirm changes landed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Which gitops config to verify against'
+        required: true
+        default: baseline
+        type: choice
+        options:
+          - baseline   # gitops/free-fleetqa
+          - min        # gitops/free-fleetqa-min
+  workflow_call:
+    inputs:
+      variant:
+        description: 'Which gitops config to verify against (baseline | min)'
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: playwright/package-lock.json
+
+      - run: npm ci
+
+      - name: Write .env.free from secrets
+        run: |
+          cat > .env.free <<EOF
+          FLEET_URL=${{ secrets.FLEET_FREE_URL }}
+          FLEET_API_TOKEN=${{ secrets.FLEET_FREE_API_TOKEN }}
+          FLEET_ADMIN_EMAIL=${{ secrets.FLEET_FREE_ADMIN_EMAIL }}
+          FLEET_ADMIN_PASSWORD=${{ secrets.FLEET_FREE_ADMIN_PASSWORD }}
+          EOF
+
+      - name: Run api-verify (${{ inputs.variant }})
+        run: |
+          if [ "${{ inputs.variant }}" = "min" ]; then
+            npm run test:api-verify:free-min
+          else
+            npm run test:api-verify:free
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: api-verify-report-${{ inputs.variant }}
+          path: playwright/playwright-report/
+          retention-days: 7

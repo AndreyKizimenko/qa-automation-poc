@@ -1,0 +1,137 @@
+agent_options:
+  path: ../free-fleetqa/agent-options.yml
+
+org_settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  fleet_desktop:
+    transparency_url: https://fleetdm.com/transparency
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+  org_info:
+    contact_url: https://fleetdm.com/company/contact
+    org_logo_url: ""
+    org_logo_url_light_background: ""
+    org_name: Free QA Automation (min)
+  secrets:
+    - secret: $FLEET_ENROLL_SECRET
+  server_settings:
+    ai_features_disabled: false
+    deferred_save_host: false
+    discard_reports_data: false
+    enable_analytics: false
+    live_reporting_disabled: false
+    report_cap: 0
+    scripts_disabled: false
+    server_url: $FLEET_URL
+  sso_settings:
+    enable_sso: true
+    enable_sso_idp_login: false
+    entity_id: fleet
+    idp_image_url: ""
+    idp_name: Okta
+    metadata_url: $FLEET_SSO_METADATA_URL
+
+controls:
+  windows_enabled_and_configured: true
+  scripts:
+    # 9 of 11
+    - path: ../free-fleetqa/platforms/macos/scripts/toggle-fleetd-debug.sh
+    - path: ../free-fleetqa/platforms/macos/scripts/uninstall-fleetd-macos.sh
+    - path: ../free-fleetqa/platforms/macos/scripts/update-safari.sh
+    - path: ../free-fleetqa/platforms/windows/scripts/create-admin-user.ps1
+    - path: ../free-fleetqa/platforms/windows/scripts/enable-ms-defender.ps1
+    - path: ../free-fleetqa/platforms/windows/scripts/toggle-fleetd-debug.ps1
+    - path: ../free-fleetqa/platforms/windows/scripts/uninstall-fleetd-windows.ps1
+    - path: ../free-fleetqa/platforms/linux/scripts/change-password-linux.sh
+    - path: ../free-fleetqa/platforms/linux/scripts/uninstall-fleetd-linux.sh
+  apple_settings:
+    configuration_profiles:
+      # 11 of 11 (mac unchanged)
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/date-time.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/disable-bluetooth-file-sharing.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/disable-content-caching.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/disable-guest-account.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/disable-internet-sharing.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/disable-media-sharing.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/enable-firewall-logging.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/enable-gatekeeper.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/firewall.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/limit-ad-tracking.mobileconfig
+      - path: ../free-fleetqa/platforms/macos/configuration-profiles/prevent-autologon.mobileconfig
+  windows_settings:
+    configuration_profiles:
+      # 8 of 10 (drop disable-game-dvr, disable-spotlight)
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/advanced-powershell-logging.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/bluetooth-settings.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/disable-guest-account.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/disable-onedrive.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/disable-remote-assistance.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/enable-firewall.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/enable-smartscreen.xml
+      - path: ../free-fleetqa/platforms/windows/configuration-profiles/windows-defender-compliance.xml
+  android_settings:
+    configuration_profiles:
+      # 2 of 2 (unchanged)
+      - path: ../free-fleetqa/platforms/android/configuration-profiles/disable-camera.json
+      - path: ../free-fleetqa/platforms/android/configuration-profiles/disable-screen-capture.json
+
+labels:
+  # 10 of 12 (drop keynote-14, virtual-machines)
+  - path: ../free-fleetqa/labels/apple-silicon-macos-hosts.yml
+  - path: ../free-fleetqa/labels/arm-based-windows-hosts.yml
+  - path: ../free-fleetqa/labels/debian-based-linux-hosts.yml
+  - path: ../free-fleetqa/labels/macos-compatibility-extension-installed.yml
+  - path: ../free-fleetqa/labels/macs-with-1password-installed.yml
+  - path: ../free-fleetqa/labels/macs-with-fleet-maintained-apps-installed.yml
+  - path: ../free-fleetqa/labels/macs-with-microsoft-autoupdate-installed.yml
+  - path: ../free-fleetqa/labels/rpm-based-linux-hosts.yml
+  - path: ../free-fleetqa/labels/windows-with-fleet-maintained-apps-installed.yml
+  - path: ../free-fleetqa/labels/x86-based-windows-hosts.yml
+
+policies:
+  # 22 of 27: 13 mac of 13, 7 win of 12 (drop 5), 2 linux of 2
+  - path: ../free-fleetqa/platforms/macos/policies/1password-emergency-kit-check.yml
+  - path: ../free-fleetqa/platforms/macos/policies/all-software-updates-installed.yml
+  - path: ../free-fleetqa/platforms/macos/policies/battery-health-check.yml
+  - path: ../free-fleetqa/platforms/macos/policies/disk-encryption-check.yml
+  - path: ../free-fleetqa/platforms/macos/policies/disk-space-check.yml
+  - path: ../free-fleetqa/platforms/macos/policies/enrollment-profile-up-to-date.yml
+  - path: ../free-fleetqa/platforms/macos/policies/install-santa-extension.yml
+  - path: ../free-fleetqa/platforms/macos/policies/latest-macos.yml
+  - path: ../free-fleetqa/platforms/macos/policies/update-1password.yml
+  - path: ../free-fleetqa/platforms/macos/policies/update-claude.yml
+  - path: ../free-fleetqa/platforms/macos/policies/update-firefox.yml
+  - path: ../free-fleetqa/platforms/macos/policies/update-safari.yml
+  - path: ../free-fleetqa/platforms/macos/policies/update-slack.yml
+  - path: ../free-fleetqa/platforms/windows/policies/all-windows-updates-installed.yml
+  - path: ../free-fleetqa/platforms/windows/policies/antivirus-signatures-up-to-date.yml
+  - path: ../free-fleetqa/platforms/windows/policies/disk-encryption-check.yml
+  - path: ../free-fleetqa/platforms/windows/policies/disk-space-check.yml
+  - path: ../free-fleetqa/platforms/windows/policies/set-time-automatically.yml
+  - path: ../free-fleetqa/platforms/windows/policies/windows-defender-compliance-check.yml
+  - path: ../free-fleetqa/platforms/windows/policies/windows-fleet-hardening.yml
+  - path: ../free-fleetqa/platforms/linux/policies/disk-encryption-check.yml
+  - path: ../free-fleetqa/platforms/linux/policies/disk-space-check.yml
+
+reports:
+  # 17 of 21 file refs → 26 reports (vs 30 in baseline). Drop 4 single-entry files.
+  - path: ../free-fleetqa/platforms/all/reports/collect-chromium-browser-extensions.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-firefox-browser-extensions.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-fleetd-information.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-known-vulnerable-chrome-extensions.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-listening-ports.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-local-user-accounts.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-operating-system-information.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-safari-browser-extensions.yml
+  - path: ../free-fleetqa/platforms/all/reports/collect-usb-devices.yml
+  - path: ../free-fleetqa/platforms/all/reports/dex-queries.yml
+  - path: ../free-fleetqa/platforms/macos/reports/collect-default-browser.yml
+  - path: ../free-fleetqa/platforms/macos/reports/collect-macos-27-incompatible-apps.yml
+  - path: ../free-fleetqa/platforms/macos/reports/collect-macos-compatibility-data.yml
+  - path: ../free-fleetqa/platforms/macos/reports/collect-santa-denied-logs.yml
+  - path: ../free-fleetqa/platforms/macos/reports/detect-apns-certificate.yml
+  - path: ../free-fleetqa/platforms/windows/reports/all-x86-hosts.yml
+  - path: ../free-fleetqa/platforms/linux/reports/all-deb-hosts.yml
