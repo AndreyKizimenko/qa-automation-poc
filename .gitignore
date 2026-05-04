@@ -20,5 +20,8 @@ Icon
 
 # Playwright-suite ignores live in playwright/.gitignore
 
-auth
-loadtest
+# Skip the auth + loadtest test directories (kept local). Scoped to
+# playwright/tests/ so we don't shadow playwright/pages/auth/ which holds
+# real page-object source.
+playwright/tests/auth/
+playwright/tests/loadtest/
