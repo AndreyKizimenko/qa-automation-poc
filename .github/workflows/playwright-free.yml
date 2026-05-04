@@ -1,0 +1,63 @@
+name: Playwright — Free
+
+# Manual-only. Runs the chosen scope against the free Fleet instance.
+
+on:
+  schedule:
+    - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Test scope'
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          # - e2e   # add when e2e specs land
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: playwright/package-lock.json
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Write .env.free from secrets
+        run: |
+          cat > .env.free <<EOF
+          FLEET_URL=${{ secrets.FLEET_FREE_URL }}
+          FLEET_API_TOKEN=${{ secrets.FLEET_FREE_API_TOKEN }}
+          FLEET_ADMIN_EMAIL=${{ secrets.FLEET_FREE_ADMIN_EMAIL }}
+          FLEET_ADMIN_PASSWORD=${{ secrets.FLEET_FREE_ADMIN_PASSWORD }}
+          FLEET_SSO_LOGIN_USERNAME=${{ secrets.FLEET_SSO_LOGIN_USERNAME }}
+          FLEET_SSO_LOGIN_PASSWORD=${{ secrets.FLEET_SSO_LOGIN_PASSWORD }}
+          EOF
+
+      - run: npm run test:free:${{ inputs.scope || 'smoke' }}
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-free-${{ inputs.scope || 'smoke' }}
+          path: playwright/playwright-report/
+          retention-days: 14
