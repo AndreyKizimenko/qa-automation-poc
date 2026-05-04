@@ -69,6 +69,9 @@ jobs:
           ABS="$GITHUB_WORKSPACE/${{ inputs.gitops-target }}"
           REL="$(realpath --relative-to="$GITHUB_WORKSPACE/playwright" "$ABS")"
           echo "value=$REL" >> "$GITHUB_OUTPUT"
+          # Slug version (no slashes/dots) for use in artifact names.
+          SLUG="$(echo '${{ inputs.gitops-target }}' | tr '/.' '-')"
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
           echo "Resolved GITOPS_TARGET: $REL"
 
       - name: Run api-verify
@@ -84,6 +87,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: api-verify-report-${{ inputs.suite }}-${{ inputs.gitops-target }}
+          name: api-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}
           path: playwright/playwright-report/
           retention-days: 7
