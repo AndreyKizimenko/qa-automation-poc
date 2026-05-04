@@ -1,0 +1,46 @@
+name: GitOps — Free
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gitops/free-fleetqa/**'
+      - '.github/workflows/gitops-free.yml'
+      - '.github/gitops-action/**'
+  pull_request:
+    paths:
+      - 'gitops/free-fleetqa/**'
+      - '.github/workflows/gitops-free.yml'
+      - '.github/gitops-action/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # 00:00 UTC — 60 min after Render redeploy at 23:00 UTC
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply latest configuration to Fleet
+        uses: ./.github/gitops-action
+        with:
+          config-file: gitops/free-fleetqa/default.yml
+          dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        env:
+          FLEET_URL:              ${{ secrets.FLEET_FREE_URL }}
+          FLEET_API_TOKEN:        ${{ secrets.FLEET_FREE_API_TOKEN }}
+          FLEET_ENROLL_SECRET:    ${{ secrets.FLEET_FREE_ENROLL_SECRET }}
+          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_SSO_METADATA_URL }}

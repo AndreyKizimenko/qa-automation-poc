@@ -1,0 +1,47 @@
+name: Apply Fleet GitOps
+description: Install fleetctl matching the target server's version, configure, dry-run, and apply
+
+inputs:
+  config-file:
+    description: Path to the GitOps default.yml
+    required: true
+  dry-run-only:
+    description: Run dry-run only (no real apply) — set true on pull_request
+    default: 'false'
+  default-fleetctl-version:
+    description: Fallback fleetctl version when the server doesn't return a clean semver
+    default: '4.85.0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install fleetctl
+      shell: bash
+      run: |
+        set -e
+        SERVER_VERSION="$(
+          curl -fsSL "$FLEET_URL/api/v1/fleet/version" \
+            --header "Authorization: Bearer $FLEET_API_TOKEN" \
+            | jq -r '.version' || true
+        )"
+        if [[ "$SERVER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          INSTALL_VERSION="$SERVER_VERSION"
+        else
+          INSTALL_VERSION="${{ inputs.default-fleetctl-version }}"
+        fi
+        echo "Installing fleetctl@$INSTALL_VERSION (server reported: ${SERVER_VERSION:-unknown})"
+        npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
+        fleetctl --version
+
+    - name: Configure fleetctl
+      shell: bash
+      run: fleetctl config set --address "$FLEET_URL" --token "$FLEET_API_TOKEN"
+
+    - name: Dry-run
+      shell: bash
+      run: fleetctl gitops --dry-run -f "${{ inputs.config-file }}"
+
+    - name: Apply
+      if: inputs.dry-run-only != 'true'
+      shell: bash
+      run: fleetctl gitops -f "${{ inputs.config-file }}"

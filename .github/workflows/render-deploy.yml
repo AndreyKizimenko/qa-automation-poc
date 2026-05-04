@@ -1,0 +1,49 @@
+name: Render — Nightly deploy
+
+# Triggers a redeploy of the Render-hosted Fleet instances so each morning's
+# GitOps runs and smoke tests hit the latest Fleet release.
+#
+# Order on a typical day:
+#   1. This workflow (23:00 UTC) — Render redeploys both instances
+#   2. gitops-free (06:00 UTC) — applies free config
+#   3. gitops-premium (06:15 UTC) — applies premium config
+#   4. Smoke tests (manual or scheduled)
+
+on:
+  schedule:
+    - cron: '0 23 * * *' # 23:00 UTC = 4PM PT / 7PM ET / 12AM CET
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  free:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render redeploy (free)
+        run: |
+          if [[ -z "${{ secrets.RENDER_FREE_DEPLOY_HOOK }}" ]]; then
+            echo "::error::Missing secret RENDER_FREE_DEPLOY_HOOK"
+            exit 1
+          fi
+          curl -fsSL -X POST "${{ secrets.RENDER_FREE_DEPLOY_HOOK }}"
+
+  premium:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render redeploy (premium)
+        run: |
+          if [[ -z "${{ secrets.RENDER_PREMIUM_DEPLOY_HOOK }}" ]]; then
+            echo "::error::Missing secret RENDER_PREMIUM_DEPLOY_HOOK"
+            exit 1
+          fi
+          curl -fsSL -X POST "${{ secrets.RENDER_PREMIUM_DEPLOY_HOOK }}"

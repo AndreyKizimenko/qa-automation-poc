@@ -1,0 +1,152 @@
+agent_options:
+  path: ./agent-options.yml
+
+org_settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  fleet_desktop:
+    transparency_url: https://fleetdm.com/transparency
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+  org_info:
+    contact_url: https://fleetdm.com/company/contact
+    org_logo_url: ""
+    org_logo_url_light_background: ""
+    org_name: Free QA Automation
+  secrets:
+    - secret: $FLEET_ENROLL_SECRET
+  server_settings:
+    ai_features_disabled: false
+    deferred_save_host: false
+    discard_reports_data: false
+    enable_analytics: false
+    live_reporting_disabled: false
+    report_cap: 0
+    scripts_disabled: false
+    server_url: $FLEET_URL
+  sso_settings:
+    enable_sso: true
+    enable_sso_idp_login: false
+    entity_id: fleet
+    idp_image_url: ""
+    idp_name: Okta
+    metadata_url: $FLEET_SSO_METADATA_URL
+
+controls:
+  windows_enabled_and_configured: true
+  scripts:
+    - path: ./platforms/macos/scripts/toggle-fleetd-debug.sh
+    - path: ./platforms/macos/scripts/uninstall-fleetd-macos.sh
+    - path: ./platforms/macos/scripts/update-safari.sh
+    - path: ./platforms/windows/scripts/create-admin-user.ps1
+    - path: ./platforms/windows/scripts/enable-ms-defender.ps1
+    - path: ./platforms/windows/scripts/hide-windows-insider-settings-page.ps1
+    - path: ./platforms/windows/scripts/toggle-fleetd-debug.ps1
+    - path: ./platforms/windows/scripts/uninstall-fleetd-windows.ps1
+    - path: ./platforms/windows/scripts/uninstall-zoom.ps1
+    - path: ./platforms/linux/scripts/change-password-linux.sh
+    - path: ./platforms/linux/scripts/uninstall-fleetd-linux.sh
+  apple_settings:
+    configuration_profiles:
+      - path: ./platforms/macos/configuration-profiles/date-time.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/disable-bluetooth-file-sharing.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/disable-content-caching.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/disable-guest-account.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/disable-internet-sharing.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/disable-media-sharing.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/enable-firewall-logging.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/enable-gatekeeper.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/firewall.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/limit-ad-tracking.mobileconfig
+      - path: ./platforms/macos/configuration-profiles/prevent-autologon.mobileconfig
+  windows_settings:
+    configuration_profiles:
+      - path: ./platforms/windows/configuration-profiles/advanced-powershell-logging.xml
+      - path: ./platforms/windows/configuration-profiles/bluetooth-settings.xml
+      - path: ./platforms/windows/configuration-profiles/disable-game-dvr.xml
+      - path: ./platforms/windows/configuration-profiles/disable-guest-account.xml
+      - path: ./platforms/windows/configuration-profiles/disable-onedrive.xml
+      - path: ./platforms/windows/configuration-profiles/disable-remote-assistance.xml
+      - path: ./platforms/windows/configuration-profiles/disable-spotlight.xml
+      - path: ./platforms/windows/configuration-profiles/enable-firewall.xml
+      - path: ./platforms/windows/configuration-profiles/enable-smartscreen.xml
+      - path: ./platforms/windows/configuration-profiles/windows-defender-compliance.xml
+  android_settings:
+    configuration_profiles:
+      - path: ./platforms/android/configuration-profiles/disable-camera.json
+      - path: ./platforms/android/configuration-profiles/disable-screen-capture.json
+
+labels:
+  - path: ./labels/apple-silicon-macos-hosts.yml
+  - path: ./labels/arm-based-windows-hosts.yml
+  - path: ./labels/debian-based-linux-hosts.yml
+  - path: ./labels/keynote-14-installed.yml
+  - path: ./labels/macos-compatibility-extension-installed.yml
+  - path: ./labels/macs-with-1password-installed.yml
+  - path: ./labels/macs-with-fleet-maintained-apps-installed.yml
+  - path: ./labels/macs-with-microsoft-autoupdate-installed.yml
+  - path: ./labels/rpm-based-linux-hosts.yml
+  - path: ./labels/virtual-machines.yml
+  - path: ./labels/windows-with-fleet-maintained-apps-installed.yml
+  - path: ./labels/x86-based-windows-hosts.yml
+
+policies:
+  # macOS
+  - path: ./platforms/macos/policies/1password-emergency-kit-check.yml
+  - path: ./platforms/macos/policies/all-software-updates-installed.yml
+  - path: ./platforms/macos/policies/battery-health-check.yml
+  - path: ./platforms/macos/policies/disk-encryption-check.yml
+  - path: ./platforms/macos/policies/disk-space-check.yml
+  - path: ./platforms/macos/policies/enrollment-profile-up-to-date.yml
+  - path: ./platforms/macos/policies/install-santa-extension.yml
+  - path: ./platforms/macos/policies/latest-macos.yml
+  - path: ./platforms/macos/policies/update-1password.yml
+  - path: ./platforms/macos/policies/update-claude.yml
+  - path: ./platforms/macos/policies/update-firefox.yml
+  - path: ./platforms/macos/policies/update-safari.yml
+  - path: ./platforms/macos/policies/update-slack.yml
+  # Windows
+  - path: ./platforms/windows/policies/all-windows-updates-installed.yml
+  - path: ./platforms/windows/policies/antivirus-signatures-up-to-date.yml
+  - path: ./platforms/windows/policies/battery-health-check.yml
+  - path: ./platforms/windows/policies/disk-encryption-check.yml
+  - path: ./platforms/windows/policies/disk-space-check.yml
+  - path: ./platforms/windows/policies/set-time-automatically.yml
+  - path: ./platforms/windows/policies/update-1password.yml
+  - path: ./platforms/windows/policies/update-claude.yml
+  - path: ./platforms/windows/policies/update-firefox.yml
+  - path: ./platforms/windows/policies/update-slack.yml
+  - path: ./platforms/windows/policies/windows-defender-compliance-check.yml
+  - path: ./platforms/windows/policies/windows-fleet-hardening.yml
+  # Linux
+  - path: ./platforms/linux/policies/disk-encryption-check.yml
+  - path: ./platforms/linux/policies/disk-space-check.yml
+
+reports:
+  # Cross-platform
+  - path: ./platforms/all/reports/collect-chromium-browser-extensions.yml
+  - path: ./platforms/all/reports/collect-firefox-browser-extensions.yml
+  - path: ./platforms/all/reports/collect-fleetd-information.yml
+  - path: ./platforms/all/reports/collect-known-vulnerable-chrome-extensions.yml
+  - path: ./platforms/all/reports/collect-listening-ports.yml
+  - path: ./platforms/all/reports/collect-local-user-accounts.yml
+  - path: ./platforms/all/reports/collect-operating-system-information.yml
+  - path: ./platforms/all/reports/collect-safari-browser-extensions.yml
+  - path: ./platforms/all/reports/collect-usb-devices.yml
+  - path: ./platforms/all/reports/dex-queries.yml
+  # macOS
+  - path: ./platforms/macos/reports/collect-default-browser.yml
+  - path: ./platforms/macos/reports/collect-macos-27-incompatible-apps.yml
+  - path: ./platforms/macos/reports/collect-macos-compatibility-data.yml
+  - path: ./platforms/macos/reports/collect-santa-denied-logs.yml
+  - path: ./platforms/macos/reports/collect-xprotect-reports.yml
+  - path: ./platforms/macos/reports/detect-apns-certificate.yml
+  - path: ./platforms/macos/reports/detect-apple-intelligence.yml
+  # Windows
+  - path: ./platforms/windows/reports/all-arm-hosts.yml
+  - path: ./platforms/windows/reports/all-x86-hosts.yml
+  # Linux
+  - path: ./platforms/linux/reports/all-deb-hosts.yml
+  - path: ./platforms/linux/reports/all-rpm-hosts.yml
