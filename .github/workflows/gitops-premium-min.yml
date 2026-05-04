@@ -1,4 +1,10 @@
-name: GitOps — Premium
+name: GitOps — Premium (min variant)
+
+# Applies the trimmed `premium-fleetqa-min` config — used by the API-verify
+# tests to confirm `fleetctl gitops` actually mutates a Premium instance,
+# including team-scoped resources.
+#
+# Manual / on-demand only. The orchestrator (nightly.yml) runs this in sequence.
 
 on:
   workflow_dispatch:
@@ -7,7 +13,7 @@ on:
   # orchestrator (workflow_call) or manual dispatch.
 
 concurrency:
-  group: gitops-premium
+  group: gitops-premium # share the lock with gitops-premium.yml — same target instance
   cancel-in-progress: false
 
 defaults:
@@ -28,8 +34,8 @@ jobs:
         uses: ./.github/gitops-action
         with:
           config-files: |
-            gitops/premium-fleetqa/default.yml
-            gitops/premium-fleetqa/fleets/workstations.yml
+            gitops/premium-fleetqa-min/default.yml
+            gitops/premium-fleetqa-min/fleets/workstations.yml
           delete-other-fleets: 'true'
           dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         env:

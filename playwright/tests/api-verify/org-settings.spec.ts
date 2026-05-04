@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { gitopsConfig, gitopsLabel } from './_config';
 
 test.describe(`API verify · org-settings · ${gitopsLabel}`, () => {
+  test.skip(gitopsConfig.scope !== 'no-team', 'org settings only apply to no-team scope');
+
   test('org name matches gitops', async ({ request }) => {
     const res = await request.get('/api/latest/fleet/config');
     await expect(res).toBeOK();

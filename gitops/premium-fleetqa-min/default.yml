@@ -10,13 +10,26 @@ org_settings:
   host_expiry_settings:
     host_expiry_enabled: false
     host_expiry_window: 0
+  mdm:
+    end_user_authentication:
+      entity_id: fleet-eua
+      idp_name: Okta
+      metadata_url: $FLEET_EUA_METADATA_URL
+    apple_business_manager:
+      - organization_name: $FLEET_ABM_ORG_NAME
+        macos_fleet: Workstations
+        ios_fleet: Workstations
+        ipados_fleet: Workstations
+    volume_purchasing_program:
+      - location: $FLEET_VPP_LOCATION
+        fleets:
+          - "All teams"
   org_info:
     contact_url: https://fleetdm.com/company/contact
     org_logo_url: ""
     org_logo_url_light_background: ""
-    org_name: Free QA Automation
-  secrets:
-    - secret: $FLEET_ENROLL_SECRET
+    org_name: Premium QA Automation (min)
+  # secrets: omitted — enroll secrets are managed via UI on the premium instance
   server_settings:
     ai_features_disabled: false
     deferred_save_host: false
@@ -36,20 +49,21 @@ org_settings:
 
 controls:
   windows_enabled_and_configured: true
+  android_enabled_and_configured: true
   scripts:
+    # 9 of 11
     - path: ../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
     - path: ../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
     - path: ../lib/platforms/macos/scripts/update-safari.sh
     - path: ../lib/platforms/windows/scripts/create-admin-user.ps1
     - path: ../lib/platforms/windows/scripts/enable-ms-defender.ps1
-    - path: ../lib/platforms/windows/scripts/hide-windows-insider-settings-page.ps1
     - path: ../lib/platforms/windows/scripts/toggle-fleetd-debug.ps1
     - path: ../lib/platforms/windows/scripts/uninstall-fleetd-windows.ps1
-    - path: ../lib/platforms/windows/scripts/uninstall-zoom.ps1
     - path: ../lib/platforms/linux/scripts/change-password-linux.sh
     - path: ../lib/platforms/linux/scripts/uninstall-fleetd-linux.sh
   apple_settings:
     configuration_profiles:
+      # 11 of 11 (mac unchanged)
       - path: ../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
       - path: ../lib/platforms/macos/configuration-profiles/disable-bluetooth-file-sharing.mobileconfig
       - path: ../lib/platforms/macos/configuration-profiles/disable-content-caching.mobileconfig
@@ -63,51 +77,45 @@ controls:
       - path: ../lib/platforms/macos/configuration-profiles/prevent-autologon.mobileconfig
   windows_settings:
     configuration_profiles:
+      # 8 of 10 (drop disable-game-dvr, disable-spotlight)
       - path: ../lib/platforms/windows/configuration-profiles/advanced-powershell-logging.xml
       - path: ../lib/platforms/windows/configuration-profiles/bluetooth-settings.xml
-      - path: ../lib/platforms/windows/configuration-profiles/disable-game-dvr.xml
       - path: ../lib/platforms/windows/configuration-profiles/disable-guest-account.xml
       - path: ../lib/platforms/windows/configuration-profiles/disable-onedrive.xml
       - path: ../lib/platforms/windows/configuration-profiles/disable-remote-assistance.xml
-      - path: ../lib/platforms/windows/configuration-profiles/disable-spotlight.xml
       - path: ../lib/platforms/windows/configuration-profiles/enable-firewall.xml
       - path: ../lib/platforms/windows/configuration-profiles/enable-smartscreen.xml
       - path: ../lib/platforms/windows/configuration-profiles/windows-defender-compliance.xml
   android_settings:
     configuration_profiles:
+      # 2 of 2 (unchanged)
       - path: ../lib/platforms/android/configuration-profiles/disable-camera.json
       - path: ../lib/platforms/android/configuration-profiles/disable-screen-capture.json
 
 labels:
+  # 10 of 12 (drop keynote-14, virtual-machines)
   - path: ../lib/labels/apple-silicon-macos-hosts.yml
   - path: ../lib/labels/arm-based-windows-hosts.yml
   - path: ../lib/labels/debian-based-linux-hosts.yml
-  - path: ../lib/labels/keynote-14-installed.yml
   - path: ../lib/labels/macos-compatibility-extension-installed.yml
   - path: ../lib/labels/macs-with-1password-installed.yml
   - path: ../lib/labels/macs-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/macs-with-microsoft-autoupdate-installed.yml
   - path: ../lib/labels/rpm-based-linux-hosts.yml
-  - path: ../lib/labels/virtual-machines.yml
   - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/x86-based-windows-hosts.yml
 
 policies:
-  # macOS
-  - path: ../lib/platforms/macos/policies/1password-emergency-kit-check.yml
+  # 22 of 27: drop 3 mac (install-santa, latest-macos, update-1password ... no wait — let's drop 1password-emergency, install-santa, update-claude, update-firefox, update-safari)
+  # Net: 8 mac + 12 win + 2 linux = 22 (vs 13+12+2=27 in baseline)
   - path: ../lib/platforms/macos/policies/all-software-updates-installed.yml
   - path: ../lib/platforms/macos/policies/battery-health-check.yml
   - path: ../lib/platforms/macos/policies/disk-encryption-check.yml
   - path: ../lib/platforms/macos/policies/disk-space-check.yml
   - path: ../lib/platforms/macos/policies/enrollment-profile-up-to-date.yml
   - path: ../lib/platforms/macos/policies/install-santa-extension.yml
-  - path: ../lib/platforms/macos/policies/latest-macos.yml
   - path: ../lib/platforms/macos/policies/update-1password.yml
-  - path: ../lib/platforms/macos/policies/update-claude.yml
-  - path: ../lib/platforms/macos/policies/update-firefox.yml
-  - path: ../lib/platforms/macos/policies/update-safari.yml
   - path: ../lib/platforms/macos/policies/update-slack.yml
-  # Windows
   - path: ../lib/platforms/windows/policies/all-windows-updates-installed.yml
   - path: ../lib/platforms/windows/policies/antivirus-signatures-up-to-date.yml
   - path: ../lib/platforms/windows/policies/battery-health-check.yml
@@ -120,12 +128,11 @@ policies:
   - path: ../lib/platforms/windows/policies/update-slack.yml
   - path: ../lib/platforms/windows/policies/windows-defender-compliance-check.yml
   - path: ../lib/platforms/windows/policies/windows-fleet-hardening.yml
-  # Linux
   - path: ../lib/platforms/linux/policies/disk-encryption-check.yml
   - path: ../lib/platforms/linux/policies/disk-space-check.yml
 
 reports:
-  # Cross-platform
+  # 17 of 21 file refs → 26 reports (vs 30 in baseline). Drop 4 single-entry files.
   - path: ../lib/platforms/all/reports/collect-chromium-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-firefox-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-fleetd-information.yml
@@ -136,17 +143,10 @@ reports:
   - path: ../lib/platforms/all/reports/collect-safari-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-usb-devices.yml
   - path: ../lib/platforms/all/reports/dex-queries.yml
-  # macOS
   - path: ../lib/platforms/macos/reports/collect-default-browser.yml
   - path: ../lib/platforms/macos/reports/collect-macos-27-incompatible-apps.yml
   - path: ../lib/platforms/macos/reports/collect-macos-compatibility-data.yml
   - path: ../lib/platforms/macos/reports/collect-santa-denied-logs.yml
-  - path: ../lib/platforms/macos/reports/collect-xprotect-reports.yml
   - path: ../lib/platforms/macos/reports/detect-apns-certificate.yml
-  - path: ../lib/platforms/macos/reports/detect-apple-intelligence.yml
-  # Windows
-  - path: ../lib/platforms/windows/reports/all-arm-hosts.yml
   - path: ../lib/platforms/windows/reports/all-x86-hosts.yml
-  # Linux
   - path: ../lib/platforms/linux/reports/all-deb-hosts.yml
-  - path: ../lib/platforms/linux/reports/all-rpm-hosts.yml

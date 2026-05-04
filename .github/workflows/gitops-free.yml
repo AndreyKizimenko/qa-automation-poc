@@ -1,20 +1,10 @@
 name: GitOps — Free
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'gitops/free-fleetqa/**'
-      - '.github/workflows/gitops-free.yml'
-      - '.github/gitops-action/**'
-  pull_request:
-    paths:
-      - 'gitops/free-fleetqa/**'
-      - '.github/workflows/gitops-free.yml'
-      - '.github/gitops-action/**'
   workflow_dispatch:
   workflow_call:
-  # Schedule lives on nightly.yml (the orchestrator).
+  # No push/pull_request triggers — gitops only runs from the nightly
+  # orchestrator (workflow_call) or manual dispatch.
 
 concurrency:
   group: gitops-free # shared with gitops-free-min — same target instance
@@ -37,7 +27,7 @@ jobs:
       - name: Apply latest configuration to Fleet
         uses: ./.github/gitops-action
         with:
-          config-file: gitops/free-fleetqa/default.yml
+          config-files: gitops/free-fleetqa/default.yml
           dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         env:
           FLEET_URL:              ${{ secrets.FLEET_FREE_URL }}

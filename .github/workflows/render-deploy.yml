@@ -11,7 +11,7 @@ name: Render — Nightly deploy
 
 on:
   schedule:
-    - cron: '0 23 * * *' # 23:00 UTC — 60 min before nightly gitops chain
+    - cron: '0 4 * * *' # 04:00 UTC = 11 PM CDT (10 PM CST). 60 min before nightly orchestrators.
   workflow_dispatch:
   workflow_call:
 

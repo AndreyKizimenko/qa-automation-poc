@@ -1,23 +1,38 @@
-name: API Verify — Free
+name: API Verify
 
-# Reads a GitOps directory and asserts the live free Fleet instance matches.
-# Used right after gitops-free or gitops-free-min to confirm changes landed.
+# Reads a GitOps target (directory or fleet file) and asserts the live Fleet
+# instance matches. Called by the per-tier nightly orchestrators between each
+# gitops apply step.
 
 on:
   workflow_dispatch:
     inputs:
-      variant:
-        description: 'Which gitops config to verify against'
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
         required: true
-        default: baseline
         type: choice
         options:
-          - baseline   # gitops/free-fleetqa
-          - min        # gitops/free-fleetqa-min
+          - free
+          - premium
+      gitops-target:
+        description: |
+          Path (relative to repo root) to either a gitops directory
+          (no-team scope) or a fleets/*.yml file (team scope).
+          Examples:
+            gitops/free-fleetqa
+            gitops/premium-fleetqa
+            gitops/premium-fleetqa/fleets/workstations.yml
+            gitops/premium-fleetqa-min
+        required: true
+        type: string
   workflow_call:
     inputs:
-      variant:
-        description: 'Which gitops config to verify against (baseline | min)'
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
+        required: true
+        type: string
+      gitops-target:
+        description: 'Path to a gitops directory or fleet file'
         required: true
         type: string
 
@@ -46,26 +61,29 @@ jobs:
 
       - run: npm ci
 
-      - name: Write .env.free from secrets
+      - name: Resolve gitops target relative to playwright/
+        id: target
         run: |
-          cat > .env.free <<EOF
-          FLEET_URL=${{ secrets.FLEET_FREE_URL }}
-          FLEET_API_TOKEN=${{ secrets.FLEET_FREE_API_TOKEN }}
-          FLEET_ADMIN_EMAIL=${{ secrets.FLEET_FREE_ADMIN_EMAIL }}
-          FLEET_ADMIN_PASSWORD=${{ secrets.FLEET_FREE_ADMIN_PASSWORD }}
-          EOF
+          # GITOPS_TARGET is read from the playwright/ working dir, so make the
+          # path relative to it.
+          ABS="$GITHUB_WORKSPACE/${{ inputs.gitops-target }}"
+          REL="$(realpath --relative-to="$GITHUB_WORKSPACE/playwright" "$ABS")"
+          echo "value=$REL" >> "$GITHUB_OUTPUT"
+          echo "Resolved GITOPS_TARGET: $REL"
 
-      - name: Run api-verify (${{ inputs.variant }})
-        run: |
-          if [ "${{ inputs.variant }}" = "min" ]; then
-            npm run test:api-verify:free-min
-          else
-            npm run test:api-verify:free
-          fi
+      - name: Run api-verify
+        env:
+          SUITE: ${{ inputs.suite }}
+          GITOPS_TARGET: ${{ steps.target.outputs.value }}
+          # Both suites need a token. Caller passes the right one through env;
+          # we expose it under the unprefixed name the playwright config reads.
+          FLEET_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_URL || secrets.FLEET_PREMIUM_URL }}
+          FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}
+        run: npx playwright test --project=api-verify
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: api-verify-report-${{ inputs.variant }}
+          name: api-verify-report-${{ inputs.suite }}-${{ inputs.gitops-target }}
           path: playwright/playwright-report/
           retention-days: 7

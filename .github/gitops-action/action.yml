@@ -2,11 +2,18 @@ name: Apply Fleet GitOps
 description: Install fleetctl matching the target server's version, configure, dry-run, and apply
 
 inputs:
-  config-file:
-    description: Path to the GitOps default.yml
+  config-files:
+    description: |
+      Newline-separated list of paths to GitOps YAML files. The first should
+      typically be a default.yml; additional files are usually fleets/*.yml.
     required: true
   dry-run-only:
-    description: Run dry-run only (no real apply) — set true on pull_request
+    description: Run dry-run only (no real apply)
+    default: 'false'
+  delete-other-fleets:
+    description: |
+      Delete teams (fleets) on the server that are not listed in the config files.
+      Off by default — fleetctl will not remove teams unless this is set to true.
     default: 'false'
   default-fleetctl-version:
     description: Fallback fleetctl version when the server doesn't return a clean semver
@@ -37,11 +44,26 @@ runs:
       shell: bash
       run: fleetctl config set --address "$FLEET_URL" --token "$FLEET_API_TOKEN"
 
+    - name: Build args
+      id: args
+      shell: bash
+      run: |
+        ARGS=""
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          ARGS="$ARGS -f $f"
+        done <<< "${{ inputs.config-files }}"
+        if [ "${{ inputs.delete-other-fleets }}" = "true" ]; then
+          ARGS="$ARGS --delete-other-fleets"
+        fi
+        echo "value=$ARGS" >> $GITHUB_OUTPUT
+        echo "fleetctl gitops args: $ARGS"
+
     - name: Dry-run
       shell: bash
-      run: fleetctl gitops --dry-run -f "${{ inputs.config-file }}"
+      run: fleetctl gitops --dry-run ${{ steps.args.outputs.value }}
 
     - name: Apply
       if: inputs.dry-run-only != 'true'
       shell: bash
-      run: fleetctl gitops -f "${{ inputs.config-file }}"
+      run: fleetctl gitops ${{ steps.args.outputs.value }}

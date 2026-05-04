@@ -10,13 +10,25 @@ org_settings:
   host_expiry_settings:
     host_expiry_enabled: false
     host_expiry_window: 0
+  mdm:
+    end_user_authentication:
+      entity_id: fleet-eua
+      idp_name: Okta
+      metadata_url: $FLEET_EUA_METADATA_URL
+    apple_business_manager:
+      - organization_name: $FLEET_ABM_ORG_NAME
+        macos_fleet: Workstations
+        ios_fleet: Workstations
+        ipados_fleet: Workstations
+    volume_purchasing_program:
+      - location: $FLEET_VPP_LOCATION
+        fleets:
+          - "All teams"
   org_info:
     contact_url: https://fleetdm.com/company/contact
     org_logo_url: ""
     org_logo_url_light_background: ""
-    org_name: Free QA Automation
-  secrets:
-    - secret: $FLEET_ENROLL_SECRET
+    org_name: Premium QA Automation
   server_settings:
     ai_features_disabled: false
     deferred_save_host: false
@@ -34,8 +46,11 @@ org_settings:
     idp_name: Okta
     metadata_url: $FLEET_SSO_METADATA_URL
 
+# default.yml's `controls`/`policies`/etc apply to the "No team" scope
+# (team_id=0). Each fleets/*.yml file applies to its own team.
 controls:
   windows_enabled_and_configured: true
+  android_enabled_and_configured: true
   scripts:
     - path: ../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
     - path: ../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
@@ -92,8 +107,8 @@ labels:
   - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/x86-based-windows-hosts.yml
 
+# No-team policies. Team-specific policies live in fleets/*.yml.
 policies:
-  # macOS
   - path: ../lib/platforms/macos/policies/1password-emergency-kit-check.yml
   - path: ../lib/platforms/macos/policies/all-software-updates-installed.yml
   - path: ../lib/platforms/macos/policies/battery-health-check.yml
@@ -107,7 +122,6 @@ policies:
   - path: ../lib/platforms/macos/policies/update-firefox.yml
   - path: ../lib/platforms/macos/policies/update-safari.yml
   - path: ../lib/platforms/macos/policies/update-slack.yml
-  # Windows
   - path: ../lib/platforms/windows/policies/all-windows-updates-installed.yml
   - path: ../lib/platforms/windows/policies/antivirus-signatures-up-to-date.yml
   - path: ../lib/platforms/windows/policies/battery-health-check.yml
@@ -120,12 +134,10 @@ policies:
   - path: ../lib/platforms/windows/policies/update-slack.yml
   - path: ../lib/platforms/windows/policies/windows-defender-compliance-check.yml
   - path: ../lib/platforms/windows/policies/windows-fleet-hardening.yml
-  # Linux
   - path: ../lib/platforms/linux/policies/disk-encryption-check.yml
   - path: ../lib/platforms/linux/policies/disk-space-check.yml
 
 reports:
-  # Cross-platform
   - path: ../lib/platforms/all/reports/collect-chromium-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-firefox-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-fleetd-information.yml
@@ -136,7 +148,6 @@ reports:
   - path: ../lib/platforms/all/reports/collect-safari-browser-extensions.yml
   - path: ../lib/platforms/all/reports/collect-usb-devices.yml
   - path: ../lib/platforms/all/reports/dex-queries.yml
-  # macOS
   - path: ../lib/platforms/macos/reports/collect-default-browser.yml
   - path: ../lib/platforms/macos/reports/collect-macos-27-incompatible-apps.yml
   - path: ../lib/platforms/macos/reports/collect-macos-compatibility-data.yml
@@ -144,9 +155,7 @@ reports:
   - path: ../lib/platforms/macos/reports/collect-xprotect-reports.yml
   - path: ../lib/platforms/macos/reports/detect-apns-certificate.yml
   - path: ../lib/platforms/macos/reports/detect-apple-intelligence.yml
-  # Windows
   - path: ../lib/platforms/windows/reports/all-arm-hosts.yml
   - path: ../lib/platforms/windows/reports/all-x86-hosts.yml
-  # Linux
   - path: ../lib/platforms/linux/reports/all-deb-hosts.yml
   - path: ../lib/platforms/linux/reports/all-rpm-hosts.yml

@@ -1,0 +1,82 @@
+name: Workstations
+
+agent_options:
+  path: ../../lib/agent-options.yml
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+  # secrets: omitted — enroll secrets are managed via UI on the premium instance
+
+controls:
+  scripts:
+    # 5 of 6 (drop toggle-fleetd-debug.ps1)
+    - path: ../../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
+    - path: ../../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
+    - path: ../../lib/platforms/macos/scripts/update-safari.sh
+    - path: ../../lib/platforms/windows/scripts/uninstall-fleetd-windows.ps1
+    - path: ../../lib/platforms/linux/scripts/uninstall-fleetd-linux.sh
+  apple_settings:
+    configuration_profiles:
+      # 11 of 11 (mac unchanged)
+      - path: ../../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-bluetooth-file-sharing.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-content-caching.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-guest-account.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-internet-sharing.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-media-sharing.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/enable-firewall-logging.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/enable-gatekeeper.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/firewall.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/limit-ad-tracking.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/prevent-autologon.mobileconfig
+  windows_settings:
+    configuration_profiles:
+      # 8 of 10 (drop disable-game-dvr, disable-spotlight)
+      - path: ../../lib/platforms/windows/configuration-profiles/advanced-powershell-logging.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/bluetooth-settings.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/disable-guest-account.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/disable-onedrive.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/disable-remote-assistance.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-firewall.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-smartscreen.xml
+      - path: ../../lib/platforms/windows/configuration-profiles/windows-defender-compliance.xml
+  android_settings:
+    configuration_profiles:
+      # 2 of 2 (unchanged)
+      - path: ../../lib/platforms/android/configuration-profiles/disable-camera.json
+      - path: ../../lib/platforms/android/configuration-profiles/disable-screen-capture.json
+
+reports:
+  # 3 of 5 (drop collect-xprotect-reports, detect-apple-intelligence)
+  - path: ../../lib/platforms/macos/reports/collect-default-browser.yml
+  - path: ../../lib/platforms/macos/reports/collect-santa-denied-logs.yml
+  - path: ../../lib/platforms/macos/reports/detect-apns-certificate.yml
+
+policies:
+  # 21 of 23: drop 2 mac (1password-emergency, latest-macos)
+  - path: ../../lib/platforms/macos/policies/all-software-updates-installed.yml
+  - path: ../../lib/platforms/macos/policies/battery-health-check.yml
+  - path: ../../lib/platforms/macos/policies/disk-encryption-check.yml
+  - path: ../../lib/platforms/macos/policies/disk-space-check.yml
+  - path: ../../lib/platforms/macos/policies/enrollment-profile-up-to-date.yml
+  - path: ../../lib/platforms/macos/policies/install-santa-extension.yml
+  - path: ../../lib/platforms/macos/policies/update-1password.yml
+  - path: ../../lib/platforms/windows/policies/all-windows-updates-installed.yml
+  - path: ../../lib/platforms/windows/policies/antivirus-signatures-up-to-date.yml
+  - path: ../../lib/platforms/windows/policies/battery-health-check.yml
+  - path: ../../lib/platforms/windows/policies/disk-encryption-check.yml
+  - path: ../../lib/platforms/windows/policies/disk-space-check.yml
+  - path: ../../lib/platforms/windows/policies/set-time-automatically.yml
+  - path: ../../lib/platforms/windows/policies/update-1password.yml
+  - path: ../../lib/platforms/windows/policies/update-claude.yml
+  - path: ../../lib/platforms/windows/policies/update-firefox.yml
+  - path: ../../lib/platforms/windows/policies/update-slack.yml
+  - path: ../../lib/platforms/windows/policies/windows-defender-compliance-check.yml
+  - path: ../../lib/platforms/windows/policies/windows-fleet-hardening.yml
+  - path: ../../lib/platforms/linux/policies/disk-encryption-check.yml
+  - path: ../../lib/platforms/linux/policies/disk-space-check.yml

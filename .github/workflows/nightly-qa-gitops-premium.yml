@@ -1,0 +1,78 @@
+name: Nightly QA GitOps — Premium
+
+# Nightly verification chain for the premium instance:
+#   1. apply baseline           (gitops-premium.yml — default + workstations)
+#   2. verify baseline          (api-verify against no-team and Workstations, parallel)
+#   3. apply min variant        (gitops-premium-min.yml)
+#   4. verify min               (api-verify against no-team and Workstations, parallel)
+#   5. restore baseline         (gitops-premium.yml — runs even if verify failed)
+#
+# Render redeploy runs separately on its own schedule 1 hour earlier.
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-qa-gitops-premium
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  apply-baseline:
+    uses: ./.github/workflows/gitops-premium.yml
+    secrets: inherit
+
+  verify-baseline-no-team:
+    needs: apply-baseline
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: premium
+      gitops-target: gitops/premium-fleetqa
+    secrets: inherit
+
+  verify-baseline-workstations:
+    needs: apply-baseline
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/workstations.yml
+    secrets: inherit
+
+  apply-min:
+    needs:
+      - verify-baseline-no-team
+      - verify-baseline-workstations
+    uses: ./.github/workflows/gitops-premium-min.yml
+    secrets: inherit
+
+  verify-min-no-team:
+    needs: apply-min
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: premium
+      gitops-target: gitops/premium-fleetqa-min
+    secrets: inherit
+
+  verify-min-workstations:
+    needs: apply-min
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: premium
+      gitops-target: gitops/premium-fleetqa-min/fleets/workstations.yml
+    secrets: inherit
+
+  restore-baseline:
+    if: ${{ always() }}
+    needs:
+      - verify-min-no-team
+      - verify-min-workstations
+    uses: ./.github/workflows/gitops-premium.yml
+    secrets: inherit

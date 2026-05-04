@@ -8,6 +8,9 @@ interface ApiLabel {
 }
 
 test.describe(`API verify · labels · ${gitopsLabel}`, () => {
+  // Labels are global (not team-scoped) — only verify against the no-team config.
+  test.skip(gitopsConfig.scope !== 'no-team', 'labels are not team-scoped');
+
   test('user label count matches gitops', async ({ request }) => {
     const res = await request.get('/api/latest/fleet/labels');
     await expect(res).toBeOK();
@@ -23,6 +26,17 @@ test.describe(`API verify · labels · ${gitopsLabel}`, () => {
     const apiNames = new Set((body.labels as ApiLabel[]).map((l) => l.name));
     for (const label of gitopsConfig.labels) {
       expect(apiNames, `label "${label.name}" missing from API`).toContain(label.name);
+    }
+  });
+
+  test('no extra user labels on live (no superset drift)', async ({ request }) => {
+    const res = await request.get('/api/latest/fleet/labels');
+    await expect(res).toBeOK();
+    const body = await res.json();
+    const expected = new Set(gitopsConfig.labels.map((l) => l.name));
+    const userLabels = (body.labels as ApiLabel[]).filter((l) => l.label_type !== 'builtin');
+    for (const live of userLabels) {
+      expect(expected, `live has unexpected label "${live.name}" not in gitops`).toContain(live.name);
     }
   });
 });

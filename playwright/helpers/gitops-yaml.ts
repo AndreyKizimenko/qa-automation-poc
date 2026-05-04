@@ -38,15 +38,22 @@ export interface ProfileEntry {
   platform: ProfilePlatform;
 }
 
+export type ConfigScope = 'no-team' | 'team';
+
 export interface ParsedConfig {
-  rootDir: string;
-  orgName: string;
-  ssoEntityId: string;
-  ssoIdpName: string;
-  enableSso: boolean;
-  enableSoftwareInventory: boolean;
-  enableHostUsers: boolean;
-  windowsMdmEnabled: boolean;
+  scope: ConfigScope;
+  source: string; // dir for no-team, file path for team
+  /** Team name; "No team" for the no-team / default.yml scope. */
+  teamName: string;
+  // Org-level — only meaningful for no-team scope
+  orgName?: string;
+  ssoEntityId?: string;
+  ssoIdpName?: string;
+  enableSso?: boolean;
+  enableSoftwareInventory?: boolean;
+  enableHostUsers?: boolean;
+  windowsMdmEnabled?: boolean;
+  // Common
   policies: PolicyEntry[];
   reports: ReportEntry[];
   labels: LabelEntry[];
@@ -96,7 +103,9 @@ export function loadGitOpsConfig(rootDir: string): ParsedConfig {
 
   const orgSettings = doc.org_settings;
   return {
-    rootDir,
+    scope: 'no-team',
+    source: rootDir,
+    teamName: 'No team',
     orgName: orgSettings.org_info.org_name,
     ssoEntityId: orgSettings.sso_settings?.entity_id ?? '',
     ssoIdpName: orgSettings.sso_settings?.idp_name ?? '',
@@ -110,6 +119,60 @@ export function loadGitOpsConfig(rootDir: string): ParsedConfig {
     scripts,
     profiles,
   };
+}
+
+/** Loads a `fleets/<name>.yml` file. Path references resolve relative to the file's directory. */
+export function loadFleetConfig(filePath: string): ParsedConfig {
+  const doc = yaml.load(fs.readFileSync(filePath, 'utf-8')) as any;
+  const fileDir = path.dirname(filePath);
+  const resolve = (p: string) => path.resolve(fileDir, p);
+
+  const policies = expandList<PolicyEntry>(doc.policies, resolve, (item) => ({
+    name: item.name,
+    platform: item.platform,
+  }));
+
+  const reports = expandList<ReportEntry>(doc.reports, resolve, (item) => ({
+    name: item.name,
+    platform: item.platform,
+  }));
+
+  const scripts: ScriptEntry[] = (doc.controls?.scripts ?? []).map((entry: any) => {
+    const fp = entry.path as string;
+    return { name: path.basename(fp), platform: scriptPlatform(fp) };
+  });
+
+  const profiles: ProfileEntry[] = [
+    ...(doc.controls?.apple_settings?.configuration_profiles ?? []).map((entry: any) => ({
+      name: extractMacosProfileName(resolve(entry.path)),
+      platform: 'darwin' as const,
+    })),
+    ...(doc.controls?.windows_settings?.configuration_profiles ?? []).map((entry: any) => ({
+      name: path.basename(entry.path, path.extname(entry.path)),
+      platform: 'windows' as const,
+    })),
+    ...(doc.controls?.android_settings?.configuration_profiles ?? []).map((entry: any) => ({
+      name: path.basename(entry.path, path.extname(entry.path)),
+      platform: 'android' as const,
+    })),
+  ];
+
+  return {
+    scope: 'team',
+    source: filePath,
+    teamName: doc.name,
+    policies,
+    reports,
+    labels: [],    // labels are global
+    scripts,
+    profiles,
+  };
+}
+
+/** Auto-detects: directory → no-team config; file → fleet config. */
+export function loadAnyConfig(target: string): ParsedConfig {
+  const stat = fs.statSync(target);
+  return stat.isDirectory() ? loadGitOpsConfig(target) : loadFleetConfig(target);
 }
 
 function expandList<T>(

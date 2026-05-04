@@ -1,0 +1,58 @@
+name: Nightly QA GitOps — Free
+
+# Nightly verification chain for the free instance:
+#   1. apply baseline           (gitops-free.yml)
+#   2. verify baseline          (api-verify against gitops/free-fleetqa)
+#   3. apply min variant        (gitops-free-min.yml)
+#   4. verify min               (api-verify against gitops/free-fleetqa-min)
+#   5. restore baseline         (gitops-free.yml — runs even if verify failed)
+#
+# Render redeploy runs separately on its own schedule 1 hour earlier.
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-qa-gitops-free
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  apply-baseline:
+    uses: ./.github/workflows/gitops-free.yml
+    secrets: inherit
+
+  verify-baseline:
+    needs: apply-baseline
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: free
+      gitops-target: gitops/free-fleetqa
+    secrets: inherit
+
+  apply-min:
+    needs: verify-baseline
+    uses: ./.github/workflows/gitops-free-min.yml
+    secrets: inherit
+
+  verify-min:
+    needs: apply-min
+    uses: ./.github/workflows/api-verify.yml
+    with:
+      suite: free
+      gitops-target: gitops/free-fleetqa-min
+    secrets: inherit
+
+  restore-baseline:
+    if: ${{ always() }}
+    needs: verify-min
+    uses: ./.github/workflows/gitops-free.yml
+    secrets: inherit
