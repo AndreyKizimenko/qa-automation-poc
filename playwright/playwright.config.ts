@@ -33,10 +33,22 @@ export default defineConfig({
       testDir: './setup',
       testMatch: /premium\.setup\.ts/,
     },
+    // Same wipe steps run twice per browser project:
+    //   1. as a dependency (cleanup-setup) — pre-test, so the run is
+    //      self-healing regardless of leftover state
+    //   2. as a teardown (cleanup-teardown) — post-test, so a crashed
+    //      worker still leaves a clean instance
+    // Both reference setup/cleanup.steps.ts; project role is decided by
+    // whether premium / free lists it under `dependencies` or `teardown`.
+    {
+      name: 'cleanup-setup',
+      testDir: './setup',
+      testMatch: /cleanup\.steps\.ts/,
+    },
     {
       name: 'cleanup-teardown',
       testDir: './setup',
-      testMatch: /cleanup\.teardown\.ts/,
+      testMatch: /cleanup\.steps\.ts/,
     },
     {
       name: 'premium',
@@ -47,7 +59,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
       },
-      dependencies: ['premium-setup'],
+      dependencies: ['premium-setup', 'cleanup-setup'],
       teardown: 'cleanup-teardown',
     },
 
@@ -70,7 +82,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',
       },
-      dependencies: ['free-setup'],
+      dependencies: ['free-setup', 'cleanup-setup'],
       teardown: 'cleanup-teardown',
     },
 

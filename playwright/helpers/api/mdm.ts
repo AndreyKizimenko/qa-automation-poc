@@ -67,6 +67,53 @@ export async function deleteSetupAssistant(
   if (!res.ok()) console.warn(`[setup-assistant cleanup] fleet ${fleetId}: HTTP ${res.status()}`);
 }
 
+/**
+ * Reset the macos_setup toggles (EUA + managed-local-account) to off for
+ * a fleet. PATCH merges, so the other macos_setup fields (bootstrap,
+ * setup-assistant, script, software) are untouched — those have their own
+ * delete helpers above. For `fleet_id=0`, targets the global `/config`
+ * endpoint; for any other id, targets `/teams/{id}`.
+ */
+export async function resetMacosSetupToggles(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  const body = {
+    mdm: {
+      macos_setup: {
+        enable_end_user_authentication: false,
+        enable_managed_local_account: false,
+      },
+    },
+  };
+  const path = fleetId === 0 ? 'config' : `teams/${fleetId}`;
+  const res = await request.patch(apiUrl(path), {
+    headers: authHeaders(),
+    data: body,
+  });
+  if (!res.ok()) console.warn(`[macos_setup reset] fleet ${fleetId}: HTTP ${res.status()}`);
+}
+
+/**
+ * One-shot reset of every setup-experience field a test can touch:
+ * bootstrap package, setup-assistant DEP profile, setup-experience script,
+ * and the macos_setup toggles (EUA + managed-local-account). Idempotent
+ * and safe to call when no state is present. Intended for cleanup-setup
+ * / cleanup-teardown only — test bodies still use the individual helpers
+ * for clearer per-test cleanup.
+ */
+export async function resetSetupExperience(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  await Promise.all([
+    deleteBootstrapPackage(request, fleetId),
+    deleteSetupAssistant(request, fleetId),
+    deleteSetupExperienceScript(request, fleetId),
+    resetMacosSetupToggles(request, fleetId),
+  ]);
+}
+
 // ── Configuration profiles ───────────────────────────────────────────────────
 
 /**
