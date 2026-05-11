@@ -19,10 +19,8 @@ import {
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
-  deleteBootstrapPackage,
-  deleteSetupAssistant,
-  deleteSetupExperienceScript,
   findFleetByName,
+  resetSetupExperience,
 } from '@helpers/api';
 
 const WORKSTATIONS_FLEET = 'Workstations';
@@ -45,20 +43,16 @@ test('wipe unassigned state', async ({ request }) => {
 });
 
 // MDM setup-experience entities are premium-only (bootstrap packages, DEP
-// setup assistants, setup-experience scripts). On free these endpoints
-// return 402/403, so skip the cleanup entirely rather than swallow errors
-// that mask real failures.
-test('wipe unassigned MDM setup-experience state', async ({ request }) => {
+// setup assistants, setup-experience scripts, plus the macos_setup
+// toggles). On free these endpoints return 402/403, so skip the cleanup
+// entirely rather than swallow errors that mask real failures.
+test('reset unassigned setup-experience state', async ({ request }) => {
   test.skip(
     process.env.SUITE === 'free',
     'Setup-experience MDM features are premium-only',
   );
 
-  await Promise.all([
-    deleteBootstrapPackage(request, 0),
-    deleteSetupAssistant(request, 0),
-    deleteSetupExperienceScript(request, 0),
-  ]);
+  await resetSetupExperience(request, 0);
 });
 
 test('wipe Workstations team state', async ({ request }) => {
@@ -81,8 +75,6 @@ test('wipe Workstations team state', async ({ request }) => {
     deleteAllInstallSoftwareTitles(request, workstations.id),
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
-    deleteBootstrapPackage(request, workstations.id),
-    deleteSetupAssistant(request, workstations.id),
-    deleteSetupExperienceScript(request, workstations.id),
+    resetSetupExperience(request, workstations.id),
   ]);
 });
