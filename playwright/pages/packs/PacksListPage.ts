@@ -31,14 +31,20 @@ export class PacksListPage {
     await expect(this.heading).toBeVisible();
   }
 
-  /** Find a pack row by its visible name. */
+  /**
+   * Find a pack row by its visible name. Filters by the row's name-link
+   * matching exactly so adjacent rows with similar names can't be picked
+   * by accident.
+   */
   packRow(name: string): Locator {
-    return this.page.getByRole('row').filter({ hasText: name });
+    return this.page.getByRole('row').filter({
+      has: this.page.getByRole('link', { name, exact: true }),
+    });
   }
 
   /** Click the pack name link to open its edit page. */
   async openPack(name: string): Promise<void> {
-    await this.page.getByRole('link', { name }).click();
+    await this.page.getByRole('link', { name, exact: true }).click();
   }
 
   /**

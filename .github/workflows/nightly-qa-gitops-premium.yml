@@ -2,10 +2,13 @@ name: Nightly QA GitOps — Premium
 
 # Nightly verification chain for the premium instance:
 #   1. apply baseline           (gitops-premium.yml — default + workstations)
-#   2. verify baseline          (api-verify against no-team and Workstations, parallel)
+#   2. verify baseline          (gitops-verify against no-team and Workstations, parallel)
 #   3. apply min variant        (gitops-premium-min.yml)
-#   4. verify min               (api-verify against no-team and Workstations, parallel)
-#   5. restore baseline         (gitops-premium.yml — runs even if verify failed)
+#   4. verify min               (gitops-verify against no-team and Workstations, parallel)
+#   5. apply reset              (gitops-premium-reset.yml — wipes test-owned state
+#                                across no-team and Workstations so the Playwright
+#                                run that follows starts from a known-blank
+#                                baseline; runs even if verify failed)
 #
 # Render redeploy runs separately on its own schedule 1 hour earlier.
 
@@ -32,7 +35,7 @@ jobs:
 
   verify-baseline-no-team:
     needs: apply-baseline
-    uses: ./.github/workflows/api-verify.yml
+    uses: ./.github/workflows/gitops-verify.yml
     with:
       suite: premium
       gitops-target: gitops/premium-fleetqa
@@ -40,7 +43,7 @@ jobs:
 
   verify-baseline-workstations:
     needs: apply-baseline
-    uses: ./.github/workflows/api-verify.yml
+    uses: ./.github/workflows/gitops-verify.yml
     with:
       suite: premium
       gitops-target: gitops/premium-fleetqa/fleets/workstations.yml
@@ -55,7 +58,7 @@ jobs:
 
   verify-min-no-team:
     needs: apply-min
-    uses: ./.github/workflows/api-verify.yml
+    uses: ./.github/workflows/gitops-verify.yml
     with:
       suite: premium
       gitops-target: gitops/premium-fleetqa-min
@@ -63,16 +66,16 @@ jobs:
 
   verify-min-workstations:
     needs: apply-min
-    uses: ./.github/workflows/api-verify.yml
+    uses: ./.github/workflows/gitops-verify.yml
     with:
       suite: premium
       gitops-target: gitops/premium-fleetqa-min/fleets/workstations.yml
     secrets: inherit
 
-  restore-baseline:
+  apply-reset:
     if: ${{ always() }}
     needs:
       - verify-min-no-team
       - verify-min-workstations
-    uses: ./.github/workflows/gitops-premium.yml
+    uses: ./.github/workflows/gitops-premium-reset.yml
     secrets: inherit

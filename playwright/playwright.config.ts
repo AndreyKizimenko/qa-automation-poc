@@ -10,7 +10,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Cap at 2 in every environment — the Fleet QA instance has limited
+  // concurrency headroom and higher worker counts surface as flaky
+  // navigation timeouts even though the test logic is correct.
+  workers: 2,
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }]]
     : 'html',
@@ -31,32 +34,21 @@ export default defineConfig({
       testMatch: /premium\.setup\.ts/,
     },
     {
-      name: 'software-fleet-setup',
+      name: 'cleanup-teardown',
       testDir: './setup',
-      testMatch: /software-fleet\.setup\.ts/,
-      dependencies: ['premium-setup'],
-    },
-    {
-      name: 'mdm-fleet-setup',
-      testDir: './setup',
-      testMatch: /mdm-fleet\.setup\.ts/,
-      dependencies: ['premium-setup'],
-    },
-    {
-      name: 'fleet-teardown',
-      testDir: './setup',
-      testMatch: /fleet\.teardown\.ts/,
+      testMatch: /cleanup\.teardown\.ts/,
     },
     {
       name: 'premium',
       testDir: './tests',
-      grepInvert: /@free|@loadtest/,
+      grepInvert: /@loadtest/,
+      testIgnore: ['**/gitops-verify/**', '**/free/**'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
       },
-      dependencies: ['premium-setup', 'software-fleet-setup', 'mdm-fleet-setup'],
-      teardown: 'fleet-teardown',
+      dependencies: ['premium-setup'],
+      teardown: 'cleanup-teardown',
     },
 
     // ── Free ───────────────────────────────────────────────────────────────────
@@ -68,20 +60,26 @@ export default defineConfig({
     {
       name: 'free',
       testDir: './tests',
-      grep: /@free|@all/,
+      grep: /@free/,
+      // Free runs anything @free-tagged outside premium-only territory.
+      // Premium-only specs in tests/e2e/premium/ stay out of scope; the
+      // @free tag matrix is reserved for tier-agnostic flows (auth, etc.)
+      // and the dedicated tests/e2e/free/ tree.
+      testIgnore: ['**/gitops-verify/**', '**/premium/**'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',
       },
       dependencies: ['free-setup'],
+      teardown: 'cleanup-teardown',
     },
 
-    // ── API Verify (post-gitops state checks) ─────────────────────────────────
+    // ── GitOps Verify (post-gitops state checks) ──────────────────────────────
     // Pure API tests, no browser. Reads the gitops dir at GITOPS_DIR (default
     // ../gitops/free-fleetqa) and asserts the live Fleet instance matches.
     {
-      name: 'api-verify',
-      testDir: './tests/api-verify',
+      name: 'gitops-verify',
+      testDir: './tests/api/gitops-verify',
       use: {
         extraHTTPHeaders: {
           Authorization: `Bearer ${process.env.FLEET_API_TOKEN ?? ''}`,
@@ -100,6 +98,7 @@ export default defineConfig({
       name: 'loadtest',
       testDir: './tests',
       grep: /@loadtest/,
+      testIgnore: '**/gitops-verify/**',
       timeout: 60000,
       use: {
         ...devices['Desktop Chrome'],

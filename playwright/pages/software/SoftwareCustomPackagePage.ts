@@ -38,7 +38,7 @@ export class SoftwareCustomPackagePage {
     this.progressModal = page.locator('.file-progress-modal');
   }
 
-  /** `fleetId` is required for the page to render content (smoke fleet). */
+  /** `fleetId` is required for the page to render content (use 0 for no-team). */
   async goto(opts: { fleetId: number }): Promise<void> {
     await this.page.goto(`/software/add/package?fleet_id=${opts.fleetId}`);
     await expect(this.heading).toBeVisible();

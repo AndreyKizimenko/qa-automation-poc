@@ -136,6 +136,35 @@ export async function deleteSoftwareTitleByPackageName(
   if (existing) await deleteSoftwareTitle(request, fleetId, existing.titleId);
 }
 
+/**
+ * Delete every "available for install" title on the given fleet (custom
+ * packages, FMA, VPP, Android). Does NOT touch host-discovered software
+ * inventory — only entries that an admin added.
+ */
+export async function deleteAllInstallSoftwareTitles(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  const res = await request.get(apiUrl('software/titles'), {
+    headers: sessionAuthHeaders(),
+    params: {
+      fleet_id: String(fleetId),
+      available_for_install: 'true',
+      per_page: '100',
+    },
+  });
+  if (!res.ok()) return;
+  const body = await res.json();
+  const titles = (body.software_titles ?? []) as Array<{ id: number }>;
+  await Promise.all(
+    titles.map((t) =>
+      deleteSoftwareTitle(request, fleetId, t.id).catch((err) => {
+        console.warn(`[software cleanup] failed to delete title ${t.id}:`, err);
+      }),
+    ),
+  );
+}
+
 /** Fetches a single software title's metadata, including its display name. */
 export async function getSoftwareTitle(
   request: APIRequestContext,

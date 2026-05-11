@@ -5,6 +5,7 @@ export { ContentList } from './components/ContentList';
 export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
+export type { TeamScope } from './components/TeamDropdown';
 export { StatusFilter } from './components/StatusFilter';
 export { LabelFilter } from './components/LabelFilter';
 

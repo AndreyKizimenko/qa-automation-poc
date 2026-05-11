@@ -1,0 +1,88 @@
+# Premium reset variant — strips every accumulating entity from no-team
+# (policies, reports, scripts, profiles, labels) so the no-team scope is
+# a known blank slate for Playwright. Applied as the final gitops step
+# before the Playwright nightly runs.
+#
+# Org settings, agent options, SMTP, SSO, MDM/ABM/VPP toggles are
+# preserved — they're environmental and required by Fleet for the
+# instance to behave like a premium one.
+#
+# The Workstations team is preserved (ABM binds device assignment to its
+# name) but its content is emptied — see fleets/workstations.yml.
+agent_options:
+  path: ../lib/agent-options.yml
+
+org_settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  fleet_desktop:
+    transparency_url: https://fleetdm.com/transparency
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+  mdm:
+    end_user_authentication:
+      entity_id: fleet-eua
+      idp_name: Okta
+      metadata_url: $FLEET_EUA_METADATA_URL
+    apple_business_manager:
+      - organization_name: $FLEET_ABM_ORG_NAME
+        macos_fleet: Workstations
+        ios_fleet: Workstations
+        ipados_fleet: Workstations
+    volume_purchasing_program:
+      - location: $FLEET_VPP_LOCATION
+        fleets:
+          - "All teams"
+  org_info:
+    contact_url: https://fleetdm.com/company/contact
+    org_logo_url: ""
+    org_logo_url_light_background: ""
+    org_name: Premium QA Automation
+  server_settings:
+    ai_features_disabled: false
+    deferred_save_host: false
+    discard_reports_data: false
+    enable_analytics: false
+    live_reporting_disabled: false
+    report_cap: 0
+    scripts_disabled: false
+    server_url: $FLEET_URL
+  sso_settings:
+    enable_sso: true
+    enable_sso_idp_login: false
+    entity_id: fleet
+    idp_image_url: ""
+    idp_name: Okta
+    metadata_url: $FLEET_SSO_METADATA_URL
+
+controls:
+  windows_enabled_and_configured: true
+  android_enabled_and_configured: true
+  scripts: []
+  apple_settings:
+    configuration_profiles: []
+  windows_settings:
+    configuration_profiles: []
+  android_settings:
+    configuration_profiles: []
+  setup_experience:
+    enable_end_user_authentication: false
+
+labels:
+  - path: ../lib/labels/apple-silicon-macos-hosts.yml
+  - path: ../lib/labels/arm-based-windows-hosts.yml
+  - path: ../lib/labels/debian-based-linux-hosts.yml
+  - path: ../lib/labels/keynote-14-installed.yml
+  - path: ../lib/labels/macos-compatibility-extension-installed.yml
+  - path: ../lib/labels/macs-with-1password-installed.yml
+  - path: ../lib/labels/macs-with-fleet-maintained-apps-installed.yml
+  - path: ../lib/labels/macs-with-microsoft-autoupdate-installed.yml
+  - path: ../lib/labels/rpm-based-linux-hosts.yml
+  - path: ../lib/labels/virtual-machines.yml
+  - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
+  - path: ../lib/labels/x86-based-windows-hosts.yml
+
+policies: []
+reports: []

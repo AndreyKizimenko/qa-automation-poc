@@ -1,0 +1,92 @@
+name: GitOps Verify
+
+# Reads a GitOps target (directory or fleet file) and asserts the live Fleet
+# instance matches. Called by the per-tier nightly orchestrators between each
+# gitops apply step.
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
+        required: true
+        type: choice
+        options:
+          - free
+          - premium
+      gitops-target:
+        description: |
+          Path (relative to repo root) to either a gitops directory
+          (no-team scope) or a fleets/*.yml file (team scope).
+          Examples:
+            gitops/free-fleetqa
+            gitops/premium-fleetqa
+            gitops/premium-fleetqa/fleets/workstations.yml
+            gitops/premium-fleetqa-min
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
+        required: true
+        type: string
+      gitops-target:
+        description: 'Path to a gitops directory or fleet file'
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: playwright/package-lock.json
+
+      - run: npm ci
+
+      - name: Resolve gitops target relative to playwright/
+        id: target
+        run: |
+          # GITOPS_TARGET is read from the playwright/ working dir, so make the
+          # path relative to it.
+          ABS="$GITHUB_WORKSPACE/${{ inputs.gitops-target }}"
+          REL="$(realpath --relative-to="$GITHUB_WORKSPACE/playwright" "$ABS")"
+          echo "value=$REL" >> "$GITHUB_OUTPUT"
+          # Slug version (no slashes/dots) for use in artifact names.
+          SLUG="$(echo '${{ inputs.gitops-target }}' | tr '/.' '-')"
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "Resolved GITOPS_TARGET: $REL"
+
+      - name: Run gitops-verify
+        env:
+          SUITE: ${{ inputs.suite }}
+          GITOPS_TARGET: ${{ steps.target.outputs.value }}
+          # Both suites need a token. Caller passes the right one through env;
+          # we expose it under the unprefixed name the playwright config reads.
+          FLEET_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_URL || secrets.FLEET_PREMIUM_URL }}
+          FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}
+        run: npx playwright test --project=gitops-verify
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}
+          path: playwright/playwright-report/
+          retention-days: 7

@@ -1,6 +1,7 @@
 import { Page, Locator, expect, Download } from '@playwright/test';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
+import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
 
 /**
@@ -22,6 +23,7 @@ export class ConfigurationProfilesPage {
   readonly page: Page;
   readonly navbar: Navbar;
   readonly list: ContentList;
+  readonly teamDropdown: TeamDropdown;
   readonly toast: Toast;
 
   readonly heading: Locator;
@@ -39,6 +41,7 @@ export class ConfigurationProfilesPage {
     this.page = page;
     this.navbar = new Navbar(page);
     this.list = new ContentList(page);
+    this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
 
     this.heading = page.getByRole('heading', { name: 'Configuration profiles' });
@@ -68,7 +71,11 @@ export class ConfigurationProfilesPage {
   }
 
   itemByName(name: string): Locator {
-    return this.listItem.filter({ hasText: name });
+    // Match the row whose title span equals `name` exactly. `hasText` would
+    // substring-match on full row content (name + platform tag + date),
+    // letting a sibling row match when the platform tag or adjacent text
+    // happens to share a substring with another profile's name.
+    return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
   async uploadProfile(filePath: string): Promise<void> {

@@ -3,6 +3,7 @@ import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
+import { TeamDropdown } from '../components/TeamDropdown';
 
 /**
  * /software/titles — the list of installed software with vulnerability counts.
@@ -13,6 +14,7 @@ export class SoftwareTitlesPage {
   readonly table: DataTable;
   readonly filter: FilterModal;
   readonly pagination: Pagination;
+  readonly teamDropdown: TeamDropdown;
 
   // Page controls
   readonly search: Locator;
@@ -31,6 +33,7 @@ export class SoftwareTitlesPage {
     this.table = new DataTable(page);
     this.filter = new FilterModal(page);
     this.pagination = new Pagination(page);
+    this.teamDropdown = new TeamDropdown(page);
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });

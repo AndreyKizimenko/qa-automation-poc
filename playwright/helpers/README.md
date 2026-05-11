@@ -78,10 +78,11 @@ fleetdm/fleet#38044).
 ### Page health monitoring — automatic via the fixture
 
 The `pageHealth` fixture in `fixtures.ts` is `auto: true`, so every test
-imported from `@fixtures` already has console-error and 4xx/5xx network
-monitoring running. Adjust the global ignore lists in
-[`console.ts`](./console.ts) when Fleet introduces a new "expected" 4xx
-empty-state probe.
+imported from `@fixtures` already has console-error and 5xx server-error
+monitoring running. 4xx isn't flagged: it's normal app behaviour
+(auth probes, "no resource yet" 404s, premium-gated 402s) and assertions
+catch the meaningful ones. Adjust `DEFAULT_IGNORED_CONSOLE_ERRORS` in
+[`console.ts`](./console.ts) for new console-error noise.
 
 If a test legitimately triggers errors (negative-path auth, post-logout
 401), it can opt out at the top of the test body:

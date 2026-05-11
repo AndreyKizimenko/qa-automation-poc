@@ -41,7 +41,7 @@ jobs:
         env:
           FLEET_URL:              ${{ secrets.FLEET_PREMIUM_URL }}
           FLEET_API_TOKEN:        ${{ secrets.FLEET_PREMIUM_API_TOKEN }}
-          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_SSO_METADATA_URL }}
+          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_PREMIUM_SSO_METADATA_URL }}
           FLEET_EUA_METADATA_URL: ${{ secrets.FLEET_EUA_METADATA_URL }}
           FLEET_ABM_ORG_NAME:     ${{ secrets.FLEET_ABM_ORG_NAME }}
           FLEET_VPP_LOCATION:     ${{ secrets.FLEET_VPP_LOCATION }}
