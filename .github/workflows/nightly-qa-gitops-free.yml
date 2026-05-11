@@ -5,10 +5,10 @@ name: Nightly QA GitOps — Free
 #   2. verify baseline          (gitops-verify against gitops/free-fleetqa)
 #   3. apply min variant        (gitops-free-min.yml)
 #   4. verify min               (gitops-verify against gitops/free-fleetqa-min)
-#   5. apply reset              (gitops-free-reset.yml — wipes test-owned state
-#                                so the Playwright run that follows starts
-#                                from a known-blank baseline; runs even if
-#                                verify failed)
+#
+# Test-state cleanup runs inside the Playwright project itself
+# (cleanup-setup runs before tests, cleanup-teardown after — see
+# `playwright/playwright.config.ts`). No separate gitops reset step.
 #
 # Render redeploy runs separately on its own schedule 1 hour earlier.
 
@@ -52,10 +52,4 @@ jobs:
     with:
       suite: free
       gitops-target: gitops/free-fleetqa-min
-    secrets: inherit
-
-  apply-reset:
-    if: ${{ always() }}
-    needs: verify-min
-    uses: ./.github/workflows/gitops-free-reset.yml
     secrets: inherit

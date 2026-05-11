@@ -43,7 +43,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Cross-module imports use the path aliases configured in `tsconfig.json`: `@fixtures`, `@helpers/*`, `@pages`, `@pages/*`. Sibling imports inside a module stay relative (`./Foo`) to keep intra-module coupling visible.
 - Specs target one of three scopes: Unassigned (no team), Workstations (the gitops-provisioned premium team), or All fleets (the global aggregate, used for reports/policies). Selection happens via `<page>.teamDropdown.select(scope)`, which is idempotent and a no-op on free (free has no dropdown).
 - Premium specs that need to call `<page>.goto({ fleetId })` for the Workstations variant pull the fleet id from the `workstationsFleetId` worker fixture (resolved once per worker via the Fleet API).
-- Do not create or delete teams from test bodies. Workstations is provisioned by gitops and never deleted; its content is wiped by both the `cleanup-teardown` project and the `gitops/premium-fleetqa-reset` apply step.
+- Do not create or delete teams from test bodies. Workstations is provisioned by gitops and never deleted; its content is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
 - The `pageHealth` fixture is **auto-applied** to every test — it monitors console errors and 5xx server errors and asserts at teardown. Tests that intentionally trigger console errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. 4xx is not flagged: it's normal app behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and assertions catch the meaningful ones. New specs need no setup to participate.
 - For per-test state (a script, a custom package), upload as a precondition and clean up at the end of the same test.
 
@@ -76,7 +76,8 @@ Tag conventions:
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `cleanup-teardown` — runs at the end of the premium project regardless of pass/fail. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`) and the Workstations team's content (team-scoped policies, install software, profiles, scripts). The Workstations team itself is preserved.
+2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`) plus MDM setup-experience entities and the Workstations team's content. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
+3. `cleanup-teardown` — same wipe steps run again at end of project regardless of pass/fail, so a crashed worker still leaves a clean instance. Both projects point at the same `setup/cleanup.steps.ts`.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
 

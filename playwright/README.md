@@ -103,7 +103,7 @@ playwright/
 │   ├── premium.setup.ts          # Logs into premium instance
 │   ├── free.setup.ts             # Logs into free instance
 │   ├── loadtest.setup.ts         # Logs into loadtest instance
-│   └── cleanup.teardown.ts       # Wipes unassigned + Workstations state at end of run
+│   └── cleanup.steps.ts          # Wipes unassigned + Workstations state; runs pre-test (cleanup-setup) and post-test (cleanup-teardown)
 ├── helpers/                      # Non-UI utilities — see helpers/README.md
 │   ├── api/                      # Per-area Fleet API helpers + cleanup helpers
 │   ├── catalogs/                 # Typed FMA / VPP / Android app-store reference data
