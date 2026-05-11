@@ -1,20 +1,11 @@
 name: Playwright — Premium
 
-# Manual-only. Runs the chosen scope against the premium Fleet instance.
+# Runs the full Playwright suite against the premium Fleet instance.
 
 on:
   schedule:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Test scope'
-        required: true
-        default: smoke
-        type: choice
-        options:
-          - smoke
-          # - e2e   # add when e2e specs land
 
 defaults:
   run:
@@ -53,11 +44,11 @@ jobs:
           FLEET_SSO_LOGIN_PASSWORD=${{ secrets.FLEET_SSO_LOGIN_PASSWORD }}
           EOF
 
-      - run: npm run test:premium:${{ inputs.scope || 'smoke' }}
+      - run: npm run test:premium
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report-premium-${{ inputs.scope || 'smoke' }}
+          name: playwright-report-premium
           path: playwright/playwright-report/
           retention-days: 14

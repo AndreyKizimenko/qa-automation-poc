@@ -16,13 +16,18 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 
 ## Layout
 
-- `tests/` — spec files (`auth/`, `hosts/`, `smoke/`, `performance/`)
-- `pages/` — page objects, with `pages/components/` for reusable UI widgets
-- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing)
-- `fixtures.ts` — page-object fixtures (single file)
-- `setup/` — auth and project-scoped setup/teardown specs
-- `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`)
-- `.auth/` — stored auth + setup state (gitignored)
+- `tests/e2e/` — browser specs in three sibling folders:
+  - `shared/<area>/` — tier-agnostic flows (currently `auth/`, `packs/`); every test tagged `@free`, runs on both projects.
+  - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
+  - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
+- `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts) and `tests/api/free/` (free-only).
+- `tests/loadtest/` — page-load timing tests (local-only, gitignored).
+- `pages/` — page objects, with `pages/components/` for reusable UI widgets.
+- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team.ts` for per-spec team lifecycle).
+- `fixtures.ts` — page-object fixtures (single file).
+- `setup/` — auth and project-scoped setup/teardown specs.
+- `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`).
+- `.auth/` — stored auth + setup state (gitignored).
 
 ## Locators and waits (Fleet-specific gotchas)
 
@@ -34,10 +39,12 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Imports + fixtures
 
-- Specs import `test` and `expect` from `'@fixtures'`, never from `@playwright/test`. Setup specs and `helpers/auth.ts` are the only exceptions.
+- Browser specs (under `tests/e2e/`) import `test` and `expect` from `'@fixtures'`, never from `@playwright/test`. Setup specs (`setup/*.ts`), pure-API specs under `tests/api/` (including `tests/api/gitops-verify/`), and `helpers/auth.ts` are the exceptions — they don't use page-object fixtures or the auto `pageHealth` fixture, so importing from `@playwright/test` is fine there. Note: when a pure-API spec *does* want a page-object or the workstationsFleetId worker fixture, import from `@fixtures` to get them.
 - Cross-module imports use the path aliases configured in `tsconfig.json`: `@fixtures`, `@helpers/*`, `@pages`, `@pages/*`. Sibling imports inside a module stay relative (`./Foo`) to keep intra-module coupling visible.
-- Two worker fixtures expose the smoke-test fleets created by the setup projects: `softwareFleet` (used by `tests/smoke/software/`, `tests/smoke/orchestration/`) and `mdmFleet` (used by `tests/smoke/mdm/`). Picking the right one keeps the two product groups' state from colliding when specs run in parallel. Do not create or delete fleets in test bodies.
-- The `pageHealth` fixture is **auto-applied** to every test — it monitors console errors and 4xx/5xx network failures and asserts at teardown. Tests that intentionally trigger errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. New specs need no setup to participate.
+- Specs target one of three scopes: Unassigned (no team), Workstations (the gitops-provisioned premium team), or All fleets (the global aggregate, used for reports/policies). Selection happens via `<page>.teamDropdown.select(scope)`, which is idempotent and a no-op on free (free has no dropdown).
+- Premium specs that need to call `<page>.goto({ fleetId })` for the Workstations variant pull the fleet id from the `workstationsFleetId` worker fixture (resolved once per worker via the Fleet API).
+- Do not create or delete teams from test bodies. Workstations is provisioned by gitops and never deleted; its content is wiped by both the `cleanup-teardown` project and the `gitops/premium-fleetqa-reset` apply step.
+- The `pageHealth` fixture is **auto-applied** to every test — it monitors console errors and 5xx server errors and asserts at teardown. Tests that intentionally trigger console errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. 4xx is not flagged: it's normal app behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and assertions catch the meaningful ones. New specs need no setup to participate.
 - For per-test state (a script, a custom package), upload as a precondition and clean up at the end of the same test.
 
 ## API access
@@ -49,48 +56,43 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects and tags
 
-Three projects target three Fleet environments. Each has its own env file
-(`.env.<project>`) and its own auth state (`.auth/<project>-admin.json`).
+Four browser/API projects target three Fleet environments. Each has its own env file
+(`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 The grep matrix is the source of truth in `playwright.config.ts`:
 
 | Project | Includes | Excludes | Auth state |
 |---|---|---|---|
-| `premium` | untagged + `@all` | `@free`, `@loadtest` | `.auth/premium-admin.json` |
-| `free` | `@free`, `@all` | (grep-based) | `.auth/free-admin.json` |
+| `premium` | untagged + `@free` | `@loadtest` | `.auth/premium-admin.json` |
+| `free` | `@free` | (grep-based) | `.auth/free-admin.json` |
 | `loadtest` | `@loadtest` | (grep-based) | `.auth/loadtest-admin.json` |
+| `gitops-verify` | `tests/api/gitops-verify/` only | own testDir | bearer token |
 
 Tag conventions:
 
-- **No tag** — premium-only (the default; most specs).
-- **`@all`** — runs on premium **and** free (login flow, basic page health).
-- **`@free`** — free-only (free-tier feature gating, premium-feature absence checks).
-- **`@loadtest`** — loadtest-only (perf measurements; can combine with `@all` for tier-agnostic loadtest sanity checks).
+- **No tag** — runs on premium only. Default for premium-only flows (Setup Experience, premium-gated features).
+- **`@free`** — runs on premium **and** free. Use for tier-agnostic flows (login, page health, no-team CRUD) and free-only specs in `tests/e2e/free/`.
+- **`@loadtest`** — loadtest project only.
 
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `software-fleet-setup` — creates "Playwright Software Smoke", writes `.auth/software-fleet.json`. Transfers every online host onto this fleet so future host-execution tests have a known set. Idempotent.
-3. `mdm-fleet-setup` — creates "Playwright MDM Smoke", writes `.auth/mdm-fleet.json`. No host transfer (MDM smokes don't need real hosts). Idempotent.
+2. `cleanup-teardown` — runs at the end of the premium project regardless of pass/fail. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`) and the Workstations team's content (team-scoped policies, install software, profiles, scripts). The Workstations team itself is preserved.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
-
-`fleet-teardown` runs at the end of the premium project regardless of pass/fail and deletes both smoke fleets (restoring hosts to no-team for the software fleet).
 
 The `free` project depends only on `free-setup`. The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is independent — no cross-project sharing.
 
 ## Env vars
 
-Every var in `.env.<project>.example` is required — specs fail rather than skip when one is missing. The only exception is:
-
-- `FLEET_NATS_URL` (or Fleet's logging plugin auto-detection) gates the NATS log-delivery tests.
+Every var in `.env.<project>.example` is required — specs fail rather than skip when one is missing.
 
 Do not introduce new env-var skip gates without a load-bearing reason.
 
-## Smoke vs. performance specs
+## E2E vs. performance specs
 
-**Smoke specs** (`tests/smoke/`) verify user-visible behaviour. Enter through the dashboard and click through the navbar / tabs / subnav to reach the feature being tested — direct URL `goto()` for the feature page is reserved for non-smoke contexts. Each spec is a single end-to-end flow; cleanup runs at the end of the same test (no shared mutable state between tests).
+**E2E specs** (`tests/e2e/`) verify user-visible behaviour. Enter through the dashboard and click through the navbar / tabs / subnav to reach the feature being tested — direct URL `goto()` for the feature page is reserved for non-flow contexts (e.g. paywall checks in `tests/e2e/free/paywalls.spec.ts`). Each spec is a single end-to-end flow; cleanup runs at the end of the same test (no shared mutable state between tests).
 
-**Performance specs** (`tests/loadtest/`) follow different rules. They are tagged `@loadtest`, run only against the loadtest project, and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The smoke conventions above (click-through nav, smoke fleet, etc.) do not apply.
+**Performance specs** (`tests/loadtest/`) follow different rules. They are tagged `@loadtest`, run only against the loadtest project, and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
 
 ## Skips
 

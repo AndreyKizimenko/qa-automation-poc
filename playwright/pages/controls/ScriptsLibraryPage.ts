@@ -2,6 +2,7 @@ import { Page, Locator, Download, expect } from '@playwright/test';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
 import { FileUploader } from '../components/FileUploader';
+import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
 
 /**
@@ -19,6 +20,7 @@ export class ScriptsLibraryPage {
   readonly navbar: Navbar;
   readonly list: ContentList;
   readonly uploader: FileUploader;
+  readonly teamDropdown: TeamDropdown;
   readonly toast: Toast;
 
   readonly heading: Locator;
@@ -47,6 +49,7 @@ export class ScriptsLibraryPage {
     this.navbar = new Navbar(page);
     this.list = new ContentList(page);
     this.uploader = new FileUploader(page);
+    this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
 
     this.heading = page.getByRole('heading', { name: 'Library', level: 2 });
@@ -85,7 +88,11 @@ export class ScriptsLibraryPage {
   }
 
   itemByName(name: string): Locator {
-    return this.listItem.filter({ hasText: name });
+    // Match the row whose title button is exactly `name`. `filter({ hasText })`
+    // would do a substring match on full row content (filename + platform
+    // tag + date), which lets a sibling row match when the platform tag or
+    // adjacent text happens to share a substring with another script's name.
+    return this.listItem.filter({ has: this.page.getByRole('button', { name, exact: true }) });
   }
 
   async uploadScript(filePath: string): Promise<void> {

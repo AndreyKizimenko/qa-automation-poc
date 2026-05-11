@@ -2,7 +2,7 @@
 
 Trimmed variant of [`../premium-fleetqa/`](../premium-fleetqa/). Used to verify that `fleetctl gitops` actually applies changes to a live Premium instance, including team-scoped resources.
 
-References files in `../lib/` like the baseline. Each scope (no-team, Workstations) trims a few items so api-verify can detect the difference.
+References files in `../lib/` like the baseline. Each scope (no-team, Workstations) trims a few items so gitops-verify can detect the difference.
 
 ## What's different from baseline
 

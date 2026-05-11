@@ -18,10 +18,13 @@ Icon
 # Logs
 *.log
 
+# Playwright MCP browser-tooling artifacts: page snapshots and console
+# logs captured during interactive exploration. May contain DOM dumps
+# of the live QA instance (host names, emails, etc.) — never commit.
+.playwright-mcp/
+
 # Playwright-suite ignores live in playwright/.gitignore
 
-# Skip the auth + loadtest test directories (kept local). Scoped to
-# playwright/tests/ so we don't shadow playwright/pages/auth/ which holds
-# real page-object source.
-playwright/tests/auth/
+# Loadtest specs are local-only (per-run credentials, not committed).
+# Scoped to playwright/tests/ so we don't shadow playwright/pages/ paths.
 playwright/tests/loadtest/

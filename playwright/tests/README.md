@@ -8,20 +8,36 @@ read like a user flow, not like raw Playwright API calls.
 
 ```
 tests/
-├── auth/             # Login, logout, forgot-password flows
-├── smoke/            # End-to-end smoke tests, grouped by feature area
-│   ├── mdm/
-│   ├── orchestration/
-│   ├── security-and-compliance/
-│   └── software/
-├── loadtest/         # Page load / search timing tests (tagged @loadtest)
-└── api-verify/       # Pure-API gitops drift checks (no browser)
+├── e2e/                      # Browser specs in three sibling folders
+│   ├── shared/               # Tier-agnostic (@free) — auth, packs, etc.
+│   │   ├── auth/             # login, logout, SSO, forgot-password
+│   │   └── packs/            # packs CRUD (global, no team scope)
+│   ├── premium/              # Premium-only flows (Unassigned + Workstations variants)
+│   │   ├── controls/
+│   │   │   ├── os-settings/
+│   │   │   ├── scripts/
+│   │   │   └── setup-experience/
+│   │   ├── policies/
+│   │   ├── reports/
+│   │   └── software/         # library (premium-only, paywalled on free) + vulnerabilities
+│   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs
+├── api/                      # Pure-API specs (no browser)
+│   ├── config.spec.ts        # Agnostic config-shape checks
+│   ├── free/                 # Free-only API contracts
+│   └── gitops-verify/        # GitOps drift checks
+└── loadtest/                 # Page load / search timing tests (tagged @loadtest, gitignored)
 ```
 
-### smoke vs loadtest vs api-verify
+Tier-routing rules:
 
-- **Smoke** — "Does this feature work for the user?" Runs in the
-  `premium` (default) and `free` projects, depending on tags. Uses
+- **Tier-agnostic** (no team/scope concept): one spec under `tests/e2e/shared/<area>/`, every test tagged `@free`. Both projects run it.
+- **Premium-only**: one spec under `tests/e2e/premium/<area>/`. Loop over `['Unassigned', 'Workstations']` (or `['All fleets', 'Workstations']` for reports/policies) calling `<page>.teamDropdown.select(scope)` after navigation. Use the `workstationsFleetId` worker fixture if the page needs a direct `goto({ fleetId })` for the Workstations variant.
+- **Free-tier counterpart**: mirror under `tests/e2e/free/<area>/`, drop the dropdown step, tag every test with `@free` so the free project's grep matches.
+
+### e2e vs loadtest vs gitops-verify
+
+- **E2E** — "Does this feature work for the user?" Runs in the
+  `premium` (default) and `free` (`@free`-tagged) projects. Uses
   click-through flows, verifies the UI renders and the user can
   complete a task.
 
@@ -31,8 +47,8 @@ tests/
   user-perceived page loads. Tagged `@loadtest` so the premium and free
   projects skip them.
 
-- **API verify** — "Does the live instance match the gitops config?"
-  Runs in the `api-verify` project (no browser, just the request
+- **GitOps verify** — "Does the live instance match the gitops config?"
+  Runs in the `gitops-verify` project (no browser, just the request
   fixture). Loads the gitops target via `_config.ts` and asserts org
   settings, profiles, policies, scripts, labels, and reports match.
   Driven by the nightly orchestrators between gitops apply steps.
@@ -60,11 +76,12 @@ Rules:
 ## Page health is automatic
 
 Every test gets the `pageHealth` fixture applied automatically. It monitors
-console errors and 4xx/5xx network failures during the run and asserts at
-teardown that no un-ignored issues occurred. New specs need no setup — just
-import from `@fixtures` and the check runs.
+console errors and 5xx server errors during the run and asserts at teardown
+that no un-ignored issues occurred. 4xx is not flagged — it's normal app
+behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and
+assertions catch the meaningful ones.
 
-If your test intentionally triggers a 4xx/5xx (negative-path auth, a
+If your test intentionally produces console errors (negative-path auth,
 post-logout 401), opt out:
 
 ```ts
@@ -75,8 +92,8 @@ test('shows error for invalid credentials', async ({ loginPage, pageHealth }) =>
 });
 ```
 
-Default ignores live in `@helpers/console` (`DEFAULT_IGNORED_CONSOLE_ERRORS`,
-`DEFAULT_IGNORED_NETWORK_PATTERNS`). Add Fleet-wide noise there.
+Console-error ignore patterns live in `@helpers/console`
+(`DEFAULT_IGNORED_CONSOLE_ERRORS`). Add Fleet-wide noise there.
 
 ## Anti-patterns to reject in review
 
@@ -117,15 +134,16 @@ state between tests unless they're in a `test.describe.configure({ mode: 'serial
 block and explicitly depend on each other (like the vulnerability flow that
 builds up `softwareByOS` across ordered tests).
 
-## Tagging
+## Tier routing
 
-| Tag | Where it runs |
-|---|---|
-| (none) | premium |
-| `@all` | premium + free |
-| `@free` | free |
-| `@loadtest` | loadtest |
+Routing is mostly by folder, with `@free` reserved for the tier-agnostic specs.
 
-The grep matrix in `playwright.config.ts` is the source of truth.
-`api-verify` doesn't use grep — it has its own `testDir` and runs every
-spec under `tests/api-verify/`.
+| Where the spec lives | premium runs it? | free runs it? |
+|---|---|---|
+| `tests/e2e/shared/**` (every test tagged `@free`) | yes | yes |
+| `tests/e2e/premium/**` | yes | no (free's `testIgnore` excludes `**/premium/**`) |
+| `tests/e2e/free/**` (every test tagged `@free`) | no (premium's `testIgnore` excludes `**/free/**`) | yes |
+| Tagged `@loadtest` | no | no — loadtest project only |
+| `tests/api/gitops-verify/**` | no | no — gitops-verify project only |
+
+The grep + testIgnore matrix in `playwright.config.ts` is the source of truth.

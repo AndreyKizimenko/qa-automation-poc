@@ -11,8 +11,6 @@
  *   - Auth comes from the setup projects' storage state.
  *   - Tests call `<page>.goto()` themselves so the spec body stays explicit.
  */
-import * as fs from 'fs';
-import * as path from 'path';
 import { test as base } from '@playwright/test';
 import { monitorConsoleErrors, monitorNetworkFailures } from './helpers/console';
 
@@ -71,20 +69,12 @@ type FleetWorkerFixtures = {
   firstHostId: number;
 
   /**
-   * Software smoke fleet — owns the library-software, scripts-library,
-   * reports, policies flows. Online hosts are transferred onto this
-   * fleet at setup time. Read from `.auth/software-fleet.json`.
+   * Resolved id of the Workstations fleet on the premium instance — fetched
+   * once per worker via the Fleet API. Used by premium specs that need to
+   * call `page.goto({ fleetId })` for the Workstations scope variant.
+   * Throws on free; free specs must not request this fixture.
    */
-  softwareFleet: { id: number; name: string };
-
-  /**
-   * MDM smoke fleet — owns every spec under tests/smoke/mdm/. Kept on
-   * a separate fleet from `softwareFleet` so MDM titles (FMA / VPP /
-   * Android / custom packages added during install-software tests)
-   * don't collide with the software product group's lifecycle tests
-   * running in parallel. Read from `.auth/mdm-fleet.json`.
-   */
-  mdmFleet: { id: number; name: string };
+  workstationsFleetId: number;
 };
 
 type FleetFixtures = {
@@ -148,7 +138,7 @@ type FleetFixtures = {
 
   /**
    * Auto-applied page-health monitor. Starts before the test body, asserts
-   * at teardown that no un-ignored console errors or 4xx/5xx network
+   * at teardown that no un-ignored console errors or 5xx server
    * failures occurred. Tests that intentionally trigger errors can opt
    * out with `pageHealth.disable()`. Defaults are tuned in
    * `helpers/console.ts`.
@@ -159,28 +149,27 @@ type FleetFixtures = {
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
 export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
-  softwareFleet: [async ({}, use) => {
-    const statePath = path.resolve(__dirname, '.auth/software-fleet.json');
-    if (!fs.existsSync(statePath)) {
+  workstationsFleetId: [async ({}, use) => {
+    const baseURL = process.env.FLEET_URL;
+    const token = process.env.FLEET_API_TOKEN;
+    if (!baseURL || !token) {
+      throw new Error('[workstationsFleetId fixture] FLEET_URL and FLEET_API_TOKEN must be set');
+    }
+    const res = await fetch(`${baseURL}/api/latest/fleet/teams?query=Workstations&per_page=50`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(`[workstationsFleetId fixture] teams lookup failed: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const list = (data.fleets ?? data.teams ?? []) as Array<{ id: number; name: string }>;
+    const wk = list.find((t) => t.name === 'Workstations');
+    if (!wk) {
       throw new Error(
-        `[softwareFleet fixture] ${statePath} not found. ` +
-        `Ensure the running project depends on 'software-fleet-setup'.`,
+        '[workstationsFleetId fixture] Workstations fleet not found — premium gitops likely not applied',
       );
     }
-    const data = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
-    await use({ id: data.id, name: data.name });
-  }, { scope: 'worker', box: true }],
-
-  mdmFleet: [async ({}, use) => {
-    const statePath = path.resolve(__dirname, '.auth/mdm-fleet.json');
-    if (!fs.existsSync(statePath)) {
-      throw new Error(
-        `[mdmFleet fixture] ${statePath} not found. ` +
-        `Ensure the running project depends on 'mdm-fleet-setup'.`,
-      );
-    }
-    const data = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
-    await use({ id: data.id, name: data.name });
+    await use(wk.id);
   }, { scope: 'worker', box: true }],
 
   pageHealth: [async ({ page }, use, testInfo) => {
@@ -199,7 +188,7 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     const fails = failures.getFailures();
     const messages: string[] = [];
     if (errs.length) messages.push(`Console errors:\n  ${errs.join('\n  ')}`);
-    if (fails.length) messages.push(`Network failures (4xx/5xx):\n  ${fails.join('\n  ')}`);
+    if (fails.length) messages.push(`Server errors (5xx):\n  ${fails.join('\n  ')}`);
     if (messages.length) throw new Error(`Page health issues:\n${messages.join('\n')}`);
   }, { auto: true, box: true }],
 

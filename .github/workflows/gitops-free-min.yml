@@ -44,4 +44,4 @@ jobs:
           FLEET_URL:              ${{ secrets.FLEET_FREE_URL }}
           FLEET_API_TOKEN:        ${{ secrets.FLEET_FREE_API_TOKEN }}
           FLEET_ENROLL_SECRET:    ${{ secrets.FLEET_FREE_ENROLL_SECRET }}
-          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_SSO_METADATA_URL }}
+          FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_FREE_SSO_METADATA_URL }}

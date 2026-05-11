@@ -12,13 +12,6 @@ Tests / specs that are currently **skipped**, **gated behind env vars**, or
 | Test | Why | Unblock |
 |---|---|---|
 | `tests/smoke/orchestration/packs-flow.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
-| `tests/smoke/orchestration/log-destination-flow.spec.ts` → `End-to-end log delivery` (whole describe) | Spec flagged as a candidate for removal. | Either remove the spec or flip `test.describe.skip` → `test.describe`. |
-
-## Gated by env vars (skip if unset)
-
-| Gate | What it controls | Set to enable |
-|---|---|---|
-| `FLEET_NATS_URL` (optional) / Fleet logging plugin set to `nats` | NATS log-destination tests | Auto-detected from Fleet's logging config when configured. |
 
 `FLEET_SSO_LOGIN_*` is required by the Okta SSO login spec — tests fail rather than skip if it is missing. Admin SSO and EUA are assumed to be pre-configured on the instance and are no longer set up by the suite. Project-level scoping (premium / free / loadtest) is handled via tags and `playwright.config.ts` grep, not env vars.
 
@@ -52,8 +45,11 @@ label, text, or testid:
   `.delete-script-modal`, `.delete-setup-experience-script-modal`) or
   `.modal__modal_container` filtered by the title text.
 - **react-select v5 triggers** (`TeamDropdown`, `LabelFilter`, `StatusFilter`)
-  — visible click target is a role-less `<div>`. Options are fine: Fleet's
-  `DropdownWrapper` emits `data-testid="dropdown-option"`.
+  — visible click target is a role-less `<div>`. `LabelFilter` and
+  `StatusFilter` options use `data-testid="dropdown-option"` (Fleet's
+  `DropdownWrapper`); `TeamDropdown` options are *not* wrapped and have
+  no testid/role, so the component targets `.team-dropdown__option`
+  directly.
 - **react-select v1** in `PackEditPage` (`.Select-*`) — library-internal
   CSS classes; will go away when Fleet migrates the picker.
 - **Section wrappers** (`.bootstrap-package`, `.run-script`, `.script-library`)
