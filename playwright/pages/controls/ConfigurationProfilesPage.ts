@@ -1,4 +1,5 @@
 import { Page, Locator, expect, Download } from '@playwright/test';
+import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
@@ -90,18 +91,14 @@ export class ConfigurationProfilesPage {
   /** Triggers a download for the profile and returns the Download handle. */
   async downloadProfile(name: string): Promise<Download> {
     const row = this.itemByName(name);
-    // Action icons are hover-revealed.
-    await row.hover();
     const downloadPromise = this.page.waitForEvent('download');
-    await row.getByTestId('download-icon').click();
+    await clickHoverAction(row, row.getByTestId('download-icon'));
     return downloadPromise;
   }
 
   async deleteProfile(name: string): Promise<void> {
     const row = this.itemByName(name);
-    // Action icons are hover-revealed.
-    await row.hover();
-    await row.getByTestId('trash-icon').click();
+    await clickHoverAction(row, row.getByTestId('trash-icon'));
     await expect(this.deleteModal).toBeVisible();
     await this.deleteConfirmButton.click();
     await this.toast.expectSuccess('Successfully deleted.');

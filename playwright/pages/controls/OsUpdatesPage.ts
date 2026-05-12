@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { clickHoverAction } from '../components/clickHoverAction';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 
@@ -23,13 +24,11 @@ export class OsUpdatesPage {
   }
 
   /**
-   * Hover the first OS row and click its "View all hosts" button. The button
-   * uses `row-hover-button` and is only visible on hover, so we must hover
-   * first.
+   * Click the first row's "View all hosts" button. The button uses
+   * `row-hover-button` and only renders while the row is hovered.
    */
   async viewHostsForFirstOs(): Promise<void> {
     const firstRow = this.table.firstRow;
-    await firstRow.hover();
-    await firstRow.getByRole('button', { name: 'View all hosts' }).click();
+    await clickHoverAction(firstRow, firstRow.getByRole('button', { name: 'View all hosts' }));
   }
 }
