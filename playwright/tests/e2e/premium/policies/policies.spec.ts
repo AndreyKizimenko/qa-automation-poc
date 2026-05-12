@@ -2,15 +2,6 @@
  * Policies CRUD lifecycle scoped to a specific fleet on premium. Each
  * scope (All fleets + Workstations) runs as a serial describe so a
  * per-step failure pinpoints which CRUD action regressed.
- *
- * Coverage per scope (in order):
- *  - create : add policy → set SQL → modal save with name/description/
- *             resolution → verify on /policies/:id → verify row in list
- *  - edit   : list → open policy → click Edit → change every editable
- *             field + SQL → Back to policy → verify on details (+ Show
- *             query for SQL) → verify renamed row in list
- *  - delete : bulk delete by name + activity assertion
- *  - feed   : dashboard activity feed shows create/edit/delete entries
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
@@ -47,7 +38,6 @@ for (const scope of SCOPES) {
     };
 
     test('create', async ({ dashboard, policiesList, policyEdit, policyDetails, request }) => {
-      // First sub-test enters the way a user actually would.
       await dashboard.goto();
       await dashboard.navbar.goToPolicies();
       await policiesList.teamDropdown.select(scope);
@@ -72,7 +62,6 @@ for (const scope of SCOPES) {
     });
 
     test('edit', async ({ policiesList, policyEdit, policyDetails, request, workstationsFleetId }) => {
-      // User flow: list → click policy name → details → click Edit policy.
       await policiesList.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
       await policiesList.teamDropdown.select(scope);
       await policiesList.openPolicy(policyName);
@@ -83,15 +72,10 @@ for (const scope of SCOPES) {
       await policyEdit.saveExisting();
       await assertActivity(request, 'edited_policy', (d) => d.policy_name === editedName);
 
-      // Back to policy → verify the details page reflects every change.
       await policyEdit.backToPolicy();
       await policyDetails.expectValues(edited);
       expect((await policyDetails.showQuery()).trim()).toContain(edited.sql.trim());
 
-      // Navbar → list → search for the new name → confirm row.
-      // (The rename itself was already verified on the details page and
-      // via the edited_policy activity; we're confirming the list view
-      // reflects the change.)
       await policyDetails.navbar.goToPolicies();
       await policiesList.teamDropdown.select(scope);
       await policiesList.search.fill(editedName);

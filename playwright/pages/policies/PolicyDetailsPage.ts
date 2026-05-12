@@ -62,17 +62,13 @@ export class PolicyDetailsPage {
     await expect(this.editButton).toBeVisible();
   }
 
-  /** Click "Edit policy" → navigates to `/policies/:id/edit`. */
+  /** Click "Edit policy" → `/policies/:id/edit`. */
   async clickEdit(): Promise<void> {
     await this.editButton.click();
     await expect(this.page).toHaveURL(/\/policies\/\d+\/edit/);
   }
 
-  /**
-   * Open the "Show query" modal, read its SQL, close the modal, and
-   * return the SQL string. The modal renders the SQL inside an Ace
-   * block (`.ace_content`).
-   */
+  /** Open the "Show query" modal, read its SQL, close, return the SQL. */
   async showQuery(): Promise<string> {
     await this.showQueryButton.click();
     await expect(this.queryModal).toBeVisible();

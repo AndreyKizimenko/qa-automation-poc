@@ -3,19 +3,6 @@
  * Each scope runs as a serial describe with one sub-test per lifecycle
  * step (create → run → edit → delete) plus a final activity-feed
  * assertion.
- *
- * Coverage per scope (in order):
- *  - create : add report → set SQL → modal save with name/description/
- *             interval/observers → verify on /reports/:id + Show query
- *             SQL → verify row in list with correct interval
- *  - run    : list → open report → details → click Edit → click Live
- *             report → wait for ready
- *  - edit   : list → open report → details → click Edit → change every
- *             editable field + SQL → confirm modal → Back to report →
- *             verify on details + Show query SQL → verify renamed row
- *             in list with the new interval
- *  - delete : bulk delete by name + activity assertion
- *  - feed   : dashboard activity feed shows create/edit/delete entries
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
@@ -64,8 +51,6 @@ for (const scope of SCOPES) {
       await reportEdit.saveNew(created);
       await assertActivity(request, 'created_saved_query', (d) => d.query_name === reportName);
 
-      // saveNew lands us on /reports/:id — verify name + description +
-      // SQL match what went through the modal.
       await reportDetails.expectValues({ name: created.name, description: created.description });
       expect((await reportDetails.showQuery()).trim()).toContain(createSql.trim());
 
@@ -86,7 +71,6 @@ for (const scope of SCOPES) {
     });
 
     test('run live report', async ({ reportsList, reportDetails, reportEdit, reportLive, workstationsFleetId }) => {
-      // User flow: list → click report → details → click Edit → click Live report.
       await reportsList.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
       await reportsList.teamDropdown.select(scope);
       await reportsList.openReport(reportName);
@@ -106,12 +90,10 @@ for (const scope of SCOPES) {
       await reportEdit.saveExisting();
       await assertActivity(request, 'edited_saved_query', (d) => d.query_name === editedName);
 
-      // Back to report → verify on details + Show query SQL.
       await reportEdit.backToReport();
       await reportDetails.expectValues({ name: edited.name, description: edited.description });
       expect((await reportDetails.showQuery()).trim()).toContain(edited.sql.trim());
 
-      // Navbar → list → search for the new name → confirm row + interval.
       await reportDetails.navbar.goToReports();
       await reportsList.teamDropdown.select(scope);
       await reportsList.search.fill(editedName);

@@ -62,7 +62,7 @@ export class ReportsListPage {
     await expect(this.page).toHaveURL(/\/reports\/new/);
   }
 
-  /** Click a report's name link in the list to open its edit page. */
+  /** Click a report's name link in the list to open its details page. */
   async openReport(name: string): Promise<void> {
     await this.page.getByRole('link', { name, exact: true }).click();
     await expect(this.page).toHaveURL(/\/reports\/\d+/);

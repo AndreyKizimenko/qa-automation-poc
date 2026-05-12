@@ -1,9 +1,6 @@
 /**
  * Controls > Scripts library lifecycle on premium. Runs every script case
  * (macOS, Linux, Windows) under both scopes (Unassigned + Workstations).
- * Each (scope, OS) cell is its own serial describe so a per-step failure
- * points at the broken action; a final test confirms the dashboard
- * activity feed surfaces all three lifecycle entries.
  */
 import * as fs from 'fs';
 import * as path from 'path';

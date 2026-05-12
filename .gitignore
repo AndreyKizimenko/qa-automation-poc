@@ -14,6 +14,9 @@ Icon
 
 # Claude Code local settings
 .claude/settings.local.json
+# Repo-root harness state (scheduled-task locks, etc.). Keep
+# playwright/.claude/ checked in — that's the shared skills tree.
+/.claude/
 
 # Logs
 *.log

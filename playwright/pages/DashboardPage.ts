@@ -109,21 +109,12 @@ export class DashboardPage {
   }
 
   /**
-   * Assert the activity feed surfaces a *recent* row matching every
-   * matcher in `matchers`. The feed has three properties that shape this:
-   *
-   *   1. It's a global, append-only log — prior runs and parallel workers
-   *      using the same static names leave historical rows that would
-   *      falsely satisfy a plain match. The freshness regex restricts to
-   *      timestamps under ~1 hour old.
-   *   2. A busy concurrent run can push the target rows off page 1.
-   *      We paginate forward, bounded by `maxPages` (8 rows per page).
-   *   3. CRUD specs typically check 3+ activities at once. Checking all
-   *      remaining matchers on every page means one pagination loop
-   *      handles the whole batch (3× faster than calling expectActivity
-   *      three times back-to-back).
-   *
-   * Single-matcher callers can use {@link expectActivity}.
+   * Assert the activity feed contains a recent row matching every
+   * matcher in `matchers`. Filters to timestamps under ~1 hour so
+   * historical rows with the same static target names can't satisfy a
+   * match; paginates forward bounded by `maxPages` (8 rows per page)
+   * and checks all remaining matchers per page so one loop drains the
+   * batch. {@link expectActivity} is a single-matcher shorthand.
    */
   async expectActivities(
     matchers: Array<string | RegExp>,

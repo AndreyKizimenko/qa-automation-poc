@@ -57,6 +57,7 @@ export class MyWidget {
 | `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger) |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
 | `TeamDropdown` | Most pages | Team / fleet picker in the page header |
+| `PlatformDropdown` | `/software/add/app-store` | Apple-vs-Android selector for the App Store add-software form (react-select v5) |
 | `Toast` | Anywhere a CRUD action confirms via banner | Scoped to `.flash-message--success` / `.flash-message--error`; has `expectSuccess` / `expectError` |
 | `FileUploader` | Bootstrap, scripts, profiles, custom packages, setup-assistant | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |
 | `SoftwareInstallerCard` | `/software/titles/:id` | Hover-revealed Download + Delete actions on the installer card |

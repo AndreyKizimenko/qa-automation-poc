@@ -11,10 +11,6 @@ import { Toast } from '../components/Toast';
  * The SQL editor is Fleet's `SQLEditor` (`.sql-editor` wrapper) around
  * Ace; visible content lives in `.ace_content` and keyboard input is
  * routed through the standard hidden `textarea.ace_text-input`.
- *
- * Existing-policy entry: the policies list links to `/policies/:id`
- * (results), not `/edit`. From there the "Edit policy" button opens the
- * form — `clickEditFromDetails()` handles that hop.
  */
 export type PolicyPlatform = 'macOS' | 'Windows' | 'Linux' | 'ChromeOS';
 export type PolicyTargetType = 'All hosts' | 'Custom';
@@ -58,8 +54,7 @@ export class PolicyEditPage {
   // (`/policies/:id`) that opens this form.
   readonly editFromDetailsButton: Locator;
 
-  // "Back to policy" button on the /edit page that returns to
-  // `/policies/:id`. Use this to chain edit → verify-on-details cleanly.
+  // "Back to policy" button on the /edit page → `/policies/:id`.
   readonly backToPolicyButton: Locator;
 
   // Modal that pops on Save for a new policy — contains the full form
@@ -160,11 +155,11 @@ export class PolicyEditPage {
   }
 
   /**
-   * Fill every editable field. Note on ordering: SQL + platform clicks
-   * trigger React re-renders that wipe earlier text-field values, so
-   * the text inputs (name/description/resolution) are filled LAST and
-   * re-asserted before save. Critical isn't covered — Fleet's
-   * role=checkbox proxy for it didn't resolve reliably under Playwright.
+   * Fill every editable field. SQL + platform interactions trigger
+   * React re-renders that reset earlier text-field values, so the text
+   * inputs (name/description/resolution) go LAST and are re-asserted
+   * before save. Critical isn't covered — Fleet's role=checkbox proxy
+   * for it doesn't resolve reliably under Playwright.
    */
   async fillAll(values: PolicyFormValues): Promise<void> {
     await this.setSql(values.sql);
@@ -188,10 +183,9 @@ export class PolicyEditPage {
 
   /**
    * Replace SQL via the hidden Ace textarea. All keyboard ops route
-   * through `editorTextarea` (Ace's `.ace_text-input`) so Ctrl/Cmd+A
-   * reaches Ace's select-all handler — sending it via `page.keyboard`
-   * after clicking the visible div targets the wrong element and
-   * Ctrl+A becomes a no-op, leaving the old SQL in place.
+   * through `editorTextarea` so Ctrl/Cmd+A reaches Ace's select-all
+   * handler — `page.keyboard.press` targets the focused element, which
+   * after clicking the visible div is the wrong target.
    */
   async setSql(sql: string): Promise<void> {
     await this.editorContent.click();

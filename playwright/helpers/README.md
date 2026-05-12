@@ -27,6 +27,7 @@ that's a page-object responsibility.
 | [`console.ts`](./console.ts) | `monitorConsoleErrors()`, `monitorNetworkFailures()`, plus the default ignore lists. Wired into every test via the auto `pageHealth` fixture in `fixtures.ts`. |
 | [`perf.ts`](./perf.ts) | `measureNav()`, `measureSearch()` — time user-perceived loads |
 | [`perf-teardown.ts`](./perf-teardown.ts) | Performance summary table + historical comparison |
+| [`team-scope.ts`](./team-scope.ts) | `fleetIdFor(scope, workstationsFleetId)` — maps `'All fleets'` / `'Unassigned'` / `'Workstations'` to the `fleet_id` URL value (`undefined` / `0` / wsId) for scope-aware page-object `goto({ fleetId })` calls |
 | [`vuln.ts`](./vuln.ts) | Vulnerability column assertions (`expectRowHasVulnData`, `expectSingleCve`, `assertVulnTooltip`) for specs that drill into the "Vulnerabilities" column of the DataTable |
 | [`catalogs/`](./catalogs/) | Typed app-store reference catalogs: `fmaApps`, `vppApps`, `vppUiSearchNames`, `androidApps`. Pick (id + platform) for API/GitOps tests; pick a name for UI search tests |
 
@@ -35,7 +36,7 @@ that's a page-object responsibility.
 | Module | What's inside |
 |--------|---------------|
 | `core.ts` | `apiUrl`, `authHeaders`, `sessionAuthHeaders`, `getApiToken`, shared `HostRef` / `FleetRef` types |
-| `activities.ts` | `findActivity` |
+| `activities.ts` | `assertActivity` (test-side check; fails the test if missing), `findActivity` (lower-level lookup) |
 | `hosts.ts` | `findHostByPlatform`, `transferHosts`, `transferHostsByFilter` |
 | `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet` |
 | `software.ts` | `uploadSoftwarePackage`, `findSoftwareTitleByPackageName`, `deleteSoftwareTitle*`, `getSoftwareTitle`, `findVulnerableSoftwareBySource`, `SoftwareTitleRef` / `SoftwarePackageRef` |

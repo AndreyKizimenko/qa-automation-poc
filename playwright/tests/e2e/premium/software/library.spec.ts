@@ -1,11 +1,7 @@
 /**
  * Software library lifecycle — premium-only (all four Add Software paths
- * are paywalled on free). Runs once per (scope, case) cell as a serial
- * describe: add → delete → activity feed. Splitting per CRUD step keeps
- * test reports specific about which action regressed for which software
- * type and team scope.
- *
- * Software has no in-UI edit step; the lifecycle is add + delete only.
+ * are paywalled on free). Runs once per (scope, case) cell. Software has
+ * no in-UI edit step; the lifecycle is add + delete only.
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
