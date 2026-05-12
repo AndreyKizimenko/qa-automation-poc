@@ -11,10 +11,6 @@ import { Toast } from '../components/Toast';
  * The SQL editor is Fleet's `SQLEditor` component (`.sql-editor` wrapper)
  * around Ace; visible code lives in `.ace_content` and keyboard input is
  * routed through the standard hidden `textarea.ace_text-input`.
- *
- * Existing-report entry: the reports list links to `/reports/:id`
- * (results), not `/edit`. From there the "Edit report" button opens the
- * form — `clickEditFromDetails()` handles that hop.
  */
 export type ReportPlatform = 'macOS' | 'Windows' | 'Linux' | 'ChromeOS';
 export type ReportInterval =
@@ -73,8 +69,7 @@ export class ReportEditPage {
   // visible text instead.
   readonly editFromDetailsButton: Locator;
 
-  // "Back to report" button on the /edit page that returns to
-  // `/reports/:id`. Use this to chain edit → verify-on-details cleanly.
+  // "Back to report" button on the /edit page → `/reports/:id`.
   readonly backToReportButton: Locator;
 
   // Interval is a react-select v1 widget scoped by `form-field--frequency`.
@@ -167,17 +162,12 @@ export class ReportEditPage {
 
   /**
    * Replace SQL via the hidden Ace textarea. The /reports/new editor
-   * pre-fills with a default ("SELECT * FROM osquery_info;"), so the
-   * select-all + delete + type sequence has to fully replace it.
-   *
-   * All keyboard ops route through `editorTextarea` (Ace's hidden
-   * `.ace_text-input`) rather than `page.keyboard`. Routing via the
-   * textarea ensures Ctrl/Cmd+A actually reaches Ace's select-all
-   * handler — sending it through `page.keyboard.press` targets whatever
-   * is globally focused, which after `editorContent.click()` is the
-   * visible div, not the input. The symptom of that bug was the new SQL
-   * getting prepended to the old SQL ("new;old;") instead of replacing.
-   * The trailing `toHaveText` catches any remaining dropped keystrokes.
+   * pre-fills with `SELECT * FROM osquery_info;`, so the select-all +
+   * delete + type sequence has to fully replace it. All keyboard ops
+   * route through `editorTextarea` so Ctrl/Cmd+A reaches Ace's
+   * select-all handler — `page.keyboard.press` targets the focused
+   * element, which after clicking the visible div is the wrong target.
+   * The trailing `toHaveText` guards against dropped keystrokes.
    */
   async setSql(sql: string): Promise<void> {
     await this.editorContent.click();
@@ -305,10 +295,10 @@ export class ReportEditPage {
   }
 
   /**
-   * Fill every editable field. Note on ordering: SQL + platform/observer
-   * clicks + the interval react-select trigger React re-renders that
-   * wipe earlier text-field values, so the text inputs go LAST and are
-   * re-asserted before save.
+   * Fill every editable field. SQL + platform/observer clicks + the
+   * interval react-select trigger React re-renders that reset earlier
+   * text-field values, so the text inputs go LAST and are re-asserted
+   * before save.
    */
   async fillAll(values: ReportFormValues): Promise<void> {
     await this.setSql(values.sql);

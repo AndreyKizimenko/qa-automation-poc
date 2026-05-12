@@ -1,11 +1,8 @@
 /**
  * Configuration profiles upload/download/delete on premium — runs the
  * macOS .mobileconfig + Windows .xml cases under both scopes (Unassigned
- * + Workstations). Each (scope, OS) cell is its own serial describe so a
- * per-step failure points at the broken action; a final test confirms the
- * dashboard activity feed surfaces both lifecycle entries.
- *
- * Profiles have no in-UI edit step — the lifecycle is upload + delete only.
+ * + Workstations). Profiles have no in-UI edit step — the lifecycle is
+ * upload + delete only.
  */
 import * as fs from 'fs';
 import * as path from 'path';

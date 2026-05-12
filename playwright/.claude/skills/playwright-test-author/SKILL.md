@@ -57,7 +57,7 @@ Follow [Playwright's locator priority](https://playwright.dev/docs/locators), ad
 
 ## Project layout and Fleet conventions
 
-Read `tools/qa/playwright/CLAUDE.md` before authoring — it is the canonical reference for the folder layout, the project pipeline, the `fleet` worker fixture, the API helpers (`apiUrl`, `authHeaders`, `sessionAuthHeaders`), smoke vs. performance navigation rules, and the always-on Fleet locator/wait policies.
+Read `playwright/CLAUDE.md` before authoring — it is the canonical reference for the folder layout, the project pipeline, the `workstationsFleetId` worker fixture, the API helpers (`apiUrl`, `authHeaders`, `sessionAuthHeaders`), e2e vs. performance navigation rules, the CRUD lifecycle serial-describe convention, and the always-on Fleet locator/wait policies.
 
 ## Research before authoring
 

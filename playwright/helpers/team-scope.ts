@@ -26,10 +26,8 @@ import type { TeamScope } from '@pages';
  *  - `'Workstations'` → the resolved Workstations fleet id (from the
  *    `workstationsFleetId` worker fixture)
  *
- * Overloads let specs that narrow `SCOPES` to non-`'All fleets'` values
- * (e.g. `['Unassigned', 'Workstations'] as const`) get a `number` return
- * type instead of `number | undefined`, so they can feed it directly to
- * page-object `goto({ fleetId })` signatures that require `number`.
+ * Narrowing the scope union (e.g. `['Unassigned', 'Workstations'] as const`)
+ * picks an overload that returns `number` instead of `number | undefined`.
  */
 export function fleetIdFor(
   scope: 'Workstations' | 'Unassigned',

@@ -57,7 +57,7 @@ export class PoliciesListPage {
     await expect(this.page).toHaveURL(/\/policies\/new/);
   }
 
-  /** Click a policy's name link in the list to open its edit page. */
+  /** Click a policy's name link in the list to open its details page. */
   async openPolicy(name: string): Promise<void> {
     await this.page.getByRole('link', { name, exact: true }).click();
     await expect(this.page).toHaveURL(/\/policies\/\d+/);

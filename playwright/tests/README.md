@@ -131,8 +131,13 @@ test('apply vulnerable filter', async ({ softwareTitles }) => {
 
 Each test gets a fresh browser context via Playwright defaults. Don't share
 state between tests unless they're in a `test.describe.configure({ mode: 'serial' })`
-block and explicitly depend on each other (like the vulnerability flow that
-builds up `softwareByOS` across ordered tests).
+block and explicitly depend on each other. Two existing exceptions:
+
+- **CRUD lifecycle specs** (policies, reports, packs, scripts, profiles,
+  software) — one sub-test per lifecycle step (create / edit / delete +
+  activity-feed check) sharing identifiers via closure. See `CLAUDE.md`
+  for the convention.
+- **Vulnerability flow** — builds up `softwareByOS` across ordered tests.
 
 ## Tier routing
 

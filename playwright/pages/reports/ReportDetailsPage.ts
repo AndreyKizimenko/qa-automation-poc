@@ -56,23 +56,19 @@ export class ReportDetailsPage {
     await expect(this.editButton).toBeVisible();
   }
 
-  /** Click "Edit report" → navigates to `/reports/:id/edit`. */
+  /** Click "Edit report" → `/reports/:id/edit`. */
   async clickEdit(): Promise<void> {
     await this.editButton.click();
     await expect(this.page).toHaveURL(/\/reports\/\d+\/edit/);
   }
 
-  /** Click "Live report" → navigates to `/reports/:id/live`. */
+  /** Click "Live report" → `/reports/:id/live`. */
   async clickLiveReport(): Promise<void> {
     await this.liveReportButton.click();
     await this.page.waitForURL(/\/reports\/\d+\/live/);
   }
 
-  /**
-   * Open the "Show query" modal, read its SQL, close the modal, and
-   * return the SQL string. The modal renders the SQL inside an Ace
-   * block (`.ace_content`).
-   */
+  /** Open the "Show query" modal, read its SQL, close, return the SQL. */
   async showQuery(): Promise<string> {
     await this.showQueryButton.click();
     await expect(this.queryModal).toBeVisible();
