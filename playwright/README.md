@@ -31,6 +31,15 @@ Fill each one with the URL and credentials for that instance. These files
 are gitignored and never committed. You only need the env files for the
 projects you intend to run.
 
+**Loadtest only — provision the fleet first.** The `loadtest` project
+measures real page-load times against a high-scale team that has to
+exist before any spec runs. See
+[../gitops/loadtest/README.md](../gitops/loadtest/README.md) for the
+generate-bundle → `fleetctl gitops` → move-hosts → wait-for-crons flow.
+The last step of that doc — setting `FLEET_LOADTEST_FLEET_ID` in
+`.env.loadtest` — is required; the loadtest fixtures throw at setup if
+it's missing.
+
 ---
 
 ## Running tests
@@ -93,7 +102,7 @@ playwright/
 │   │   ├── config.spec.ts        # Agnostic config-shape checks (@free)
 │   │   ├── free/                 # Free-only API contracts (license, endpoints)
 │   │   └── gitops-verify/        # GitOps drift checks
-│   └── loadtest/                 # Page-load timing (tagged @loadtest, gitignored)
+│   └── loadtest/                 # Page-load timing (tagged @loadtest)
 ├── pages/                        # Page Object Model — see pages/README.md
 │   ├── components/               # Reused widgets (DataTable, Navbar, TeamDropdown, etc.)
 │   ├── settings/                 # Settings subpages grouped together

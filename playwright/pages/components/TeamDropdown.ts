@@ -39,11 +39,4 @@ export class TeamDropdown {
     await this.page.locator('.team-dropdown__option').filter({ hasText: name }).click();
     await expect(this.currentValue).toHaveText(name);
   }
-
-  /** `index=0` is "All fleets"; default `index=1` picks the first real team. */
-  async selectByIndex(index = 1): Promise<void> {
-    await this.trigger.click();
-    await this.page.locator('.team-dropdown__option').nth(index).click();
-    await this.page.waitForURL(/fleet_id/);
-  }
 }

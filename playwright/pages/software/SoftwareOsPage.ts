@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { clickHoverAction } from '../components/clickHoverAction';
 import { DataTable } from '../components/DataTable';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
@@ -28,8 +29,9 @@ export class SoftwareOsPage {
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }
 
-  async goto(opts: { platform?: 'darwin' | 'windows' | 'linux'; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
+  async goto(opts: { fleetId?: number; platform?: 'darwin' | 'windows' | 'linux'; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
     const params = new URLSearchParams();
+    if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.platform) params.set('platform', opts.platform);
     if (opts.sort) {
       params.set('order_key', opts.sort.key);
@@ -43,5 +45,15 @@ export class SoftwareOsPage {
   /** Click the first row to open that OS's detail page. */
   async clickFirstOs(): Promise<void> {
     await this.table.firstRow.click();
+  }
+
+  /**
+   * Click the first row's "View all hosts" button. The button uses
+   * `row-hover-button` and only renders while the row is hovered, so the
+   * caller doesn't need to wait for the OS detail page to load.
+   */
+  async viewHostsForFirstOs(): Promise<void> {
+    const firstRow = this.table.firstRow;
+    await clickHoverAction(firstRow, firstRow.getByRole('button', { name: 'View all hosts' }));
   }
 }

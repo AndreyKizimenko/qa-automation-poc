@@ -32,8 +32,9 @@ export class OsSettingsPage {
     this.passwordsLink = page.getByRole('link', { name: 'Passwords' });
   }
 
-  async goto(): Promise<void> {
-    await this.page.goto('/controls/os-settings');
+  async goto(opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/controls/os-settings${qs}`);
     await expect(this.statusLinks.first()).toBeVisible();
   }
 

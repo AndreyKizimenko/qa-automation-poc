@@ -36,8 +36,9 @@ export class HostsListPage {
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
   }
 
-  async goto(opts: { sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
+  async goto(opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
     const params = new URLSearchParams();
+    if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.sort) {
       params.set('order_key', opts.sort.key);
       params.set('order_direction', opts.sort.direction);

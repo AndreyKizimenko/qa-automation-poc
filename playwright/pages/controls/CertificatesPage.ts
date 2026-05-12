@@ -16,8 +16,9 @@ export class CertificatesPage {
     this.list = new ContentList(page);
   }
 
-  async goto(): Promise<void> {
-    await this.page.goto('/controls/os-settings/certificates');
+  async goto(opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/controls/os-settings/certificates${qs}`);
     await expect(this.list.firstItem).toBeVisible();
   }
 }

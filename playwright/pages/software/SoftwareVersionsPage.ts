@@ -38,8 +38,9 @@ export class SoftwareVersionsPage {
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }
 
-  async goto(opts: { vulnerable?: boolean; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
+  async goto(opts: { fleetId?: number; vulnerable?: boolean; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
     const params = new URLSearchParams();
+    if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.vulnerable) params.set('vulnerable', 'true');
     if (opts.sort) {
       params.set('order_key', opts.sort.key);

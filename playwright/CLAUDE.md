@@ -21,7 +21,10 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
   - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts) and `tests/api/free/` (free-only).
-- `tests/loadtest/` — page-load timing tests (local-only, gitignored).
+- `tests/loadtest/` — page-load timing tests. Run locally only — they
+  need a high-scale instance and a team provisioned via
+  [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
+  in `.env.loadtest` (gitignored), so no CI workflow targets them.
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
 - `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team.ts` for per-spec team lifecycle).
 - `fixtures.ts` — page-object fixtures (single file).

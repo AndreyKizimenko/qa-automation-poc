@@ -25,7 +25,7 @@ tests/
 │   ├── config.spec.ts        # Agnostic config-shape checks
 │   ├── free/                 # Free-only API contracts
 │   └── gitops-verify/        # GitOps drift checks
-└── loadtest/                 # Page load / search timing tests (tagged @loadtest, gitignored)
+└── loadtest/                 # Page load / search timing tests (tagged @loadtest, local-only)
 ```
 
 Tier-routing rules:

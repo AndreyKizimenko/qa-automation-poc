@@ -12,7 +12,8 @@ suite, and the GitHub Actions that wire them together.
 │   ├── free-fleetqa/           # Baseline gitops config for the free QA instance
 │   ├── free-fleetqa-min/       # Trimmed variant — used by gitops-verify
 │   ├── premium-fleetqa/        # Baseline gitops config for the premium QA instance
-│   └── premium-fleetqa-min/    # Trimmed variant — used by gitops-verify
+│   ├── premium-fleetqa-min/    # Trimmed variant — used by gitops-verify
+│   └── loadtest/               # Generator for the bulk loadtest team bundle (local-only)
 ├── playwright/                 # Playwright browser + API test suite
 └── .github/
     ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
@@ -36,7 +37,9 @@ Source the matching `playwright/.env.<tier>` first so `FLEET_URL` /
 in the environment.
 
 Loadtest runs are local-only — credentials change per run, so they are
-not stored as GitHub Actions secrets.
+not stored as GitHub Actions secrets. The loadtest fleet itself is
+provisioned via [gitops/loadtest/](gitops/loadtest/README.md) before any
+loadtest spec is run.
 
 ## CI
 

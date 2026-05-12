@@ -26,8 +26,9 @@ export class ScriptsBatchProgressPage {
     this.finishedTab = page.getByRole('tab', { name: 'Finished' });
   }
 
-  async goto(): Promise<void> {
-    await this.page.goto('/controls/scripts/progress');
+  async goto(opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/controls/scripts/progress${qs}`);
   }
 
   /** Switch to the Finished sub-tab and wait for its list items to render. */

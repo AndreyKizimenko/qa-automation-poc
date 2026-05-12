@@ -16,8 +16,9 @@ export class VariablesPage {
     this.list = new ContentList(page);
   }
 
-  async goto(): Promise<void> {
-    await this.page.goto('/controls/variables');
-    await expect(this.list.firstItem).toBeVisible();
+  async goto(opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/controls/variables${qs}`);
+    await expect(this.list.firstItem.or(this.list.emptyState)).toBeVisible();
   }
 }

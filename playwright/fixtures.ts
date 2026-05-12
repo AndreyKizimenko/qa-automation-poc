@@ -65,8 +65,9 @@ import {
 
 type FleetWorkerFixtures = {
   /**
-   * First host id (sorted by display_name ASC) on the loadtest instance.
-   * Loadtest project only — the storageState path is hardcoded.
+   * First host id (sorted by display_name ASC) within the loadtest fleet on
+   * the loadtest instance. Loadtest project only — the storageState path is
+   * hardcoded and the fleet is scoped via `loadtestFleetId`.
    */
   firstHostId: number;
 
@@ -77,6 +78,15 @@ type FleetWorkerFixtures = {
    * Throws on free; free specs must not request this fixture.
    */
   workstationsFleetId: number;
+
+  /**
+   * Numeric id of the fleet (team) holding the loadtest dataset on the
+   * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, which the
+   * workflow that provisions the team sets per run. Required by the
+   * loadtest project — specs fail at fixture setup if the env var is
+   * missing or non-numeric.
+   */
+  loadtestFleetId: number;
 };
 
 type FleetFixtures = {
@@ -196,12 +206,23 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     if (messages.length) throw new Error(`Page health issues:\n${messages.join('\n')}`);
   }, { auto: true, box: true }],
 
-  firstHostId: [async ({ browser }, use) => {
+  loadtestFleetId: [async ({}, use) => {
+    const raw = process.env.FLEET_LOADTEST_FLEET_ID;
+    const id = Number(raw);
+    if (!raw || !Number.isInteger(id) || id <= 0) {
+      throw new Error(
+        `[loadtestFleetId fixture] FLEET_LOADTEST_FLEET_ID must be a positive integer (got ${JSON.stringify(raw)}). Set it in .env.loadtest to the id of the team holding the loadtest dataset.`,
+      );
+    }
+    await use(id);
+  }, { scope: 'worker', box: true }],
+
+  firstHostId: [async ({ browser, loadtestFleetId }, use) => {
     const context = await browser.newContext({
       storageState: '.auth/loadtest-admin.json',
     });
     const page = await context.newPage();
-    await page.goto('/hosts/manage?order_key=display_name&order_direction=asc');
+    await page.goto(`/hosts/manage?fleet_id=${loadtestFleetId}&order_key=display_name&order_direction=asc`);
     const firstLink = page.getByRole('table').locator('tbody tr').first().getByRole('link').first();
     const href = (await firstLink.getAttribute('href')) ?? '';
     const id = parseInt(href.match(/\/hosts\/(\d+)/)?.[1] ?? '0', 10);
