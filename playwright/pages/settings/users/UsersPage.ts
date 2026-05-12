@@ -91,14 +91,46 @@ export class UsersPage {
     return this.page.locator('.actions-dropdown__option').filter({ hasText: label });
   }
 
-  /** Locator for the table row containing the given email. */
+  /**
+   * Locator for the table row whose email cell exactly matches the given
+   * address. Anchored on `.email__cell` via an end-anchored regex so a
+   * lookup for one email never matches another email that contains it
+   * as a substring.
+   */
   rowByEmail(email: string): Locator {
-    return this.table.rowWith(email).first();
+    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const emailCell = this.page.locator('.email__cell').filter({
+      hasText: new RegExp(`^${escaped}$`),
+    });
+    return this.table.table.locator('tbody tr').filter({ has: emailCell });
   }
 
   /** Locator for the table row containing the given name. */
   rowByName(name: string): Locator {
     return this.table.rowWith(name).first();
+  }
+
+  /**
+   * Filter the table to a single email and return that row's locator.
+   * Specs asserting a newly-created user appears in the list should use
+   * this rather than `rowByEmail` directly: Fleet's user table paginates
+   * at 10/page and the static-user catalog alone fills the first page on
+   * most instances, so a row created with a later-sorting email lives
+   * off the first page by default.
+   */
+  async findRowByEmail(email: string): Promise<Locator> {
+    await this.search.fill(email);
+    return this.rowByEmail(email);
+  }
+
+  /**
+   * Filter the table to a single name and return that row's locator.
+   * Used for API-only users, which display by name (their server-stamped
+   * email is unstable). Same pagination caveat as {@link findRowByEmail}.
+   */
+  async findRowByName(name: string): Promise<Locator> {
+    await this.search.fill(name);
+    return this.rowByName(name);
   }
 
   /**

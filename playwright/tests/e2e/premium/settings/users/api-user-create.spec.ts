@@ -86,7 +86,7 @@ test.describe('Create API-only user (premium)', () => {
 
       await expect(page).toHaveURL(/\/settings\/users\b/);
       await usersPage.toast.expectSuccess(`${name} has been created!`);
-      await assertApiUserRow(usersPage.rowByName(name), name, role);
+      await assertApiUserRow(await usersPage.findRowByName(name), name, role);
 
       const id = await findApiUserIdByName(request, name);
       if (id !== null) createdUserIds.push(id);
@@ -112,7 +112,7 @@ test.describe('Create API-only user (premium)', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByName(name);
+    const row = await usersPage.findRowByName(name);
     await assertApiUserRow(row, name, 'Maintainer');
     await expect(row).toContainText('Workstations');
 
@@ -138,7 +138,7 @@ test.describe('Create API-only user (premium)', () => {
     await createApiUserPage.submitAndDone();
 
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByName(name);
+    const row = await usersPage.findRowByName(name);
     await assertApiUserRow(row, name, 'Observer');
     await expect(row).toContainText('2 fleets');
     await expect(row).not.toContainText('Various');
@@ -165,7 +165,7 @@ test.describe('Create API-only user (premium)', () => {
     await createApiUserPage.submitAndDone();
 
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByName(name);
+    const row = await usersPage.findRowByName(name);
     await assertApiUserRow(row, name, 'Various');
     await expect(row).toContainText('2 fleets');
 
@@ -222,7 +222,7 @@ test.describe('Create API-only user (premium)', () => {
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
     // Role for this user is the per-fleet "Observer" we picked.
-    await assertApiUserRow(usersPage.rowByName(name), name, 'Observer');
+    await assertApiUserRow(await usersPage.findRowByName(name), name, 'Observer');
 
     const id = await findApiUserIdByName(request, name);
     if (id !== null) createdUserIds.push(id);
@@ -279,7 +279,7 @@ test.describe('Create API-only user (premium)', () => {
     await createApiUserPage.doneButton.click();
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    await assertApiUserRow(usersPage.rowByName(name), name, 'GitOps');
+    await assertApiUserRow(await usersPage.findRowByName(name), name, 'GitOps');
 
     const id = await findApiUserIdByName(request, name);
     if (id !== null) createdUserIds.push(id);

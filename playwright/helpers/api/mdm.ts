@@ -21,7 +21,13 @@ export async function getBootstrapMetadata(
   return res.json();
 }
 
-/** Safe to call when no package is uploaded (404 is treated as success). */
+/**
+ * Safe to call when no package is uploaded (404 is treated as success) or
+ * when the tier doesn't support MDM bootstrap (402 "Requires Premium" on
+ * free). The cleanup pipeline runs on both tiers and there is no
+ * tier-aware branching in `cleanup.steps.ts`, so the helper itself absorbs
+ * the license rejection.
+ */
 export async function deleteBootstrapPackage(
   request: APIRequestContext,
   fleetId: number,
@@ -29,7 +35,7 @@ export async function deleteBootstrapPackage(
   const res = await request.delete(apiUrl(`bootstrap/${fleetId}`), {
     headers: authHeaders(),
   });
-  if (res.status() === 404) return;
+  if (res.status() === 404 || res.status() === 402) return;
   await expect(res, `Failed to delete bootstrap for fleet ${fleetId}`).toBeOK();
 }
 

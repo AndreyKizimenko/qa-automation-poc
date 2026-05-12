@@ -16,6 +16,9 @@ export { clickHoverAction } from './components/clickHoverAction';
 export { LoginPage } from './auth/LoginPage';
 export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
 
+// Account
+export { MyAccountPage } from './account';
+
 // Dashboard (its own top-level nav entry)
 export { DashboardPage } from './DashboardPage';
 
