@@ -22,7 +22,10 @@ export class LabelFilter {
 
   async selectPlatform(platform: string): Promise<void> {
     await this.trigger.click();
-    const option = this.options.filter({ hasText: platform });
+    // Custom labels frequently embed a platform name (e.g. "macOS workstations"),
+    // so the dropdown can list multiple matches. The Platforms group renders
+    // first, so the first match is always the canonical platform entry.
+    const option = this.options.filter({ hasText: platform }).first();
     await expect(option).toBeVisible();
     await option.click();
   }

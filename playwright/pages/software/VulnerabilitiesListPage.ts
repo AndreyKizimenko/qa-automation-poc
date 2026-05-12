@@ -29,8 +29,9 @@ export class VulnerabilitiesListPage {
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }
 
-  async goto(opts: { exploit?: boolean; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
+  async goto(opts: { fleetId?: number; exploit?: boolean; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
     const params = new URLSearchParams();
+    if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.exploit) params.set('exploit', 'true');
     if (opts.sort) {
       params.set('order_key', opts.sort.key);

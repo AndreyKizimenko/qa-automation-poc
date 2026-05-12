@@ -28,6 +28,7 @@ Icon
 
 # Playwright-suite ignores live in playwright/.gitignore
 
-# Loadtest specs are local-only (per-run credentials, not committed).
-# Scoped to playwright/tests/ so we don't shadow playwright/pages/ paths.
-playwright/tests/loadtest/
+# Output of gitops/loadtest/generate.sh — bulk yml/scripts/profiles/etc.
+# regenerated locally before each loadtest run. Only the generator script
+# is checked in.
+gitops/loadtest/generated/

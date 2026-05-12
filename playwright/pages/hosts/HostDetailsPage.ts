@@ -34,6 +34,10 @@ export class HostDetailsPage {
   readonly vitalsOperatingSystem: Locator;
 
   readonly firstActivityTimestamp: Locator;
+  // Empty-state placeholder rendered by the Activity card when the host has
+  // no past activities yet. Use `firstActivityTimestamp.or(activityEmptyState)`
+  // when the test only needs the card to finish loading.
+  readonly activityEmptyState: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -59,6 +63,9 @@ export class HostDetailsPage {
 
     // Activity rows are buttons whose aria-label ends with "ago".
     this.firstActivityTimestamp = page.getByRole('button', { name: /\bago\b/ }).first();
+    // EmptyFeed renders an `<h3>No activity</h3>` inside the Activity card
+    // when the host has no past activities yet.
+    this.activityEmptyState = page.getByRole('heading', { level: 3, name: 'No activity' });
   }
 
   async goto(hostId: number): Promise<void> {

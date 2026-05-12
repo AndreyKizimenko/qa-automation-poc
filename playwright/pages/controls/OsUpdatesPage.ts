@@ -18,8 +18,9 @@ export class OsUpdatesPage {
     this.table = new DataTable(page);
   }
 
-  async goto(): Promise<void> {
-    await this.page.goto('/controls/os-updates');
+  async goto(opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/controls/os-updates${qs}`);
     await expect(this.table.firstRow).toBeVisible();
   }
 
