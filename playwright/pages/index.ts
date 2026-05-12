@@ -92,4 +92,11 @@ export { PackEditPage } from './packs/PackEditPage';
 export { OrganizationInfoPage } from './settings/OrganizationInfoPage';
 export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
-export { UsersPage } from './settings/UsersPage';
+export {
+  UsersPage,
+  CreateUserPage,
+  CreateApiUserPage,
+  EditUserPage,
+  UserFormFields,
+} from './settings/users';
+export type { AddUserOption, RowAction, GlobalRole, ApiGlobalRole } from './settings/users';

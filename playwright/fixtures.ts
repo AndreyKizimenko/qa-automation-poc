@@ -61,6 +61,9 @@ import {
   OrganizationAdvancedPage,
   IntegrationsPage,
   UsersPage,
+  CreateUserPage,
+  CreateApiUserPage,
+  EditUserPage,
 } from './pages';
 
 type FleetWorkerFixtures = {
@@ -149,6 +152,9 @@ type FleetFixtures = {
   organizationAdvanced: OrganizationAdvancedPage;
   integrationsPage: IntegrationsPage;
   usersPage: UsersPage;
+  createUserPage: CreateUserPage;
+  createApiUserPage: CreateApiUserPage;
+  editUserPage: EditUserPage;
 
   /**
    * Auto-applied page-health monitor. Starts before the test body, asserts
@@ -375,6 +381,15 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   usersPage: [async ({ page }, use) => {
     await use(new UsersPage(page));
+  }, { box: true }],
+  createUserPage: [async ({ page }, use) => {
+    await use(new CreateUserPage(page));
+  }, { box: true }],
+  createApiUserPage: [async ({ page }, use) => {
+    await use(new CreateApiUserPage(page));
+  }, { box: true }],
+  editUserPage: [async ({ page }, use) => {
+    await use(new EditUserPage(page));
   }, { box: true }],
 });
 

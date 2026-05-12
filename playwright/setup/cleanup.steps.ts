@@ -16,6 +16,7 @@ import {
   deleteAllGlobalPolicies,
   deleteAllInstallSoftwareTitles,
   deleteAllPacks,
+  deleteAllQaTestUsers,
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
@@ -33,6 +34,8 @@ const WORKSTATIONS_FLEET = 'Workstations';
 // two calls together cover it.
 test('wipe unassigned state', async ({ request }) => {
   // Tier-agnostic wipes — these endpoints exist on both free and premium.
+  // deleteAllQaTestUsers only touches addresses matching the QA_TEST_EMAIL_RE
+  // prefix in helpers/api/users.ts, so admin/SSO accounts are untouchable.
   const ops: Promise<unknown>[] = [
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
@@ -40,6 +43,7 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllInstallSoftwareTitles(request, 0),
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
+    deleteAllQaTestUsers(request),
   ];
 
   // Premium-only resets. MDM setup-experience entities (bootstrap
