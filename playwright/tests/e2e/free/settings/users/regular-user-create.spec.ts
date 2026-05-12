@@ -51,7 +51,7 @@ test.describe('Create regular user (free)', { tag: '@free' }, () => {
 
       await expect(page).toHaveURL(/\/settings\/users\b/);
       await usersPage.toast.expectSuccess(`${name} has been created!`);
-      const row = usersPage.rowByEmail(email);
+      const row = await usersPage.findRowByEmail(email);
       await expect(row).toBeVisible();
       await expect(row).toContainText(name);
       // Exact role-cell match — `toContainText('Observer')` would also

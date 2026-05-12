@@ -58,7 +58,7 @@ test.describe('Create regular user (premium)', () => {
 
       await expect(page).toHaveURL(/\/settings\/users\b/);
       await usersPage.toast.expectSuccess(`${name} has been created!`);
-      const row = usersPage.rowByEmail(email);
+      const row = await usersPage.findRowByEmail(email);
       await expect(row).toBeVisible();
       await expect(row).toContainText(name);
       // Anchored on `.role__cell` with exact text so Observer and Observer+
@@ -96,7 +96,7 @@ test.describe('Create regular user (premium)', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByEmail(email);
+    const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
     await expect(row).toContainText(name);
     await expect(row.locator('.role__cell')).toHaveText('Maintainer');
@@ -130,7 +130,7 @@ test.describe('Create regular user (premium)', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByEmail(email);
+    const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
     // Fleet collapses mixed-role assignments to "2 fleets" + "Various".
     await expect(row).toContainText('2 fleets');
@@ -164,7 +164,7 @@ test.describe('Create regular user (premium)', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    const row = usersPage.rowByEmail(email);
+    const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
     // Same role across fleets → Role cell shows the role name (exact),
     // not "Various". Anchoring on `.role__cell` keeps the match precise.

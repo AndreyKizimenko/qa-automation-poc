@@ -73,7 +73,7 @@ test.describe('Create API-only user (free)', { tag: '@free' }, () => {
 
       await expect(page).toHaveURL(/\/settings\/users\b/);
       await usersPage.toast.expectSuccess(`${name} has been created!`);
-      await assertApiUserRow(usersPage.rowByName(name), name, role);
+      await assertApiUserRow(await usersPage.findRowByName(name), name, role);
 
       const id = await findApiUserIdByName(request, name);
       if (id !== null) createdUserIds.push(id);
@@ -120,7 +120,7 @@ test.describe('Create API-only user (free)', { tag: '@free' }, () => {
     await createApiUserPage.doneButton.click();
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    await assertApiUserRow(usersPage.rowByName(name), name, 'Observer');
+    await assertApiUserRow(await usersPage.findRowByName(name), name, 'Observer');
 
     const id = await findApiUserIdByName(request, name);
     if (id !== null) createdUserIds.push(id);

@@ -13,4 +13,6 @@ export * from './fma';
 export * from './app-store';
 export * from './mdm';
 export * from './users';
+export * from './static-users';
+export * from './role-access';
 export * from './cleanup';

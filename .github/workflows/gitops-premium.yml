@@ -30,7 +30,6 @@ jobs:
           config-files: |
             gitops/premium-fleetqa/default.yml
             gitops/premium-fleetqa/fleets/workstations.yml
-          delete-other-fleets: 'true'
           dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         env:
           FLEET_URL:              ${{ secrets.FLEET_PREMIUM_URL }}

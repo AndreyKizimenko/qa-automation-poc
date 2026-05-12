@@ -83,6 +83,14 @@ type FleetWorkerFixtures = {
   workstationsFleetId: number;
 
   /**
+   * Resolved id of the QA fleet on the premium instance — fetched once per
+   * worker via the Fleet API. Used by premium role-access specs that need a
+   * second fleet alongside Workstations to verify cross-fleet denial.
+   * Throws on free; free specs must not request this fixture.
+   */
+  qaFleetId: number;
+
+  /**
    * Numeric id of the fleet (team) holding the loadtest dataset on the
    * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, which the
    * workflow that provisions the team sets per run. Required by the
@@ -190,6 +198,29 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
       );
     }
     await use(wk.id);
+  }, { scope: 'worker', box: true }],
+
+  qaFleetId: [async ({}, use) => {
+    const baseURL = process.env.FLEET_URL;
+    const token = process.env.FLEET_API_TOKEN;
+    if (!baseURL || !token) {
+      throw new Error('[qaFleetId fixture] FLEET_URL and FLEET_API_TOKEN must be set');
+    }
+    const res = await fetch(`${baseURL}/api/latest/fleet/teams?query=QA&per_page=50`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(`[qaFleetId fixture] teams lookup failed: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const list = (data.fleets ?? data.teams ?? []) as Array<{ id: number; name: string }>;
+    const qa = list.find((t) => t.name === 'QA');
+    if (!qa) {
+      throw new Error(
+        '[qaFleetId fixture] QA fleet not found — premium gitops likely not applied',
+      );
+    }
+    await use(qa.id);
   }, { scope: 'worker', box: true }],
 
   pageHealth: [async ({ page }, use, testInfo) => {
