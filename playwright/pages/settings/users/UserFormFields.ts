@@ -7,9 +7,8 @@ import { Page, Locator, expect } from '@playwright/test';
  * Locator notes (verified against the live DOM):
  *
  * - **Full name** has a plain `<label>` and works with `getByLabel`.
- * - **Email** and **Password** have a tooltip-wrapper inside the label,
- *   which breaks `getByLabel({ exact: true })` matching. Both inputs do
- *   carry placeholders, so we anchor on those instead.
+ * - **Email** and **Password** labels embed a tooltip-wrapper span,
+ *   so those inputs are anchored on their placeholder text.
  * - **Permissions** radio defaults to **"Assign to fleet(s)"** on premium —
  *   the role dropdown isn't rendered until "Global user" is selected.
  * - **Role dropdown** wrapper carries the `user-form__global-role-dropdown`
@@ -55,8 +54,9 @@ export class UserFormFields {
     this.page = page;
 
     this.fullName = page.getByLabel('Full name');
-    // Placeholders avoid the tooltip-wrapper label-matching pitfall AND the
-    // collision between the "Password" radio label and the password input.
+    // Placeholder anchors for fields whose `<label>` text is wrapped in a
+    // tooltip span (Email, Password). Also disambiguates the password input
+    // from the "Password" Authentication radio.
     this.email = page.getByPlaceholder('Email');
     this.password = page.getByPlaceholder('Password');
 

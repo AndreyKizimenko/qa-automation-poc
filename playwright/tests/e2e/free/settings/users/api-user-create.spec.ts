@@ -24,8 +24,9 @@ async function assertApiUserRow(row: Locator, name: string, role: string): Promi
   await expect(row).toBeVisible();
   await expect(row.locator('.data-table__tooltip-truncated-text').first()).toHaveText(name);
   await expect(row.locator('.pill-badge')).toHaveText('API');
-  // Exact role-cell match — `toContainText('Observer')` would also pass
-  // against an "Observer+" row.
+  // Anchored on `.role__cell` with exact text. Free has no Observer+ so
+  // the collision can't fire here, but the helper stays consistent with
+  // premium.
   await expect(row.locator('.role__cell')).toHaveText(role);
 }
 

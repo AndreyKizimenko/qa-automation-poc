@@ -86,7 +86,7 @@ export class UsersPage {
     await this.dropdownOption(option).click();
   }
 
-  /** Locator for any open ActionsDropdown option whose label starts with `label`. */
+  /** Locator for any open ActionsDropdown option containing the given label text. */
   dropdownOption(label: string): Locator {
     return this.page.locator('.actions-dropdown__option').filter({ hasText: label });
   }

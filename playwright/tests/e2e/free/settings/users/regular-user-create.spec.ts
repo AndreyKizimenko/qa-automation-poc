@@ -58,6 +58,8 @@ test.describe('Create regular user (free)', { tag: '@free' }, () => {
       // pass against an "Observer+" row on premium (not present on free,
       // but the assertion stays consistent across tiers).
       await expect(row.locator('.role__cell')).toHaveText(role);
+      // Email cell shows the address we submitted.
+      await expect(row.locator('.email__cell')).toHaveText(email);
 
       const created = await findUserByEmail(request, email);
       if (created) createdUserIds.push(created.id);

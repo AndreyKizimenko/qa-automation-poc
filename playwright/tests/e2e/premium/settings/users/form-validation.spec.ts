@@ -70,9 +70,8 @@ test.describe('Create-user form validation', () => {
       createApiUserPage,
       page,
     }) => {
-      // The API form validates on submit (not on blur), so the test
-      // clicks Add and verifies the inline error appears rather than
-      // asserting a disabled button state.
+      // The API form validates on submit, so clicking Add surfaces the
+      // inline "Name is required" error directly.
       await createApiUserPage.goto();
       await createApiUserPage.submitButton.click();
       await expect(page.getByText('Name is required')).toBeVisible();

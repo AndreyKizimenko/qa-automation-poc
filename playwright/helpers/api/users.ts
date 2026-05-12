@@ -67,9 +67,9 @@ export const QA_TEST_EMAIL_RE = /^qa-test-\d+-[a-z0-9]+@fleetdm\.com$/;
 
 /**
  * Password used for every test user the user-management specs create.
- * Sourced from `FLEET_TEST_USER_PASSWORD` so future "can log in" specs
- * can reach the same secret. Throws at first use rather than letting
- * the API reject the create with an opaque 422.
+ * Sourced from `FLEET_TEST_USER_PASSWORD`. Throws at first use so a
+ * missing env var fails the spec at setup rather than as an opaque 422
+ * on user create.
  */
 export function qaTestPassword(): string {
   const pw = process.env.FLEET_TEST_USER_PASSWORD;

@@ -61,9 +61,12 @@ test.describe('Create regular user (premium)', () => {
       const row = usersPage.rowByEmail(email);
       await expect(row).toBeVisible();
       await expect(row).toContainText(name);
-      // Exact role-cell match: `toContainText('Observer')` would also
-      // pass against an "Observer+" row.
+      // Anchored on `.role__cell` with exact text so Observer and Observer+
+      // never collide.
       await expect(row.locator('.role__cell')).toHaveText(role);
+      // Email cell shows the address we submitted — confirms the UI →
+      // API → UI round-trip on the email field.
+      await expect(row.locator('.email__cell')).toHaveText(email);
       await expect(row).toContainText('Global');
 
       const created = await findUserByEmail(request, email);
@@ -97,6 +100,7 @@ test.describe('Create regular user (premium)', () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText(name);
     await expect(row.locator('.role__cell')).toHaveText('Maintainer');
+    await expect(row.locator('.email__cell')).toHaveText(email);
     await expect(row).toContainText('Workstations');
 
     const created = await findUserByEmail(request, email);
@@ -131,6 +135,7 @@ test.describe('Create regular user (premium)', () => {
     // Fleet collapses mixed-role assignments to "2 fleets" + "Various".
     await expect(row).toContainText('2 fleets');
     await expect(row.locator('.role__cell')).toHaveText('Various');
+    await expect(row.locator('.email__cell')).toHaveText(email);
 
     const created = await findUserByEmail(request, email);
     if (created) createdUserIds.push(created.id);
@@ -165,6 +170,7 @@ test.describe('Create regular user (premium)', () => {
     // not "Various". Anchoring on `.role__cell` keeps the match precise.
     await expect(row).toContainText('2 fleets');
     await expect(row.locator('.role__cell')).toHaveText('Observer');
+    await expect(row.locator('.email__cell')).toHaveText(email);
 
     const created = await findUserByEmail(request, email);
     if (created) createdUserIds.push(created.id);

@@ -37,8 +37,7 @@ test.describe('Delete user', { tag: '@free' }, () => {
     await usersPage.deleteConfirmButton.click();
     await expect(usersPage.deleteModal).toBeHidden();
     await usersPage.toast.expectSuccess(`Successfully deleted ${name}.`);
-    // toHaveCount(0) auto-waits until the row locator resolves to zero,
-    // so this is sufficient as a "row is gone" check.
+    // `toHaveCount(0)` auto-waits until the row locator resolves to zero.
     await expect(usersPage.table.rowWith(email)).toHaveCount(0);
 
     userId = undefined;

@@ -7,7 +7,7 @@ import { UserFormFields } from './UserFormFields';
  * user-creation form. Reached from the Users list page via the "Add user"
  * dropdown → "Regular user" option.
  *
- * The form fields are shared with the Edit modal via {@link UserFormFields}.
+ * The form fields are shared with the Edit page via {@link UserFormFields}.
  * This page object wires only the page-level chrome (heading, action buttons,
  * confirmation toast) on top of the shared fields.
  */
