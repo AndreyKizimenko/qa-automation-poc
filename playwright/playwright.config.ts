@@ -2,7 +2,30 @@ import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-const suite = process.env.SUITE || 'premium';
+// Resolve which `.env.<suite>` file to load. Order of precedence:
+//   1. SUITE env var — explicit (set by the npm scripts)
+//   2. --project=<name> on the Playwright CLI — infer from the project
+//      ("free"/"loadtest" map to the matching suite; everything else
+//      defaults to "premium" because most projects are premium-tier)
+//
+// Without (2), `npx playwright test --project=free` would silently load
+// `.env.premium` and the free-tagged tests would point at the wrong
+// instance — every "free" suite call without `SUITE=free` produced
+// confusing premium-shaped failures before we added the fallback.
+function resolveSuite(): string {
+  if (process.env.SUITE) return process.env.SUITE;
+  const projectArg = process.argv.find((a) => a.startsWith('--project'));
+  if (projectArg) {
+    const name = projectArg.includes('=')
+      ? projectArg.split('=')[1]
+      : process.argv[process.argv.indexOf(projectArg) + 1];
+    if (name === 'free' || name === 'free-setup') return 'free';
+    if (name === 'loadtest' || name === 'loadtest-setup') return 'loadtest';
+  }
+  return 'premium';
+}
+
+const suite = resolveSuite();
 dotenv.config({ path: path.resolve(__dirname, `.env.${suite}`), quiet: true });
 
 export default defineConfig({

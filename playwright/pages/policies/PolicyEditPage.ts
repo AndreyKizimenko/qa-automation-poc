@@ -11,7 +11,34 @@ import { Toast } from '../components/Toast';
  * The SQL editor is Fleet's `SQLEditor` (`.sql-editor` wrapper) around
  * Ace; visible content lives in `.ace_content` and keyboard input is
  * routed through the standard hidden `textarea.ace_text-input`.
+ *
+ * Existing-policy entry: the policies list links to `/policies/:id`
+ * (results), not `/edit`. From there the "Edit policy" button opens the
+ * form — `clickEditFromDetails()` handles that hop.
  */
+export type PolicyPlatform = 'macOS' | 'Windows' | 'Linux' | 'ChromeOS';
+export type PolicyTargetType = 'All hosts' | 'Custom';
+
+export interface PolicyFormValues {
+  name: string;
+  description: string;
+  resolution: string;
+  platforms: PolicyPlatform[];
+  sql: string;
+}
+
+/**
+ * Fields collected by the "Save policy" modal that pops on Save for a
+ * new policy. Platforms / target / critical are left at their modal
+ * defaults (macOS, All hosts, not critical) — the smoke flow doesn't
+ * need to exercise them at creation time.
+ */
+export interface SavePolicyValues {
+  name: string;
+  description: string;
+  resolution: string;
+}
+
 export class PolicyEditPage {
   readonly page: Page;
   readonly navbar: Navbar;
@@ -23,11 +50,24 @@ export class PolicyEditPage {
 
   // Inline name input — only renders for an existing policy.
   readonly nameInput: Locator;
+  readonly descriptionInput: Locator;
+  readonly resolutionInput: Locator;
   readonly saveButton: Locator;
 
-  // Modal that pops on Save for a new policy.
+  // "Edit policy" button on the policy results/details page
+  // (`/policies/:id`) that opens this form.
+  readonly editFromDetailsButton: Locator;
+
+  // "Back to policy" button on the /edit page that returns to
+  // `/policies/:id`. Use this to chain edit → verify-on-details cleanly.
+  readonly backToPolicyButton: Locator;
+
+  // Modal that pops on Save for a new policy — contains the full form
+  // (name, description, resolution, platforms, target, critical).
   readonly saveNewModal: Locator;
   readonly saveNewNameInput: Locator;
+  readonly saveNewDescriptionInput: Locator;
+  readonly saveNewResolutionInput: Locator;
   readonly saveNewSubmitButton: Locator;
 
   constructor(page: Page) {
@@ -35,19 +75,39 @@ export class PolicyEditPage {
     this.navbar = new Navbar(page);
     this.toast = new Toast(page);
 
-    // The /policies/:id/edit page also renders a schema-sidebar SQL example
-    // that uses the same `.sql-editor` wrapper; scope to the first
-    // instance so locator chains resolve to the main policy editor.
-    this.editor = page.locator('.sql-editor').first();
+    // The /policies/new and /policies/:id/edit pages also render a
+    // schema-sidebar SQL example that uses the same `.sql-editor`
+    // wrapper. Filter by the non-readonly textarea (only the main
+    // editor is editable; the example's textarea has `readonly`).
+    this.editor = page.locator('.sql-editor').filter({
+      has: page.locator('textarea.ace_text-input:not([readonly])'),
+    });
     this.editorContent = this.editor.locator('.ace_content');
     this.editorTextarea = this.editor.locator('textarea.ace_text-input');
 
     this.nameInput = page.locator('input[name="policy-name"]');
+    this.descriptionInput = page.locator('textarea[name="policy-description"]');
+    this.resolutionInput = page.locator('textarea[name="policy-resolution"]');
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
+
+    this.editFromDetailsButton = page.getByRole('button', { name: 'Edit policy' });
+    this.backToPolicyButton = page.getByRole('button', { name: 'Back to policy' });
 
     this.saveNewModal = page.locator('.modal__modal_container').filter({ hasText: 'Save policy' });
     this.saveNewNameInput = this.saveNewModal.locator('input[name="name"]');
+    this.saveNewDescriptionInput = this.saveNewModal.locator('textarea[name="description"]');
+    this.saveNewResolutionInput = this.saveNewModal.locator('textarea[name="resolution"]');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+  }
+
+  /** Platform target checkbox by visible label. */
+  platformCheckbox(os: PolicyPlatform): Locator {
+    return this.page.getByRole('checkbox', { name: os, exact: true });
+  }
+
+  /** All hosts / Custom radio. */
+  targetTypeRadio(value: PolicyTargetType): Locator {
+    return this.page.getByRole('radio', { name: value });
   }
 
   async gotoNew(opts: { fleetId?: number } = {}): Promise<void> {
@@ -65,11 +125,81 @@ export class PolicyEditPage {
     await expect(this.editorContent).toBeVisible();
   }
 
+  /**
+   * Click "Edit policy" on the results page (`/policies/:id`) to open the
+   * editor. The list links land on results, not directly on /edit, so
+   * specs entering via list → openPolicy() come through here next.
+   */
+  async clickEditFromDetails(): Promise<void> {
+    await this.editFromDetailsButton.click();
+    await expect(this.page).toHaveURL(/\/policies\/\d+\/edit/);
+    await expect(this.nameInput).toBeVisible();
+    await expect(this.editorContent).toBeVisible();
+  }
+
+  /**
+   * Toggle platform checkboxes so the resulting checked set equals
+   * `platforms` exactly. Each policy has at least one platform selected,
+   * so callers can't pass `[]`.
+   */
+  async setPlatforms(platforms: PolicyPlatform[]): Promise<void> {
+    for (const os of ['macOS', 'Windows', 'Linux', 'ChromeOS'] as const) {
+      const cb = this.platformCheckbox(os);
+      if (platforms.includes(os)) await cb.check();
+      else await cb.uncheck();
+    }
+  }
+
+  /** Read back the set of checked platforms. */
+  async checkedPlatforms(): Promise<PolicyPlatform[]> {
+    const result: PolicyPlatform[] = [];
+    for (const os of ['macOS', 'Windows', 'Linux', 'ChromeOS'] as const) {
+      if (await this.platformCheckbox(os).isChecked()) result.push(os);
+    }
+    return result;
+  }
+
+  /**
+   * Fill every editable field. Note on ordering: SQL + platform clicks
+   * trigger React re-renders that wipe earlier text-field values, so
+   * the text inputs (name/description/resolution) are filled LAST and
+   * re-asserted before save. Critical isn't covered — Fleet's
+   * role=checkbox proxy for it didn't resolve reliably under Playwright.
+   */
+  async fillAll(values: PolicyFormValues): Promise<void> {
+    await this.setSql(values.sql);
+    await this.setPlatforms(values.platforms);
+    await this.nameInput.fill(values.name);
+    await this.descriptionInput.fill(values.description);
+    await this.resolutionInput.fill(values.resolution);
+    await expect(this.nameInput).toHaveValue(values.name);
+    await expect(this.descriptionInput).toHaveValue(values.description);
+    await expect(this.resolutionInput).toHaveValue(values.resolution);
+  }
+
+  /** Assert every editable field equals `values` (use after re-opening). */
+  async expectValues(values: PolicyFormValues): Promise<void> {
+    await expect(this.nameInput).toHaveValue(values.name);
+    await expect(this.descriptionInput).toHaveValue(values.description);
+    await expect(this.resolutionInput).toHaveValue(values.resolution);
+    expect(await this.checkedPlatforms()).toEqual(values.platforms);
+    expect(await this.sqlText()).toContain(values.sql.trim());
+  }
+
+  /**
+   * Replace SQL via the hidden Ace textarea. All keyboard ops route
+   * through `editorTextarea` (Ace's `.ace_text-input`) so Ctrl/Cmd+A
+   * reaches Ace's select-all handler — sending it via `page.keyboard`
+   * after clicking the visible div targets the wrong element and
+   * Ctrl+A becomes a no-op, leaving the old SQL in place.
+   */
   async setSql(sql: string): Promise<void> {
+    await this.editorContent.click();
     await this.editorTextarea.focus();
-    await this.page.keyboard.press('ControlOrMeta+A');
-    await this.page.keyboard.press('Delete');
+    await this.editorTextarea.press('ControlOrMeta+A');
+    await this.editorTextarea.press('Delete');
     await this.editorTextarea.pressSequentially(sql);
+    await expect(this.editorContent).toHaveText(sql);
   }
 
   async sqlText(): Promise<string> {
@@ -78,13 +208,16 @@ export class PolicyEditPage {
 
   /**
    * New-policy save flow: clicks Save → opens "Save policy" modal → fills
-   * the name → submits. Fleet redirects to `/policies/:id` on success;
-   * the parsed id is returned.
+   * name + description + resolution → submits → waits for the success
+   * toast. Fleet redirects to `/policies/:id` (the results page) on
+   * success; the parsed id is returned.
    */
-  async saveNew(name: string): Promise<number> {
+  async saveNew(values: SavePolicyValues): Promise<number> {
     await this.saveButton.click();
     await expect(this.saveNewModal).toBeVisible();
-    await this.saveNewNameInput.fill(name);
+    await this.saveNewNameInput.fill(values.name);
+    await this.saveNewDescriptionInput.fill(values.description);
+    await this.saveNewResolutionInput.fill(values.resolution);
     await this.saveNewSubmitButton.click();
     await this.toast.expectSuccess('Policy created.');
     await this.page.waitForURL(/\/policies\/\d+(?:\?|$)/);
@@ -94,6 +227,12 @@ export class PolicyEditPage {
     );
     if (!id) throw new Error(`Could not parse policy id from ${this.page.url()}`);
     return id;
+  }
+
+  /** Click "Back to policy" → returns to `/policies/:id` (the results page). */
+  async backToPolicy(): Promise<void> {
+    await this.backToPolicyButton.click();
+    await expect(this.page).toHaveURL(/\/policies\/\d+(?:\?|$)/);
   }
 
   /** Existing-policy save: clicks Save and waits for the success toast. */

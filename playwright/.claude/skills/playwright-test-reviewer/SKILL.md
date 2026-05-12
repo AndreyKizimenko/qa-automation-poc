@@ -24,7 +24,7 @@ Review this Playwright test suite as a strict senior automation engineer for a l
 5. Locators that aren't grounded in the actual React component (`frontend/` in this repo, or `~/repositories/fleet/frontend/`) — verify the chosen role/text/class is what the source emits, not just what the rendered DOM shows. Use the Playwright MCP and `docs/REST API/rest-api.md` to cross-check.
 6. Unnecessary waits (`waitForTimeout`, arbitrary sleeps).
 7. Missing web-first assertions.
-8. Poor test isolation (tests depending on order or shared mutable state).
+8. Poor test isolation (tests depending on order or shared mutable state). Exception: CRUD lifecycle specs (see `playwright/CLAUDE.md`) intentionally use `test.describe.configure({ mode: 'serial' })` with closure-shared identifiers across sub-tests — flag only if a non-CRUD spec does this.
 9. Duplicated setup or login logic that should be a fixture or storage state.
 10. Abstractions that make tests harder to read.
 11. Places where Fleet-like repeated admin flows (team switching, table filter/sort, modal confirmation, policy/software/report actions) should be extracted into shared helpers.

@@ -1,54 +1,124 @@
 /**
- * Policies CRUD lifecycle scoped to a specific fleet on premium.
- * Runs once per scope (All fleets + Workstations).
+ * Policies CRUD lifecycle scoped to a specific fleet on premium. Each
+ * scope (All fleets + Workstations) runs as a serial describe so a
+ * per-step failure pinpoints which CRUD action regressed.
+ *
+ * Coverage per scope (in order):
+ *  - create : add policy → set SQL → modal save with name/description/
+ *             resolution → verify on /policies/:id → verify row in list
+ *  - edit   : list → open policy → click Edit → change every editable
+ *             field + SQL → Back to policy → verify on details (+ Show
+ *             query for SQL) → verify renamed row in list
+ *  - delete : bulk delete by name + activity assertion
+ *  - feed   : dashboard activity feed shows create/edit/delete entries
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
-import type { TeamScope } from '@pages';
+import { fleetIdFor } from '@helpers/team-scope';
+import type { PolicyFormValues, SavePolicyValues, TeamScope } from '@pages';
 
 const SCOPES: readonly TeamScope[] = ['All fleets', 'Workstations'];
 
 for (const scope of SCOPES) {
   const slug = scope.replace(/\s+/g, '-').toLowerCase();
 
-  test(`Policies — create → edit → delete (${scope})`, async ({
-    dashboard,
-    policiesList,
-    policyEdit,
-    request,
-  }) => {
+  test.describe(`Policies CRUD (${scope})`, () => {
+    test.describe.configure({ mode: 'serial' });
+
     const stamp = Date.now();
     const policyName = `playwright-policy-${slug}-${stamp}`;
     const editedName = `${policyName}-edited`;
-    const sql = 'SELECT 1 AS one;';
-    const editedSql = 'SELECT version FROM osquery_info;';
+    const createSql = 'SELECT 1 AS one;';
 
-    await dashboard.goto();
-    await dashboard.navbar.goToPolicies();
-    await policiesList.teamDropdown.select(scope);
+    const created: SavePolicyValues = {
+      name: policyName,
+      description: 'Created by Playwright',
+      resolution: 'Created resolution',
+    };
 
-    await policiesList.addPolicy();
-    await policyEdit.setSql(sql);
-    const policyId = await policyEdit.saveNew(policyName);
-    await assertActivity(request, 'created_policy', (d) => d.policy_name === policyName);
+    // Edit values diverge from create in every text field + the SQL +
+    // platforms, so a stuck field surfaces at the post-save verification.
+    const edited: PolicyFormValues = {
+      name: editedName,
+      description: 'Edited by Playwright',
+      resolution: 'Edited resolution',
+      platforms: ['Windows', 'Linux'],
+      sql: 'SELECT version FROM osquery_info;',
+    };
 
-    await policyEdit.gotoEdit(policyId);
-    await expect(policyEdit.nameInput).toHaveValue(policyName);
-    await policyEdit.nameInput.fill(editedName);
-    await policyEdit.setSql(editedSql);
-    await policyEdit.saveExisting();
-    await assertActivity(request, 'edited_policy', (d) => d.policy_name === editedName);
+    test('create', async ({ dashboard, policiesList, policyEdit, policyDetails, request }) => {
+      // First sub-test enters the way a user actually would.
+      await dashboard.goto();
+      await dashboard.navbar.goToPolicies();
+      await policiesList.teamDropdown.select(scope);
 
-    await policyEdit.gotoEdit(policyId);
-    await expect(policyEdit.nameInput).toHaveValue(editedName);
-    expect(await policyEdit.sqlText()).toContain('osquery_info');
+      await policiesList.addPolicy();
+      await policyEdit.setSql(createSql);
+      await policyEdit.saveNew(created);
+      await assertActivity(request, 'created_policy', (d) => d.policy_name === policyName);
 
-    await policiesList.goto();
-    await policiesList.teamDropdown.select(scope);
-    await policiesList.deletePolicy(editedName);
+      // saveNew lands us on /policies/:id — verify the details page reflects
+      // the values that went through the modal.
+      await policyDetails.expectValues(created);
 
-    await expect(policiesList.table.rowOrEmpty()).toBeVisible();
-    await expect(policiesList.table.rowWith(editedName)).toHaveCount(0);
-    await assertActivity(request, 'deleted_policy', (d) => d.policy_name === editedName);
+      // Click "Policies" in the navbar — confirm the new row is present.
+      // Re-select the scope (the navbar click preserves the last-used
+      // team filter) and search by name (the list is paginated; new
+      // policies may not be on page 1).
+      await policyDetails.navbar.goToPolicies();
+      await policiesList.teamDropdown.select(scope);
+      await policiesList.search.fill(policyName);
+      await expect(policiesList.table.rowWith(policyName)).toBeVisible();
+    });
+
+    test('edit', async ({ policiesList, policyEdit, policyDetails, request, workstationsFleetId }) => {
+      // User flow: list → click policy name → details → click Edit policy.
+      await policiesList.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
+      await policiesList.teamDropdown.select(scope);
+      await policiesList.openPolicy(policyName);
+      await policyDetails.clickEdit();
+      await expect(policyEdit.nameInput).toHaveValue(policyName);
+
+      await policyEdit.fillAll(edited);
+      await policyEdit.saveExisting();
+      await assertActivity(request, 'edited_policy', (d) => d.policy_name === editedName);
+
+      // Back to policy → verify the details page reflects every change.
+      await policyEdit.backToPolicy();
+      await policyDetails.expectValues(edited);
+      expect((await policyDetails.showQuery()).trim()).toContain(edited.sql.trim());
+
+      // Navbar → list → search for the new name → confirm row.
+      // (The rename itself was already verified on the details page and
+      // via the edited_policy activity; we're confirming the list view
+      // reflects the change.)
+      await policyDetails.navbar.goToPolicies();
+      await policiesList.teamDropdown.select(scope);
+      await policiesList.search.fill(editedName);
+      await expect(policiesList.table.rowWith(editedName)).toBeVisible();
+    });
+
+    test('delete', async ({ policiesList, request, workstationsFleetId }) => {
+      await policiesList.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
+      await policiesList.teamDropdown.select(scope);
+      await policiesList.deletePolicy(editedName);
+
+      await expect(policiesList.table.rowOrEmpty()).toBeVisible();
+      await expect(policiesList.table.rowWith(editedName)).toHaveCount(0);
+      await assertActivity(request, 'deleted_policy', (d) => d.policy_name === editedName);
+    });
+
+    test('activity feed shows create → edit → delete', async ({ dashboard }) => {
+      await dashboard.goto();
+      // Fleet renders policy activity as "<actor> created a policy <name> ...",
+      // "edited the policy <name> ...", "deleted the policy <name> ...".
+      // The suffix is "globally." (All fleets) or "on the <fleet> fleet."
+      const suffix = scope === 'All fleets' ? 'globally' : `on the ${scope} fleet`;
+      await dashboard.expectActivities([
+        new RegExp(`created a policy ${policyName} ${suffix}\\.`),
+        new RegExp(`edited the policy ${editedName} ${suffix}\\.`),
+        new RegExp(`deleted the policy ${editedName} ${suffix}\\.`),
+      ]);
+    });
   });
 }

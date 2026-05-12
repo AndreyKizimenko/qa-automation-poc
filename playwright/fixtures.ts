@@ -49,9 +49,11 @@ import {
   SetupAssistantPage,
   ReportsListPage,
   ReportEditPage,
+  ReportDetailsPage,
   ReportLivePage,
   PoliciesListPage,
   PolicyEditPage,
+  PolicyDetailsPage,
   LabelsPage,
   PacksListPage,
   PackEditPage,
@@ -121,9 +123,11 @@ type FleetFixtures = {
   // Reports + Policies
   reportsList: ReportsListPage;
   reportEdit: ReportEditPage;
+  reportDetails: ReportDetailsPage;
   reportLive: ReportLivePage;
   policiesList: PoliciesListPage;
   policyEdit: PolicyEditPage;
+  policyDetails: PolicyDetailsPage;
 
   // Labels + Packs
   labelsPage: LabelsPage;
@@ -311,6 +315,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   reportEdit: [async ({ page }, use) => {
     await use(new ReportEditPage(page));
   }, { box: true }],
+  reportDetails: [async ({ page }, use) => {
+    await use(new ReportDetailsPage(page));
+  }, { box: true }],
   reportLive: [async ({ page }, use) => {
     await use(new ReportLivePage(page));
   }, { box: true }],
@@ -319,6 +326,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   policyEdit: [async ({ page }, use) => {
     await use(new PolicyEditPage(page));
+  }, { box: true }],
+  policyDetails: [async ({ page }, use) => {
+    await use(new PolicyDetailsPage(page));
   }, { box: true }],
 
   // Labels + Packs

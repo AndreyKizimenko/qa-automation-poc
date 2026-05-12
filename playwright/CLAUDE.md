@@ -91,7 +91,15 @@ Do not introduce new env-var skip gates without a load-bearing reason.
 
 ## E2E vs. performance specs
 
-**E2E specs** (`tests/e2e/`) verify user-visible behaviour. Enter through the dashboard and click through the navbar / tabs / subnav to reach the feature being tested — direct URL `goto()` for the feature page is reserved for non-flow contexts (e.g. paywall checks in `tests/e2e/free/paywalls.spec.ts`). Each spec is a single end-to-end flow; cleanup runs at the end of the same test (no shared mutable state between tests).
+**E2E specs** (`tests/e2e/`) verify user-visible behaviour. Enter through the dashboard and click through the navbar / tabs / subnav to reach the feature being tested — direct URL `goto()` for the feature page is reserved for non-flow contexts (e.g. paywall checks in `tests/e2e/free/paywalls.spec.ts`).
+
+Default: a spec is a single end-to-end flow; cleanup runs at the end of the same test (no shared mutable state between tests).
+
+**Exception — CRUD lifecycle specs** (policies, reports, packs, scripts, profiles, software). These split each lifecycle step (create / edit / delete + a final dashboard activity-feed assertion) into its own sub-test inside a `test.describe.configure({ mode: 'serial' })` block, sharing identifiers via closure (`let policyId`, `let titleName`, etc.). The win is granular failure attribution while flake-fixing. Conventions:
+- Only the first sub-test does the dashboard → navbar → list dropdown dance. Subsequent sub-tests go straight to the master list with `<page>.goto({ fleetId })`, resolving `fleetId` via `fleetIdFor(scope, workstationsFleetId)` from `@helpers/team-scope` (`'Workstations'` → the worker fixture, `'Unassigned'` → `0`, `'All fleets'` → `undefined`).
+- **Always call `<page>.teamDropdown.select(scope)` immediately after every scope-aware `goto({ fleetId })` in a scope loop.** Fleet's pages don't all behave the same when navigated with/without `fleet_id` — some preserve the last-used team via localStorage and render the wrong scope even though the URL is correct. The `select()` call is idempotent (no-op if already correct), so applying it everywhere is the safe default.
+- The final sub-test asserts the dashboard activity feed via `dashboard.expectActivities(matcher, count)`. Matchers use explicit verbs and the rendered scope suffix — they differ per resource and per tier, so scout the live feed when authoring a new one.
+- Cleanup still runs inside the same describe block (the `delete` sub-test), so an aborted create still leaves the cleanup-teardown project to wipe state.
 
 **Performance specs** (`tests/loadtest/`) follow different rules. They are tagged `@loadtest`, run only against the loadtest project, and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
 
