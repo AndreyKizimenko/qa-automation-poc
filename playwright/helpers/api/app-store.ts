@@ -1,5 +1,5 @@
 import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, sessionAuthHeaders } from './core';
+import { apiUrl, authHeaders } from './core';
 
 export type AppStorePlatform = 'darwin' | 'ios' | 'ipados' | 'android';
 
@@ -29,7 +29,7 @@ export async function addAppStoreApp(
     data.self_service = opts.selfService ?? true;
   }
   const res = await request.post(apiUrl('software/app_store_apps'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     data,
     timeout: 120_000,
   });

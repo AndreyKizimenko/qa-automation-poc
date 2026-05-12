@@ -51,7 +51,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 - Build URLs through `apiUrl(path)` from `@helpers/api`. Never inline `/api/v1/...` or `/api/latest/...` in test code.
 - API helpers are split per area under `helpers/api/` (`core`, `hosts`, `fleets`, `software`, `fma`, `app-store`, `mdm`, `activities`). The barrel `@helpers/api` re-exports everything; specs can also reach for a specific module (`@helpers/api/software`) when they want narrower deps.
-- Use `authHeaders()` (the `FLEET_API_TOKEN` env user) by default. Use `sessionAuthHeaders()` (the storage-state user) for endpoints that 401/403 with the env token — currently software/package, packs, and admin queries/policies (tracked upstream as fleetdm/fleet#38044).
+- Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/packs`, `/queries`, `/policies`, etc.
 - Use the Playwright `request` fixture; do not use raw `fetch()` from inside specs.
 
 ## Projects and tags

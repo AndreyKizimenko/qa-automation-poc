@@ -3,12 +3,12 @@
 // empty scope and silently skips individual failures so one stuck item
 // doesn't abort the rest of the cleanup.
 import { APIRequestContext } from '@playwright/test';
-import { apiUrl, authHeaders, sessionAuthHeaders } from './core';
+import { apiUrl, authHeaders } from './core';
 
 /** Deletes every saved query on the instance. */
 export async function deleteAllQueries(request: APIRequestContext): Promise<void> {
   const res = await request.get(apiUrl('queries'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     params: { per_page: '500' },
   });
   if (!res.ok()) return;
@@ -17,7 +17,7 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
   await Promise.all(
     queries.map((q) =>
       request
-        .delete(apiUrl(`queries/id/${q.id}`), { headers: sessionAuthHeaders() })
+        .delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() })
         .catch((err) => console.warn(`[cleanup queries] ${q.id}:`, err)),
     ),
   );
@@ -35,7 +35,7 @@ export async function deleteAllPacks(request: APIRequestContext): Promise<void> 
   await Promise.all(
     packs.map((p) =>
       request
-        .delete(apiUrl(`packs/id/${p.id}`), { headers: sessionAuthHeaders() })
+        .delete(apiUrl(`packs/id/${p.id}`), { headers: authHeaders() })
         .catch((err) => console.warn(`[cleanup packs] ${p.id}:`, err)),
     ),
   );
@@ -53,7 +53,7 @@ export async function deleteAllGlobalPolicies(request: APIRequestContext): Promi
   if (ids.length === 0) return;
   await request
     .post(apiUrl('policies/delete'), {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       data: { ids },
     })
     .catch((err) => console.warn('[cleanup policies]', err));
@@ -74,7 +74,7 @@ export async function deleteAllTeamPolicies(
   if (ids.length === 0) return;
   await request
     .post(apiUrl(`teams/${teamId}/policies/delete`), {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       data: { ids },
     })
     .catch((err) => console.warn(`[cleanup team ${teamId} policies]`, err));

@@ -1,5 +1,5 @@
 import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, sessionAuthHeaders } from './core';
+import { apiUrl, authHeaders } from './core';
 
 interface FmaListEntry {
   id: number;
@@ -25,7 +25,7 @@ export async function findFmaIdBySlug(
   if (cached) return cached;
 
   const res = await request.get(apiUrl('software/fleet_maintained_apps'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     params: { fleet_id: String(fleetId), per_page: '500' },
   });
   await expect(res, `Failed to list Fleet-maintained apps`).toBeOK();
@@ -55,7 +55,7 @@ export async function addFmaToFleet(
 ): Promise<{ titleId: number }> {
   const fmaId = await findFmaIdBySlug(request, fleetId, slug);
   const res = await request.post(apiUrl('software/fleet_maintained_apps'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     data: { fleet_maintained_app_id: fmaId, fleet_id: fleetId },
     timeout: 120_000,
   });

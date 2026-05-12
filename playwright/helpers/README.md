@@ -35,7 +35,7 @@ that's a page-object responsibility.
 
 | Module | What's inside |
 |--------|---------------|
-| `core.ts` | `apiUrl`, `authHeaders`, `sessionAuthHeaders`, `getApiToken`, shared `HostRef` / `FleetRef` types |
+| `core.ts` | `apiUrl`, `authHeaders`, `getApiToken`, shared `HostRef` / `FleetRef` types |
 | `activities.ts` | `assertActivity` (test-side check; fails the test if missing), `findActivity` (lower-level lookup) |
 | `hosts.ts` | `findHostByPlatform`, `transferHosts`, `transferHostsByFilter` |
 | `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet` |
@@ -59,7 +59,7 @@ import { addFmaToFleet } from '@helpers/api/fma';
 
 ## Conventions
 
-### API calls — use `authHeaders()` (or `sessionAuthHeaders()`)
+### API calls — use `authHeaders()`
 
 ```ts
 import { apiUrl, authHeaders, findActivity } from '@helpers/api';
@@ -70,11 +70,6 @@ const activity = await findActivity(request, 'created_pack', (d) => d.pack_name 
 ```
 
 Never inline `{ Authorization: \`Bearer ${process.env.FLEET_API_TOKEN}\` }` — one place to update when auth semantics change.
-
-`sessionAuthHeaders()` is the storage-state-cookie variant — use it for
-endpoints that the API-only `FLEET_API_TOKEN` user can't reach (currently
-software/package, packs, and admin queries/policies — tracked upstream as
-fleetdm/fleet#38044).
 
 ### Page health monitoring — automatic via the fixture
 
@@ -124,12 +119,12 @@ import {
   vppUiSearchNames,
   androidApps,
 } from '@helpers/catalogs';
-import { apiUrl, sessionAuthHeaders } from '@helpers/api';
+import { apiUrl, authHeaders } from '@helpers/api';
 
 // API: pick the first macOS VPP entry and add it to the fleet
 const vpp = vppApps.find((a) => a.platform === 'darwin')!;
 await request.post(apiUrl('software/app_store_apps'), {
-  headers: sessionAuthHeaders(),
+  headers: authHeaders(),
   data: { app_store_id: vpp.appStoreId, platform: vpp.platform, fleet_id: fleet.id },
 });
 
