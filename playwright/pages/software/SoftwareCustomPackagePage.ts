@@ -38,9 +38,31 @@ export class SoftwareCustomPackagePage {
     this.progressModal = page.locator('.file-progress-modal');
   }
 
-  /** `fleetId` is required for the page to render content (use 0 for no-team). */
+  /**
+   * Direct URL navigation. Reserved for verification steps and subsequent
+   * sub-tests; the primary `add` sub-test reaches this view by clicking
+   * "Add software" on the titles page and then `openTab()`.
+   *
+   * `fleetId` is required for the page to render content (use 0 for no-team).
+   */
   async goto(opts: { fleetId: number }): Promise<void> {
     await this.page.goto(`/software/add/package?fleet_id=${opts.fleetId}`);
+    await this.expectLoaded();
+  }
+
+  /**
+   * Switch to this tab from another Add software tab. Idempotent — a no-op
+   * if already selected. Carries the current `fleet_id` query param.
+   */
+  async openTab(): Promise<void> {
+    if ((await this.customPackageTab.getAttribute('aria-selected')) !== 'true') {
+      await this.customPackageTab.click();
+      await expect(this.page).toHaveURL(/\/software\/add\/package/);
+    }
+    await this.expectLoaded();
+  }
+
+  async expectLoaded(): Promise<void> {
     await expect(this.heading).toBeVisible();
     await expect(this.customPackageTab).toBeVisible();
   }

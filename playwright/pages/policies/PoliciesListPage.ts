@@ -21,6 +21,8 @@ export class PoliciesListPage {
 
   readonly addPolicyButton: Locator;
 
+  readonly search: Locator;
+
   readonly bulkDeleteButton: Locator;
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -33,6 +35,7 @@ export class PoliciesListPage {
     this.toast = new Toast(page);
 
     this.addPolicyButton = page.getByRole('button', { name: /add policy/i });
+    this.search = page.getByPlaceholder('Search by name');
 
     this.bulkDeleteButton = page.getByRole('button', { name: 'Delete', exact: true });
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete policies' });
@@ -54,11 +57,20 @@ export class PoliciesListPage {
     await expect(this.page).toHaveURL(/\/policies\/new/);
   }
 
+  /** Click a policy's name link in the list to open its edit page. */
+  async openPolicy(name: string): Promise<void> {
+    await this.page.getByRole('link', { name, exact: true }).click();
+    await expect(this.page).toHaveURL(/\/policies\/\d+/);
+  }
+
   /**
    * Selects the row matching `name` via its checkbox, clicks the bulk
-   * "Delete" button, and confirms in the "Delete policies" modal.
+   * "Delete" button, and confirms in the "Delete policies" modal. The
+   * list is narrowed by name first so a row past the first page is
+   * still reachable.
    */
   async deletePolicy(name: string): Promise<void> {
+    await this.search.fill(name);
     const row = this.table.rowWith(name);
     await expect(row).toBeVisible();
     await row.getByRole('checkbox').check();

@@ -11,6 +11,13 @@ import { Navbar } from './components/Navbar';
  */
 type DashboardPlatform = 'mac' | 'windows' | 'linux' | 'chrome' | 'ios' | 'ipados';
 
+// Timestamps the dashboard renders for activities up to ~1h old. Fleet uses
+// date-fns `formatDistanceToNow`, which produces "less than a minute ago",
+// "N second(s)/minute(s) ago", and "about 1 hour ago" (45–89 min). Anything
+// coarser ("about 2 hours ago", "1 day ago", ...) indicates a stale entry
+// from a prior run — the feed is global and never wiped by our cleanup.
+const FRESH_TIMESTAMP_RE = /(?:less than a minute|\d+ seconds?|\d+ minutes?|about 1 hour) ago/;
+
 export class DashboardPage {
   readonly page: Page;
   readonly navbar: Navbar;
@@ -23,7 +30,9 @@ export class DashboardPage {
   readonly firstSoftwareRow: Locator;
   readonly firstSoftwareNameCell: Locator;
   readonly activityHeading: Locator;
+  readonly activityFeedCard: Locator;
   readonly firstActivityItem: Locator;
+  readonly activityNext: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -38,9 +47,20 @@ export class DashboardPage {
     this.firstSoftwareRow = this.softwareTable.locator('tbody tr').first();
     this.firstSoftwareNameCell = this.firstSoftwareRow.locator('td').first();
     this.activityHeading = page.getByRole('heading', { name: 'Activity' });
-    // Activity rows are buttons whose aria-label ends with "ago" — filter
-    // by that to avoid matching unrelated buttons on the page.
-    this.firstActivityItem = page.getByRole('button', { name: /\bago\b/ }).first();
+
+    // Scopes the activity feed via class — no role/text anchor uniquely
+    // identifies this card amongst the other dashboard widgets, and the
+    // "Next" pagination button below collides with controls on other cards
+    // (e.g. the Software widget) without this scope.
+    this.activityFeedCard = page.locator('.activity-feed-card');
+
+    // Activity rows are buttons whose accessible name ends with "ago" —
+    // filter by that to avoid matching the filter dropdowns or the
+    // pagination controls inside the same card.
+    this.firstActivityItem = this.activityFeedCard
+      .getByRole('button', { name: /\bago\b/ })
+      .first();
+    this.activityNext = this.activityFeedCard.getByRole('button', { name: 'Next' });
   }
 
   async goto(opts: { platform?: DashboardPlatform; fleetId?: number } = {}): Promise<void> {
@@ -50,5 +70,92 @@ export class DashboardPage {
     const path = opts.platform ? `/dashboard/${opts.platform}` : '/dashboard';
     await this.page.goto(`${path}${qs ? '?' + qs : ''}`);
     await expect(this.firstCard).toBeVisible();
+  }
+
+  // Activity rows in the dashboard feed are buttons whose accessible name
+  // embeds the actor, action, target, and a "X ago" timestamp. Specs filter
+  // by the target portion (typically a Date.now()-stamped name) so the match
+  // doesn't collide with unrelated buttons elsewhere on the page.
+  activityRows(matcher: string | RegExp): Locator {
+    return this.activityFeedCard.getByRole('button', { name: matcher });
+  }
+
+  // Returns a locator for rows matching `matcher` AND whose timestamp is
+  // within the freshness window. The fresh filter rejects historical
+  // entries from prior runs that share the same static target name.
+  private freshActivityRows(matcher: string | RegExp): Locator {
+    return this.activityRows(matcher).filter({ hasText: FRESH_TIMESTAMP_RE });
+  }
+
+  /**
+   * Click "Next" on the activity feed and wait for the resulting fetch +
+   * DOM update. The feed paginates via `GET /api/.../activities?page=N`
+   * (8 rows per page); we wait on that response, then on the first-row
+   * text to change so DOM rendering has caught up before the next match
+   * attempt.
+   */
+  private async paginateActivityNext(): Promise<void> {
+    const firstText = await this.firstActivityItem.innerText();
+    const responsePromise = this.page.waitForResponse(
+      (r) => /\/activities\?.*page=/.test(r.url()) && r.status() === 200,
+      { timeout: 10_000 },
+    );
+    await this.activityNext.click();
+    await responsePromise.catch(() => {
+      // Network wait is a hint, not a hard requirement — fall through to
+      // the DOM-change wait below regardless.
+    });
+    await expect(this.firstActivityItem).not.toHaveText(firstText, { useInnerText: true });
+  }
+
+  /**
+   * Assert the activity feed surfaces a *recent* row matching every
+   * matcher in `matchers`. The feed has three properties that shape this:
+   *
+   *   1. It's a global, append-only log — prior runs and parallel workers
+   *      using the same static names leave historical rows that would
+   *      falsely satisfy a plain match. The freshness regex restricts to
+   *      timestamps under ~1 hour old.
+   *   2. A busy concurrent run can push the target rows off page 1.
+   *      We paginate forward, bounded by `maxPages` (8 rows per page).
+   *   3. CRUD specs typically check 3+ activities at once. Checking all
+   *      remaining matchers on every page means one pagination loop
+   *      handles the whole batch (3× faster than calling expectActivity
+   *      three times back-to-back).
+   *
+   * Single-matcher callers can use {@link expectActivity}.
+   */
+  async expectActivities(
+    matchers: Array<string | RegExp>,
+    opts: { maxPages?: number } = {},
+  ): Promise<void> {
+    const maxPages = opts.maxPages ?? 15;
+    const remaining = matchers.slice();
+
+    for (let page = 0; page < maxPages && remaining.length > 0; page++) {
+      // Walk backwards so splice doesn't disturb iteration indices.
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        if ((await this.freshActivityRows(remaining[i]).count()) > 0) {
+          remaining.splice(i, 1);
+        }
+      }
+      if (remaining.length === 0) return;
+      if (!(await this.activityNext.isEnabled())) break;
+      await this.paginateActivityNext();
+    }
+
+    if (remaining.length > 0) {
+      // Surface the first un-matched matcher via toBeVisible() so the
+      // failure carries Playwright's standard locator + screenshot context.
+      await expect(this.freshActivityRows(remaining[0]).first()).toBeVisible();
+    }
+  }
+
+  /** Single-matcher shorthand for {@link expectActivities}. */
+  async expectActivity(
+    matcher: string | RegExp,
+    opts: { maxPages?: number } = {},
+  ): Promise<void> {
+    await this.expectActivities([matcher], opts);
   }
 }

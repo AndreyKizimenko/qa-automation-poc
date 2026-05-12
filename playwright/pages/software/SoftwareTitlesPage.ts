@@ -70,6 +70,17 @@ export class SoftwareTitlesPage {
   }
 
   /**
+   * Click the "Add software" button. Fleet lands on the Fleet-maintained
+   * tab by default and carries the current `fleet_id` query param into
+   * the new URL, so the destination inherits the team scope selected via
+   * `teamDropdown.select()`.
+   */
+  async clickAddSoftware(): Promise<void> {
+    await this.addSoftwareButton.click();
+    await expect(this.page).toHaveURL(/\/software\/add\/fleet-maintained/);
+  }
+
+  /**
    * Click into the "Vulnerabilities" tab. Returns after the URL has changed
    * and the new table has rendered.
    */

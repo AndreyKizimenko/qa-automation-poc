@@ -62,6 +62,12 @@ export class ReportsListPage {
     await expect(this.page).toHaveURL(/\/reports\/new/);
   }
 
+  /** Click a report's name link in the list to open its edit page. */
+  async openReport(name: string): Promise<void> {
+    await this.page.getByRole('link', { name, exact: true }).click();
+    await expect(this.page).toHaveURL(/\/reports\/\d+/);
+  }
+
   /**
    * Filters by name first to ensure the row is visible on the current
    * page, then selects the row's checkbox, clicks the bulk-action

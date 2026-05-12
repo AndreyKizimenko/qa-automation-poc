@@ -32,27 +32,26 @@ const WORKSTATIONS_FLEET = 'Workstations';
 // Workstations); the "All fleets" UI view is the union of both, so the
 // two calls together cover it.
 test('wipe unassigned state', async ({ request }) => {
-  await Promise.all([
+  // Tier-agnostic wipes — these endpoints exist on both free and premium.
+  const ops: Promise<unknown>[] = [
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
     deleteAllPacks(request),
     deleteAllInstallSoftwareTitles(request, 0),
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
-  ]);
-});
+  ];
 
-// MDM setup-experience entities are premium-only (bootstrap packages, DEP
-// setup assistants, setup-experience scripts, plus the macos_setup
-// toggles). On free these endpoints return 402/403, so skip the cleanup
-// entirely rather than swallow errors that mask real failures.
-test('reset unassigned setup-experience state', async ({ request }) => {
-  test.skip(
-    process.env.SUITE === 'free',
-    'Setup-experience MDM features are premium-only',
-  );
+  // Premium-only resets. MDM setup-experience entities (bootstrap
+  // packages, DEP setup assistants, setup-experience scripts, plus the
+  // macos_setup toggles) return 402/403 on free, so the call is gated
+  // behind the suite check rather than letting Promise.all reject the
+  // whole batch on a free run.
+  if (process.env.SUITE !== 'free') {
+    ops.push(resetSetupExperience(request, 0));
+  }
 
-  await resetSetupExperience(request, 0);
+  await Promise.all(ops);
 });
 
 test('wipe Workstations team state', async ({ request }) => {

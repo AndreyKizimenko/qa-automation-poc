@@ -6,6 +6,8 @@ export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
 export type { TeamScope } from './components/TeamDropdown';
+export { PlatformDropdown } from './components/PlatformDropdown';
+export type { AppStorePlatformLabel } from './components/PlatformDropdown';
 export { StatusFilter } from './components/StatusFilter';
 export { LabelFilter } from './components/LabelFilter';
 
@@ -56,11 +58,27 @@ export { SetupAssistantPage } from './controls/SetupAssistantPage';
 // Reports
 export { ReportsListPage } from './reports/ReportsListPage';
 export { ReportEditPage } from './reports/ReportEditPage';
+export type {
+  ReportFormValues,
+  ReportInterval,
+  ReportPlatform,
+  SaveReportValues,
+} from './reports/ReportEditPage';
+export { ReportDetailsPage } from './reports/ReportDetailsPage';
+export type { ReportDetailsValues } from './reports/ReportDetailsPage';
 export { ReportLivePage } from './reports/ReportLivePage';
 
 // Policies
 export { PoliciesListPage } from './policies/PoliciesListPage';
 export { PolicyEditPage } from './policies/PolicyEditPage';
+export type {
+  PolicyFormValues,
+  PolicyPlatform,
+  PolicyTargetType,
+  SavePolicyValues,
+} from './policies/PolicyEditPage';
+export { PolicyDetailsPage } from './policies/PolicyDetailsPage';
+export type { PolicyDetailsValues } from './policies/PolicyDetailsPage';
 
 // Labels
 export { LabelsPage } from './labels/LabelsPage';

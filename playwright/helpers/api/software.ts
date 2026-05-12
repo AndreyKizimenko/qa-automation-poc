@@ -42,7 +42,18 @@ export async function findVulnerableSoftwareBySource(
   return { id: match.id, name: match.name, source: match.source };
 }
 
-/** Match against `software_package.name`. Pages up to `maxPages × perPage`. */
+/**
+ * Match against `software_package.name`. Pages up to `maxPages × perPage`.
+ *
+ * Note on `available_for_install=true`: Fleet's `/software/titles` is
+ * asymmetric across team scopes. For a real team (e.g. fleet_id=4) the
+ * default response includes uploaded packages; for unassigned
+ * (fleet_id=0) the default response excludes them, and the package only
+ * appears when this filter is passed. Always-pass keeps the helper
+ * consistent across both scopes and harmless on premium teams (it just
+ * narrows from "all titles" to "installer titles", which is what we
+ * want — we're looking for our just-uploaded installer).
+ */
 export async function findSoftwareTitleByPackageName(
   request: APIRequestContext,
   fleetId: number,
@@ -57,6 +68,7 @@ export async function findSoftwareTitleByPackageName(
         fleet_id: String(fleetId),
         per_page: String(perPage),
         page: String(page),
+        available_for_install: 'true',
       },
     });
     if (!res.ok()) return null;

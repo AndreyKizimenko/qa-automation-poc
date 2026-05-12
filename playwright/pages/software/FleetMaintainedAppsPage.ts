@@ -13,6 +13,7 @@ export class FleetMaintainedAppsPage {
   readonly navbar: Navbar;
 
   readonly heading: Locator;
+  readonly tab: Locator;
   readonly table: Locator;
   readonly nameColumn: Locator;
   readonly macosColumn: Locator;
@@ -24,6 +25,7 @@ export class FleetMaintainedAppsPage {
     this.navbar = new Navbar(page);
 
     this.heading = page.getByRole('heading', { name: 'Add software', level: 1 });
+    this.tab = page.getByRole('tab', { name: 'Fleet-maintained' });
     this.table = page.getByRole('table');
     this.nameColumn = page.getByRole('columnheader', { name: 'Name' });
     this.macosColumn = page.getByRole('columnheader', { name: 'macOS' });
@@ -31,9 +33,31 @@ export class FleetMaintainedAppsPage {
     this.searchInput = page.getByPlaceholder(/search/i);
   }
 
-  async goto(opts: { fleetId?: number } = {}): Promise<void> {
-    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
-    await this.page.goto(`/software/add/fleet-maintained${qs}`);
+  /**
+   * Direct URL navigation. Reserved for verification steps in the same
+   * sub-test (e.g. "expectAddedFor" after an add) and for the `delete`
+   * sub-test — both follow the suite's convention of skipping the full
+   * click-through dance on subsequent navigations.
+   */
+  async goto(opts: { fleetId: number }): Promise<void> {
+    await this.page.goto(`/software/add/fleet-maintained?fleet_id=${opts.fleetId}`);
+    await this.expectLoaded();
+  }
+
+  /**
+   * Switch to this tab from another Add software tab (Custom package /
+   * App store). Idempotent — a no-op if already selected. Carries the
+   * current `fleet_id` query param through the tab navigation.
+   */
+  async openTab(): Promise<void> {
+    if ((await this.tab.getAttribute('aria-selected')) !== 'true') {
+      await this.tab.click();
+      await expect(this.page).toHaveURL(/\/software\/add\/fleet-maintained/);
+    }
+    await this.expectLoaded();
+  }
+
+  async expectLoaded(): Promise<void> {
     await expect(this.heading).toBeVisible();
     await expect(this.macosColumn).toBeVisible();
     await expect(this.windowsColumn).toBeVisible();
