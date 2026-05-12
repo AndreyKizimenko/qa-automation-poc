@@ -1,4 +1,5 @@
 import { Page, Locator, Download, expect } from '@playwright/test';
+import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
 import { FileUploader } from '../components/FileUploader';
@@ -156,15 +157,13 @@ export class ScriptsLibraryPage {
   async downloadScript(name: string): Promise<Download> {
     const row = this.itemByName(name);
     const downloadPromise = this.page.waitForEvent('download');
-    await row.getByTestId('download-icon').click();
+    await clickHoverAction(row, row.getByTestId('download-icon'));
     return downloadPromise;
   }
 
   async deleteScript(name: string): Promise<void> {
     const row = this.itemByName(name);
-    // Trash icon is hover-revealed.
-    await row.hover();
-    await row.getByTestId('trash-icon').click();
+    await clickHoverAction(row, row.getByTestId('trash-icon'));
     await expect(this.deleteModal).toBeVisible();
     await this.deleteConfirmButton.click();
     await expect(row).toBeHidden();

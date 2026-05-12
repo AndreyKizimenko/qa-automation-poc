@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { clickHoverAction } from './clickHoverAction';
 
 /**
  * `.software-installer-card` on `/software/titles/:id` — uploaded package
@@ -29,15 +30,13 @@ export class SoftwareInstallerCard {
   }
 
   async download(): Promise<import('@playwright/test').Download> {
-    await this.card.hover();
     const dl = this.page.waitForEvent('download');
-    await this.downloadButton.click();
+    await clickHoverAction(this.card, this.downloadButton);
     return dl;
   }
 
   async delete(): Promise<void> {
-    await this.card.hover();
-    await this.deleteButton.click();
+    await clickHoverAction(this.card, this.deleteButton);
     await expect(this.deleteModal).toBeVisible();
     await this.deleteConfirmButton.click();
     await expect(this.card).toBeHidden();
