@@ -12,4 +12,5 @@ export * from './software';
 export * from './fma';
 export * from './app-store';
 export * from './mdm';
+export * from './users';
 export * from './cleanup';

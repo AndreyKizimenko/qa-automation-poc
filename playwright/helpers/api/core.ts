@@ -7,6 +7,8 @@
  * activities) import from this file rather than from `@playwright/test`
  * directly so the auth contract stays in one place.
  */
+import type { APIRequestContext } from '@playwright/test';
+import { request as apiRequest } from '@playwright/test';
 // ── API versioning ───────────────────────────────────────────────────────────
 
 export const API_VERSION = 'v1';
@@ -53,4 +55,33 @@ export async function getApiToken(baseURL: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`Login failed: ${res.status}`);
   return (await res.json()).token;
+}
+
+// ── Hook-friendly request context ────────────────────────────────────────────
+
+/**
+ * Wraps a function in a short-lived `APIRequestContext` for use inside
+ * `test.beforeAll` / `test.afterAll` hooks, which only receive
+ * worker-scoped fixtures (the regular `request` fixture is test-scoped).
+ *
+ * Auth flows through Bearer-token headers from `authHeaders()`, so a
+ * fresh request context with no cookies still works for every helper in
+ * this module.
+ *
+ * @example
+ *   test.beforeAll(async () => {
+ *     await withApiRequest(async (request) => {
+ *       const { user } = await createUser(request, ...);
+ *     });
+ *   });
+ */
+export async function withApiRequest<T>(
+  fn: (request: APIRequestContext) => Promise<T>,
+): Promise<T> {
+  const ctx = await apiRequest.newContext({ baseURL: process.env.FLEET_URL });
+  try {
+    return await fn(ctx);
+  } finally {
+    await ctx.dispose();
+  }
 }
