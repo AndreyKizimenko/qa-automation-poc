@@ -4,7 +4,7 @@
  * sub-test so a per-step failure pinpoints which action regressed.
  */
 import { test, expect } from '@fixtures';
-import { authHeaders, sessionAuthHeaders, assertActivity, apiUrl } from '@helpers/api';
+import { authHeaders, assertActivity, apiUrl } from '@helpers/api';
 
 test.describe('Packs CRUD', { tag: '@free' }, () => {
   test.describe.configure({ mode: 'serial' });
@@ -75,7 +75,7 @@ test.describe('Packs CRUD', { tag: '@free' }, () => {
     expect(host).toBeDefined();
     const hostID = host.id;
 
-    const queriesRes = await request.get(apiUrl('queries'), { headers: sessionAuthHeaders() });
+    const queriesRes = await request.get(apiUrl('queries'), { headers: authHeaders() });
     await expect(queriesRes).toBeOK();
     const queriesData = await queriesRes.json();
     let queryID: number;
@@ -84,7 +84,7 @@ test.describe('Packs CRUD', { tag: '@free' }, () => {
       queryID = queriesData.queries[0].id;
     } else {
       const createQueryRes = await request.post(apiUrl('queries'), {
-        headers: sessionAuthHeaders(),
+        headers: authHeaders(),
         data: { query: 'SELECT 1;', name: `smoke_pack_query_${Date.now()}` },
       });
       await expect(createQueryRes).toBeOK();
@@ -93,7 +93,7 @@ test.describe('Packs CRUD', { tag: '@free' }, () => {
 
     const execPackName = `Exec Pack ${Date.now()}`;
     const createPackRes = await request.post(apiUrl('packs'), {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       data: {
         name: execPackName,
         description: 'Smoke test: verify pack query execution',
@@ -104,7 +104,7 @@ test.describe('Packs CRUD', { tag: '@free' }, () => {
     const packID = (await createPackRes.json()).pack.id;
 
     const scheduleRes = await request.post(apiUrl('packs/schedule'), {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       data: { pack_id: packID, query_id: queryID, interval: 10 },
     });
     await expect(scheduleRes).toBeOK();
@@ -133,7 +133,7 @@ test.describe('Packs CRUD', { tag: '@free' }, () => {
       await new Promise((r) => setTimeout(r, pollIntervalMs));
     }
 
-    await request.delete(apiUrl(`packs/id/${packID}`), { headers: sessionAuthHeaders() });
+    await request.delete(apiUrl(`packs/id/${packID}`), { headers: authHeaders() });
 
     expect(executed).toBeTruthy();
   });

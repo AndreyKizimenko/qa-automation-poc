@@ -1,7 +1,7 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { apiUrl, sessionAuthHeaders } from './core';
+import { apiUrl, authHeaders } from './core';
 
 export interface SoftwareTitleRef {
   id: number;
@@ -63,7 +63,7 @@ export async function findSoftwareTitleByPackageName(
 ): Promise<SoftwarePackageRef | null> {
   for (let page = 0; page < maxPages; page++) {
     const res = await request.get(apiUrl('software/titles'), {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       params: {
         fleet_id: String(fleetId),
         per_page: String(perPage),
@@ -98,7 +98,7 @@ export async function uploadSoftwarePackage(
   const buffer = fs.readFileSync(filePath);
 
   const res = await request.post(apiUrl('software/package'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     multipart: {
       software: { name: fileName, mimeType: 'application/octet-stream', buffer },
       fleet_id: String(fleetId),
@@ -127,7 +127,7 @@ export async function deleteSoftwareTitle(
   const res = await request.delete(
     apiUrl(`software/titles/${titleId}/available_for_install`),
     {
-      headers: sessionAuthHeaders(),
+      headers: authHeaders(),
       params: { fleet_id: String(fleetId) },
     },
   );
@@ -158,7 +158,7 @@ export async function deleteAllInstallSoftwareTitles(
   fleetId: number,
 ): Promise<void> {
   const res = await request.get(apiUrl('software/titles'), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     params: {
       fleet_id: String(fleetId),
       available_for_install: 'true',
@@ -184,7 +184,7 @@ export async function getSoftwareTitle(
   titleId: number,
 ): Promise<{ id: number; name: string; source: string }> {
   const res = await request.get(apiUrl(`software/titles/${titleId}`), {
-    headers: sessionAuthHeaders(),
+    headers: authHeaders(),
     params: { fleet_id: String(fleetId) },
   });
   await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
