@@ -182,17 +182,21 @@ export class PolicyEditPage {
   }
 
   /**
-   * Replace SQL via the hidden Ace textarea. All keyboard ops route
-   * through `editorTextarea` so Ctrl/Cmd+A reaches Ace's select-all
-   * handler — `page.keyboard.press` targets the focused element, which
-   * after clicking the visible div is the wrong target.
+   * Replace SQL by writing directly into Ace's buffer. Going through
+   * the hidden textarea (`pressSequentially`) routes through Ace's
+   * key-event pipeline, which in SQL mode can auto-insert characters
+   * around `;` and duplicate the trailing terminator. `setValue` on
+   * the Ace instance attached to the editor DOM bypasses that layer
+   * entirely; the `1` cursor-position arg places the caret at the end.
    */
   async setSql(sql: string): Promise<void> {
     await this.editorContent.click();
-    await this.editorTextarea.focus();
-    await this.editorTextarea.press('ControlOrMeta+A');
-    await this.editorTextarea.press('Delete');
-    await this.editorTextarea.pressSequentially(sql);
+    await this.editorContent.evaluate((el, newSql) => {
+      const aceEl = el.closest('.ace_editor');
+      const env = (aceEl as unknown as { env?: { editor?: { setValue: (v: string, c?: number) => void } } } | null)?.env;
+      if (!env?.editor) throw new Error('Ace editor instance not found on .ace_editor element');
+      env.editor.setValue(newSql, 1);
+    }, sql);
     await expect(this.editorContent).toHaveText(sql);
   }
 
