@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
@@ -84,7 +84,7 @@ jobs:
           FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}
         run: npx playwright test --project=gitops-verify
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
           name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}
