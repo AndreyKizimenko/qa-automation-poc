@@ -36,6 +36,11 @@ on:
         required: true
         type: string
 
+# Opt the bundled JS actions into Node 24 ahead of GitHub's June 2026 force-flip
+# (actions/upload-artifact@v5 still ships on Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 defaults:
   run:
     shell: bash

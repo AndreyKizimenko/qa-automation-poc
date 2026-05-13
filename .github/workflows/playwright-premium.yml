@@ -7,6 +7,11 @@ on:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
 
+# Opt the bundled JS actions into Node 24 ahead of GitHub's June 2026 force-flip
+# (actions/upload-artifact@v5 still ships on Node 20).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 defaults:
   run:
     shell: bash
