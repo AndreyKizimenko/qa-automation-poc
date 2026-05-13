@@ -73,11 +73,14 @@ export default defineConfig({
       testDir: './setup',
       testMatch: /cleanup\.steps\.ts/,
     },
+    // Project scope is set by folder, not by tag. Premium picks up
+    // tests/e2e/premium/, tests/e2e/shared/, tests/api/ (minus the
+    // free-only and gitops-verify subtrees, plus the dedicated loadtest
+    // tree). Free is the mirror image.
     {
       name: 'premium',
       testDir: './tests',
-      grepInvert: /@loadtest/,
-      testIgnore: ['**/gitops-verify/**', '**/free/**'],
+      testIgnore: ['**/gitops-verify/**', '**/free/**', '**/loadtest/**'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
@@ -95,12 +98,7 @@ export default defineConfig({
     {
       name: 'free',
       testDir: './tests',
-      grep: /@free/,
-      // Free runs anything @free-tagged outside premium-only territory.
-      // Premium-only specs in tests/e2e/premium/ stay out of scope; the
-      // @free tag matrix is reserved for tier-agnostic flows (auth, etc.)
-      // and the dedicated tests/e2e/free/ tree.
-      testIgnore: ['**/gitops-verify/**', '**/premium/**'],
+      testIgnore: ['**/gitops-verify/**', '**/premium/**', '**/loadtest/**'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',
@@ -131,9 +129,7 @@ export default defineConfig({
     },
     {
       name: 'loadtest',
-      testDir: './tests',
-      grep: /@loadtest/,
-      testIgnore: '**/gitops-verify/**',
+      testDir: './tests/loadtest',
       timeout: 60000,
       use: {
         ...devices['Desktop Chrome'],

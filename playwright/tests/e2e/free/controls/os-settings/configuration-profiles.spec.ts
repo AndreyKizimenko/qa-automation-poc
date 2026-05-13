@@ -50,7 +50,7 @@ const PROFILE_CASES: ProfileCase[] = [
 ];
 
 for (const profile of PROFILE_CASES) {
-  test.describe(`MDM • OS settings — configuration profiles — ${profile.os}`, { tag: '@free' }, () => {
+  test.describe(`MDM • OS settings — configuration profiles — ${profile.os}`, () => {
     test.describe.configure({ mode: 'serial' });
 
     // Free has no team scoping — the feed uses "all <hostsPhrase>".

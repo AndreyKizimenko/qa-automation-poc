@@ -1,7 +1,7 @@
 import { test, expect } from '@fixtures';
 import { createUser, deleteUser, qaTestEmail, withApiRequest } from '@helpers/api';
 
-test.describe('Delete user', { tag: '@free' }, () => {
+test.describe('Delete user', () => {
   test.describe.configure({ mode: 'serial' });
 
   const email = qaTestEmail('delete');

@@ -1,7 +1,7 @@
 import { test, expect } from '@fixtures';
 import { createUser, deleteUser, withApiRequest } from '@helpers/api';
 
-test.describe('Edit user', { tag: '@free' }, () => {
+test.describe('Edit user', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

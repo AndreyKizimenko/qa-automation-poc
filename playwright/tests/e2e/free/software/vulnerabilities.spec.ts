@@ -53,7 +53,7 @@ test.beforeAll(async () => {
   if (winHost) hostByOS.windows = winHost;
 });
 
-test.describe('Software vulnerabilities', { tag: '@free' }, () => {
+test.describe('Software vulnerabilities', () => {
   test('Software Titles — vulnerable filter, pagination, and column checks', async ({
     softwareTitles,
     page,

@@ -55,7 +55,7 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
 | `nightly-qa-gitops-free.yml` | 05:00 UTC daily, manual | Free chain: apply baseline → verify → apply min → verify. |
 | `nightly-qa-gitops-premium.yml` | 05:00 UTC daily, manual | Premium chain: same as free, plus parallel verify of the Workstations team. |
-| `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual | Runs the Playwright suite against the matching instance (free runs `@free`-tagged specs only). Test-state cleanup is owned by the suite — `cleanup-setup` runs before specs, `cleanup-teardown` after, both defined in `playwright/playwright.config.ts`. |
+| `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual | Runs the Playwright suite against the matching instance — project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. |
 
 Nightly ordering: Render redeploy at 04:00 UTC → gitops orchestrators at
 05:00 UTC → Playwright at 05:30 UTC.

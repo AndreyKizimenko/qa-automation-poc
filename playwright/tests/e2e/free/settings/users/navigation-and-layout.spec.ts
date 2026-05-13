@@ -1,6 +1,6 @@
 import { test, expect } from '@fixtures';
 
-test.describe('Users page navigation and layout', { tag: '@free' }, () => {
+test.describe('Users page navigation and layout', () => {
   test('user menu → Users renders the list and page chrome', async ({ dashboard, usersPage, page }) => {
     await dashboard.goto();
     await dashboard.navbar.openUserMenu();

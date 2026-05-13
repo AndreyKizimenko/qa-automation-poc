@@ -3,7 +3,7 @@ import { test, expect } from '@fixtures';
 test.use({ storageState: { cookies: [], origins: [] } });
 
 // Admin SSO is pre-configured on QA; the Okta test user is JIT-provisioned on first login.
-test.describe('Okta SSO login', { tag: '@free' }, () => {
+test.describe('Okta SSO login', () => {
   const username = process.env.FLEET_SSO_LOGIN_USERNAME!;
   const password = process.env.FLEET_SSO_LOGIN_PASSWORD!;
 

@@ -14,7 +14,7 @@ import {
   staticUserBearerHeaders,
 } from '@helpers/api';
 
-test.describe('Free • API role access', { tag: '@free' }, () => {
+test.describe('Free • API role access', () => {
   test('global admin can hit admin-only writes and reads', async ({ request }) => {
     const headers = staticUserBearerHeaders('api-global-admin');
     await expectAllow(request, headers, PROBES_ADMIN_ONLY.createUser);

@@ -7,7 +7,7 @@ import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
 import type { PolicyFormValues, SavePolicyValues } from '@pages';
 
-test.describe('Policies CRUD', { tag: '@free' }, () => {
+test.describe('Policies CRUD', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

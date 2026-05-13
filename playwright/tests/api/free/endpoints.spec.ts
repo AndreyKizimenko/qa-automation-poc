@@ -39,7 +39,7 @@ async function callEndpoint(request: APIRequestContext, c: EndpointCase) {
   }
 }
 
-test.describe('Free • premium-gated endpoints', { tag: '@free' }, () => {
+test.describe('Free • premium-gated endpoints', () => {
   for (const c of [...READ_ENDPOINTS, ...MUTATION_ENDPOINTS]) {
     test(`${c.method} /${c.path} → 402 + license-required message`, async ({ request }) => {
       const res = await callEndpoint(request, c);

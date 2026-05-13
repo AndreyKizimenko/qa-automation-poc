@@ -3,7 +3,7 @@ import { measureNav } from '@helpers/perf';
 
 test.describe('Host Details load times', () => {
   // ── Details page full load ──────────────────────────────────────────────────
-  test('Host details page', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Host details page', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await measureNav(page, testInfo, 'Host details page', async () => {
       await hostDetails.goto(firstHostId);
       await expect(hostDetails.vitalsDiskSpace).toBeVisible();
@@ -15,7 +15,7 @@ test.describe('Host Details load times', () => {
   });
 
   // ── Software tab ────────────────────────────────────────────────────────────
-  test('Software inventory', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Software inventory', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await hostDetails.goto(firstHostId);
 
     await measureNav(page, testInfo, 'Software inventory', async () => {
@@ -24,7 +24,7 @@ test.describe('Host Details load times', () => {
     });
   });
 
-  test('Software - Vulnerable filter', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Software - Vulnerable filter', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await hostDetails.goto(firstHostId);
     await hostDetails.openSoftwareTab();
 
@@ -34,7 +34,7 @@ test.describe('Host Details load times', () => {
     });
   });
 
-  test('Software - Library view', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Software - Library view', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await hostDetails.goto(firstHostId);
     await hostDetails.openSoftwareTab();
 
@@ -45,7 +45,7 @@ test.describe('Host Details load times', () => {
   });
 
   // ── Reports tab ─────────────────────────────────────────────────────────────
-  test('Reports tab', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Reports tab', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await hostDetails.goto(firstHostId);
 
     await measureNav(page, testInfo, 'Reports tab', async () => {
@@ -56,7 +56,7 @@ test.describe('Host Details load times', () => {
   });
 
   // ── Policies tab ────────────────────────────────────────────────────────────
-  test('Policies tab', { tag: '@loadtest' }, async ({ firstHostId, hostDetails, page }, testInfo) => {
+  test('Policies tab', async ({ firstHostId, hostDetails, page }, testInfo) => {
     await hostDetails.goto(firstHostId);
 
     await measureNav(page, testInfo, 'Policies tab', async () => {

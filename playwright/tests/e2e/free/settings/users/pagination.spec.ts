@@ -3,7 +3,7 @@ import { createUser, deleteUser, withApiRequest } from '@helpers/api';
 
 const BULK_COUNT = 20;
 
-test.describe('Users pagination', { tag: '@free' }, () => {
+test.describe('Users pagination', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();
