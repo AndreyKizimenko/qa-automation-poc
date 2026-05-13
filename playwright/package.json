@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test:premium": "playwright test --project=premium",
-    "test:premium:headed": "playwright test --project=premium --headed",
-    "test:premium:ui": "playwright test --project=premium --ui",
+    "test:premium": "SUITE=premium playwright test --project=premium",
+    "test:premium:headed": "SUITE=premium playwright test --project=premium --headed",
+    "test:premium:ui": "SUITE=premium playwright test --project=premium --ui",
     "test:free": "SUITE=free playwright test --project=free",
     "test:free:headed": "SUITE=free playwright test --project=free --headed",
     "test:free:ui": "SUITE=free playwright test --project=free --ui",

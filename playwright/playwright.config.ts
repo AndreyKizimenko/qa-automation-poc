@@ -2,30 +2,89 @@ import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Resolve which `.env.<suite>` file to load. Order of precedence:
-//   1. SUITE env var — explicit (set by the npm scripts)
-//   2. --project=<name> on the Playwright CLI — infer from the project
-//      ("free"/"loadtest" map to the matching suite; everything else
-//      defaults to "premium" because most projects are premium-tier)
-//
-// Without (2), `npx playwright test --project=free` would silently load
-// `.env.premium` and the free-tagged tests would point at the wrong
-// instance — every "free" suite call without `SUITE=free` produced
-// confusing premium-shaped failures before we added the fallback.
-function resolveSuite(): string {
-  if (process.env.SUITE) return process.env.SUITE;
-  const projectArg = process.argv.find((a) => a.startsWith('--project'));
-  if (projectArg) {
-    const name = projectArg.includes('=')
-      ? projectArg.split('=')[1]
-      : process.argv[process.argv.indexOf(projectArg) + 1];
-    if (name === 'free' || name === 'free-setup') return 'free';
-    if (name === 'loadtest' || name === 'loadtest-setup') return 'loadtest';
+type Suite = 'free' | 'premium' | 'loadtest';
+const VALID_SUITES: readonly Suite[] = ['free', 'premium', 'loadtest'] as const;
+
+// Projects that uniquely target one tier. Setup projects map to the suite
+// of the browser project they support. Anything not in this map (cleanup
+// dependencies, gitops-verify) is treated as suite-ambiguous and requires
+// SUITE= to be set explicitly.
+const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
+  premium: 'premium',
+  'premium-setup': 'premium',
+  free: 'free',
+  'free-setup': 'free',
+  loadtest: 'loadtest',
+  'loadtest-setup': 'loadtest',
+};
+
+const SUITE_AMBIGUOUS_PROJECTS: ReadonlySet<string> = new Set([
+  'cleanup-setup',
+  'cleanup-teardown',
+  'gitops-verify',
+]);
+
+function parseProjectArg(argv: readonly string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--project') return argv[i + 1];
+    if (a.startsWith('--project=')) return a.slice('--project='.length);
   }
-  return 'premium';
+  return undefined;
+}
+
+function isSuite(s: string | undefined): s is Suite {
+  return s !== undefined && (VALID_SUITES as readonly string[]).includes(s);
+}
+
+function fail(message: string): never {
+  // Throwing at config load makes the suite refuse to start rather than
+  // silently load the wrong .env and target the wrong Fleet instance.
+  throw new Error(`[playwright.config] ${message}`);
+}
+
+function resolveSuite(): Suite {
+  const fromEnv = process.env.SUITE;
+  const project = parseProjectArg(process.argv);
+
+  if (fromEnv) {
+    if (!isSuite(fromEnv)) {
+      fail(`Invalid SUITE="${fromEnv}". Expected one of: ${VALID_SUITES.join(', ')}.`);
+    }
+    const mapped = project ? PROJECT_TO_SUITE[project] : undefined;
+    if (mapped && mapped !== fromEnv) {
+      fail(
+        `SUITE=${fromEnv} conflicts with --project=${project} (which targets ${mapped}). Drop one of them.`,
+      );
+    }
+    return fromEnv;
+  }
+
+  if (project) {
+    const mapped = PROJECT_TO_SUITE[project];
+    if (mapped) return mapped;
+    if (SUITE_AMBIGUOUS_PROJECTS.has(project)) {
+      fail(
+        `--project=${project} can target either tier. Set SUITE=free|premium|loadtest explicitly (the test:gitops-verify:* npm scripts already do this).`,
+      );
+    }
+    const known = [...Object.keys(PROJECT_TO_SUITE), ...SUITE_AMBIGUOUS_PROJECTS]
+      .sort()
+      .join(', ');
+    fail(`Unknown --project="${project}". Known projects: ${known}.`);
+  }
+
+  fail(
+    `No SUITE env var or --project=<name> given. Use \`npm run test:premium|test:free|test:loadtest\`, or pass both SUITE=<tier> and --project=<name> when running playwright directly.`,
+  );
 }
 
 const suite = resolveSuite();
+// Mirror the resolved suite back into the environment so cleanup.steps.ts
+// and any spec code can read process.env.SUITE without a fallback default
+// — the "|| 'premium'" fallback was the original silent-footgun pattern.
+process.env.SUITE = suite;
+
 dotenv.config({ path: path.resolve(__dirname, `.env.${suite}`), quiet: true });
 
 export default defineConfig({
