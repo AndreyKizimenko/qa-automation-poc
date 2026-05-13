@@ -1,0 +1,43 @@
+name: Playwright — Check
+
+# Static checks (tsc + eslint) for the Playwright suite. Runs on any PR
+# touching playwright/ so type or lint regressions are caught before merge,
+# and on push to main so the same check registers for branch protection.
+
+on:
+  pull_request:
+    paths:
+      - 'playwright/**'
+      - '.github/workflows/playwright-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'playwright/**'
+      - '.github/workflows/playwright-check.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: playwright/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
