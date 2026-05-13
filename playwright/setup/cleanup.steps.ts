@@ -33,10 +33,13 @@ const WORKSTATIONS_FLEET = 'Workstations';
 // Workstations); the "All fleets" UI view is the union of both, so the
 // two calls together cover it.
 test('wipe unassigned state', async ({ request }) => {
-  // Tier-agnostic wipes — these endpoints exist on both free and premium.
-  // deleteAllQaTestUsers only touches addresses matching the QA_TEST_EMAIL_RE
-  // prefix in helpers/api/users.ts, so admin/SSO accounts are untouchable.
-  const ops: Promise<unknown>[] = [
+  // Every helper here is safe on both tiers. The MDM-related ones
+  // (resetSetupExperience and its sub-helpers in helpers/api/mdm.ts)
+  // absorb the 402 "Requires Premium" response on free, so they noop
+  // instead of failing the Promise.all batch. deleteAllQaTestUsers only
+  // touches addresses matching the QA_TEST_EMAIL_RE prefix in
+  // helpers/api/users.ts, so admin/SSO accounts are untouchable.
+  await Promise.all([
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
     deleteAllPacks(request),
@@ -44,18 +47,8 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
     deleteAllQaTestUsers(request),
-  ];
-
-  // Premium-only resets. MDM setup-experience entities (bootstrap
-  // packages, DEP setup assistants, setup-experience scripts, plus the
-  // macos_setup toggles) return 402/403 on free, so the call is gated
-  // behind the suite check rather than letting Promise.all reject the
-  // whole batch on a free run.
-  if (process.env.SUITE !== 'free') {
-    ops.push(resetSetupExperience(request, 0));
-  }
-
-  await Promise.all(ops);
+    resetSetupExperience(request, 0),
+  ]);
 });
 
 test('wipe Workstations team state', async ({ request }) => {
