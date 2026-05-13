@@ -44,6 +44,8 @@ export async function deleteBootstrapPackage(
 /**
  * Delete the setup-experience run-script for a fleet, if one exists.
  * Used by teardown to clear any script left behind by a failed test.
+ * Silent on 402 ("Requires Premium") so the shared cleanup pipeline can
+ * call it on both tiers — mirrors deleteBootstrapPackage above.
  */
 export async function deleteSetupExperienceScript(
   request: APIRequestContext,
@@ -53,13 +55,15 @@ export async function deleteSetupExperienceScript(
     headers: authHeaders(),
     params: { team_id: String(fleetId) },
   });
-  if (res.status() === 404) return;
+  if (res.status() === 404 || res.status() === 402) return;
   if (!res.ok()) console.warn(`[setup-exp script cleanup] fleet ${fleetId}: HTTP ${res.status()}`);
 }
 
 /**
  * Delete the setup-assistant (DEP) profile for a fleet, if one exists.
  * Used by teardown to clear any profile left behind by a failed test.
+ * Silent on 402 ("Requires Premium") so the shared cleanup pipeline can
+ * call it on both tiers — mirrors deleteBootstrapPackage above.
  */
 export async function deleteSetupAssistant(
   request: APIRequestContext,
@@ -69,7 +73,7 @@ export async function deleteSetupAssistant(
     headers: authHeaders(),
     params: { team_id: String(fleetId) },
   });
-  if (res.status() === 404) return;
+  if (res.status() === 404 || res.status() === 402) return;
   if (!res.ok()) console.warn(`[setup-assistant cleanup] fleet ${fleetId}: HTTP ${res.status()}`);
 }
 
@@ -79,6 +83,8 @@ export async function deleteSetupAssistant(
  * setup-assistant, script, software) are untouched — those have their own
  * delete helpers above. For `fleet_id=0`, targets the global `/config`
  * endpoint; for any other id, targets `/teams/{id}`.
+ * Silent on 402 ("Requires Premium") so the shared cleanup pipeline can
+ * call it on both tiers — mirrors deleteBootstrapPackage above.
  */
 export async function resetMacosSetupToggles(
   request: APIRequestContext,
@@ -97,6 +103,7 @@ export async function resetMacosSetupToggles(
     headers: authHeaders(),
     data: body,
   });
+  if (res.status() === 402) return;
   if (!res.ok()) console.warn(`[macos_setup reset] fleet ${fleetId}: HTTP ${res.status()}`);
 }
 
