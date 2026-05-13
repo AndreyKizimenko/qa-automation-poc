@@ -51,7 +51,7 @@ From `playwright/`:
 | `npm run test:premium` | Premium suite, headless |
 | `npm run test:premium:headed` | Premium suite, browser visible |
 | `npm run test:premium:ui` | Premium suite, Playwright UI |
-| `npm run test:free` | Free suite (`@free`-tagged), headless |
+| `npm run test:free` | Free suite, headless |
 | `npm run test:free:headed` | Free suite, browser visible |
 | `npm run test:free:ui` | Free suite, Playwright UI |
 | `npm run test:loadtest` | Loadtest tests, headless |
@@ -91,7 +91,7 @@ Floating-promise detection is on via `@typescript-eslint`, so missing
 playwright/
 ├── tests/                        # Specs — see tests/README.md
 │   ├── e2e/                      # Browser specs
-│   │   ├── shared/               # Tier-agnostic (@free) — auth, packs, anything without team scope
+│   │   ├── shared/               # Tier-agnostic — auth, packs, anything without team scope (both projects)
 │   │   ├── premium/              # Premium-only (Unassigned + Workstations variants)
 │   │   │   ├── controls/         # os-settings, scripts, setup-experience
 │   │   │   ├── policies/
@@ -99,10 +99,10 @@ playwright/
 │   │   │   └── software/         # library + vulnerabilities
 │   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs
 │   ├── api/                      # Pure-API specs (no browser)
-│   │   ├── config.spec.ts        # Agnostic config-shape checks (@free)
+│   │   ├── config.spec.ts        # Agnostic config-shape checks (both projects)
 │   │   ├── free/                 # Free-only API contracts (license, endpoints)
 │   │   └── gitops-verify/        # GitOps drift checks
-│   └── loadtest/                 # Page-load timing (tagged @loadtest)
+│   └── loadtest/                 # Page-load timing (loadtest project only)
 ├── pages/                        # Page Object Model — see pages/README.md
 │   ├── components/               # Reused widgets (DataTable, Navbar, TeamDropdown, etc.)
 │   ├── settings/                 # Settings subpages grouped together
@@ -140,44 +140,28 @@ playwright/
 | | premium | free | loadtest | gitops-verify |
 |---|---|---|---|---|
 | Target | Premium Fleet instance | Free Fleet instance | High-scale instance | Premium **or** free, selected via `SUITE` |
-| Tests | Untagged + `@free` (excludes `tests/e2e/free/**`) | `@free` (excludes `tests/e2e/premium/**`) | `@loadtest` | `tests/api/gitops-verify/` only |
-| Excludes | `@loadtest` + `tests/api/gitops-verify/**` + `tests/e2e/free/**` | `tests/api/gitops-verify/**` + `tests/e2e/premium/**` | `tests/api/gitops-verify/**` | n/a — own testDir |
+| Picks up | `tests/e2e/{shared,premium}/**`, `tests/api/**` (minus `free/` + `gitops-verify/`) | `tests/e2e/{shared,free}/**`, `tests/api/**` (minus `premium/` + `gitops-verify/`) | `tests/loadtest/**` only | `tests/api/gitops-verify/**` only |
+| Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | n/a — own `testDir` | n/a — own `testDir` |
 | Retries on failure | Yes (in CI) | Yes (in CI) | No — a slow run is a slow run | No — drift should fail loudly |
 | Timeouts | 30s test / 5s expect | 30s test / 5s expect | 60s test / 30s expect | Default |
 | Auth state | `.auth/premium-admin.json` | `.auth/free-admin.json` | `.auth/loadtest-admin.json` | None (bearer token via `FLEET_API_TOKEN`) |
 | Env file | `.env.premium` | `.env.free` | `.env.loadtest` | `.env.<SUITE>` |
 
----
-
-## Tags
-
-| Tag | Where it runs | Use for |
-|---|---|---|
-| (none) | premium | Default. Premium-only flows (Setup Experience, premium-gated features). |
-| `@free` | premium + free | Tier-agnostic flows (login, page health, no-team CRUD) and free-only specs. |
-| `@loadtest` | loadtest | Page-load timing measurements. |
-
-The grep matrix in `playwright.config.ts` is the source of truth.
+Project scope is decided by folder — no tags. The `testIgnore` matrix in `playwright.config.ts` is the source of truth.
 
 ---
 
 ## Adding tests
 
-**Tier-agnostic** (no team/scope concept — auth, packs, settings, labels): add a spec under `tests/e2e/shared/<area>/` and tag every test with `@free`. Same spec runs on both projects.
+**Tier-agnostic** (no team/scope concept — auth, packs, settings, labels): add a spec under `tests/e2e/shared/<area>/` (or root of `tests/api/`). Both projects pick it up via folder structure.
 
 **Premium-only:** add a spec under `tests/e2e/premium/<area>/`. Loop over `['Unassigned', 'Workstations']` (or `['All fleets', 'Workstations']` for reports/policies), calling `<page>.teamDropdown.select(scope)` after navigation. Use the `workstationsFleetId` worker fixture if the page needs a direct `goto({ fleetId })` for the Workstations variant.
 
-**Free-tier counterpart:** mirror the premium spec under `tests/e2e/free/<area>/`. Drop the dropdown selection (free has no dropdown). Tag every test with `@free` so the free project's grep picks it up.
+**Free-tier counterpart:** mirror the premium spec under `tests/e2e/free/<area>/`. Drop the dropdown selection (free has no dropdown).
 
-```ts
-test.describe('My feature', { tag: '@free' }, () => {
-  test('does the thing', async ({ page }) => { ... });
-});
-```
+**Free-only:** add the spec under `tests/e2e/free/` (or `tests/api/free/`). Use this for paywall presence assertions and free-tier API contracts that have no premium analogue.
 
-**Free-only:** add the spec under `tests/e2e/free/` and tag it `@free`. Use this for paywall presence assertions and free-tier API contracts that have no premium analogue.
-
-**Performance:** add a spec under `tests/loadtest/` tagged `@loadtest`, using `measureNav` from `helpers/perf.ts`.
+**Performance:** add a spec under `tests/loadtest/`, using `measureNav` from `helpers/perf.ts`.
 
 **GitOps verify:** add a spec under `tests/api/gitops-verify/`. Import `gitopsConfig` (and `resolveTeamId` if team-scoped) from `./_config` to read the loaded gitops target, then assert via the `request` fixture that the live instance matches.
 

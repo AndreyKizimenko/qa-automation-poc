@@ -100,7 +100,7 @@ the fixture rather than wiring listeners by hand.
 ```ts
 import { measureNav } from '@helpers/perf';
 
-test('Software page', { tag: '@loadtest' }, async ({ page }, testInfo) => {
+test('Software page', async ({ page }, testInfo) => {
   await measureNav(page, testInfo, 'Software page', async () => {
     await page.goto('/software/titles');
     await expect(page.getByRole('table').locator('tbody tr').first()).toBeVisible();

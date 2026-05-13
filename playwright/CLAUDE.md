@@ -17,7 +17,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 ## Layout
 
 - `tests/e2e/` — browser specs in three sibling folders:
-  - `shared/<area>/` — tier-agnostic flows (currently `auth/`, `packs/`); every test tagged `@free`, runs on both projects.
+  - `shared/<area>/` — tier-agnostic flows (currently `auth/`, `packs/`); both premium and free pick these up via folder structure.
   - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts) and `tests/api/free/` (free-only).
@@ -57,24 +57,26 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/packs`, `/queries`, `/policies`, etc.
 - Use the Playwright `request` fixture; do not use raw `fetch()` from inside specs.
 
-## Projects and tags
+## Projects (folder-based)
 
 Four browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
-The grep matrix is the source of truth in `playwright.config.ts`:
+Project scope is determined purely by folder — no tags. The `testIgnore`
+matrix in `playwright.config.ts` is the source of truth:
 
-| Project | Includes | Excludes | Auth state |
+| Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | untagged + `@free` | `@loadtest` | `.auth/premium-admin.json` |
-| `free` | `@free` | (grep-based) | `.auth/free-admin.json` |
-| `loadtest` | `@loadtest` | (grep-based) | `.auth/loadtest-admin.json` |
-| `gitops-verify` | `tests/api/gitops-verify/` only | own testDir | bearer token |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/premium-admin.json` |
+| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/free-admin.json` |
+| `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
+| `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 
-Tag conventions:
+Folder conventions:
 
-- **No tag** — runs on premium only. Default for premium-only flows (Setup Experience, premium-gated features).
-- **`@free`** — runs on premium **and** free. Use for tier-agnostic flows (login, page health, no-team CRUD) and free-only specs in `tests/e2e/free/`.
-- **`@loadtest`** — loadtest project only.
+- Premium-only flow → `tests/e2e/premium/<area>/` (or `tests/api/role-access/premium/`).
+- Free-only flow (paywall checks, free-license assertions) → `tests/e2e/free/<area>/` (or `tests/api/free/`, `tests/api/role-access/free/`).
+- Tier-agnostic flow (auth, packs, generic API contracts) → `tests/e2e/shared/<area>/` or root of `tests/api/`.
+- Loadtest spec → `tests/loadtest/**`.
 
 ## Project pipeline (premium)
 
@@ -104,7 +106,7 @@ Default: a spec is a single end-to-end flow; cleanup runs at the end of the same
 - The final sub-test asserts the dashboard activity feed via `dashboard.expectActivities(matcher, count)`. Matchers use explicit verbs and the rendered scope suffix — they differ per resource and per tier, so scout the live feed when authoring a new one.
 - Cleanup still runs inside the same describe block (the `delete` sub-test), so an aborted create still leaves the cleanup-teardown project to wipe state.
 
-**Performance specs** (`tests/loadtest/`) follow different rules. They are tagged `@loadtest`, run only against the loadtest project, and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
+**Performance specs** (`tests/loadtest/`) follow different rules. They live in the `tests/loadtest/` tree (which the loadtest project's `testDir` targets exclusively, and which premium/free skip via `testIgnore`), and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
 
 ## Skips
 

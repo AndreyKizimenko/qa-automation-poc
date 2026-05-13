@@ -7,7 +7,7 @@
 import { test, expect } from '@fixtures';
 import { authHeaders, apiUrl } from '@helpers/api';
 
-test.describe('Config shape', { tag: '@free' }, () => {
+test.describe('Config shape', () => {
   test('org info is populated', async ({ request }) => {
     const res = await request.get(apiUrl('config'), { headers: authHeaders() });
     await expect(res).toBeOK();

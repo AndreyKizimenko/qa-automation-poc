@@ -6,7 +6,7 @@ import type { GlobalRole } from '@pages';
 // configured in Fleet's userManagementHelpers when `isPremiumTier=false`.
 const FREE_GLOBAL_ROLES: readonly GlobalRole[] = ['Observer', 'Maintainer', 'Admin'];
 
-test.describe('Create regular user (free)', { tag: '@free' }, () => {
+test.describe('Create regular user (free)', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

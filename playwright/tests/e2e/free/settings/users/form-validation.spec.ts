@@ -1,7 +1,7 @@
 import { test, expect } from '@fixtures';
 import { qaTestPassword } from '@helpers/api';
 
-test.describe('Create-user form validation', { tag: '@free' }, () => {
+test.describe('Create-user form validation', () => {
   test.describe('Regular user', () => {
     test('clearing Full name disables Add', async ({ createUserPage }) => {
       await createUserPage.goto();

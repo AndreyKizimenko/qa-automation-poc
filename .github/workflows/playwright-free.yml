@@ -1,6 +1,6 @@
 name: Playwright — Free
 
-# Runs the @free-tagged Playwright suite against the free Fleet instance.
+# Runs the Playwright free project (tests/e2e/free + tests/e2e/shared + tests/api outside premium-only trees) against the free Fleet instance.
 
 on:
   schedule:

@@ -47,7 +47,7 @@ const SCRIPT_CASES: ScriptCase[] = [
 ];
 
 for (const script of SCRIPT_CASES) {
-  test.describe(`Scripts library lifecycle — ${script.os}`, { tag: '@free' }, () => {
+  test.describe(`Scripts library lifecycle — ${script.os}`, () => {
     test.describe.configure({ mode: 'serial' });
 
     // Free has no team scoping — the feed uses "unassigned" the same way

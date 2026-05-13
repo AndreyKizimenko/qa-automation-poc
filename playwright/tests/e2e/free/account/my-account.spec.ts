@@ -15,7 +15,7 @@ const MY_ACCOUNT_USERS: StaticUserKey[] = [
   'global-observer',
 ];
 
-test.describe('Free • My Account', { tag: '@free' }, () => {
+test.describe('Free • My Account', () => {
   for (const key of MY_ACCOUNT_USERS) {
     test(`${key} sees their email, name, and role (no Fleets section)`, async ({ browser }) => {
       const spec = staticUser(key);

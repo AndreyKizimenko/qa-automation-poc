@@ -25,7 +25,7 @@ const PAYWALLED_PAGES: Array<{ name: string; url: string; expectedBanners?: numb
   { name: 'Settings — Integrations / Certificate authorities', url: '/settings/integrations/certificate-authorities' },
 ];
 
-test.describe('Free • paywall presence', { tag: '@free' }, () => {
+test.describe('Free • paywall presence', () => {
   for (const page of PAYWALLED_PAGES) {
     test(page.name, async ({ page: pw }) => {
       await pw.goto(page.url);

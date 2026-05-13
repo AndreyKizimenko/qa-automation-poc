@@ -3,7 +3,7 @@ import { test, expect } from '@fixtures';
 // Login tests always start with a fresh session
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('Login', { tag: '@free' }, () => {
+test.describe('Login', () => {
   test.beforeEach(async ({ loginPage }) => {
     await loginPage.goto();
   });

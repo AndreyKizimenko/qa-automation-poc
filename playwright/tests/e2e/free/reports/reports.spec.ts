@@ -8,7 +8,7 @@ import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
 import type { ReportFormValues, SaveReportValues } from '@pages';
 
-test.describe('Reports CRUD', { tag: '@free' }, () => {
+test.describe('Reports CRUD', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

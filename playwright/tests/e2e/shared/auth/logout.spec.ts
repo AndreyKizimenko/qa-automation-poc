@@ -1,7 +1,7 @@
 import { test, expect } from '@fixtures';
 import { loginAsAdmin } from '@helpers/auth';
 
-test.describe('Logout', { tag: '@free' }, () => {
+test.describe('Logout', () => {
   // Use a blank session so this test never touches the shared auth state.
   // The logout action invalidates the server-side session, which would break
   // the stored cookies used by all other tests.

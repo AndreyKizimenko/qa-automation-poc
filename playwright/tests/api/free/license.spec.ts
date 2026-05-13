@@ -5,7 +5,7 @@
 import { test, expect } from '@fixtures';
 import { authHeaders, apiUrl } from '@helpers/api';
 
-test.describe('Free • license', { tag: '@free' }, () => {
+test.describe('Free • license', () => {
   test('license tier is free', async ({ request }) => {
     const res = await request.get(apiUrl('config'), { headers: authHeaders() });
     await expect(res).toBeOK();

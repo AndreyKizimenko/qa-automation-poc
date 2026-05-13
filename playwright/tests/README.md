@@ -9,7 +9,7 @@ read like a user flow, not like raw Playwright API calls.
 ```
 tests/
 ├── e2e/                      # Browser specs in three sibling folders
-│   ├── shared/               # Tier-agnostic (@free) — auth, packs, etc.
+│   ├── shared/               # Tier-agnostic — auth, packs, etc. (both projects)
 │   │   ├── auth/             # login, logout, SSO, forgot-password
 │   │   └── packs/            # packs CRUD (global, no team scope)
 │   ├── premium/              # Premium-only flows (Unassigned + Workstations variants)
@@ -25,27 +25,26 @@ tests/
 │   ├── config.spec.ts        # Agnostic config-shape checks
 │   ├── free/                 # Free-only API contracts
 │   └── gitops-verify/        # GitOps drift checks
-└── loadtest/                 # Page load / search timing tests (tagged @loadtest, local-only)
+└── loadtest/                 # Page load / search timing tests (loadtest project, local-only)
 ```
 
 Tier-routing rules:
 
-- **Tier-agnostic** (no team/scope concept): one spec under `tests/e2e/shared/<area>/`, every test tagged `@free`. Both projects run it.
+- **Tier-agnostic** (no team/scope concept): one spec under `tests/e2e/shared/<area>/`. Both projects pick it up via folder structure — no tag needed.
 - **Premium-only**: one spec under `tests/e2e/premium/<area>/`. Loop over `['Unassigned', 'Workstations']` (or `['All fleets', 'Workstations']` for reports/policies) calling `<page>.teamDropdown.select(scope)` after navigation. Use the `workstationsFleetId` worker fixture if the page needs a direct `goto({ fleetId })` for the Workstations variant.
-- **Free-tier counterpart**: mirror under `tests/e2e/free/<area>/`, drop the dropdown step, tag every test with `@free` so the free project's grep matches.
+- **Free-tier counterpart**: mirror under `tests/e2e/free/<area>/`. Drop the dropdown step.
 
 ### e2e vs loadtest vs gitops-verify
 
 - **E2E** — "Does this feature work for the user?" Runs in the
-  `premium` (default) and `free` (`@free`-tagged) projects. Uses
-  click-through flows, verifies the UI renders and the user can
-  complete a task.
+  `premium` and `free` projects. Uses click-through flows, verifies the
+  UI renders and the user can complete a task.
 
 - **Loadtest** — "How fast does this load under high-scale data?"
   Runs in the `loadtest` project against a high-scale QA instance. Uses
   `measureNav` / `measureSearch` from `@helpers/perf` to time
-  user-perceived page loads. Tagged `@loadtest` so the premium and free
-  projects skip them.
+  user-perceived page loads. Lives in `tests/loadtest/` so the premium
+  and free projects skip it by folder exclusion.
 
 - **GitOps verify** — "Does the live instance match the gitops config?"
   Runs in the `gitops-verify` project (no browser, just the request
@@ -141,14 +140,19 @@ block and explicitly depend on each other. Two existing exceptions:
 
 ## Tier routing
 
-Routing is mostly by folder, with `@free` reserved for the tier-agnostic specs.
+Routing is purely by folder — no tags. Each browser project's `testIgnore` in
+`playwright.config.ts` lists the trees it does *not* run.
 
 | Where the spec lives | premium runs it? | free runs it? |
 |---|---|---|
-| `tests/e2e/shared/**` (every test tagged `@free`) | yes | yes |
-| `tests/e2e/premium/**` | yes | no (free's `testIgnore` excludes `**/premium/**`) |
-| `tests/e2e/free/**` (every test tagged `@free`) | no (premium's `testIgnore` excludes `**/free/**`) | yes |
-| Tagged `@loadtest` | no | no — loadtest project only |
+| `tests/e2e/shared/**` | yes | yes |
+| `tests/e2e/premium/**` | yes | no (free `testIgnore` excludes `**/premium/**`) |
+| `tests/e2e/free/**` | no (premium `testIgnore` excludes `**/free/**`) | yes |
+| `tests/api/*.spec.ts` (root) | yes | yes |
+| `tests/api/free/**` | no | yes |
+| `tests/api/role-access/premium/**` | yes | no |
+| `tests/api/role-access/free/**` | no | yes |
+| `tests/loadtest/**` | no | no — loadtest project only |
 | `tests/api/gitops-verify/**` | no | no — gitops-verify project only |
 
-The grep + testIgnore matrix in `playwright.config.ts` is the source of truth.
+The `testIgnore` matrix in `playwright.config.ts` is the source of truth.

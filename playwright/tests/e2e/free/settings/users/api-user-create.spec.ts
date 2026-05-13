@@ -30,7 +30,7 @@ async function assertApiUserRow(row: Locator, name: string, role: string): Promi
   await expect(row.locator('.role__cell')).toHaveText(role);
 }
 
-test.describe('Create API-only user (free)', { tag: '@free' }, () => {
+test.describe('Create API-only user (free)', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

@@ -19,7 +19,7 @@ import { MyAccountPage } from '@pages';
 
 const NEW_PASSWORD = 'NewPassw0rd!Test123';
 
-test.describe('Free • My Account change password', { tag: '@free' }, () => {
+test.describe('Free • My Account change password', () => {
   const email = qaTestEmail('changepw');
   let userId: number;
   let initialPassword: string;

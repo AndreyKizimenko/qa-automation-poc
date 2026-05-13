@@ -6,7 +6,7 @@
 import { test, expect } from '@fixtures';
 import { authHeaders, assertActivity, apiUrl } from '@helpers/api';
 
-test.describe('Packs CRUD', { tag: '@free' }, () => {
+test.describe('Packs CRUD', () => {
   test.describe.configure({ mode: 'serial' });
 
   const stamp = Date.now();

@@ -2,14 +2,14 @@ import { test, expect } from '@fixtures';
 import { measureNav, measureSearch } from '@helpers/perf';
 
 test.describe('Hosts load times', () => {
-  test('Hosts list', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Hosts list', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await measureNav(page, testInfo, 'Hosts list', async () => {
       await hostsList.goto({ fleetId: loadtestFleetId });
       await expect(hostsList.table.firstRowWithLink).toBeVisible();
     });
   });
 
-  test('Online status filter', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Online status filter', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'Online status filter', async () => {
@@ -18,7 +18,7 @@ test.describe('Hosts load times', () => {
     });
   });
 
-  test('Platform filter - macOS', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Platform filter - macOS', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'Platform filter - macOS', async () => {
@@ -27,7 +27,7 @@ test.describe('Hosts load times', () => {
     });
   });
 
-  test('Platform filter - Windows', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Platform filter - Windows', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'Platform filter - Windows', async () => {
@@ -36,7 +36,7 @@ test.describe('Hosts load times', () => {
     });
   });
 
-  test('Platform filter - Linux', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Platform filter - Linux', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'Platform filter - Linux', async () => {
@@ -45,7 +45,7 @@ test.describe('Hosts load times', () => {
     });
   });
 
-  test('Label filter - first available', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Label filter - first available', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'Label filter', async () => {
@@ -54,7 +54,7 @@ test.describe('Hosts load times', () => {
     });
   });
 
-  test('Search host by name', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Search host by name', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await hostsList.goto({ fleetId: loadtestFleetId });
     const firstHostName = await hostsList.firstHostName();
 
@@ -65,14 +65,14 @@ test.describe('Hosts load times', () => {
     );
   });
 
-  test('Sort by Host name ascending', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Sort by Host name ascending', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await measureNav(page, testInfo, 'Sort name ascending', async () => {
       await hostsList.goto({ fleetId: loadtestFleetId, sort: { key: 'display_name', direction: 'asc' } });
       await expect(hostsList.table.firstRowWithLink).toBeVisible();
     });
   });
 
-  test('Sort by Host name descending', { tag: '@loadtest' }, async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+  test('Sort by Host name descending', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
     await measureNav(page, testInfo, 'Sort name descending', async () => {
       await hostsList.goto({ fleetId: loadtestFleetId, sort: { key: 'display_name', direction: 'desc' } });
       await expect(hostsList.table.firstRowWithLink).toBeVisible();
