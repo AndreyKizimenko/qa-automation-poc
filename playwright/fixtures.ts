@@ -13,6 +13,7 @@
  */
 import { test as base } from '@playwright/test';
 import { monitorConsoleErrors, monitorNetworkFailures } from './helpers/console';
+import { findFleetByName, withApiRequest } from './helpers/api';
 
 import {
   LoginPage,
@@ -78,7 +79,7 @@ type FleetWorkerFixtures = {
    * Resolved id of the Workstations fleet on the premium instance — fetched
    * once per worker via the Fleet API. Used by premium specs that need to
    * call `page.goto({ fleetId })` for the Workstations scope variant.
-   * Throws on free; free specs must not request this fixture.
+   * Throws with a `premium-only` error if requested on any other tier.
    */
   workstationsFleetId: number;
 
@@ -86,7 +87,7 @@ type FleetWorkerFixtures = {
    * Resolved id of the QA fleet on the premium instance — fetched once per
    * worker via the Fleet API. Used by premium role-access specs that need a
    * second fleet alongside Workstations to verify cross-fleet denial.
-   * Throws on free; free specs must not request this fixture.
+   * Throws with a `premium-only` error if requested on any other tier.
    */
   qaFleetId: number;
 
@@ -174,53 +175,40 @@ type FleetFixtures = {
   pageHealth: { disable: () => void };
 };
 
+/**
+ * Resolves a premium fleet id by name via the Fleet API, gated to the premium
+ * tier. A free spec that accidentally requests one of the premium-only
+ * fixtures below fails here with a clear "premium-only" error instead of
+ * surfacing a misleading "fleet not found" later in the call.
+ */
+async function resolvePremiumFleetId(
+  fixtureName: string,
+  teamName: string,
+): Promise<number> {
+  if (process.env.SUITE !== 'premium') {
+    throw new Error(
+      `[${fixtureName}] premium-only fixture — must not be requested on SUITE=${process.env.SUITE}. ` +
+      `Free/loadtest specs have no fleet concept; if you need this id, move the spec under tests/e2e/premium/.`,
+    );
+  }
+  const fleet = await withApiRequest((request) => findFleetByName(request, teamName));
+  if (!fleet) {
+    throw new Error(
+      `[${fixtureName}] '${teamName}' fleet not found on premium instance — gitops apply likely missing.`,
+    );
+  }
+  return fleet.id;
+}
+
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
 export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   workstationsFleetId: [async ({}, use) => {
-    const baseURL = process.env.FLEET_URL;
-    const token = process.env.FLEET_API_TOKEN;
-    if (!baseURL || !token) {
-      throw new Error('[workstationsFleetId fixture] FLEET_URL and FLEET_API_TOKEN must be set');
-    }
-    const res = await fetch(`${baseURL}/api/latest/fleet/teams?query=Workstations&per_page=50`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      throw new Error(`[workstationsFleetId fixture] teams lookup failed: HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const list = (data.fleets ?? data.teams ?? []) as Array<{ id: number; name: string }>;
-    const wk = list.find((t) => t.name === 'Workstations');
-    if (!wk) {
-      throw new Error(
-        '[workstationsFleetId fixture] Workstations fleet not found — premium gitops likely not applied',
-      );
-    }
-    await use(wk.id);
+    await use(await resolvePremiumFleetId('workstationsFleetId', 'Workstations'));
   }, { scope: 'worker', box: true }],
 
   qaFleetId: [async ({}, use) => {
-    const baseURL = process.env.FLEET_URL;
-    const token = process.env.FLEET_API_TOKEN;
-    if (!baseURL || !token) {
-      throw new Error('[qaFleetId fixture] FLEET_URL and FLEET_API_TOKEN must be set');
-    }
-    const res = await fetch(`${baseURL}/api/latest/fleet/teams?query=QA&per_page=50`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      throw new Error(`[qaFleetId fixture] teams lookup failed: HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const list = (data.fleets ?? data.teams ?? []) as Array<{ id: number; name: string }>;
-    const qa = list.find((t) => t.name === 'QA');
-    if (!qa) {
-      throw new Error(
-        '[qaFleetId fixture] QA fleet not found — premium gitops likely not applied',
-      );
-    }
-    await use(qa.id);
+    await use(await resolvePremiumFleetId('qaFleetId', 'QA'));
   }, { scope: 'worker', box: true }],
 
   pageHealth: [async ({ page }, use, testInfo) => {
