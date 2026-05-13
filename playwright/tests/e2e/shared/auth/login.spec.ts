@@ -29,9 +29,8 @@ test.describe('Login', () => {
 
   test('redirects to dashboard when already authenticated', async ({ browser }) => {
     // Loads the project's saved admin state to bypass the describe-level auth reset.
-    const suite = process.env.SUITE || 'premium';
     const context = await browser.newContext({
-      storageState: `.auth/${suite}-admin.json`,
+      storageState: `.auth/${process.env.SUITE}-admin.json`,
       baseURL: process.env.FLEET_URL,
     });
     const page = await context.newPage();
