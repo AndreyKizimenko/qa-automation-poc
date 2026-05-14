@@ -11,13 +11,6 @@ import { Navbar } from './components/Navbar';
  */
 type DashboardPlatform = 'mac' | 'windows' | 'linux' | 'chrome' | 'ios' | 'ipados';
 
-// Timestamps the dashboard renders for activities up to ~1h old. Fleet uses
-// date-fns `formatDistanceToNow`, which produces "less than a minute ago",
-// "N second(s)/minute(s) ago", and "about 1 hour ago" (45–89 min). Anything
-// coarser ("about 2 hours ago", "1 day ago", ...) indicates a stale entry
-// from a prior run — the feed is global and never wiped by our cleanup.
-const FRESH_TIMESTAMP_RE = /(?:less than a minute|\d+ seconds?|\d+ minutes?|about 1 hour) ago/;
-
 export class DashboardPage {
   readonly page: Page;
   readonly navbar: Navbar;
@@ -80,41 +73,30 @@ export class DashboardPage {
     return this.activityFeedCard.getByRole('button', { name: matcher });
   }
 
-  // Returns a locator for rows matching `matcher` AND whose timestamp is
-  // within the freshness window. The fresh filter rejects historical
-  // entries from prior runs that share the same static target name.
-  private freshActivityRows(matcher: string | RegExp): Locator {
-    return this.activityRows(matcher).filter({ hasText: FRESH_TIMESTAMP_RE });
-  }
-
   /**
-   * Click "Next" on the activity feed and wait for the resulting fetch +
-   * DOM update. The feed paginates via `GET /api/.../activities?page=N`
-   * (8 rows per page); we wait on that response, then on the first-row
-   * text to change so DOM rendering has caught up before the next match
-   * attempt.
+   * Click "Next" on the activity feed and wait for the resulting
+   * `GET /api/.../activities?page=N` response — the response is the
+   * synchronization point; the table re-renders synchronously once the
+   * payload arrives, so no follow-up DOM-change wait is needed.
    */
   private async paginateActivityNext(): Promise<void> {
-    const firstText = await this.firstActivityItem.innerText();
     const responsePromise = this.page.waitForResponse(
       (r) => /\/activities\?.*page=/.test(r.url()) && r.status() === 200,
       { timeout: 10_000 },
     );
     await this.activityNext.click();
-    await responsePromise.catch(() => {
-      // Network wait is a hint, not a hard requirement — fall through to
-      // the DOM-change wait below regardless.
-    });
-    await expect(this.firstActivityItem).not.toHaveText(firstText, { useInnerText: true });
+    await responsePromise;
   }
 
   /**
-   * Assert the activity feed contains a recent row matching every
-   * matcher in `matchers`. Filters to timestamps under ~1 hour so
-   * historical rows with the same static target names can't satisfy a
-   * match; paginates forward bounded by `maxPages` (8 rows per page)
-   * and checks all remaining matchers per page so one loop drains the
-   * batch. {@link expectActivity} is a single-matcher shorthand.
+   * Assert the activity feed contains a row matching every matcher in
+   * `matchers`. Paginates forward bounded by `maxPages` (8 rows per page)
+   * and checks every remaining matcher per page so one walk drains the
+   * batch. {@link expectActivity} is the single-matcher shorthand.
+   *
+   * Specs already stamp resource names with `Date.now()`, so a matcher
+   * keyed on that name is unique to the current run — no timestamp-based
+   * "freshness" filter is needed here.
    */
   async expectActivities(
     matchers: Array<string | RegExp>,
@@ -126,7 +108,7 @@ export class DashboardPage {
     for (let page = 0; page < maxPages && remaining.length > 0; page++) {
       // Walk backwards so splice doesn't disturb iteration indices.
       for (let i = remaining.length - 1; i >= 0; i--) {
-        if ((await this.freshActivityRows(remaining[i]).count()) > 0) {
+        if ((await this.activityRows(remaining[i]).count()) > 0) {
           remaining.splice(i, 1);
         }
       }
@@ -138,7 +120,7 @@ export class DashboardPage {
     if (remaining.length > 0) {
       // Surface the first un-matched matcher via toBeVisible() so the
       // failure carries Playwright's standard locator + screenshot context.
-      await expect(this.freshActivityRows(remaining[0]).first()).toBeVisible();
+      await expect(this.activityRows(remaining[0]).first()).toBeVisible();
     }
   }
 

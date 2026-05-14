@@ -1,6 +1,7 @@
 import { test, expect } from '@fixtures';
 import type { APIRequestContext, Locator } from '@playwright/test';
 import { deleteUser, listUsers } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { ApiGlobalRole } from '@pages';
 
 /**
@@ -294,10 +295,7 @@ test.describe('Create API-only user (premium)', () => {
     const users = await listUsers(request, { query: sampleName });
     const target = users.find((u) => u.api_only && u.name === sampleName)!;
 
-    // Fleet's generated API-user email contains regex specials like + and =,
-    // so escape everything that's reserved before stuffing it in the matcher.
-    const emailRe = target.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     await dashboard.goto();
-    await dashboard.expectActivity(new RegExp(`created a user\\s+${emailRe}\\.`));
+    await dashboard.expectActivity(activityCopy.user.created({ email: target.email }));
   });
 });

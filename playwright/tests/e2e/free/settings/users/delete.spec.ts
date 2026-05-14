@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { createUser, deleteUser, qaTestEmail, withApiRequest } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Delete user', () => {
   test.describe.configure({ mode: 'serial' });
@@ -45,8 +46,6 @@ test.describe('Delete user', () => {
 
   test('activity feed shows the deleted-user entry', async ({ dashboard }) => {
     await dashboard.goto();
-    await dashboard.expectActivity(
-      new RegExp(`deleted a user ${email.replace('.', '\\.')}\\.`),
-    );
+    await dashboard.expectActivity(activityCopy.user.deleted({ email }));
   });
 });

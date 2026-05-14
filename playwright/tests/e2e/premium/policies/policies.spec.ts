@@ -5,6 +5,7 @@
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { PolicyFormValues, SavePolicyValues, TeamScope } from '@pages';
 
@@ -94,14 +95,10 @@ for (const scope of SCOPES) {
 
     test('activity feed shows create → edit → delete', async ({ dashboard }) => {
       await dashboard.goto();
-      // Fleet renders policy activity as "<actor> created a policy <name> ...",
-      // "edited the policy <name> ...", "deleted the policy <name> ...".
-      // The suffix is "globally." (All fleets) or "on the <fleet> fleet."
-      const suffix = scope === 'All fleets' ? 'globally' : `on the ${scope} fleet`;
       await dashboard.expectActivities([
-        new RegExp(`created a policy ${policyName} ${suffix}\\.`),
-        new RegExp(`edited the policy ${editedName} ${suffix}\\.`),
-        new RegExp(`deleted the policy ${editedName} ${suffix}\\.`),
+        activityCopy.policy.created({ name: policyName, scope }),
+        activityCopy.policy.edited({ name: editedName, scope }),
+        activityCopy.policy.deleted({ name: editedName, scope }),
       ]);
     });
   });

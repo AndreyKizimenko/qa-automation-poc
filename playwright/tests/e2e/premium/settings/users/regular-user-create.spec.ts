@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { deleteUser, findUserByEmail, qaTestPassword } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { GlobalRole } from '@pages';
 
 const PREMIUM_GLOBAL_ROLES: readonly GlobalRole[] = [
@@ -181,6 +182,6 @@ test.describe('Create regular user (premium)', () => {
     // The first global-role test creates "qa-test-<stamp>-observer@fleetdm.com".
     const sampleEmail = `qa-test-${stamp}-observer@fleetdm.com`;
     await dashboard.goto();
-    await dashboard.expectActivity(new RegExp(`created a user\\s+${sampleEmail.replace('.', '\\.')}\\.`));
+    await dashboard.expectActivity(activityCopy.user.created({ email: sampleEmail }));
   });
 });

@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { deleteUser, findUserByEmail, qaTestPassword } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { GlobalRole } from '@pages';
 
 // Free omits Observer+, Technician, and GitOps — the form-only roles
@@ -69,8 +70,6 @@ test.describe('Create regular user (free)', () => {
   test('activity feed shows the created-user entry', async ({ dashboard }) => {
     const sampleEmail = `qa-test-${stamp}-observer@fleetdm.com`;
     await dashboard.goto();
-    await dashboard.expectActivity(
-      new RegExp(`created a user\\s+${sampleEmail.replace('.', '\\.')}\\.`),
-    );
+    await dashboard.expectActivity(activityCopy.user.created({ email: sampleEmail }));
   });
 });

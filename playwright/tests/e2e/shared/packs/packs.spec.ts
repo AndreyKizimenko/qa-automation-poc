@@ -5,6 +5,7 @@
  */
 import { test, expect } from '@fixtures';
 import { authHeaders, assertActivity, apiUrl } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Packs CRUD', () => {
   test.describe.configure({ mode: 'serial' });
@@ -55,12 +56,10 @@ test.describe('Packs CRUD', () => {
 
   test('activity feed shows create → edit → delete', async ({ dashboard }) => {
     await dashboard.goto();
-    // Pack activity uses "created pack <name>." / "edited pack <name>." /
-    // "deleted pack <name>." — no article, no scope suffix.
     await dashboard.expectActivities([
-      new RegExp(`created pack ${packName}\\.`),
-      new RegExp(`edited pack ${packName}\\.`),
-      new RegExp(`deleted pack ${packName}\\.`),
+      activityCopy.pack.created({ name: packName }),
+      activityCopy.pack.edited({ name: packName }),
+      activityCopy.pack.deleted({ name: packName }),
     ]);
   });
 

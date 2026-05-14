@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope } from '@pages';
 
@@ -54,12 +55,6 @@ for (const scope of SCOPES) {
     test.describe(`Scripts library lifecycle (${scope}) — ${script.os}`, () => {
       test.describe.configure({ mode: 'serial' });
 
-      // Activity-feed scope suffix differs from the team-dropdown label:
-      // Unassigned renders as "unassigned", Workstations as "the Workstations fleet".
-      const addedSuffix = scope === 'Unassigned' ? 'unassigned' : `the ${scope} fleet`;
-      const editedSuffix = addedSuffix;
-      const deletedSuffix = addedSuffix;
-
       test('upload', async ({ dashboard, controls, scriptsLibrary, request }) => {
         await dashboard.goto();
         await dashboard.navbar.goToControls();
@@ -105,12 +100,10 @@ for (const scope of SCOPES) {
 
       test('activity feed shows upload → edit → delete', async ({ dashboard }) => {
         await dashboard.goto();
-        // Fleet renders script activity as "added script <name> to <scope>.",
-        // "edited script <name> for <scope>.", "deleted script <name> from <scope>.".
         await dashboard.expectActivities([
-          new RegExp(`added script ${script.baseName} to ${addedSuffix}\\.`),
-          new RegExp(`edited script ${script.baseName} for ${editedSuffix}\\.`),
-          new RegExp(`deleted script ${script.baseName} from ${deletedSuffix}\\.`),
+          activityCopy.script.added({ name: script.baseName, scope }),
+          activityCopy.script.edited({ name: script.baseName, scope }),
+          activityCopy.script.deleted({ name: script.baseName, scope }),
         ]);
       });
     });

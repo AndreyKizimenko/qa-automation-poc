@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 interface ScriptCase {
   os: 'macOS' | 'Linux' | 'Windows';
@@ -49,10 +50,6 @@ const SCRIPT_CASES: ScriptCase[] = [
 for (const script of SCRIPT_CASES) {
   test.describe(`Scripts library lifecycle — ${script.os}`, () => {
     test.describe.configure({ mode: 'serial' });
-
-    // Free has no team scoping — the feed uses "unassigned" the same way
-    // premium does for its Unassigned scope.
-    const scopeSuffix = 'unassigned';
 
     test('upload', async ({ dashboard, controls, scriptsLibrary, request }) => {
       await dashboard.goto();
@@ -97,9 +94,9 @@ for (const script of SCRIPT_CASES) {
     test('activity feed shows upload → edit → delete', async ({ dashboard }) => {
       await dashboard.goto();
       await dashboard.expectActivities([
-        new RegExp(`added script ${script.fileName} to ${scopeSuffix}\\.`),
-        new RegExp(`edited script ${script.fileName} for ${scopeSuffix}\\.`),
-        new RegExp(`deleted script ${script.fileName} from ${scopeSuffix}\\.`),
+        activityCopy.script.added({ name: script.fileName, scope: 'Unassigned' }),
+        activityCopy.script.edited({ name: script.fileName, scope: 'Unassigned' }),
+        activityCopy.script.deleted({ name: script.fileName, scope: 'Unassigned' }),
       ]);
     });
   });

@@ -1,6 +1,7 @@
 import { test, expect } from '@fixtures';
 import type { APIRequestContext, Locator } from '@playwright/test';
 import { deleteUser, listUsers } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { ApiGlobalRole } from '@pages';
 
 const FREE_API_ROLES: readonly ApiGlobalRole[] = ['Observer', 'Maintainer', 'Admin'];
@@ -132,8 +133,7 @@ test.describe('Create API-only user (free)', () => {
     const target = users.find((u) => u.api_only && u.name === sampleName);
     expect(target, `Expected ${sampleName} to exist for activity-feed assertion`).toBeTruthy();
 
-    const emailRe = target!.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     await dashboard.goto();
-    await dashboard.expectActivity(new RegExp(`created a user\\s+${emailRe}\\.`));
+    await dashboard.expectActivity(activityCopy.user.created({ email: target!.email }));
   });
 });
