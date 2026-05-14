@@ -8,15 +8,8 @@
  *   frontend/pages/DashboardPage/cards/ActivityFeed/GlobalActivityItem/
  *   GlobalActivityItem.tsx
  *
- * Each builder cites the line that emits the copy. Pin the line range when
- * upstream changes, or update both ends together when Fleet edits the
- * template — `tests/api/activity-copy.spec.ts` is the gate that catches
- * the regex going out of sync.
- *
- * Scope of this module today: policy, report, pack, script, and the
- * tier-agnostic user create/delete activities. The harder cases (software
- * app-store asymmetry, configuration profile platform-aware suffix, user
- * role changes) keep their hand-coded matchers until they're folded in.
+ * Each builder cites the line that emits the copy. `tests/api/activity-copy.spec.ts`
+ * is the gate that catches regexes going out of sync with the citations.
  */
 
 import type { TeamScope } from '@pages';
@@ -129,9 +122,10 @@ export const activityCopy = {
       new RegExp(`deleted the report ${esc(name)}${fleetSuffix(scope, { unassignedFallsThrough: true })}\\.`),
   },
 
-  // Packs are global on the Fleet API (no team scope). The activity item
-  // falls through to a default template that renders "created pack NAME."
-  // etc. — verified empirically against tests/e2e/shared/packs/packs.spec.ts.
+  // Packs are global on the Fleet API (no team scope). Fleet has no
+  // dedicated pack renderer; activities fall through to defaultActivityTemplate
+  // (GlobalActivityItem.tsx:848), which prints `<activityType> <b>NAME</b>.`
+  // — "created pack NAME.", "edited pack NAME.", "deleted pack NAME.".
   pack: {
     created: ({ name }: { name: string }) =>
       new RegExp(`created pack ${esc(name)}\\.`),

@@ -94,9 +94,9 @@ export class DashboardPage {
    * and checks every remaining matcher per page so one walk drains the
    * batch. {@link expectActivity} is the single-matcher shorthand.
    *
-   * Specs already stamp resource names with `Date.now()`, so a matcher
-   * keyed on that name is unique to the current run — no timestamp-based
-   * "freshness" filter is needed here.
+   * Matcher uniqueness is the caller's contract — specs stamp resource
+   * names with `Date.now()`, so any row whose accessible name matches is
+   * by construction from the current run.
    */
   async expectActivities(
     matchers: Array<string | RegExp>,
