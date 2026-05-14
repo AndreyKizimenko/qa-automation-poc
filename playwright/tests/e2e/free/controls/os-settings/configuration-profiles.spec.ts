@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 interface ProfileCase {
   os: 'macOS' | 'Windows';
@@ -53,9 +54,6 @@ for (const profile of PROFILE_CASES) {
   test.describe(`MDM • OS settings — configuration profiles — ${profile.os}`, () => {
     test.describe.configure({ mode: 'serial' });
 
-    // Free has no team scoping — the feed uses "all <hostsPhrase>".
-    const scopeSuffix = `all ${profile.hostsPhrase}`;
-
     test('upload', async ({ dashboard, controls, osSettings, configurationProfiles, request }) => {
       await dashboard.goto();
       await dashboard.navbar.goToControls();
@@ -89,8 +87,8 @@ for (const profile of PROFILE_CASES) {
     test('activity feed shows upload → delete', async ({ dashboard }) => {
       await dashboard.goto();
       await dashboard.expectActivities([
-        new RegExp(`added configuration profile ${profile.displayName} to ${scopeSuffix}\\.`),
-        new RegExp(`deleted configuration profile ${profile.displayName} from ${scopeSuffix}\\.`),
+        activityCopy.configurationProfile.added({ name: profile.displayName, hostsPhrase: profile.hostsPhrase }),
+        activityCopy.configurationProfile.deleted({ name: profile.displayName, hostsPhrase: profile.hostsPhrase }),
       ]);
     });
   });

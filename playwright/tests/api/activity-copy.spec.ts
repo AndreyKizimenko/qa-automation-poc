@@ -86,6 +86,34 @@ test.describe('activityCopy', () => {
       .test('deleted ChatGPT (Android) from the Workstations fleet.')).toBe(true);
   });
 
+  test('configurationProfile.* — tier-aware via process.env.SUITE', () => {
+    // The helper reads process.env.SUITE to pick the free vs premium branch;
+    // flip it inside this assertion so both branches are covered and
+    // restore the original value at the end so we don't leak into other
+    // tests in this worker.
+    const original = process.env.SUITE;
+    try {
+      const APPLE = 'macOS, iOS, and iPadOS hosts';
+      const WINDOWS = 'Windows hosts';
+
+      process.env.SUITE = 'free';
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE })
+        .test('added configuration profile Fleet Test Passcode to all macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS })
+        .test('deleted configuration profile fleet-test-screenlock from all Windows hosts.')).toBe(true);
+
+      process.env.SUITE = 'premium';
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE, scope: 'Unassigned' })
+        .test('added configuration profile Fleet Test Passcode to unassigned macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('added configuration profile fleet-test-screenlock to Windows hosts assigned to the Workstations fleet.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('deleted configuration profile fleet-test-screenlock from Windows hosts assigned to the Workstations fleet.')).toBe(true);
+    } finally {
+      process.env.SUITE = original;
+    }
+  });
+
   test('user.created tolerates doubled whitespace before the email', () => {
     // Fleet's createdUser template emits `<b> EMAIL</b>` (leading space
     // inside <b>) so the rendered text has two spaces between "user" and

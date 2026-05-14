@@ -83,6 +83,27 @@ function appStoreAppScope(scope: TeamScope, action: 'add' | 'delete'): string {
   return action === 'add' ? 'the No team fleet' : 'unassigned';
 }
 
+/**
+ * Scope-suffix for configuration profiles. Tier-aware: Fleet renders
+ * different copy on free vs premium, gated by `isPremiumTier` in the
+ * frontend (getProfileMessageSuffix). The helper reads `process.env.SUITE`
+ * to pick the branch — set reliably by playwright.config.ts's resolveSuite
+ * at config load.
+ *
+ *   Free:                 "all <hostsPhrase>"                     (scope ignored)
+ *   Premium Unassigned:   "unassigned <hostsPhrase>"
+ *   Premium named team:   "<hostsPhrase> assigned to the X fleet"
+ *
+ * @see frontend/.../GlobalActivityItem.tsx getProfileMessageSuffix:66
+ */
+function profileSuffix(hostsPhrase: string, scope?: TeamScope): string {
+  if (process.env.SUITE !== 'premium') return `all ${hostsPhrase}`;
+  if (!scope || scope === 'Unassigned' || scope === 'All fleets') {
+    return `unassigned ${hostsPhrase}`;
+  }
+  return `${hostsPhrase} assigned to the ${scope} fleet`;
+}
+
 export const activityCopy = {
   policy: {
     /** @see frontend/.../GlobalActivityItem.tsx:1748 — `created a policy <b>NAME</b><scope>.` */
@@ -154,6 +175,21 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:1518 — `deleted <b>TITLE</b> (Platform) from <scope>.` */
     deleted: ({ name, platform, scope }: { name: string; platform: string; scope: TeamScope }) =>
       new RegExp(`deleted ${esc(name)} \\(${esc(platform)}\\) from ${appStoreAppScope(scope, 'delete')}\\.`),
+  },
+
+  // MDM configuration profiles. Suffix is tier-aware via process.env.SUITE
+  // (see {@link profileSuffix}). `hostsPhrase` is the platform-specific
+  // string Fleet embeds in the suffix — Apple profiles use "macOS, iOS,
+  // and iPadOS hosts", Windows "Windows hosts", Android "Android hosts".
+  // On free, scope is ignored — the feed always reads "all <hostsPhrase>"
+  // — so free specs can omit it.
+  configurationProfile: {
+    /** @see frontend/.../GlobalActivityItem.tsx:585 — `added configuration profile <b>NAME</b> to <scope>.` */
+    added: ({ name, hostsPhrase, scope }: { name: string; hostsPhrase: string; scope?: TeamScope }) =>
+      new RegExp(`added configuration profile ${esc(name)} to ${profileSuffix(hostsPhrase, scope)}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:608 — `deleted configuration profile <b>NAME</b> from <scope>.` */
+    deleted: ({ name, hostsPhrase, scope }: { name: string; hostsPhrase: string; scope?: TeamScope }) =>
+      new RegExp(`deleted configuration profile ${esc(name)} from ${profileSuffix(hostsPhrase, scope)}\\.`),
   },
 
   user: {
