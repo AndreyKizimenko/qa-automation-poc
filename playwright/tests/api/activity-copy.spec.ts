@@ -60,6 +60,32 @@ test.describe('activityCopy', () => {
       .test(`deleted script ${NAME} from the Workstations fleet.`)).toBe(true);
   });
 
+  test('software.* — symmetric add/delete suffix; package filename verbatim', () => {
+    const pkg = 'gh_2.92.0_macOS_universal.pkg';
+    expect(activityCopy.software.added({ packageName: pkg, scope: 'Unassigned' })
+      .test(`added ${pkg} to unassigned.`)).toBe(true);
+    expect(activityCopy.software.deleted({ packageName: pkg, scope: 'Unassigned' })
+      .test(`deleted ${pkg} from unassigned.`)).toBe(true);
+    expect(activityCopy.software.added({ packageName: pkg, scope: 'Workstations' })
+      .test(`added ${pkg} to the Workstations fleet.`)).toBe(true);
+    expect(activityCopy.software.deleted({ packageName: pkg, scope: 'Workstations' })
+      .test(`deleted ${pkg} from the Workstations fleet.`)).toBe(true);
+  });
+
+  test('appStoreApp.* — (Platform) suffix + asymmetric Unassigned scope', () => {
+    // Add on Unassigned uses "the No team fleet" (team_name="No team" in the
+    // activity); delete on Unassigned uses "unassigned" (team_name=null).
+    expect(activityCopy.appStoreApp.added({ name: 'Bear', platform: 'iOS', scope: 'Unassigned' })
+      .test('added Bear (iOS) to the No team fleet.')).toBe(true);
+    expect(activityCopy.appStoreApp.deleted({ name: 'Bear', platform: 'iOS', scope: 'Unassigned' })
+      .test('deleted Bear (iOS) from unassigned.')).toBe(true);
+    // Named teams stay symmetric.
+    expect(activityCopy.appStoreApp.added({ name: 'ChatGPT', platform: 'Android', scope: 'Workstations' })
+      .test('added ChatGPT (Android) to the Workstations fleet.')).toBe(true);
+    expect(activityCopy.appStoreApp.deleted({ name: 'ChatGPT', platform: 'Android', scope: 'Workstations' })
+      .test('deleted ChatGPT (Android) from the Workstations fleet.')).toBe(true);
+  });
+
   test('user.created tolerates doubled whitespace before the email', () => {
     // Fleet's createdUser template emits `<b> EMAIL</b>` (leading space
     // inside <b>) so the rendered text has two spaces between "user" and

@@ -66,6 +66,23 @@ function scriptScope(scope: TeamScope): string {
   return `the ${scope} fleet`;
 }
 
+/**
+ * Scope-suffix for app-store apps. The Fleet *renderer* is symmetric for
+ * add/delete (team_name → "the X fleet", otherwise → "unassigned"), but
+ * the activity *details* are asymmetric on the Unassigned scope: Fleet's
+ * API populates team_name="No team" on the add activity, leaving
+ * team_name=null on the delete activity. That maps to:
+ *   add    on Unassigned → "the No team fleet"
+ *   delete on Unassigned → "unassigned"
+ * Named teams (Workstations, etc.) stay symmetric: "the X fleet".
+ *
+ * @see frontend/.../GlobalActivityItem.tsx addedAppStoreApp ~1480
+ */
+function appStoreAppScope(scope: TeamScope, action: 'add' | 'delete'): string {
+  if (scope !== 'Unassigned' && scope !== 'All fleets') return `the ${scope} fleet`;
+  return action === 'add' ? 'the No team fleet' : 'unassigned';
+}
+
 export const activityCopy = {
   policy: {
     /** @see frontend/.../GlobalActivityItem.tsx:1748 — `created a policy <b>NAME</b><scope>.` */
@@ -113,6 +130,30 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:1145 — `deleted script <b>NAME</b> from <scope>.` */
     deleted: ({ name, scope }: { name: string; scope: TeamScope }) =>
       new RegExp(`deleted script ${esc(name)} from ${scriptScope(scope)}\\.`),
+  },
+
+  // Custom packages + Fleet-Maintained Apps. The feed shows the installer
+  // file (Fleet's activity `software_package` detail — e.g. `gh_2.92.0.pkg`),
+  // not the human-readable title. Symmetric add/delete scope suffix.
+  software: {
+    /** @see frontend/.../GlobalActivityItem.tsx:1349 — `added <b>PACKAGE</b> to <scope>.` */
+    added: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
+      new RegExp(`added ${esc(packageName)} to ${scriptScope(scope)}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:1379 — `deleted <b>PACKAGE</b> from <scope>.` */
+    deleted: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
+      new RegExp(`deleted ${esc(packageName)} from ${scriptScope(scope)}\\.`),
+  },
+
+  // VPP and Android app-store entries. The feed renders the title with a
+  // `(Platform)` parens suffix before the preposition. Scope suffix is
+  // asymmetric on Unassigned — see {@link appStoreAppScope}.
+  appStoreApp: {
+    /** @see frontend/.../GlobalActivityItem.tsx:1480 — `added <b>TITLE</b> (Platform) to <scope>.` */
+    added: ({ name, platform, scope }: { name: string; platform: string; scope: TeamScope }) =>
+      new RegExp(`added ${esc(name)} \\(${esc(platform)}\\) to ${appStoreAppScope(scope, 'add')}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:1518 — `deleted <b>TITLE</b> (Platform) from <scope>.` */
+    deleted: ({ name, platform, scope }: { name: string; platform: string; scope: TeamScope }) =>
+      new RegExp(`deleted ${esc(name)} \\(${esc(platform)}\\) from ${appStoreAppScope(scope, 'delete')}\\.`),
   },
 
   user: {

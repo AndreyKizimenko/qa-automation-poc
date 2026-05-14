@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope, VppPlatformLabel } from '@pages';
 
@@ -74,20 +75,13 @@ for (const scope of SCOPES) {
       const addActivity = isAppStore ? 'added_app_store_app' : 'added_software';
       const deleteActivity = isAppStore ? 'deleted_app_store_app' : 'deleted_software';
 
-      // Activity-feed suffix is asymmetric for app-store apps on the
-      // Unassigned scope: add renders "to the No team fleet" while delete
-      // renders "from unassigned". Custom/FMA stay symmetric ("unassigned").
-      const addSuffix =
-        scope === 'Unassigned'
-          ? (isAppStore ? 'the No team fleet' : 'unassigned')
-          : `the ${scope} fleet`;
-      const deleteSuffix =
-        scope === 'Unassigned' ? 'unassigned' : `the ${scope} fleet`;
-
       // Captured during 'add' for use in 'delete' and 'activity feed'.
       let titleName: string;
       let titleId: number;
-      let feedNeedle: string;
+      // Installer file name (Fleet's activity `software_package` detail) —
+      // populated for custom/FMA cases only; app-store cases feed
+      // titleName + platform directly into the appStoreApp matchers.
+      let packageName: string;
 
       test('add', async ({
         dashboard,
@@ -150,17 +144,13 @@ for (const scope of SCOPES) {
         titleId = Number(page.url().match(/\/software\/titles\/(\d+)/)?.[1]);
         expect(titleId).toBeGreaterThan(0);
 
-        // Feed text varies by case kind:
-        //   - custom/FMA → installer filename (`software_package` in details)
-        //   - VPP/Android → "<titleName> (<platform>)"
+        // Custom/FMA cases need the installer filename for the activity-feed
+        // matcher (Fleet renders software_package, not the title). App-store
+        // cases use titleName + the case's platform label directly.
         if (c.kind === 'custom' || c.kind === 'fma') {
-          feedNeedle = (activity.details as { software_package?: string }).software_package ?? '';
-        } else if (c.kind === 'vpp') {
-          feedNeedle = `${titleName} (${c.platform})`;
-        } else {
-          feedNeedle = `${titleName} (Android)`;
+          packageName = (activity.details as { software_package?: string }).software_package ?? '';
+          expect(packageName.length).toBeGreaterThan(0);
         }
-        expect(feedNeedle.length).toBeGreaterThan(0);
 
         await softwareTitles.goto({ fleetId, availableForInstall: true });
         await softwareTitles.teamDropdown.select(scope);
@@ -208,13 +198,24 @@ for (const scope of SCOPES) {
 
       test('activity feed shows add → delete', async ({ dashboard }) => {
         await dashboard.goto();
-        // Escape the captured needle: filenames contain dots, VPP/Android
-        // names may include parentheses — both are regex metacharacters.
-        const escaped = feedNeedle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        await dashboard.expectActivities([
-          new RegExp(`added ${escaped} to ${addSuffix}\\.`),
-          new RegExp(`deleted ${escaped} from ${deleteSuffix}\\.`),
-        ]);
+        const matchers = isAppStore
+          ? [
+              activityCopy.appStoreApp.added({
+                name: titleName,
+                platform: c.kind === 'android' ? 'Android' : c.platform,
+                scope,
+              }),
+              activityCopy.appStoreApp.deleted({
+                name: titleName,
+                platform: c.kind === 'android' ? 'Android' : c.platform,
+                scope,
+              }),
+            ]
+          : [
+              activityCopy.software.added({ packageName, scope }),
+              activityCopy.software.deleted({ packageName, scope }),
+            ];
+        await dashboard.expectActivities(matchers);
       });
     });
   }
