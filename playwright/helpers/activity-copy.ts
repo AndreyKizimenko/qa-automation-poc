@@ -202,5 +202,15 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:246 */
     deleted: ({ email }: { email: string }) =>
       new RegExp(`deleted a user\\s+${esc(email)}\\.`),
+    /**
+     * Premium adds " for all fleets" to the global-role change; free omits it.
+     * Tier read from process.env.SUITE (see {@link profileSuffix} for the
+     * pattern).
+     * @see frontend/.../GlobalActivityItem.tsx:282 — `changed <b>EMAIL</b> to <b>ROLE</b>[ for all fleets].`
+     */
+    changedGlobalRole: ({ email, role }: { email: string; role: string }) => {
+      const suffix = process.env.SUITE === 'premium' ? ' for all fleets' : '';
+      return new RegExp(`changed ${esc(email)} to ${esc(role)}${suffix}\\.`);
+    },
   },
 } as const;

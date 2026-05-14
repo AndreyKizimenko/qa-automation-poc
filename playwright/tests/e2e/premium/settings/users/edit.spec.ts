@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { createUser, deleteUser, withApiRequest } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Edit user', () => {
   test.describe.configure({ mode: 'serial' });
@@ -68,10 +69,7 @@ test.describe('Edit user', () => {
   });
 
   test('activity feed shows the edited-user entry', async ({ dashboard }) => {
-    // Fleet logs the role change as "changed <email> to <role> for all fleets."
     await dashboard.goto();
-    await dashboard.expectActivity(
-      new RegExp(`changed ${email.replace('.', '\\.')} to maintainer for all fleets\\.`),
-    );
+    await dashboard.expectActivity(activityCopy.user.changedGlobalRole({ email, role: 'maintainer' }));
   });
 });

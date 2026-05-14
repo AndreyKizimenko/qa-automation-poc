@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { createUser, deleteUser, withApiRequest } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Edit user', () => {
   test.describe.configure({ mode: 'serial' });
@@ -62,10 +63,7 @@ test.describe('Edit user', () => {
   });
 
   test('activity feed shows the edited-user entry', async ({ dashboard }) => {
-    // Free has no teams, so the role-change activity ends at the role
-    // without the premium-only "for all fleets" suffix.
-    const emailRe = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     await dashboard.goto();
-    await dashboard.expectActivity(new RegExp(`changed ${emailRe} to maintainer\\.`));
+    await dashboard.expectActivity(activityCopy.user.changedGlobalRole({ email, role: 'maintainer' }));
   });
 });

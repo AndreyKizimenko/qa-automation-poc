@@ -129,6 +129,21 @@ test.describe('activityCopy', () => {
       .test(`deleted a user ${EMAIL}.`)).toBe(true);
   });
 
+  test('user.changedGlobalRole — tier-aware "for all fleets" suffix', () => {
+    const original = process.env.SUITE;
+    try {
+      process.env.SUITE = 'free';
+      expect(activityCopy.user.changedGlobalRole({ email: EMAIL, role: 'maintainer' })
+        .test(`changed ${EMAIL} to maintainer.`)).toBe(true);
+
+      process.env.SUITE = 'premium';
+      expect(activityCopy.user.changedGlobalRole({ email: EMAIL, role: 'maintainer' })
+        .test(`changed ${EMAIL} to maintainer for all fleets.`)).toBe(true);
+    } finally {
+      process.env.SUITE = original;
+    }
+  });
+
   test('name with regex-meta chars is escaped', () => {
     const tricky = 'name.with(parens).and+plus';
     expect(activityCopy.policy.created({ name: tricky, scope: 'All fleets' })
