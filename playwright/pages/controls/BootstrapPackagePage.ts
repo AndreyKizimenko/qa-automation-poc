@@ -35,7 +35,10 @@ export class BootstrapPackagePage {
     this.container = page.locator('.bootstrap-package');
     this.statusTable = page.getByRole('table');
 
-    this.emptyUploader = page.locator('.bootstrap-package-uploader');
+    // Fleet's <FileUploader> renders as `.file-uploader` with no role;
+    // scope to the bootstrap-package container so we don't collide with
+    // other uploaders (script library, custom package, etc.).
+    this.emptyUploader = this.container.locator('.file-uploader');
     this.listItem = page.locator('.bootstrap-package-list-item');
     this.listItemName = page.locator('.bootstrap-package-list-item__list-item-name');
 
