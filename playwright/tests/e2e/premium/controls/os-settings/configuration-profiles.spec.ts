@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope } from '@pages';
 
@@ -56,15 +57,6 @@ for (const scope of SCOPES) {
     test.describe(`MDM • OS settings — configuration profiles (${scope}) — ${profile.os}`, () => {
       test.describe.configure({ mode: 'serial' });
 
-      // Feed-text suffix differs between scopes:
-      //   Unassigned → "to/from unassigned <hostsPhrase>."
-      //   Workstations → "to/from <hostsPhrase> assigned to the <fleet> fleet."
-      const addedSuffix =
-        scope === 'Unassigned'
-          ? `unassigned ${profile.hostsPhrase}`
-          : `${profile.hostsPhrase} assigned to the ${scope} fleet`;
-      const deletedSuffix = addedSuffix;
-
       test('upload', async ({ dashboard, controls, osSettings, configurationProfiles, request }) => {
         await dashboard.goto();
         await dashboard.navbar.goToControls();
@@ -100,12 +92,9 @@ for (const scope of SCOPES) {
 
       test('activity feed shows upload → delete', async ({ dashboard }) => {
         await dashboard.goto();
-        // Profile activity renders as "added configuration profile <name>
-        // to <scope-suffix>." / "deleted configuration profile <name> from
-        // <scope-suffix>." — no edit step exists.
         await dashboard.expectActivities([
-          new RegExp(`added configuration profile ${profile.displayName} to ${addedSuffix}\\.`),
-          new RegExp(`deleted configuration profile ${profile.displayName} from ${deletedSuffix}\\.`),
+          activityCopy.configurationProfile.added({ name: profile.displayName, hostsPhrase: profile.hostsPhrase, scope }),
+          activityCopy.configurationProfile.deleted({ name: profile.displayName, hostsPhrase: profile.hostsPhrase, scope }),
         ]);
       });
     });

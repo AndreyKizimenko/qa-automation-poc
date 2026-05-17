@@ -6,6 +6,7 @@
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { ReportFormValues, SaveReportValues } from '@pages';
 
 test.describe('Reports CRUD', () => {
@@ -99,9 +100,9 @@ test.describe('Reports CRUD', () => {
   test('activity feed shows create → edit → delete', async ({ dashboard }) => {
     await dashboard.goto();
     await dashboard.expectActivities([
-      new RegExp(`created a report ${reportName} globally\\.`),
-      new RegExp(`edited the report ${editedName} globally\\.`),
-      new RegExp(`deleted the report ${editedName} globally\\.`),
+      activityCopy.report.created({ name: reportName, scope: 'All fleets' }),
+      activityCopy.report.edited({ name: editedName, scope: 'All fleets' }),
+      activityCopy.report.deleted({ name: editedName, scope: 'All fleets' }),
     ]);
   });
 });

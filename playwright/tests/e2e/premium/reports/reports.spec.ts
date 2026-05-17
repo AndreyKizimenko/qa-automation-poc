@@ -6,6 +6,7 @@
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { ReportFormValues, SaveReportValues, TeamScope } from '@pages';
 
@@ -115,11 +116,10 @@ for (const scope of SCOPES) {
 
     test('activity feed shows create → edit → delete', async ({ dashboard }) => {
       await dashboard.goto();
-      const suffix = scope === 'All fleets' ? 'globally' : `on the ${scope} fleet`;
       await dashboard.expectActivities([
-        new RegExp(`created a report ${reportName} ${suffix}\\.`),
-        new RegExp(`edited the report ${editedName} ${suffix}\\.`),
-        new RegExp(`deleted the report ${editedName} ${suffix}\\.`),
+        activityCopy.report.created({ name: reportName, scope }),
+        activityCopy.report.edited({ name: editedName, scope }),
+        activityCopy.report.deleted({ name: editedName, scope }),
       ]);
     });
   });

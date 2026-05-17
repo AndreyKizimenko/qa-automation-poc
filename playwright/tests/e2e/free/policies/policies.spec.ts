@@ -5,6 +5,7 @@
  */
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
+import { activityCopy } from '@helpers/activity-copy';
 import type { PolicyFormValues, SavePolicyValues } from '@pages';
 
 test.describe('Policies CRUD', () => {
@@ -76,9 +77,9 @@ test.describe('Policies CRUD', () => {
   test('activity feed shows create → edit → delete', async ({ dashboard }) => {
     await dashboard.goto();
     await dashboard.expectActivities([
-      new RegExp(`created a policy ${policyName} globally\\.`),
-      new RegExp(`edited the policy ${editedName} globally\\.`),
-      new RegExp(`deleted the policy ${editedName} globally\\.`),
+      activityCopy.policy.created({ name: policyName, scope: 'All fleets' }),
+      activityCopy.policy.edited({ name: editedName, scope: 'All fleets' }),
+      activityCopy.policy.deleted({ name: editedName, scope: 'All fleets' }),
     ]);
   });
 });
