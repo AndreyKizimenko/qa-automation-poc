@@ -96,6 +96,13 @@ export default defineConfig({
   // concurrency headroom and higher worker counts surface as flaky
   // navigation timeouts even though the test logic is correct.
   workers: 2,
+  // Fleet serves /assets/bundle-*.js without Cache-Control, so Cloudflare
+  // doesn't cache it (cf-cache-status: DYNAMIC) and every cold browser
+  // context refetches the 4.7 MB bundle from origin. Under origin load
+  // that can exceed Playwright's default 30 s and surface as `page.goto`
+  // timeouts with a blank screenshot. Drop back to 30 s once
+  // fleetdm/fleet#45682 ships and the bundle is edge-cached.
+  timeout: 60000,
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }]]
     : 'html',
