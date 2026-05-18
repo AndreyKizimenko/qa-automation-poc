@@ -28,6 +28,7 @@ export { HostDetailsPage } from './hosts/HostDetailsPage';
 
 // Software + vulnerabilities
 export { SoftwareTitlesPage } from './software/SoftwareTitlesPage';
+export { SoftwareLibraryPage } from './software/SoftwareLibraryPage';
 export { SoftwareVersionsPage } from './software/SoftwareVersionsPage';
 export { SoftwareTitleDetailPage } from './software/SoftwareTitleDetailPage';
 export { SoftwareVersionDetailPage } from './software/SoftwareVersionDetailPage';

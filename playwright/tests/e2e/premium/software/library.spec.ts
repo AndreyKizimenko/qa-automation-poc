@@ -86,6 +86,7 @@ for (const scope of SCOPES) {
       test('add', async ({
         dashboard,
         softwareTitles,
+        softwareLibrary,
         softwareTitleDetail,
         softwareCustomPackage,
         fleetMaintainedApps,
@@ -152,10 +153,16 @@ for (const scope of SCOPES) {
           expect(packageName.length).toBeGreaterThan(0);
         }
 
-        await softwareTitles.goto({ fleetId, availableForInstall: true });
-        await softwareTitles.teamDropdown.select(scope);
-        await softwareTitles.searchByName(titleName);
-        await expect(softwareTitles.table.rowWith(titleName)).toBeVisible();
+        // Verify on the Library tab (installer-managed software only) —
+        // the legacy /software/titles?available_for_install=true URL now
+        // redirects to /software/inventory and silently drops the
+        // filter, so the inventory list mixes installers with
+        // host-reported software (and a title-name search there can
+        // hit unrelated rows on hosts).
+        await softwareLibrary.goto({ fleetId });
+        await softwareLibrary.teamDropdown.select(scope);
+        await softwareLibrary.searchByName(titleName);
+        await expect(softwareLibrary.table.rowWith(titleName)).toBeVisible();
 
         if (c.kind === 'fma') {
           await fleetMaintainedApps.goto({ fleetId });
@@ -167,7 +174,7 @@ for (const scope of SCOPES) {
       });
 
       test('delete', async ({
-        softwareTitles,
+        softwareLibrary,
         softwareTitleDetail,
         fleetMaintainedApps,
         softwareAppStoreVpp,
@@ -181,11 +188,14 @@ for (const scope of SCOPES) {
         await softwareTitleDetail.installerCard.delete();
         await assertActivity(request, deleteActivity, (d) => d.software_title === titleName);
 
-        await softwareTitles.goto({ fleetId, availableForInstall: true });
-        await softwareTitles.teamDropdown.select(scope);
-        await softwareTitles.search.fill(titleName);
-        await expect(softwareTitles.table.rowOrEmpty()).toBeVisible();
-        await expect(softwareTitles.table.rowWith(titleName)).toHaveCount(0);
+        await softwareLibrary.goto({ fleetId });
+        await softwareLibrary.teamDropdown.select(scope);
+        // Library's search input is disabled when the table is empty, so
+        // we can't always type a query post-delete. Library is bounded to
+        // installer-managed items (no host-reported noise), so a direct
+        // row-count assertion on the title name is unambiguous.
+        await expect(softwareLibrary.table.rowOrEmpty()).toBeVisible();
+        await expect(softwareLibrary.table.rowWith(titleName)).toHaveCount(0);
 
         if (c.kind === 'fma') {
           await fleetMaintainedApps.goto({ fleetId });
