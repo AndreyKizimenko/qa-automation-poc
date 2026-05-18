@@ -296,10 +296,15 @@ export class ReportEditPage {
   }
 
   /**
-   * Fill every editable field. SQL + platform/observer clicks + the
-   * interval react-select trigger React re-renders that reset earlier
-   * text-field values, so the text inputs go LAST and are re-asserted
-   * before save.
+   * Fill every editable field. The interval react-select, platform/observer
+   * clicks, and the Custom-target useEffect that landed in
+   * fleetdm/fleet#41565 all trigger React re-renders that can clobber
+   * earlier field values mid-fill. The first pass sets every field; the
+   * second pass verifies each one and re-applies any drift before save.
+   * Without the second pass the suite is flaky — the most common symptom
+   * is the SQL editor reverting to the stored value, which then makes
+   * `confirmChanges` false and `saveExisting()` hang waiting for the
+   * Save Changes confirm modal that never opens.
    */
   async fillAll(values: ReportFormValues): Promise<void> {
     await this.setSql(values.sql);
@@ -309,8 +314,34 @@ export class ReportEditPage {
     await this.setPlatforms(values.platforms);
     await this.nameInput.fill(values.name);
     await this.descriptionInput.fill(values.description);
+
+    if ((await this.intervalLabel()) !== values.interval) {
+      await this.setInterval(values.interval);
+    }
+    if ((await this.observersCanRunCheckbox.isChecked()) !== values.observersCanRun) {
+      if (values.observersCanRun) await this.observersCanRunCheckbox.check();
+      else await this.observersCanRunCheckbox.uncheck();
+    }
+    const currentPlatforms = await this.checkedPlatforms();
+    if (JSON.stringify(currentPlatforms) !== JSON.stringify(values.platforms)) {
+      await this.setPlatforms(values.platforms);
+    }
+    if ((await this.nameInput.inputValue()) !== values.name) {
+      await this.nameInput.fill(values.name);
+    }
+    if ((await this.descriptionInput.inputValue()) !== values.description) {
+      await this.descriptionInput.fill(values.description);
+    }
+    if (!(await this.sqlText()).includes(values.sql.trim())) {
+      await this.setSql(values.sql);
+    }
+
     await expect(this.nameInput).toHaveValue(values.name);
     await expect(this.descriptionInput).toHaveValue(values.description);
+    expect(await this.intervalLabel()).toBe(values.interval);
+    await expect(this.observersCanRunCheckbox).toBeChecked({ checked: values.observersCanRun });
+    expect(await this.checkedPlatforms()).toEqual(values.platforms);
+    expect(await this.sqlText()).toContain(values.sql.trim());
   }
 
   /** Assert every editable field equals `values` (use after re-opening). */
