@@ -1,7 +1,13 @@
 /**
  * MDM Setup Experience — Setup Assistant. Singleton automatic-enrollment
- * profile per fleet: upload, download, delete. Runs once per scope
- * (Unassigned + Workstations).
+ * profile per fleet: Fleet always renders a profile card — a
+ * download-only `Default profile` card on a cold fleet, and the
+ * admin-uploaded card after `upload()`. The lifecycle:
+ *   1. arrive → Default profile card is showing
+ *   2. upload custom profile → custom card replaces default
+ *   3. download custom profile (FileSaver, .json)
+ *   4. delete custom profile → Default profile card returns
+ * Runs once per scope (Unassigned + Workstations).
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
@@ -16,7 +22,7 @@ const SCOPES: readonly TeamScope[] = ['Unassigned', 'Workstations'];
 
 for (const scope of SCOPES) {
   test.describe(`MDM • Setup Experience — Setup Assistant (${scope})`, () => {
-    test('upload → download → delete', async ({
+    test('default profile → upload replaces it → delete restores it', async ({
       dashboard,
       controls,
       setupExperience,
@@ -28,15 +34,20 @@ for (const scope of SCOPES) {
       await controls.goToSetupExperience();
       await setupExperience.goToSetupAssistant();
 
-      await setupAssistant.deleteIfPresent();
+      // A prior failed run may have left a custom profile behind; reset
+      // to the cold-start default-profile state before asserting.
+      await setupAssistant.deleteIfCustomPresent();
+      await expect(setupAssistant.defaultCard).toBeVisible();
+      await expect(setupAssistant.profileName).toHaveText('Default profile');
 
       await setupAssistant.upload(FIXTURE);
-      await expect(setupAssistant.profileName).toBeVisible();
+      await expect(setupAssistant.profileName).not.toHaveText('Default profile');
 
       const dl = await setupAssistant.download();
       expect(dl.suggestedFilename()).toMatch(/\.json$/);
 
       await setupAssistant.delete();
+      await expect(setupAssistant.profileName).toHaveText('Default profile');
     });
   });
 }

@@ -22,6 +22,7 @@ import {
   HostsListPage,
   HostDetailsPage,
   SoftwareTitlesPage,
+  SoftwareLibraryPage,
   SoftwareVersionsPage,
   SoftwareTitleDetailPage,
   SoftwareVersionDetailPage,
@@ -113,6 +114,7 @@ type FleetFixtures = {
 
   // Software + vulnerabilities
   softwareTitles: SoftwareTitlesPage;
+  softwareLibrary: SoftwareLibraryPage;
   softwareVersions: SoftwareVersionsPage;
   softwareTitleDetail: SoftwareTitleDetailPage;
   softwareVersionDetail: SoftwareVersionDetailPage;
@@ -272,6 +274,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   softwareTitles: [async ({ page }, use) => {
     await use(new SoftwareTitlesPage(page));
+  }, { box: true }],
+  softwareLibrary: [async ({ page }, use) => {
+    await use(new SoftwareLibraryPage(page));
   }, { box: true }],
   softwareVersions: [async ({ page }, use) => {
     await use(new SoftwareVersionsPage(page));
