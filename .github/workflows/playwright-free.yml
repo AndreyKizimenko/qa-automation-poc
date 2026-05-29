@@ -18,6 +18,11 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    # Browsers are pre-installed in the image, so we skip `playwright install`
+    # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --user 1001
     defaults:
       run:
         working-directory: playwright
@@ -27,11 +32,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
-          cache: npm
-          cache-dependency-path: playwright/package-lock.json
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
 
       - name: Write .env.free from secrets
         run: |
