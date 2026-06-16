@@ -63,6 +63,20 @@ export class FleetMaintainedAppsPage {
     await expect(this.windowsColumn).toBeVisible();
   }
 
+  /**
+   * Filters the catalog down to `name` via the search box before any row
+   * lookup. The catalog renders every app in one un-virtualized table
+   * (hundreds of rows), so an unfiltered `getByRole('row')` scan resolves
+   * roles across the whole DOM on every retry and tips past the expect
+   * timeout. Search drives a server-side `?query=` filter, collapsing the
+   * table to the matching row(s). Idempotent — re-filling the same query
+   * is a no-op once the row is shown.
+   */
+  async searchFor(name: string): Promise<void> {
+    await this.searchInput.fill(name);
+    await expect(this.rowByName(name)).toBeVisible();
+  }
+
   rowByName(name: string): Locator {
     return this.table.getByRole('row').filter({ hasText: new RegExp(`^${escape(name)}`, 'i') });
   }
@@ -83,17 +97,19 @@ export class FleetMaintainedAppsPage {
    * unavailable-for-this-platform empty cell.
    */
   async clickAdd(name: string, platform: 'macOS' | 'Windows'): Promise<void> {
-    await expect(this.rowByName(name)).toBeVisible();
+    await this.searchFor(name);
     await this.cellByPlatform(name, platform).getByRole('button', { name: 'Add' }).click();
   }
 
   async expectAddedFor(name: string, platform: 'macOS' | 'Windows'): Promise<void> {
+    await this.searchFor(name);
     const cell = this.cellByPlatform(name, platform);
     await expect(cell.getByTestId('success-icon')).toBeVisible();
     await expect(cell.getByRole('button', { name: 'Add' })).toHaveCount(0);
   }
 
   async expectNotAddedFor(name: string, platform: 'macOS' | 'Windows'): Promise<void> {
+    await this.searchFor(name);
     const cell = this.cellByPlatform(name, platform);
     await expect(cell.getByRole('button', { name: 'Add' })).toBeVisible();
     await expect(cell.getByTestId('success-icon')).toHaveCount(0);
