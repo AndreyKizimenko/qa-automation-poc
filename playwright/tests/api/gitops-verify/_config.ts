@@ -8,6 +8,7 @@
  */
 import * as path from 'path';
 import { APIRequestContext } from '@playwright/test';
+import { apiLatestUrl } from '@helpers/api';
 import { loadAnyConfig } from '@helpers/gitops-yaml';
 
 const target = process.env.GITOPS_TARGET
@@ -32,7 +33,7 @@ export async function resolveTeamId(request: APIRequestContext): Promise<number>
     cachedTeamId = 0;
     return 0;
   }
-  const res = await request.get('/api/latest/fleet/teams?per_page=200');
+  const res = await request.get(apiLatestUrl('teams?per_page=200'));
   if (!res.ok()) {
     throw new Error(`failed to list teams: HTTP ${res.status()} ${await res.text()}`);
   }

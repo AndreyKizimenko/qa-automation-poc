@@ -87,6 +87,8 @@ export class CreateApiUserPage {
     this.specificEndpointsLabel = page.locator('label[for="specific-endpoints"]');
 
     this.endpointSearch = page.getByPlaceholder('Search by name or path');
+    // The endpoint selector renders as a role-less container <div> with no
+    // role/label/text anchor, so it is scoped by its component class.
     this.endpointTable = page.locator('.endpoint-selector-table');
 
     this.submitButton = page.getByRole('button', { name: 'Add' });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiLatestUrl } from '@helpers/api';
 import { gitopsConfig, gitopsLabel, resolveTeamId } from './_config';
 
 interface ApiQuery {
@@ -20,7 +21,7 @@ test.beforeAll(async ({ request }) => {
  * Fleet's REST API uses `/queries` for the route name; UI calls them "reports".
  */
 function reportsEndpoint(id: number): string {
-  return `/api/latest/fleet/queries?per_page=200&team_id=${id}&merge_inherited=false`;
+  return apiLatestUrl(`queries?per_page=200&team_id=${id}&merge_inherited=false`);
 }
 
 test.describe(`GitOps verify · reports · ${gitopsLabel}`, () => {

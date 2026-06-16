@@ -38,14 +38,18 @@ export class FilterModal {
     await this.open();
     await this.vulnerableSwitch.click();
 
-    // Capture the item count before applying so we can detect the re-render
-    const countLocator = this.page.locator('text=/\\d[\\d,]*\\s+items?/').first();
-    const countBefore = await countLocator.innerText().catch(() => '');
+    // The table footer shows a "N items"/"N results" count. Capturing it before
+    // applying lets us prove the filtered set re-rendered, since the count drops
+    // when the vulnerable filter narrows the list (the first-row identity can stay
+    // the same across that change, so the count — not the row — is the real signal).
+    // Wait for the count first so the before-value is a real read, not an empty
+    // pre-render one that would silently skip the assertion.
+    const countLocator = this.page.locator('text=/\\d[\\d,]*\\s+(items?|results?)/').first();
+    await expect(countLocator).toBeVisible();
+    const countBefore = await countLocator.innerText();
 
     await this.applyButton.click();
 
-    if (countBefore) {
-      await expect(countLocator).not.toHaveText(countBefore, { timeout: 10000 });
-    }
+    await expect(countLocator).not.toHaveText(countBefore, { timeout: 10000 });
   }
 }

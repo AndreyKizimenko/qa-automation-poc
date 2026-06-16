@@ -74,7 +74,9 @@ export class DataTable {
    * column order or column-count changes.
    */
   async cellByColumn(row: Locator, header: string): Promise<Locator> {
-    const headers = this.table.locator('thead th');
+    // Exclude the `.active-selection` thead Fleet overlays during row-selection mode,
+    // so the column index resolves against the real header row.
+    const headers = this.table.locator('thead:not(.active-selection) th');
     const count = await headers.count();
     for (let i = 0; i < count; i++) {
       const text = (await headers.nth(i).innerText()).trim();

@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../../components/DataTable';
 import { Navbar } from '../../components/Navbar';
+import { Pagination } from '../../components/Pagination';
 import { Toast } from '../../components/Toast';
 
 /**
@@ -21,6 +22,7 @@ export class UsersPage {
   readonly page: Page;
   readonly navbar: Navbar;
   readonly table: DataTable;
+  readonly pagination: Pagination;
   readonly toast: Toast;
 
   // Page-level controls
@@ -43,6 +45,7 @@ export class UsersPage {
     this.page = page;
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
+    this.pagination = new Pagination(page);
     this.toast = new Toast(page);
 
     this.addUserButton = page.getByRole('button', { name: 'Add user', exact: true });

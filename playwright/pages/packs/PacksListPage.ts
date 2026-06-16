@@ -14,6 +14,8 @@ export class PacksListPage {
   readonly heading: Locator;
   readonly createNewPackButton: Locator;
   readonly deleteButton: Locator;
+  readonly deleteModal: Locator;
+  readonly deleteConfirmButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -24,6 +26,12 @@ export class PacksListPage {
     this.createNewPackButton = page.getByRole('button', { name: /create new pack/i });
     // Bulk delete — appears when at least one checkbox is selected
     this.deleteButton = page.getByRole('button', { name: /delete/i });
+    // Fleet's Modal applies DeletePackModal's `remove-pack-modal` baseClass to both
+    // the modal container and its inner content div, so `.remove-pack-modal` is not
+    // unique; scope to the modal container by its title text (the shared delete-modal
+    // pattern) so the confirm button can't be confused with the toolbar's bulk delete.
+    this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete pack' });
+    this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: /delete/i });
   }
 
   async goto(): Promise<void> {
@@ -54,7 +62,8 @@ export class PacksListPage {
   async deletePack(name: string): Promise<void> {
     await this.packRow(name).getByRole('checkbox').click();
     await this.deleteButton.click();
-    // Modal has another "Delete" button for confirmation — the last one on screen
-    await this.deleteButton.last().click();
+    await expect(this.deleteModal).toBeVisible();
+    await this.deleteConfirmButton.click();
+    await expect(this.deleteModal).toBeHidden();
   }
 }

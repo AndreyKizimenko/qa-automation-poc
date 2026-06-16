@@ -87,7 +87,7 @@ export class FleetMaintainedAppsPage {
   }
 
   rowByName(name: string): Locator {
-    return this.table.getByRole('row').filter({ hasText: new RegExp(`^${escape(name)}`, 'i') });
+    return this.table.getByRole('row').filter({ hasText: new RegExp(`^${escapeRegExp(name)}`, 'i') });
   }
 
   /**
@@ -125,6 +125,6 @@ export class FleetMaintainedAppsPage {
   }
 }
 
-function escape(s: string): string {
+function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

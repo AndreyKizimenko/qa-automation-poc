@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiLatestUrl } from '@helpers/api';
 import { gitopsConfig, gitopsLabel, resolveTeamId } from './_config';
 
 interface ApiProfile {
@@ -15,7 +16,7 @@ test.beforeAll(async ({ request }) => {
 
 test.describe(`GitOps verify · configuration profiles · ${gitopsLabel}`, () => {
   test('total profile count matches gitops', async ({ request }) => {
-    const res = await request.get(`/api/latest/fleet/configuration_profiles?per_page=200&team_id=${teamId}`);
+    const res = await request.get(apiLatestUrl(`configuration_profiles?per_page=200&team_id=${teamId}`));
     await expect(res).toBeOK();
     const body = await res.json();
     const apiProfiles = body.profiles as ApiProfile[];
@@ -23,7 +24,7 @@ test.describe(`GitOps verify · configuration profiles · ${gitopsLabel}`, () =>
   });
 
   test('per-platform profile counts match gitops', async ({ request }) => {
-    const res = await request.get(`/api/latest/fleet/configuration_profiles?per_page=200&team_id=${teamId}`);
+    const res = await request.get(apiLatestUrl(`configuration_profiles?per_page=200&team_id=${teamId}`));
     await expect(res).toBeOK();
     const body = await res.json();
     const apiProfiles = body.profiles as ApiProfile[];
@@ -36,7 +37,7 @@ test.describe(`GitOps verify · configuration profiles · ${gitopsLabel}`, () =>
   });
 
   test('every gitops profile exists by name', async ({ request }) => {
-    const res = await request.get(`/api/latest/fleet/configuration_profiles?per_page=200&team_id=${teamId}`);
+    const res = await request.get(apiLatestUrl(`configuration_profiles?per_page=200&team_id=${teamId}`));
     await expect(res).toBeOK();
     const body = await res.json();
     const apiProfiles = body.profiles as ApiProfile[];
@@ -47,7 +48,7 @@ test.describe(`GitOps verify · configuration profiles · ${gitopsLabel}`, () =>
   });
 
   test('no extra profiles on live (no superset drift)', async ({ request }) => {
-    const res = await request.get(`/api/latest/fleet/configuration_profiles?per_page=200&team_id=${teamId}`);
+    const res = await request.get(apiLatestUrl(`configuration_profiles?per_page=200&team_id=${teamId}`));
     await expect(res).toBeOK();
     const body = await res.json();
     const expected = new Set(gitopsConfig.profiles.map((p) => p.name));

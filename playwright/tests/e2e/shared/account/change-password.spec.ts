@@ -1,5 +1,5 @@
 /**
- * Free • Change password from My Account. Creates a disposable
+ * Change password from My Account. Creates a disposable
  * `qa-test-...` user via API, logs in as them in a fresh context,
  * rotates their password via the side-panel modal, and confirms the new
  * password works on a subsequent login. The test admin and other
@@ -19,7 +19,7 @@ import { MyAccountPage } from '@pages';
 
 const NEW_PASSWORD = 'NewPassw0rd!Test123';
 
-test.describe('Free • My Account change password', () => {
+test.describe('My Account change password', () => {
   const email = qaTestEmail('changepw');
   let userId: number;
   let initialPassword: string;

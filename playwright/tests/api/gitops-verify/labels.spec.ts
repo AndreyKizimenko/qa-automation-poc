@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiLatestUrl } from '@helpers/api';
 import { gitopsConfig, gitopsLabel } from './_config';
 
 interface ApiLabel {
@@ -12,7 +13,7 @@ test.describe(`GitOps verify · labels · ${gitopsLabel}`, () => {
   test.skip(gitopsConfig.scope !== 'no-team', 'labels are not team-scoped');
 
   test('user label count matches gitops', async ({ request }) => {
-    const res = await request.get('/api/latest/fleet/labels');
+    const res = await request.get(apiLatestUrl('labels'));
     await expect(res).toBeOK();
     const body = await res.json();
     const userLabels = (body.labels as ApiLabel[]).filter((l) => l.label_type !== 'builtin');
@@ -20,7 +21,7 @@ test.describe(`GitOps verify · labels · ${gitopsLabel}`, () => {
   });
 
   test('every gitops label exists by name', async ({ request }) => {
-    const res = await request.get('/api/latest/fleet/labels');
+    const res = await request.get(apiLatestUrl('labels'));
     await expect(res).toBeOK();
     const body = await res.json();
     const apiNames = new Set((body.labels as ApiLabel[]).map((l) => l.name));
@@ -30,7 +31,7 @@ test.describe(`GitOps verify · labels · ${gitopsLabel}`, () => {
   });
 
   test('no extra user labels on live (no superset drift)', async ({ request }) => {
-    const res = await request.get('/api/latest/fleet/labels');
+    const res = await request.get(apiLatestUrl('labels'));
     await expect(res).toBeOK();
     const body = await res.json();
     const expected = new Set(gitopsConfig.labels.map((l) => l.name));

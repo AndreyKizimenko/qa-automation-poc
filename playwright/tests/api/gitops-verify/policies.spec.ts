@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { apiLatestUrl } from '@helpers/api';
 import { gitopsConfig, gitopsLabel, resolveTeamId } from './_config';
 
 interface ApiPolicy {
@@ -21,8 +22,8 @@ test.beforeAll(async ({ request }) => {
  */
 function policiesEndpoint(id: number): string {
   return id === 0
-    ? '/api/latest/fleet/policies?per_page=200'
-    : `/api/latest/fleet/fleets/${id}/policies?per_page=200`;
+    ? apiLatestUrl('policies?per_page=200')
+    : apiLatestUrl(`fleets/${id}/policies?per_page=200`);
 }
 
 test.describe(`GitOps verify · policies · ${gitopsLabel}`, () => {

@@ -20,7 +20,7 @@ export class SoftwareVersionsPage {
 
   readonly search: Locator;
   readonly showVersionsSwitch: Locator;
-  readonly softwareTab: Locator;
+  readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
 
@@ -33,7 +33,8 @@ export class SoftwareVersionsPage {
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
-    this.softwareTab = page.getByRole('tab', { name: 'Software' });
+    // First software subnav tab; renders <TabText>Inventory</TabText> via react-tabs.
+    this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }

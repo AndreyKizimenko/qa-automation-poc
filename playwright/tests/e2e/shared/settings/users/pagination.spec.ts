@@ -35,17 +35,15 @@ test.describe('Users pagination', () => {
 
   test('Next pagination control becomes enabled and advances the table', async ({
     usersPage,
-    page,
   }) => {
     await usersPage.goto();
 
-    const nextButton = page.getByRole('button', { name: /next page/i }).or(
-      page.getByRole('button', { name: 'Next' }),
-    );
-    await expect(nextButton).toBeEnabled();
+    await expect(usersPage.pagination.next).toBeEnabled();
 
+    // User rows expose no primary link, so the page change is detected via the
+    // whole first-row text rather than Pagination.nextIfEnabled's link signal.
     const firstPageFirstRowText = (await usersPage.table.firstRow.innerText()).trim();
-    await nextButton.click();
+    await usersPage.pagination.next.click();
     await expect.poll(async () => (await usersPage.table.firstRow.innerText()).trim())
       .not.toBe(firstPageFirstRowText);
   });

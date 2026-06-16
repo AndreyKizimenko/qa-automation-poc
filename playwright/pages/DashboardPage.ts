@@ -89,22 +89,15 @@ export class DashboardPage {
   }
 
   /**
-   * Assert the activity feed contains a row matching every matcher in
-   * `matchers`. Paginates forward bounded by `maxPages` (8 rows per page)
-   * and checks every remaining matcher per page so one walk drains the
-   * batch. {@link expectActivity} is the single-matcher shorthand.
-   *
-   * Matcher uniqueness is the caller's contract — specs stamp resource
-   * names with `Date.now()`, so any row whose accessible name matches is
-   * by construction from the current run.
+   * Walk the feed forward once (8 rows per page, bounded by `maxPages`),
+   * removing every matcher that is present on the way, and return the matchers
+   * still missing. Reads the currently-rendered feed — call after it has loaded.
    */
-  async expectActivities(
+  private async findMissingActivities(
     matchers: Array<string | RegExp>,
-    opts: { maxPages?: number } = {},
-  ): Promise<void> {
-    const maxPages = opts.maxPages ?? 15;
+    maxPages: number,
+  ): Promise<Array<string | RegExp>> {
     const remaining = matchers.slice();
-
     for (let page = 0; page < maxPages && remaining.length > 0; page++) {
       // Walk backwards so splice doesn't disturb iteration indices.
       for (let i = remaining.length - 1; i >= 0; i--) {
@@ -112,9 +105,44 @@ export class DashboardPage {
           remaining.splice(i, 1);
         }
       }
-      if (remaining.length === 0) return;
+      if (remaining.length === 0) break;
       if (!(await this.activityNext.isEnabled())) break;
       await this.paginateActivityNext();
+    }
+    return remaining;
+  }
+
+  /**
+   * Assert the activity feed contains a row matching every matcher in
+   * `matchers`. {@link expectActivity} is the single-matcher shorthand.
+   *
+   * Activity records are written asynchronously after the action that triggers
+   * them, and the feed is fetched only on load — so a matcher missing from the
+   * first walk reloads the dashboard and re-walks (bounded by `reloadAttempts`),
+   * letting a not-yet-propagated activity be re-fetched rather than asserted
+   * against a stale render. Found matchers carry over between attempts, so each
+   * reload only re-hunts what's still missing.
+   *
+   * Matcher uniqueness is the caller's contract — specs stamp resource names
+   * with `Date.now()`, so any row whose accessible name matches is by
+   * construction from the current run.
+   */
+  async expectActivities(
+    matchers: Array<string | RegExp>,
+    opts: { maxPages?: number; reloadAttempts?: number } = {},
+  ): Promise<void> {
+    const maxPages = opts.maxPages ?? 15;
+    const reloadAttempts = opts.reloadAttempts ?? 6;
+    let remaining = matchers.slice();
+
+    for (let attempt = 0; attempt < reloadAttempts && remaining.length > 0; attempt++) {
+      if (attempt > 0) {
+        // Re-fetch the feed so an activity that hadn't propagated at load appears;
+        // reload preserves the URL, keeping the current team scope.
+        await this.page.reload();
+        await expect(this.firstActivityItem).toBeVisible({ timeout: 15_000 });
+      }
+      remaining = await this.findMissingActivities(remaining, maxPages);
     }
 
     if (remaining.length > 0) {

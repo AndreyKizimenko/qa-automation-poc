@@ -6,7 +6,7 @@ import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
 
 /**
- * /software/titles — the list of installed software with vulnerability counts.
+ * /software/inventory — the list of installed software with vulnerability counts.
  */
 export class SoftwareTitlesPage {
   readonly page: Page;
@@ -22,8 +22,8 @@ export class SoftwareTitlesPage {
   readonly manageAutomationsButton: Locator;
   readonly addSoftwareButton: Locator;
 
-  // Tabs (Software / OS / Vulnerabilities)
-  readonly softwareTab: Locator;
+  // Tabs (Inventory / OS / Vulnerabilities)
+  readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
 
@@ -40,7 +40,8 @@ export class SoftwareTitlesPage {
     this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations' });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
 
-    this.softwareTab = page.getByRole('tab', { name: 'Software' });
+    // First software subnav tab; renders <TabText>Inventory</TabText> via react-tabs.
+    this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }
@@ -60,7 +61,10 @@ export class SoftwareTitlesPage {
       params.set('order_direction', opts.sort.direction);
     }
     const qs = params.toString();
-    await this.page.goto(`/software/titles${qs ? '?' + qs : ''}`);
+    // /software/inventory is canonical; /software/titles only resolves via a legacy redirect.
+    await this.page.goto(`/software/inventory${qs ? '?' + qs : ''}`);
+    // Assert the resolved tab so a removed redirect fails loudly rather than on a blank page.
+    await expect(this.inventoryTab).toHaveAttribute('aria-selected', 'true');
     await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 
