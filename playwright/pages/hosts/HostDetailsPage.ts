@@ -47,6 +47,9 @@ export class HostDetailsPage {
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
+    // Matches the idle-state label only; during a refetch the button reads
+    // "Fetching fresh vitals…" and is disabled, so readiness must be re-checked
+    // by other means rather than re-asserting this name.
     this.refetchButton = page.getByRole('button', { name: 'Refetch' });
     this.actionsButton = page.getByRole('button', { name: 'Actions' });
 

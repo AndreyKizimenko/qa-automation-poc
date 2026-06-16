@@ -338,7 +338,7 @@ export class ReportEditPage {
 
     await expect(this.nameInput).toHaveValue(values.name);
     await expect(this.descriptionInput).toHaveValue(values.description);
-    expect(await this.intervalLabel()).toBe(values.interval);
+    await expect(this.intervalValueLabel).toHaveText(values.interval);
     await expect(this.observersCanRunCheckbox).toBeChecked({ checked: values.observersCanRun });
     expect(await this.checkedPlatforms()).toEqual(values.platforms);
     expect(await this.sqlText()).toContain(values.sql.trim());
@@ -348,7 +348,7 @@ export class ReportEditPage {
   async expectValues(values: ReportFormValues): Promise<void> {
     await expect(this.nameInput).toHaveValue(values.name);
     await expect(this.descriptionInput).toHaveValue(values.description);
-    expect(await this.intervalLabel()).toBe(values.interval);
+    await expect(this.intervalValueLabel).toHaveText(values.interval);
     await expect(this.observersCanRunCheckbox).toBeChecked({ checked: values.observersCanRun });
     expect(await this.checkedPlatforms()).toEqual(values.platforms);
     expect(await this.sqlText()).toContain(values.sql.trim());

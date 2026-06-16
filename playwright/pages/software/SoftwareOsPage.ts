@@ -14,7 +14,7 @@ export class SoftwareOsPage {
   readonly table: DataTable;
   readonly pagination: Pagination;
 
-  readonly softwareTab: Locator;
+  readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
 
@@ -24,7 +24,8 @@ export class SoftwareOsPage {
     this.table = new DataTable(page);
     this.pagination = new Pagination(page);
 
-    this.softwareTab = page.getByRole('tab', { name: 'Software' });
+    // First software subnav tab; renders <TabText>Inventory</TabText> via react-tabs.
+    this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
   }

@@ -93,13 +93,10 @@ export class ReportsListPage {
   }
 
   async firstReportName(): Promise<string> {
-    const firstRow = this.table.firstRowWithLink;
-    // Skip the checkbox column.
-    const nameCell = firstRow.locator('td').nth(1);
-    // Read from the truncated-text span when present — it holds the
-    // full text without any tooltip-suffix the cell may render.
-    const truncated = nameCell.locator('.data-table__tooltip-truncated-text');
-    if (await truncated.count() > 0) return (await truncated.innerText()).trim();
-    return (await nameCell.innerText()).trim();
+    // The report name is the first row's primary entity link. Resolving it via the
+    // primary link stays correct whether or not the selection-checkbox column renders
+    // (it is gated on edit permission + team-scoped query presence), and reads the
+    // link's text without any tooltip-suffix the cell may inject.
+    return this.table.firstRowPrimaryLinkText();
   }
 }

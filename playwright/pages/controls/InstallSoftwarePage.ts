@@ -32,12 +32,6 @@ export class InstallSoftwarePage {
   readonly saveButton: Locator;
   readonly nextButton: Locator;
   readonly previousButton: Locator;
-  /**
-   * The Name cell of the first data row — column index 1 (after the
-   * selection-checkbox column at index 0). Reading its text identifies
-   * the row at the top of the current page.
-   */
-  readonly firstRowNameCell: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -50,12 +44,12 @@ export class InstallSoftwarePage {
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
     this.nextButton = page.getByRole('button', { name: 'Next', exact: true });
     this.previousButton = page.getByRole('button', { name: 'Previous', exact: true });
-    this.firstRowNameCell = this.table.firstRow.locator('td').nth(1);
   }
 
-  /** Trimmed text of the first row's Name cell. */
+  /** Trimmed text of the first row's Name cell, resolved by its column header. */
   async firstRowName(): Promise<string> {
-    return (await this.firstRowNameCell.innerText()).trim();
+    const cell = await this.table.cellByColumn(this.table.firstRow, 'Name');
+    return (await cell.innerText()).trim();
   }
 
   async goto(platform: InstallSoftwarePlatform, opts: { fleetId?: number } = {}): Promise<void> {

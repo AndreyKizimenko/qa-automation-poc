@@ -13,10 +13,19 @@ import { request as apiRequest } from '@playwright/test';
 
 export const API_VERSION = 'v1';
 export const API_PREFIX = `/api/${API_VERSION}/fleet`;
+export const API_LATEST_PREFIX = '/api/latest/fleet';
 
 /** apiUrl('fleets') → '/api/v1/fleet/fleets' */
 export const apiUrl = (path: string): string =>
   `${API_PREFIX}/${path.replace(/^\//, '')}`;
+
+/**
+ * apiLatestUrl('labels') → '/api/latest/fleet/labels'. The gitops-verify specs
+ * read the `/latest` channel (apiUrl is pinned to v1), so they build URLs here
+ * rather than inlining the path.
+ */
+export const apiLatestUrl = (path: string): string =>
+  `${API_LATEST_PREFIX}/${path.replace(/^\//, '')}`;
 
 // ── Cross-cutting reference types ────────────────────────────────────────────
 

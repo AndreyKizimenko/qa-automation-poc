@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { DataSet } from '../components/DataSet';
 import { Navbar } from '../components/Navbar';
 
 /**
@@ -40,13 +41,16 @@ export class PolicyDetailsPage {
     // h1+p with "This screen size is not supported yet. Please enlarge…"
     // that would otherwise match generic h1/p selectors).
     const container = page.locator('.main-content.policy-details-page');
-    this.nameHeading = container.locator('.policy-details-page__policy-name');
+    const dataSet = new DataSet(container);
+    // The policy name is the container's only <h1>; the overlay's h1 sits outside it.
+    this.nameHeading = container.getByRole('heading', { level: 1 });
+    // PageDescription renders the description in a role-less <div><p>…</p>; scoped
+    // to the details container, the BEM class is the stable handle.
     this.descriptionParagraph = container.locator('.policy-details-page__policy-description');
-    // Resolution / Platforms render as <dd> nodes adjacent to <dt>
-    // terms with the visible label ("Resolve" — yes, "Resolve", not
-    // "Resolution" — and "Platforms").
-    this.resolutionDefinition = container.locator('dt:has-text("Resolve") + dd');
-    this.platformsDefinition = container.locator('dt:has-text("Platforms") + dd');
+    // Resolution / Platforms render through Fleet's DataSet ("Resolve" — yes,
+    // "Resolve", not "Resolution" — and "Platforms").
+    this.resolutionDefinition = dataSet.value('Resolve');
+    this.platformsDefinition = dataSet.value('Platforms');
 
     this.showQueryButton = page.getByRole('button', { name: 'Show query' });
     this.editButton = page.getByRole('button', { name: 'Edit policy' });

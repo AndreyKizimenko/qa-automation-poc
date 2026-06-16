@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { DataSet } from '../components/DataSet';
 import { Toast } from '../components/Toast';
 
 /**
@@ -54,17 +55,16 @@ export class MyAccountPage {
     this.positionInput = page.getByLabel(/^Position/);
     this.updateButton = page.getByRole('button', { name: 'Update' });
 
-    // DataSet rows live inside the AccountSidePanel; filter by visible title
-    // text and reach into the `<dd>` value cell.
-    const dataSet = (title: string): Locator =>
-      page.locator('.data-set').filter({ hasText: title }).locator('dd');
-    this.fleetsValue = dataSet('Fleets');
-    this.roleValue = dataSet('Role');
+    // DataSet rows live inside the AccountSidePanel; the DataSet component
+    // filters by visible title text and reaches into the `<dd>` value cell.
+    const dataSet = new DataSet(page);
+    this.fleetsValue = dataSet.value('Fleets');
+    this.roleValue = dataSet.value('Role');
 
     // Side-panel trigger sits inside the "Password" DataSet — scoping this
     // way avoids a strict-mode collision with the same-labelled submit
     // button rendered inside the change-password modal.
-    this.changePasswordButton = dataSet('Password').getByRole('button', { name: 'Change password' });
+    this.changePasswordButton = dataSet.value('Password').getByRole('button', { name: 'Change password' });
     this.getApiTokenButton = page.getByRole('button', { name: 'Get API token' });
 
     // Fleet's Modal component doesn't set role="dialog", so the modal is

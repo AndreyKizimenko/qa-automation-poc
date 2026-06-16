@@ -10,9 +10,10 @@ import { Locator } from '@playwright/test';
  * leaving the icon hidden and the click timing out.
  *
  * Re-hovers between retries so a transient loss of hover state recovers.
- * Falls back to `dispatchEvent('click')` on the last attempt — the icon
- * is in the DOM (we just resolved it), so dispatching the click event
- * directly is safe and bypasses the visibility check.
+ * On the last attempt it re-hovers and force-clicks: that skips the
+ * stability / hit-target re-checks the hover loss trips, while still
+ * clicking the real element at its position — so a control that never
+ * actually renders surfaces as a failure rather than passing silently.
  */
 export async function clickHoverAction(parent: Locator, icon: Locator): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -22,7 +23,9 @@ export async function clickHoverAction(parent: Locator, icon: Locator): Promise<
       return;
     } catch {
       if (attempt === 2) {
-        await icon.dispatchEvent('click');
+        await parent.hover();
+        // eslint-disable-next-line playwright/no-force-option -- last-resort recovery for the hover-loss flake; the element is re-hovered immediately above so a real control is clicked.
+        await icon.click({ force: true, timeout: 3000 });
         return;
       }
     }

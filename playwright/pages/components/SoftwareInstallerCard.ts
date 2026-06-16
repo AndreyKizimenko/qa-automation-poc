@@ -5,8 +5,10 @@ import { clickHoverAction } from './clickHoverAction';
  * `.software-installer-card` on `/software/titles/:id` — uploaded package
  * metadata plus hover-revealed Download + Delete actions.
  *
- * Action buttons are icon-only; first/last in DOM order map to
- * Download/Delete.
+ * Action buttons are icon-only. Each Download/Delete handle is identified by
+ * the icon its `Icon` component stamps (`data-testid="download-icon"` /
+ * `"trash-icon"`), which holds whether the card shows both buttons
+ * (package / Fleet-maintained) or Delete only (VPP / Android app-store).
  */
 export class SoftwareInstallerCard {
   readonly page: Page;
@@ -21,8 +23,12 @@ export class SoftwareInstallerCard {
     this.page = page;
     this.card = page.locator('.software-installer-card');
     this.actionButtons = this.card.locator('button.software-installer-card__action-btn');
-    this.downloadButton = this.actionButtons.first();
-    this.deleteButton = this.actionButtons.last();
+    this.downloadButton = this.card.locator('button.software-installer-card__action-btn', {
+      has: page.getByTestId('download-icon'),
+    });
+    this.deleteButton = this.card.locator('button.software-installer-card__action-btn', {
+      has: page.getByTestId('trash-icon'),
+    });
 
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete software' });
     // Exact match: the modal also contains a Cancel button.

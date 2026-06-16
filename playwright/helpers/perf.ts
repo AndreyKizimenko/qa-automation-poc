@@ -71,10 +71,12 @@ export async function measureSearch(
   { urlPattern = 'query=' } = {},
 ): Promise<void> {
   const requestFired = page.waitForRequest((req) => req.url().includes(urlPattern));
-  // Only match the 200 response — Fleet can emit 304s on debounce-collapsed
-  // duplicate queries, which don't carry the search payload we need to measure.
+  // Settle on the search response, accepting a 304 as well as a 200: a debounce-collapsed
+  // duplicate query returns 304 with no payload, and gating only on 200 would hang to the
+  // global timeout if that is the only response. The waitFor() call below is the real
+  // "results rendered" gate, so it — not the status — bounds the measurement.
   const responseDone = page.waitForResponse(
-    (res) => res.url().includes(urlPattern) && res.status() === 200,
+    (res) => res.url().includes(urlPattern) && (res.status() === 200 || res.status() === 304),
   );
 
   await input.fill(query);

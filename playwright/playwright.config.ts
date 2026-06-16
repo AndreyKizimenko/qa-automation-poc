@@ -176,8 +176,8 @@ export default defineConfig({
     },
 
     // ── GitOps Verify (post-gitops state checks) ──────────────────────────────
-    // Pure API tests, no browser. Reads the gitops dir at GITOPS_DIR (default
-    // ../gitops/free-fleetqa) and asserts the live Fleet instance matches.
+    // Pure API tests, no browser. Reads the gitops target at GITOPS_TARGET
+    // (default ../gitops/free-fleetqa) and asserts the live Fleet instance matches.
     {
       name: 'gitops-verify',
       testDir: './tests/api/gitops-verify',

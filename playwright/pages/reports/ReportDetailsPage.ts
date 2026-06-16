@@ -38,7 +38,8 @@ export class ReportDetailsPage {
     // Fleet labels the wrapper `.query-details-page` (the entity is
     // called "query" in source; the UI exposes it as "report").
     const container = page.locator('.main-content.query-details-page');
-    this.nameHeading = container.locator('.query-details-page__query-name');
+    // The report name is the container's only <h1>; the overlay's h1 sits outside it.
+    this.nameHeading = container.getByRole('heading', { level: 1 });
     this.descriptionParagraph = container.locator('.query-details-page__query-description');
 
     this.showQueryButton = page.getByRole('button', { name: 'Show query' });

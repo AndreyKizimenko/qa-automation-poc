@@ -163,13 +163,15 @@ export class ScriptsLibraryPage {
   async downloadScript(name: string): Promise<Download> {
     const row = this.itemByName(name);
     const downloadPromise = this.page.waitForEvent('download');
-    await clickHoverAction(row, row.getByTestId('download-icon'));
+    // ScriptListItem renders the hover action as a Button with aria-label
+    // "Download <name>"; scoping to the row keeps similar filenames distinct.
+    await clickHoverAction(row, row.getByRole('button', { name: `Download ${name}` }));
     return downloadPromise;
   }
 
   async deleteScript(name: string): Promise<void> {
     const row = this.itemByName(name);
-    await clickHoverAction(row, row.getByTestId('trash-icon'));
+    await clickHoverAction(row, row.getByRole('button', { name: `Delete ${name}` }));
     await expect(this.deleteModal).toBeVisible();
     await this.deleteConfirmButton.click();
     await expect(row).toBeHidden();
