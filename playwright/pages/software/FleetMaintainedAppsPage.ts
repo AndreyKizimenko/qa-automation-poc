@@ -15,9 +15,6 @@ export class FleetMaintainedAppsPage {
   readonly heading: Locator;
   readonly tab: Locator;
   readonly table: Locator;
-  readonly nameColumn: Locator;
-  readonly macosColumn: Locator;
-  readonly windowsColumn: Locator;
   readonly searchInput: Locator;
 
   constructor(page: Page) {
@@ -27,9 +24,6 @@ export class FleetMaintainedAppsPage {
     this.heading = page.getByRole('heading', { name: 'Add software', level: 1 });
     this.tab = page.getByRole('tab', { name: 'Fleet-maintained' });
     this.table = page.getByRole('table');
-    this.nameColumn = page.getByRole('columnheader', { name: 'Name' });
-    this.macosColumn = page.getByRole('columnheader', { name: 'macOS' });
-    this.windowsColumn = page.getByRole('columnheader', { name: 'Windows' });
     this.searchInput = page.getByPlaceholder(/search/i);
   }
 
@@ -57,25 +51,33 @@ export class FleetMaintainedAppsPage {
     await this.expectLoaded();
   }
 
+  /**
+   * Page-shell readiness only. The Add software heading and the selected
+   * Fleet-maintained tab render immediately, before the catalog fetch — the
+   * catalog panel itself shows a spinner until its 800+ row result paints in
+   * one commit, so gating on the table here would block the whole flow on that
+   * render. The flow always narrows via searchFor() next, which waits for the
+   * search box and operates on the collapsed result instead.
+   */
   async expectLoaded(): Promise<void> {
     await expect(this.heading).toBeVisible();
-    // The Fleet-maintained catalog renders 800+ rows un-virtualized, which can
-    // take well past the default 5s expect timeout to paint under instance
-    // load; the platform columns only resolve once that render completes.
-    await expect(this.macosColumn).toBeVisible({ timeout: 30_000 });
-    await expect(this.windowsColumn).toBeVisible({ timeout: 30_000 });
+    await expect(this.tab).toHaveAttribute('aria-selected', 'true');
   }
 
   /**
    * Filters the catalog down to `name` via the search box before any row
    * lookup. The catalog renders every app in one un-virtualized table
-   * (hundreds of rows), so an unfiltered `getByRole('row')` scan resolves
-   * roles across the whole DOM on every retry and tips past the expect
-   * timeout. Search drives a server-side `?query=` filter, collapsing the
-   * table to the matching row(s). Idempotent — re-filling the same query
-   * is a no-op once the row is shown.
+   * (hundreds of rows) behind a spinner, so an unfiltered `getByRole('row')`
+   * scan resolves roles across the whole DOM on every retry and tips past the
+   * expect timeout. Typing drives a server-side `?query=` filter, collapsing
+   * the table to the matching row(s).
+   *
+   * Waits for the search box first with headroom for that large initial render
+   * under instance load — it only appears once the spinner resolves. Idempotent
+   * — re-filling the same query is a no-op once the row is shown.
    */
   async searchFor(name: string): Promise<void> {
+    await expect(this.searchInput).toBeVisible({ timeout: 30_000 });
     await this.searchInput.fill(name);
     await expect(this.rowByName(name)).toBeVisible();
   }
