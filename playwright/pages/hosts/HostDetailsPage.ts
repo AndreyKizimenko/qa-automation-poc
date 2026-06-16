@@ -78,6 +78,29 @@ export class HostDetailsPage {
     await expect(this.table.firstRow).toBeVisible();
   }
 
+  /**
+   * macOS hosts default the Software list to the "Applications" view (top-level
+   * apps only) and expose a filter dropdown to switch it; other platforms show
+   * the full list and render no dropdown. Selects "Full inventory" so the table
+   * lists every reported package. No-op on Windows/Linux hosts, where the
+   * dropdown isn't present.
+   *
+   * The react-select trigger has no accessible role, so it's scoped by the host
+   * software table's filter container class to avoid colliding with the team
+   * dropdown or the vulnerable filter modal; options carry `dropdown-option`.
+   */
+  async showFullInventory(): Promise<void> {
+    const trigger = this.page.locator(
+      '.host-software-table__software-filter .react-select__control',
+    );
+    if ((await trigger.count()) === 0) return;
+    await trigger.click();
+    await this.page.getByTestId('dropdown-option').filter({ hasText: 'Full inventory' }).click();
+    // The selection drives the list via the `macos_applications` query param;
+    // waiting on it confirms the table has switched before downstream steps.
+    await expect(this.page).toHaveURL(/macos_applications=false/);
+  }
+
   async applyVulnerableFilter(): Promise<void> {
     await this.filter.applyVulnerable();
   }
