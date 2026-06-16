@@ -53,15 +53,19 @@ export class FleetMaintainedAppsPage {
 
   /**
    * Page-shell readiness only. The Add software heading and the selected
-   * Fleet-maintained tab render immediately, before the catalog fetch — the
-   * catalog panel itself shows a spinner until its 800+ row result paints in
-   * one commit, so gating on the table here would block the whole flow on that
-   * render. The flow always narrows via searchFor() next, which waits for the
-   * search box and operates on the collapsed result instead.
+   * Fleet-maintained tab render before the catalog fetch — the catalog panel
+   * itself shows a spinner until its 800+ row result paints in one commit, so
+   * gating on the table here would block the whole flow on that render. The
+   * flow always narrows via searchFor() next, which waits for the search box
+   * and operates on the collapsed result instead.
+   *
+   * The shell waits get headroom past the default 5s expect timeout: under
+   * full-suite instance load the Add software route can take longer than that
+   * to render even its shell.
    */
   async expectLoaded(): Promise<void> {
-    await expect(this.heading).toBeVisible();
-    await expect(this.tab).toHaveAttribute('aria-selected', 'true');
+    await expect(this.heading).toBeVisible({ timeout: 30_000 });
+    await expect(this.tab).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
   }
 
   /**
