@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { Toast } from '../components/Toast';
 
 /**
  * /packs/new and /packs/:id/edit — create / edit pack form.
@@ -13,6 +14,7 @@ import { Navbar } from '../components/Navbar';
 export class PackEditPage {
   readonly page: Page;
   readonly navbar: Navbar;
+  readonly toast: Toast;
 
   readonly nameInput: Locator;
   readonly descriptionInput: Locator;
@@ -29,6 +31,7 @@ export class PackEditPage {
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
+    this.toast = new Toast(page);
 
     this.nameInput = page.getByRole('textbox', { name: 'Name' });
     this.descriptionInput = page.getByRole('textbox', { name: 'Description' });
@@ -40,7 +43,9 @@ export class PackEditPage {
     this.targetSearchInput = page.locator('.Select-input input');
     this.targetDropdownMenu = page.locator('.Select-menu');
     this.firstHostOption = page.locator('.target-option__wrapper.is-host').first();
-    this.uniqueHostCount = page.getByText(/unique host/);
+    // The targets-count label renders "N unique host(s)" and reads "0 unique hosts" on
+    // mount, so require a non-zero count: the locator only resolves once a host is added.
+    this.uniqueHostCount = page.getByText(/[1-9]\d* unique hosts?/);
   }
 
   async gotoNew(): Promise<void> {
@@ -69,6 +74,7 @@ export class PackEditPage {
     // SVG has pointer-events:none, so clicking the button avoids needing force.
     await this.firstHostOption.locator('.target-option__add-btn').click();
 
+    // Confirms the add actually selected a host: the locator matches only a non-zero count.
     await expect(this.uniqueHostCount).toBeVisible();
   }
 
@@ -83,5 +89,9 @@ export class PackEditPage {
   async updateDescription(description: string): Promise<void> {
     await this.descriptionInput.fill(description);
     await this.saveButton.click();
+    // Wait for the server to confirm the save — Fleet flashes this on the edit page
+    // once the update request resolves, so a caller that navigates away next doesn't
+    // abort the in-flight request and lose the change.
+    await this.toast.expectSuccess('Successfully updated this pack.');
   }
 }
