@@ -59,8 +59,11 @@ export class FleetMaintainedAppsPage {
 
   async expectLoaded(): Promise<void> {
     await expect(this.heading).toBeVisible();
-    await expect(this.macosColumn).toBeVisible();
-    await expect(this.windowsColumn).toBeVisible();
+    // The Fleet-maintained catalog renders 800+ rows un-virtualized, which can
+    // take well past the default 5s expect timeout to paint under instance
+    // load; the platform columns only resolve once that render completes.
+    await expect(this.macosColumn).toBeVisible({ timeout: 30_000 });
+    await expect(this.windowsColumn).toBeVisible({ timeout: 30_000 });
   }
 
   /**

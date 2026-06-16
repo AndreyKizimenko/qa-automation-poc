@@ -1,7 +1,8 @@
 /**
- * MDM Setup Experience — Users tab. Verifies the EUA + managed-local-account
- * controls render and that each toggle round-trips a save. Runs once per
- * scope (Unassigned + Workstations).
+ * MDM Setup Experience — Users tab. Verifies the local-account + IdP
+ * controls render and that the two toggles ("Require IdP authentication"
+ * and "Create hidden admin") each round-trip a save. Runs once per scope
+ * (Unassigned + Workstations).
  */
 import { test, expect } from '@fixtures';
 import type { TeamScope } from '@pages';
@@ -10,7 +11,7 @@ const SCOPES: readonly TeamScope[] = ['Unassigned', 'Workstations'];
 
 for (const scope of SCOPES) {
   test.describe(`MDM • Setup Experience — Users (${scope})`, () => {
-    test('renders + EUA and managed local account toggles round-trip', async ({
+    test('renders + IdP and hidden-admin toggles round-trip', async ({
       dashboard,
       controls,
       setupExperience,
@@ -23,26 +24,32 @@ for (const scope of SCOPES) {
       await setupExperience.goToUsers();
 
       await expect(setupExperienceUsers.heading).toBeVisible();
-      await expect(setupExperienceUsers.eaCheckbox).toBeVisible();
-      await expect(setupExperienceUsers.managedLocalCheckbox).toBeVisible();
+      // Local-account type radios are styled custom controls over hidden native
+      // <input type=radio>, so assert they're present (not visible). The IdP +
+      // managed toggles render as visible ARIA checkboxes.
+      await expect(setupExperienceUsers.localAccountAdminRadio).toBeAttached();
+      await expect(setupExperienceUsers.localAccountStandardRadio).toBeAttached();
+      await expect(setupExperienceUsers.localAccountSkipRadio).toBeAttached();
+      await expect(setupExperienceUsers.createHiddenAdminCheckbox).toBeVisible();
+      await expect(setupExperienceUsers.requireIdpCheckbox).toBeVisible();
       await expect(setupExperienceUsers.idpLink).toBeVisible();
 
-      const eaStarted = await setupExperienceUsers.eaCheckbox.isChecked();
-      const managedStarted = await setupExperienceUsers.managedLocalCheckbox.isChecked();
+      const idpStarted = await setupExperienceUsers.requireIdpCheckbox.isChecked();
+      const hiddenAdminStarted = await setupExperienceUsers.createHiddenAdminCheckbox.isChecked();
 
-      await setupExperienceUsers.eaCheckbox.click();
+      await setupExperienceUsers.requireIdpCheckbox.click();
       await setupExperienceUsers.save();
-      await expect(setupExperienceUsers.eaCheckbox).toBeChecked({ checked: !eaStarted });
+      await expect(setupExperienceUsers.requireIdpCheckbox).toBeChecked({ checked: !idpStarted });
 
-      await setupExperienceUsers.managedLocalCheckbox.click();
+      await setupExperienceUsers.createHiddenAdminCheckbox.click();
       await setupExperienceUsers.save();
-      await expect(setupExperienceUsers.managedLocalCheckbox).toBeChecked({ checked: !managedStarted });
+      await expect(setupExperienceUsers.createHiddenAdminCheckbox).toBeChecked({ checked: !hiddenAdminStarted });
 
-      await setupExperienceUsers.eaCheckbox.click();
-      await setupExperienceUsers.managedLocalCheckbox.click();
+      await setupExperienceUsers.requireIdpCheckbox.click();
+      await setupExperienceUsers.createHiddenAdminCheckbox.click();
       await setupExperienceUsers.save();
-      await expect(setupExperienceUsers.eaCheckbox).toBeChecked({ checked: eaStarted });
-      await expect(setupExperienceUsers.managedLocalCheckbox).toBeChecked({ checked: managedStarted });
+      await expect(setupExperienceUsers.requireIdpCheckbox).toBeChecked({ checked: idpStarted });
+      await expect(setupExperienceUsers.createHiddenAdminCheckbox).toBeChecked({ checked: hiddenAdminStarted });
     });
   });
 }

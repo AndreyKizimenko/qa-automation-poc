@@ -4,8 +4,10 @@ import { Toast } from '../components/Toast';
 
 /**
  * `/controls/setup-experience/users` — first step of the Setup Experience
- * wizard. Toggles "End user authentication" (requires EUA configured at
- * `/settings/integrations/sso/end-users`) and "Managed local account".
+ * wizard. Configures the macOS local account ("End user" type: Admin /
+ * Standard / Skip, plus a "Create hidden admin" managed option) and the
+ * "Require IdP authentication" toggle (requires EUA configured at
+ * `/settings/integrations/sso/end-users`).
  */
 export class SetupExperienceUsersPage {
   readonly page: Page;
@@ -13,8 +15,11 @@ export class SetupExperienceUsersPage {
   readonly toast: Toast;
 
   readonly heading: Locator;
-  readonly eaCheckbox: Locator;
-  readonly managedLocalCheckbox: Locator;
+  readonly requireIdpCheckbox: Locator;
+  readonly createHiddenAdminCheckbox: Locator;
+  readonly localAccountAdminRadio: Locator;
+  readonly localAccountStandardRadio: Locator;
+  readonly localAccountSkipRadio: Locator;
   readonly idpLink: Locator;
   readonly saveButton: Locator;
 
@@ -24,8 +29,13 @@ export class SetupExperienceUsersPage {
     this.toast = new Toast(page);
 
     this.heading = page.getByRole('heading', { name: 'Users', level: 2 });
-    this.eaCheckbox = page.getByRole('checkbox', { name: 'End user authentication' });
-    this.managedLocalCheckbox = page.getByRole('checkbox', { name: 'Managed local account' });
+    // Fleet renders custom checkboxes (the underlying <input> is display:none);
+    // the accessible control is the ARIA checkbox carrying the label text.
+    this.requireIdpCheckbox = page.getByRole('checkbox', { name: 'Require IdP authentication' });
+    this.createHiddenAdminCheckbox = page.getByRole('checkbox', { name: 'Create hidden admin' });
+    this.localAccountAdminRadio = page.getByRole('radio', { name: 'Admin' });
+    this.localAccountStandardRadio = page.getByRole('radio', { name: 'Standard' });
+    this.localAccountSkipRadio = page.getByRole('radio', { name: 'Skip (no account)' });
     this.idpLink = page.getByRole('link', { name: /identity provider/i });
     this.saveButton = page.getByRole('button', { name: 'Save' });
   }

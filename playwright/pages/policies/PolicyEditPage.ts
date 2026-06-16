@@ -190,11 +190,18 @@ export class PolicyEditPage {
    * entirely; the `1` cursor-position arg places the caret at the end.
    */
   async setSql(sql: string): Promise<void> {
-    await this.editorContent.click();
+    // Drive the editor through its attached Ace instance rather than a DOM
+    // click: the visible `.ace_content` is tall and can sit below the fold,
+    // where its center overlaps the platform-compatibility badge and the
+    // policy-automations rows and intercepts the click. `focus()` + `setValue`
+    // bypass the pointer entirely; the `1` cursor-position arg parks the caret
+    // at the end (pressSequentially would let SQL mode duplicate the `;`).
+    await expect(this.editorContent).toBeVisible();
     await this.editorContent.evaluate((el, newSql) => {
       const aceEl = el.closest('.ace_editor');
-      const env = (aceEl as unknown as { env?: { editor?: { setValue: (v: string, c?: number) => void } } } | null)?.env;
+      const env = (aceEl as unknown as { env?: { editor?: { setValue: (v: string, c?: number) => void; focus: () => void } } } | null)?.env;
       if (!env?.editor) throw new Error('Ace editor instance not found on .ace_editor element');
+      env.editor.focus();
       env.editor.setValue(newSql, 1);
     }, sql);
     await expect(this.editorContent).toHaveText(sql);
