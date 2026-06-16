@@ -56,8 +56,12 @@ export class ScriptsLibraryPage {
     this.heading = page.getByRole('heading', { name: 'Library', level: 2 });
     this.container = page.locator('.script-library');
     // Empty state renders a single "Upload" button (no list header yet);
-    // once any script exists, the list header switches to "+ Add script".
-    this.addScriptButton = page.getByRole('button', { name: /^(Add script|Upload)$/ });
+    // once any script exists, the list header switches to a "+ Add script"
+    // button whose plus icon prepends "plus" to its accessible name
+    // ("plus Add script"), so match on the trailing label rather than the
+    // whole string. (The No-team library is shared across the per-OS script
+    // describes, so the populated state is the common case here.)
+    this.addScriptButton = page.getByRole('button', { name: /(Add script|Upload)$/ });
 
     this.listItem = page.locator('.script-list-item');
 

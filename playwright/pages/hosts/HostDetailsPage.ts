@@ -75,7 +75,11 @@ export class HostDetailsPage {
 
   async openSoftwareTab(): Promise<void> {
     await this.softwareTab.click();
-    await expect(this.table.firstRow).toBeVisible();
+    // Wait for the table to settle to either rows or its empty state — a macOS
+    // host defaults to the "Applications" view, which is empty when the host
+    // reports only non-app packages (so `firstRow` alone would never resolve;
+    // callers switch to full inventory via showFullInventory() next).
+    await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 
   /**
