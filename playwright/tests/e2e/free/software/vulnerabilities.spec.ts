@@ -149,6 +149,9 @@ test.describe('Software vulnerabilities', () => {
 
       await hostDetails.goto(host.id);
       await hostDetails.openSoftwareTab();
+      // macOS hosts default to the "Applications" view, which hides non-app
+      // packages (most vulnerable items); switch to the full list.
+      await hostDetails.showFullInventory();
 
       await hostDetails.applyVulnerableFilter();
       await expect(hostDetails.table.rowOrEmpty()).toBeVisible();
