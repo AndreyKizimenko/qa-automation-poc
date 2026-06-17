@@ -105,6 +105,10 @@ export default defineConfig({
   // timeouts with a blank screenshot. Drop back to 30 s once
   // fleetdm/fleet#45682 ships and the bundle is edge-cached.
   timeout: 60000,
+  // Web-first assertions get a wider window than Playwright's 5s default: the
+  // shared QA instance renders slowly under concurrent load (the bundle refetch
+  // noted above), so transient render latency shouldn't surface as a flake.
+  expect: { timeout: 10_000 },
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }]]
     : 'html',
