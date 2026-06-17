@@ -29,7 +29,7 @@ test.describe('User row actions', () => {
     usersPage,
   }) => {
     await usersPage.goto();
-    const row = usersPage.rowByEmail(email);
+    const row = await usersPage.findRowByEmail(email);
     await usersPage.clickRowAction(row, 'Require password reset');
 
     await expect(usersPage.resetPasswordModal).toBeVisible();
@@ -42,7 +42,7 @@ test.describe('User row actions', () => {
 
   test('Reset sessions opens the confirmation modal and confirms', async ({ usersPage }) => {
     await usersPage.goto();
-    const row = usersPage.rowByEmail(email);
+    const row = await usersPage.findRowByEmail(email);
     await usersPage.clickRowAction(row, 'Reset sessions');
 
     await expect(usersPage.resetSessionsModal).toBeVisible();

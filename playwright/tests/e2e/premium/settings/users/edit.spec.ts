@@ -62,7 +62,9 @@ test.describe('Edit user', () => {
     // the user's email was changed too; for a name+role-only edit the
     // toast ends at the user's name.
     await usersPage.toast.expectSuccess(`Successfully edited ${updatedName}`);
-    const updatedRow = usersPage.rowByEmail(email);
+    // The save redirect lands on an unfiltered list; re-search so the row is on
+    // page 1 regardless of how crowded the table is under concurrency.
+    const updatedRow = await usersPage.findRowByEmail(email);
     await expect(updatedRow).toBeVisible();
     await expect(updatedRow).toContainText(updatedName);
     await expect(updatedRow).toContainText('Maintainer');

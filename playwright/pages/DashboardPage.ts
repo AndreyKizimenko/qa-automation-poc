@@ -132,7 +132,10 @@ export class DashboardPage {
     opts: { maxPages?: number; reloadAttempts?: number } = {},
   ): Promise<void> {
     const maxPages = opts.maxPages ?? 15;
-    const reloadAttempts = opts.reloadAttempts ?? 6;
+    // Activity propagation latency rises with concurrent load, so allow a wider
+    // reload window; the fast path (activity already present) still returns on
+    // the first walk without reloading.
+    const reloadAttempts = opts.reloadAttempts ?? 10;
     let remaining = matchers.slice();
 
     for (let attempt = 0; attempt < reloadAttempts && remaining.length > 0; attempt++) {
