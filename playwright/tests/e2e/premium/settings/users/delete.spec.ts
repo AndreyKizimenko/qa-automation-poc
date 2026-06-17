@@ -28,7 +28,9 @@ test.describe('Delete user', () => {
 
   test('admin deletes a user via the row Actions menu', async ({ usersPage }) => {
     await usersPage.goto();
-    const row = usersPage.rowByEmail(email);
+    // Search-then-act: the user table paginates at 10/page and concurrent specs
+    // crowd page 1, so filter to this user before reaching for its row.
+    const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
 
     await usersPage.clickRowAction(row, 'Delete');

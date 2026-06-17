@@ -53,13 +53,20 @@ test.describe('Users search', () => {
     await expect(usersPage.table.rowWith(alphaEmail)).toHaveCount(0);
   });
 
-  test('clearing the search shows both users again', async ({ usersPage }) => {
+  test('clearing the search restores the unfiltered list', async ({ usersPage }) => {
     await usersPage.goto();
     await usersPage.search.fill(alphaName);
+    // The unique name narrows the table to exactly its one row. Waiting on that
+    // exact count is the reliable "filter settled" signal — a plain "alpha visible"
+    // or a row-count read can be spoofed by a pre-debounce render, or by the other
+    // user simply paginating off page 1 rather than being filtered out.
+    await expect(usersPage.table.table.locator('tbody tr')).toHaveCount(1);
     await expect(usersPage.rowByName(alphaName)).toBeVisible();
 
     await usersPage.search.fill('');
-    await expect(usersPage.rowByEmail(alphaEmail)).toBeVisible();
-    await expect(usersPage.rowByEmail(betaEmail)).toBeVisible();
+    // Clearing lifts the filter; the table returns to its multi-row first page.
+    await expect
+      .poll(async () => usersPage.table.table.locator('tbody tr').count())
+      .toBeGreaterThan(1);
   });
 });
