@@ -92,11 +92,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  // 4 workers everywhere (CI and local). Validated stable at 4: free runs clean,
-  // and premium's only residual flakes are bundle/navigation latency under load,
-  // which the CI retries above absorb. (workers=6 is nearly viable too but leans
-  // harder on the shared instance.) `WORKERS` env or `--workers=N` overrides.
-  workers: process.env.WORKERS ? Number(process.env.WORKERS) : 4,
+  // CI runs at 2 — the shared Fleet QA instance has limited concurrency
+  // headroom, and higher worker counts there surface as flaky navigation
+  // timeouts under load even when the test logic is correct. Local dev defaults
+  // to 4 for faster feedback. `WORKERS` env or `--workers=N` overrides either.
+  workers: process.env.WORKERS ? Number(process.env.WORKERS) : process.env.CI ? 2 : 4,
   // Fleet serves /assets/bundle-*.js without Cache-Control, so Cloudflare
   // doesn't cache it (cf-cache-status: DYNAMIC) and every cold browser
   // context refetches the 4.7 MB bundle from origin. Under origin load
