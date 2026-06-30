@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       test_path:
-        description: 'Path to tests (e.g. tests/smoke or tests/smoke/software)'
+        description: 'Path to tests (e.g. tests/e2e or tests/e2e/software)'
         required: false
-        default: 'tests/smoke'
+        default: 'tests/e2e'
       suite:
         description: 'Suite name for artifact (e.g. all, software, scripts)'
         required: false
@@ -72,7 +72,7 @@ jobs:
         run: >
           PLAYWRIGHT_JSON_OUTPUT_NAME=results.json
           npm run test:premium --
-          ${{ github.event.inputs.test_path || 'tests/smoke' }}
+          ${{ github.event.inputs.test_path || 'tests/e2e' }}
           --reporter=json,line
 
       - name: Upload JSON results
