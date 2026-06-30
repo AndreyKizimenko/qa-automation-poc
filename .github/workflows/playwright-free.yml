@@ -6,6 +6,15 @@ on:
   schedule:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
+    inputs:
+      test_path:
+        description: 'Test path relative to playwright/ (e.g. tests/e2e or tests/e2e/software)'
+        required: false
+        default: 'tests/e2e'
+      suite:
+        description: 'Suite label used for the JSON artifact name'
+        required: false
+        default: 'all'
 
 defaults:
   run:
@@ -51,7 +60,20 @@ jobs:
           FLEET_STATIC_TOKEN_API_GLOBAL_OBSERVER=${{ secrets.FLEET_FREE_STATIC_TOKEN_API_GLOBAL_OBSERVER }}
           EOF
 
-      - run: npm run test:free
+      - name: Run Playwright tests
+        run: >
+          PLAYWRIGHT_JSON_OUTPUT_NAME=results.json
+          npm run test:free --
+          ${{ github.event.inputs.test_path || 'tests/e2e' }}
+          --reporter=json,line
+
+      - name: Upload JSON results
+        uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-json-${{ github.event.inputs.suite || 'all' }}
+          path: playwright/results.json
+          retention-days: 3
 
       - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
