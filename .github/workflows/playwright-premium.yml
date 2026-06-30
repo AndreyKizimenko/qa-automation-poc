@@ -6,6 +6,15 @@ on:
   schedule:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
+    inputs:
+      test_path:
+        description: 'Path to tests (e.g. tests/smoke or tests/smoke/software)'
+        required: false
+        default: 'tests/smoke'
+      suite:
+        description: 'Suite name for artifact (e.g. all, software, scripts)'
+        required: false
+        default: 'all'
 
 defaults:
   run:
@@ -59,7 +68,20 @@ jobs:
           FLEET_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_WS=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_WS }}
           EOF
 
-      - run: npm run test:premium
+      - name: Run Playwright tests
+        run: >
+          PLAYWRIGHT_JSON_OUTPUT_NAME=results.json
+          npm run test:premium --
+          ${{ github.event.inputs.test_path || 'tests/smoke' }}
+          --reporter=json,line
+
+      - name: Upload JSON results
+        uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-json-${{ github.event.inputs.suite || 'all' }}
+          path: playwright/results.json
+          retention-days: 3
 
       - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
