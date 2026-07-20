@@ -1,0 +1,23 @@
+# Coverage agent options — exercises config + command_line_flags + update_channels.
+config:
+  options:
+    pack_delimiter: /
+    distributed_interval: 10
+    distributed_plugin: tls
+    distributed_tls_max_attempts: 3
+    logger_tls_endpoint: /api/osquery/log
+    logger_tls_period: 10
+    disable_distributed: false
+  decorators:
+    load:
+      - SELECT uuid AS host_uuid FROM system_info;
+      - SELECT hostname AS hostname FROM system_info;
+command_line_flags:
+  enable_file_events: true
+  disable_audit: false
+  events_max: 50000
+  events_expiry: 86400
+update_channels:
+  orbit: stable
+  osqueryd: stable
+  desktop: stable

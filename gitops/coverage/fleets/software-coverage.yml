@@ -1,0 +1,56 @@
+# Coverage team: software item keys (script-only package + Fleet-maintained apps) and
+# the GitOps-only policy automations (install_software, run_script, type: patch).
+name: Coverage - Software
+
+agent_options:
+  path: ../lib/agent-options.yml
+
+controls:
+  # script declared here so the run_script policy automation below can reference it
+  scripts:
+    - path: ../lib/scripts/coverage-run-on-fail.sh
+
+software:
+  packages:
+    # script-only package: the .sh IS the installer (no url/hash needed)
+    - path: ../lib/scripts/coverage-package.sh
+      self_service: true
+      categories:
+        - Utilities
+      labels_include_any:
+        - Coverage manual hosts
+  fleet_maintained_apps:
+    - slug: 1password/darwin
+      self_service: true
+      setup_experience: true
+      categories:
+        - Security
+    - slug: google-chrome/darwin
+      self_service: true
+      categories:
+        - Browsers
+      labels_exclude_any:
+        - Coverage manual hosts
+
+policies:
+  - name: Coverage - install software on failure
+    query: "SELECT 1 FROM osquery_info WHERE start_time < 0;"
+    platform: darwin
+    description: Fails intentionally to exercise install_software automation.
+    resolution: Fleet installs the linked Fleet-maintained app.
+    install_software:
+      fleet_maintained_app_slug: 1password/darwin
+  - name: Coverage - run script on failure
+    query: "SELECT 1 FROM osquery_info WHERE start_time < 0;"
+    platform: darwin
+    description: Fails intentionally to exercise run_script automation.
+    resolution: Fleet runs the linked remediation script.
+    run_script:
+      path: ../lib/scripts/coverage-run-on-fail.sh
+  - name: Coverage - patch policy for a Fleet-maintained app
+    type: patch
+    fleet_maintained_app_slug: 1password/darwin
+    platform: darwin
+
+reports:
+  - path: ../../lib/platforms/all/reports/collect-operating-system-information.yml

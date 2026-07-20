@@ -1,0 +1,4 @@
+- name: Coverage manual hosts
+  description: Manual-membership label (coverage fixture for the labels[] manual path).
+  label_membership_type: manual
+  hosts: []

@@ -1,0 +1,38 @@
+# Coverage team: policy keys (critical, label scoping, calendar/conditional flags are
+# creds-gated and omitted) and report (query) keys (interval, automations, logging, discard).
+name: Coverage - Policies and Reports
+
+agent_options:
+  path: ../lib/agent-options.yml
+
+policies:
+  - name: Coverage - critical dynamic policy
+    query: "SELECT 1;"
+    platform: darwin
+    critical: true
+    description: Exercises a critical, label-scoped dynamic policy.
+    resolution: N/A — coverage fixture.
+    labels_include_any:
+      - Coverage manual hosts
+  - name: Coverage - policy scoped out by label
+    query: "SELECT 1;"
+    platform: linux
+    description: Exercises labels_exclude_any on a policy.
+    labels_exclude_any:
+      - Coverage manual hosts
+
+reports:
+  - name: Coverage report with automations
+    query: "SELECT * FROM osquery_info;"
+    interval: 3600
+    platform: darwin
+    observer_can_run: true
+    automations_enabled: true
+    logging: snapshot
+    min_osquery_version: "5.0.0"
+  - name: Coverage report differential discard
+    query: "SELECT * FROM system_info;"
+    interval: 7200
+    automations_enabled: false
+    logging: differential
+    discard_data: true

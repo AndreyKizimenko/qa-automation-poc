@@ -1,0 +1,87 @@
+# GitOps coverage config — default.yml (org / "No team" scope).
+# Goal: exercise every *fully-appliable* org_settings + no-team controls key, so a
+# `fleetctl gitops` run against a test instance proves the whole supported surface.
+# Credential/infra-dependent settings (ABM, VPP, SSO, Jira/Zendesk, Google Calendar,
+# certificate_authorities, SMTP, conditional access) are intentionally omitted — see README.md.
+#
+# Env vars required for apply/dry-run: FLEET_URL, COVERAGE_ENROLL_SECRET.
+
+agent_options:
+  path: ./lib/agent-options.yml
+
+org_settings:
+  org_info:
+    org_name: Coverage QA
+    contact_url: https://fleetdm.com/company/contact
+    org_logo_url: ""
+    org_logo_url_light_background: ""
+  server_settings:
+    server_url: $FLEET_URL
+    enable_analytics: true
+    live_reporting_disabled: false
+    deferred_save_host: false
+    discard_reports_data: false
+    scripts_disabled: false
+    ai_features_disabled: false
+    report_cap: 0
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  fleet_desktop:
+    transparency_url: https://fleetdm.com/transparency
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+  activity_expiry_settings:
+    activity_expiry_enabled: false
+    activity_expiry_window: 0
+  vulnerability_settings:
+    databases_path: /tmp/vulndb
+  webhook_settings:
+    interval: 360m0s
+    activities_webhook:
+      enable_activities_webhook: false
+      destination_url: https://example.com/coverage/activities
+    host_status_webhook:
+      enable_host_status_webhook: false
+      destination_url: https://example.com/coverage/host-status
+      host_percentage: 25
+      days_count: 7
+    failing_policies_webhook:
+      enable_failing_policies_webhook: false
+      destination_url: https://example.com/coverage/failing-policies
+      policy_ids: []
+      host_batch_size: 0
+    vulnerabilities_webhook:
+      enable_vulnerabilities_webhook: false
+      destination_url: https://example.com/coverage/vulnerabilities
+      host_batch_size: 0
+  # NOTE: org_settings.yara_rules omitted — its schema differs across the client/server
+  # versions in use (path rejected at parse, contents rejected at apply). Re-add once
+  # the target fleetctl and server versions agree (CIS/MDM YARA is a niche surface).
+  gitops:
+    # Flip gitops_mode_enabled to true on a dedicated test instance to exercise
+    # GitOps-mode (read-only UI). Left false here so it doesn't lock other testing.
+    gitops_mode_enabled: false
+    repository_url: https://github.com/fleetdm/fleet
+  # Requires the GitOps "secrets" exception to be OFF on the target instance
+  # (an instance with that UI exception ON will reject this key).
+  secrets:
+    - secret: $COVERAGE_ENROLL_SECRET
+
+# `controls` here applies to the "No team" scope. The full controls matrix lives in
+# fleets/controls-coverage.yml.
+controls:
+  enable_disk_encryption: false
+  scripts:
+    - path: ../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
+
+labels:
+  - path: ../lib/labels/apple-silicon-macos-hosts.yml
+  - path: ../lib/labels/debian-based-linux-hosts.yml
+  - path: ./lib/labels/coverage-manual.yml
+
+policies: []
+
+reports:
+  - path: ../lib/platforms/all/reports/collect-fleetd-information.yml

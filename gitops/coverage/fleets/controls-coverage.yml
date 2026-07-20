@@ -1,0 +1,88 @@
+# Coverage team: every fully-appliable `controls` key + team `settings` + secrets.
+# Env vars: COVERAGE_TEAM_ENROLL_SECRET.
+name: Coverage - Controls
+
+agent_options:
+  path: ../lib/agent-options.yml
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  host_expiry_settings:
+    host_expiry_enabled: true
+    host_expiry_window: 30
+  webhook_settings:
+    failing_policies_webhook:
+      enable_failing_policies_webhook: false
+      destination_url: https://example.com/coverage/team-failing-policies
+      host_batch_size: 0
+    host_status_webhook:
+      enable_host_status_webhook: false
+      destination_url: https://example.com/coverage/team-host-status
+      host_percentage: 10
+      days_count: 3
+  # Requires the GitOps "secrets" exception OFF on the target instance (see default.yml note).
+  secrets:
+    - secret: $COVERAGE_TEAM_ENROLL_SECRET
+
+controls:
+  # disk encryption + recovery / bitlocker (premium MDM controls)
+  enable_disk_encryption: true
+  enable_recovery_lock_password: true
+  windows_require_bitlocker_pin: true
+  apple_require_hardware_attestation: false
+  # MDM enablement toggles
+  windows_enabled_and_configured: true
+  android_enabled_and_configured: true
+  windows_migration_enabled: false
+  enable_turn_on_windows_mdm_manually: false
+  # OS updates — all four platforms
+  macos_updates:
+    minimum_version: "15.0"
+    deadline: "2026-12-31"
+    update_new_hosts: true
+  ios_updates:
+    minimum_version: "18.0"
+    deadline: "2026-12-31"
+  ipados_updates:
+    minimum_version: "18.0"
+    deadline: "2026-12-31"
+  windows_updates:
+    deadline_days: 7
+    grace_period_days: 2
+  # configuration profiles per platform (+ label scoping on one)
+  apple_settings:
+    configuration_profiles:
+      - path: ../../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-bluetooth-file-sharing.mobileconfig
+        labels_include_any:
+          - Coverage manual hosts
+  windows_settings:
+    configuration_profiles:
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-firewall.xml
+  android_settings:
+    configuration_profiles:
+      - path: ../../lib/platforms/android/configuration-profiles/disable-camera.json
+  scripts:
+    - path: ../../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
+    - path: ../../lib/platforms/windows/scripts/uninstall-fleetd-windows.ps1
+  macos_migration:
+    enable: false
+    mode: voluntary
+    webhook_url: https://example.com/coverage/macos-migration
+  # setup experience — fully-appliable sub-keys (creds-free)
+  setup_experience:
+    lock_end_user_info: false
+    apple_enable_release_device_manually: false
+    macos_manual_agent_install: false
+    require_all_software_macos: false
+    require_all_software_windows: false
+    enable_create_local_admin_account: true
+    end_user_local_account_type: standard
+    macos_script: ../lib/scripts/coverage-setup.sh
+
+policies: []
+
+reports:
+  - path: ../../lib/platforms/all/reports/collect-fleetd-information.yml
