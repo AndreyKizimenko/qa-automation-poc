@@ -10,8 +10,8 @@ import { Toast } from '../components/Toast';
  * redirects to the new title's detail page.
  *
  * Toast on success: "<filename> successfully added." (the filename text
- * comes from the uploaded file). The Toast component scopes to
- * `.flash-message--success`, so we match on the loose default regex.
+ * comes from the uploaded file), so we match on the loose `/successfully
+ * added/` regex rather than pinning the exact filename.
  */
 export class SoftwareCustomPackagePage {
   readonly page: Page;

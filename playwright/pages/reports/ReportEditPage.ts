@@ -69,9 +69,6 @@ export class ReportEditPage {
   // visible text instead.
   readonly editFromDetailsButton: Locator;
 
-  // "Back to report" button on the /edit page → `/reports/:id`.
-  readonly backToReportButton: Locator;
-
   // Interval is a react-select v1 widget scoped by `form-field--frequency`.
   readonly intervalControl: Locator;
   readonly intervalValueLabel: Locator;
@@ -116,7 +113,6 @@ export class ReportEditPage {
     this.liveReportButton = page.getByRole('button', { name: /Live report/ });
 
     this.editFromDetailsButton = page.getByRole('button', { name: 'Edit report' });
-    this.backToReportButton = page.getByRole('button', { name: 'Back to report' });
 
     this.intervalControl = page.locator('.form-field--frequency .Select-control');
     this.intervalValueLabel = page.locator('.form-field--frequency .Select-value-label');
@@ -217,21 +213,17 @@ export class ReportEditPage {
     return id;
   }
 
-  /** Click "Back to report" → returns to `/reports/:id` (the results page). */
-  async backToReport(): Promise<void> {
-    await this.backToReportButton.click();
-    await expect(this.page).toHaveURL(/\/reports\/\d+(?:\?|$)/);
-  }
-
   /**
    * Existing-report save flow: clicks Save → confirms the "Save changes?"
-   * modal → waits for the success toast.
+   * modal → waits for the success toast. Fleet then redirects to the report
+   * details page (`/reports/:id`).
    */
   async saveExisting(): Promise<void> {
     await this.saveButton.click();
     await expect(this.confirmSaveModal).toBeVisible();
     await this.confirmSaveButton.click();
     await this.toast.expectSuccess('Report updated.');
+    await this.page.waitForURL(/\/reports\/\d+(?:\?|$)/);
   }
 
   /** Click "Live report" → navigates to `/reports/:id/live`. */

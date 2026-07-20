@@ -108,12 +108,42 @@ export async function resetMacosSetupToggles(
 }
 
 /**
+ * Clear the setup-experience "install software" selection for a fleet on
+ * every platform (the selection is stored per-platform). A software title
+ * that's selected here can't be deleted — Fleet rejects the delete with
+ * HTTP 409 "installed during new host setup" — so cleanup must clear this
+ * before wiping install-software titles. Silent on 402 ("Requires Premium")
+ * so the shared cleanup pipeline can call it on both tiers.
+ */
+export async function clearSetupExperienceSoftware(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  const platforms = ['macos', 'windows', 'linux', 'ios', 'ipados', 'android'];
+  for (const platform of platforms) {
+    // fleet_id, platform, and the (empty) title list all go in the body —
+    // matching Fleet's own UI. Passing fleet_id via the query string is
+    // ignored, so a non-zero fleet would silently clear "Unassigned" instead.
+    const res = await request.put(apiUrl('setup_experience/software'), {
+      headers: authHeaders(),
+      data: { software_title_ids: [], fleet_id: fleetId, platform },
+    });
+    // 402 means the tier is free — no per-platform state to clear on any of them.
+    if (res.status() === 402) return;
+    if (res.status() === 404) continue;
+    if (!res.ok()) {
+      console.warn(`[setup-exp software cleanup] fleet ${fleetId} ${platform}: HTTP ${res.status()}`);
+    }
+  }
+}
+
+/**
  * One-shot reset of every setup-experience field a test can touch:
  * bootstrap package, setup-assistant DEP profile, setup-experience script,
- * and the macos_setup toggles (EUA + managed-local-account). Idempotent
- * and safe to call when no state is present. Intended for cleanup-setup
- * / cleanup-teardown only — test bodies still use the individual helpers
- * for clearer per-test cleanup.
+ * the install-software selection, and the macos_setup toggles (EUA +
+ * managed-local-account). Idempotent and safe to call when no state is
+ * present. Intended for cleanup-setup / cleanup-teardown only — test bodies
+ * still use the individual helpers for clearer per-test cleanup.
  */
 export async function resetSetupExperience(
   request: APIRequestContext,
@@ -123,6 +153,7 @@ export async function resetSetupExperience(
     deleteBootstrapPackage(request, fleetId),
     deleteSetupAssistant(request, fleetId),
     deleteSetupExperienceScript(request, fleetId),
+    clearSetupExperienceSoftware(request, fleetId),
     resetMacosSetupToggles(request, fleetId),
   ]);
 }

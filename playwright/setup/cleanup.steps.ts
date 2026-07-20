@@ -39,6 +39,10 @@ test('wipe unassigned state', async ({ request }) => {
   // instead of failing the Promise.all batch. deleteAllQaTestUsers only
   // touches addresses matching the QA_TEST_EMAIL_RE prefix in
   // helpers/api/users.ts, so admin/SSO accounts are untouchable.
+  // Setup Experience references install-software titles, and a referenced
+  // title can't be deleted (Fleet returns 409). Clear Setup Experience first
+  // so the software-title wipe below isn't racing the reference removal.
+  await resetSetupExperience(request, 0);
   await Promise.all([
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
@@ -47,7 +51,6 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
     deleteAllQaTestUsers(request),
-    resetSetupExperience(request, 0),
   ]);
 });
 
@@ -66,11 +69,12 @@ test('wipe Workstations team state', async ({ request }) => {
     );
   }
 
+  // Clear Setup Experience before the software wipe (see the unassigned step).
+  await resetSetupExperience(request, workstations.id);
   await Promise.all([
     deleteAllTeamPolicies(request, workstations.id),
     deleteAllInstallSoftwareTitles(request, workstations.id),
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
-    resetSetupExperience(request, workstations.id),
   ]);
 });
