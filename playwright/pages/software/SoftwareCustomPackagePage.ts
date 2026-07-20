@@ -77,12 +77,13 @@ export class SoftwareCustomPackagePage {
     await expect(this.addSoftwareButton).toBeEnabled();
     await this.addSoftwareButton.click();
 
-    // Progress modal may flash briefly or not at all for tiny packages.
+    // Progress modal may flash briefly or not at all for tiny packages; a real
+    // upload clears in a few seconds, so 45s is generous headroom under load.
     if (await this.progressModal.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await expect(this.progressModal).toBeHidden({ timeout: 120_000 });
+      await expect(this.progressModal).toBeHidden({ timeout: 45_000 });
     }
 
-    await this.page.waitForURL(/\/software\/titles\/\d+/);
+    await this.page.waitForURL(/\/software\/titles\/\d+/, { timeout: 30_000 });
     await this.toast.expectSuccess(/successfully added/);
 
     const url = new URL(this.page.url());

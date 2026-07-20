@@ -109,9 +109,9 @@ for (const scope of SCOPES) {
         page,
       }) => {
         const fleetId = scope === 'Unassigned' ? 0 : workstationsFleetId;
-        // Fleet's CDN / App Store fetch can take 30+ seconds on the first
-        // add of a given app.
-        test.setTimeout(180_000);
+        // Adds software via the API (installer/CDN fetch) then drives the
+        // setup-experience UI; 90s caps the whole flow with headroom under load.
+        test.setTimeout(90_000);
 
         let titleId: number;
         switch (c.kind) {

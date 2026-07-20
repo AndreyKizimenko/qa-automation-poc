@@ -23,16 +23,18 @@ export class FleetMaintainedAppDetailPage {
   }
 
   /**
-   * Wait timeout is 2 minutes — Fleet's CDN fetch can be slow for large
-   * apps. The "Uploading software…" message may not appear at all when
-   * the package is cached server-side.
+   * Confirms the add and waits for Fleet's server-side CDN fetch to finish.
+   * The "Uploading software…" message may not appear at all when the package
+   * is cached server-side; when it does, a typical fetch clears in a few
+   * seconds. The 45s ceiling leaves ample headroom for a large app on a cold
+   * CDN under concurrent load while still failing fast if the add hangs.
    */
   async confirmAdd(): Promise<void> {
     await expect(this.addSoftwareButton).toBeVisible();
     await this.addSoftwareButton.click();
 
     if (await this.uploadingMessage.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await expect(this.uploadingMessage).toBeHidden({ timeout: 120_000 });
+      await expect(this.uploadingMessage).toBeHidden({ timeout: 45_000 });
     }
   }
 }

@@ -57,7 +57,7 @@ export async function addFmaToFleet(
   const res = await request.post(apiUrl('software/fleet_maintained_apps'), {
     headers: authHeaders(),
     data: { fleet_maintained_app_id: fmaId, fleet_id: fleetId },
-    timeout: 120_000,
+    timeout: 60_000,
   });
   await expect(res, `Failed to add FMA "${slug}" to fleet ${fleetId}`).toBeOK();
   const body = await res.json();

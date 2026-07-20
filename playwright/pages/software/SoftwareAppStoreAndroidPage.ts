@@ -62,14 +62,14 @@ export class SoftwareAppStoreAndroidPage {
 
   /**
    * Types `applicationId` into the input and submits. Google Play metadata
-   * fetch can take several seconds; waitForURL allows up to 60s for the
-   * redirect to `/software/titles/:id`.
+   * fetch takes a few seconds; waitForURL allows up to 30s for the redirect
+   * to `/software/titles/:id`.
    */
   async addApp(applicationId: string): Promise<number> {
     await this.applicationIdInput.fill(applicationId);
     await expect(this.addSoftwareButton).toBeEnabled();
     await this.addSoftwareButton.click();
-    await this.page.waitForURL(/\/software\/titles\/\d+/, { timeout: 60_000 });
+    await this.page.waitForURL(/\/software\/titles\/\d+/, { timeout: 30_000 });
     const id = parseInt(
       new URL(this.page.url()).pathname.match(/\/software\/titles\/(\d+)/)?.[1] ?? '0',
       10,
