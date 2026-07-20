@@ -4,8 +4,9 @@ import { Navbar } from '../components/Navbar';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
 
 /**
- * /software/titles/:id — versions table for a software title. Titles with
- * an uploaded installer also expose a `SoftwareInstallerCard`.
+ * /software/titles/:id — versions table for a software title. Titles managed
+ * by an installer also render a Library section of accordion rows, modelled
+ * by `SoftwareInstallerCard`.
  */
 export class SoftwareTitleDetailPage {
   readonly page: Page;

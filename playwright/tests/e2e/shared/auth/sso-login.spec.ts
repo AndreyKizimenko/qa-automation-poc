@@ -11,9 +11,12 @@ test.describe('Okta SSO login', () => {
     await loginPage.goto();
   });
 
-  test('"Sign in with Okta" button is visible on the login page', async ({ loginPage }) => {
+  test('SSO button is visible and names Okta in its hover tooltip', async ({ loginPage }) => {
     await expect(loginPage.ssoButton).toBeVisible();
-    await expect(loginPage.ssoButton).toContainText(/okta/i);
+    await expect(loginPage.ssoButton).toHaveText(/sign in with sso/i);
+    // The IdP name moved off the button label into a hover tooltip.
+    await loginPage.ssoButton.hover();
+    await expect(loginPage.ssoTooltip).toContainText(/okta/i);
   });
 
   test('valid Okta credentials result in successful login', async ({ loginPage, page }) => {

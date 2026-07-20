@@ -3,7 +3,7 @@ import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 
 /**
- * /packs/manage — list of osquery packs. Has a "Create new pack" button and
+ * /packs/manage — list of osquery packs. Has an "Add new pack" button and
  * supports bulk selection/deletion via checkboxes.
  */
 export class PacksListPage {
@@ -23,7 +23,9 @@ export class PacksListPage {
     this.table = new DataTable(page);
 
     this.heading = page.getByRole('heading', { name: 'Packs', exact: true });
-    this.createNewPackButton = page.getByRole('button', { name: /create new pack/i });
+    // The header button and the empty-state primary button both carry this
+    // accessible name, so it resolves whether or not packs already exist.
+    this.createNewPackButton = page.getByRole('button', { name: /add new pack/i });
     // Bulk delete — appears when at least one checkbox is selected
     this.deleteButton = page.getByRole('button', { name: /delete/i });
     // Fleet's Modal applies DeletePackModal's `remove-pack-modal` baseClass to both

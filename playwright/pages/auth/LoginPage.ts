@@ -2,7 +2,8 @@ import { Page, Locator, expect } from '@playwright/test';
 
 /**
  * /login — Fleet's email/password login page. Also hosts the SSO sign-in
- * button when SSO is configured.
+ * button when SSO is configured. The button carries a generic "Sign in with
+ * SSO" label; the configured IdP name (e.g. Okta) shows in a hover tooltip.
  */
 export class LoginPage {
   readonly page: Page;
@@ -11,6 +12,7 @@ export class LoginPage {
   readonly loginButton: Locator;
   readonly forgotPasswordLink: Locator;
   readonly ssoButton: Locator;
+  readonly ssoTooltip: Locator;
   readonly authFailedMessage: Locator;
   readonly emailRequiredMessage: Locator;
   readonly passwordRequiredMessage: Locator;
@@ -22,6 +24,8 @@ export class LoginPage {
     this.loginButton = page.getByRole('button', { name: 'Log in' });
     this.forgotPasswordLink = page.getByRole('link', { name: 'Forgot password?' });
     this.ssoButton = page.getByRole('button', { name: /sign in with/i });
+    // Names the configured IdP; rendered only while the SSO button is hovered.
+    this.ssoTooltip = page.getByRole('tooltip');
     this.authFailedMessage = page.getByText('Authentication failed');
     this.emailRequiredMessage = page.getByText('Email field must be completed');
     this.passwordRequiredMessage = page.getByText('Password field must be completed');

@@ -91,7 +91,7 @@ for (const scope of SCOPES) {
       await reportEdit.saveExisting();
       await assertActivity(request, 'edited_saved_query', (d) => d.query_name === editedName);
 
-      await reportEdit.backToReport();
+      // saveExisting() lands on the report details page, so assert there directly.
       await reportDetails.expectValues({ name: edited.name, description: edited.description });
       expect((await reportDetails.showQuery()).trim()).toContain(edited.sql.trim());
 
