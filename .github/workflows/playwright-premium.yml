@@ -21,7 +21,7 @@ jobs:
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
       options: --user 1001
     defaults:
       run:
