@@ -31,7 +31,7 @@ export async function addAppStoreApp(
   const res = await request.post(apiUrl('software/app_store_apps'), {
     headers: authHeaders(),
     data,
-    timeout: 120_000,
+    timeout: 60_000,
   });
   await expect(
     res,

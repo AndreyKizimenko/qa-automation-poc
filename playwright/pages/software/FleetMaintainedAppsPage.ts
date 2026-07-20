@@ -52,36 +52,29 @@ export class FleetMaintainedAppsPage {
   }
 
   /**
-   * Page-shell readiness only. The Add software heading and the selected
-   * Fleet-maintained tab render before the catalog fetch — the catalog panel
-   * itself shows a spinner until its 800+ row result paints in one commit, so
-   * gating on the table here would block the whole flow on that render. The
-   * flow always narrows via searchFor() next, which waits for the search box
-   * and operates on the collapsed result instead.
+   * Page-shell readiness only — the "Add software" heading and the selected
+   * Fleet-maintained tab. The catalog is server-side paginated (100 apps per
+   * page) and reached via searchFor() next, so this doesn't gate on the table.
    *
-   * The shell waits get headroom past the default 5s expect timeout: under
-   * full-suite instance load the Add software route can take longer than that
-   * to render even its shell.
+   * The shell waits keep modest headroom past the default expect timeout
+   * because the Add software route depends on the large JS bundle, which the
+   * shared instance serves slowly under concurrent load (see the
+   * playwright.config.ts timeout note and fleetdm/fleet#45682).
    */
   async expectLoaded(): Promise<void> {
-    await expect(this.heading).toBeVisible({ timeout: 30_000 });
-    await expect(this.tab).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
+    await expect(this.heading).toBeVisible({ timeout: 15_000 });
+    await expect(this.tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
   }
 
   /**
    * Filters the catalog down to `name` via the search box before any row
-   * lookup. The catalog renders every app in one un-virtualized table
-   * (hundreds of rows) behind a spinner, so an unfiltered `getByRole('row')`
-   * scan resolves roles across the whole DOM on every retry and tips past the
-   * expect timeout. Typing drives a server-side `?query=` filter, collapsing
-   * the table to the matching row(s).
-   *
-   * Waits for the search box first with headroom for that large initial render
-   * under instance load — it only appears once the spinner resolves. Idempotent
-   * — re-filling the same query is a no-op once the row is shown.
+   * lookup. The catalog is server-side paginated (100 apps per page), so a
+   * target app isn't guaranteed to be on the visible page; typing drives the
+   * server-side `?query=` filter, collapsing the table to the matching row(s).
+   * Idempotent — re-filling the same query is a no-op once the row is shown.
    */
   async searchFor(name: string): Promise<void> {
-    await expect(this.searchInput).toBeVisible({ timeout: 30_000 });
+    await expect(this.searchInput).toBeVisible();
     await this.searchInput.fill(name);
     await expect(this.rowByName(name)).toBeVisible();
   }

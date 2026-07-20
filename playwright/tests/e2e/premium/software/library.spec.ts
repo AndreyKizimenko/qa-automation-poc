@@ -97,13 +97,11 @@ for (const scope of SCOPES) {
         request,
         page,
       }) => {
-        // The "add" flow is long under load: the Add-software catalog render plus
-        // Fleet's server-side installer fetch (the "Uploading software…" wait in
-        // confirmAdd) together run past the global 60s test budget, so the run is
-        // cut off mid-execution. Budget for the whole flow — each step still ends
-        // as soon as its work does; this is only the ceiling. Matches the
-        // install-software lifecycle, which sets the same for the same reason.
-        test.setTimeout(180_000);
+        // The add flow runs a server-side installer/CDN fetch plus the library
+        // and activity-feed checks; under 4-worker load that can edge past the
+        // global 60s budget. 90s caps the whole flow with headroom — each step
+        // still ends as soon as its work does; this is only the ceiling.
+        test.setTimeout(90_000);
         const fleetId = fleetIdFor(scope, workstationsFleetId);
 
         await dashboard.goto();
@@ -127,7 +125,7 @@ for (const scope of SCOPES) {
             await fleetMaintainedApps.expectNotAddedFor(c.appName, c.platform);
             await fleetMaintainedApps.clickAdd(c.appName, c.platform);
             await fleetMaintainedAppDetail.confirmAdd();
-            await page.waitForURL(/\/software\/titles\/\d+/);
+            await page.waitForURL(/\/software\/titles\/\d+/, { timeout: 30_000 });
             break;
           case 'vpp':
             await softwareAppStoreVpp.openTab();
