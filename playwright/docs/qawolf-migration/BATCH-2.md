@@ -16,7 +16,7 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 3. [x] **software os** (premium) — commit `795159e`.
 4a. [x] **reports save-as-new** (premium + free) — commit `60944c1`.
 4b. [x] **reports list-filters** (premium) — commit `613b5be`.
-5. [ ] **labels CRUD** — big `LabelsPage` build.
+5. [x] **labels CRUD** (premium, Dynamic + Manual) — commits `01ad292`, `757a8c7`.
 6. [ ] **org-settings** — build an appConfig save/restore helper FIRST.
 7. [ ] **vuln/report/policy automations** — global config → save/restore (depends on #6's helper).
 
@@ -112,6 +112,41 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   (both URL params). POM: `ReportsListPage.searchByName()` + `selectPlatform()`.
 - **Team-admin variants (P24/P25) skipped** — no team-admin static user provisioned (see cross-cutting gaps).
 - Live: premium 3 (stable over --repeat-each=3).
+
+### 5. labels CRUD — `premium/labels/labels.spec.ts` (+ big `LabelsPage` build)
+Two serial lifecycles (Dynamic + Manual): create → edit → delete → activity feed. Grounded in
+`frontend/pages/labels/{ManageLabelsPage,NewLabelPage,EditLabelPage}` (thorough Explore grounding — see
+the corrections below).
+- **Instance reality (matters a lot):** ~27 gitops-provisioned custom labels; the list is **client-side
+  paginated (20/page, DEFAULT_PAGE_SIZE)** sorted by name → a new label often lands on page 2. →
+  `LabelsPage.locateRow(name)` pages via the `Pagination` component until found; `runRowAction()` +
+  create/edit verifications all go through it. Do NOT use `rowFor` alone for a fresh label.
+- **Grounding corrections vs QA Wolf hints:** Type cell is `.label_membership_type__cell` (not
+  `.type__cell`); row Actions is a react-select `ActionsDropdown` (`.actions-dropdown-select__control` +
+  `__option`, matched by TEXT — **no** `data-testid="dropdown-option"`; that testid is only on the Platform
+  DropdownWrapper), menu portals to `<body>`, reveals on row hover; edit is `/labels/:id` (not `/edit`);
+  Dynamic query is immutable on edit; delete → "Delete label" modal (confirm "Delete"), toast
+  `Successfully deleted <name>.`. Create toast `Label added successfully.` → redirect `/labels/manage`;
+  edit toast `Label updated successfully.` (no redirect).
+- **Fleet Radio** hides the real `<input>` (display:none) → `selectType()` clicks the `<label>` text, not
+  the radio (`.check()` only worked because Dynamic is the default).
+- **Manual host picker (TargetsInput):** `getByRole('searchbox')`, results `.display_name__cell` (click to
+  add), selected table `.targets-input__hosts-selected-table`, remove via `.delete__cell`. `addHost()`
+  **verifies the host landed in the selected table** — a manual label saved with 0 hosts is rejected with a
+  `missing required parameter(s)` 422 (was an intermittent create-fail). The search also logs that same
+  benign 4xx to the console while typing (label still saves) → Manual `create` uses `pageHealth.disable()`.
+- **Dynamic create is host-independent** (form ships a valid default query). **Manual** picks a host via
+  `firstHostDisplayName()` (offline hosts resolve).
+- **Cleanup:** `cleanup.steps.ts` does NOT wipe labels → each lifecycle's `beforeAll` purges its own marker
+  (`pw-label-dyn` / `pw-label-man`) via a cookie-less API context (`deleteLabelsMatching`). Distinct markers
+  per describe so parallel describes don't delete each other's in-flight labels.
+- **activityCopy.label** added (`created a label` / `edited the label` / `deleted the label`) + gate case.
+- **Do NOT validate with `--repeat-each`** here: the serial `name` is a module-level `Date.now()` shared
+  across repeats, so parallel repeats collide on the same label name (harness artifact, not a real bug).
+- **Not yet done in the labels area (follow-ups):** sort-headers + "View all hosts" spec (C9 #13),
+  role-access (maintainer own-only / observer view-only, C9 #14/#15). `LabelsPage` already has the row-action
+  + `filterPill` plumbing to build these on.
+- Live: premium 8 sub-tests (single run).
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
