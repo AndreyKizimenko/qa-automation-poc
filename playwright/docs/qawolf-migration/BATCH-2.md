@@ -13,7 +13,7 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 ## Order (from HANDOFF) + status
 1. [x] **software manage-automations-access** (premium + free) — commit `be1e420`.
 2. [x] **policies sql-validation** (premium + free) — commit `e12a28c`.
-3. [ ] **software os** — OS tab platform filter + "View all hosts" from an OS row → `premium/software/os.spec.ts`.
+3. [x] **software os** (premium) — commit `795159e`.
 4. [ ] **reports save-as-new + list-filters**.
 5. [ ] **labels CRUD** — big `LabelsPage` build.
 6. [ ] **org-settings** — build an appConfig save/restore helper FIRST.
@@ -58,6 +58,28 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   `compatiblePlatform(os)` accessor, `clearNewPolicyPlatforms()`.
 - Free is a subset per C3 (#8 no-platform, #9 compat 3 cases) + the tier-agnostic syntax check.
 - Live: premium 8 passed, free 5 passed.
+
+### 3. software OS tab — `premium/software/os.spec.ts`
+- Entry: `softwareTitles.goto()` → `teamDropdown.select('Unassigned')` → `softwareTitles.gotoOsTab()`
+  (mirrors the vulnerabilities.spec sub-tab entry; SoftwareOsPage has no teamDropdown of its own).
+- Platform filter is a `DropdownWrapper` (`name="os-platform-dropdown"`, baseClass `software-os-table`):
+  trigger `.software-os-table__platform-dropdown .react-select__control`, options
+  `data-testid="dropdown-option"`, value `.react-select__single-value`. Labels/values: All platforms=all,
+  macOS=darwin, Windows=windows, Linux=linux, ChromeOS=chrome, iOS=ios, iPadOS, Android.
+- **keepPreviousData race** (SoftwareOS.tsx `useQuery` keepPreviousData:true): after selecting a platform the
+  URL flips (`?platform=darwin`) but the table keeps the prior rows until the refetch lands. Do NOT read row
+  text once — assert with a retrying locator `rows.filter({ hasNotText: token }).toHaveCount(0)`.
+- Row-content tokens: macOS rows contain "macOS", Windows rows contain "Windows" (name is "Microsoft
+  Windows …"). **Linux omitted** — rows are distro-named (Ubuntu), not "Linux".
+- "View all hosts" per-row → Hosts list filtered by that OS. `FilterPill`
+  (frontend/.../ManageHostsPage/components/FilterPill) renders `role="status"`
+  aria-label `hosts filtered by <label>` → `HostsListPage.filterPill = getByRole('status', {name:/hosts filtered by/})`.
+  **Name mismatch**: the OS row shows "Microsoft Windows 11 Enterprise 22H2"; the pill shows "Windows 11
+  Enterprise 22H2 10.0.22621" (no "Microsoft ", + build). Normalize row name via `.replace('Microsoft ','')`
+  then `toContainText`. `viewHostsForFirstOs()` already existed on the POM.
+- POM adds: `SoftwareTitlesPage.gotoOsTab()`; `SoftwareOsPage.platformFilter`/`platformFilterValue`/
+  `selectPlatform()`/`firstOsName()`; `HostsListPage.filterPill` (reusable for Batch 3 hosts filtering).
+- Live: premium 3 passed (stable over --repeat-each=3).
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
