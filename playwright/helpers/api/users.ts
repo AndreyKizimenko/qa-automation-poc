@@ -117,6 +117,25 @@ export async function createUser(
   return { user: body.user, token: body.token };
 }
 
+/**
+ * Create an API-only user via `POST /users/api_only` (distinct from
+ * `createUser`, which posts to `/users/admin`). API users carry no password
+ * or email in the request — Fleet generates a placeholder email and returns
+ * the bearer token in the response.
+ */
+export async function createApiUser(
+  request: APIRequestContext,
+  params: { name: string; global_role?: UserRole | null; teams?: FleetRoleAssignment[] },
+): Promise<CreateUserResult> {
+  const res = await request.post(apiUrl('users/api_only'), {
+    headers: authHeaders(),
+    data: params,
+  });
+  await expect(res, `Failed to create API user "${params.name}"`).toBeOK();
+  const body = await res.json();
+  return { user: body.user, token: body.token };
+}
+
 export async function getUser(
   request: APIRequestContext,
   id: number,
