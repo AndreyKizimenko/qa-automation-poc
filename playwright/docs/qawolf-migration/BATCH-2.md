@@ -14,7 +14,8 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 1. [x] **software manage-automations-access** (premium + free) — commit `be1e420`.
 2. [x] **policies sql-validation** (premium + free) — commit `e12a28c`.
 3. [x] **software os** (premium) — commit `795159e`.
-4. [ ] **reports save-as-new + list-filters**.
+4a. [x] **reports save-as-new** (premium + free) — commit `60944c1`.
+4b. [ ] **reports list-filters** — search count + UI platform dropdown + inherited view.
 5. [ ] **labels CRUD** — big `LabelsPage` build.
 6. [ ] **org-settings** — build an appConfig save/restore helper FIRST.
 7. [ ] **vuln/report/policy automations** — global config → save/restore (depends on #6's helper).
@@ -80,6 +81,22 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 - POM adds: `SoftwareTitlesPage.gotoOsTab()`; `SoftwareOsPage.platformFilter`/`platformFilterValue`/
   `selectPlatform()`/`firstOsName()`; `HostsListPage.filterPill` (reusable for Batch 3 hosts filtering).
 - Live: premium 3 passed (stable over --repeat-each=3).
+
+### 4a. reports Save as new — `{premium,free}/reports/save-as-new.spec.ts`
+- Grounded in `frontend/pages/queries/edit/components/SaveAsNewQueryModal`. Modal title "Save as new";
+  name `InputField name="queryName"` → `#queryName`, default `Copy of <name>`; submit `.save-as-new-query`
+  ("Save"); success `Successfully added report <name>.`; dup error `A report called "<name>" already exists
+  for <all fleets|the <Team> fleet|this fleet>.`. The in-modal Fleet dropdown renders only when
+  `isPremiumTier && userTeams.length > 1`.
+- "Save as new" trigger button renders on the **edit form** only for existing reports + save-permitted
+  roles (EditQueryForm `hasSavePermissions && isExistingQuery`); disabled on form errors.
+- New API helper `helpers/api/reports.ts`: `createReport` (POST `queries`, body `{name,query,description,
+  team_id?}`; omit team_id → global), `listReports`, `deleteReport`, `deleteReportsMatching(substring)`.
+- **Isolation lesson**: first run flaked under 4 workers — (1) `Date.now()`-only names collided across
+  workers → seed 409; (2) afterEach cleaning by a shared marker nuked a sibling test's base mid-flight.
+  Fix: base name = `<marker>-<Date.now()>-<rand>`, and afterEach cleans by that per-test `baseName` (which
+  also matches its own "Copy of <baseName>"). POM: `ReportEditPage.openSaveAsNew()`/`submitSaveAsNew()`.
+- Live: premium 2, free 2 (stable in parallel).
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
