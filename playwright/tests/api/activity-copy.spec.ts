@@ -42,6 +42,15 @@ test.describe('activityCopy', () => {
       .test(`deleted the report ${NAME}.`)).toBe(true);
   });
 
+  test('label.* — "a label" on create, "the label" on edit/delete', () => {
+    expect(activityCopy.label.created({ name: NAME })
+      .test(`created a label ${NAME}.`)).toBe(true);
+    expect(activityCopy.label.edited({ name: NAME })
+      .test(`edited the label ${NAME}.`)).toBe(true);
+    expect(activityCopy.label.deleted({ name: NAME })
+      .test(`deleted the label ${NAME}.`)).toBe(true);
+  });
+
   test('pack.* — global, no scope variants', () => {
     expect(activityCopy.pack.created({ name: NAME })
       .test(`created pack ${NAME}.`)).toBe(true);

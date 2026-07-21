@@ -186,6 +186,22 @@ export const activityCopy = {
       new RegExp(`deleted configuration profile ${esc(name)} from ${profileSuffix(hostsPhrase, scope)}\\.`),
   },
 
+  // Labels are global here (no team scope selected on create). The renderer
+  // appends an optional " on the <fleet> fleet" only for team-scoped labels,
+  // so the global copy is just the name + period. Create uses the article
+  // "a label"; edit/delete use "the label".
+  label: {
+    /** @see frontend/.../GlobalActivityItem.tsx:1977 — `created a label <b>NAME</b>[ on the <fleet> fleet].` */
+    created: ({ name }: { name: string }) =>
+      new RegExp(`created a label ${esc(name)}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:1994 */
+    edited: ({ name }: { name: string }) =>
+      new RegExp(`edited the label ${esc(name)}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:2011 */
+    deleted: ({ name }: { name: string }) =>
+      new RegExp(`deleted the label ${esc(name)}\\.`),
+  },
+
   user: {
     // Fleet renders `created a user <b> EMAIL</b>.` — note the leading space
     // inside <b>, which renders as a doubled gap. `\s+` tolerates both the
