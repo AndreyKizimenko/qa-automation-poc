@@ -24,6 +24,11 @@ export class ReportsListPage {
   readonly search: Locator;
   readonly addReportButton: Locator;
 
+  // Platform filter is Fleet's DropdownWrapper (react-select v5): the visible
+  // trigger exposes no role, so it's scoped by its BEM container; each option
+  // carries data-testid="dropdown-option".
+  readonly platformFilter: Locator;
+
   readonly bulkDeleteButton: Locator;
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -38,6 +43,7 @@ export class ReportsListPage {
 
     this.search = page.getByPlaceholder('Search by name');
     this.addReportButton = page.getByRole('button', { name: /add report/i });
+    this.platformFilter = page.locator('.queries-table__platform-dropdown .react-select__control');
 
     // Bulk-action bar appears once a row is selected; the trash-labelled
     // primary action is named "delete reports" in source but renders as
@@ -66,6 +72,26 @@ export class ReportsListPage {
   async openReport(name: string): Promise<void> {
     await this.page.getByRole('link', { name, exact: true }).click();
     await expect(this.page).toHaveURL(/\/reports\/\d+/);
+  }
+
+  /** Type into the name search; callers assert on the filtered rows. */
+  async searchByName(name: string): Promise<void> {
+    await this.search.fill(name);
+  }
+
+  /**
+   * Select a platform-filter option by its visible label (via the UI
+   * dropdown, distinct from the URL-param `applyPlatformFilter`). Waits for
+   * the list to re-render before returning.
+   */
+  async selectPlatform(
+    label: 'All platforms' | 'macOS' | 'Windows' | 'Linux' | 'ChromeOS',
+  ): Promise<void> {
+    await this.platformFilter.click();
+    const option = this.page.getByTestId('dropdown-option').filter({ hasText: label });
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 
   /**

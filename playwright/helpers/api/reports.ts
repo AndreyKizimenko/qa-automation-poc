@@ -16,7 +16,14 @@ export interface ReportRef {
  */
 export async function createReport(
   request: APIRequestContext,
-  opts: { name: string; query?: string; description?: string; teamId?: number },
+  opts: {
+    name: string;
+    query?: string;
+    description?: string;
+    teamId?: number;
+    /** Comma-separated targeted platforms (e.g. "darwin", "windows"); all if omitted. */
+    platform?: string;
+  },
 ): Promise<ReportRef> {
   const res = await request.post(apiUrl('queries'), {
     headers: authHeaders(),
@@ -25,6 +32,7 @@ export async function createReport(
       query: opts.query ?? 'SELECT 1;',
       description: opts.description ?? '',
       ...(opts.teamId !== undefined ? { team_id: opts.teamId } : {}),
+      ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
     },
   });
   if (!res.ok()) {
