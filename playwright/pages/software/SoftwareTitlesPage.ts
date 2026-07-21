@@ -104,6 +104,16 @@ export class SoftwareTitlesPage {
   }
 
   /**
+   * Click into the "OS" tab. Returns after the URL has changed and the new
+   * table has rendered. Carries the currently selected team scope.
+   */
+  async gotoOsTab(): Promise<void> {
+    await this.osTab.click();
+    await expect(this.page).toHaveURL(/\/software\/os/);
+    await expect(this.table.firstRow).toBeVisible();
+  }
+
+  /**
    * Click into a software title by name. Assumes the table is already
    * showing the software (e.g. after `searchByName`).
    */

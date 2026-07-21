@@ -21,6 +21,7 @@ export class HostsListPage {
   readonly search: Locator;
   readonly addHostsButton: Locator;
   readonly editColumnsButton: Locator;
+  readonly filterPill: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -34,6 +35,10 @@ export class HostsListPage {
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
+    // FilterPill (frontend/.../ManageHostsPage/components/FilterPill) renders
+    // role="status" with aria-label "hosts filtered by <label>" when the list
+    // is scoped by a software title, OS, policy, etc.
+    this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
   }
 
   async goto(opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
