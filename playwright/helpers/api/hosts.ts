@@ -19,6 +19,23 @@ function matchesPlatform(
   return linuxPlatforms.includes(hostPlatform);
 }
 
+/**
+ * Display name of the first host on the instance (any platform, online or
+ * not). Returns null if the instance has no hosts. Handy for seeding a
+ * deterministic host into a manual-label / target picker.
+ */
+export async function firstHostDisplayName(
+  request: APIRequestContext,
+): Promise<string | null> {
+  const res = await request.get(apiUrl('hosts'), {
+    headers: authHeaders(),
+    params: { per_page: '1' },
+  });
+  if (!res.ok()) return null;
+  const body = await res.json();
+  return body.hosts?.[0]?.display_name ?? null;
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,

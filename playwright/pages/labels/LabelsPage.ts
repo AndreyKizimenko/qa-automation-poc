@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
+import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
 
@@ -21,6 +22,7 @@ export class LabelsPage {
   readonly page: Page;
   readonly navbar: Navbar;
   readonly table: DataTable;
+  readonly pagination: Pagination;
   readonly toast: Toast;
 
   readonly heading: Locator;
@@ -42,6 +44,7 @@ export class LabelsPage {
     this.page = page;
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
+    this.pagination = new Pagination(page);
     this.toast = new Toast(page);
 
     this.heading = page.getByRole('heading', { name: 'Labels', level: 1 });
@@ -79,7 +82,11 @@ export class LabelsPage {
 
   /** Select the label-type radio by visible label (Dynamic is the default). */
   async selectType(type: LabelType): Promise<void> {
-    await this.page.getByRole('radio', { name: type }).check();
+    // Fleet's Radio hides the real <input type="radio"> (display:none) behind a
+    // styled proxy, so the accessible radio isn't clickable; click the
+    // associated <label> text instead.
+    await this.page.locator('label').filter({ hasText: type }).click();
+    await expect(this.page.getByRole('radio', { name: type })).toBeChecked();
   }
 
   async fillDetails(name: string, description: string): Promise<void> {
@@ -95,21 +102,58 @@ export class LabelsPage {
     await option.click();
   }
 
+  /**
+   * Search the manual-label host picker and add the first matching host,
+   * returning its display name. Before selection `.display_name__cell` belongs
+   * to the search-results table; after selection the host moves to the
+   * selected-hosts table (and the search clears). Verifying it landed in the
+   * selected table guards against saving a manual label with no hosts (the
+   * server rejects that with a "missing required parameter(s)" 422).
+   */
+  async addHost(searchTerm: string): Promise<string> {
+    await this.hostSearch.fill(searchTerm);
+    const firstResult = this.page.locator('.display_name__cell').first();
+    await expect(firstResult).toBeVisible();
+    const hostName = (await firstResult.innerText()).trim();
+    await firstResult.click();
+    await expect(
+      this.page
+        .locator('.targets-input__hosts-selected-table .display_name__cell')
+        .filter({ hasText: hostName }),
+    ).toBeVisible();
+    return hostName;
+  }
+
   async save(): Promise<void> {
     await this.saveButton.click();
   }
 
-  /** A label's row in the list, matched by name. */
+  /** A label's row on the *current* page, matched by name. */
   rowFor(name: string): Locator {
     return this.table.rowWith(name);
   }
 
   /**
-   * Open a label row's Actions dropdown and pick an option. The dropdown
-   * only reveals on row hover; the option menu portals to <body>.
+   * Page through the client-side-paginated list until a label's row is found,
+   * and return it. The list sorts by name and pages at 20, so a label can land
+   * on a later page; callers assert on the returned locator.
+   */
+  async locateRow(name: string): Promise<Locator> {
+    await expect(this.table.firstRow).toBeVisible();
+    for (;;) {
+      const row = this.rowFor(name);
+      if (await row.count()) return row;
+      if (!(await this.pagination.nextIfEnabled(this.table))) return row;
+    }
+  }
+
+  /**
+   * Open a label row's Actions dropdown and pick an option. Pages to the row
+   * first; the dropdown reveals on row hover and its option menu portals to
+   * <body>.
    */
   async runRowAction(name: string, action: LabelRowAction): Promise<void> {
-    const row = this.rowFor(name);
+    const row = await this.locateRow(name);
     await row.hover();
     await row.locator('.actions-dropdown-select__control').click();
     await this.page
