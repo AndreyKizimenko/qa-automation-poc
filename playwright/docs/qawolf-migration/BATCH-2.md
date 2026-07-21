@@ -15,7 +15,7 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 2. [x] **policies sql-validation** (premium + free) — commit `e12a28c`.
 3. [x] **software os** (premium) — commit `795159e`.
 4a. [x] **reports save-as-new** (premium + free) — commit `60944c1`.
-4b. [ ] **reports list-filters** — search count + UI platform dropdown + inherited view.
+4b. [x] **reports list-filters** (premium) — commit `613b5be`.
 5. [ ] **labels CRUD** — big `LabelsPage` build.
 6. [ ] **org-settings** — build an appConfig save/restore helper FIRST.
 7. [ ] **vuln/report/policy automations** — global config → save/restore (depends on #6's helper).
@@ -97,6 +97,21 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   Fix: base name = `<marker>-<Date.now()>-<rand>`, and afterEach cleans by that per-test `baseName` (which
   also matches its own "Copy of <baseName>"). POM: `ReportEditPage.openSaveAsNew()`/`submitSaveAsNew()`.
 - Live: premium 2, free 2 (stable in parallel).
+
+### 4b. reports list-filters — `premium/reports/list-filters.spec.ts`
+- Grounded in `frontend/.../ManageQueriesPage/components/QueriesTable` (baseClass `queries-table`).
+- Platform filter: `DropdownWrapper name="platform-dropdown"`, `.queries-table__platform-dropdown
+  .react-select__control`, options `data-testid="dropdown-option"`, drives `?platform=darwin|windows`.
+  `variant="table-filter"` + `isDisabled` when the list is truly empty — so seed reports first.
+- Inherited: `<PillBadge>Inherited</PillBadge>` shown when `viewingTeamScope && team_id !== currentTeamId`
+  (i.e. a global report viewed under a team). Assert via row-scoped `getByText('Inherited')`. Count widget
+  is `TableCount name="reports"` (`.table-count`).
+- `createReport` gained an optional `platform` (comma-separated targeted platforms, e.g. "darwin").
+- Isolation: each test seeds uniquely-named reports + cleans by its own marker; assertions target specific
+  named rows (visibility), so parallel siblings sharing the list don't interfere. Search+platform compose
+  (both URL params). POM: `ReportsListPage.searchByName()` + `selectPlatform()`.
+- **Team-admin variants (P24/P25) skipped** — no team-admin static user provisioned (see cross-cutting gaps).
+- Live: premium 3 (stable over --repeat-each=3).
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
