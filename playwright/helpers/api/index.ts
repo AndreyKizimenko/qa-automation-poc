@@ -5,6 +5,7 @@
  * (`import { x } from '@helpers/api/software'`).
  */
 export * from './core';
+export * from './config';
 export * from './activities';
 export * from './hosts';
 export * from './fleets';
