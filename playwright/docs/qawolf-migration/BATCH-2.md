@@ -17,8 +17,8 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 4a. [x] **reports save-as-new** (premium + free) — commit `60944c1`.
 4b. [x] **reports list-filters** (premium) — commit `613b5be`.
 5. [x] **labels CRUD** (premium, Dynamic + Manual) — commits `01ad292`, `757a8c7`.
-6. [ ] **org-settings** — build an appConfig save/restore helper FIRST.
-7. [ ] **vuln/report/policy automations** — global config → save/restore (depends on #6's helper).
+6. [x] **org-settings** organization-info (premium + free) + **appConfig save/restore helper** — commit `4e6a85a`.
+7. [ ] **vuln/report/policy automations** — global config → save/restore (reuses `helpers/api/config.ts`).
 
 ## Done — grounding notes (revisit, don't re-derive)
 
@@ -147,6 +147,34 @@ the corrections below).
   role-access (maintainer own-only / observer view-only, C9 #14/#15). `LabelsPage` already has the row-action
   + `filterPill` plumbing to build these on.
 - Live: premium 8 sub-tests (single run).
+
+### 6. org-settings organization-info + appConfig helper — `{premium,free}/settings/organization/organization-info.spec.ts`
+- **New shared infra `helpers/api/config.ts`:** `getAppConfig` (GET /config) + `patchAppConfig` (PATCH
+  /config, merge). This is the prereq for all global-config-mutating specs. Pattern: snapshot the touched
+  subtree in `beforeEach`, restore it in `afterEach` (runs even on body failure) so the shared instance is
+  left unchanged.
+- **Grounding:** the "Organization support URL" field is `org_info.contact_url` in the API — **NOT**
+  `org_support_url` (PATCH rejects that with `unsupported key provided`). From
+  `frontend/pages/admin/OrgSettingsPage/cards/Info` `formDataToSubmit`. Save toast: "Successfully updated
+  settings.". Org name field label "Organization name" (role textbox); support URL "Organization support URL".
+- Built out the bare `OrganizationInfoPage` (orgName/supportURL/save + toast).
+- **fleet-web-address deliberately NOT ported** (C7 #4/#14) — rewriting the server URL can break instance
+  auth. If ever wanted, do it purely via the appConfig helper with a guaranteed restore, or reduce to presence.
+- Live: premium 1, free 1.
+
+## Item 7 — automations (NEXT, not started): kickoff notes
+All three mutate GLOBAL config → reuse `helpers/api/config.ts` snapshot/restore in `afterEach`.
+- **software vulnerability-automations** (C6 #16/#17): the "Automations" button + "Manage automations" modal
+  are already located on `SoftwareTitlesPage` (slice 1). Toggle "Vulnerability automations" + webhook URL →
+  Save → toast "Successfully updated vulnerability automations." → reload persists. Config lives under
+  `webhook_settings.vulnerabilities_webhook` (verify exact key via GET /config). Tier-agnostic (webhook
+  automations exist on free) — open question in C6 whether to split tiers or share.
+- **reports automations** (C4 P2/P7): per-report automations switch + log destination (Filesystem) on the
+  report edit form; list-level "Automations" manage modal + On/Off cell + toast "Successfully updated report
+  automations." Needs ReportEditPage automations switch + ReportsListPage manage-automations modal.
+- **policy automations** (C3 #10/#12/#14): "Other workflows" modal (enable/disable slider, webhook/ticket
+  radios, destination URL, empty-integration → "Add integration" prompt), toast "Successfully updated policy
+  automations." Needs a new PolicyAutomationsModal component POM.
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
