@@ -44,6 +44,15 @@ export class PolicyEditPage {
   readonly editorContent: Locator;
   readonly editorTextarea: Locator;
 
+  // Platform-compatibility badge rendered below the SQL editor
+  // (frontend/components/PlatformCompatibility).
+  readonly platformCompatibility: Locator;
+  readonly compatiblePlatforms: Locator;
+
+  // SQL syntax-error label. Fleet intentionally leaves Save enabled on a
+  // syntax error so teams can capture false-positives.
+  readonly sqlSyntaxError: Locator;
+
   // Inline name input — only renders for an existing policy.
   readonly nameInput: Locator;
   readonly descriptionInput: Locator;
@@ -79,6 +88,14 @@ export class PolicyEditPage {
     });
     this.editorContent = this.editor.locator('.ace_content');
     this.editorTextarea = this.editor.locator('textarea.ace_text-input');
+
+    // PlatformCompatibility renders a role-less container holding one
+    // <span class="platform"> per OS; the compatible ones carry a
+    // `compatible-platform` (check) icon, incompatible ones an
+    // `incompatible-platform` (close) icon.
+    this.platformCompatibility = page.locator('.platform-compatibility');
+    this.compatiblePlatforms = this.platformCompatibility.locator('.compatible-platform');
+    this.sqlSyntaxError = page.getByText('Syntax error. Please review before saving.');
 
     this.nameInput = page.locator('input[name="policy-name"]');
     this.descriptionInput = page.locator('textarea[name="policy-description"]');
@@ -152,6 +169,23 @@ export class PolicyEditPage {
       if (await this.platformCheckbox(os).isChecked()) result.push(os);
     }
     return result;
+  }
+
+  /**
+   * The compatibility badge's check icon for a given OS — present only while
+   * that platform is marked compatible for the current query.
+   */
+  compatiblePlatform(os: PolicyPlatform): Locator {
+    return this.platformCompatibility
+      .locator('.platform', { hasText: os })
+      .locator('.compatible-platform');
+  }
+
+  /** Uncheck every platform in the open "Save policy" modal. */
+  async clearNewPolicyPlatforms(): Promise<void> {
+    for (const os of ['macOS', 'Windows', 'Linux', 'ChromeOS'] as const) {
+      await this.platformCheckbox(os).uncheck();
+    }
   }
 
   /**
