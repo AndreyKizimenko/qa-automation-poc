@@ -3,6 +3,7 @@
  * (macOS, Linux, Windows) under both scopes (Unassigned + Workstations).
  */
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import { assertActivity } from '@helpers/api';
@@ -75,6 +76,15 @@ for (const scope of SCOPES) {
         await scriptsLibrary.closeScript();
       });
 
+      test('download matches source', async ({ scriptsLibrary, workstationsFleetId }) => {
+        await scriptsLibrary.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
+        await scriptsLibrary.teamDropdown.select(scope);
+        const download = await scriptsLibrary.downloadScript(script.baseName);
+        const downloadedContent = fs.readFileSync(await download.path(), 'utf-8').trim();
+        const sourceContent = fs.readFileSync(script.filePath, 'utf-8').trim();
+        expect(downloadedContent).toBe(sourceContent);
+      });
+
       test('edit', async ({ scriptsLibrary, request, workstationsFleetId }) => {
         await scriptsLibrary.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
         await scriptsLibrary.teamDropdown.select(scope);
@@ -109,3 +119,28 @@ for (const scope of SCOPES) {
     });
   }
 }
+
+// Fleet caps library scripts at 500,000 characters. Generated at runtime so
+// no ~500 KB junk fixture is committed. Negative path → own describe.
+test.describe('Scripts library — upload validation', () => {
+  test('rejects a script larger than 500,000 characters', async ({
+    dashboard,
+    controls,
+    scriptsLibrary,
+    pageHealth,
+  }) => {
+    // The intentional oversize rejection is a 4xx the app may log to console.
+    pageHealth.disable();
+
+    const oversizedPath = path.join(os.tmpdir(), 'playwright-oversized-script.sh');
+    fs.writeFileSync(oversizedPath, `#!/bin/bash\n# ${'x'.repeat(500_001)}\n`);
+
+    await dashboard.goto();
+    await dashboard.navbar.goToControls();
+    await controls.goToScripts();
+    await scriptsLibrary.teamDropdown.select('Unassigned');
+
+    await scriptsLibrary.submitScriptUpload(oversizedPath);
+    await scriptsLibrary.toast.expectError(/Script is too large\. It's limited to 500,000 characters/);
+  });
+});

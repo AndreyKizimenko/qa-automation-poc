@@ -111,4 +111,15 @@ export class MyAccountPage {
     await this.newPasswordConfirmationInput.fill(confirmation);
     await this.changePasswordSubmit.click();
   }
+
+  /**
+   * Select a colour theme from the side-panel Theme picker. Fleet's Radio
+   * hides the real <input> (display:none) and toggles via its <label for=…>,
+   * so click the label; the applied theme surfaces as a `dark-mode` class on
+   * <body> (see `utilities/theme`) and is persisted in localStorage.
+   */
+  async selectTheme(label: 'System' | 'Light' | 'Dark'): Promise<void> {
+    await this.page.locator(`label[for="theme-${label.toLowerCase()}"]`).click();
+    await expect(this.page.getByRole('radio', { name: label })).toBeChecked();
+  }
 }

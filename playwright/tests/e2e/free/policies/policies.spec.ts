@@ -41,6 +41,11 @@ test.describe('Policies CRUD', () => {
 
     await policyDetails.expectValues(created);
 
+    // The details page surfaces the three primary policy actions.
+    await expect(policyDetails.showQueryButton).toBeVisible();
+    await expect(policyDetails.runButton).toBeVisible();
+    await expect(policyDetails.editButton).toBeVisible();
+
     await policyDetails.navbar.goToPolicies();
     await policiesList.search.fill(policyName);
     await expect(policiesList.table.rowWith(policyName)).toBeVisible();

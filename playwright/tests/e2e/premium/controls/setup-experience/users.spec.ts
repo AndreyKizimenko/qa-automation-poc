@@ -51,5 +51,33 @@ for (const scope of SCOPES) {
       await expect(setupExperienceUsers.requireIdpCheckbox).toBeChecked({ checked: idpStarted });
       await expect(setupExperienceUsers.createHiddenAdminCheckbox).toBeChecked({ checked: hiddenAdminStarted });
     });
+
+    test('Lock end user info renders only when Require IdP is enabled', async ({
+      dashboard,
+      controls,
+      setupExperience,
+      setupExperienceUsers,
+    }) => {
+      await dashboard.goto();
+      await dashboard.navbar.goToControls();
+      await controls.teamDropdown.select(scope);
+      await controls.goToSetupExperience();
+      await setupExperience.goToUsers();
+
+      // The managed-account "Lock end user info" toggle is gated client-side
+      // on Require IdP. Drive the toggle WITHOUT saving: the show/hide
+      // dependency is the behavior under test, and not saving keeps this
+      // deterministic and leaves the scope's server config untouched.
+      if (await setupExperienceUsers.requireIdpCheckbox.isChecked()) {
+        await setupExperienceUsers.requireIdpCheckbox.click();
+      }
+      await expect(setupExperienceUsers.lockEndUserInfoCheckbox).toBeHidden();
+
+      await setupExperienceUsers.requireIdpCheckbox.click();
+      await expect(setupExperienceUsers.lockEndUserInfoCheckbox).toBeVisible();
+
+      await setupExperienceUsers.requireIdpCheckbox.click();
+      await expect(setupExperienceUsers.lockEndUserInfoCheckbox).toBeHidden();
+    });
   });
 }

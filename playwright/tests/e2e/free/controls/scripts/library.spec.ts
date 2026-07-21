@@ -70,6 +70,14 @@ for (const script of SCRIPT_CASES) {
       await scriptsLibrary.closeScript();
     });
 
+    test('download matches source', async ({ scriptsLibrary }) => {
+      await scriptsLibrary.goto();
+      const download = await scriptsLibrary.downloadScript(script.fileName);
+      const downloadedContent = fs.readFileSync(await download.path(), 'utf-8').trim();
+      const sourceContent = fs.readFileSync(script.filePath, 'utf-8').trim();
+      expect(downloadedContent).toBe(sourceContent);
+    });
+
     test('edit', async ({ scriptsLibrary, request }) => {
       await scriptsLibrary.goto();
 

@@ -62,6 +62,10 @@ export class ReportEditPage {
   // Buttons rendered by EditQueryForm.
   readonly saveButton: Locator;
   readonly liveReportButton: Locator;
+  // Inline validator message the SQLEditor shows for a syntactically invalid
+  // query. Fleet still permits saving (to support catching false-positives),
+  // so specs assert it appears while Save stays enabled.
+  readonly sqlSyntaxError: Locator;
 
   // "Edit report" button on the report results/details page
   // (`/reports/:id`) that opens this form. The button's class is the
@@ -111,6 +115,7 @@ export class ReportEditPage {
     this.observersCanRunCheckbox = page.getByRole('checkbox', { name: 'Observers can run' });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
     this.liveReportButton = page.getByRole('button', { name: /Live report/ });
+    this.sqlSyntaxError = page.getByText('Syntax error. Please review before saving.');
 
     this.editFromDetailsButton = page.getByRole('button', { name: 'Edit report' });
 

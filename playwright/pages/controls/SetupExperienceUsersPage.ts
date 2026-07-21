@@ -17,6 +17,9 @@ export class SetupExperienceUsersPage {
   readonly heading: Locator;
   readonly requireIdpCheckbox: Locator;
   readonly createHiddenAdminCheckbox: Locator;
+  // Managed-local-account "Lock end user info" toggle. Only renders once
+  // "Require IdP authentication" is enabled (see EndUserAuthSection).
+  readonly lockEndUserInfoCheckbox: Locator;
   readonly localAccountAdminRadio: Locator;
   readonly localAccountStandardRadio: Locator;
   readonly localAccountSkipRadio: Locator;
@@ -33,6 +36,7 @@ export class SetupExperienceUsersPage {
     // the accessible control is the ARIA checkbox carrying the label text.
     this.requireIdpCheckbox = page.getByRole('checkbox', { name: 'Require IdP authentication' });
     this.createHiddenAdminCheckbox = page.getByRole('checkbox', { name: 'Create hidden admin' });
+    this.lockEndUserInfoCheckbox = page.getByRole('checkbox', { name: 'Lock end user info' });
     this.localAccountAdminRadio = page.getByRole('radio', { name: 'Admin' });
     this.localAccountStandardRadio = page.getByRole('radio', { name: 'Standard' });
     this.localAccountSkipRadio = page.getByRole('radio', { name: 'Skip (no account)' });

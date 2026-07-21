@@ -27,6 +27,12 @@ export class EditUserPage {
   readonly saveButton: Locator;
   readonly cancelButton: Locator;
 
+  // API-only edit: endpoint-access controls (same shape as CreateApiUserPage).
+  readonly specificEndpointsLabel: Locator;
+  readonly endpointTable: Locator;
+  readonly endpointSearch: Locator;
+  readonly endpointSuggestionRows: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -37,6 +43,23 @@ export class EditUserPage {
     this.backButton = page.getByRole('link', { name: 'Back to users' });
     this.saveButton = page.getByRole('button', { name: 'Save' });
     this.cancelButton = page.getByRole('button', { name: 'Cancel' });
+
+    this.specificEndpointsLabel = page.locator('label[for="specific-endpoints"]');
+    // Role-less container div — scoped by its component class (same as create).
+    this.endpointTable = page.locator('.endpoint-selector-table');
+    this.endpointSearch = page.getByPlaceholder('Search by name or path');
+    this.endpointSuggestionRows = page.locator(
+      '.endpoint-selector-table__search-dropdown tbody tr',
+    );
+  }
+
+  /**
+   * Search the endpoint catalog and click the matching suggestion to add it
+   * to the API user's allow-list (Specific API endpoints mode).
+   */
+  async addEndpoint(query: string, rowText: string | RegExp): Promise<void> {
+    await this.endpointSearch.fill(query);
+    await this.endpointSuggestionRows.filter({ hasText: rowText }).first().click();
   }
 
   /** Direct navigation. Specs typically reach this page via the row's Edit action. */

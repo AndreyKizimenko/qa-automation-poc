@@ -27,6 +27,15 @@ test.describe('Login', () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  test('redirects to login when visiting a protected route signed out', async ({ page, loginPage, pageHealth }) => {
+    // Booting the app unauthenticated on a protected route logs a 401-driven
+    // console error before the redirect resolves; the redirect is the behavior.
+    pageHealth.disable();
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/login/);
+    await expect(loginPage.emailInput).toBeVisible();
+  });
+
   test('redirects to dashboard when already authenticated', async ({ browser }) => {
     // Loads the project's saved admin state to bypass the describe-level auth reset.
     const context = await browser.newContext({

@@ -124,3 +124,26 @@ for (const scope of SCOPES) {
     });
   });
 }
+
+// Fleet lets you save a report whose SQL has a syntax error (so teams can
+// intentionally capture false-positives); the editor surfaces the error
+// inline without disabling Save. Non-persisting, so it lives outside the
+// scoped CRUD lifecycle above.
+test.describe('Reports — SQL validation', () => {
+  test('invalid SQL surfaces a syntax error but Save stays enabled', async ({ reportEdit }) => {
+    await reportEdit.gotoNew();
+    await reportEdit.setSql('SELECT * FRM osquery_info;');
+    await expect(reportEdit.sqlSyntaxError).toBeVisible();
+    await expect(reportEdit.saveButton).toBeEnabled();
+  });
+});
+
+// A brand-new report starts from Fleet's DEFAULT_QUERY (SELECT * FROM
+// osquery_info) with Save enabled — the ready-to-save default state.
+test.describe('Reports — new-report defaults', () => {
+  test('starts from the default osquery_info query with Save enabled', async ({ reportEdit }) => {
+    await reportEdit.gotoNew();
+    expect(await reportEdit.sqlText()).toContain('SELECT * FROM osquery_info');
+    await expect(reportEdit.saveButton).toBeEnabled();
+  });
+});

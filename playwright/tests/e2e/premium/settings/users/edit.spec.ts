@@ -1,5 +1,5 @@
 import { test, expect } from '@fixtures';
-import { createUser, deleteUser, withApiRequest } from '@helpers/api';
+import { createApiUser, createUser, deleteUser, withApiRequest } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Edit user', () => {
@@ -73,5 +73,42 @@ test.describe('Edit user', () => {
   test('activity feed shows the edited-user entry', async ({ dashboard }) => {
     await dashboard.goto();
     await dashboard.expectActivity(activityCopy.user.changedGlobalRole({ email, role: 'maintainer' }));
+  });
+});
+
+test.describe('Edit API-only user', () => {
+  const stamp = Date.now();
+  const name = `QA API Edit ${stamp}`;
+  let apiUserId: number;
+
+  test.beforeAll(async () => {
+    await withApiRequest(async (request) => {
+      const { user } = await createApiUser(request, { name, global_role: 'observer' });
+      apiUserId = user.id;
+    });
+  });
+
+  test.afterAll(async () => {
+    if (apiUserId === undefined) return;
+    await withApiRequest((request) => deleteUser(request, apiUserId, { ignoreMissing: true }));
+  });
+
+  test('switches an API user from All to Specific endpoints and saves', async ({
+    editUserPage,
+    usersPage,
+    page,
+  }) => {
+    await editUserPage.goto(apiUserId);
+    await expect(editUserPage.apiUserHeading).toBeVisible();
+
+    // Default is All endpoints; switching reveals the endpoint selector.
+    await expect(editUserPage.endpointTable).toBeHidden();
+    await editUserPage.specificEndpointsLabel.click();
+    await expect(editUserPage.endpointTable).toBeVisible();
+    await editUserPage.addEndpoint('hosts', /List hosts/);
+
+    await editUserPage.saveButton.click();
+    await expect(page).toHaveURL(/\/settings\/users\b/);
+    await usersPage.toast.expectSuccess(/Successfully edited/);
   });
 });

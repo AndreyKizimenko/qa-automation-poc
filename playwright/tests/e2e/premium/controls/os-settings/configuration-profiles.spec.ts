@@ -100,3 +100,34 @@ for (const scope of SCOPES) {
     });
   }
 }
+
+// Fleet signs profiles itself, so a pre-signed (PKCS7/CMS) .mobileconfig is
+// rejected on upload. Negative path, so it lives in its own describe outside
+// the per-scope CRUD lifecycle above. The signed fixture is generated with
+// openssl (see test-data/apple/macos/profiles/README).
+test.describe('MDM • OS settings — configuration profile upload validation', () => {
+  const signedProfile = path.resolve(
+    __dirname,
+    '../../../../../test-data/apple/macos/profiles/fleet-test-signed.mobileconfig',
+  );
+
+  test('rejects a signed .mobileconfig with a "can\'t be signed" error', async ({
+    dashboard,
+    controls,
+    osSettings,
+    configurationProfiles,
+    pageHealth,
+  }) => {
+    // The rejection is a deliberate 4xx that the app may log to the console.
+    pageHealth.disable();
+
+    await dashboard.goto();
+    await dashboard.navbar.goToControls();
+    await controls.goToOsSettings();
+    await osSettings.goToConfigurationProfiles();
+    await configurationProfiles.teamDropdown.select('Unassigned');
+
+    await configurationProfiles.submitProfileUpload(signedProfile);
+    await configurationProfiles.toast.expectError(/Configuration profiles can't be signed/);
+  });
+});

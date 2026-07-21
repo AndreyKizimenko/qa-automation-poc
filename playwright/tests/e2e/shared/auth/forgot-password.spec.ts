@@ -10,5 +10,11 @@ test.describe('Forgot password', () => {
 
     await expect(page).toHaveURL(/\/login\/forgot/);
     await expect(forgotPasswordPage.heading).toBeVisible();
+    // The reset page renders its actionable form (email field + submit). The
+    // submit → "email sent" confirmation path isn't asserted here: it only
+    // renders when the instance has SMTP/SES configured (the QA instances
+    // don't — the endpoint returns ErrPasswordResetNotConfigured instead).
+    await expect(forgotPasswordPage.emailInput).toBeVisible();
+    await expect(forgotPasswordPage.submitButton).toBeVisible();
   });
 });

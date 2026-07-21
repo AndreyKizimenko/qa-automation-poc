@@ -235,3 +235,19 @@ for (const scope of SCOPES) {
     });
   }
 }
+
+// Software is added to a specific fleet, so under the "All fleets" aggregate
+// the "Add software" button is disabled and explains why on hover. A gating
+// check, not part of the add/delete lifecycle, so it lives in its own describe.
+test.describe('Software — add-software gating', () => {
+  test('Add software is disabled under All fleets, with a tooltip', async ({ softwareTitles, page }) => {
+    await softwareTitles.goto();
+    await softwareTitles.teamDropdown.select('All fleets');
+
+    await expect(softwareTitles.addSoftwareButton).toBeDisabled();
+    // The button is disabled (swallows pointer events), so force the hover to
+    // trigger the wrapping TooltipWrapper's mouseenter and reveal the reason.
+    await softwareTitles.addSoftwareButton.hover({ force: true });
+    await expect(page.getByText('Select a fleet to add software.')).toBeVisible();
+  });
+});
