@@ -20,6 +20,7 @@ export class SoftwareTitlesPage {
   readonly search: Locator;
   readonly showVersionsSwitch: Locator;
   readonly manageAutomationsButton: Locator;
+  readonly manageAutomationsModal: Locator;
   readonly addSoftwareButton: Locator;
 
   // Tabs (Inventory / OS / Vulnerabilities)
@@ -37,7 +38,15 @@ export class SoftwareTitlesPage {
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
-    this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations' });
+    // AutomationsButton renders a settings icon + the visible label "Automations";
+    // clicking it (when enabled) opens the "Manage automations" modal. Only global
+    // admins see it, and only under the "All fleets" aggregate is it enabled.
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    // Fleet's Modal renders a role-less title <span>, so target the shared
+    // container class filtered by the modal's title text.
+    this.manageAutomationsModal = page
+      .locator('.modal__modal_container')
+      .filter({ hasText: 'Manage automations' });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
 
     // First software subnav tab; renders <TabText>Inventory</TabText> via react-tabs.
