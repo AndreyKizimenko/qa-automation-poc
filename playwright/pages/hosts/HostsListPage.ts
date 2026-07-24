@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { StatusFilter } from '../components/StatusFilter';
 import { LabelFilter } from '../components/LabelFilter';
+import { Toast } from '../components/Toast';
 
 /**
  * /hosts/manage — the list of all hosts enrolled in Fleet.
@@ -17,11 +18,19 @@ export class HostsListPage {
   readonly teamDropdown: TeamDropdown;
   readonly statusFilter: StatusFilter;
   readonly labelFilter: LabelFilter;
+  readonly toast: Toast;
 
   readonly search: Locator;
   readonly addHostsButton: Locator;
   readonly editColumnsButton: Locator;
   readonly filterPill: Locator;
+
+  // Enroll-secret modals (shared EnrollSecrets components).
+  readonly enrollSecretsModal: Locator;
+  readonly addSecretButton: Locator;
+  readonly secretEditorModal: Locator;
+  readonly secretInput: Locator;
+  readonly saveSecretButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -31,6 +40,7 @@ export class HostsListPage {
     this.teamDropdown = new TeamDropdown(page);
     this.statusFilter = new StatusFilter(page);
     this.labelFilter = new LabelFilter(page);
+    this.toast = new Toast(page);
 
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
@@ -39,6 +49,37 @@ export class HostsListPage {
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
     this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
+
+    this.enrollSecretsModal = page.locator('.modal__modal_container').filter({ hasText: 'Manage enroll secrets' });
+    this.addSecretButton = this.enrollSecretsModal.getByRole('button', { name: 'Add secret' });
+    // SecretEditorModal shares the "Add secret" title with the button above, so
+    // scope it by its unique helper text instead.
+    this.secretEditorModal = page
+      .locator('.modal__modal_container')
+      .filter({ hasText: 'Must contain at least 32 characters' });
+    this.secretInput = this.secretEditorModal.getByRole('textbox', { name: 'Secret' });
+    this.saveSecretButton = this.secretEditorModal.getByRole('button', { name: 'Save', exact: true });
+  }
+
+  /**
+   * Open the "Manage enroll secrets" modal for a fleet via its deep-link query
+   * param (avoids hunting the header/empty-state button).
+   */
+  async openEnrollSecrets(fleetId: number): Promise<void> {
+    await this.page.goto(`/hosts/manage?fleet_id=${fleetId}&manage_enroll_secrets=1`);
+    await expect(this.enrollSecretsModal).toBeVisible();
+  }
+
+  /**
+   * Add a new enroll secret: opens the editor (pre-filled with a generated
+   * secret), captures it, and saves. Returns the added secret string.
+   */
+  async addEnrollSecret(): Promise<string> {
+    await this.addSecretButton.click();
+    await expect(this.secretEditorModal).toBeVisible();
+    const secret = await this.secretInput.inputValue();
+    await this.saveSecretButton.click();
+    return secret;
   }
 
   async goto(opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {

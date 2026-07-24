@@ -18,6 +18,7 @@ export * from './reports';
 export * from './labels';
 export * from './policies';
 export * from './variables';
+export * from './enroll-secrets';
 export * from './static-users';
 export * from './role-access';
 export * from './cleanup';
