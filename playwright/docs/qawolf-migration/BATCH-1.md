@@ -73,6 +73,10 @@ Moved to Batch 2 (software-title Actions work, pairs with edit-package):
       settings `upload-and-delete-script-to-no-team` (= controls/scripts/library.spec).
 
 ## AUGMENTs — graft onto existing specs. ~33 flows. Grouped by risk.
+> Note: the per-line `[ ]`/`[x]` boxes below were not maintained after the batch closed. The authoritative
+> record is the **BATCH 1 COMPLETE** header above — 18 augments shipped + committed (`61ea344`); the items
+> that were intentionally not ported are in the "Deferred with grounding notes" section. Don't infer status
+> from the boxes.
 
 ### 1a — safe, POM already sufficient
 - [x] `shared/auth/login.spec.ts` — signed-out visit to protected route → `/login` (C10 #4). **DONE.**

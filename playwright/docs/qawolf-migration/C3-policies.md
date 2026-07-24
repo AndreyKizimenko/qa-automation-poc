@@ -51,7 +51,7 @@ Existing coverage read:
 | 38 | verify-sql-statement-for-platform-compatibility | Premium | Compat badge across 6 cases incl. syntax-error(save still enabled), CTE tables ignored, macadmins ext | MERGE [SQL-validation] | NEW `premium/policies/sql-validation.spec.ts` | Superset — canonical source for the SQL-validation spec. |
 
 ## Summary
-- Counts: DUP 2, AUGMENT 1, NEW 3, CUT 2, MERGE 32
+- Counts: DUP 2, AUGMENT 1, NEW 2, CUT 2, MERGE 31 (total 38)
   - (MERGE flows collapse into 8 groups → ~10 spec files. "NEW" as a standalone disposition = single-flow gaps: empty-automation #12, AI-autofill #27; plus #17/#25 CUT.)
 
 - **NEW specs recommended** (proposed paths):

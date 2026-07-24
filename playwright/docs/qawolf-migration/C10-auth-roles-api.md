@@ -38,7 +38,7 @@ NOTE: 4 of the 5 `authentication-*` flows are **empty placeholders** (goal/arran
 
 ## Summary
 
-- **Counts: DUP 9, AUGMENT 4, NEW 0, CUT 1, MERGE 9** (the 9 MERGE flows collapse into **one NEW** parameterized API spec — see below).
+- **Counts: DUP 11, AUGMENT 4, NEW 0, CUT 1, MERGE 9** (total 25) (the 9 MERGE flows collapse into **one NEW** parameterized API spec — see below).
 
 - **NEW specs recommended:**
   - `tests/api/premium/max-request-file-sizes.spec.ts` — ONE table-driven pure-API spec replacing all 9 `api-max-request-file-sizes-*` flows. Table rows = `{endpoint, payload-builder, sizeBytes, expect: pass | {status, message, reason}}`. Covers: single script (pass / >500k-char fail), single profile (pass / >1.573MB fail), batch scripts (<5MB, <25MB), batch profiles (<25MB), EULA (<25MB pass / >26.21MB fail). Premium subpath so the free project skips it (config-profiles/EULA are premium-gated → would 402 on free). Rationale: 9 UI-heavy flows → 1 clean contract spec; drop the entire UI dance (token minting, team dropdown, Controls nav, list-render/pagination assertions) and assert on the API response only.
