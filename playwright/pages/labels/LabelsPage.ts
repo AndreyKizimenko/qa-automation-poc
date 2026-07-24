@@ -133,6 +133,24 @@ export class LabelsPage {
     return this.table.rowWith(name);
   }
 
+  /** Label names in the "Name" column across every row on the current page. */
+  async labelNames(): Promise<string[]> {
+    await expect(this.table.firstRow).toBeVisible();
+    const rows = this.table.table.locator('tbody tr');
+    const count = await rows.count();
+    const names: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const cell = await this.table.cellByColumn(rows.nth(i), 'Name');
+      names.push((await cell.innerText()).trim());
+    }
+    return names;
+  }
+
+  /** Click a sortable column header to toggle its sort (client-side). */
+  async sortByColumn(header: 'Name' | 'Description' | 'Type'): Promise<void> {
+    await this.page.getByRole('button', { name: header, exact: true }).click();
+  }
+
   /**
    * Page through the client-side-paginated list until a label's row is found,
    * and return it. The list sorts by name and pages at 20, so a label can land
