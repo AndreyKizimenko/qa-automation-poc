@@ -52,17 +52,28 @@ Legend: [ ] todo · [x] done (green + committed) · [→4] moved to Batch 4 · [
   validated. appConfig snapshot/restore of `webhook_settings.host_status_webhook` (new `HostStatusWebhook`
   config interface). `IntegrationsPage.gotoHostStatusWebhook`/`setHostStatusWebhookEnabled`/
   `saveHostStatusWebhook`. C1 #3/#17. Live: premium + free.
-- [ ] **labels-crud via Hosts label-filter** — OVERLAPS the shipped `premium/labels/labels.spec.ts` (Batch 2,
-  created via `/labels/manage`). This is the *Hosts label-filter* entry (Add label + filter-pill pencil/trash).
-  Decide: augment the existing labels spec with the filter entry point, or skip as redundant. C1 #2/#14/#15.
+- [skip] **labels-crud via Hosts label-filter** — SKIPPED as redundant (per lead): label CRUD is covered by the
+  shipped `premium/labels/labels.spec.ts` and role-access by the labels role-access spec (both Batch 2). The
+  only unique bit here is the Hosts label-filter entry point (Add label + filter-pill pencil/trash), not worth a
+  duplicate spec. C1 #2/#14/#15.
 
 ## Actionable now — hosts DETAILS reads (C2, offline-host cached data)
-- [ ] **host-software** (free + premium) — Software tab (Full inventory) search-by-name filters; drill a
-  title → Hosts count → `/hosts/manage` filtered by that software (filter pill shows the name). Reads cached
-  inventory on offline hosts; reuses `SoftwareTitleDetailPage` + `HostsListPage.filterPill`. C2 #6/#9/#16/#21.
-- [ ] **host-details-smoke (partial)** — Local-user-accounts card search + (premium) Agent/osquery tooltip
-  hover are cached reads; **Refetch is online-only → Batch 4**, so this spec is only partially authorable now.
-  C2 #10/#17/#22 now; #7/#19 (refetch) → Batch 4.
+- [x] **host-software** (shared) — `tests/e2e/shared/hosts/host-software.spec.ts`. Host Software tab (Full
+  inventory): search-by-name filters (`getByPlaceholder('Search by name or vulnerability (CVE)')`), then drill
+  the first title → click its **"Hosts"** count → hosts list filtered by that software (filter pill names it).
+  Made deterministic via new `findHostWithSoftware(request)` (first host reporting software — avoids a fragile
+  "first host" pick). The host-count link's visible text is the volatile count, so `SoftwareTitleDetailPage.
+  hostCountLink` targets it by the `software_title_id` href. Reused across tiers (identical behavior; free
+  instance also has host software) → shared. `HostDetailsPage.searchSoftware`/`firstSoftwareName`;
+  `SoftwareTitleDetailPage.viewHosts`. C2 #6/#9/#16/#21. Live: premium + free.
+- [→4] **host-details-smoke** — Local-user-accounts search + Agent/osquery tooltip are cached reads, but
+  **Refetch is online-only**, so this spec is dominated by Batch-4 work; deferred whole to Batch 4 with the
+  live-host fixture. C2 #7/#10/#17/#19/#22.
+
+## ✅ Batch 3 actionable-now set COMPLETE
+All host-independent hosts-area coverage that doesn't need an online host / provisioning is shipped:
+export-csv, edit-columns, add-hosts-download, cta-visibility (free+premium), host-status-webhook, host-software.
+Everything else in the hosts area is in the [→4] / [cut] lists below (online-host, destructive, or blocked).
 
 ## Deferred to Batch 4 (online host / destructive / blocked)
 - [→4] **bulk-transfer** + **host-transfer-permissions** (C1 #10/#12/#20/#22/#25) — mutate host↔team
