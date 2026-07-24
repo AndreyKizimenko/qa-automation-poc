@@ -7,6 +7,18 @@ export interface EnrollSecret {
   secret: string;
 }
 
+/** Current global (no-team) enroll secrets — GET /spec/enroll_secret. */
+export async function getGlobalEnrollSecrets(
+  request: APIRequestContext,
+): Promise<EnrollSecret[]> {
+  const res = await request.get(apiUrl('spec/enroll_secret'), { headers: authHeaders() });
+  if (!res.ok()) {
+    throw new Error(`[getGlobalEnrollSecrets] ${res.status()}: ${await res.text()}`);
+  }
+  const body = await res.json();
+  return ((body.spec?.secrets ?? []) as EnrollSecret[]).map((s) => ({ secret: s.secret }));
+}
+
 /** Current enroll secrets for a team/fleet. */
 export async function getTeamEnrollSecrets(
   request: APIRequestContext,

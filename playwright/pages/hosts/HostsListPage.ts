@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { StatusFilter } from '../components/StatusFilter';
 import { LabelFilter } from '../components/LabelFilter';
+import { AddHostsModal } from '../components/AddHostsModal';
 import { Toast } from '../components/Toast';
 
 /**
@@ -18,6 +19,7 @@ export class HostsListPage {
   readonly teamDropdown: TeamDropdown;
   readonly statusFilter: StatusFilter;
   readonly labelFilter: LabelFilter;
+  readonly addHostsModal: AddHostsModal;
   readonly toast: Toast;
 
   readonly search: Locator;
@@ -44,6 +46,7 @@ export class HostsListPage {
     this.teamDropdown = new TeamDropdown(page);
     this.statusFilter = new StatusFilter(page);
     this.labelFilter = new LabelFilter(page);
+    this.addHostsModal = new AddHostsModal(page);
     this.toast = new Toast(page);
 
     this.search = page.getByPlaceholder('Search');
@@ -118,6 +121,12 @@ export class HostsListPage {
     const downloadPromise = this.page.waitForEvent('download');
     await this.exportHostsButton.click();
     return downloadPromise;
+  }
+
+  /** Opens the Add hosts modal via the header button. */
+  async openAddHosts(): Promise<void> {
+    await this.addHostsButton.click();
+    await expect(this.addHostsModal.modal).toBeVisible();
   }
 
   /** A hosts-table column header by its visible name. */

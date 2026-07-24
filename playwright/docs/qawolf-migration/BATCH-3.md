@@ -24,9 +24,16 @@ Legend: [ ] todo · [x] done (green + committed) · [→4] moved to Batch 4 · [
   hides `device_mapping`/"User email" by DEFAULT** (verified live), so the flow is hidden→show→hide (also
   self-restores). Choice persists to per-context localStorage (`hostHiddenColumns`), so no cross-test
   mutation. C1 #7/#24. `HostsListPage.columnHeader()` + `toggleColumn()`. Live: premium + free.
-- [ ] **add-hosts-download** (shared) — Add Hosts modal → Advanced/plain-osquery → download Fleet cert /
-  enroll secret / flagfile; assert contents (`BEGIN CERTIFICATE`, secret string, server line). Big POM build
-  (Add Hosts modal). No mutation. C1 #1/#9.
+- [x] **add-hosts-download** (shared) — `tests/e2e/shared/hosts/add-hosts-download.spec.ts`. New
+  `AddHostsModal` component (`.add-hosts-modal`/`.platform-wrapper`): open → **Advanced** tab shows the Fleet
+  cert download (`.platform-wrapper__fleet-certificate-download`, `.first()` — it renders twice once expanded);
+  the **"Plain osquery"** RevealButton then shows enroll-secret + flagfile downloads (all three Buttons are
+  just named "Download" → scope enroll-secret/flagfile to `.platform-wrapper__advanced--{enroll-secrets,
+  flagfile}`). Downloads fire via FileSaver (captured by `waitForEvent('download')`; read with
+  `fs.readFileSync(await dl.path())`). Asserts cert `BEGIN CERTIFICATE`, enroll secret ∈ global secrets, flagfile
+  `--enroll_secret_path=secret.txt` + `--tls_server_certs=fleet.pem`. Select **"All fleets"** → modal uses the
+  global secret (no-op on free). New `getGlobalEnrollSecrets` (GET `/spec/enroll_secret`). No mutation. C1
+  #1/#9. Live: premium + free.
 - [ ] **cta-visibility** (free + premium, explicit tiers — role-different) — admin/maintainer see Add hosts /
   Manage enroll secret / Add label; observer does not (Export always visible). Uses static users; bundles the
   enroll-secret add/delete lifecycle (POM support exists from Batch 2). C1 #5/#6/#19/#21/#23.
