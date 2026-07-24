@@ -35,12 +35,23 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   label. So global-observer: no Add + only "View all hosts"; ws-maintainer: has Add but only "View all
   hosts" on a GLOBAL label (must use ws-maintainer, not global-maintainer, for the can't-edit assertion).
   POM: `openRowActions()` + `rowActionOption()`.
-- [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1),
-  **no-teams-views** (Unassigned software/OS/vuln read + count integrity).
-- [ ] other **settings**: advanced-options (appConfig save/restore; AVOID host-expiry — can delete hosts),
-  fleet-desktop (premium-only presence), enroll-secrets.
-- [ ] **mdm** (disk-encryption, mdm-settings), **controls** (batch-progress nav/empty, run-script-modal,
-  custom-variables), **automatic-enrollment**, API file-size spec.
+- [x] **software no-teams-views** (premium) — commit `cf253f9`. Read-only: Unassigned scope persists across
+  Inventory/OS/Vulnerabilities (assert via `TeamDropdown.currentValue`); drilling a title → detail with no
+  "Add software". Reuses SoftwareTitlesPage; premium-only (Unassigned is a premium scope).
+- [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1).
+- [ ] **controls custom-variables** — GROUNDED but not built; UI has been **REDESIGNED** since the QA Wolf
+  flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
+  custom-variable-with-secret) and **Custom host vitals**. Both are **table-based** (not the flow's
+  `.list-item`). `AddCustomVariableModal` (title "Add custom variable", InputField Name/Value, name
+  auto-uppercases, validation "Name is required"/"Value is required"/"Name may only include uppercase
+  letters, numbers, and underscores"); delete via a trash `Icon` button `ariaLabel="Delete <name>"` +
+  `DeleteCustomVariableModal`. Frontend: `pages/ManageControlsPage/Variables/**`. Premium (gated on
+  isPremiumTier). Re-ground against `cards/GlobalVariables` — the QA Wolf `.list-item` selectors are stale.
+- [ ] other **settings**: advanced-options (appConfig save/restore; **AVOID host-expiry — can delete hosts**,
+  and most advanced toggles have side effects: scripts/software-inventory off would break other specs — pick
+  a truly innocuous field or skip), fleet-desktop (premium-only presence), enroll-secrets (view = safe read).
+- [ ] **mdm** (disk-encryption, mdm-settings), **controls** (batch-progress nav/empty, run-script-modal),
+  **automatic-enrollment**, API file-size spec.
 - [ ] Batch 3 (hosts area) + Batch 4 (host-dependent).
 
 ## Done — grounding notes (revisit, don't re-derive)
