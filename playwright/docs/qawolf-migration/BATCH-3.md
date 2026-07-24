@@ -43,8 +43,15 @@ Legend: [ ] todo · [x] done (green + committed) · [→4] moved to Batch 4 · [
   (a11y name resolves to "plus") inside the *opened* label dropdown, and role-based label-add is already
   covered by the Batch-2 labels role-access spec; the enroll-secret add/copy/delete lifecycle is a mutation
   (dropped — visibility is the concern here). C1 #5/#6/#19/#21/#23. Live: premium 3, free 2.
-- [ ] **host-status-webhook** (shared settings) — global host-status webhook enable + URL + %, save, verify
-  persist, restore. appConfig save/restore (`webhook_settings.host_status_webhook`). C1 #3/#17.
+- [x] **host-status-webhook** (shared settings) — `tests/e2e/shared/settings/host-status-webhook.spec.ts`.
+  Settings → Integrations → **Host status alerts** (`/settings/integrations/host-status-webhook`, H2 "Host
+  status alerts"; both tiers, not premium-gated). Enable (Fleet `<Checkbox>` → `getByRole('checkbox',
+  {name:'enableHostStatusWebhook'})` — a11y name is the `name` prop; read aria-checked) → fill Destination URL
+  (getByLabel; only rendered once enabled) → Save ("Save"; toast **"Successfully updated settings."**) →
+  API-verify. **% and days dropdowns need NOT be set** — they default to 1 and only `destination_url` is
+  validated. appConfig snapshot/restore of `webhook_settings.host_status_webhook` (new `HostStatusWebhook`
+  config interface). `IntegrationsPage.gotoHostStatusWebhook`/`setHostStatusWebhookEnabled`/
+  `saveHostStatusWebhook`. C1 #3/#17. Live: premium + free.
 - [ ] **labels-crud via Hosts label-filter** — OVERLAPS the shipped `premium/labels/labels.spec.ts` (Batch 2,
   created via `/labels/manage`). This is the *Hosts label-filter* entry (Add label + filter-pill pencil/trash).
   Decide: augment the existing labels spec with the filter entry point, or skip as redundant. C1 #2/#14/#15.

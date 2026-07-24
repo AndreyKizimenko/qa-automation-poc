@@ -25,9 +25,18 @@ export interface FailingPoliciesWebhook {
   [key: string]: unknown;
 }
 
+export interface HostStatusWebhook {
+  enable_host_status_webhook?: boolean;
+  destination_url?: string;
+  host_percentage?: number;
+  days_count?: number;
+  [key: string]: unknown;
+}
+
 export interface WebhookSettings {
   vulnerabilities_webhook?: VulnerabilitiesWebhook;
   failing_policies_webhook?: FailingPoliciesWebhook;
+  host_status_webhook?: HostStatusWebhook;
   [key: string]: unknown;
 }
 

@@ -30,6 +30,12 @@ export class IntegrationsPage {
   readonly deleteEulaModal: Locator;
   readonly deleteEulaConfirmButton: Locator;
 
+  // Host status webhook subpage (global).
+  readonly hostStatusHeading: Locator;
+  readonly hostStatusWebhookToggle: Locator;
+  readonly hostStatusDestinationUrl: Locator;
+  readonly hostStatusSaveButton: Locator;
+
   // SSO subpage — end-user authentication (IdP) form. The "Fleet users" tab
   // has the same field labels, so everything is scoped to this section.
   readonly endUserAuthSection: Locator;
@@ -73,6 +79,13 @@ export class IntegrationsPage {
       exact: true,
     });
 
+    this.hostStatusHeading = page.getByRole('heading', { name: 'Host status alerts' });
+    // Fleet's Checkbox exposes the interactive element as role="checkbox" whose
+    // accessible name is the `name` prop (not the visible label text).
+    this.hostStatusWebhookToggle = page.getByRole('checkbox', { name: 'enableHostStatusWebhook' });
+    this.hostStatusDestinationUrl = page.getByLabel('Destination URL');
+    this.hostStatusSaveButton = page.getByRole('button', { name: 'Save', exact: true });
+
     // The end-user IdP form's root; the sibling "Fleet users" tab reuses the
     // same field labels, so scope every field/button to this section.
     this.endUserAuthSection = page.locator('.end-user-auth-section');
@@ -113,6 +126,28 @@ export class IntegrationsPage {
     await expect(this.deleteEulaModal).toBeVisible();
     await this.deleteEulaConfirmButton.click();
     await expect(this.eulaListItem).toBeHidden();
+  }
+
+  /** Global host-status webhook settings page. */
+  async gotoHostStatusWebhook(): Promise<void> {
+    await this.page.goto('/settings/integrations/host-status-webhook');
+    await expect(this.hostStatusHeading).toBeVisible();
+  }
+
+  /**
+   * Ensures the host-status-webhook enable checkbox matches `enabled`. Reading
+   * aria-checked keeps it idempotent regardless of the starting config state.
+   */
+  async setHostStatusWebhookEnabled(enabled: boolean): Promise<void> {
+    const checked = (await this.hostStatusWebhookToggle.getAttribute('aria-checked')) === 'true';
+    if (checked !== enabled) await this.hostStatusWebhookToggle.click();
+    await expect(this.hostStatusWebhookToggle).toHaveAttribute('aria-checked', String(enabled));
+  }
+
+  /** Saves the host-status-webhook card and waits for the success toast. */
+  async saveHostStatusWebhook(): Promise<void> {
+    await this.hostStatusSaveButton.click();
+    await this.toast.expectSuccess('Successfully updated settings.');
   }
 
   /** SSO → End users tab, where the end-user IdP form lives. */
