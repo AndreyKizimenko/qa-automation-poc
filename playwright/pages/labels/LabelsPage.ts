@@ -166,17 +166,25 @@ export class LabelsPage {
   }
 
   /**
-   * Open a label row's Actions dropdown and pick an option. Pages to the row
-   * first; the dropdown reveals on row hover and its option menu portals to
-   * <body>.
+   * Open a label row's Actions dropdown (without picking an option). Pages to
+   * the row first; the dropdown reveals on row hover and its option menu
+   * portals to <body>. Use with `rowActionOption` to inspect which actions a
+   * role is offered.
    */
-  async runRowAction(name: string, action: LabelRowAction): Promise<void> {
+  async openRowActions(name: string): Promise<void> {
     const row = await this.locateRow(name);
     await row.hover();
     await row.locator('.actions-dropdown-select__control').click();
-    await this.page
-      .locator('.actions-dropdown-select__option')
-      .filter({ hasText: action })
-      .click();
+  }
+
+  /** A row-actions menu option by its visible label (matched by text). */
+  rowActionOption(action: LabelRowAction): Locator {
+    return this.page.locator('.actions-dropdown-select__option').filter({ hasText: action });
+  }
+
+  /** Open a label row's Actions dropdown and pick an option. */
+  async runRowAction(name: string, action: LabelRowAction): Promise<void> {
+    await this.openRowActions(name);
+    await this.rowActionOption(action).click();
   }
 }
