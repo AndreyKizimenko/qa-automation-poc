@@ -12,8 +12,20 @@ export interface OrgInfo {
   [key: string]: unknown;
 }
 
+export interface VulnerabilitiesWebhook {
+  enable_vulnerabilities_webhook?: boolean;
+  destination_url?: string;
+  [key: string]: unknown;
+}
+
+export interface WebhookSettings {
+  vulnerabilities_webhook?: VulnerabilitiesWebhook;
+  [key: string]: unknown;
+}
+
 export interface AppConfig {
   org_info?: OrgInfo;
+  webhook_settings?: WebhookSettings;
   [key: string]: unknown;
 }
 

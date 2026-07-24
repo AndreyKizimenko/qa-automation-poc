@@ -4,6 +4,7 @@ import { FilterModal } from '../components/FilterModal';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
+import { Toast } from '../components/Toast';
 
 /**
  * /software/inventory — the list of installed software with vulnerability counts.
@@ -15,6 +16,7 @@ export class SoftwareTitlesPage {
   readonly filter: FilterModal;
   readonly pagination: Pagination;
   readonly teamDropdown: TeamDropdown;
+  readonly toast: Toast;
 
   // Page controls
   readonly search: Locator;
@@ -22,6 +24,11 @@ export class SoftwareTitlesPage {
   readonly manageAutomationsButton: Locator;
   readonly manageAutomationsModal: Locator;
   readonly addSoftwareButton: Locator;
+
+  // "Manage automations" modal — vulnerability-automations controls.
+  readonly vulnAutomationsToggle: Locator;
+  readonly vulnWebhookUrlInput: Locator;
+  readonly saveAutomationsButton: Locator;
 
   // Tabs (Inventory / OS / Vulnerabilities)
   readonly inventoryTab: Locator;
@@ -35,6 +42,7 @@ export class SoftwareTitlesPage {
     this.filter = new FilterModal(page);
     this.pagination = new Pagination(page);
     this.teamDropdown = new TeamDropdown(page);
+    this.toast = new Toast(page);
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
@@ -48,6 +56,14 @@ export class SoftwareTitlesPage {
       .locator('.modal__modal_container')
       .filter({ hasText: 'Manage automations' });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
+
+    // Vulnerability-automations controls inside the modal. The toggle is Fleet's
+    // Slider (a role="switch" button with aria-checked). The webhook URL field's
+    // "Destination URL" label is tooltip-wrapped (no htmlFor association), so
+    // target it by placeholder.
+    this.vulnAutomationsToggle = this.manageAutomationsModal.getByRole('switch');
+    this.vulnWebhookUrlInput = this.manageAutomationsModal.getByPlaceholder('https://server.com/example');
+    this.saveAutomationsButton = this.manageAutomationsModal.getByRole('button', { name: 'Save', exact: true });
 
     // First software subnav tab; renders <TabText>Inventory</TabText> via react-tabs.
     this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
@@ -91,6 +107,43 @@ export class SoftwareTitlesPage {
   async clickAddSoftware(): Promise<void> {
     await this.addSoftwareButton.click();
     await expect(this.page).toHaveURL(/\/software\/add\/fleet-maintained/);
+  }
+
+  /** Open the "Manage automations" modal (button must be enabled — All fleets). */
+  async openManageAutomations(): Promise<void> {
+    await this.manageAutomationsButton.click();
+    await expect(this.manageAutomationsModal).toBeVisible();
+  }
+
+  /**
+   * Toggle the "Vulnerability automations" slider to `enabled`. The slider is a
+   * role="switch" button; reads/asserts its aria-checked state so the call is
+   * idempotent.
+   */
+  async setVulnerabilityAutomations(enabled: boolean): Promise<void> {
+    const isOn = (await this.vulnAutomationsToggle.getAttribute('aria-checked')) === 'true';
+    if (isOn !== enabled) await this.vulnAutomationsToggle.click();
+    await expect(this.vulnAutomationsToggle).toHaveAttribute('aria-checked', String(enabled));
+  }
+
+  /**
+   * Select the "Webhook" workflow radio (the modal may open on "Ticket"). The
+   * Radio's real <input> is hidden, so click the label; the destination-URL
+   * field renders once it's selected.
+   */
+  async selectWebhookWorkflow(): Promise<void> {
+    await this.manageAutomationsModal.locator('label').filter({ hasText: 'Webhook' }).click();
+    await expect(this.vulnWebhookUrlInput).toBeVisible();
+  }
+
+  /**
+   * Save the manage-automations modal. Waits for the modal to close, which is
+   * the reliable save-completed signal (the success toast lives only 5s and can
+   * linger from a prior save, so it's not a safe wait on its own).
+   */
+  async saveAutomations(): Promise<void> {
+    await this.saveAutomationsButton.click();
+    await expect(this.manageAutomationsModal).toBeHidden();
   }
 
   /**
