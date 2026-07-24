@@ -16,6 +16,7 @@ export * from './mdm';
 export * from './users';
 export * from './reports';
 export * from './labels';
+export * from './policies';
 export * from './static-users';
 export * from './role-access';
 export * from './cleanup';

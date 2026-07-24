@@ -18,8 +18,16 @@ export interface VulnerabilitiesWebhook {
   [key: string]: unknown;
 }
 
+export interface FailingPoliciesWebhook {
+  enable_failing_policies_webhook?: boolean;
+  destination_url?: string;
+  policy_ids?: number[];
+  [key: string]: unknown;
+}
+
 export interface WebhookSettings {
   vulnerabilities_webhook?: VulnerabilitiesWebhook;
+  failing_policies_webhook?: FailingPoliciesWebhook;
   [key: string]: unknown;
 }
 
