@@ -38,8 +38,18 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 - [x] **software no-teams-views** (premium) — commit `cf253f9`. Read-only: Unassigned scope persists across
   Inventory/OS/Vulnerabilities (assert via `TeamDropdown.currentValue`); drilling a title → detail with no
   "Add software". Reuses SoftwareTitlesPage; premium-only (Unassigned is a premium scope).
+- [x] **controls custom-variables** (premium) — commit `e4a030a`. Redesigned table UI; add/delete + name
+  validation (auto-uppercase; format error disables Save; "required" is suppressed until save, so Save is
+  ENABLED on an empty form). New `helpers/api/variables.ts`. Per-test cleanup by created name (shared-marker
+  purge deletes a sibling's variable under parallel workers).
+- [x] **settings Fleet Desktop** (premium) — commit `e66ef72`. Presence check (premium-only "Custom
+  transparency URL"); inline locators.
+- [x] **settings enroll-secrets** (premium) — commit `00042b5`. Add secret to Workstations, API-verified;
+  snapshot/restore via new `helpers/api/enroll-secrets.ts`. Opened via ?manage_enroll_secrets=1 deep link;
+  SecretEditorModal scoped by "Must contain at least 32 characters" (shares "Add secret" title with the list
+  button). POM on HostsListPage.
 - [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1).
-- [ ] **controls custom-variables** — GROUNDED but not built; UI has been **REDESIGNED** since the QA Wolf
+- [ ] (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
   flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
   custom-variable-with-secret) and **Custom host vitals**. Both are **table-based** (not the flow's
   `.list-item`). `AddCustomVariableModal` (title "Add custom variable", InputField Name/Value, name
