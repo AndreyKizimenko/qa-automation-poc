@@ -31,10 +31,28 @@ export interface WebhookSettings {
   [key: string]: unknown;
 }
 
+export interface MdmConfig {
+  enable_disk_encryption?: boolean;
+  [key: string]: unknown;
+}
+
 export interface AppConfig {
   org_info?: OrgInfo;
   webhook_settings?: WebhookSettings;
+  mdm?: MdmConfig;
   [key: string]: unknown;
+}
+
+/**
+ * Set global (no-team) disk-encryption enforcement. The no-team path is the
+ * app-config endpoint (PATCH /config with `mdm.enable_disk_encryption`), not
+ * the team-scoped /disk_encryption endpoint.
+ */
+export async function setGlobalDiskEncryption(
+  request: APIRequestContext,
+  enabled: boolean,
+): Promise<void> {
+  await patchAppConfig(request, { mdm: { enable_disk_encryption: enabled } });
 }
 
 /** Fetch the full app config (GET /config). */
