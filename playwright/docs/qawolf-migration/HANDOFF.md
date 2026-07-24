@@ -1,5 +1,17 @@
 # QA Wolf → Fleet Playwright migration — HANDOFF
 
+> **UPDATE (Batch 2 in progress):** The full HANDOFF order (7 items) + 10 extras are DONE — ~57 tests,
+> premium+free, all `npm run check`-clean + live-green, committed to `main` (unpushed, no PR). See
+> **`BATCH-2.md`** for the live tracker + per-item grounding. Shipped: software (manage-automations-access,
+> os, vulnerability-automations, no-teams-views), policies (sql-validation, policy-automations), reports
+> (save-as-new, list-filters, automations), labels (CRUD, sort-view, role-access), settings (org-info,
+> fleet-desktop, enroll-secrets, mdm-migration-validation), controls (custom-variables, disk-encryption),
+> plus the **appConfig save/restore helper** + API helpers (reports/labels/policies/variables/enroll-secrets/config).
+> **Still open in Batch 2:** software `edit-package` (biggest, grounded, not built), `automatic-enrollment`,
+> EULA-26MB size case; `advanced-options` SKIPPED (risky bundled save — flag to lead); labels team-admin
+> variants blocked (no team-admin static user). Then Batch 3 (hosts) + Batch 4 (online-host-dependent).
+> Working tree: clean except pre-existing unrelated `CLAUDE.md` + `docs/run-reviews/` (NOT ours — leave alone).
+
 > **UPDATE 2026-07-21:** Batch 1 is **COMMITTED to `main` in 3 chunks** (not pushed, no PR) after the full
 > premium (257 passed) + free (141 passed) suites re-ran green, 0 failures. `ws-admin`/`api-ws-admin` naming
 > verified against convention (still need instance provisioning).
