@@ -18,10 +18,13 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 4b. [x] **reports list-filters** (premium) — commit `613b5be`.
 5. [x] **labels CRUD** (premium, Dynamic + Manual) — commits `01ad292`, `757a8c7`.
 6. [x] **org-settings** organization-info (premium + free) + **appConfig save/restore helper** — commit `4e6a85a`.
-7. **vuln/report/policy automations** — global config → save/restore (reuses `helpers/api/config.ts`).
+7. [x] **vuln/report/policy automations** — all three shipped.
    - [x] **software vulnerability-automations** (premium + free) — commit `1ac34fe`.
-   - [ ] **reports automations** (C4 P2/P7).
-   - [ ] **policy automations** (C3 #10/#12/#14).
+   - [x] **reports automations** (premium + free) — commit `711ff90`.
+   - [x] **policy automations** (premium + free) — commit `b27bbe7`.
+
+## ✅ HANDOFF order (items 1–7) COMPLETE. Remaining Batch-2 candidates are the not-yet-started
+##    extras below (edit-package, no-teams-views, labels sort/role, other settings, mdm, etc.) + Batch 3/4.
 
 ## Done — grounding notes (revisit, don't re-derive)
 
@@ -177,12 +180,19 @@ All three mutate GLOBAL config → reuse `helpers/api/config.ts` snapshot/restor
   consecutive saves and falsely satisfies a wait). **Assert persistence via the API, not a second UI reopen**
   — a reopened modal renders stale config (observed live; the disable-direction reopen showed stale on free,
   so the spec is scoped to a single enable→persist flow).
-- **reports automations** (C4 P2/P7): per-report automations switch + log destination (Filesystem) on the
-  report edit form; list-level "Automations" manage modal + On/Off cell + toast "Successfully updated report
-  automations." Needs ReportEditPage automations switch + ReportsListPage manage-automations modal.
-- **policy automations** (C3 #10/#12/#14): "Other workflows" modal (enable/disable slider, webhook/ticket
-  radios, destination URL, empty-integration → "Add integration" prompt), toast "Successfully updated policy
-  automations." Needs a new PolicyAutomationsModal component POM.
+- [DONE] **reports automations** (C4 P2/P7) — commit `711ff90`. KEY: report automations are **per-report**
+  state (`automations_enabled` on the query), NOT global config — the list-level "Manage automations" modal
+  (`ManageQueryAutomationsModal`) Save PATCHes each query via `queriesAPI.update`. So NO appConfig
+  save/restore: seed a report + toggle its checkbox (accessible name = report name) + Save (toast
+  "Successfully updated report automations.") + verify `automations_enabled` via `findReportById`. The
+  AutomationsButton is enabled once the scope has ≥1 report.
+- [DONE] **policy automations** (C3 #10/#12/#14) — commit `b27bbe7`. This one IS global config
+  (`webhook_settings.failing_policies_webhook`) → appConfig save/restore. Modal title "Automations" (not
+  "Manage automations"); controls in the nested `OtherWorkflowsModal` (Slider role=switch, Webhook/Ticket
+  radios, "Destination URL" by placeholder); toast "Successfully updated policy automations." The
+  "Automations" button is `disabled={!hasPoliciesToAutomate}` → seed a global policy first via new
+  `helpers/api/policies.ts` (`createPolicy` POST `/global/policies`, `deletePolicies` POST
+  `/global/policies/delete` — NOT `/policies`, which 404s).
 
 ## Deferred within Batch 2 (revisit)
 - **policies bad-SQL persistence** (C3 #11): save a syntax-error policy → reopen → SQL persisted. Skipped
