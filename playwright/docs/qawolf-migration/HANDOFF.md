@@ -7,10 +7,12 @@
 > (save-as-new, list-filters, automations), labels (CRUD, sort-view, role-access), settings (org-info,
 > fleet-desktop, enroll-secrets, mdm-migration-validation), controls (custom-variables, disk-encryption),
 > plus the **appConfig save/restore helper** + API helpers (reports/labels/policies/variables/enroll-secrets/config).
-> **Still open in Batch 2:** `automatic-enrollment` + EULA-26MB size case; `advanced-options` SKIPPED
-> (risky bundled save — flag to lead); labels team-admin variants blocked (no team-admin static user).
-> **software `edit-package` DONE** (premium; self-service round-trip via the "Edit package" modal — see
-> BATCH-2.md for two live-proven grounding corrections). Then Batch 3 (hosts) + Batch 4 (online-host-dependent).
+> **Still open in Batch 2:** `advanced-options` SKIPPED (risky bundled save — flag to lead); labels team-admin
+> variants blocked (no team-admin static user). **DONE since last update:** software `edit-package` (premium;
+> self-service round-trip via the "Edit package" modal); `automatic-enrollment` (EULA >26.21MB API rejection +
+> EULA upload/delete UI on the MDM card + end-user-auth SSO/IdP client-side gating on the SSO card). See
+> BATCH-2.md for the live-proven grounding corrections. **Batch 2 is effectively complete** (only the two
+> blocked/skipped items remain). Next: Batch 3 (hosts) + Batch 4 (online-host-dependent).
 > Working tree: clean except pre-existing unrelated `CLAUDE.md` + `docs/run-reviews/` (NOT ours — leave alone).
 
 > **UPDATE 2026-07-21:** Batch 1 is **COMMITTED to `main` in 3 chunks** (not pushed, no PR) after the full

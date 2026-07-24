@@ -102,15 +102,18 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
     New `helpers/api/mdm.ts` `getEulaMetadata`/`deleteEula`/`deleteEulaIfPresent` (`setup_experience/eula`
     family; UI uses the deprecated `mdm/setup/eula` family — same global entity). `FileUploader.setFile` widened
     to accept an in-memory `{name,mimeType,buffer}` payload. Live: premium 1 (single run).
-  - [ ] **SSO/IdP end-user-auth** — NOT built. Lives on the **SSO card → "End users" tab**
-    (`/settings/integrations/sso/end-users`, `EndUserAuthSection`, `.end-user-auth-section`; premium-only, NOT
-    ABM-gated). Fields (InputField, `id=name`, tooltip-wrapped labels): `idp_name` "Identity provider name",
-    `entity_id` "Entity ID", `metadata_url` "Metadata URL", `metadata` "Metadata". Save "Save" disabled until
-    idp_name + entity_id + (metadata|metadata_url); disabled-tooltip "Complete all required fields to save end
-    user authentication.". **Do client-side only (presence + tooltips + save-gating), NO save** — it PATCHes
-    `mdm.end_user_authentication` (global config) and BATCH-1 saw end-user-IdP not persist reliably. **Scope
-    selectors to `.end-user-auth-section`** — the sibling "Fleet users" tab has identical labels (different
-    `name`s, writes `sso_settings`).
+  - [x] **SSO/IdP end-user-auth** — added as a second describe in `automatic-enrollment.spec.ts`. Lives on
+    the **SSO card → "End users" tab** (`/settings/integrations/sso/end-users`, `EndUserAuthSection`,
+    `.end-user-auth-section`; premium-only, NOT ABM-gated). Fields via `getByLabel` (exact) scoped to the
+    section: "Identity provider name"/`idp_name`, "Entity ID"/`entity_id`, "Metadata URL"/`metadata_url`,
+    "Metadata"/`metadata` (`FormField` associates `<label htmlFor=name>` with the input `id=name`; no required
+    asterisk; **exact needed so "Metadata"≠"Metadata URL"**; note FormField swaps the label text for the error
+    message when invalid — don't re-locate a field by label after invalidating it). **Client-side only, NO
+    save**: fill all required → Save enabled; clear idp_name → Save disabled. Never saved (would PATCH
+    `mdm.end_user_authentication`; BATCH-1 saw end-user-IdP not persist reliably), so state-independent + no
+    mutation. **Scope to `.end-user-auth-section`** — the sibling "Fleet users" tab has identical labels
+    (different `name`s → `sso_settings`). Tooltip copy not asserted (cosmetic; hover/portal flake risk).
+    Live: premium 1.
 - (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
   flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
   custom-variable-with-secret) and **Custom host vitals**. Both are **table-based** (not the flow's

@@ -1,13 +1,18 @@
 /**
- * Premium • Settings • Integrations • Automatic enrollment — macOS EULA.
+ * Premium • Settings • Integrations • Automatic enrollment.
  *
- * Uploads a EULA PDF on the MDM integrations card (shown to end users during
- * Apple automatic enrollment), verifies it landed via the UI and the API, then
- * deletes it. The EULA is a single global entity and cleanup.steps.ts does not
- * wipe it, so the test removes any EULA as a precondition and in teardown.
+ * Two concerns of the Apple automatic-enrollment / end-user setup flow, which
+ * live on different Integrations cards (the "Automatic enrollment" page is a
+ * legacy name that now redirects):
+ *   - macOS EULA upload/delete — on the MDM card (/settings/integrations/mdm),
+ *     rendered only when Apple Business Manager is configured (true here).
+ *   - End-user authentication IdP form — on the SSO card's "End users" tab
+ *     (/settings/integrations/sso/end-users).
  *
- * Requires Apple Business Manager configured (true on this instance) — the
- * EULA section only renders then. Premium-only.
+ * The EULA is a single global entity and cleanup.steps.ts does not wipe it, so
+ * that test removes any EULA as a precondition and in teardown. The SSO form is
+ * exercised client-side only (no save) — saving would PATCH global config.
+ * Premium-only.
  */
 import { test, expect } from '@fixtures';
 import { getEulaMetadata, deleteEulaIfPresent } from '@helpers/api';
@@ -39,5 +44,29 @@ test.describe('Premium • Settings • Automatic enrollment — EULA', () => {
 
     await integrationsPage.deleteEula();
     expect(await getEulaMetadata(request)).toBeNull();
+  });
+});
+
+test.describe('Premium • Settings • Automatic enrollment — end-user authentication (SSO)', () => {
+  test('IdP form renders and Save is gated on the required fields', async ({ integrationsPage }) => {
+    await integrationsPage.gotoSsoEndUsers();
+
+    await expect(integrationsPage.idpNameField).toBeVisible();
+    await expect(integrationsPage.entityIdField).toBeVisible();
+    await expect(integrationsPage.metadataUrlField).toBeVisible();
+    await expect(integrationsPage.metadataField).toBeVisible();
+
+    // Client-side only — the form is filled but never saved, so no global
+    // config is mutated. With every required field set, Save enables; clearing
+    // a required field (identity provider name) disables it again.
+    await integrationsPage.fillEndUserAuth({
+      idpName: 'pw-idp',
+      entityId: 'pw-entity-id',
+      metadataUrl: 'https://idp.example.com/metadata.xml',
+    });
+    await expect(integrationsPage.endUserAuthSaveButton).toBeEnabled();
+
+    await integrationsPage.idpNameField.fill('');
+    await expect(integrationsPage.endUserAuthSaveButton).toBeDisabled();
   });
 });

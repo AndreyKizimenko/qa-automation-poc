@@ -30,6 +30,15 @@ export class IntegrationsPage {
   readonly deleteEulaModal: Locator;
   readonly deleteEulaConfirmButton: Locator;
 
+  // SSO subpage — end-user authentication (IdP) form. The "Fleet users" tab
+  // has the same field labels, so everything is scoped to this section.
+  readonly endUserAuthSection: Locator;
+  readonly idpNameField: Locator;
+  readonly entityIdField: Locator;
+  readonly metadataUrlField: Locator;
+  readonly metadataField: Locator;
+  readonly endUserAuthSaveButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -63,6 +72,19 @@ export class IntegrationsPage {
       name: 'Delete',
       exact: true,
     });
+
+    // The end-user IdP form's root; the sibling "Fleet users" tab reuses the
+    // same field labels, so scope every field/button to this section.
+    this.endUserAuthSection = page.locator('.end-user-auth-section');
+    this.idpNameField = this.endUserAuthSection.getByLabel('Identity provider name', { exact: true });
+    this.entityIdField = this.endUserAuthSection.getByLabel('Entity ID', { exact: true });
+    // Exact so "Metadata URL" and "Metadata" don't cross-match.
+    this.metadataUrlField = this.endUserAuthSection.getByLabel('Metadata URL', { exact: true });
+    this.metadataField = this.endUserAuthSection.getByLabel('Metadata', { exact: true });
+    this.endUserAuthSaveButton = this.endUserAuthSection.getByRole('button', {
+      name: 'Save',
+      exact: true,
+    });
   }
 
   async goto(): Promise<void> {
@@ -91,5 +113,22 @@ export class IntegrationsPage {
     await expect(this.deleteEulaModal).toBeVisible();
     await this.deleteEulaConfirmButton.click();
     await expect(this.eulaListItem).toBeHidden();
+  }
+
+  /** SSO → End users tab, where the end-user IdP form lives. */
+  async gotoSsoEndUsers(): Promise<void> {
+    await this.page.goto('/settings/integrations/sso/end-users');
+    await expect(this.endUserAuthSection).toBeVisible();
+  }
+
+  /** Fills the end-user IdP form (client-side only — does not save). */
+  async fillEndUserAuth(fields: {
+    idpName: string;
+    entityId: string;
+    metadataUrl: string;
+  }): Promise<void> {
+    await this.idpNameField.fill(fields.idpName);
+    await this.entityIdField.fill(fields.entityId);
+    await this.metadataUrlField.fill(fields.metadataUrl);
   }
 }
