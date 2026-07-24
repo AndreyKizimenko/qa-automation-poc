@@ -48,6 +48,13 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   snapshot/restore via new `helpers/api/enroll-secrets.ts`. Opened via ?manage_enroll_secrets=1 deep link;
   SecretEditorModal scoped by "Must contain at least 32 characters" (shares "Add secret" title with the list
   button). POM on HostsListPage.
+- [x] **API max request/file sizes** (premium, pure API) — commit `172cb24`. Rejection-only: /scripts
+  >500k chars → "Script is too large"; /mdm/profiles >1.573MB → "max size limit of 1.573MB". No fixtures.
+- [x] **controls disk encryption** (premium) — commit `77700fe`. Toggle enforcement round-trip. **Key gotcha:
+  the no-team disk-encryption update is `PATCH /config` (mdm.enable_disk_encryption), NOT `/disk_encryption`
+  (405 on PATCH).** Enabling worked (no private-key error on this instance). `setGlobalDiskEncryption` routes
+  via patchAppConfig. (Lesson: a wrong restore endpoint left the instance polluted mid-debug — recovered via
+  curl; always confirm the restore endpoint.)
 - [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1).
 - [ ] (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
   flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
