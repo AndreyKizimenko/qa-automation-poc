@@ -85,8 +85,32 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   server_settings (scripts_disabled, discard_reports, ai_features), smtp, **host_expiry**, activity_expiry,
   mdm apple_server_url, sso, and features(historical_data) into ONE payload from formData — a formData-init
   glitch on Save could reset scripts/software-inventory and break other specs. Not worth the round-trip.
-- [~] settings **automatic-enrollment** (C7 #28) — NOT built. EULA PDF upload (per-entity, needs a PDF
-  fixture + cleanup) + SSO/IdP config (appConfig). Medium; group with the EULA 26.21MB size case (C10 #20/21).
+- [~] settings **automatic-enrollment** (C7 #28) — EULA parts DONE; SSO/IdP part open.
+  - [x] **EULA 26.21MB rejection** (C10 #20) — added to `tests/api/premium/max-request-file-sizes.spec.ts`.
+    POST `/setup_experience/eula` with a `%PDF-`-prefixed buffer > 25 MiB → 413 "max size limit of 26.21MB".
+    Rejection-only (no state). The <25MB *accept* path (C10 #21) is covered by the UI upload/delete below
+    instead of the pure-API spec, since `cleanup.steps.ts` does NOT wipe the EULA.
+  - [x] **EULA upload/delete UI** — `tests/e2e/premium/settings/integrations/automatic-enrollment.spec.ts`.
+    **Framing correction: "Automatic enrollment" is a legacy name** — the EULA lives on the **MDM** card at
+    `/settings/integrations/mdm` (gated on ABM being configured — true here), NOT a standalone page. Fleet's
+    `FileUploader` (button "Upload", `input#upload-file`, `accept=".pdf"`) auto-submits; the endpoint validates
+    only the `%PDF-` magic prefix, so a tiny generated buffer works (no committed fixture). Uploaded EULA
+    renders as `.eula-list-item` (`.eula-list-item__list-item-name` = filename); the delete trash Button is
+    **icon-only (no text/aria-label)** → target the `.eula-list-item__list-item-button` containing
+    `[data-testid="trash-icon"]`. Delete modal "Delete EULA" → confirm "Delete". EULA is a global singleton +
+    no cleanup wipe → the spec deletes any EULA as a precondition AND in afterEach (`deleteEulaIfPresent`).
+    New `helpers/api/mdm.ts` `getEulaMetadata`/`deleteEula`/`deleteEulaIfPresent` (`setup_experience/eula`
+    family; UI uses the deprecated `mdm/setup/eula` family — same global entity). `FileUploader.setFile` widened
+    to accept an in-memory `{name,mimeType,buffer}` payload. Live: premium 1 (single run).
+  - [ ] **SSO/IdP end-user-auth** — NOT built. Lives on the **SSO card → "End users" tab**
+    (`/settings/integrations/sso/end-users`, `EndUserAuthSection`, `.end-user-auth-section`; premium-only, NOT
+    ABM-gated). Fields (InputField, `id=name`, tooltip-wrapped labels): `idp_name` "Identity provider name",
+    `entity_id` "Entity ID", `metadata_url` "Metadata URL", `metadata` "Metadata". Save "Save" disabled until
+    idp_name + entity_id + (metadata|metadata_url); disabled-tooltip "Complete all required fields to save end
+    user authentication.". **Do client-side only (presence + tooltips + save-gating), NO save** — it PATCHes
+    `mdm.end_user_authentication` (global config) and BATCH-1 saw end-user-IdP not persist reliably. **Scope
+    selectors to `.end-user-auth-section`** — the sibling "Fleet users" tab has identical labels (different
+    `name`s, writes `sso_settings`).
 - (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
   flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
   custom-variable-with-secret) and **Custom host vitals**. Both are **table-based** (not the flow's

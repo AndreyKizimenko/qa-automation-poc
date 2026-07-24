@@ -20,8 +20,13 @@ export class FileUploader {
     this.toast = new Toast(page);
   }
 
-  async setFile(filePath: string): Promise<void> {
-    await this.input.setInputFiles(filePath);
+  /**
+   * Accepts a path (or paths) or an in-memory payload
+   * (`{ name, mimeType, buffer }`) so callers can stage a runtime-generated
+   * file without writing it to disk.
+   */
+  async setFile(files: Parameters<Locator['setInputFiles']>[0]): Promise<void> {
+    await this.input.setInputFiles(files);
   }
 
   async expectToast(text: string | RegExp = /^Successfully/): Promise<void> {

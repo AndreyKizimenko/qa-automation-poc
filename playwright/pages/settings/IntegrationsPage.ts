@@ -1,31 +1,95 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { FileUploader } from '../components/FileUploader';
+import { Toast } from '../components/Toast';
 
 /**
  * /settings/integrations — the Integrations section, with a left-side nav
  * listing integration categories. The default subpage is "Ticket destinations".
  * Premium-only IdP / SCIM / Calendars / etc. subpages are gated on license.
+ *
+ * The MDM subpage (`/settings/integrations/mdm`) hosts the macOS EULA
+ * upload/delete used by Apple automatic enrollment. That section only renders
+ * when Apple Business Manager is configured on the instance.
  */
 export class IntegrationsPage {
   readonly page: Page;
   readonly navbar: Navbar;
+  readonly uploader: FileUploader;
+  readonly toast: Toast;
 
   /** Default subpage heading when landing on /settings/integrations. */
   readonly ticketDestinationsHeading: Locator;
   readonly scimText: Locator;
 
+  // MDM subpage — EULA section.
+  readonly eulaHeading: Locator;
+  readonly eulaListItem: Locator;
+  readonly eulaName: Locator;
+  readonly eulaDeleteButton: Locator;
+  readonly deleteEulaModal: Locator;
+  readonly deleteEulaConfirmButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
+    this.uploader = new FileUploader(page);
+    this.toast = new Toast(page);
+
     this.ticketDestinationsHeading = page.getByRole('heading', {
       name: 'Ticket destinations',
       exact: true,
     });
     this.scimText = page.getByText(/SCIM/i);
+
+    this.eulaHeading = page.getByRole('heading', {
+      name: 'End user license agreement (EULA)',
+    });
+    // Fleet's ListItem renders as a role-less <div>; the uploaded EULA is the
+    // only one on the page, so the BEM class is the handle.
+    this.eulaListItem = page.locator('.eula-list-item');
+    this.eulaName = this.eulaListItem.locator('.eula-list-item__list-item-name');
+    // The delete control is an icon-only Button (no text, no aria-label); it's
+    // distinguished from the sibling "open" button by its trash Icon, which
+    // Fleet's Icon renders with data-testid="trash-icon".
+    this.eulaDeleteButton = this.eulaListItem
+      .locator('.eula-list-item__list-item-button')
+      .filter({ has: page.locator('[data-testid="trash-icon"]') });
+
+    this.deleteEulaModal = page
+      .locator('.modal__modal_container')
+      .filter({ hasText: 'Delete EULA' });
+    this.deleteEulaConfirmButton = this.deleteEulaModal.getByRole('button', {
+      name: 'Delete',
+      exact: true,
+    });
   }
 
   async goto(): Promise<void> {
     await this.page.goto('/settings/integrations');
     await expect(this.ticketDestinationsHeading).toBeVisible();
+  }
+
+  /** MDM subpage. Anchors on the EULA heading (present when ABM is configured). */
+  async gotoMdm(): Promise<void> {
+    await this.page.goto('/settings/integrations/mdm');
+    await expect(this.eulaHeading).toBeVisible();
+  }
+
+  /**
+   * Stages a PDF into the EULA FileUploader (which auto-submits) and waits for
+   * the uploaded EULA to render. `file` is a path or an in-memory payload.
+   */
+  async uploadEula(file: Parameters<FileUploader['setFile']>[0]): Promise<void> {
+    await this.uploader.setFile(file);
+    await expect(this.eulaListItem).toBeVisible();
+  }
+
+  /** Deletes the uploaded EULA via the trash action + confirmation modal. */
+  async deleteEula(): Promise<void> {
+    await this.eulaDeleteButton.click();
+    await expect(this.deleteEulaModal).toBeVisible();
+    await this.deleteEulaConfirmButton.click();
+    await expect(this.eulaListItem).toBeHidden();
   }
 }

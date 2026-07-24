@@ -60,6 +60,40 @@ export async function deleteSetupExperienceScript(
 }
 
 /**
+ * Get metadata for the uploaded macOS EULA (shown during Apple automatic
+ * enrollment). Returns null when none is uploaded (Fleet returns 404). The
+ * EULA is a single global entity, so no fleet scoping.
+ */
+export async function getEulaMetadata(
+  request: APIRequestContext,
+): Promise<{ name: string; token: string } | null> {
+  const res = await request.get(apiUrl('setup_experience/eula/metadata'), {
+    headers: authHeaders(),
+  });
+  if (res.status() === 404) return null;
+  await expect(res, 'Failed to get EULA metadata').toBeOK();
+  return res.json();
+}
+
+/** Delete the EULA identified by `token`. 404 is treated as success. */
+export async function deleteEula(request: APIRequestContext, token: string): Promise<void> {
+  const res = await request.delete(apiUrl(`setup_experience/eula/${token}`), {
+    headers: authHeaders(),
+  });
+  if (res.status() === 404) return;
+  await expect(res, `Failed to delete EULA ${token}`).toBeOK();
+}
+
+/**
+ * Remove any uploaded EULA. `cleanup.steps.ts` does not wipe the EULA, so
+ * specs that upload one clean up with this (as a precondition and in teardown).
+ */
+export async function deleteEulaIfPresent(request: APIRequestContext): Promise<void> {
+  const meta = await getEulaMetadata(request);
+  if (meta) await deleteEula(request, meta.token);
+}
+
+/**
  * Delete the setup-assistant (DEP) profile for a fleet, if one exists.
  * Used by teardown to clear any profile left behind by a failed test.
  * Silent on 402 ("Requires Premium") so the shared cleanup pipeline can
