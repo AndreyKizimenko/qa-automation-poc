@@ -14,6 +14,8 @@
 > add-hosts-download, cta-visibility (free+premium), host-status-webhook, host-software; tracker in
 > `BATCH-3.md`. Batch 4 (NOT started) = online-host-dependent + destructive + the moved items, gated on the
 > daily host-autoenroll action + a `liveMacosHost` fixture (parked in stash) + team-admin provisioning.
+> **Batch 4 plan + full agent handoff (orientation → prerequisites → work plan): see `BATCH-4.md` — the next
+> agent should start there once online hosts are set up.**
 > Working tree: clean except pre-existing unrelated `CLAUDE.md` + `docs/run-reviews/` (NOT ours — leave alone).
 
 > **UPDATE 2026-07-21:** Batch 1 is **COMMITTED to `main` in 3 chunks** (not pushed, no PR) after the full
