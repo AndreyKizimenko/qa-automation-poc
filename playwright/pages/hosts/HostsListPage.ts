@@ -1,4 +1,4 @@
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, Locator, expect, Download } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
@@ -23,6 +23,7 @@ export class HostsListPage {
   readonly search: Locator;
   readonly addHostsButton: Locator;
   readonly editColumnsButton: Locator;
+  readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
 
   // Enroll-secret modals (shared EnrollSecrets components).
@@ -45,6 +46,7 @@ export class HostsListPage {
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
+    this.exportHostsButton = page.getByRole('button', { name: 'Export hosts' });
     // FilterPill (frontend/.../ManageHostsPage/components/FilterPill) renders
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
@@ -103,5 +105,12 @@ export class HostsListPage {
   /** Click the first host in the list — navigates to its detail page. */
   async clickFirstHost(): Promise<void> {
     await this.table.firstRowWithLink.getByRole('link').first().click();
+  }
+
+  /** Clicks "Export hosts" and returns the CSV download of the current view. */
+  async exportHosts(): Promise<Download> {
+    const downloadPromise = this.page.waitForEvent('download');
+    await this.exportHostsButton.click();
+    return downloadPromise;
   }
 }
