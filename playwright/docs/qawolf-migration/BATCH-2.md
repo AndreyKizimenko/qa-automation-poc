@@ -55,8 +55,23 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   (405 on PATCH).** Enabling worked (no private-key error on this instance). `setGlobalDiskEncryption` routes
   via patchAppConfig. (Lesson: a wrong restore endpoint left the instance polluted mid-debug — recovered via
   curl; always confirm the restore endpoint.)
-- [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1).
-- [ ] (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
+- [x] **MDM end-user migration webhook validation** (premium) — commit `941828c`. Client-side only
+  (no save/mutation): `.end-user-migration-section` → enable Slider → webhook input `name="webhook_url"`
+  ("Webhook URL" label not associated) → invalid → "Must be a valid URL.". Needs ABM configured (true here).
+- [~] software **edit-package** — NOT built (biggest remaining lift). Fully grounded: title detail →
+  Actions menu / pencil Edit → `EditSoftwareModal` (PackageForm) → toggle **Self-service** checkbox (the
+  simplest round-trip field — avoid the 4 ACE editors: `#preInstallQuery`, install/post-install/uninstall)
+  → Save → **ConfirmSaveChangesModal** ("Save changes?") confirm → reopen verify → delete. Reuse
+  library.spec's softwareCustomPackage.uploadPackage + softwareTitleDetail.installerCard.delete for
+  add/cleanup. NOT appConfig (per-title state) → self-contained, low risk. `SoftwareInstallerCard` already
+  has the card + delete; add the Actions/Edit trigger + the modal there.
+- [~] settings **advanced-options** — **SKIPPED (too risky).** The Advanced card's `performSave` bundles
+  server_settings (scripts_disabled, discard_reports, ai_features), smtp, **host_expiry**, activity_expiry,
+  mdm apple_server_url, sso, and features(historical_data) into ONE payload from formData — a formData-init
+  glitch on Save could reset scripts/software-inventory and break other specs. Not worth the round-trip.
+- [~] settings **automatic-enrollment** (C7 #28) — NOT built. EULA PDF upload (per-entity, needs a PDF
+  fixture + cleanup) + SSO/IdP config (appConfig). Medium; group with the EULA 26.21MB size case (C10 #20/21).
+- (superseded — see custom-variables DONE above) UI has been **REDESIGNED** since the QA Wolf
   flow. Now Controls→Variables → a `SideNav` with two cards: **Global variables** (name+value, the
   custom-variable-with-secret) and **Custom host vitals**. Both are **table-based** (not the flow's
   `.list-item`). `AddCustomVariableModal` (title "Add custom variable", InputField Name/Value, name
