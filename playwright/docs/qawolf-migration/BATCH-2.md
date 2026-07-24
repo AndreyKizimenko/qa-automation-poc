@@ -23,8 +23,25 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
    - [x] **reports automations** (premium + free) — commit `711ff90`.
    - [x] **policy automations** (premium + free) — commit `b27bbe7`.
 
-## ✅ HANDOFF order (items 1–7) COMPLETE. Remaining Batch-2 candidates are the not-yet-started
-##    extras below (edit-package, no-teams-views, labels sort/role, other settings, mdm, etc.) + Batch 3/4.
+## ✅ HANDOFF order (items 1–7) COMPLETE.
+
+## Extras (beyond the named order) — status
+- [x] **labels sort-view** (premium) — commit `e25893d`. Name column sorts **case-sensitively** (UTF-16
+  code-unit: "ARM…" < "Apple…", "…1Password" < "…Brave") — not lowercased. Read the Name column via
+  `DataTable.cellByColumn(row,'Name')` (the `.name__cell` class guess was wrong) and wait for `firstRow`
+  (goto only anchors the heading). "View all hosts" → Hosts `filterPill`.
+- [x] **labels role-access** (premium) — commit `2e0e9f8`. `canAddLabel` = global admin/maint/tech OR any
+  team maint/admin/tech; `hasEditPermission` = global admin/maint/tech OR author+team-role OR team-scoped
+  label. So global-observer: no Add + only "View all hosts"; ws-maintainer: has Add but only "View all
+  hosts" on a GLOBAL label (must use ws-maintainer, not global-maintainer, for the can't-edit assertion).
+  POM: `openRowActions()` + `rowActionOption()`.
+- [ ] software **edit-package** (EditSoftwareModal + 4 ACE editors — biggest lift, deferred from Batch 1),
+  **no-teams-views** (Unassigned software/OS/vuln read + count integrity).
+- [ ] other **settings**: advanced-options (appConfig save/restore; AVOID host-expiry — can delete hosts),
+  fleet-desktop (premium-only presence), enroll-secrets.
+- [ ] **mdm** (disk-encryption, mdm-settings), **controls** (batch-progress nav/empty, run-script-modal,
+  custom-variables), **automatic-enrollment**, API file-size spec.
+- [ ] Batch 3 (hosts area) + Batch 4 (host-dependent).
 
 ## Done — grounding notes (revisit, don't re-derive)
 
