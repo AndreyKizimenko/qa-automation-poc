@@ -81,10 +81,11 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
     `software_package.self_service` — persistence verified via API, not a stale reopen);
     `activityCopy.software.edited` (`edited <pkg> on <scope>` — "on", unlike add/delete "to"/"from").
   - Live: premium 4 sub-tests green (single run).
-- [~] settings **advanced-options** — **SKIPPED (too risky).** The Advanced card's `performSave` bundles
-  server_settings (scripts_disabled, discard_reports, ai_features), smtp, **host_expiry**, activity_expiry,
-  mdm apple_server_url, sso, and features(historical_data) into ONE payload from formData — a formData-init
-  glitch on Save could reset scripts/software-inventory and break other specs. Not worth the round-trip.
+- [→ Batch 4] settings **advanced-options** — **MOVED TO BATCH 4** (2026-07-24, per lead). The Advanced card's
+  `performSave` bundles server_settings (scripts_disabled, discard_reports, ai_features), smtp, **host_expiry**,
+  activity_expiry, mdm apple_server_url, sso, and features(historical_data) into ONE payload from formData — a
+  formData-init glitch on Save could reset scripts/software-inventory and break other specs. Defer to Batch 4
+  where it can be sequenced with a guaranteed appConfig full-snapshot/restore and away from the parallel suite.
 - [~] settings **automatic-enrollment** (C7 #28) — EULA parts DONE; SSO/IdP part open.
   - [x] **EULA 26.21MB rejection** (C10 #20) — added to `tests/api/premium/max-request-file-sizes.spec.ts`.
     POST `/setup_experience/eula` with a `%PDF-`-prefixed buffer > 25 MiB → 413 "max size limit of 26.21MB".
@@ -122,12 +123,11 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
   letters, numbers, and underscores"); delete via a trash `Icon` button `ariaLabel="Delete <name>"` +
   `DeleteCustomVariableModal`. Frontend: `pages/ManageControlsPage/Variables/**`. Premium (gated on
   isPremiumTier). Re-ground against `cards/GlobalVariables` — the QA Wolf `.list-item` selectors are stale.
-- [ ] other **settings**: advanced-options (appConfig save/restore; **AVOID host-expiry — can delete hosts**,
-  and most advanced toggles have side effects: scripts/software-inventory off would break other specs — pick
-  a truly innocuous field or skip), fleet-desktop (premium-only presence), enroll-secrets (view = safe read).
-- [ ] **mdm** (disk-encryption, mdm-settings), **controls** (batch-progress nav/empty, run-script-modal),
-  **automatic-enrollment**, API file-size spec.
-- [ ] Batch 3 (hosts area) + Batch 4 (host-dependent).
+## ✅ BATCH 2 COMPLETE (2026-07-24)
+All net-new host-independent specs shipped + committed to `main`. The two items that could not be finished
+were **moved to Batch 4** (per lead): `advanced-options` (risky bundled save) and labels **team-admin variants**
+(no team-admin static user provisioned — an infra prerequisite, so it batches with the other
+provisioning/host-gated work). Next: **Batch 3 (hosts area)** — see `BATCH-3.md`.
 
 ## Done — grounding notes (revisit, don't re-derive)
 
