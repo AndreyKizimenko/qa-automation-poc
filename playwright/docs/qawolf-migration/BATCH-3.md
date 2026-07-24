@@ -34,9 +34,15 @@ Legend: [ ] todo · [x] done (green + committed) · [→4] moved to Batch 4 · [
   `--enroll_secret_path=secret.txt` + `--tls_server_certs=fleet.pem`. Select **"All fleets"** → modal uses the
   global secret (no-op on free). New `getGlobalEnrollSecrets` (GET `/spec/enroll_secret`). No mutation. C1
   #1/#9. Live: premium + free.
-- [ ] **cta-visibility** (free + premium, explicit tiers — role-different) — admin/maintainer see Add hosts /
-  Manage enroll secret / Add label; observer does not (Export always visible). Uses static users; bundles the
-  enroll-secret add/delete lifecycle (POM support exists from Batch 2). C1 #5/#6/#19/#21/#23.
+- [x] **cta-visibility** (free + premium, explicit tiers) — `{free,premium}/hosts/cta-visibility.spec.ts`.
+  Role-based CTA visibility via `withStaticUser` (fresh context per role). Asserts the three clean header CTAs:
+  **Add hosts** + **Enroll secrets** (both gated on `canEnrollHosts` = global/team admin|maintainer) and
+  **Export hosts** (no role gate). Admin (and maintainer, premium) see all three; global observer sees only
+  Export. `HostsListPage.enrollSecretsButton` (exact "Enroll secrets" — NOT the empty-state "Manage enroll
+  secrets" banner link). **Scoped to the three header CTAs on purpose:** "Add label" is an icon-only button
+  (a11y name resolves to "plus") inside the *opened* label dropdown, and role-based label-add is already
+  covered by the Batch-2 labels role-access spec; the enroll-secret add/copy/delete lifecycle is a mutation
+  (dropped — visibility is the concern here). C1 #5/#6/#19/#21/#23. Live: premium 3, free 2.
 - [ ] **host-status-webhook** (shared settings) — global host-status webhook enable + URL + %, save, verify
   persist, restore. appConfig save/restore (`webhook_settings.host_status_webhook`). C1 #3/#17.
 - [ ] **labels-crud via Hosts label-filter** — OVERLAPS the shipped `premium/labels/labels.spec.ts` (Batch 2,

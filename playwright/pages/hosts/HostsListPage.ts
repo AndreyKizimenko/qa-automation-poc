@@ -24,6 +24,7 @@ export class HostsListPage {
 
   readonly search: Locator;
   readonly addHostsButton: Locator;
+  readonly enrollSecretsButton: Locator;
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
@@ -51,6 +52,9 @@ export class HostsListPage {
 
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
+    // Exact so it doesn't also match the empty-state "Manage enroll secrets"
+    // banner link. Both this and Add hosts are gated on the enroll-hosts role.
+    this.enrollSecretsButton = page.getByRole('button', { name: 'Enroll secrets', exact: true });
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
     this.exportHostsButton = page.getByRole('button', { name: 'Export hosts' });
     // FilterPill (frontend/.../ManageHostsPage/components/FilterPill) renders
