@@ -1,6 +1,6 @@
 # QA Wolf → Fleet Playwright migration — HANDOFF
 
-> **UPDATE (Batch 2 in progress):** The full HANDOFF order (7 items) + 10 extras are DONE — ~57 tests,
+> **UPDATE (Batch 2 — COMPLETE):** The full HANDOFF order (7 items) + 10 extras are DONE — ~57 tests,
 > premium+free, all `npm run check`-clean + live-green, committed to `main` (unpushed, no PR). See
 > **`BATCH-2.md`** for the live tracker + per-item grounding. Shipped: software (manage-automations-access,
 > os, vulnerability-automations, no-teams-views), policies (sql-validation, policy-automations), reports
@@ -9,9 +9,11 @@
 > plus the **appConfig save/restore helper** + API helpers (reports/labels/policies/variables/enroll-secrets/config).
 > **BATCH 2 COMPLETE.** All net-new host-independent specs shipped + committed to `main` (last: `edit-package`
 > + `automatic-enrollment`). The two unfinished items were **moved to Batch 4** (per lead): `advanced-options`
-> (risky bundled save) and labels team-admin variants (no team-admin static user). **Batch 3 (hosts area) is
-> now in progress** — the biggest gap (zero e2e today); tracker in `BATCH-3.md`. Batch 4 = online-host-dependent
-> + the two moved items, gated on the daily host-autoenroll action + team-admin provisioning.
+> (risky bundled save) and labels team-admin variants (no team-admin static user). **Batch 3 (hosts area):
+> the host-independent actionable-now set is COMPLETE + committed** — export-csv, edit-columns,
+> add-hosts-download, cta-visibility (free+premium), host-status-webhook, host-software; tracker in
+> `BATCH-3.md`. Batch 4 (NOT started) = online-host-dependent + destructive + the moved items, gated on the
+> daily host-autoenroll action + a `liveMacosHost` fixture (parked in stash) + team-admin provisioning.
 > Working tree: clean except pre-existing unrelated `CLAUDE.md` + `docs/run-reviews/` (NOT ours — leave alone).
 
 > **UPDATE 2026-07-21:** Batch 1 is **COMMITTED to `main` in 3 chunks** (not pushed, no PR) after the full
