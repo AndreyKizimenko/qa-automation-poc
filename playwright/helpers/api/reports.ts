@@ -7,6 +7,7 @@ import { apiUrl, authHeaders } from './core';
 export interface ReportRef {
   id: number;
   name: string;
+  automations_enabled?: boolean;
 }
 
 /**
@@ -50,7 +51,19 @@ export async function listReports(request: APIRequestContext): Promise<ReportRef
   });
   if (!res.ok()) return [];
   const body = await res.json();
-  return ((body.queries ?? []) as ReportRef[]).map((q) => ({ id: q.id, name: q.name }));
+  return ((body.queries ?? []) as ReportRef[]).map((q) => ({
+    id: q.id,
+    name: q.name,
+    automations_enabled: q.automations_enabled,
+  }));
+}
+
+/** Fetch a single report by id (null if not found). */
+export async function findReportById(
+  request: APIRequestContext,
+  id: number,
+): Promise<ReportRef | null> {
+  return (await listReports(request)).find((r) => r.id === id) ?? null;
 }
 
 /** Delete a report by id; safe to call on an already-deleted id. */

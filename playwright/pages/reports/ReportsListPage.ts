@@ -33,6 +33,12 @@ export class ReportsListPage {
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
 
+  // "Manage automations" modal: an AutomationsButton (visible label
+  // "Automations") opens a modal with one checkbox per report.
+  readonly manageAutomationsButton: Locator;
+  readonly manageAutomationsModal: Locator;
+  readonly saveAutomationsButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -51,6 +57,36 @@ export class ReportsListPage {
     this.bulkDeleteButton = page.getByRole('button', { name: 'Delete', exact: true });
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete reports' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
+
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    this.manageAutomationsModal = page
+      .locator('.modal__modal_container')
+      .filter({ hasText: 'Manage automations' });
+    this.saveAutomationsButton = this.manageAutomationsModal.getByRole('button', { name: 'Save', exact: true });
+  }
+
+  /** A report's automations checkbox inside the "Manage automations" modal. */
+  reportAutomationCheckbox(name: string): Locator {
+    return this.manageAutomationsModal.getByRole('checkbox', { name });
+  }
+
+  /** Open the reports-list "Manage automations" modal (button must be enabled). */
+  async openManageAutomations(): Promise<void> {
+    await this.manageAutomationsButton.click();
+    await expect(this.manageAutomationsModal).toBeVisible();
+  }
+
+  /** Toggle a report's automations checkbox to `enabled` (idempotent). */
+  async setReportAutomation(name: string, enabled: boolean): Promise<void> {
+    const checkbox = this.reportAutomationCheckbox(name);
+    if (enabled) await checkbox.check();
+    else await checkbox.uncheck();
+  }
+
+  /** Save the manage-automations modal; waits for it to close. */
+  async saveAutomations(): Promise<void> {
+    await this.saveAutomationsButton.click();
+    await expect(this.manageAutomationsModal).toBeHidden();
   }
 
   async goto(opts: { fleetId?: number; platform?: string } = {}): Promise<void> {
