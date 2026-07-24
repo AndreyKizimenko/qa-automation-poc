@@ -183,6 +183,14 @@ for (const osKey of OS_KEYS) {
     page,
   }) => {
     test.skip(!hostByOS[osKey], `No ${OS_LABELS[osKey]} host with vulnerable software`);
+    // Fleet's CVE detail endpoint 404s for CVEs matched to host software but
+    // absent from cve_meta (NVD metadata); the deb host's accountsservice
+    // package carries such CVEs, so this variant deterministically lands on a
+    // "Vulnerability not detected" detail page. Tracked in
+    // docs/blocked-by-product-bugs.md.
+    // TODO(fleetdm/fleet#49913): remove once the detail endpoint renders
+    // matched-but-unenriched CVEs consistently with the vulnerabilities list.
+    test.skip(osKey === 'deb', 'Blocked by fleetdm/fleet#49913 — CVE detail 404 for matched-but-unenriched CVE');
     const host = hostByOS[osKey]!;
 
     await hostDetails.goto(host.id);
