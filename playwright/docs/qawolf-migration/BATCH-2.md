@@ -18,7 +18,10 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 4b. [x] **reports list-filters** (premium) — commit `613b5be`.
 5. [x] **labels CRUD** (premium, Dynamic + Manual) — commits `01ad292`, `757a8c7`.
 6. [x] **org-settings** organization-info (premium + free) + **appConfig save/restore helper** — commit `4e6a85a`.
-7. [ ] **vuln/report/policy automations** — global config → save/restore (reuses `helpers/api/config.ts`).
+7. **vuln/report/policy automations** — global config → save/restore (reuses `helpers/api/config.ts`).
+   - [x] **software vulnerability-automations** (premium + free) — commit `1ac34fe`.
+   - [ ] **reports automations** (C4 P2/P7).
+   - [ ] **policy automations** (C3 #10/#12/#14).
 
 ## Done — grounding notes (revisit, don't re-derive)
 
@@ -162,13 +165,18 @@ the corrections below).
   auth. If ever wanted, do it purely via the appConfig helper with a guaranteed restore, or reduce to presence.
 - Live: premium 1, free 1.
 
-## Item 7 — automations (NEXT, not started): kickoff notes
+## Item 7 — automations: kickoff notes
 All three mutate GLOBAL config → reuse `helpers/api/config.ts` snapshot/restore in `afterEach`.
-- **software vulnerability-automations** (C6 #16/#17): the "Automations" button + "Manage automations" modal
-  are already located on `SoftwareTitlesPage` (slice 1). Toggle "Vulnerability automations" + webhook URL →
-  Save → toast "Successfully updated vulnerability automations." → reload persists. Config lives under
-  `webhook_settings.vulnerabilities_webhook` (verify exact key via GET /config). Tier-agnostic (webhook
-  automations exist on free) — open question in C6 whether to split tiers or share.
+- [DONE] **software vulnerability-automations** (C6 #16/#17) — commit `1ac34fe`. Grounding that transfers to
+  the other two: Fleet's `Slider` is a `role="switch"` button with `aria-checked`; the modal can open on the
+  "Ticket" workflow (disabled Save, no URL field) so select the "Webhook" radio (hidden-input Radio → click
+  the label) before the URL field renders; the "Destination URL" label is tooltip-wrapped (no htmlFor) so
+  target by placeholder `https://server.com/example`; config key `webhook_settings.vulnerabilities_webhook`
+  (`enable_vulnerabilities_webhook` + `destination_url`); toast "Successfully updated vulnerability
+  automations.". **saveAutomations() waits for the modal to CLOSE** (the 5s success toast lingers between
+  consecutive saves and falsely satisfies a wait). **Assert persistence via the API, not a second UI reopen**
+  — a reopened modal renders stale config (observed live; the disable-direction reopen showed stale on free,
+  so the spec is scoped to a single enable→persist flow).
 - **reports automations** (C4 P2/P7): per-report automations switch + log destination (Filesystem) on the
   report edit form; list-level "Automations" manage modal + On/Off cell + toast "Successfully updated report
   automations." Needs ReportEditPage automations switch + ReportsListPage manage-automations modal.
