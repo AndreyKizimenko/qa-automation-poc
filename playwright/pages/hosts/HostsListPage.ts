@@ -26,6 +26,9 @@ export class HostsListPage {
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
 
+  readonly editColumnsModal: Locator;
+  readonly saveColumnsButton: Locator;
+
   // Enroll-secret modals (shared EnrollSecrets components).
   readonly enrollSecretsModal: Locator;
   readonly addSecretButton: Locator;
@@ -51,6 +54,9 @@ export class HostsListPage {
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
     this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
+
+    this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });
+    this.saveColumnsButton = this.editColumnsModal.getByRole('button', { name: 'Save', exact: true });
 
     this.enrollSecretsModal = page.locator('.modal__modal_container').filter({ hasText: 'Manage enroll secrets' });
     this.addSecretButton = this.enrollSecretsModal.getByRole('button', { name: 'Add secret' });
@@ -112,5 +118,23 @@ export class HostsListPage {
     const downloadPromise = this.page.waitForEvent('download');
     await this.exportHostsButton.click();
     return downloadPromise;
+  }
+
+  /** A hosts-table column header by its visible name. */
+  columnHeader(name: string): Locator {
+    return this.table.table.getByRole('columnheader', { name });
+  }
+
+  /**
+   * Toggles a column's visibility via the Edit columns modal and saves. The
+   * column checkbox is a Fleet `<Checkbox>` (role="checkbox", accessible name =
+   * the column title). Hidden columns are stored per-context in localStorage.
+   */
+  async toggleColumn(name: string): Promise<void> {
+    await this.editColumnsButton.click();
+    await expect(this.editColumnsModal).toBeVisible();
+    await this.editColumnsModal.getByRole('checkbox', { name }).click();
+    await this.saveColumnsButton.click();
+    await expect(this.editColumnsModal).toBeHidden();
   }
 }

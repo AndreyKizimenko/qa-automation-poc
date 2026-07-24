@@ -18,8 +18,12 @@ Legend: [ ] todo · [x] done (green + committed) · [→4] moved to Batch 4 · [
 - [x] **export-csv** (shared) — `tests/e2e/shared/hosts/export-csv.spec.ts`. "Export hosts" → CSV download
   (`getByRole('button',{name:'Export hosts'})`; `HostsListPage.exportHosts()` returns the Download; read via
   `fs.readFileSync(await download.path())`). Asserts the CSV contains the first Unassigned host. C1 #4/#18.
-- [ ] **edit-columns** (shared) — hide/show the "User email" column via the Edit columns modal; assert the
-  column header appears/disappears. Client-side pref, no mutation. C1 #7/#24.
+- [x] **edit-columns** (shared) — `tests/e2e/shared/hosts/edit-columns.spec.ts`. Edit columns modal
+  (`.modal__modal_container` "Edit columns"; column = Fleet `<Checkbox>` → `getByRole('checkbox',{name})`;
+  Save). Shows then hides the "User email" column (`columnHeader('User email')` = table columnheader). **Fleet
+  hides `device_mapping`/"User email" by DEFAULT** (verified live), so the flow is hidden→show→hide (also
+  self-restores). Choice persists to per-context localStorage (`hostHiddenColumns`), so no cross-test
+  mutation. C1 #7/#24. `HostsListPage.columnHeader()` + `toggleColumn()`. Live: premium + free.
 - [ ] **add-hosts-download** (shared) — Add Hosts modal → Advanced/plain-osquery → download Fleet cert /
   enroll secret / flagfile; assert contents (`BEGIN CERTIFICATE`, secret string, server line). Big POM build
   (Add Hosts modal). No mutation. C1 #1/#9.
