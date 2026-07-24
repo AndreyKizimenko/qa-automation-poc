@@ -58,13 +58,29 @@ Legend: [ ] todo · [x] done (green + committed) · [~] blocked/needs-input
 - [x] **MDM end-user migration webhook validation** (premium) — commit `941828c`. Client-side only
   (no save/mutation): `.end-user-migration-section` → enable Slider → webhook input `name="webhook_url"`
   ("Webhook URL" label not associated) → invalid → "Must be a valid URL.". Needs ABM configured (true here).
-- [~] software **edit-package** — NOT built (biggest remaining lift). Fully grounded: title detail →
-  Actions menu / pencil Edit → `EditSoftwareModal` (PackageForm) → toggle **Self-service** checkbox (the
-  simplest round-trip field — avoid the 4 ACE editors: `#preInstallQuery`, install/post-install/uninstall)
-  → Save → **ConfirmSaveChangesModal** ("Save changes?") confirm → reopen verify → delete. Reuse
-  library.spec's softwareCustomPackage.uploadPackage + softwareTitleDetail.installerCard.delete for
-  add/cleanup. NOT appConfig (per-title state) → self-contained, low risk. `SoftwareInstallerCard` already
-  has the card + delete; add the Actions/Edit trigger + the modal there.
+- [x] software **edit-package** (premium) — `premium/software/edit-package.spec.ts`. Serial
+  add → edit(self-service) → delete → activity-feed on **Unassigned** with the **sublime-text `.deb`**
+  (the one custom-package fixture library.spec doesn't upload → no title collision under parallel workers;
+  `.deb` keeps Advanced options collapsed, so the 4 ACE editors never render). Two grounding corrections vs
+  the original note (both proven live — probe first next time):
+  1. **On premium a custom package is a *multi-package* title** (`canActivateMultiplePackages =
+     isPremiumTier && isCustomPackage && !isIosOrIpados`, `SoftwareTitleDetailsPage.tsx:185`), so the summary
+     Actions dropdown collapses to a pencil "**Edit appearance**" button and per-installer edit lives on the
+     **Library accordion row**. The edit modal is titled "**Edit package**" (not "Edit software"). The Self-
+     service control is a **`<Slider>` (`role="switch"`, no accessible name; read `aria-checked`)**, NOT a
+     checkbox. Fresh-package edit trigger = the row's "**All hosts**" labels badge `<Button>` (`exact:true` —
+     the accordion header is itself a `role="button"` whose name nests the badge text); the self-service
+     `user` icon (aria "Edit package") only appears once self-service is already on.
+  2. **Enabling self-service DOES open the "Save changes?" confirm modal.** `isOnlySelfServiceUpdated` is
+     `Object.keys(diff)===1 && 'selfService' in diff`, but turning self-service ON reveals the categories
+     field → the diff gains `categories` → not self-service-only → confirm modal shown (warns it cancels
+     pending installs). While it's open the edit modal is CSS-hidden (`--hidden`), not closed — `save()` must
+     drive the confirm through, not treat the hide as success.
+  - New `EditSoftwareModal` component (`pages/components/`); `SoftwareInstallerCard.openEdit()` +
+    `editBadge`; `SoftwareTitleDetailPage.editSoftwareModal`; `getSoftwarePackage()` API helper (reads
+    `software_package.self_service` — persistence verified via API, not a stale reopen);
+    `activityCopy.software.edited` (`edited <pkg> on <scope>` — "on", unlike add/delete "to"/"from").
+  - Live: premium 4 sub-tests green (single run).
 - [~] settings **advanced-options** — **SKIPPED (too risky).** The Advanced card's `performSave` bundles
   server_settings (scripts_disabled, discard_reports, ai_features), smtp, **host_expiry**, activity_expiry,
   mdm apple_server_url, sso, and features(historical_data) into ONE payload from formData — a formData-init

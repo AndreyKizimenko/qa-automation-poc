@@ -69,7 +69,7 @@ test.describe('activityCopy', () => {
       .test(`deleted script ${NAME} from the Workstations fleet.`)).toBe(true);
   });
 
-  test('software.* — symmetric add/delete suffix; package filename verbatim', () => {
+  test('software.* — add/delete "to"/"from", edit "on"; package filename verbatim', () => {
     const pkg = 'gh_2.92.0_macOS_universal.pkg';
     expect(activityCopy.software.added({ packageName: pkg, scope: 'Unassigned' })
       .test(`added ${pkg} to unassigned.`)).toBe(true);
@@ -79,6 +79,11 @@ test.describe('activityCopy', () => {
       .test(`added ${pkg} to the Workstations fleet.`)).toBe(true);
     expect(activityCopy.software.deleted({ packageName: pkg, scope: 'Workstations' })
       .test(`deleted ${pkg} from the Workstations fleet.`)).toBe(true);
+    // Edit uses the "on" preposition (not "to"/"from"); unassigned drops "the".
+    expect(activityCopy.software.edited({ packageName: pkg, scope: 'Unassigned' })
+      .test(`edited ${pkg} on unassigned.`)).toBe(true);
+    expect(activityCopy.software.edited({ packageName: pkg, scope: 'Workstations' })
+      .test(`edited ${pkg} on the Workstations fleet.`)).toBe(true);
   });
 
   test('appStoreApp.* — (Platform) suffix + asymmetric Unassigned scope', () => {

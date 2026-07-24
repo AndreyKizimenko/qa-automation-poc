@@ -154,6 +154,9 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:1349 — `added <b>PACKAGE</b> to <scope>.` */
     added: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
       new RegExp(`added ${esc(packageName)} to ${scriptScope(scope)}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:1448 — `edited <b>PACKAGE</b> on <scope>.` */
+    edited: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
+      new RegExp(`edited ${esc(packageName)} on ${scriptScope(scope)}\\.`),
     /** @see frontend/.../GlobalActivityItem.tsx:1379 — `deleted <b>PACKAGE</b> from <scope>.` */
     deleted: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
       new RegExp(`deleted ${esc(packageName)} from ${scriptScope(scope)}\\.`),

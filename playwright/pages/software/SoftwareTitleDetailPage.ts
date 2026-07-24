@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
+import { EditSoftwareModal } from '../components/EditSoftwareModal';
 
 /**
  * /software/titles/:id — versions table for a software title. Titles managed
@@ -13,6 +14,7 @@ export class SoftwareTitleDetailPage {
   readonly navbar: Navbar;
   readonly table: DataTable;
   readonly installerCard: SoftwareInstallerCard;
+  readonly editSoftwareModal: EditSoftwareModal;
   /**
    * The page's main software-name heading. The visible text is the title's
    * display name, but the accessible name is the static `software display
@@ -25,6 +27,7 @@ export class SoftwareTitleDetailPage {
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
     this.installerCard = new SoftwareInstallerCard(page);
+    this.editSoftwareModal = new EditSoftwareModal(page);
     this.displayHeading = page.getByLabel('software display name');
   }
 

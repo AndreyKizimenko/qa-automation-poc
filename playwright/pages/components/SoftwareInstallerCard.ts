@@ -17,6 +17,7 @@ export class SoftwareInstallerCard {
   /** The active installer row — doubles as the "installer present" signal. */
   readonly card: Locator;
   readonly header: Locator;
+  readonly editBadge: Locator;
   readonly deleteButton: Locator;
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -35,6 +36,14 @@ export class SoftwareInstallerCard {
     // it apart from the nested badge buttons; a fresh page load renders it
     // collapsed.
     this.header = this.card.getByRole('button', { expanded: false });
+
+    // The label-scope badge in the collapsed header opens the Edit-software
+    // modal. A package with no custom label scope shows the "All hosts" badge;
+    // it's the reliable edit affordance for a fresh custom package (the
+    // self-service icon only appears once self-service is already on). Exact
+    // match: the accordion header is itself a role="button" whose accessible
+    // name nests this badge's text, so a substring match resolves to both.
+    this.editBadge = this.card.getByRole('button', { name: 'All hosts', exact: true });
     this.deleteButton = this.card.getByRole('button', { name: 'Delete this version' });
 
     // Title is "Delete package" for custom-package titles (which can hold
@@ -44,6 +53,11 @@ export class SoftwareInstallerCard {
       .filter({ hasText: /Delete (software|package)/ });
     // Exact match: the modal also contains a Cancel button.
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: /^delete$/i });
+  }
+
+  /** Opens the Edit-software modal via the collapsed header's label badge. */
+  async openEdit(): Promise<void> {
+    await this.editBadge.click();
   }
 
   async delete(): Promise<void> {
