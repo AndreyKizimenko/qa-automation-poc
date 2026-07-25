@@ -7,11 +7,13 @@ export class ForgotPasswordPage {
   readonly page: Page;
   readonly heading: Locator;
   readonly emailInput: Locator;
+  readonly submitButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.heading = page.getByRole('heading', { name: 'Reset password' });
     this.emailInput = page.getByPlaceholder('Email');
+    this.submitButton = page.getByRole('button', { name: 'Get instructions' });
   }
 
   async goto(): Promise<void> {

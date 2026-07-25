@@ -112,6 +112,18 @@ export class ScriptsLibraryPage {
   }
 
   /**
+   * Stages a script in the upload modal and submits without asserting
+   * success — for negative-path uploads where the caller asserts the
+   * rejection toast.
+   */
+  async submitScriptUpload(filePath: string): Promise<void> {
+    await this.addScriptButton.click();
+    await expect(this.uploadModal).toBeVisible();
+    await this.uploader.setFile(filePath);
+    await this.uploadConfirmButton.click();
+  }
+
+  /**
    * Opens the edit/preview modal by clicking the script's name link, then
    * waits for the editor to render its content. Returns the modal locator
    * so callers can compose further assertions before closing it.

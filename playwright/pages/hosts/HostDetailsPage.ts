@@ -29,6 +29,7 @@ export class HostDetailsPage {
 
   readonly inventoryTab: Locator;
   readonly libraryTab: Locator;
+  readonly softwareSearch: Locator;
 
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
@@ -60,6 +61,7 @@ export class HostDetailsPage {
 
     this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.libraryTab = page.getByRole('tab', { name: 'Library' });
+    this.softwareSearch = page.getByPlaceholder('Search by name or vulnerability (CVE)');
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
@@ -110,6 +112,17 @@ export class HostDetailsPage {
 
   async applyVulnerableFilter(): Promise<void> {
     await this.filter.applyVulnerable();
+  }
+
+  /** Display name of the first software row (its title link text). */
+  async firstSoftwareName(): Promise<string> {
+    const link = this.table.firstRowWithLink.locator('td').first().getByRole('link').first();
+    return (await link.textContent())?.trim() ?? '';
+  }
+
+  /** Filters the host's software table by name (server-side `query` param). */
+  async searchSoftware(term: string): Promise<void> {
+    await this.softwareSearch.fill(term);
   }
 
   async clickFirstSoftware(): Promise<void> {

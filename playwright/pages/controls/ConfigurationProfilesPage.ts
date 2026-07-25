@@ -88,6 +88,18 @@ export class ConfigurationProfilesPage {
     await expect(this.uploadModal).toBeHidden();
   }
 
+  /**
+   * Stages a profile in the Add-profile modal and submits without asserting
+   * success — for negative-path uploads where the caller asserts the
+   * rejection message Fleet renders.
+   */
+  async submitProfileUpload(filePath: string): Promise<void> {
+    await this.addProfileButton.click();
+    await expect(this.uploadModal).toBeVisible();
+    await this.uploadInput.setInputFiles(filePath);
+    await this.uploadConfirmButton.click();
+  }
+
   /** Triggers a download for the profile and returns the Download handle. */
   async downloadProfile(name: string): Promise<Download> {
     const row = this.itemByName(name);

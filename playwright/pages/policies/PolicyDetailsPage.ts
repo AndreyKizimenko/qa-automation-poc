@@ -25,6 +25,7 @@ export class PolicyDetailsPage {
   readonly platformsDefinition: Locator;
 
   readonly showQueryButton: Locator;
+  readonly runButton: Locator;
   readonly editButton: Locator;
   readonly backToPoliciesButton: Locator;
 
@@ -53,6 +54,7 @@ export class PolicyDetailsPage {
     this.platformsDefinition = dataSet.value('Platforms');
 
     this.showQueryButton = page.getByRole('button', { name: 'Show query' });
+    this.runButton = page.getByRole('button', { name: 'Run policy' });
     this.editButton = page.getByRole('button', { name: 'Edit policy' });
     this.backToPoliciesButton = page.getByRole('button', { name: 'Back to policies' });
 

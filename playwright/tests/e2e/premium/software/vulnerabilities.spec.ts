@@ -115,6 +115,39 @@ for (const osKey of OS_KEYS) {
   });
 }
 
+test('Vulnerabilities tab — search narrows to a single CVE', async ({
+  softwareTitles,
+  vulnerabilitiesList,
+}) => {
+  await softwareTitles.goto();
+  await softwareTitles.teamDropdown.select('Unassigned');
+  await softwareTitles.gotoVulnerabilitiesTab();
+
+  // Searching a full CVE id (unique) must collapse the list to that one row.
+  const cveName = await vulnerabilitiesList.firstCveName();
+  await vulnerabilitiesList.search.fill(cveName);
+  await expect(vulnerabilitiesList.table.table.locator('tbody tr')).toHaveCount(1);
+  await expect(vulnerabilitiesList.table.firstRowPrimaryLink).toHaveText(cveName, {
+    useInnerText: true,
+  });
+});
+
+test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
+  softwareTitles,
+  vulnerabilitiesList,
+  page,
+}) => {
+  await softwareTitles.goto();
+  await softwareTitles.teamDropdown.select('Unassigned');
+  await softwareTitles.gotoVulnerabilitiesTab();
+
+  // Selecting the "Exploited" option drives the `exploit=true` query param and
+  // re-fetches; the filtered list may be empty, so assert row-or-empty.
+  await vulnerabilitiesList.selectExploitedFilter('Exploited vulnerabilities');
+  await expect(page).toHaveURL(/exploit=true/);
+  await expect(vulnerabilitiesList.table.rowOrEmpty()).toBeVisible();
+});
+
 test('Vulnerabilities tab — list, pagination, and CVE detail flow', async ({
   softwareTitles,
   vulnerabilitiesList,

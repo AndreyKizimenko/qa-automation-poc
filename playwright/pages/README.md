@@ -135,7 +135,7 @@ export class SoftwareTitlesPage {
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
-    this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations' });
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
 
     this.softwareTab = page.getByRole('tab', { name: 'Software' });

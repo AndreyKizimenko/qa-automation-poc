@@ -16,6 +16,8 @@ export class VulnerabilitiesListPage {
   readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
+  readonly exploitedFilter: Locator;
+  readonly exploitedFilterValue: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -28,6 +30,27 @@ export class VulnerabilitiesListPage {
     this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
+    // Exploited-vulnerabilities filter is Fleet's DropdownWrapper (react-select
+    // v5): the trigger exposes no role, so it's scoped by its BEM container;
+    // each option carries data-testid="dropdown-option".
+    this.exploitedFilter = page.locator(
+      '.software-vulnerabilities-table__exploited-vulnerabilities-filter .react-select__control',
+    );
+    this.exploitedFilterValue = page.locator(
+      '.software-vulnerabilities-table__exploited-vulnerabilities-filter .react-select__single-value',
+    );
+  }
+
+  /** Select an exploited-vulnerabilities filter option by its visible label. */
+  async selectExploitedFilter(
+    label: 'All vulnerabilities' | 'Exploited vulnerabilities',
+  ): Promise<void> {
+    if ((await this.exploitedFilterValue.textContent())?.trim() === label) return;
+    await this.exploitedFilter.click();
+    const option = this.page.getByTestId('dropdown-option').filter({ hasText: label });
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect(this.exploitedFilterValue).toHaveText(label);
   }
 
   async goto(opts: { fleetId?: number; exploit?: boolean; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {

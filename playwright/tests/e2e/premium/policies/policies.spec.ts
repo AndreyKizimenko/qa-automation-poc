@@ -52,6 +52,11 @@ for (const scope of SCOPES) {
       // the values that went through the modal.
       await policyDetails.expectValues(created);
 
+      // The details page surfaces the three primary policy actions.
+      await expect(policyDetails.showQueryButton).toBeVisible();
+      await expect(policyDetails.runButton).toBeVisible();
+      await expect(policyDetails.editButton).toBeVisible();
+
       // Click "Policies" in the navbar — confirm the new row is present.
       // Re-select the scope (the navbar click preserves the last-used
       // team filter) and search by name (the list is paginated; new

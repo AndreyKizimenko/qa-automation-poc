@@ -62,6 +62,10 @@ export class ReportEditPage {
   // Buttons rendered by EditQueryForm.
   readonly saveButton: Locator;
   readonly liveReportButton: Locator;
+  // Inline validator message the SQLEditor shows for a syntactically invalid
+  // query. Fleet still permits saving (to support catching false-positives),
+  // so specs assert it appears while Save stays enabled.
+  readonly sqlSyntaxError: Locator;
 
   // "Edit report" button on the report results/details page
   // (`/reports/:id`) that opens this form. The button's class is the
@@ -87,6 +91,13 @@ export class ReportEditPage {
   readonly confirmSaveModal: Locator;
   readonly confirmSaveButton: Locator;
 
+  // "Save as new" secondary button (renders on the edit form for an existing
+  // report, save-permitted roles) and the modal it opens.
+  readonly saveAsNewButton: Locator;
+  readonly saveAsNewModal: Locator;
+  readonly saveAsNewNameInput: Locator;
+  readonly saveAsNewSubmitButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -111,6 +122,7 @@ export class ReportEditPage {
     this.observersCanRunCheckbox = page.getByRole('checkbox', { name: 'Observers can run' });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
     this.liveReportButton = page.getByRole('button', { name: /Live report/ });
+    this.sqlSyntaxError = page.getByText('Syntax error. Please review before saving.');
 
     this.editFromDetailsButton = page.getByRole('button', { name: 'Edit report' });
 
@@ -134,6 +146,13 @@ export class ReportEditPage {
 
     this.confirmSaveModal = page.locator('.modal__modal_container').filter({ hasText: 'Save changes' });
     this.confirmSaveButton = this.confirmSaveModal.getByRole('button', { name: 'Save', exact: true });
+
+    this.saveAsNewButton = page.getByRole('button', { name: 'Save as new' });
+    this.saveAsNewModal = page.locator('.modal__modal_container').filter({ hasText: 'Save as new' });
+    // InputField name="queryName" renders id="queryName" with no associated
+    // <label htmlFor>, so target it by id within the modal.
+    this.saveAsNewNameInput = this.saveAsNewModal.locator('#queryName');
+    this.saveAsNewSubmitButton = this.saveAsNewModal.getByRole('button', { name: 'Save', exact: true });
   }
 
   /** Platform target checkbox by visible label. */
@@ -224,6 +243,22 @@ export class ReportEditPage {
     await this.confirmSaveButton.click();
     await this.toast.expectSuccess('Report updated.');
     await this.page.waitForURL(/\/reports\/\d+(?:\?|$)/);
+  }
+
+  /**
+   * Open the "Save as new" modal from the edit form. Returns the copy name it
+   * pre-fills ("Copy of <original>").
+   */
+  async openSaveAsNew(): Promise<string> {
+    await this.saveAsNewButton.click();
+    await expect(this.saveAsNewModal).toBeVisible();
+    return (await this.saveAsNewNameInput.inputValue()).trim();
+  }
+
+  /** Submit the "Save as new" modal, optionally overriding the copy name. */
+  async submitSaveAsNew(name?: string): Promise<void> {
+    if (name !== undefined) await this.saveAsNewNameInput.fill(name);
+    await this.saveAsNewSubmitButton.click();
   }
 
   /** Click "Live report" → navigates to `/reports/:id/live`. */

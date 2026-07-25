@@ -28,12 +28,14 @@ export type StaticUserKey =
   // Premium-only humans.
   | 'global-observer-plus'
   | 'global-technician'
+  | 'ws-admin'
   | 'ws-maintainer'
   | 'ws-observer'
   // Premium-only API users.
   | 'api-global-observer-plus'
   | 'api-global-technician'
   | 'api-global-gitops'
+  | 'api-ws-admin'
   | 'api-ws-maintainer'
   | 'api-ws-observer'
   | 'api-ws-maint-qa-obs'
@@ -138,6 +140,13 @@ export const STATIC_USERS: Readonly<Record<StaticUserKey, StaticUserSpec>> = {
   },
 
   // ── Premium fleet-scoped humans ────────────────────────────────────────────
+  'ws-admin': {
+    email: 'ws-admin@fleetdm.com',
+    name: 'QA Static Workstations Admin',
+    apiOnly: false,
+    role: { kind: 'fleets', assignments: [{ fleet: WORKSTATIONS_FLEET, role: 'admin' }] },
+    tiers: PREMIUM_ONLY,
+  },
   'ws-maintainer': {
     email: 'ws-maintainer@fleetdm.com',
     name: 'QA Static Workstations Maintainer',
@@ -177,6 +186,13 @@ export const STATIC_USERS: Readonly<Record<StaticUserKey, StaticUserSpec>> = {
   },
 
   // ── Premium fleet-scoped API users ─────────────────────────────────────────
+  'api-ws-admin': {
+    email: 'api-ws-admin@fleetdm.com',
+    name: 'QA Static API Workstations Admin',
+    apiOnly: true,
+    role: { kind: 'fleets', assignments: [{ fleet: WORKSTATIONS_FLEET, role: 'admin' }] },
+    tiers: PREMIUM_ONLY,
+  },
   'api-ws-maintainer': {
     email: 'api-ws-maintainer@fleetdm.com',
     name: 'QA Static API Workstations Maintainer',

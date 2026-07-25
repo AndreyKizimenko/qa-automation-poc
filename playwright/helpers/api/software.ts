@@ -192,3 +192,33 @@ export async function getSoftwareTitle(
   const t = body.software_title;
   return { id: t.id, name: t.name, source: t.source };
 }
+
+export interface SoftwarePackageDetail {
+  name: string;
+  selfService: boolean;
+}
+
+/**
+ * Reads a title's active installer package metadata. `self_service` lives on
+ * `software_title.software_package` (a back-compat alias Fleet still returns,
+ * pointing at the first-added package; `packages[0]` is the modern shape).
+ * Returns null for titles with no custom package (FMA / app-store /
+ * host-reported). The definitive way to verify an Edit-software round-trip
+ * persisted — a reopened modal renders stale config.
+ */
+export async function getSoftwarePackage(
+  request: APIRequestContext,
+  fleetId: number,
+  titleId: number,
+): Promise<SoftwarePackageDetail | null> {
+  const res = await request.get(apiUrl(`software/titles/${titleId}`), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId) },
+  });
+  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  const body = await res.json();
+  const t = body.software_title;
+  const pkg = t?.software_package ?? t?.packages?.[0];
+  if (!pkg) return null;
+  return { name: pkg.name, selfService: !!pkg.self_service };
+}

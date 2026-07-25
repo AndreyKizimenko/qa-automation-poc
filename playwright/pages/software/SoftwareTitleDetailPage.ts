@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
+import { EditSoftwareModal } from '../components/EditSoftwareModal';
 
 /**
  * /software/titles/:id — versions table for a software title. Titles managed
@@ -13,19 +14,28 @@ export class SoftwareTitleDetailPage {
   readonly navbar: Navbar;
   readonly table: DataTable;
   readonly installerCard: SoftwareInstallerCard;
+  readonly editSoftwareModal: EditSoftwareModal;
   /**
    * The page's main software-name heading. The visible text is the title's
    * display name, but the accessible name is the static `software display
    * name` aria-label, so getByLabel resolves the element correctly.
    */
   readonly displayHeading: Locator;
+  /**
+   * The "Hosts" summary metric links to the hosts list filtered by this title.
+   * Its visible text is the volatile host-count number, so it's targeted by the
+   * `software_title_id` it links to rather than by name.
+   */
+  readonly hostCountLink: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
     this.installerCard = new SoftwareInstallerCard(page);
+    this.editSoftwareModal = new EditSoftwareModal(page);
     this.displayHeading = page.getByLabel('software display name');
+    this.hostCountLink = page.locator('a[href*="software_title_id"]').first();
   }
 
   /** The visible display-name text shown in the title's `<h1>` heading. */
@@ -60,5 +70,10 @@ export class SoftwareTitleDetailPage {
 
   async waitForReady(): Promise<void> {
     await expect(this.table.firstRow).toBeVisible();
+  }
+
+  /** Clicks the "Hosts" count → the hosts list filtered by this software title. */
+  async viewHosts(): Promise<void> {
+    await this.hostCountLink.click();
   }
 }

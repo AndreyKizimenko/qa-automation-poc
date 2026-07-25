@@ -19,6 +19,23 @@ function matchesPlatform(
   return linuxPlatforms.includes(hostPlatform);
 }
 
+/**
+ * Display name of the first host on the instance (any platform, online or
+ * not). Returns null if the instance has no hosts. Handy for seeding a
+ * deterministic host into a manual-label / target picker.
+ */
+export async function firstHostDisplayName(
+  request: APIRequestContext,
+): Promise<string | null> {
+  const res = await request.get(apiUrl('hosts'), {
+    headers: authHeaders(),
+    params: { per_page: '1' },
+  });
+  if (!res.ok()) return null;
+  const body = await res.json();
+  return body.hosts?.[0]?.display_name ?? null;
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,
@@ -45,6 +62,38 @@ export async function findHostByPlatform(
     if (!swRes.ok) continue;
     const swBody = await swRes.json();
     if (swBody.software?.length > 0 || swBody.count > 0) {
+      return { id: host.id, displayName: host.display_name };
+    }
+  }
+  return null;
+}
+
+/**
+ * First host (by display name) that reports at least one software title —
+ * gives host-software specs a deterministic host with inventory instead of a
+ * fragile "first host" pick (which could be an Android/empty host). Scans up to
+ * `maxScan` hosts. Returns null if none report software.
+ */
+export async function findHostWithSoftware(
+  request: APIRequestContext,
+  maxScan = 50,
+): Promise<HostRef | null> {
+  const res = await request.get(apiUrl('hosts'), {
+    headers: authHeaders(),
+    params: { per_page: String(maxScan), order_key: 'display_name', order_direction: 'asc' },
+  });
+  if (!res.ok()) return null;
+  const body = await res.json();
+  const hosts = (body.hosts ?? []) as Array<{ id: number; display_name: string }>;
+
+  for (const host of hosts) {
+    const swRes = await request.get(apiUrl(`hosts/${host.id}/software`), {
+      headers: authHeaders(),
+      params: { per_page: '1' },
+    });
+    if (!swRes.ok()) continue;
+    const swBody = await swRes.json();
+    if ((swBody.software?.length ?? 0) > 0 || (swBody.count ?? 0) > 0) {
       return { id: host.id, displayName: host.display_name };
     }
   }

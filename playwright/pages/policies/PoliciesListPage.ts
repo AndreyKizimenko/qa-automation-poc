@@ -27,6 +27,15 @@ export class PoliciesListPage {
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
 
+  // Global policy automations ("Automations" button → "Automations" modal).
+  // The webhook/ticket controls live in the modal's "Webhooks or tickets"
+  // section (Fleet's OtherWorkflowsModal).
+  readonly manageAutomationsButton: Locator;
+  readonly automationsModal: Locator;
+  readonly policyAutomationsToggle: Locator;
+  readonly policyWebhookUrlInput: Locator;
+  readonly saveAutomationsButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -40,6 +49,46 @@ export class PoliciesListPage {
     this.bulkDeleteButton = page.getByRole('button', { name: 'Delete', exact: true });
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete policies' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
+
+    // AutomationsButton renders the visible label "Automations"; it's disabled
+    // until the scope has at least one policy.
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    // The modal's title is "Automations" (role-less Modal span).
+    this.automationsModal = page.locator('.modal__modal_container').filter({ hasText: 'Automations' });
+    // Enable/disable is Fleet's Slider (role="switch" button); the "Destination
+    // URL" label is tooltip-wrapped, so target the field by placeholder.
+    this.policyAutomationsToggle = this.automationsModal.getByRole('switch');
+    this.policyWebhookUrlInput = this.automationsModal.getByPlaceholder('https://server.com/example');
+    this.saveAutomationsButton = this.automationsModal.getByRole('button', { name: 'Save', exact: true });
+  }
+
+  /** Open the "Automations" modal (button is enabled once a policy exists). */
+  async openAutomations(): Promise<void> {
+    await this.manageAutomationsButton.click();
+    await expect(this.automationsModal).toBeVisible();
+  }
+
+  /** Toggle the policy-automations slider to `enabled` (idempotent). */
+  async setPolicyAutomations(enabled: boolean): Promise<void> {
+    const isOn = (await this.policyAutomationsToggle.getAttribute('aria-checked')) === 'true';
+    if (isOn !== enabled) await this.policyAutomationsToggle.click();
+    await expect(this.policyAutomationsToggle).toHaveAttribute('aria-checked', String(enabled));
+  }
+
+  /**
+   * Select the "Webhook" workflow radio (the modal may open on "Ticket"). The
+   * Radio's real <input> is hidden, so click the label; the destination-URL
+   * field renders once it's selected.
+   */
+  async selectWebhookWorkflow(): Promise<void> {
+    await this.automationsModal.locator('label').filter({ hasText: 'Webhook' }).click();
+    await expect(this.policyWebhookUrlInput).toBeVisible();
+  }
+
+  /** Save the automations modal; waits for it to close (reliable completion). */
+  async saveAutomations(): Promise<void> {
+    await this.saveAutomationsButton.click();
+    await expect(this.automationsModal).toBeHidden();
   }
 
   async goto(opts: { fleetId?: number; automationType?: 'other' | 'software' } = {}): Promise<void> {

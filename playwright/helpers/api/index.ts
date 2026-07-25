@@ -5,6 +5,7 @@
  * (`import { x } from '@helpers/api/software'`).
  */
 export * from './core';
+export * from './config';
 export * from './activities';
 export * from './hosts';
 export * from './fleets';
@@ -13,6 +14,11 @@ export * from './fma';
 export * from './app-store';
 export * from './mdm';
 export * from './users';
+export * from './reports';
+export * from './labels';
+export * from './policies';
+export * from './variables';
+export * from './enroll-secrets';
 export * from './static-users';
 export * from './role-access';
 export * from './cleanup';
