@@ -9,14 +9,10 @@
  * stays isolated from siblings running in parallel. Identical on both tiers, so
  * it runs shared. C2 #1/#3/#8/#11/#13/#20.
  *
- * Note on the results assertion: a host that answers a live query may return
- * rows, no rows, or an error — all three count as "responded". The hosts on the
- * QA instances are osquery-perf simulations that deliberately return no rows for
- * a fraction of live queries (`--live_query_no_results_prob`, default 0.2) and
- * ignore the SQL, answering any query with a fixed row. So the run's completion
- * and responded count are asserted, and the results area is accepted in either
- * terminal state; asserting a specific row or value here would be flaky by
- * construction.
+ * Runs against the real macOS VM (`liveMacosHost`): a real host runs the query's
+ * actual SQL, so the run's results can be asserted on directly. The osquery-perf
+ * simulations cannot back this — they ignore the SQL, answer with a fixed row,
+ * and return no rows at all for a fraction of runs.
  */
 import { test, expect } from '@fixtures';
 import { createReport, deleteReportsMatching } from '@helpers/api';
@@ -32,7 +28,9 @@ test('Host details — runs a saved report live against the host', async ({
   page,
 }) => {
   const marker = `pw-hostlq-${Date.now()}-${rand()}`;
-  await createReport(request, { name: marker, query: 'SELECT 1 AS probe;' });
+  // A constant-selecting query so the expected result is fixed regardless of
+  // what the host actually has installed.
+  await createReport(request, { name: marker, query: "SELECT 'bar' AS foo;" });
 
   try {
     await hostDetails.goto(liveMacosHost.id);
@@ -61,7 +59,11 @@ test('Host details — runs a saved report live against the host', async ({
     await expect(reportLive.runSummary).toContainText('1 host targeted');
     await expect(reportLive.runSummary).toContainText('100% responded');
 
-    await expect(reportLive.resultsRows.first().or(reportLive.noResultsState)).toBeVisible();
+    // The host ran the SQL: one row, attributed to it, carrying the value the
+    // query selected.
+    await expect(reportLive.resultsRows).toHaveCount(1);
+    await expect(reportLive.resultsRows.first()).toContainText(liveMacosHost.displayName);
+    await expect(reportLive.resultsRows.first()).toContainText('bar');
   } finally {
     await deleteReportsMatching(request, marker);
   }

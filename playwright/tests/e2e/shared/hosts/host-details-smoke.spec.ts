@@ -1,19 +1,19 @@
 /**
- * Shared • Hosts • Host details reads that need an online host.
+ * Shared • Hosts • Host details reads against a real device.
  *
  * Three independent concerns on `/hosts/:id/details`:
  *   - Refetch re-collects the host's vitals and the header reports it.
  *   - The "Local user accounts" card filters by username.
  *   - The Agent vitals tooltip reports the host's osquery/Orbit versions.
  *
- * All three behave identically on both tiers, so this runs shared rather than
- * duplicated per tier. Each test resolves its own host by API: the QA instances
- * are stocked by an osquery-perf load fleet whose hosts report different vitals
- * from one another, so a spec must ask for a host that reports what it asserts
- * on instead of trusting an arbitrary pick.
+ * Runs against the real macOS VM (`liveMacosHost`), not the osquery-perf load
+ * fleet: these assert on genuine reported vitals — real local user accounts and
+ * real agent versions — which the simulations only approximate. All three behave
+ * identically on both tiers, so this runs shared rather than duplicated per tier.
+ * C2 #7/#10/#17/#19/#22.
  */
 import { test, expect } from '@fixtures';
-import { findOnlineHost, getHostDetailUpdatedAt } from '@helpers/api';
+import { getHostDetailUpdatedAt } from '@helpers/api';
 
 /**
  * A username no other username on the host contains, so filtering by it leaves
@@ -22,13 +22,14 @@ import { findOnlineHost, getHostDetailUpdatedAt } from '@helpers/api';
 const unambiguousUsername = (usernames: string[]): string | undefined =>
   usernames.find((name) => !usernames.some((other) => other !== name && other.includes(name)));
 
-test('Host details — refetch re-collects the host vitals', async ({ hostDetails, request }) => {
-  const host = await findOnlineHost(request, 'darwin');
-  expect(host, 'expected an online macOS host').not.toBeNull();
+test('Host details — refetch re-collects the host vitals', async ({
+  hostDetails,
+  liveMacosHost,
+  request,
+}) => {
+  const before = await getHostDetailUpdatedAt(request, liveMacosHost.id);
 
-  const before = await getHostDetailUpdatedAt(request, host!.id);
-
-  await hostDetails.goto(host!.id);
+  await hostDetails.goto(liveMacosHost.id);
   await hostDetails.refetch();
 
   // The round trip waits on the host's distributed interval, so allow well over
@@ -40,21 +41,21 @@ test('Host details — refetch re-collects the host vitals', async ({ hostDetail
   // Fleet stored a newer set of vitals — proves the refresh came from the
   // refetch and not from a background detail cycle that was already recent.
   await expect
-    .poll(() => getHostDetailUpdatedAt(request, host!.id), { timeout: 15_000 })
+    .poll(() => getHostDetailUpdatedAt(request, liveMacosHost.id), { timeout: 30_000 })
     .not.toBe(before);
 });
 
 test('Host details — local user accounts card filters by username', async ({
   hostDetails,
-  request,
+  liveMacosHost,
 }) => {
-  const host = await findOnlineHost(request, 'darwin', { withUsers: true });
-  expect(host, 'expected an online macOS host reporting local user accounts').not.toBeNull();
+  const username = unambiguousUsername(liveMacosHost.usernames);
+  expect(
+    username,
+    `no distinctly-named local user among ${liveMacosHost.usernames.join(', ') || '(none)'}`,
+  ).toBeDefined();
 
-  const username = unambiguousUsername(host!.usernames);
-  expect(username, `no distinctly-named user among ${host!.usernames.join(', ')}`).toBeDefined();
-
-  await hostDetails.goto(host!.id);
+  await hostDetails.goto(liveMacosHost.id);
   await expect(hostDetails.usersHeading).toBeVisible();
   await expect(hostDetails.usersRows.first()).toBeVisible();
 
@@ -66,22 +67,17 @@ test('Host details — local user accounts card filters by username', async ({
 
 test('Host details — Agent tooltip reports osquery and Orbit versions', async ({
   hostDetails,
+  liveMacosHost,
   page,
-  request,
 }) => {
-  // Only fleetd hosts render the tooltip; a vanilla-osquery host shows a bare
-  // osquery version with nothing to hover.
-  const host = await findOnlineHost(request, 'darwin', { withOrbit: true });
-  expect(host, 'expected an online macOS host reporting an Orbit version').not.toBeNull();
-
-  await hostDetails.goto(host!.id);
+  await hostDetails.goto(liveMacosHost.id);
 
   // The visible Agent value is the fleetd (Orbit) version; osquery's is in the tooltip.
-  await expect(hostDetails.vitals.value('Agent')).toContainText(host!.orbitVersion!);
+  await expect(hostDetails.vitals.value('Agent')).toContainText(liveMacosHost.orbitVersion!);
 
   await hostDetails.hoverAgentVersion();
 
   const tooltip = page.getByRole('tooltip');
-  await expect(tooltip).toContainText(`osquery: ${host!.osqueryVersion}`);
-  await expect(tooltip).toContainText(`Orbit: ${host!.orbitVersion}`);
+  await expect(tooltip).toContainText(`osquery: ${liveMacosHost.osqueryVersion}`);
+  await expect(tooltip).toContainText(`Orbit: ${liveMacosHost.orbitVersion}`);
 });

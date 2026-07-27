@@ -17,7 +17,7 @@ import {
   findFleetByName,
   findOnlineHost,
   withApiRequest,
-  type HostRef,
+  type OnlineHostRef,
 } from './helpers/api';
 
 import {
@@ -107,20 +107,25 @@ type FleetWorkerFixtures = {
   loadtestFleetId: number;
 
   /**
-   * An online macOS host, resolved once per worker via the Fleet API. Backs
-   * every spec that needs a host which actually responds — live reports,
-   * refetch, script runs, transfers.
+   * The online **real** macOS VM, resolved once per worker via the Fleet API,
+   * with the vitals a spec asserts against. Backs every spec that needs genuine
+   * device behaviour — live reports that actually run the query's SQL, refetch,
+   * real local users and agent versions.
    *
-   * Resolved by platform + online status rather than by name or a pinned id:
-   * the QA instances are stocked by an osquery-perf load fleet (see
-   * `tools/perf-hosts/`) whose hosts get random display names and fresh ids
-   * whenever the daemon restarts. Both tiers land these hosts in
-   * Unassigned/"No team", so no fleet scoping is applied.
+   * Resolved by platform + online status + MDM enrollment rather than by name or
+   * a pinned id, since ids change on re-enrollment. MDM enrollment is what
+   * separates the real VMs from the osquery-perf load fleet sharing these
+   * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
+   * fleet, but free has no fleets, so enrollment is the cross-tier signal.
    *
-   * Fails loud when no macOS host is online, so a downed load fleet surfaces
-   * as a clear setup error instead of a puzzling mid-spec assertion failure.
+   * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
+   * should draw from the simulated pool via `findSimulatedHostIds` instead —
+   * there are only a couple of real VMs per tier and they must not be destroyed.
+   *
+   * Fails loud when none is online, so a downed VM surfaces as a clear setup
+   * error instead of a puzzling mid-spec assertion failure.
    */
-  liveMacosHost: HostRef;
+  liveMacosHost: OnlineHostRef;
 };
 
 type FleetFixtures = {
@@ -235,12 +240,14 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { scope: 'worker', box: true }],
 
   liveMacosHost: [async ({}, use) => {
-    const host = await withApiRequest((request) => findOnlineHost(request, 'darwin'));
+    const host = await withApiRequest((request) =>
+      findOnlineHost(request, 'darwin', { kind: 'real' }),
+    );
     if (!host) {
       throw new Error(
-        `[liveMacosHost] no online macOS host on ${process.env.FLEET_URL}. Host-execution specs need ` +
-        `one — check the osquery-perf load fleet is running (tools/perf-hosts/) and that ` +
-        `GET /api/v1/fleet/hosts?status=online reports macOS hosts.`,
+        `[liveMacosHost] no online, MDM-enrolled macOS VM on ${process.env.FLEET_URL}. ` +
+        `Real-device specs need one — check the QA macOS VM is powered on and still enrolled ` +
+        `(GET /api/v1/fleet/hosts?status=online&mdm_enrollment_status=enrolled).`,
       );
     }
     await use(host);

@@ -110,12 +110,37 @@ export interface OnlineHostRef extends HostRef {
 }
 
 /**
- * Extra guarantees a spec needs from its host. Hosts on the QA instances are
- * osquery-perf simulations whose reported vitals vary host to host, so a spec
- * asserting on one must resolve a host known to report it rather than trusting
- * an arbitrary pick.
+ * Which population of hosts to draw from. The QA instances carry both a handful
+ * of **real** VMs and a large **simulated** (osquery-perf) load fleet, and they
+ * suit opposite purposes:
+ *
+ *  - `'real'` — a genuine device. Runs real osquery, so it answers live queries
+ *    with the query's actual results, reports real local users and agent
+ *    versions, and supports MDM-gated features. Use for any spec asserting real
+ *    device behaviour. There are only a couple per tier, so never destroy one.
+ *  - `'simulated'` — the disposable load fleet. Plentiful and self-regenerating,
+ *    but it ignores live-query SQL, returns no rows for a fraction of runs, and
+ *    reports contradictory label membership. Use where the test needs *volume*
+ *    (bulk select/transfer/delete) and the individual host is incidental.
+ *
+ * Implemented with Fleet's documented `mdm_enrollment_status` filter: the real
+ * macOS/Windows VMs are MDM-enrolled and no simulation is.
+ *
+ * Caveat: the real **Linux** VMs are not MDM-enrolled, so they fall inside
+ * `'simulated'`. Destructive specs must therefore target `darwin` or `windows`,
+ * never `linux`, or they risk deleting a real VM.
+ */
+export type HostKind = 'real' | 'simulated';
+
+/**
+ * Extra guarantees a spec needs from its host. Simulated hosts report different
+ * vitals from one another, so a spec asserting on one must resolve a host known
+ * to report it rather than trusting an arbitrary pick. Real VMs satisfy both of
+ * these already.
  */
 export interface OnlineHostRequirements {
+  /** Restrict to real devices or to the simulated load fleet. */
+  kind?: HostKind;
   /**
    * Only match hosts reporting local user accounts. A host's users card stays
    * empty ("No users detected on this host") until its `users` detail query has
@@ -148,9 +173,9 @@ export async function findOnlineHost(
   requirements: OnlineHostRequirements = {},
   maxScan = 100,
 ): Promise<OnlineHostRef | null> {
-  const candidates = (await listOnlineHosts(request, platform, maxScan)).filter((h) =>
-    matchesPlatform(h.platform, platform),
-  );
+  const candidates = (
+    await listOnlineHosts(request, platform, maxScan, requirements.kind)
+  ).filter((h) => matchesPlatform(h.platform, platform));
 
   for (const candidate of candidates) {
     const host = await getOnlineHostVitals(request, candidate);
@@ -160,6 +185,24 @@ export async function findOnlineHost(
     return host;
   }
   return null;
+}
+
+/**
+ * Ids of simulated hosts of a platform — the disposable pool for bulk and
+ * destructive specs. Excludes every MDM-enrolled host so a real VM can never be
+ * selected; pass `darwin` or `windows` (see {@link HostKind} on why `linux` is
+ * unsafe here).
+ */
+export async function findSimulatedHostIds(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows',
+  count: number,
+): Promise<HostRef[]> {
+  const hosts = await listOnlineHosts(request, platform, Math.max(count * 3, 50), 'simulated');
+  return hosts
+    .filter((h) => matchesPlatform(h.platform, platform))
+    .slice(0, count)
+    .map((h) => ({ id: h.id, displayName: h.display_name }));
 }
 
 /**
@@ -204,6 +247,7 @@ async function listOnlineHosts(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
   perPage: number,
+  kind?: HostKind,
 ): Promise<OnlineHost[]> {
   const res = await request.get(apiUrl('hosts'), {
     headers: authHeaders(),
@@ -213,6 +257,8 @@ async function listOnlineHosts(
       per_page: String(perPage),
       order_key: 'display_name',
       order_direction: 'asc',
+      ...(kind === 'real' ? { mdm_enrollment_status: 'enrolled' } : {}),
+      ...(kind === 'simulated' ? { mdm_enrollment_status: 'unenrolled' } : {}),
     },
   });
   if (!res.ok()) return [];
