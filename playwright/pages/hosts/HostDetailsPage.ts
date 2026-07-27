@@ -4,6 +4,8 @@ import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
 import { Navbar } from '../components/Navbar';
 import { SelectReportModal } from '../components/SelectReportModal';
+import { Toast } from '../components/Toast';
+import { TransferHostModal } from '../components/TransferHostModal';
 
 /**
  * /hosts/:id/details — detailed view of a single host with tabs for Details,
@@ -21,6 +23,9 @@ export class HostDetailsPage {
   /** Vitals term/value pairs in the host's summary panel (Agent, Memory, …). */
   readonly vitals: DataSet;
   readonly selectReportModal: SelectReportModal;
+  /** Raised by Actions → Transfer; the same component the hosts list uses. */
+  readonly transferModal: TransferHostModal;
+  readonly toast: Toast;
 
   readonly hostHeading: Locator;
   readonly backButton: Locator;
@@ -84,6 +89,8 @@ export class HostDetailsPage {
     this.filter = new FilterModal(page);
     this.vitals = new DataSet(page);
     this.selectReportModal = new SelectReportModal(page);
+    this.transferModal = new TransferHostModal(page);
+    this.toast = new Toast(page);
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
