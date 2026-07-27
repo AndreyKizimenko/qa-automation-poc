@@ -38,6 +38,8 @@ export class HostsListPage {
    * active (`DataTable.tsx` `shouldRenderToggleAllPages`).
    */
   readonly selectAllMatchingButton: Locator;
+  /** Confirmation raised by the bulk Delete action; its own modal class. */
+  readonly deleteModal: Locator;
 
   readonly search: Locator;
   readonly addHostsButton: Locator;
@@ -90,6 +92,7 @@ export class HostsListPage {
     this.selectAllMatchingButton = this.selectionBar.getByRole('button', {
       name: 'Select all matching hosts',
     });
+    this.deleteModal = page.locator('.delete-host-modal');
 
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
@@ -192,6 +195,12 @@ export class HostsListPage {
   /** The bulk-select bar's "N selected" tally. */
   get selectedCount(): Locator {
     return this.selectionBar.getByText(/^\d+ selected$/);
+  }
+
+  /** Confirms the delete-host modal and waits for it to close. */
+  async confirmDelete(): Promise<void> {
+    await this.deleteModal.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(this.deleteModal).toBeHidden();
   }
 
   /** A hosts-table column header by its visible name. */

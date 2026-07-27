@@ -26,6 +26,8 @@ export class HostDetailsPage {
   /** Raised by Actions → Transfer; the same component the hosts list uses. */
   readonly transferModal: TransferHostModal;
   readonly toast: Toast;
+  /** Confirmation raised by Actions → Delete; its own modal class. */
+  readonly deleteModal: Locator;
 
   readonly hostHeading: Locator;
   readonly backButton: Locator;
@@ -91,6 +93,7 @@ export class HostDetailsPage {
     this.selectReportModal = new SelectReportModal(page);
     this.transferModal = new TransferHostModal(page);
     this.toast = new Toast(page);
+    this.deleteModal = page.locator('.delete-host-modal');
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
@@ -228,6 +231,12 @@ export class HostDetailsPage {
   async openLiveReport(): Promise<void> {
     await this.runAction('Live report');
     await expect(this.selectReportModal.modal).toBeVisible();
+  }
+
+  /** Confirms the delete-host modal and waits for it to close. */
+  async confirmDelete(): Promise<void> {
+    await this.deleteModal.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(this.deleteModal).toBeHidden();
   }
 
   /** Filters the "Local user accounts" card by username (client-side). */

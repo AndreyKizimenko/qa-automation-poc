@@ -197,22 +197,27 @@ export async function findOnlineHost(
  * pickers other specs use (`findOnlineHost`, `findHostWithSoftware`) all take the
  * first hosts ascending, so mutating from the other end keeps a parallel worker
  * from having a host moved out from under it mid-assertion.
+ *
+ * `offset` claims a distinct slice of the pool. The suite runs fully parallel,
+ * so two mutating specs on the same platform must not be handed the same hosts —
+ * each picks a slice and the offsets are kept distinct across specs.
  */
 export async function findSimulatedHostIds(
   request: APIRequestContext,
   platform: 'darwin' | 'windows',
   count: number,
+  offset = 0,
 ): Promise<HostRef[]> {
   const hosts = await listOnlineHosts(
     request,
     platform,
-    Math.max(count * 3, 50),
+    Math.max((count + offset) * 3, 50),
     'simulated',
     'desc',
   );
   return hosts
     .filter((h) => matchesPlatform(h.platform, platform))
-    .slice(0, count)
+    .slice(offset, offset + count)
     .map((h) => ({ id: h.id, displayName: h.display_name }));
 }
 
@@ -229,6 +234,19 @@ export async function getHostDetailUpdatedAt(
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
   return (await res.json()).host?.detail_updated_at ?? '';
+}
+
+/**
+ * Whether Fleet still knows about a host id. Deletion specs assert on the id
+ * rather than the display name: the load fleet's agents re-enroll after a
+ * delete, and a re-enrolled host reuses its name under a **new** id.
+ */
+export async function hostExists(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<boolean> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  return res.ok();
 }
 
 /**
