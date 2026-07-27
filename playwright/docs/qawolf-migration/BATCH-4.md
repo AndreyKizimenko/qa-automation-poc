@@ -119,11 +119,17 @@ query results, label membership, or MDM state must use a real VM.
         50% simulated failure rate per cycle) and `withOrbit` (the sim fleet is a **mix** of fleetd hosts
         reporting `orbit_version` and vanilla-osquery hosts reporting none — the Agent tooltip only renders for
         the former).
-- [ ] **`team-admin` static user provisioned.** Needed for every team-admin flow. Catalog entries `ws-admin` /
-      `api-ws-admin` exist in `helpers/api/static-users.ts` (Workstations-scoped admin) but were **not
-      provisioned on the instance**. Provision (POST `/users/admin` with a fleets-scoped `admin` assignment;
-      password from `FLEET_STATIC_USER_PASSWORD`) and confirm `withStaticUser(browser, 'ws-admin', …)` logs in.
-      Until then, the team-admin flows below stay blocked.
+- [x] **`team-admin` static user provisioned — DONE (2026-07-27).** `team-admin@fleetdm.com` ("QA Static Team
+      Admin"), **admin on both Workstations and VMs**, using the shared `FLEET_STATIC_USER_PASSWORD`. The
+      catalog's old placeholder `ws-admin` (`ws-admin@fleetdm.com`, Workstations only) never existed on the
+      instance and was renamed to `team-admin` to match. Reach it with
+      `withStaticUser(browser, 'team-admin', …)`.
+      - **Gotcha when provisioning any static user:** a user created by an admin comes back with
+        `force_password_reset: true`, and Fleet then bounces every login to `/login/reset` — which in a spec
+        looks exactly like a wrong password. `PATCH /users/:id` will **not** clear the flag; the only route is
+        `POST /perform_required_password_reset` as that user, which rejects reusing the old password. Clearing
+        it therefore takes two hops: reset to a throwaway password, then `POST /change_password` back to the
+        shared one. Done for this account; check `force_password_reset` is `false` for any future one.
 - [~] **Disposable-host decision (destructive tests) — partly resolved by the sim pool.**
       - **delete / bulk-delete:** the osquery-perf fleet IS a disposable, self-regenerating pool, so deleting a
         handful of sim hosts is now safe (they're fake and plentiful; host_expiry + the load fleet backfill).
@@ -238,14 +244,15 @@ restore reliably and consider whether these should run less-parallel.
 - ⚠️ **Measured cost — the pool does not self-heal.** The earlier assumption that the load fleet backfills a
   deleted host is **wrong**: osquery-perf's `enroll()` runs once at agent start and has **no node-invalid
   recovery**, so a deleted sim just keeps posting a dead node key and never comes back. Verified live — a host
-  deleted at 22:16 had not returned 3 minutes later, and the online count stayed down. **Each run of this spec
-  permanently costs 3 hosts** out of ~300 (~1%/run).
-  - Remedy: restart the daemon to enroll a fresh full set —
-    `sudo launchctl kickstart -k system/com.fleetqa.perf.premium` (and `.free`), or enable the ready-made
-    `com.fleetqa.perf.refresh.plist` daily refresh in `tools/perf-hosts/`. Worth enabling before this spec
-    runs nightly.
+  deleted at 22:16 had not returned 3 minutes later, and the online count stayed down.
+  - **The pool is repopulated by the scheduled daily refresh** in `tools/perf-hosts/`, so the budget is
+    per-day rather than per-run. Agreed ceiling: **delete at most ~5 hosts per run.** This file currently
+    deletes **4** (2 bulk + 1 from details + 1 team-admin); anything added must stay inside that.
   - Fleet's own delete modal says hosts "will re-appear unless Fleet's agent is uninstalled" — true of real
     fleetd, **not** of osquery-perf. Don't trust that copy for the sim fleet.
+- [x] **`team-admin` delete** (C1 #26) — a team admin can delete a host on a fleet they administer
+  (`canDeleteHost` admits team admins). Stages into **VMs** rather than Workstations, since the bulk case
+  stages there and the two run in parallel.
 
 ### Group D — provisioning-unblocked (moved here from Batches 2 & 3)
 - **`settings/advanced-options`** (moved from Batch 2): the Advanced card's `performSave` bundles
@@ -253,10 +260,18 @@ restore reliably and consider whether these should run less-parallel.
   could reset fields other specs depend on. Do it with a **full appConfig snapshot/restore** (get the whole
   `/config`, restore it verbatim in `afterEach`), pick a genuinely innocuous field, and **avoid `host_expiry`
   (can delete hosts)**. Run it away from the parallel suite if possible. Verify instance state after.
-- **`labels` team-admin variants** (moved from Batch 2; C9): maintainer own-only / observer view-only /
-  team-admin cases — needs the team-admin user. `LabelsPage` already has the row-action + filter-pill plumbing.
-- **`settings/team-host-status-webhook`** (C1 #16): team-level host-status webhook + host-expiry
-  tooltip/help/disabled-input — needs the team-admin user. (The **global** host-status webhook already shipped
+- [x] **`labels` team-admin variant** (moved from Batch 2; C9) — **DONE**, folded into the existing
+  `tests/e2e/premium/labels/role-access.spec.ts` as a third case. A team admin **can** add labels but
+  **cannot** edit a global one — the same outcome as the team maintainer, but through a different branch of
+  each gate (`canAddLabel` via `isAnyTeamMaintainerOrTeamAdmin`; `hasEditPermission` omits team roles), so the
+  two can regress independently.
+- [ ] **`settings/team-host-status-webhook`** (C1 #16) — **now unblocked** by the team-admin user; not yet
+  built. Team-level host-status webhook (`teamHostStatusWebhookEnabled` / `…DestinationUrl` / percentage /
+  window) → Save → "Successfully updated settings." → persists across reload. Plus the host-expiry trio:
+  hover "Enable host expiry" → tooltip, help text "Host expiry is globally enabled in organization
+  settings…", and a **disabled** expiry input. That last group needs host expiry enabled globally — it is
+  (`host_expiry` = 1 day, set for the load fleet), so the precondition holds. Needs a team-settings POM plus
+  an API snapshot/restore of the fleet's webhook config. (The **global** host-status webhook already shipped
   in Batch 3: `tests/e2e/shared/settings/host-status-webhook.spec.ts`.)
 
 ### Group E — reassign
