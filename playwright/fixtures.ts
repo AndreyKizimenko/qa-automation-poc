@@ -13,7 +13,12 @@
  */
 import { test as base } from '@playwright/test';
 import { monitorConsoleErrors, monitorNetworkFailures } from './helpers/console';
-import { findFleetByName, withApiRequest } from './helpers/api';
+import {
+  findFleetByName,
+  findOnlineHost,
+  withApiRequest,
+  type HostRef,
+} from './helpers/api';
 
 import {
   LoginPage,
@@ -100,6 +105,22 @@ type FleetWorkerFixtures = {
    * missing or non-numeric.
    */
   loadtestFleetId: number;
+
+  /**
+   * An online macOS host, resolved once per worker via the Fleet API. Backs
+   * every spec that needs a host which actually responds — live reports,
+   * refetch, script runs, transfers.
+   *
+   * Resolved by platform + online status rather than by name or a pinned id:
+   * the QA instances are stocked by an osquery-perf load fleet (see
+   * `tools/perf-hosts/`) whose hosts get random display names and fresh ids
+   * whenever the daemon restarts. Both tiers land these hosts in
+   * Unassigned/"No team", so no fleet scoping is applied.
+   *
+   * Fails loud when no macOS host is online, so a downed load fleet surfaces
+   * as a clear setup error instead of a puzzling mid-spec assertion failure.
+   */
+  liveMacosHost: HostRef;
 };
 
 type FleetFixtures = {
@@ -211,6 +232,18 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
 
   qaFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('qaFleetId', 'QA'));
+  }, { scope: 'worker', box: true }],
+
+  liveMacosHost: [async ({}, use) => {
+    const host = await withApiRequest((request) => findOnlineHost(request, 'darwin'));
+    if (!host) {
+      throw new Error(
+        `[liveMacosHost] no online macOS host on ${process.env.FLEET_URL}. Host-execution specs need ` +
+        `one — check the osquery-perf load fleet is running (tools/perf-hosts/) and that ` +
+        `GET /api/v1/fleet/hosts?status=online reports macOS hosts.`,
+      );
+    }
+    await use(host);
   }, { scope: 'worker', box: true }],
 
   pageHealth: [async ({ page }, use, testInfo) => {

@@ -1,7 +1,9 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
 import { Navbar } from '../components/Navbar';
+import { SelectReportModal } from '../components/SelectReportModal';
 
 /**
  * /hosts/:id/details — detailed view of a single host with tabs for Details,
@@ -16,11 +18,30 @@ export class HostDetailsPage {
   readonly navbar: Navbar;
   readonly table: DataTable;
   readonly filter: FilterModal;
+  /** Vitals term/value pairs in the host's summary panel (Agent, Memory, …). */
+  readonly vitals: DataSet;
+  readonly selectReportModal: SelectReportModal;
 
   readonly hostHeading: Locator;
   readonly backButton: Locator;
   readonly refetchButton: Locator;
   readonly actionsButton: Locator;
+  /**
+   * The header's "Last fetched <relative time>" line. `HostHeader` renders it as
+   * a role-less `<div class="host-header__last-fetched">` holding a bare text
+   * node plus the relative time, so there's no role or label to target. Assert
+   * with `toContainText` rather than `toHaveText`: the nested tooltip injects a
+   * `<style>` block and an absolute timestamp into this element's text.
+   */
+  readonly lastFetched: Locator;
+
+  // Details tab — "Local user accounts" card. Scoped to the card because the
+  // Details tab renders a second table (host certificates) that an unscoped
+  // table locator would also match.
+  readonly usersCard: Locator;
+  readonly usersHeading: Locator;
+  readonly usersSearch: Locator;
+  readonly usersRows: Locator;
 
   readonly detailsTab: Locator;
   readonly softwareTab: Locator;
@@ -45,6 +66,8 @@ export class HostDetailsPage {
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
     this.filter = new FilterModal(page);
+    this.vitals = new DataSet(page);
+    this.selectReportModal = new SelectReportModal(page);
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
@@ -53,6 +76,14 @@ export class HostDetailsPage {
     // by other means rather than re-asserting this name.
     this.refetchButton = page.getByRole('button', { name: 'Refetch' });
     this.actionsButton = page.getByRole('button', { name: 'Actions' });
+    this.lastFetched = page.locator('.host-header__last-fetched');
+
+    // `local-user-accounts-card` is the card's own modifier class; Fleet's Card
+    // renders as a role-less div, so it's the only stable scope for the card.
+    this.usersCard = page.locator('.local-user-accounts-card');
+    this.usersHeading = this.usersCard.getByRole('heading', { name: 'Local user accounts' });
+    this.usersSearch = this.usersCard.getByPlaceholder('Search local user accounts by username');
+    this.usersRows = this.usersCard.getByRole('table').locator('tbody').getByRole('row');
 
     this.detailsTab = page.getByRole('tab', { name: 'Details' });
     this.softwareTab = page.getByRole('tab', { name: 'Software' });
@@ -127,5 +158,66 @@ export class HostDetailsPage {
 
   async clickFirstSoftware(): Promise<void> {
     await this.table.firstRowWithLink.locator('td').first().getByRole('link').first().click();
+  }
+
+  /**
+   * Asks Fleet to re-collect the host's vitals. While a refetch is in flight the
+   * button is relabelled "Fetching fresh vitals...this may take a moment" and
+   * disabled, so this waits for the idle label before clicking to avoid racing a
+   * refetch already underway. The round trip is bounded by the host's
+   * distributed interval, so callers assert readiness on `lastFetched` (which
+   * settles to "less than a minute ago") rather than on the button.
+   */
+  async refetch(): Promise<void> {
+    await expect(this.refetchButton).toBeEnabled();
+    await this.refetchButton.click();
+  }
+
+  /**
+   * Picks an option from the host's Actions menu (Transfer, Live report, Run
+   * script, Delete, and the MDM-only Lock/Wipe/Unlock entries). The menu is a
+   * react-select with no ARIA roles on the options, so they're matched by their
+   * option class and exact visible text.
+   */
+  async runAction(label: string): Promise<void> {
+    await this.actionsButton.click();
+    await this.page
+      .locator('.actions-dropdown__option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
+  }
+
+  /** Opens the "Select a report" modal via Actions → Live report. */
+  async openLiveReport(): Promise<void> {
+    await this.runAction('Live report');
+    await expect(this.selectReportModal.modal).toBeVisible();
+  }
+
+  /** Filters the "Local user accounts" card by username (client-side). */
+  async searchUsers(term: string): Promise<void> {
+    await this.usersSearch.fill(term);
+  }
+
+  /** A "Local user accounts" row by its exact username cell. */
+  userRow(username: string): Locator {
+    return this.usersRows.filter({
+      has: this.page.getByRole('cell', { name: username, exact: true }),
+    });
+  }
+
+  /**
+   * Hovers the Agent vitals value to reveal its osquery/Orbit/Fleet Desktop
+   * tooltip. Only fleetd hosts render the tooltip — on a vanilla-osquery host
+   * the value is plain text (see `Vitals.tsx`), so resolve the host with
+   * `findOnlineHost(..., { withOrbit: true })` before calling this.
+   *
+   * The hover target is the tooltip wrapper's inner element, since the `<dd>`
+   * itself spans padding that doesn't trigger the tooltip.
+   */
+  async hoverAgentVersion(): Promise<void> {
+    await this.vitals
+      .value('Agent')
+      .locator('.component__tooltip-wrapper__element')
+      .hover();
   }
 }

@@ -60,30 +60,53 @@ Working dir: `/Users/andrey/repositories/qa-automation`; the suite is under `pla
 Batch 4 was blocked on infrastructure. **Confirm each of these is actually true on the instance now — do not
 assume.** If one isn't ready, that group of specs stays blocked; do the groups that are unblocked.
 
-- [ ] **Online host(s) enrolled and reporting.** Check via the API with a cookie-less/admin request:
-      `GET /api/v1/fleet/hosts?status=online` (use `apiUrl('hosts')` + `authHeaders()`). Note how many, and
-      which **platforms** (macOS/Windows/Linux). The roadmap target is a **macOS 26 VM** (see the
-      `project_host_tests` memory) plus ideally Windows/Linux for cross-platform reads.
-- [ ] **A committed live-host worker fixture.** There is **no committed e2e live-host fixture** — `firstHostId`
-      is loadtest-only. A `liveMacosHost` fixture + host-Actions POM methods were **prototyped and parked in a
-      git stash**: `git stash@{0}: "CIS host-tests WIP parked 2026-06-28"`. **Review it before reusing**
-      (`git stash show -p stash@{0}`) — it may be stale. Also check whether any host-test foundation was
-      *committed* since (the `project_host_tests` memory mentions a CIS policy↔script hero spec); reconcile the
-      stash against `git log` and current `pages/hosts/*`. Build/commit the fixture as the first Batch-4 step.
-      **Key constraint (from C2):** on premium the durable host should live in the **QA fleet** (resolve via the
-      existing `qaFleetId` worker fixture) — `cleanup.steps.ts` wipes Unassigned/Workstations/global but **not**
-      the QA fleet. On free the host is no-team, and its reports/software get wiped by cleanup, so free
-      host-data specs must self-provision + self-clean.
+- [x] **Online hosts enrolled and reporting — DONE (2026-07-27).** A persistent **osquery-perf** load fleet
+      runs on a MacStadium macOS VM (`launchd` daemons; source + setup in `tools/perf-hosts/`), keeping
+      **~300 online hosts on premium and ~268 on free**, split ~100/100/100 across macOS 14.1.2 / Windows 11 /
+      Ubuntu 22.04, refreshed continuously. `host_expiry` = 1 day sweeps offline leftovers. Confirm current
+      state anytime: `GET /api/v1/fleet/hosts?status=online`.
+      - **CRITICAL — these are osquery-perf *simulations*, not real/MDM hosts.** They DO respond to
+        distributed/live queries and report software inventory, so they unblock: host-live-query,
+        run-existing-query, refetch, host-reports-tab (cached results), and give real online hosts to
+        transfer. They are **NOT MDM-enrolled** (`mdm enrolls: 0`), so **lock/wipe stay blocked** (need a real
+        MDM-enrolled host). They ARE effectively the **disposable pool** for delete/bulk-delete — see below.
+      - They live where osquery-perf enrolls them: **premium hosts land in "No team"/Unassigned by default**
+        (osquery-perf doesn't set a team), NOT the QA fleet. So the "durable host in the QA fleet" note below
+        needs rethinking — either transfer some sims into the QA fleet as a fixture precondition, or resolve
+        the live host by API from Unassigned each run. Decide when building the fixture.
+- [x] **A committed live-host worker fixture — DONE (2026-07-27).** `liveMacosHost` (worker-scoped, in
+      `fixtures.ts`) returns a `HostRef` for an online macOS host, resolved via the new
+      `findOnlineHost(request, platform, requirements)` in `helpers/api/hosts.ts`. Fails loud (naming
+      `tools/perf-hosts/`) when no macOS host is online.
+      - **The parked stash (`stash@{0}`) was reviewed and only partly reusable.** Its premise — resolve a
+        *named* durable VM via `findOnlineHostByName(request, 'MacOS 26')` — is **dead**: the sim fleet's hosts
+        get **random 12-char display names** (`_0DKvbg2kgOu`) and fresh ids on every daemon restart. Resolution
+        is therefore by **platform + `status=online`**, never by name or a pinned id. Its `refetch()` and
+        Actions-menu ideas were re-authored (see below); its `TeamDropdown.selectByLabel` QA-fleet escape hatch
+        is **not needed** — the sims live in Unassigned, so no fleet scoping applies. Nothing was committed from
+        the stash directly; leave it parked (its `runSavedScript` / `expectPolicyStatus` are still useful for a
+        future run-script / CIS slice).
+      - **The C2 "durable host in the QA fleet" constraint no longer applies.** It existed to dodge
+        `cleanup.steps.ts`; the sims are in Unassigned and cleanup doesn't touch *hosts*, only content. Specs
+        still self-provision + self-clean their own reports.
+      - **Sim vitals vary per host** — a spec must request what it asserts on via `requirements`:
+        `withUsers` (only ~50–75% of sims have populated "Local user accounts"; the `users` detail query has a
+        50% simulated failure rate per cycle) and `withOrbit` (the sim fleet is a **mix** of fleetd hosts
+        reporting `orbit_version` and vanilla-osquery hosts reporting none — the Agent tooltip only renders for
+        the former).
 - [ ] **`team-admin` static user provisioned.** Needed for every team-admin flow. Catalog entries `ws-admin` /
       `api-ws-admin` exist in `helpers/api/static-users.ts` (Workstations-scoped admin) but were **not
       provisioned on the instance**. Provision (POST `/users/admin` with a fleets-scoped `admin` assignment;
       password from `FLEET_STATIC_USER_PASSWORD`) and confirm `withStaticUser(browser, 'ws-admin', …)` logs in.
       Until then, the team-admin flows below stay blocked.
-- [ ] **Disposable-host decision (destructive tests).** delete / lock / wipe / bulk-delete **irreversibly
-      remove or mutate hosts** with no re-enroll path, and would break every other host spec by destroying the
-      shared host. **Do NOT run these against the sole live host.** Decide with the lead: a disposable/
-      re-enrollable pool (and for lock/wipe, an MDM-enrolled disposable host)? Reframe as API-level role checks?
-      Or keep CUT? **Do not author destructive UI specs until this is resolved.**
+- [~] **Disposable-host decision (destructive tests) — partly resolved by the sim pool.**
+      - **delete / bulk-delete:** the osquery-perf fleet IS a disposable, self-regenerating pool, so deleting a
+        handful of sim hosts is now safe (they're fake and plentiful; host_expiry + the load fleet backfill).
+        **Verify osquery-perf's behavior when its host is deleted** (it keeps checking in with the old node key
+        → it may re-enroll as a new host or error) before relying on exact count assertions. Prefer deleting a
+        small, clearly-identified subset and asserting *those* are gone, not brittle total-count arithmetic.
+      - **lock / wipe:** still blocked — the sims aren't MDM-enrolled. Needs osquery-perf started with MDM
+        flags, or a real MDM-enrolled disposable host. Keep CUT for now, or cover as API-level role checks.
 - [ ] **Creds present** for whatever you run: `playwright/.env.{premium,free}` (`FLEET_URL`, `FLEET_API_TOKEN`,
       `FLEET_STATIC_USER_PASSWORD`, static-user tokens). Every var in `.env.<project>.example` is required.
 
@@ -98,10 +121,21 @@ a small, `npm run check`-clean, live-verified, committed chunk — same cadence 
 ### Group A — host-details reads & execution (needs an online host; non-destructive)
 Reference `C2-hosts-details.md`. Land under `tests/e2e/{premium,free}/hosts/`. Reuse the `liveMacosHost`
 fixture; self-provision + self-clean any reports/queries/software the spec needs.
-- **`host-details-smoke`** (C2 #7/#10/#17/#19/#22): **Refetch** vitals → "Last fetched less than a minute ago"
-  (the online-only part); Local-user-accounts card search; premium: hover Agent underline → osquery/Orbit
-  tooltip. `HostDetailsPage.refetchButton` exists; add a `refetch()` that clicks and waits out the
-  "Fetching fresh vitals…" state (prototyped in the stash).
+- [x] **`host-details-smoke`** (C2 #7/#10/#17/#19/#22) — **DONE**, landed **shared** rather than per-tier:
+  `tests/e2e/shared/hosts/host-details-smoke.spec.ts`. All three concerns behave identically on both tiers
+  (the "premium-only" Agent tooltip was an accident of QA Wolf's coverage — the feature and the sim mix exist
+  on free too), so per the Batch-3 convention (tier-agnostic-identical → `shared/`) it's one file, 3 tests:
+  - **Refetch** → header reads "Last fetched less than a minute ago" (60s budget). Asserted on
+    `.host-header__last-fetched` with `toContainText` — the nested tooltip injects a `<style>` block and an
+    absolute timestamp into that element's text, so `toHaveText` would fail. Backed by an
+    `expect.poll` on the API's `detail_updated_at` (new `getHostDetailUpdatedAt`) so a background detail
+    cycle that already read "less than a minute ago" can't make the assertion pass vacuously.
+  - **Local user accounts** card search → filters to 1 row. Scoped to `.local-user-accounts-card`: the
+    Details tab renders a **second table** (host certificates) that an unscoped table locator also matches.
+    The search token is picked as a username no other username contains (the card filters by substring).
+  - **Agent tooltip** → hover the tooltip wrapper inside the Agent `DataSet` value; asserts the
+    `role="tooltip"` text matches the API's `osquery_version` / `orbit_version`.
+  Live-verified green on **premium + free**.
 - **`host-live-query`** (C2 #1/#3/#8/#11/#13/#20): Actions → Live report → "Select a report" modal →
   pick a saved report → Run → "Report finished" with a result row. De-stale `ReportLivePage` for the
   completed-run screen. Role dimension (admin + maintainer both allowed) via `withStaticUser`, or defer to
