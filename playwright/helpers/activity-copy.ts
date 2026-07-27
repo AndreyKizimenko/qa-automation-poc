@@ -226,4 +226,17 @@ export const activityCopy = {
       return new RegExp(`changed ${esc(email)} to ${esc(role)}${suffix}\\.`);
     },
   },
+
+  /**
+   * The dashboard's "Manage automations" — streaming the activity feed to a
+   * destination URL. The copy carries no subject, only the verb.
+   */
+  activityAutomations: {
+    /** @see frontend/.../GlobalActivityItem.tsx:1671 */
+    enabled: () => /enabled activity automations\./,
+    /** @see frontend/.../GlobalActivityItem.tsx:1674 */
+    edited: () => /edited activity automations\./,
+    /** @see frontend/.../GlobalActivityItem.tsx:1677 */
+    disabled: () => /disabled activity automations\./,
+  },
 } as const;

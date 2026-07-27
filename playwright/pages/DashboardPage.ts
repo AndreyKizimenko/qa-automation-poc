@@ -27,6 +27,17 @@ export class DashboardPage {
   readonly firstActivityItem: Locator;
   readonly activityNext: Locator;
 
+  // "Manage automations" — streams the activity feed to a destination URL.
+  readonly automationsButton: Locator;
+  readonly automationsModal: Locator;
+  /**
+   * Fleet's `Slider` renders a `role="switch"` with **no** accessible name, so
+   * it's reached through the modal and its state read from `aria-checked`.
+   */
+  readonly automationsToggle: Locator;
+  readonly automationsUrlInput: Locator;
+  readonly automationsSaveButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -54,6 +65,42 @@ export class DashboardPage {
       .getByRole('button', { name: /\bago\b/ })
       .first();
     this.activityNext = this.activityFeedCard.getByRole('button', { name: 'Next' });
+
+    this.automationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    // The modal class is on both the container and its inner form div, so the
+    // container is pinned by the shared modal-container class as well.
+    this.automationsModal = page.locator(
+      '.activity-feed-automations-modal.modal__modal_container',
+    );
+    this.automationsToggle = this.automationsModal.getByRole('switch');
+    // The URL field is tooltip-wrapped, so it's reached by placeholder rather
+    // than label (see TeamSettingsPage for the same pattern).
+    this.automationsUrlInput = this.automationsModal.getByPlaceholder(
+      'https://server.com/example',
+    );
+    this.automationsSaveButton = this.automationsModal.getByRole('button', {
+      name: 'Save',
+      exact: true,
+    });
+  }
+
+  /** Opens the "Manage automations" modal from the activity feed header. */
+  async openAutomations(): Promise<void> {
+    await this.automationsButton.click();
+    await expect(this.automationsModal).toBeVisible();
+  }
+
+  /** Flips the activity-automations switch, reading current state from aria-checked. */
+  async setAutomationsEnabled(enabled: boolean): Promise<void> {
+    const checked = (await this.automationsToggle.getAttribute('aria-checked')) === 'true';
+    if (checked !== enabled) await this.automationsToggle.click();
+    await expect(this.automationsToggle).toHaveAttribute('aria-checked', String(enabled));
+  }
+
+  /** Saves the automations modal and waits for it to close. */
+  async saveAutomations(): Promise<void> {
+    await this.automationsSaveButton.click();
+    await expect(this.automationsModal).toBeHidden();
   }
 
   async goto(opts: { platform?: DashboardPlatform; fleetId?: number } = {}): Promise<void> {

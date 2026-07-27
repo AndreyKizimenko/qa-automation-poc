@@ -163,4 +163,16 @@ test.describe('activityCopy', () => {
     expect(activityCopy.policy.created({ name: tricky, scope: 'All fleets' })
       .test(`created a policy ${tricky} globally.`)).toBe(true);
   });
+
+  test('activityAutomations — enabled / edited / disabled', () => {
+    expect(activityCopy.activityAutomations.enabled()
+      .test('enabled activity automations.')).toBe(true);
+    expect(activityCopy.activityAutomations.edited()
+      .test('edited activity automations.')).toBe(true);
+    expect(activityCopy.activityAutomations.disabled()
+      .test('disabled activity automations.')).toBe(true);
+    // The three verbs must not match one another's copy.
+    expect(activityCopy.activityAutomations.enabled()
+      .test('disabled activity automations.')).toBe(false);
+  });
 });
