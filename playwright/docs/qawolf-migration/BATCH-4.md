@@ -155,10 +155,31 @@ fixture; self-provision + self-clean any reports/queries/software the spec needs
   - **Role dimension not folded in** (C2 open question #3 still open): admin-vs-maintainer "can run" is left
     for either a `withStaticUser` loop here or `tests/api/role-access/`. Not blocked — just undecided.
   Live-verified green on **premium + free**.
-- **`host-reports-tab`** (C2 #5/#15/#23/#24): Reports tab renders cards/count/sort/search; premium adds
-  sort A-Z/Z-A ordering + report-card Actions → Show details → report-results page. **Precondition-heavy:**
-  cards only appear once a saved query has a **cached result** for the host (needs a real run or a
-  short-interval scheduled query). Premium can lean on QA-fleet gitops reports; free must run one itself.
+- [x] **`host-reports-tab`** (C2 #5/#15/#23) — **DONE**, landed **shared**:
+  `tests/e2e/shared/hosts/host-reports-tab.spec.ts`. Seeds two uniquely-named reports, then asserts the count,
+  the "don't store results" toggle default, name search, and **Name A-Z / Z-A reordering** (`?sort=name_asc`
+  / `name_desc`).
+  - **C2's "precondition-heavy" premise was wrong.** Reports appear on the tab as soon as they *apply* to the
+    host — **no cached result needed**; one without results renders "Fleet is awaiting results from `<host>`".
+    So no gitops reports, no scheduled-query wait.
+  - **Isolation matters here:** other specs seed **global** reports, which apply to this host too, so the
+    unfiltered list and count are shared mutable state. Every assertion is made against the test's own two
+    reports by first searching its marker; the count is only asserted to match `/\d+ reports?/`.
+  - Grounding: card name is an **`h3`** (`getByRole('heading', { level: 3 })` — no class needed); the sort
+    trigger is `.host-reports-tab__sort-dropdown .react-select__control` (**not** the card Actions menu's
+    `.actions-dropdown-select__control` — mixing those up hangs the click until the test times out); options
+    carry `data-testid="dropdown-option"`; the toggle is a `role="switch"` with **no accessible name** (its
+    label is a sibling span) → read `aria-checked`.
+  Live-verified green on **premium + free**.
+- [ ] **`host-report-details`** (C2 #24 — the only Group A item left): report-card Actions → **Show details** →
+  this host's report-results page (perf-impact + "View data for all hosts"). **Still gated on a stored result:**
+  `HostReportCard.tsx` gates that action on `report.last_fetched !== null`, and with none the card offers only
+  "View report for all hosts". Getting one needs a report with an `interval` whose scheduled run the host
+  actually submits. **Unresolved constraint:** `cleanup-setup` wipes global reports at the start of every run,
+  so such a report can't be pre-seeded out of band — it must be created inside the test and waited on, bounded
+  by osquery-perf's config interval + the query interval (the sims poll queries every 10s per
+  `--query_interval` in the perf plists, but an end-to-end cached-result timing was **not** confirmed — an
+  attempt was wiped by `cleanup-setup` mid-experiment). Measure that wait before committing to a UI spec.
 
 ### Group B — host↔team transfer (reversible via API; mind parallel workers)
 Reference `C1-hosts-list.md`. **No team create/delete in bodies** — rework to Unassigned↔Workstations using the

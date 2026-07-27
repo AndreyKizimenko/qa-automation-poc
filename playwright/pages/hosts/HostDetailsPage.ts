@@ -43,6 +43,22 @@ export class HostDetailsPage {
   readonly usersSearch: Locator;
   readonly usersRows: Locator;
 
+  // Reports tab. The tab, its controls, and the report cards are role-less
+  // wrappers, so each is scoped by the `host-reports-tab` / `host-report-card`
+  // component classes; the values inside them are reached by role.
+  readonly reportsTabPanel: Locator;
+  readonly reportsCount: Locator;
+  /**
+   * "Show reports that don't store results". Fleet's `Slider` renders a
+   * `role="switch"` button whose visible label is a *sibling* span, so it has no
+   * accessible name — read its state from `aria-checked`.
+   */
+  readonly dontStoreResultsToggle: Locator;
+  readonly reportsSearch: Locator;
+  readonly reportsSortTrigger: Locator;
+  readonly reportCards: Locator;
+  readonly reportsEmptyState: Locator;
+
   readonly detailsTab: Locator;
   readonly softwareTab: Locator;
   readonly reportsTab: Locator;
@@ -84,6 +100,20 @@ export class HostDetailsPage {
     this.usersHeading = this.usersCard.getByRole('heading', { name: 'Local user accounts' });
     this.usersSearch = this.usersCard.getByPlaceholder('Search local user accounts by username');
     this.usersRows = this.usersCard.getByRole('table').locator('tbody').getByRole('row');
+
+    this.reportsTabPanel = page.locator('.host-reports-tab');
+    this.reportsCount = this.reportsTabPanel.locator('.host-reports-tab__count');
+    this.dontStoreResultsToggle = this.reportsTabPanel
+      .locator('.host-reports-tab__toggle')
+      .getByRole('switch');
+    this.reportsSearch = this.reportsTabPanel.getByPlaceholder('Search by name');
+    // react-select trigger — the visible click target is a role-less div, so it's
+    // scoped by the sort dropdown's own wrapper class.
+    this.reportsSortTrigger = this.reportsTabPanel.locator(
+      '.host-reports-tab__sort-dropdown .react-select__control',
+    );
+    this.reportCards = this.reportsTabPanel.locator('.host-report-card');
+    this.reportsEmptyState = page.getByRole('heading', { name: 'No reports scheduled' });
 
     this.detailsTab = page.getByRole('tab', { name: 'Details' });
     this.softwareTab = page.getByRole('tab', { name: 'Software' });
@@ -203,6 +233,48 @@ export class HostDetailsPage {
     return this.usersRows.filter({
       has: this.page.getByRole('cell', { name: username, exact: true }),
     });
+  }
+
+  // ── Reports tab ───────────────────────────────────────────────────────────
+
+  /** Opens the Reports tab and waits for it to settle to cards or its empty state. */
+  async openReportsTab(): Promise<void> {
+    await this.reportsTab.click();
+    await expect(this.page).toHaveURL(/\/reports$/);
+    await expect(this.reportCards.first().or(this.reportsEmptyState)).toBeVisible();
+  }
+
+  /** A report card by its name (the card's `h3` heading). */
+  reportCard(name: string): Locator {
+    return this.reportCards.filter({
+      has: this.page.getByRole('heading', { level: 3, name, exact: true }),
+    });
+  }
+
+  /** Report card names in the order they're rendered — the sort assertion's input. */
+  async reportCardNames(): Promise<string[]> {
+    const names = await this.reportsTabPanel
+      .getByRole('heading', { level: 3 })
+      .allInnerTexts();
+    return names.map((n) => n.trim());
+  }
+
+  /** Filters the Reports tab by report name (server-side `query` param). */
+  async searchReports(term: string): Promise<void> {
+    await this.reportsSearch.fill(term);
+  }
+
+  /**
+   * Re-sorts the Reports tab. Options come from Fleet's `DropdownWrapper`, which
+   * tags each with `data-testid="dropdown-option"`. The choice is reflected in the
+   * `sort` query param, so callers can wait on the URL before reading order.
+   */
+  async sortReports(label: 'Newest results' | 'Oldest results' | 'Name A-Z' | 'Name Z-A'): Promise<void> {
+    await this.reportsSortTrigger.click();
+    await this.page
+      .getByTestId('dropdown-option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
   }
 
   /**
