@@ -255,11 +255,18 @@ restore reliably and consider whether these should run less-parallel.
   stages there and the two run in parallel.
 
 ### Group D — provisioning-unblocked (moved here from Batches 2 & 3)
-- **`settings/advanced-options`** (moved from Batch 2): the Advanced card's `performSave` bundles
-  `scripts_disabled`, `host_expiry`, software-inventory, smtp, sso, etc. into ONE payload — a formData glitch
-  could reset fields other specs depend on. Do it with a **full appConfig snapshot/restore** (get the whole
-  `/config`, restore it verbatim in `afterEach`), pick a genuinely innocuous field, and **avoid `host_expiry`
-  (can delete hosts)**. Run it away from the parallel suite if possible. Verify instance state after.
+- [x] **`settings/advanced-options`** (moved from Batch 2) — **DONE**:
+  `tests/e2e/premium/settings/advanced-options.spec.ts`. Reframed around the actual risk: the bundled
+  `performSave` posts host-lifecycle, activity-retention, features and server-authentication together, so the
+  spec edits the card's most inert field (**SMTP `domain`** — SMTP is deliberately unconfigured on QA) and
+  asserts every neighbouring subtree survives byte-identical, naming software-inventory and the server URL.
+  Never touches `host_expiry_settings`.
+  - **Restore only the edited field.** Patching whole snapshotted subtrees back **400s** — they carry
+    read-only members such as `smtp_settings.configured`. A neighbour that *does* change is a real Fleet bug
+    and should fail the assertion, not be quietly repaired.
+  - Fixed a stale readiness anchor in `OrganizationAdvancedPage`: it waited on an "Advanced options" heading
+    the page no longer renders (it opens straight into its sections; **"Host lifecycle"** is the first).
+    Nothing had used the POM, so this was invisible until now.
 - [x] **`labels` team-admin variant** (moved from Batch 2; C9) — **DONE**, folded into the existing
   `tests/e2e/premium/labels/role-access.spec.ts` as a third case. A team admin **can** add labels but
   **cannot** edit a global one — the same outcome as the team maintainer, but through a different branch of
@@ -275,11 +282,20 @@ restore reliably and consider whether these should run less-parallel.
   in Batch 3: `tests/e2e/shared/settings/host-status-webhook.spec.ts`.)
 
 ### Group E — reassign
-- **`dashboard/automations-activity`** (C1 #8 — mis-filed under hosts): the **dashboard** "Automations" modal
-  (enable/disable/edit activity-feed automations) + activity-feed assertions. Land under
-  `tests/e2e/premium/dashboard/`. Reuse `dashboard.expectActivities([...])`; ground the activity copy in
-  `GlobalActivityItem.tsx` and add matchers to `helpers/activity-copy.ts` (with a case in
-  `tests/api/activity-copy.spec.ts`, the gate).
+- [x] **`dashboard/automations-activity`** (C1 #8 — mis-filed under hosts) — **DONE**:
+  `tests/e2e/premium/dashboard/automations-activity.spec.ts`. Enable → edit → disable the activity webhook,
+  each verb landing in the very feed the modal configures. Adds `activityCopy.activityAutomations` matchers
+  plus a case in the `tests/api/activity-copy.spec.ts` gate, and an `ActivitiesWebhook` config interface.
+  - **The API check between UI steps is load-bearing.** Closing the modal doesn't mean the PATCH landed;
+    reopening immediately can load pre-save config, and the next save then writes that stale value back,
+    silently undoing the edit. Don't remove those assertions as redundant.
+  - `PATCH /config` merges **within** `webhook_settings` (verified — sibling webhooks survive a restore that
+    sends only `activities_webhook`). This is the **opposite** of `PATCH /teams/:id`, which replaces the
+    subtree wholesale.
+  - There is one global activity webhook, so the test can't run beside a copy of itself (`--repeat-each` with
+    parallel workers fails it). Sibling appConfig specs are fine — they restore only their own subtree.
+  - Modal gotcha: `.activity-feed-automations-modal` is on **both** the container and its inner form div, so
+    the container is pinned with `.modal__modal_container` too.
 
 ---
 
