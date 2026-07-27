@@ -211,22 +211,41 @@ Reference `C1-hosts-list.md`. **No team create/delete in bodies** — rework to 
 existing `transferHosts` / `transferHostsByFilter` helpers (`helpers/api/hosts.ts`) for preconditions AND
 guaranteed restore in teardown. Transferring shared hosts changes their scope for other specs mid-run, so
 restore reliably and consider whether these should run less-parallel.
-- **`bulk-transfer`** (C1 #10/#12/#25): header select-all → "Select all matching hosts" → transfer; team
-  typeahead in the transfer modal; unhappy-path (filter applied → "Select all matching" hidden). Also assert
-  the "Create a fleet" link is present (salvage of the CUT #13). Needs a reusable transfer-modal component.
-- **`host-transfer-permissions`** (C1 #20/#22/#27): single-host transfer (host details Actions → Transfer) by
-  role — admin/maintainer can; **team-admin can't (#27, needs the `ws-admin`/team-admin user)**.
+- [x] **`bulk-transfer`** (C1 #10/#12/#25 + #13 salvage) — **DONE**:
+  `tests/e2e/premium/hosts/bulk-transfer.spec.ts`. Three tests: staged bulk transfer to Unassigned (toast +
+  API-verified), the searchable fleet dropdown narrowing to one match, and the
+  "Select all matching hosts" affordance appearing on a full page but not on a small fleet.
+  - Staged into the **QA** fleet (not Workstations): least-trafficked, and cleanup doesn't touch it. The
+    staging *is* the safety property — the fleet holds only this test's hosts, so select-all can't over-reach.
+  - **"Select all matching hosts" is only ever observed, never clicked.** It widens the selection to every
+    matching host, which on Unassigned is the whole load fleet sibling specs are reading.
+  - It only renders when **≥ one page (50)** of rows is selected (`DataTable.tsx` `shouldRenderToggleAllPages`),
+    which is why the small-fleet case asserts its *absence* rather than a filter-based unhappy path.
+  - Copy drift: the modal's link reads **"Add a fleet"** (QA Wolf said "Create a fleet"), and its submit stays
+    disabled until a destination is picked.
+- [x] **`host-transfer-permissions`** (C1 #20/#22) — **DONE**:
+  `tests/e2e/premium/hosts/host-transfer-permissions.spec.ts`. Global admin and global maintainer each
+  transfer a host via host details Actions → Transfer, verified by API and by the host's "Fleet" vital.
+  Uses **Windows** simulations so its pool can't overlap bulk-transfer's macOS one.
+  **C1 #27 (team admin must NOT see Transfer) remains blocked** on the unprovisioned `ws-admin` user.
 
-### Group C — host deletion (unblocked; simulated hosts only)
-Reference C1 #11 (`bulk-delete`) and C2 #2/#4/#12/#14 (delete host from details). The sim fleet is a
-disposable, self-regenerating pool, so deleting a handful is safe.
-- **Select targets with `findSimulatedHostIds(request, 'darwin' | 'windows', n)`** — it can never return a real
-  VM. Do **not** pass `linux` (the real Linux VMs are not MDM-enrolled and so fall inside the simulated set).
-- Assert that the *specific* hosts deleted are gone, not total-count arithmetic — the load fleet backfills
-  continuously and `host_expiry` sweeps in the background, so any count is stale the moment it's read.
-- Still unverified: what osquery-perf does when its host is deleted underneath it (keeps checking in with the
-  old node key → may re-enroll as a new host, or error). Confirm before relying on a deleted host *staying*
-  gone for the length of a run.
+### Group C — host deletion (DONE; simulated hosts only)
+- [x] **`host-delete`** (C1 #11, C2 #12) — **DONE**: `tests/e2e/premium/hosts/host-delete.spec.ts` (one file,
+  two describes: bulk from the list, and single from host details — the C1 table proposed `bulk-delete.spec.ts`
+  before the details case was unblocked). Bulk stages into **Workstations** (the transfer specs use QA) so
+  select-all can only reach this test's hosts. Assertions are on **host ids** via `hostExists`, never total
+  counts and never display names.
+- ⚠️ **Measured cost — the pool does not self-heal.** The earlier assumption that the load fleet backfills a
+  deleted host is **wrong**: osquery-perf's `enroll()` runs once at agent start and has **no node-invalid
+  recovery**, so a deleted sim just keeps posting a dead node key and never comes back. Verified live — a host
+  deleted at 22:16 had not returned 3 minutes later, and the online count stayed down. **Each run of this spec
+  permanently costs 3 hosts** out of ~300 (~1%/run).
+  - Remedy: restart the daemon to enroll a fresh full set —
+    `sudo launchctl kickstart -k system/com.fleetqa.perf.premium` (and `.free`), or enable the ready-made
+    `com.fleetqa.perf.refresh.plist` daily refresh in `tools/perf-hosts/`. Worth enabling before this spec
+    runs nightly.
+  - Fleet's own delete modal says hosts "will re-appear unless Fleet's agent is uninstalled" — true of real
+    fleetd, **not** of osquery-perf. Don't trust that copy for the sim fleet.
 
 ### Group D — provisioning-unblocked (moved here from Batches 2 & 3)
 - **`settings/advanced-options`** (moved from Batch 2): the Advanced card's `performSave` bundles
@@ -305,6 +324,13 @@ That covers the RBAC regression risk without ever firing the command.
 - **Role-based specs**: `withStaticUser(browser, key, async (page) => { const pom = new SomePage(page); … })` —
   construct the POM manually inside the callback (the fixture `page` is the admin session). See
   `premium/hosts/cta-visibility.spec.ts` and `premium/software/manage-automations-access.spec.ts`.
+  - **Logins are a shared, rate-limited resource.** Fleet throttles `POST /login` to **10/min, burst 9, in one
+    bucket shared by every user and every parallel worker** (`server/service/handler.go`; measured — the 11th
+    login in a minute returns 429). A throttled login silently leaves the browser on `/login` with no error
+    message, which reads like a bad password. `withStaticUser` therefore caches each user's `storageState`
+    under `.auth/static-<suite>-<key>.json` and reuses it (falling back to a fresh login if the session went
+    stale), and `loginAsAdmin` retries. **Don't reintroduce a per-test login** — adding a handful of role
+    specs that each log in is enough to starve the rest of the suite.
 - **`pageHealth`** is auto-applied (asserts no console/5xx errors at teardown); `pageHealth.disable()` only for
   known-benign 4xx noise (e.g. a host-target search), with a comment.
 
