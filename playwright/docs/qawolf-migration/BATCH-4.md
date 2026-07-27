@@ -136,10 +136,25 @@ fixture; self-provision + self-clean any reports/queries/software the spec needs
   - **Agent tooltip** → hover the tooltip wrapper inside the Agent `DataSet` value; asserts the
     `role="tooltip"` text matches the API's `osquery_version` / `orbit_version`.
   Live-verified green on **premium + free**.
-- **`host-live-query`** (C2 #1/#3/#8/#11/#13/#20): Actions → Live report → "Select a report" modal →
-  pick a saved report → Run → "Report finished" with a result row. De-stale `ReportLivePage` for the
-  completed-run screen. Role dimension (admin + maintainer both allowed) via `withStaticUser`, or defer to
-  `tests/api/role-access/`.
+- [x] **`host-live-query`** (C2 #1/#3/#8/#11/#13/#20) — **DONE**, landed **shared**:
+  `tests/e2e/shared/hosts/host-live-query.spec.ts`. Seeds a uniquely-named report via the API, then walks
+  Actions → Live report → "Select a report" → the report's **edit** screen (`/reports/:id/edit?host_id=N` —
+  the modal does *not* go straight to `/live`) → "Live report" → Select targets (host pre-selected, asserted)
+  → Run → "Report finished" + "1 host targeted" + "100% responded". Reuses the existing
+  `ReportEditPage.clickLiveReport()`; `ReportLivePage` extended to the run screen.
+  - **Do not assert a specific result row or value here.** The sims **ignore the SQL** and answer any live
+    query with a fixed canned row, and return **no rows at all ~20%** of the time
+    (`--live_query_no_results_prob`, default 0.2, not overridden in the perf plists). So QA Wolf's
+    "1 result / value `bar`" assertions are unportable; the spec asserts the run *completed* and the host
+    *responded*, and accepts either terminal results state via `.or(noResultsState)`. Verified stable over
+    5 repeats (20/20 executions green). **If we want a row-level assertion**, add
+    `--live_query_no_results_prob 0` to `tools/perf-hosts/com.fleetqa.perf.{premium,free}.plist` and
+    re-run `install.sh` on the VM — then the results row becomes deterministic.
+  - Copy drift: the modal's authoring link reads **"create a report"** (QA Wolf said "create your own
+    report"). The "Select a report" modal has a dedicated `.select-report-modal` class.
+  - **Role dimension not folded in** (C2 open question #3 still open): admin-vs-maintainer "can run" is left
+    for either a `withStaticUser` loop here or `tests/api/role-access/`. Not blocked — just undecided.
+  Live-verified green on **premium + free**.
 - **`host-reports-tab`** (C2 #5/#15/#23/#24): Reports tab renders cards/count/sort/search; premium adds
   sort A-Z/Z-A ordering + report-card Actions → Show details → report-results page. **Precondition-heavy:**
   cards only appear once a saved query has a **cached result** for the host (needs a real run or a
