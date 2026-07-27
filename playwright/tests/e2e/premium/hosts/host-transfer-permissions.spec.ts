@@ -14,8 +14,11 @@
  * Every case restores the host to Unassigned via the API — `cleanup.steps.ts`
  * does not move hosts, so a leaked transfer would persist on the instance.
  *
- * C1 #27 (a team admin must NOT see Transfer) stays uncovered: it needs the
- * `ws-admin` static user, which is not provisioned on the instance.
+ * The team-admin case (C1 #27) is the negative: moving a host between fleets
+ * would move it out of that admin's own scope, so Fleet withholds the action
+ * (`HostActionsDropdown/helpers.tsx` — `canTransferTeam` requires a *global*
+ * role, while `canDeleteHost` admits team admins). It reads the real VM in the
+ * VMs fleet, which the team admin administers, and mutates nothing.
  */
 import { test, expect } from '@fixtures';
 import { HostDetailsPage } from '@pages';
@@ -63,4 +66,22 @@ test.describe('Premium • Hosts • single-host transfer by role', () => {
       }
     });
   }
+
+  test('a team admin is not offered Transfer on a host they administer', async ({
+    browser,
+    liveMacosHost,
+  }) => {
+    await withStaticUser(browser, 'team-admin', async (page) => {
+      const hostDetails = new HostDetailsPage(page);
+
+      await hostDetails.goto(liveMacosHost.id);
+      await hostDetails.openActions();
+
+      // Delete is offered to team admins, so its presence proves the menu
+      // rendered for this role rather than the assertion passing on an
+      // unrendered menu.
+      await expect(hostDetails.actionOptions.filter({ hasText: /^Delete$/ })).toBeVisible();
+      await expect(hostDetails.actionOptions.filter({ hasText: /^Transfer$/ })).toHaveCount(0);
+    });
+  });
 });

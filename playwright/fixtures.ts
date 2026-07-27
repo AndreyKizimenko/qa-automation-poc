@@ -98,6 +98,14 @@ type FleetWorkerFixtures = {
   qaFleetId: number;
 
   /**
+   * Resolved id of the "VMs" fleet on the premium instance — home of the real
+   * (non-simulated) QA VMs, and the second fleet the `team-admin` static user
+   * administers. Throws with a `premium-only` error if requested on any other
+   * tier.
+   */
+  vmsFleetId: number;
+
+  /**
    * Numeric id of the fleet (team) holding the loadtest dataset on the
    * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, which the
    * workflow that provisions the team sets per run. Required by the
@@ -237,6 +245,10 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
 
   qaFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('qaFleetId', 'QA'));
+  }, { scope: 'worker', box: true }],
+
+  vmsFleetId: [async ({}, use) => {
+    await use(await resolvePremiumFleetId('vmsFleetId', 'VMs'));
   }, { scope: 'worker', box: true }],
 
   liveMacosHost: [async ({}, use) => {

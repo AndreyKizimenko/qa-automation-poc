@@ -214,6 +214,22 @@ export class HostDetailsPage {
   }
 
   /**
+   * Options currently offered by the host's Actions menu. Fleet builds this list
+   * per role and per host (`HostActionsDropdown/helpers.tsx`
+   * `removeUnavailableOptions`), so it's the surface a role-permission spec
+   * asserts on. Only meaningful while the menu is open.
+   */
+  get actionOptions(): Locator {
+    return this.page.locator('.actions-dropdown__option');
+  }
+
+  /** Opens the host's Actions menu and waits for its options to render. */
+  async openActions(): Promise<void> {
+    await this.actionsButton.click();
+    await expect(this.actionOptions.first()).toBeVisible();
+  }
+
+  /**
    * Picks an option from the host's Actions menu (Transfer, Live report, Run
    * script, Delete, and the MDM-only Lock/Wipe/Unlock entries). The menu is a
    * react-select with no ARIA roles on the options, so they're matched by their
@@ -221,10 +237,7 @@ export class HostDetailsPage {
    */
   async runAction(label: string): Promise<void> {
     await this.actionsButton.click();
-    await this.page
-      .locator('.actions-dropdown__option')
-      .filter({ hasText: new RegExp(`^${label}$`) })
-      .click();
+    await this.actionOptions.filter({ hasText: new RegExp(`^${label}$`) }).click();
   }
 
   /** Opens the "Select a report" modal via Actions → Live report. */
