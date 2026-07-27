@@ -96,6 +96,7 @@ export { PackEditPage } from './packs/PackEditPage';
 export { OrganizationInfoPage } from './settings/OrganizationInfoPage';
 export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
+export { TeamSettingsPage } from './settings/TeamSettingsPage';
 export {
   UsersPage,
   CreateUserPage,
