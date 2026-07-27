@@ -30,13 +30,30 @@ export class TeamDropdown {
    * the dropdown already shows the desired scope.
    */
   async select(name: TeamScope): Promise<void> {
+    await this.selectByLabel(name);
+  }
+
+  /**
+   * Selects any fleet by its exact visible label. {@link select} is the typed
+   * entry point for the scope-loop specs; this is the escape hatch for fleets
+   * outside the {@link TeamScope} matrix — notably "QA", which host-mutation
+   * specs stage into. Idempotent, and a no-op on free.
+   *
+   * Matching is anchored to the whole label so one fleet name can't select
+   * another that merely contains it.
+   */
+  async selectByLabel(label: string): Promise<void> {
     if ((await this.trigger.count()) === 0) return;
 
     const current = (await this.currentValue.textContent())?.trim();
-    if (current === name) return;
+    if (current === label) return;
 
     await this.trigger.click();
-    await this.page.locator('.team-dropdown__option').filter({ hasText: name }).click();
-    await expect(this.currentValue).toHaveText(name);
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await this.page
+      .locator('.team-dropdown__option')
+      .filter({ hasText: new RegExp(`^${escaped}$`) })
+      .click();
+    await expect(this.currentValue).toHaveText(label);
   }
 }

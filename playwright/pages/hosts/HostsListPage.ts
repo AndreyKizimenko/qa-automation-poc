@@ -6,6 +6,7 @@ import { TeamDropdown } from '../components/TeamDropdown';
 import { StatusFilter } from '../components/StatusFilter';
 import { LabelFilter } from '../components/LabelFilter';
 import { AddHostsModal } from '../components/AddHostsModal';
+import { TransferHostModal } from '../components/TransferHostModal';
 import { Toast } from '../components/Toast';
 
 /**
@@ -20,7 +21,23 @@ export class HostsListPage {
   readonly statusFilter: StatusFilter;
   readonly labelFilter: LabelFilter;
   readonly addHostsModal: AddHostsModal;
+  readonly transferModal: TransferHostModal;
   readonly toast: Toast;
+
+  // Bulk-select bar. Selecting rows swaps the table's header for a
+  // `thead.active-selection` holding the count and the bulk actions; each action
+  // is a plain text button, so only the bar itself needs a class scope.
+  readonly selectAllOnPageCheckbox: Locator;
+  readonly selectionBar: Locator;
+  readonly transferSelectedButton: Locator;
+  readonly deleteSelectedButton: Locator;
+  readonly clearSelectionButton: Locator;
+  /**
+   * "Select all matching hosts" — widens the selection past the current page.
+   * Only rendered once a full page is selected and no unsupported filter is
+   * active (`DataTable.tsx` `shouldRenderToggleAllPages`).
+   */
+  readonly selectAllMatchingButton: Locator;
 
   readonly search: Locator;
   readonly addHostsButton: Locator;
@@ -48,7 +65,31 @@ export class HostsListPage {
     this.statusFilter = new StatusFilter(page);
     this.labelFilter = new LabelFilter(page);
     this.addHostsModal = new AddHostsModal(page);
+    this.transferModal = new TransferHostModal(page);
     this.toast = new Toast(page);
+
+    // Fleet's Checkbox hides the real input behind a role="checkbox" div with no
+    // accessible name, so the header one is reached positionally within the
+    // table head — which holds only that checkbox in both header states.
+    this.selectAllOnPageCheckbox = this.table.table
+      .locator('thead')
+      .getByRole('checkbox')
+      .first();
+    this.selectionBar = this.table.table.locator('thead.active-selection');
+    this.transferSelectedButton = this.selectionBar.getByRole('button', {
+      name: 'Transfer',
+      exact: true,
+    });
+    this.deleteSelectedButton = this.selectionBar.getByRole('button', {
+      name: 'Delete',
+      exact: true,
+    });
+    this.clearSelectionButton = this.selectionBar.getByRole('button', {
+      name: 'Clear selection',
+    });
+    this.selectAllMatchingButton = this.selectionBar.getByRole('button', {
+      name: 'Select all matching hosts',
+    });
 
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
@@ -131,6 +172,26 @@ export class HostsListPage {
   async openAddHosts(): Promise<void> {
     await this.addHostsButton.click();
     await expect(this.addHostsModal.modal).toBeVisible();
+  }
+
+  /**
+   * Ticks the header checkbox, selecting every host on the current page and
+   * raising the bulk-select bar.
+   */
+  async selectAllOnPage(): Promise<void> {
+    await this.selectAllOnPageCheckbox.click();
+    await expect(this.selectionBar).toBeVisible();
+  }
+
+  /** Opens the Transfer modal from the bulk-select bar. */
+  async openTransferForSelection(): Promise<void> {
+    await this.transferSelectedButton.click();
+    await expect(this.transferModal.modal).toBeVisible();
+  }
+
+  /** The bulk-select bar's "N selected" tally. */
+  get selectedCount(): Locator {
+    return this.selectionBar.getByText(/^\d+ selected$/);
   }
 
   /** A hosts-table column header by its visible name. */

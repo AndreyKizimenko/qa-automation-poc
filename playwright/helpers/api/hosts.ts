@@ -188,17 +188,28 @@ export async function findOnlineHost(
 }
 
 /**
- * Ids of simulated hosts of a platform — the disposable pool for bulk and
- * destructive specs. Excludes every MDM-enrolled host so a real VM can never be
+ * Simulated hosts of a platform — the disposable pool for specs that mutate or
+ * destroy hosts. Excludes every MDM-enrolled host so a real VM can never be
  * selected; pass `darwin` or `windows` (see {@link HostKind} on why `linux` is
  * unsafe here).
+ *
+ * Drawn from the **end** of the display-name ordering on purpose: the read-only
+ * pickers other specs use (`findOnlineHost`, `findHostWithSoftware`) all take the
+ * first hosts ascending, so mutating from the other end keeps a parallel worker
+ * from having a host moved out from under it mid-assertion.
  */
 export async function findSimulatedHostIds(
   request: APIRequestContext,
   platform: 'darwin' | 'windows',
   count: number,
 ): Promise<HostRef[]> {
-  const hosts = await listOnlineHosts(request, platform, Math.max(count * 3, 50), 'simulated');
+  const hosts = await listOnlineHosts(
+    request,
+    platform,
+    Math.max(count * 3, 50),
+    'simulated',
+    'desc',
+  );
   return hosts
     .filter((h) => matchesPlatform(h.platform, platform))
     .slice(0, count)
@@ -218,6 +229,20 @@ export async function getHostDetailUpdatedAt(
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
   return (await res.json()).host?.detail_updated_at ?? '';
+}
+
+/**
+ * The fleet a host currently belongs to, or null for Unassigned/"No team".
+ * Transfer specs verify the move through this rather than re-reading the list,
+ * which can serve a stale page from react-query's cache.
+ */
+export async function getHostFleetId(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<number | null> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (await res.json()).host?.team_id ?? null;
 }
 
 /** Vitals for a single host, shaped for assertions (null when unreadable). */
@@ -248,6 +273,7 @@ async function listOnlineHosts(
   platform: 'darwin' | 'windows' | 'linux',
   perPage: number,
   kind?: HostKind,
+  direction: 'asc' | 'desc' = 'asc',
 ): Promise<OnlineHost[]> {
   const res = await request.get(apiUrl('hosts'), {
     headers: authHeaders(),
@@ -256,7 +282,7 @@ async function listOnlineHosts(
       platform,
       per_page: String(perPage),
       order_key: 'display_name',
-      order_direction: 'asc',
+      order_direction: direction,
       ...(kind === 'real' ? { mdm_enrollment_status: 'enrolled' } : {}),
       ...(kind === 'simulated' ? { mdm_enrollment_status: 'unenrolled' } : {}),
     },
