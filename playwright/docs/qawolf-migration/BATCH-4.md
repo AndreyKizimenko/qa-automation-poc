@@ -74,6 +74,31 @@ assume.** If one isn't ready, that group of specs stays blocked; do the groups t
         (osquery-perf doesn't set a team), NOT the QA fleet. So the "durable host in the QA fleet" note below
         needs rethinking — either transfer some sims into the QA fleet as a fixture precondition, or resolve
         the live host by API from Unassigned each run. Decide when building the fixture.
+- [x] **Real VMs added — DONE (2026-07-27).** Alongside the sim fleet, both instances now carry **three real
+      VMs** each (macOS 26.6 / Ubuntu 26.04 / Windows 11 24H2, osquery 5.23.1, fleetd 1.58.0). Premium keeps
+      them in a dedicated **"VMs" fleet (id 103)**; free has no fleets so they sit in no-team among the sims.
+      The macOS and Windows VMs are **MDM-enrolled** ("On (manual)"); the Linux ones aren't.
+
+### Host-selection policy (applies to every spec in this batch)
+
+Two populations share each instance. Pick by what the test actually needs:
+
+| Need | Population | How to resolve |
+|---|---|---|
+| Genuine device behaviour — live-query results, real users/agent versions, MDM-gated features, scripts | **real VM** | `liveMacosHost` fixture, or `findOnlineHost(request, platform, { kind: 'real' })` |
+| Volume — bulk select / transfer / delete, where the individual host is incidental | **simulated** | `findSimulatedHostIds(request, platform, n)` |
+
+Implemented via Fleet's documented `mdm_enrollment_status` filter (`enrolled` = the real macOS/Windows VMs,
+`unenrolled` = the sims) — the only discriminator that works on **both** tiers, since free has no fleets to
+scope by. **Never destroy a real VM**: there are only three per tier and no re-provisioning path.
+
+> ⚠️ **The real Linux VMs are not MDM-enrolled, so they fall inside the `'simulated'` set.** Destructive specs
+> must target **`darwin` or `windows`**, never `linux`, or they risk deleting a real VM.
+
+Why it matters beyond convenience: the sims are actively unfaithful. They ignore live-query SQL (answering any
+query with one canned dpkg row), return no rows ~20% of the time, and match **contradictory labels** — a single
+darwin sim is simultaneously in "Fedora Linux", "MS Windows", "All Linux" and "chrome". Any spec asserting on
+query results, label membership, or MDM state must use a real VM.
 - [x] **A committed live-host worker fixture — DONE (2026-07-27).** `liveMacosHost` (worker-scoped, in
       `fixtures.ts`) returns a `HostRef` for an online macOS host, resolved via the new
       `findOnlineHost(request, platform, requirements)` in `helpers/api/hosts.ts`. Fails loud (naming
@@ -192,10 +217,16 @@ restore reliably and consider whether these should run less-parallel.
 - **`host-transfer-permissions`** (C1 #20/#22/#27): single-host transfer (host details Actions → Transfer) by
   role — admin/maintainer can; **team-admin can't (#27, needs the `ws-admin`/team-admin user)**.
 
-### Group C — destructive (BLOCKED until the disposable-host decision; see Phase 2)
-Do not author against the live host. Reference C1 #11 (`bulk-delete`) and C2 #2/#4/#12/#14/#18/#25
-(delete/lock/wipe). Lock/wipe additionally need an MDM-enrolled disposable host. If never unblocked, keep CUT
-or reduce to API-level role-permission checks in `tests/api/role-access/`.
+### Group C — host deletion (unblocked; simulated hosts only)
+Reference C1 #11 (`bulk-delete`) and C2 #2/#4/#12/#14 (delete host from details). The sim fleet is a
+disposable, self-regenerating pool, so deleting a handful is safe.
+- **Select targets with `findSimulatedHostIds(request, 'darwin' | 'windows', n)`** — it can never return a real
+  VM. Do **not** pass `linux` (the real Linux VMs are not MDM-enrolled and so fall inside the simulated set).
+- Assert that the *specific* hosts deleted are gone, not total-count arithmetic — the load fleet backfills
+  continuously and `host_expiry` sweeps in the background, so any count is stale the moment it's read.
+- Still unverified: what osquery-perf does when its host is deleted underneath it (keeps checking in with the
+  old node key → may re-enroll as a new host, or error). Confirm before relying on a deleted host *staying*
+  gone for the length of a run.
 
 ### Group D — provisioning-unblocked (moved here from Batches 2 & 3)
 - **`settings/advanced-options`** (moved from Batch 2): the Advanced card's `performSave` bundles
@@ -215,6 +246,39 @@ or reduce to API-level role-permission checks in `tests/api/role-access/`.
   `tests/e2e/premium/dashboard/`. Reuse `dashboard.expectActivities([...])`; ground the activity copy in
   `GlobalActivityItem.tsx` and add matchers to `helpers/activity-copy.ts` (with a case in
   `tests/api/activity-copy.spec.ts`, the gate).
+
+---
+
+---
+
+## Deferred indefinitely — destructive MDM actions (Lock / Wipe)
+
+**Not part of the Batch-4 delivery. Do not author these without an explicit decision to take them on.**
+Parked here so the coverage gap stays visible rather than being silently dropped.
+
+Flows: **C2 #18 `lock-via-host-details`** (Actions → Lock → "I wish to lock `<host>`" checkbox → Lock →
+"LOCK PENDING" + toast + "locked this host" activity) and **C2 #25 `wipe-via-host-details`** (Actions → Wipe →
+"I wish to wipe" → "WIPE PENDING"/"WIPED" + script activity).
+
+Why they stay parked even though they are now *technically* possible:
+
+- They are **genuinely destructive and effectively one-shot.** The real macOS/Windows VMs are now MDM-enrolled,
+  so Fleet would really lock or wipe them. There are only three VMs per tier and **no re-provisioning
+  automation** — a wipe ends every other real-device spec in this batch until someone rebuilds the VM by hand.
+- Unlocking needs the recovery PIN Fleet surfaces after a lock, so even the "reversible" one is a manual
+  recovery chore, not an API teardown.
+- They must **never** be pointed at the simulated fleet as a workaround: sims aren't MDM-enrolled, so the
+  actions aren't even offered (verified live — a sim's Actions menu shows only Transfer / Live report /
+  Run script / Delete).
+
+If they are ever taken on, the prerequisite is a **dedicated sacrificial MDM-enrolled VM** with a scripted
+re-enroll, kept out of `liveMacosHost`'s resolution (e.g. its own fleet on premium, and on free some signal
+other than MDM enrollment, which no longer discriminates once a second enrolled host exists).
+
+Cheaper partial coverage available today, if the risk is unacceptable but the gap matters: assert the
+**permission surface** rather than the effect — that Lock/Wipe appear in the Actions menu for an admin on an
+MDM-enrolled host and are absent for an observer — plus API-level role checks in `tests/api/role-access/`.
+That covers the RBAC regression risk without ever firing the command.
 
 ---
 
