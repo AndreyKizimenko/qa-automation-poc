@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  This is a TEMPLATE. The __FREE_*__ placeholders are substituted by install.sh
+  from perf-hosts.env (gitignored) at install time — do not paste the real URL
+  or enroll secret in here, this file is committed to a public repo. Install
+  via install.sh rather than copying it by hand.
+
+  Persistent osquery-perf load fleet for the FREE QA instance.
+  KeepAlive keeps ~300 simulated hosts online 24/7 and relaunches on crash/reboot.
+  Install to /Library/LaunchDaemons/ (see install.sh / README.md).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fleetqa.perf.free</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/fleet-perf</string>
+        <string>--server_url</string>
+        <string>__FREE_FLEET_URL__</string>
+        <string>--enroll_secret</string>
+        <string>__FREE_ENROLL_SECRET__</string>
+        <string>--host_count</string>
+        <string>300</string>
+        <string>--os_templates</string>
+        <string>macos_14.1.2:100,windows_11:100,ubuntu_22.04:100</string>
+        <string>--start_period</string>
+        <string>2m</string>
+        <string>--query_interval</string>
+        <string>10s</string>
+        <string>--config_interval</string>
+        <string>1m</string>
+        <!-- Default is 0.2 (20% of live queries return no rows). 0 makes results
+             deterministic so tests can assert an actual result row, not just
+             "responded". -->
+        <string>--live_query_no_results_prob</string>
+        <string>0</string>
+    </array>
+
+    <!-- Keep the simulator running: relaunch on crash and at boot. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <!-- Back off before relaunching so a bad config can't hot-loop. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- 300 simulated hosts open far more than macOS's default 256-fd limit;
+         launchd doesn't inherit shell ulimits, so raise it here. -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>10240</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>10240</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/fleet-perf-free.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/fleet-perf-free.log</string>
+</dict>
+</plist>

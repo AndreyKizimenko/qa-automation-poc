@@ -37,7 +37,15 @@ gitops/loadtest/generated/
 # reference during the migration; not runnable and not part of the suite.
 qa-wolf/
 
-# Local ops tooling for the QA instances (osquery-perf launchd daemons that
-# keep the simulated host population online). The plists embed live enroll
-# secrets in plaintext — never commit.
-tools/
+# QA ops tooling (tools/) is checked in. What must never be:
+#
+# Real instance URLs + enroll secrets. The committed launchd plists are
+# templates with __PLACEHOLDER__ tokens; install.sh substitutes from this file.
+tools/perf-hosts/perf-hosts.env
+
+# Output of tools/windows-mdm-loadtest/generate.sh. The generator is
+# deterministic, so these regenerate byte-identical — only it is checked in.
+tools/windows-mdm-loadtest/profiles_*/
+tools/windows-mdm-loadtest/batch_*.json
+# Host-ID cache written by transfer_hosts.sh.
+tools/windows-mdm-loadtest/ids_*.txt
