@@ -80,8 +80,8 @@ test.describe('Premium • Hosts • single-host transfer by role', () => {
       // Delete is offered to team admins, so its presence proves the menu
       // rendered for this role rather than the assertion passing on an
       // unrendered menu.
-      await expect(hostDetails.actionOptions.filter({ hasText: /^Delete$/ })).toBeVisible();
-      await expect(hostDetails.actionOptions.filter({ hasText: /^Transfer$/ })).toHaveCount(0);
+      await expect(hostDetails.actionOption('Delete')).toBeVisible();
+      await expect(hostDetails.actionOption('Transfer')).toHaveCount(0);
     });
   });
 });

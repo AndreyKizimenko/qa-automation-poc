@@ -1,7 +1,9 @@
 # QA Wolf → Playwright migration
 
-**Status: complete.** 269 flows handed over, 267 audited, 250 portable, **250 covered**. The only uncovered
-behaviours are **Lock and Wipe**, parked by decision. Shipped in PR #35 (Batches 1–3) and PR #36 (Batch 4).
+**Status: complete.** 269 flows handed over, 267 audited, 250 portable, **250 covered**. Lock and Wipe are the
+only commands never fired — their **availability is asserted across macOS, Windows and Ubuntu on both tiers**,
+so the gating is covered even though the destructive act isn't. Shipped in PR #35 (Batches 1–3) and PR #36
+(Batch 4).
 
 QA Wolf handed us a suite of `*.flow.js` files that were never runnable here — they import helpers that don't
 exist in this repo, hardcode `@qawolf.email` accounts, and create teams inline. We treated them as **coverage

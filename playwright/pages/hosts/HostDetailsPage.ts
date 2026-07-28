@@ -223,6 +223,15 @@ export class HostDetailsPage {
     return this.page.locator('.actions-dropdown__option');
   }
 
+  /**
+   * One Actions-menu option by its exact label. Use `toBeVisible()` /
+   * `toHaveCount(0)` on it to assert an action is offered or withheld — Fleet
+   * builds the list per role, per platform and per MDM state.
+   */
+  actionOption(label: string): Locator {
+    return this.actionOptions.filter({ hasText: new RegExp(`^${label}$`) });
+  }
+
   /** Opens the host's Actions menu and waits for its options to render. */
   async openActions(): Promise<void> {
     await this.actionsButton.click();

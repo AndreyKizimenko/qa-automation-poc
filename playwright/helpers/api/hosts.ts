@@ -293,11 +293,15 @@ async function listOnlineHosts(
   kind?: HostKind,
   direction: 'asc' | 'desc' = 'asc',
 ): Promise<OnlineHost[]> {
+  // Fleet's `platform` param matches *label groups*, and there is no "linux"
+  // group — passing it returns zero hosts even when Linux hosts exist. For linux
+  // the param is omitted and the client-side `matchesPlatform` filter (which
+  // callers already apply) does the work.
   const res = await request.get(apiUrl('hosts'), {
     headers: authHeaders(),
     params: {
       status: 'online',
-      platform,
+      ...(platform === 'linux' ? {} : { platform }),
       per_page: String(perPage),
       order_key: 'display_name',
       order_direction: direction,

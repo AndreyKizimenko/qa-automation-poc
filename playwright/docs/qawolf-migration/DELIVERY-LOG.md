@@ -89,8 +89,26 @@ bundled save must not disturb its neighbours) · the labels team-admin variant.
 `dashboard/automations-activity` — filed under hosts in the audit, but it's the dashboard's automations modal.
 Enable → edit → disable, each verb landing in the feed it configures.
 
+### Group F — MDM action availability
+`mdm-actions-availability` (premium + free) — asserts which of **Lock / Wipe / Turn off MDM** Fleet offers
+across macOS, Windows and Ubuntu on both tiers. Six cases, and it never clicks a destructive item.
+
+Added after the rest of the batch, once the real VMs made a per-platform matrix possible. It closes the gating
+half of the Lock/Wipe gap: the commands still aren't fired, but a change that exposed one to the wrong platform,
+tier or role would now fail a test. Two findings from grounding it in
+`HostActionsDropdown/helpers.tsx` were counter-intuitive enough to be worth carrying forward:
+
+- **Turn off MDM is Apple-only** — a Windows host never offers it, MDM-enrolled or not.
+- **Lock and Wipe need no MDM on Linux** — both accept `isLinuxLike` outright, so the Ubuntu VM offers them
+  with no enrollment at all.
+
+It also exposed a real helper bug: `?platform=linux` returns **zero** hosts from Fleet's API (the `platform`
+param matches label groups, and `linux` isn't one), so `findOnlineHost` now omits the param for Linux and
+relies on the client-side platform filter.
+
 ### Deliberately not built
-**Lock and Wipe.** Rationale and the cheaper alternative: [`PARITY.md` §6](PARITY.md#6-the-one-real-gap-lock-and-wipe).
+**Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
+[`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
 ---
 

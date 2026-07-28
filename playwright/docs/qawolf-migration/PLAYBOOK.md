@@ -159,9 +159,14 @@ Three distinct answers; do not conflate them.
 | **Infrastructure gap** | mark the flow blocked in the tracker with what would unblock it, and move on. Do not fake it. |
 | **Real product bug** | file a Fleet issue, add a narrow skip citing it, and log it in [`../blocked-by-product-bugs.md`](../blocked-by-product-bugs.md). See `feedback_blocked_flows_workflow` — "make it green" is the wrong instinct. |
 
-And a fourth, which is not a failure: **the flow is asking for something we deliberately won't do.** Lock and
-Wipe are covered-by-decision-not-to-cover. Write down the decision and the cheaper alternative so it doesn't
-get silently re-litigated.
+And a fourth, which is not a failure: **the flow asks for something we deliberately won't do.** Write down the
+decision *and* the cheaper alternative, then check whether the alternative is worth building — often it is.
+
+Lock and Wipe are the worked example. Firing them needs a sacrificial device we don't have, so the destructive
+act stays uncovered. But every *gate* in front of them is cheap and safe to assert, and a gating regression is
+the failure mode that actually ships: `mdm-actions-availability.spec.ts` checks which of Lock / Wipe / Turn off
+MDM Fleet offers across 3 platforms × 2 tiers without clicking anything. **When you park a destructive flow,
+ask what the permission-surface version looks like** — it is usually 80% of the value for none of the risk.
 
 ## 9. Reconcile: don't skip the accounting
 
