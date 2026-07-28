@@ -21,14 +21,17 @@ test-data/
 │   │   ├── profiles/            # .mobileconfig
 │   │   ├── scripts/             # marker create/delete .sh scripts
 │   │   ├── setup-assistant/     # automatic-enrollment .json
+│   │   ├── setup-experience/    # .pkg installed during setup experience
 │   │   └── software/            # .pkg custom packages
 │   └── ios-ipados/              # (future) .mobileconfig, declarations
 ├── linux/
 │   ├── scripts/                 # marker create/delete .sh scripts
+│   ├── setup-experience/        # .deb installed during setup experience
 │   └── software/                # .deb / .rpm / .tar.gz custom packages
 ├── windows/
 │   ├── profiles/                # .xml profiles
 │   ├── scripts/                 # marker create/delete .ps1 scripts
+│   ├── setup-experience/        # .msi installed during setup experience
 │   └── software/                # .msi / .exe custom packages
 └── shared/                      # (future) cross-platform fixtures
 ```

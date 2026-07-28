@@ -9,21 +9,35 @@ read like a user flow, not like raw Playwright API calls.
 ```
 tests/
 ├── e2e/                      # Browser specs in three sibling folders
-│   ├── shared/               # Tier-agnostic — auth, packs, etc. (both projects)
+│   ├── shared/               # Tier-agnostic (both projects)
+│   │   ├── account/          # change-password, theme
 │   │   ├── auth/             # login, logout, SSO, forgot-password
-│   │   └── packs/            # packs CRUD (global, no team scope)
+│   │   ├── hosts/            # host details, live query, software, columns, CSV export
+│   │   ├── packs/            # packs CRUD (global, no team scope)
+│   │   └── settings/         # host-status webhook, user list search/pagination/row-actions
 │   ├── premium/              # Premium-only flows (Unassigned + Workstations variants)
+│   │   ├── account/
 │   │   ├── controls/
 │   │   │   ├── os-settings/
 │   │   │   ├── scripts/
-│   │   │   └── setup-experience/
+│   │   │   ├── setup-experience/
+│   │   │   └── custom-variables.spec.ts
+│   │   ├── dashboard/        # automations activity feed
+│   │   ├── hosts/            # transfer, delete, report details, CTA + MDM-action availability
+│   │   ├── labels/
 │   │   ├── policies/
 │   │   ├── reports/
-│   │   └── software/         # library (premium-only, paywalled on free) + vulnerabilities
+│   │   ├── settings/         # org, integrations, enroll-secrets, users, webhooks
+│   │   └── software/         # library (premium-only, paywalled on free), edit-package, os, vulnerabilities
 │   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs
 ├── api/                      # Pure-API specs (no browser)
 │   ├── config.spec.ts        # Agnostic config-shape checks
+│   ├── activity-copy.spec.ts # Activity-feed copy contract
+│   ├── premium/              # Premium-only API contracts
 │   ├── free/                 # Free-only API contracts
+│   ├── role-access/          # Per-role endpoint allow/deny probes
+│   │   ├── free/             # global roles on free
+│   │   └── premium/          # global, fleet-scoped, multi-fleet, endpoint-allowlisted
 │   └── gitops-verify/        # GitOps drift checks
 └── loadtest/                 # Page load / search timing tests (loadtest project, local-only)
 ```
@@ -33,6 +47,7 @@ Tier-routing rules:
 - **Tier-agnostic** (no team/scope concept): one spec under `tests/e2e/shared/<area>/`. Both projects pick it up via folder structure — no tag needed.
 - **Premium-only**: one spec under `tests/e2e/premium/<area>/`. Loop over `['Unassigned', 'Workstations']` (or `['All fleets', 'Workstations']` for reports/policies) calling `<page>.teamDropdown.select(scope)` after navigation. Use the `workstationsFleetId` worker fixture if the page needs a direct `goto({ fleetId })` for the Workstations variant.
 - **Free-tier counterpart**: mirror under `tests/e2e/free/<area>/`. Drop the dropdown step.
+- **Role access**: `tests/api/role-access/{free,premium}/`. Probes run as a pre-provisioned static user — never create one. Pull the user and its bearer headers from `@helpers/api/static-users`, assert with `expectAllow` / `expectDeny` from `@helpers/api/role-access`.
 
 ### e2e vs loadtest vs gitops-verify
 
@@ -66,7 +81,7 @@ test('describe the user scenario', async ({ softwareTitles }) => {
 
 Rules:
 
-1. **Always import `test` and `expect` from `@fixtures`.** Never from `@playwright/test` — that skips our page-object fixtures (and the auto `pageHealth` fixture). The only exception is setup specs under `setup/`.
+1. **Browser specs always import `test` and `expect` from `@fixtures`.** Never from `@playwright/test` — that skips our page-object fixtures (and the auto `pageHealth` fixture). Two exceptions, both of which have no page to monitor: setup specs under `setup/`, and pure-API specs that need neither a page object nor a worker fixture (`tests/api/gitops-verify/**`, `tests/api/activity-copy.spec.ts`). A pure-API spec that *does* want a page object or `workstationsFleetId` imports from `@fixtures` like everything else — most of `tests/api/` does.
 2. **Destructure the page objects you need.** `async ({ softwareTitles, cveDetail }) =>` — TypeScript tells you what's available.
 3. **Call page methods, not raw Playwright APIs.** If you find yourself writing `page.getByRole('table').locator('tbody tr')`, the page object is missing a method — add it, don't work around it.
 4. **Web-first assertions.** `await expect(locator).toBeVisible()` auto-retries. Don't `await locator.isVisible()` in assertions.
@@ -149,6 +164,7 @@ Routing is purely by folder — no tags. Each browser project's `testIgnore` in
 | `tests/e2e/premium/**` | yes | no (free `testIgnore` excludes `**/premium/**`) |
 | `tests/e2e/free/**` | no (premium `testIgnore` excludes `**/free/**`) | yes |
 | `tests/api/*.spec.ts` (root) | yes | yes |
+| `tests/api/premium/**` | yes | no |
 | `tests/api/free/**` | no | yes |
 | `tests/api/role-access/premium/**` | yes | no |
 | `tests/api/role-access/free/**` | no | yes |

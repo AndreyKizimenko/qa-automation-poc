@@ -8,17 +8,27 @@ suite, and the GitHub Actions that wire them together.
 ```
 .
 ├── gitops/
-│   ├── lib/                    # Shared profiles, policies, scripts, labels, reports
+│   ├── lib/                    # Shared payloads referenced by every config
+│   │   ├── agent-options.yml
+│   │   ├── labels/             # Label definitions (multi-entry files)
+│   │   └── platforms/<os>/     # configuration-profiles, policies, reports, scripts
 │   ├── free-fleetqa/           # Baseline gitops config for the free QA instance
 │   ├── free-fleetqa-min/       # Trimmed variant — used by gitops-verify
 │   ├── premium-fleetqa/        # Baseline gitops config for the premium QA instance
 │   ├── premium-fleetqa-min/    # Trimmed variant — used by gitops-verify
 │   └── loadtest/               # Generator for the bulk loadtest team bundle (local-only)
 ├── playwright/                 # Playwright browser + API test suite
+│   └── docs/                   # Suite docs: blocked-by-product-bugs, QA Wolf migration record
 └── .github/
     ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
     └── workflows/              # CI workflows (see below)
 ```
+
+Two working directories are deliberately untracked: `tools/` (osquery-perf
+`launchd` daemons that keep the QA instances stocked with online simulated
+hosts — the plists embed live enroll secrets) and `qa-wolf/` (the source
+`*.flow.js` exports the Playwright suite was migrated from). Neither is needed
+to run anything in this repo.
 
 ## Running locally
 
@@ -56,11 +66,14 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `nightly-qa-gitops-free.yml` | 05:00 UTC daily, manual | Free chain: apply baseline → verify → apply min → verify. |
 | `nightly-qa-gitops-premium.yml` | 05:00 UTC daily, manual | Premium chain: same as free, plus parallel verify of the Workstations team. |
 | `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual | Runs the Playwright suite against the matching instance — project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. |
+| `playwright-check.yml` | PR + push to `main` touching `playwright/**`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
 
 Nightly ordering: Render redeploy at 04:00 UTC → gitops orchestrators at
 05:00 UTC → Playwright at 05:30 UTC.
 
 ### Required secrets
+
+Instance + gitops:
 
 | Secret | Used by |
 |---|---|
@@ -72,5 +85,19 @@ Nightly ordering: Render redeploy at 04:00 UTC → gitops orchestrators at
 | `FLEET_FREE_SSO_METADATA_URL` | gitops-free |
 | `FLEET_PREMIUM_SSO_METADATA_URL` | gitops-premium |
 | `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium |
-| `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec) |
+| `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec, both tiers) |
 | `RENDER_FREE_DEPLOY_HOOK`, `RENDER_PREMIUM_DEPLOY_HOOK` | render-deploy |
+
+Test users — the role-access specs authenticate as pre-provisioned static users
+rather than creating them, so each needs its bearer token as a secret. Prefixed
+`FLEET_FREE_` / `FLEET_PREMIUM_` and mapped to the unprefixed env var the suite
+reads (see `playwright/.env.<tier>.example`):
+
+| Secret | Used by |
+|---|---|
+| `FLEET_<TIER>_TEST_USER_PASSWORD` | user-CRUD specs (the password they assign) |
+| `FLEET_<TIER>_STATIC_USER_PASSWORD` | shared password for the UI-login static users |
+| `FLEET_<TIER>_STATIC_TOKEN_API_GLOBAL_{ADMIN,MAINTAINER,OBSERVER}` | global-role API probes (both tiers) |
+| `FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_{OBSERVER_PLUS,TECHNICIAN,GITOPS}` | premium-only global roles |
+| `FLEET_PREMIUM_STATIC_TOKEN_API_WS_{MAINTAINER,OBSERVER,MAINT_QA_OBS}` | fleet-scoped + multi-fleet role probes |
+| `FLEET_PREMIUM_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_{GLOBAL,WS}` | API-only users with an endpoint allowlist |
