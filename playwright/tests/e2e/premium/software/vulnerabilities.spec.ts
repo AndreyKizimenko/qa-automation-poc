@@ -76,18 +76,25 @@ async function openVulnerableTitles(
 // runs — free has a single scope, so the leak can't occur there.
 // TODO(fleetdm/fleet#50059): remove once the filter respects the fleet scope.
 // eslint-disable-next-line playwright/no-skipped-test -- tracked in docs/blocked-by-product-bugs.md
-test.skip('Software Titles — every vulnerable-filtered row reports vulnerability data', async ({
-  softwareTitles,
-  page,
-}) => {
-  await openVulnerableTitles(softwareTitles, page);
+test.skip(
+  'Software Titles — every vulnerable-filtered row reports vulnerability data',
+  {
+    annotation: {
+      type: 'blocked by product bug',
+      description:
+        'fleetdm/fleet#50059 — vulnerable=true is not fleet-scoped, so a title vulnerable only in another fleet renders "---"',
+    },
+  },
+  async ({ softwareTitles, page }) => {
+    await openVulnerableTitles(softwareTitles, page);
 
-  const rows = softwareTitles.table.table.locator('tbody tr');
-  const rowCount = await rows.count();
-  for (let i = 0; i < rowCount; i++) {
-    await expectRowHasVulnData(page, rows.nth(i));
-  }
-});
+    const rows = softwareTitles.table.table.locator('tbody tr');
+    const rowCount = await rows.count();
+    for (let i = 0; i < rowCount; i++) {
+      await expectRowHasVulnData(page, rows.nth(i));
+    }
+  },
+);
 
 test('Software Titles — vulnerable filter, pagination, and column checks', async ({
   softwareTitles,

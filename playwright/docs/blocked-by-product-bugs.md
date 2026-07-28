@@ -18,9 +18,9 @@ the filed Fleet issue so we can unblock the moment it's fixed.
 
 | Flow / test | Spec | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
-| Linux (deb) host → vulnerable software → version → CVE detail | [vulnerabilities.spec.ts:178](../tests/e2e/premium/software/vulnerabilities.spec.ts#L178) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | CVE detail endpoint renders matched-but-unenriched CVEs (no 404) — then drop the `osKey === 'deb'` skip |
-| Linux (deb) software titles → version → CVE detail | [vulnerabilities.spec.ts:91](../tests/e2e/premium/software/vulnerabilities.spec.ts#L91) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-28 (v4.90.0-rc) | Same as above — one fix unblocks both deb variants |
-| Every vulnerable-filtered software title reports vulnerability data | [vulnerabilities.spec.ts:59](../tests/e2e/premium/software/vulnerabilities.spec.ts#L59) | premium, Unassigned | [fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059) | 2026-07-28 (v4.90.0-rc; latent in GA ≥4.80) | `vulnerable=true` respects the fleet scope (or the column shows the matching CVEs) — then un-skip the test |
+| Linux (deb) host → vulnerable software → version → CVE detail | [vulnerabilities.spec.ts:218](../tests/e2e/premium/software/vulnerabilities.spec.ts#L218) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | CVE detail endpoint renders matched-but-unenriched CVEs (no 404) — then drop the `osKey === 'deb'` skip |
+| Linux (deb) software titles → version → CVE detail | [vulnerabilities.spec.ts:122](../tests/e2e/premium/software/vulnerabilities.spec.ts#L122) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-28 (v4.90.0-rc) | Same as above — one fix unblocks both deb variants |
+| Every vulnerable-filtered software title reports vulnerability data | [vulnerabilities.spec.ts:79](../tests/e2e/premium/software/vulnerabilities.spec.ts#L79) | premium, Unassigned | [fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059) | 2026-07-28 (v4.90.0-rc; latent in GA ≥4.80) | `vulnerable=true` respects the fleet scope (or the column shows the matching CVEs) — then un-skip the test |
 
 ### Notes
 

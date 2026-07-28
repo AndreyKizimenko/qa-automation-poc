@@ -82,8 +82,9 @@ low-traffic fleet, so "select all on this page" can only ever act on the test's 
 asserted by host **id** rather than display name, budgeted to 4 deletions per run.
 
 ### Group D — provisioning-unblocked
-`team-host-status-webhook` (fleet webhook + host-expiry inherited-and-locked state) · `advanced-options` (the
-bundled save must not disturb its neighbours) · the labels team-admin variant.
+`team-host-status-webhook` (fleet webhook + the host-expiry checkbox deriving from the global and fleet
+settings) · `advanced-options` (the bundled save must not disturb its neighbours) · the labels team-admin
+variant.
 
 ### Group E — reassigned
 `dashboard/automations-activity` — filed under hosts in the audit, but it's the dashboard's automations modal.
@@ -122,10 +123,17 @@ These were pre-existing defects the migration surfaced, not regressions it cause
 | **`DataSet.value()` matches the whole term** | it matched substrings, so `"Fleet"` also resolved `"Added to Fleet"` on host vitals. Expressed as one selector, because a `filter({ has })` locator inherits the chain of whatever root built it — which silently matched nothing for container-scoped DataSets. |
 | **`OrganizationAdvancedPage.goto()` anchor** | waited on an "Advanced options" heading the page no longer renders. Nothing had used the POM, so it had been quietly broken. |
 | **`ReportLivePage` extended to the run screen** | previously only covered the targets picker, so no spec could assert a completed run. |
+| **The vulnerable-software lookup no longer hides its own failures** | it read only page 0 of `/software/titles?vulnerable=true`, whose default ordering is all deb packages, and returned `null` on a non-OK response — which callers turn into a platform skip. So the macOS and Windows title→CVE variants had been skipping **every run** behind "No macOS software found", and a 500 was indistinguishable from missing test data. Now one paged sweep resolves every platform group, a failed request throws, and a match must carry a CVE in the requested scope. |
+
+Fixing that last one exposed an instance limit worth knowing about: `vulnerable=true` builds a large MySQL
+temp table, and firing one per platform per worker made the premium QA instance return
+`Error 1114 (HY000): The table … is full`. Sequentially the same query is fine, so it is capacity rather than
+a query bug — the single sweep removed it in practice, but `tmp_table_size` / `tmpdir` headroom on that box is
+an open ops item and a plausible source of unexplained flakiness elsewhere.
 
 ## Fixture and helper inventory added
 
-`liveMacosHost` (real macOS VM, worker-scoped) · `vmsFleetId` · `findOnlineHost(request, platform, { kind, withUsers, withOrbit })` · `findSimulatedHostIds` · `hostExists` · `getHostFleetId` · `getHostDetailUpdatedAt` · `getFleetWebhookSettings`/`setFleetWebhookSettings` · `findReportByName`/`getHostReportLastFetched` · `activityCopy.activityAutomations` · `TransferHostModal` · `SelectReportModal` · `TeamSettingsPage` · `HostQueryReportPage` · `TeamDropdown.selectByLabel`.
+`liveMacosHost` (real macOS VM, worker-scoped) · `vmsFleetId` · `findOnlineHost(request, platform, { kind, withUsers, withOrbit })` · `findSimulatedHostIds` · `hostExists` · `getHostFleetId` · `getHostDetailUpdatedAt` · `getFleetWebhookSettings`/`setFleetWebhookSettings` · `getFleetHostExpirySettings` · `findReportByName`/`getHostReportLastFetched` · `activityCopy.activityAutomations` · `TransferHostModal` · `SelectReportModal` · `TeamSettingsPage` · `HostQueryReportPage` · `TeamDropdown.selectByLabel`.
 
 ## Plan corrections worth remembering
 

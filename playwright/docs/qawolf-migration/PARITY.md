@@ -156,5 +156,6 @@ express, and several specs now assert *more* than their source did:
 - **Product bugs filed** where a flow proved a real defect rather than a test gap — see
   [`../blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
 - **Pre-existing suite bugs found and fixed** while porting: the `/login` rate-limit starvation in
-  `withStaticUser`, `DataSet.value()` substring matching, and a stale readiness anchor in
-  `OrganizationAdvancedPage`. See [`DELIVERY-LOG.md`](DELIVERY-LOG.md).
+  `withStaticUser`, `DataSet.value()` substring matching, a stale readiness anchor in
+  `OrganizationAdvancedPage`, and a vulnerable-software lookup that had been silently skipping the macOS and
+  Windows title→CVE variants every run. See [`DELIVERY-LOG.md`](DELIVERY-LOG.md).
