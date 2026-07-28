@@ -57,9 +57,9 @@ Full comparison: [PLAYBOOK §7](PLAYBOOK.md#7-test-hosts-fidelity-vs-volume).
 The simulated pool is Fleet's own `cmd/osquery-perf` binary run as two persistent
 macOS `launchd` daemons (one per tier) on a dedicated QA VM. osquery-perf keeps its
 hosts checking in only while the process lives, so `KeepAlive` is the whole
-mechanism — no cron, no teardown/rebuild cycle. The daemon definitions embed live
-enroll secrets, so they live outside this repo under a gitignored `tools/` directory
-on the VM. What matters for reading the specs:
+mechanism — no cron, no teardown/rebuild cycle. The daemons and their installer are
+in [`tools/perf-hosts/`](../../../tools/perf-hosts/README.md). What matters for
+reading the specs:
 
 | Knob | Value | Why the suite depends on it |
 |---|---|---|

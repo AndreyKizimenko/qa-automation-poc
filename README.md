@@ -19,16 +19,23 @@ suite, and the GitHub Actions that wire them together.
 │   └── loadtest/               # Generator for the bulk loadtest team bundle (local-only)
 ├── playwright/                 # Playwright browser + API test suite
 │   └── docs/                   # Suite docs: blocked-by-product-bugs, QA Wolf migration record
+├── tools/                      # Hand-run ops tooling — see tools/README.md
+│   ├── perf-hosts/             # osquery-perf launchd daemons keeping QA hosts online
+│   ├── windows-mdm-loadtest/   # Windows MDM profile fan-out + team-transfer drivers
+│   └── kubernetes/             # Helm-chart smoke test on Docker Desktop
 └── .github/
     ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
     └── workflows/              # CI workflows (see below)
 ```
 
-Two working directories are deliberately untracked: `tools/` (osquery-perf
-`launchd` daemons that keep the QA instances stocked with online simulated
-hosts — the plists embed live enroll secrets) and `qa-wolf/` (the source
-`*.flow.js` exports the Playwright suite was migrated from). Neither is needed
-to run anything in this repo.
+`qa-wolf/` is deliberately untracked — the source `*.flow.js` exports the
+Playwright suite was migrated from. It isn't runnable and isn't needed for
+anything here.
+
+**This repo is public.** Real instance URLs, enroll secrets, and API tokens
+never belong in it — they come from GitHub secrets in CI, and from gitignored
+`.env` files locally. [`tools/README.md`](tools/README.md#before-you-run-anything)
+covers the same rule for the hand-run tooling.
 
 ## Running locally
 

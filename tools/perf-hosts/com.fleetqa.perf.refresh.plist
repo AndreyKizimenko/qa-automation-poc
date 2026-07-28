@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  OPTIONAL. Only install this if you specifically want a FRESH set of hosts
+  every 24h (the "kill previous, deploy new" behavior). It is NOT required for
+  the recommended persistent setup — the KeepAlive daemons above already keep
+  hosts online continuously and self-heal.
+
+  Daily at 09:00 it force-restarts both perf daemons. Because the daemons run
+  WITHOUT --node_key_file, each restart enrolls a brand-new set of ~300 hosts;
+  the previous set stops checking in and host_expiry=1 deletes it within a day.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fleetqa.perf.refresh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>/bin/launchctl kickstart -k system/com.fleetqa.perf.premium; /bin/launchctl kickstart -k system/com.fleetqa.perf.free</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/fleet-perf-refresh.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/fleet-perf-refresh.log</string>
+</dict>
+</plist>
