@@ -79,6 +79,20 @@ assume.** If one isn't ready, that group of specs stays blocked; do the groups t
       them in a dedicated **"VMs" fleet (id 103)**; free has no fleets so they sit in no-team among the sims.
       The macOS and Windows VMs are **MDM-enrolled** ("On (manual)"); the Linux ones aren't.
 
+### Standing instance preconditions this batch introduced
+
+Beyond the hosts themselves, two things are now assumed to exist and are **not** created by any spec:
+
+| What | Where | Needed by | If it goes missing |
+|---|---|---|---|
+| `team-admin@fleetdm.com`, admin on Workstations **and** VMs, shared `FLEET_STATIC_USER_PASSWORD`, `force_password_reset: false` | premium instance | every team-admin case (C1 #16/#26/#27, labels) | recreate per the Phase-2 note, including the two-hop password dance |
+| Report **`pw-host-report-results`** on the **VMs** fleet, interval 300, `SELECT 'bar' AS foo` | premium instance | `host-report-details.spec.ts` (C2 #24) | recreate per that spec's header, then allow ~3.5 min for one scheduled run |
+
+Both were chosen over self-provisioning deliberately: the report needs a real scheduled run before the UI
+exposes what it tests, and it has to sit on a fleet because `cleanup.steps.ts` wipes global reports every run.
+**Verified 2026-07-28:** the report and its cached result survived overnight plus repeated cleanup cycles, with
+`last_fetched` staying ~2 minutes old.
+
 ### Host-selection policy (applies to every spec in this batch)
 
 Two populations share each instance. Pick by what the test actually needs:
