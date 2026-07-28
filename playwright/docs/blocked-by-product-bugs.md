@@ -13,6 +13,9 @@ the filed Fleet issue so we can unblock the moment it's fixed.
   pointing back here, so the two never drift.
 - When the issue closes: re-run the flow against a build with the fix, and if it
   passes, remove the skip and move the row to **Resolved** (keep the history).
+- This file is the durable record. The per-run triage write-ups it came from live
+  in `docs/run-reviews/`, which is **gitignored** — so every root cause worth
+  keeping has to be written out here, not left behind as a link.
 
 ## Active
 
@@ -32,12 +35,14 @@ optional. The deb host's `accountsservice` package surfaces such CVEs
 (CVE-2026-61897/61898), so the deb variant deterministically fails. Only the deb
 variants are skipped; the macOS/Windows host→CVE variants still run (they land on
 enriched CVEs today, but could hit the same bug if their newest CVE is ever
-unenriched). Full triage + root cause: [run-reviews/2026-07-22-premium-run-29901965767.md](run-reviews/2026-07-22-premium-run-29901965767.md).
+unenriched). First surfaced in premium run
+[29901965767](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/29901965767).
 
 Both the host path and the software-titles path reach `accountsservice`'s
 unenriched CVE, so both deb variants carry the skip — the titles path was added
-after run 30368075570 hit the same 404 from the other direction
-([run-reviews/2026-07-28-premium-run-30368075570.md](run-reviews/2026-07-28-premium-run-30368075570.md)).
+after premium run
+[30368075570](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/30368075570)
+hit the same 404 from the other direction.
 
 **#50059 — `vulnerable=true` is not fleet-scoped.** The software-titles filter
 joins `software` → `software_cve` on `s.title_id = st.id` with no team predicate,
@@ -47,8 +52,8 @@ another fleet is therefore listed under the Vulnerable filter but renders `---`
 in the Vulnerabilities column. On the premium QA instance `fuse3` does this: its
 vulnerable `3.18.2-1` lives on one host in fleet `VMs`, while Unassigned carries
 only non-vulnerable versions. Free is unaffected (single scope), so the free
-counterpart of the assertion still runs. Full triage + root cause:
-[run-reviews/2026-07-28-premium-run-30368075570.md](run-reviews/2026-07-28-premium-run-30368075570.md).
+counterpart of the assertion still runs. Surfaced in premium run
+[30368075570](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/30368075570).
 
 ## Resolved
 

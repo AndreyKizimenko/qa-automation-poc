@@ -32,3 +32,12 @@ Icon
 # regenerated locally before each loadtest run. Only the generator script
 # is checked in.
 gitops/loadtest/generated/
+
+# Source QA Wolf *.flow.js exports (flows-Free/, flows-Premium/). Kept for
+# reference during the migration; not runnable and not part of the suite.
+qa-wolf/
+
+# Local ops tooling for the QA instances (osquery-perf launchd daemons that
+# keep the simulated host population online). The plists embed live enroll
+# secrets in plaintext — never commit.
+tools/

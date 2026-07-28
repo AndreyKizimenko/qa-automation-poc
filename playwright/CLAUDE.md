@@ -1,12 +1,12 @@
 # Playwright test suite
 
-This folder contains the Playwright end-to-end suite for Fleet. The standards below apply whenever you work in `tools/qa/playwright/`.
+This folder contains the Playwright end-to-end suite for Fleet. The standards below apply whenever you work in `playwright/`.
 
 ## Skills
 
-- **playwright-test-author** — auto-invoked when writing or scaffolding new tests, page objects, component objects, or fixtures.
-- **playwright-test-reviewer** — invoke explicitly with `/playwright-test-reviewer` to audit existing specs and POMs.
-- **playwright-run-reviewer** — triage a finished run (CI or local): per failing/flaky test, decide flake vs test-bug vs product-defect. Invoke with `/playwright-run-reviewer`, or by pasting a Playwright Actions run URL / pointing at `playwright-report/`.
+- **playwright-test-author** — auto-invoked when writing or scaffolding new tests, page objects, component objects, or fixtures. Checked in at `.claude/skills/`.
+- **playwright-test-reviewer** — invoke explicitly with `/playwright-test-reviewer` to audit existing specs and POMs. Checked in at `.claude/skills/`.
+- **playwright-run-reviewer** — triage a finished run (CI or local): per failing/flaky test, decide flake vs test-bug vs product-defect. Invoke with `/playwright-run-reviewer`, or by pasting a Playwright Actions run URL / pointing at `playwright-report/`. Lives in the repo-root `.claude/`, which is gitignored, so it is **local-only** — it isn't available to a fresh clone.
 
 ## Comment style (always-on)
 
@@ -18,19 +18,20 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 ## Layout
 
 - `tests/e2e/` — browser specs in three sibling folders:
-  - `shared/<area>/` — tier-agnostic flows (currently `auth/`, `packs/`); both premium and free pick these up via folder structure.
+  - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `hosts/`, `packs/`, `settings/`); both premium and free pick these up via folder structure.
   - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
-- `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts) and `tests/api/free/` (free-only).
+- `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
 - `tests/loadtest/` — page-load timing tests. Run locally only — they
   need a high-scale instance and a team provisioned via
   [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
   in `.env.loadtest` (gitignored), so no CI workflow targets them.
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
-- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team.ts` for per-spec team lifecycle).
-- `fixtures.ts` — page-object fixtures (single file).
+- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings).
+- `fixtures.ts` — page-object fixtures, worker fixtures (fleet ids, `liveMacosHost`), and the auto `pageHealth` fixture (single file).
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`).
+- `docs/` — `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects) and `qawolf-migration/` (the migration record + per-flow audit). `docs/run-reviews/` holds per-run triage write-ups and is gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
 
 ## Locators and waits (Fleet-specific gotchas)
@@ -54,7 +55,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 ## API access
 
 - Build URLs through `apiUrl(path)` from `@helpers/api`. Never inline `/api/v1/...` or `/api/latest/...` in test code.
-- API helpers are split per area under `helpers/api/` (`core`, `hosts`, `fleets`, `software`, `fma`, `app-store`, `mdm`, `activities`). The barrel `@helpers/api` re-exports everything; specs can also reach for a specific module (`@helpers/api/software`) when they want narrower deps.
+- API helpers are split per area under `helpers/api/` (`core`, `activities`, `app-store`, `cleanup`, `config`, `enroll-secrets`, `fleets`, `fma`, `hosts`, `labels`, `mdm`, `policies`, `reports`, `role-access`, `software`, `static-users`, `users`, `variables`). The barrel `@helpers/api` re-exports everything; specs can also reach for a specific module (`@helpers/api/software`) when they want narrower deps.
 - Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/packs`, `/queries`, `/policies`, etc.
 - Use the Playwright `request` fixture; do not use raw `fetch()` from inside specs.
 
@@ -91,7 +92,9 @@ The `free` project depends only on `free-setup`. The `loadtest` project depends 
 
 ## Env vars
 
-Every var in `.env.<project>.example` is required — specs fail rather than skip when one is missing.
+Every var in `.env.<project>.example` that the suite reads is required — specs fail rather than skip when one is missing. The example files also carry vars consumed only by a local `fleetctl gitops` apply (`FLEET_ENROLL_SECRET`, `FLEET_SSO_METADATA_URL`, and on premium the ABM / VPP / EUA vars); those are grouped under their own comment header and the suite never reads them.
+
+The static-user credentials (`FLEET_STATIC_USER_PASSWORD`, `FLEET_STATIC_TOKEN_*`) are shared and live in 1Password — never mint a replacement locally. The bearer tokens are shown once at user-creation time and cannot be rotated, so a locally-created user diverges from what CI uses.
 
 Do not introduce new env-var skip gates without a load-bearing reason.
 
@@ -111,7 +114,11 @@ Default: a spec is a single end-to-end flow; cleanup runs at the end of the same
 
 ## Skips
 
-Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment naming the reason and what unblocks it. If a skip is gated on an env var, document the var in `.env.example`.
+Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment naming the reason and what unblocks it. If a skip is gated on an env var, document the var in `.env.example`. Where the skip gets recorded depends on why it exists:
+
+- **Blocked by a confirmed Fleet defect** → a row in `docs/blocked-by-product-bugs.md` with the filed issue and the unblock condition, and a matching `TODO(fleetdm/fleet#NNNNN)` comment on the skip so the two can't drift. File the Fleet issue first — "make it green" is not the fix.
+- **Env-gated, or deliberately deferred** → a row in `TODO.md`.
+- **Data-availability guard** (`test.skip(!host, 'no macOS host')`, `gitopsConfig.scope !== 'no-team'`) → inline reason only. These are preconditions, not debt, and don't get tracked.
 
 ## Pre-PR check
 

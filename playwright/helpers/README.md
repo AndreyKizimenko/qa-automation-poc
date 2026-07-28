@@ -12,7 +12,11 @@ and component objects). See [`../pages/README.md`](../pages/README.md).
 | Call the Fleet REST API | `@helpers/api` (or a specific module under `api/`) |
 | Monitor console / network errors on a page | `@helpers/console` — usually consumed via the auto `pageHealth` fixture |
 | Measure a page's load time | `@helpers/perf` |
-| Log in a user (setup-time only) | `@helpers/auth` |
+| Log in the admin at setup time, or open a second context as another user | `@helpers/auth` |
+| Act as a specific pre-provisioned role (API token or UI login) | `@helpers/api/static-users` |
+| Assert an endpoint is allowed / denied for a role | `@helpers/api/role-access` |
+| Resolve a live host to test against | `findOnlineHost` from `@helpers/api/hosts` |
+| Assert activity-feed wording | `@helpers/activity-copy` |
 | Pick a known FMA / VPP / Android app for an API or UI search test | `@helpers/catalogs` |
 
 If you catch yourself writing `page.getByRole(...)` in a helper, stop —
@@ -23,8 +27,10 @@ that's a page-object responsibility.
 | Path | Purpose |
 |------|---------|
 | [`api/`](./api/) | Per-area Fleet API helpers (see below). The barrel `@helpers/api` re-exports everything. |
-| [`auth.ts`](./auth.ts) | `loginAsAdmin()` — used by setup projects to write `.auth/*.json` |
+| [`activity-copy.ts`](./activity-copy.ts) | `activityCopy` — the expected activity-feed strings, shared by the specs that assert the feed and by the copy-contract API spec, so wording lives in one place |
+| [`auth.ts`](./auth.ts) | `loginAsAdmin()` (setup projects, writes `.auth/*.json`), plus `withCleanContext()` / `withStaticUser()` for specs that need a second browser context signed in as someone else |
 | [`console.ts`](./console.ts) | `monitorConsoleErrors()`, `monitorNetworkFailures()`, plus the default ignore lists. Wired into every test via the auto `pageHealth` fixture in `fixtures.ts`. |
+| [`gitops-yaml.ts`](./gitops-yaml.ts) | Loads and flattens a gitops target's YAML `path:` refs into typed entries — the reader behind the `gitops-verify` specs |
 | [`perf.ts`](./perf.ts) | `measureNav()`, `measureSearch()` — time user-perceived loads |
 | [`perf-teardown.ts`](./perf-teardown.ts) | Performance summary table + historical comparison |
 | [`team-scope.ts`](./team-scope.ts) | `fleetIdFor(scope, workstationsFleetId)` — maps `'All fleets'` / `'Unassigned'` / `'Workstations'` to the `fleet_id` URL value (`undefined` / `0` / wsId) for scope-aware page-object `goto({ fleetId })` calls |
@@ -35,14 +41,24 @@ that's a page-object responsibility.
 
 | Module | What's inside |
 |--------|---------------|
-| `core.ts` | `apiUrl`, `authHeaders`, `getApiToken`, shared `HostRef` / `FleetRef` types |
+| `core.ts` | `apiUrl`, `apiLatestUrl`, `authHeaders`, `getApiToken`, `withApiRequest`, shared `HostRef` / `FleetRef` types |
 | `activities.ts` | `assertActivity` (test-side check; fails the test if missing), `findActivity` (lower-level lookup) |
-| `hosts.ts` | `findHostByPlatform`, `transferHosts`, `transferHostsByFilter` |
-| `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet` |
-| `software.ts` | `uploadSoftwarePackage`, `findSoftwareTitleByPackageName`, `deleteSoftwareTitle*`, `getSoftwareTitle`, `findVulnerableSoftwareBySource`, `SoftwareTitleRef` / `SoftwarePackageRef` |
+| `hosts.ts` | `findOnlineHost` (resolve by platform + `kind: 'real' \| 'simulated'`), `findHostByPlatform`, `findHostWithSoftware`, `findSimulatedHostIds`, `hostExists`, `getHostFleetId`, `getHostDetailUpdatedAt`, `transferHosts`, `transferHostsByFilter` |
+| `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet`, plus the per-fleet webhook / host-expiry getters and setters |
+| `software.ts` | `uploadSoftwarePackage`, `findSoftwareTitleByPackageName`, `deleteSoftwareTitle*`, `getSoftwareTitle`, `getSoftwarePackage`, `findVulnerableSoftwareBySources`, `SoftwareTitleRef` / `SoftwarePackageRef` |
 | `fma.ts` | `findFmaIdBySlug`, `addFmaToFleet` |
 | `app-store.ts` | `addAppStoreApp`, `AppStorePlatform` |
-| `mdm.ts` | `getBootstrapMetadata`, `deleteBootstrapPackage` |
+| `mdm.ts` | Bootstrap package, EULA, setup assistant, and setup-experience getters/deleters, plus the bulk `deleteAllConfigurationProfiles` / `deleteAllScripts` used by cleanup |
+| `config.ts` | `getAppConfig`, `patchAppConfig`, `setGlobalDiskEncryption`, and the typed `AppConfig` / `WebhookSettings` shapes |
+| `policies.ts` | `createPolicy`, `deletePolicies`, `PolicyRef` |
+| `reports.ts` | `createReport`, `listReports`, `findReportBy{Id,Name}`, `deleteReport`, `deleteReportsMatching`, `getHostReportLastFetched` |
+| `labels.ts` | `deleteLabelsMatching` |
+| `variables.ts` | `listVariables`, `deleteVariablesMatching` |
+| `enroll-secrets.ts` | Global + per-team enroll-secret getters and setters |
+| `users.ts` | `createUser` / `createApiUser`, `updateUser`, `deleteUser`, `findUserByEmail`, `requirePasswordReset`, `deleteUserSessions`, plus `qaTestEmail()` / `deleteAllQaTestUsers()` for disposable test users |
+| `static-users.ts` | The `STATIC_USERS` registry of pre-provisioned accounts (never created by the suite) and the accessors that resolve one to its password, bearer token, or expected role display |
+| `role-access.ts` | `expectAllow` / `expectDeny` plus the per-role `PROBES_*` endpoint sets the role-access specs iterate |
+| `cleanup.ts` | Bulk wipes for queries, packs, and global/team policies — used by `setup/cleanup.steps.ts` |
 
 Specs default to importing from the barrel:
 

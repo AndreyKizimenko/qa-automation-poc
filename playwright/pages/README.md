@@ -18,17 +18,24 @@ pages/
 ├── index.ts            # Re-exports every page + component
 ├── DashboardPage.ts    # Top-level nav entries live at root
 ├── auth/               # LoginPage, ForgotPasswordPage
-├── hosts/              # HostsListPage, HostDetailsPage (even though it has
-│                       #   Software/Reports/Policies tabs — hosts is its
-│                       #   primary nav context)
-├── software/           # SoftwareTitlesPage + versions/OS/vulnerabilities/CVE
-├── controls/           # ControlsPage, OsUpdates, OsSettings, profiles, etc.
-├── reports/            # ReportsListPage
-├── policies/           # PoliciesListPage
+├── account/            # MyAccountPage
+├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage
+│                       #   (HostDetailsPage has Software/Reports/Policies tabs,
+│                       #   but hosts is its primary nav context)
+├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
+│                       #   detail pages, CVE detail, FMA, and the add-software forms
+├── controls/           # ControlsPage, OsUpdates, OsSettings, profiles, certificates,
+│                       #   scripts, variables, and the setup-experience pages
+├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
+├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage
 ├── labels/             # LabelsPage
 ├── packs/              # PacksListPage, PackEditPage
-└── settings/           # Organization info/advanced, Integrations, Users
+└── settings/           # Organization info/advanced, Integrations, TeamSettings
+    └── users/          # UsersPage, Create/Edit user + API user, shared UserFormFields
 ```
+
+A folder with more than a couple of pages carries its own `index.ts` barrel
+(`account/`, `settings/users/`); `pages/index.ts` re-exports everything either way.
 
 Inside a feature folder, `import { Foo } from '../components/Foo'` (one
 directory up). Specs and fixtures should import from `@pages` (the
@@ -84,7 +91,7 @@ Per [Playwright best practices](https://playwright.dev/docs/locators), prefer in
 2. `getByLabel(text)` — form fields with labels
 3. `getByPlaceholder(text)` — form fields without labels
 4. `getByText(text)` — non-interactive text content
-5. `getByTestId('id')` — explicit test contract (Fleet has a few: `user-menu`, `user-avatar`, `dropdown-option`)
+5. `getByTestId('id')` — explicit test contract. Fleet ships only a handful, and we don't add more to its React source: `user-menu`, `dropdown-option`, `card`, `download-icon`, `success-icon`, `trash-icon`
 6. `page.locator('.css-class')` — **last resort, always add a comment** explaining why no role/text worked (typically: react-select internals or widgets without accessible roles)
 
 ## Authoring a new page object

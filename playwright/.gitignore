@@ -9,6 +9,12 @@ node_modules/
 .perf-results/
 .perf-history/
 
+# Per-run triage write-ups produced by the playwright-run-reviewer skill.
+# Each one is a snapshot of a single CI run; the durable conclusions get
+# promoted into TODO.md or docs/blocked-by-product-bugs.md, so the raw
+# reviews stay local.
+docs/run-reviews/
+
 # Claude Code local settings
 .claude/settings.local.json
 

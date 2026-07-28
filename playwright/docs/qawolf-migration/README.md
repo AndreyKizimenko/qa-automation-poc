@@ -31,7 +31,7 @@ they're invisible to anyone re-provisioning an instance, so they're recorded her
 |---|---|---|---|
 | `team-admin@fleetdm.com` — admin on **Workstations + VMs**, shared `FLEET_STATIC_USER_PASSWORD`, `force_password_reset: false` | premium | every team-admin case (C1 #16/#26/#27, labels role-access) | recreate via `POST /users/admin`, then clear the reset flag — `PATCH` won't do it, see [PLAYBOOK §6](PLAYBOOK.md#6-instance-level-gotchas-worth-knowing-up-front) |
 | Report **`pw-host-report-results`** on the **VMs** fleet — interval 300, `SELECT 'bar' AS foo` | premium | `premium/hosts/host-report-details.spec.ts` | recreate per that spec's header, then allow ~3.5 min for one scheduled run |
-| Real VMs online (macOS/Windows MDM-enrolled) + the osquery-perf load fleet | both | every host-dependent spec | see `tools/perf-hosts/` |
+| Real VMs online (macOS/Windows MDM-enrolled) + the osquery-perf load fleet | both | every host-dependent spec | see "Keeping the host population online" below |
 
 The report has to live on a **fleet**: `cleanup.steps.ts` wipes global reports at the start of every run, and
 never touches other fleets. Verified to survive overnight plus repeated cleanup cycles.
@@ -51,6 +51,28 @@ fleets to scope by. Caveat: the real **Linux** VMs aren't MDM-enrolled, so they 
 destructive specs must target `darwin` or `windows`.
 
 Full comparison: [PLAYBOOK §7](PLAYBOOK.md#7-test-hosts-fidelity-vs-volume).
+
+## Keeping the host population online
+
+The simulated pool is Fleet's own `cmd/osquery-perf` binary run as two persistent
+macOS `launchd` daemons (one per tier) on a dedicated QA VM. osquery-perf keeps its
+hosts checking in only while the process lives, so `KeepAlive` is the whole
+mechanism — no cron, no teardown/rebuild cycle. The daemon definitions embed live
+enroll secrets, so they live outside this repo under a gitignored `tools/` directory
+on the VM. What matters for reading the specs:
+
+| Knob | Value | Why the suite depends on it |
+|---|---|---|
+| `--host_count` / `--os_templates` | 300, split `macos_14.1.2:100,windows_11:100,ubuntu_22.04:100` | Every spec resolving a `'simulated'` host by platform assumes all three exist |
+| `--live_query_no_results_prob` | `0` (default `0.2`) | Otherwise ~20% of live queries return no rows and live-query specs flake |
+| `--start_period` | `2m` | A tighter ramp bunches enrollments and drops hosts during the burst |
+| `host_expiry_settings` on each instance | 1 day | The janitor for the abandoned set a crash/reboot leaves behind |
+| `NumberOfFiles` resource limit | 10240 | 300 hosts/process exceeds macOS's 256-fd default and the process dies |
+
+Two consequences the specs are written around: host IDs change across a daemon
+restart (so fixtures resolve hosts by API at run time, never by stored id), and a
+deleted simulation never returns on its own — osquery-perf enrolls once at startup
+with no node-invalid recovery.
 
 ## Source flows
 

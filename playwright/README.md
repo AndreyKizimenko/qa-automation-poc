@@ -31,6 +31,37 @@ Fill each one with the URL and credentials for that instance. These files
 are gitignored and never committed. You only need the env files for the
 projects you intend to run.
 
+**Every var the suite reads is required** — specs fail rather than skip when one is
+missing. Beyond the instance URL and admin credentials, the role-access specs
+authenticate as pre-provisioned static users, so they need each user's bearer token
+(`FLEET_STATIC_TOKEN_*`) and the shared static-user password.
+
+**The static-user credentials are shared — get them from 1Password**, don't mint
+your own. Those bearer tokens are shown once at user-creation time and can't be
+rotated, so a locally-created user would diverge from what CI and everyone else is
+using.
+
+The example files also carry vars used only by a local `fleetctl gitops` apply —
+`FLEET_ENROLL_SECRET`, `FLEET_SSO_METADATA_URL`, and premium's ABM / VPP / EUA vars.
+They sit under their own comment header, and the suite never reads them.
+
+**3. Know what the suite expects to already exist**
+
+The suite does not provision its own instance. A handful of entities are standing
+preconditions — each fails loud with recreation instructions, but they're invisible
+if you're bringing up a fresh instance:
+
+- **Static users** (`api-*@fleetdm.com`, `team-admin@fleetdm.com`) for the role-access
+  and permission specs.
+- **The `Workstations` team** on premium, provisioned by gitops and never deleted by
+  the suite.
+- **A scheduled report on the `VMs` fleet** for the host-report spec.
+- **Online hosts** — a mix of real MDM-enrolled VMs and a simulated osquery-perf pool.
+- **Admin SSO and end-user auth (EUA)**, configured on the instance beforehand.
+
+See [docs/qawolf-migration/README.md](docs/qawolf-migration/README.md#standing-instance-preconditions)
+for the full table and how to recreate each one.
+
 **Loadtest only — provision the fleet first.** The `loadtest` project
 measures real page-load times against a high-scale team that has to
 exist before any spec runs. See
@@ -91,23 +122,37 @@ Floating-promise detection is on via `@typescript-eslint`, so missing
 playwright/
 ├── tests/                        # Specs — see tests/README.md
 │   ├── e2e/                      # Browser specs
-│   │   ├── shared/               # Tier-agnostic — auth, packs, anything without team scope (both projects)
+│   │   ├── shared/               # Tier-agnostic (both projects)
+│   │   │   ├── account/          # change-password, theme
+│   │   │   ├── auth/             # login, logout, SSO, forgot-password
+│   │   │   ├── hosts/            # host details, live query, software, CSV export
+│   │   │   ├── packs/            # packs CRUD (global, no team scope)
+│   │   │   └── settings/         # host-status webhook, user list search/pagination/row-actions
 │   │   ├── premium/              # Premium-only (Unassigned + Workstations variants)
-│   │   │   ├── controls/         # os-settings, scripts, setup-experience
+│   │   │   ├── account/
+│   │   │   ├── controls/         # custom-variables, os-settings, scripts, setup-experience
+│   │   │   ├── dashboard/
+│   │   │   ├── hosts/            # transfer, delete, CTA + MDM-action availability
+│   │   │   ├── labels/
 │   │   │   ├── policies/
 │   │   │   ├── reports/
-│   │   │   └── software/         # library + vulnerabilities
+│   │   │   ├── settings/         # org, integrations, enroll-secrets, users
+│   │   │   └── software/         # library, edit-package, os, vulnerabilities
 │   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs
 │   ├── api/                      # Pure-API specs (no browser)
 │   │   ├── config.spec.ts        # Agnostic config-shape checks (both projects)
+│   │   ├── activity-copy.spec.ts # Activity-feed copy contract
+│   │   ├── premium/              # Premium-only API contracts
 │   │   ├── free/                 # Free-only API contracts (license, endpoints)
+│   │   ├── role-access/          # Per-role endpoint allow/deny probes, split free/ + premium/
 │   │   └── gitops-verify/        # GitOps drift checks
 │   └── loadtest/                 # Page-load timing (loadtest project only)
 ├── pages/                        # Page Object Model — see pages/README.md
 │   ├── components/               # Reused widgets (DataTable, Navbar, TeamDropdown, etc.)
-│   ├── settings/                 # Settings subpages grouped together
-│   └── <PageName>.ts             # One file per Fleet screen
-├── fixtures.ts                   # Test fixtures — page objects + workstationsFleetId worker fixture
+│   ├── DashboardPage.ts          # Root — the one page with no feature folder
+│   └── <area>/<PageName>.ts      # account, auth, controls, hosts, labels, packs,
+│                                 #   policies, reports, settings, software
+├── fixtures.ts                   # Page-object fixtures, worker fixtures, auto pageHealth (see below)
 ├── setup/
 │   ├── premium.setup.ts          # Logs into premium instance
 │   ├── free.setup.ts             # Logs into free instance
@@ -116,22 +161,46 @@ playwright/
 ├── helpers/                      # Non-UI utilities — see helpers/README.md
 │   ├── api/                      # Per-area Fleet API helpers + cleanup helpers
 │   ├── catalogs/                 # Typed FMA / VPP / Android app-store reference data
-│   ├── auth.ts                   # loginAsAdmin (setup-time only)
+│   ├── activity-copy.ts          # Expected activity-feed strings, shared by specs and the copy contract
+│   ├── auth.ts                   # loginAsAdmin (setup-time), withCleanContext, withStaticUser
 │   ├── console.ts                # monitorConsoleErrors, monitorNetworkFailures — auto-wired via the pageHealth fixture
 │   ├── gitops-yaml.ts            # Loads + flattens gitops YAML refs for gitops-verify specs
 │   ├── perf.ts                   # measureNav, measureSearch
 │   ├── perf-teardown.ts          # Summary table + historical comparison
+│   ├── team-scope.ts             # fleetIdFor(scope, workstationsFleetId) → the fleet_id URL value
 │   └── vuln.ts                   # Vulnerability column assertions
 ├── test-data/                    # Static fixtures (.pkg/.msi/.deb/.sh) by platform
+├── docs/
+│   ├── blocked-by-product-bugs.md  # Skips caused by confirmed Fleet defects, with unblock conditions
+│   ├── qawolf-migration/         # The QA Wolf → Playwright migration record + per-flow audit
+│   └── run-reviews/              # Per-run triage write-ups (gitignored — local only)
 ├── eslint.config.js              # Lint config
 ├── playwright.config.ts
 ├── tsconfig.json
+├── TODO.md                       # Skips, env gates, config workarounds
+├── CLAUDE.md                     # Suite conventions for AI-assisted work
 ├── .env.premium                  # premium credentials (gitignored)
 ├── .env.free                     # free credentials (gitignored)
 ├── .env.loadtest                 # loadtest credentials (gitignored)
 ├── .env.*.example                # Templates
+├── .auth/                        # Stored login state per suite (gitignored)
 └── .perf-history/                # Performance run history (gitignored)
 ```
+
+### Fixtures
+
+`fixtures.ts` provides three kinds of fixture, all reached by importing `test` from
+`@fixtures`:
+
+- **Page objects** — one per screen (`softwareTitles`, `hostDetails`, `policiesList`, …).
+  Destructure what you need; TypeScript lists what's available.
+- **Worker fixtures**, resolved once per worker via the Fleet API so specs don't
+  re-look-up shared state: `workstationsFleetId`, `qaFleetId`, `vmsFleetId` (fleet ids),
+  `liveMacosHost` (a real MDM-enrolled macOS host), plus `loadtestFleetId` / `firstHostId`
+  for the loadtest project.
+- **`pageHealth`** — auto-applied to every test. Monitors console errors and 5xx responses
+  and asserts at teardown. Opt out with `pageHealth.disable()` in specs that intentionally
+  trigger errors.
 
 ---
 
@@ -142,12 +211,24 @@ playwright/
 | Target | Premium Fleet instance | Free Fleet instance | High-scale instance | Premium **or** free, selected via `SUITE` |
 | Picks up | `tests/e2e/{shared,premium}/**`, `tests/api/**` (minus `free/` + `gitops-verify/`) | `tests/e2e/{shared,free}/**`, `tests/api/**` (minus `premium/` + `gitops-verify/`) | `tests/loadtest/**` only | `tests/api/gitops-verify/**` only |
 | Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | n/a — own `testDir` | n/a — own `testDir` |
-| Retries on failure | Yes (in CI) | Yes (in CI) | No — a slow run is a slow run | No — drift should fail loudly |
-| Timeouts | 30s test / 5s expect | 30s test / 5s expect | 60s test / 30s expect | Default |
+| Retries on failure | 2 in CI, 0 locally | 2 in CI, 0 locally | No — a slow run is a slow run | No — drift should fail loudly |
+| Timeouts | 60s test / 10s expect | 60s test / 10s expect | 60s test / 30s expect | 60s test / 10s expect (inherits top-level) |
 | Auth state | `.auth/premium-admin.json` | `.auth/free-admin.json` | `.auth/loadtest-admin.json` | None (bearer token via `FLEET_API_TOKEN`) |
 | Env file | `.env.premium` | `.env.free` | `.env.loadtest` | `.env.<SUITE>` |
 
+The 60s test timeout and 10s expect timeout are both workarounds for a shared-QA-instance
+render-latency issue, not intended defaults — see [TODO.md](TODO.md#config-workarounds) for the
+revert condition.
+
+Workers default to 2 in CI (the shared instance has limited concurrency headroom) and 4
+locally. Override either with `WORKERS=N` or `--workers=N`.
+
 Project scope is decided by folder — no tags. The `testIgnore` matrix in `playwright.config.ts` is the source of truth.
+
+`SUITE` decides which `.env.<suite>` is loaded, and the config **refuses to start** rather
+than guess: `--project=premium|free|loadtest` implies its suite, but the tier-ambiguous
+projects (`cleanup-setup`, `cleanup-teardown`, `gitops-verify`) need `SUITE=` set
+explicitly. The npm scripts already do this.
 
 ---
 
@@ -165,7 +246,16 @@ Project scope is decided by folder — no tags. The `testIgnore` matrix in `play
 
 **GitOps verify:** add a spec under `tests/api/gitops-verify/`. Import `gitopsConfig` (and `resolveTeamId` if team-scoped) from `./_config` to read the loaded gitops target, then assert via the `request` fixture that the live instance matches.
 
+**Role access:** add a spec under `tests/api/role-access/{free,premium}/`. These probe endpoints as a pre-provisioned static user rather than creating one — pull the user and its bearer headers from `@helpers/api/static-users`, and assert with `expectAllow` / `expectDeny` from `@helpers/api/role-access`.
+
 **E2E flows** follow the click-through navigation rule in `CLAUDE.md`: enter through the dashboard and click through navbar / tabs / subnav rather than calling `goto()` directly on the feature page. Direct `goto()` is reserved for non-flow contexts (paywall checks, page-load assertions).
+
+**Skipping something?** Every skip needs an inline reason. Where it gets recorded depends
+on why: an env gate or a deliberately deferred test goes in [TODO.md](TODO.md); a flow
+blocked by a confirmed Fleet defect goes in
+[docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md) with a filed issue and
+an unblock condition. Data-availability guards (`test.skip(!host, 'no macOS host')`) need
+neither — they're preconditions, not debt.
 
 ---
 
@@ -202,8 +292,14 @@ Run history is stored in `.perf-history/` (max 10 runs, oldest pruned automatica
 
 Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
-`.github/workflows/playwright-premium.yml`) — scheduled at 05:30 UTC and
-also runnable on demand with a scope dropdown (currently `smoke`).
+`.github/workflows/playwright-premium.yml`) — scheduled at 05:30 UTC, and
+runnable on demand via `workflow_dispatch` (no inputs; each runs its whole
+project).
+
+`playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint)
+on any PR touching `playwright/**`, and on push to `main` so the check registers
+for branch protection. The tier suites themselves are nightly only — a PR never
+runs live specs.
 
 `gitops-verify` runs as part of the nightly gitops orchestrators
 (`nightly-qa-gitops-{free,premium}.yml`), called between each gitops
