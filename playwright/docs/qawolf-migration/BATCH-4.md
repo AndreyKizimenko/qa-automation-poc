@@ -206,15 +206,20 @@ fixture; self-provision + self-clean any reports/queries/software the spec needs
     carry `data-testid="dropdown-option"`; the toggle is a `role="switch"` with **no accessible name** (its
     label is a sibling span) → read `aria-checked`.
   Live-verified green on **premium + free**.
-- [ ] **`host-report-details`** (C2 #24 — the only Group A item left): report-card Actions → **Show details** →
-  this host's report-results page (perf-impact + "View data for all hosts"). **Still gated on a stored result:**
-  `HostReportCard.tsx` gates that action on `report.last_fetched !== null`, and with none the card offers only
-  "View report for all hosts". Getting one needs a report with an `interval` whose scheduled run the host
-  actually submits. **Unresolved constraint:** `cleanup-setup` wipes global reports at the start of every run,
-  so such a report can't be pre-seeded out of band — it must be created inside the test and waited on, bounded
-  by osquery-perf's config interval + the query interval (the sims poll queries every 10s per
-  `--query_interval` in the perf plists, but an end-to-end cached-result timing was **not** confirmed — an
-  attempt was wiped by `cleanup-setup` mid-experiment). Measure that wait before committing to a UI spec.
+- [x] **`host-report-details`** (C2 #24) — **DONE**:
+  `tests/e2e/premium/hosts/host-report-details.spec.ts`. Report card Actions → **Show details** → this host's
+  stored results (asserts the row the query selected, so it can't pass on an empty shell) → **View data for
+  all hosts** → the report's own results page.
+  - **Only possible against a real VM.** `HostReportCard.tsx` gates the action on `last_fetched`, which needs
+    a scheduled run the host actually performed; simulations never execute one.
+  - **Precondition is durable instance furniture**: report `pw-host-report-results` on the **VMs** fleet,
+    interval 300, `SELECT 'bar' AS foo`. It has to live on a fleet — `cleanup.steps.ts` wipes global reports
+    at the start of every run, which destroyed an earlier attempt mid-flight — and the VMs fleet is untouched.
+    **Verified: it and its cached result survive a full cleanup cycle.** Self-provisioning was rejected because
+    a real scheduled run takes **~3.5 min** (measured) before the action appears. The spec fails loud with
+    recreation instructions if it goes missing.
+  - Gotcha: a fleet-owned report is **invisible to the global report list**, so `listReports` /
+    `findReportByName` now take an optional `fleetId`.
 
 ### Group B — host↔team transfer (reversible via API; mind parallel workers)
 Reference `C1-hosts-list.md`. **No team create/delete in bodies** — rework to Unassigned↔Workstations using the

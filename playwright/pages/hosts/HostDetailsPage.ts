@@ -307,6 +307,21 @@ export class HostDetailsPage {
   }
 
   /**
+   * Picks an action from a report card's Actions menu. "Show details" is only
+   * offered once the report has a stored result for this host (`HostReportCard.tsx`
+   * gates it on `last_fetched`); "View report for all hosts" is always there.
+   * The card's menu is a react-select, so the trigger is its control class and
+   * the options carry no roles.
+   */
+  async runReportCardAction(reportName: string, label: string): Promise<void> {
+    await this.reportCard(reportName).locator('.actions-dropdown-select__control').click();
+    await this.page
+      .locator('.actions-dropdown__option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
+  }
+
+  /**
    * Hovers the Agent vitals value to reveal its osquery/Orbit/Fleet Desktop
    * tooltip. Only fleetd hosts render the tooltip — on a vanilla-osquery host
    * the value is plain text (see `Vitals.tsx`), so resolve the host with

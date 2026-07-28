@@ -25,6 +25,7 @@ export { DashboardPage } from './DashboardPage';
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';
 export { HostDetailsPage } from './hosts/HostDetailsPage';
+export { HostQueryReportPage } from './hosts/HostQueryReportPage';
 
 // Software + vulnerabilities
 export { SoftwareTitlesPage } from './software/SoftwareTitlesPage';

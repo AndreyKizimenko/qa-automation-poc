@@ -26,6 +26,7 @@ import {
   DashboardPage,
   HostsListPage,
   HostDetailsPage,
+  HostQueryReportPage,
   SoftwareTitlesPage,
   SoftwareLibraryPage,
   SoftwareVersionsPage,
@@ -145,6 +146,7 @@ type FleetFixtures = {
   dashboard: DashboardPage;
   hostsList: HostsListPage;
   hostDetails: HostDetailsPage;
+  hostQueryReport: HostQueryReportPage;
 
   // Software + vulnerabilities
   softwareTitles: SoftwareTitlesPage;
@@ -323,6 +325,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   hostDetails: [async ({ page }, use) => {
     await use(new HostDetailsPage(page));
+  }, { box: true }],
+  hostQueryReport: [async ({ page }, use) => {
+    await use(new HostQueryReportPage(page));
   }, { box: true }],
   softwareTitles: [async ({ page }, use) => {
     await use(new SoftwareTitlesPage(page));
