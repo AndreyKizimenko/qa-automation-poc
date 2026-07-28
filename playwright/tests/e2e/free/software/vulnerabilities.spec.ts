@@ -7,7 +7,7 @@ import { test, expect } from '@fixtures';
 import {
   getApiToken,
   findHostByPlatform,
-  findVulnerableSoftwareBySource,
+  findVulnerableSoftwareBySources,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -28,25 +28,21 @@ const OS_LABELS: Record<OsKey, string> = {
   windows: 'Windows',
 };
 
-const softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
+let softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
 const hostByOS: Partial<Record<OsKey, HostRef>> = {};
 
 test.beforeAll(async () => {
   const baseURL = process.env.FLEET_URL!;
   const token = await getApiToken(baseURL);
 
-  const [macSw, debSw, winSw, macHost, linuxHost, winHost] = await Promise.all([
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.macos),
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.deb),
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.windows),
+  // No `fleetId`: free has no fleets, so the lookup runs against the one scope.
+  softwareByOS = await findVulnerableSoftwareBySources(baseURL, token, OS_SOURCES);
+
+  const [macHost, linuxHost, winHost] = await Promise.all([
     findHostByPlatform(baseURL, token, 'darwin'),
     findHostByPlatform(baseURL, token, 'linux'),
     findHostByPlatform(baseURL, token, 'windows'),
   ]);
-
-  if (macSw) softwareByOS.macos = macSw;
-  if (debSw) softwareByOS.deb = debSw;
-  if (winSw) softwareByOS.windows = winSw;
 
   if (macHost) hostByOS.macos = macHost;
   if (linuxHost) hostByOS.deb = linuxHost;

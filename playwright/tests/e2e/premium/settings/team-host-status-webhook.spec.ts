@@ -11,15 +11,25 @@
  * subtree wholesale on PATCH, and Workstations carries a failing-policies
  * webhook with gitops-provisioned policy ids that must survive.
  *
- * The host-expiry assertions depend on host expiry being enabled globally, which
- * it is on both QA instances (`host_expiry` = 1 day, set so the load fleet's
- * abandoned hosts get swept). With it on, a fleet cannot opt out — Fleet
- * disables the fleet-level checkbox and explains why in help text.
+ * Host expiry on a fleet stacks on the global setting instead of replacing it:
+ * Fleet ticks the fleet-level checkbox for the fleet's own setting *or* the
+ * inherited global one, and locks it while the global one is on — a fleet can
+ * add a custom window on top of the global policy but cannot opt out of it. The
+ * test below reads both settings from the API and asserts the checkbox derives
+ * from them, so it holds whichever way the instance is configured. The QA
+ * instances keep global host expiry off (gitops `default.yml`), and the suite
+ * deliberately never turns it on: a live expiry window can make Fleet delete the
+ * simulated hosts the rest of the suite depends on.
  */
 import { test, expect } from '@fixtures';
 import { TeamSettingsPage } from '@pages';
 import { withStaticUser } from '@helpers/auth';
-import { getFleetWebhookSettings, setFleetWebhookSettings } from '@helpers/api';
+import {
+  getAppConfig,
+  getFleetHostExpirySettings,
+  getFleetWebhookSettings,
+  setFleetWebhookSettings,
+} from '@helpers/api';
 
 const DESTINATION_URL = 'https://example.com/fleet-team-host-status';
 
@@ -65,20 +75,41 @@ test.describe('Premium • Settings • fleet host status webhook', () => {
     }
   });
 
-  test('host expiry cannot be opted out of when it is enabled globally', async ({
+  test('the fleet host expiry checkbox derives from the global and fleet settings', async ({
     browser,
     workstationsFleetId,
+    request,
   }) => {
+    const globalExpiry = (await getAppConfig(request)).host_expiry_settings as
+      | { host_expiry_enabled?: boolean }
+      | undefined;
+    const globalEnabled = globalExpiry?.host_expiry_enabled === true;
+    const fleetEnabled =
+      (await getFleetHostExpirySettings(request, workstationsFleetId)).host_expiry_enabled === true;
+
     await withStaticUser(browser, 'team-admin', async (page) => {
       const teamSettings = new TeamSettingsPage(page);
 
       await teamSettings.goto(workstationsFleetId);
 
-      // Globally enabled, so the fleet inherits it and can't turn it off here.
-      await expect(teamSettings.hostExpiryCheckbox).toHaveAttribute('aria-checked', 'true');
-      await expect(teamSettings.hostExpiryCheckbox).toHaveAttribute('aria-disabled', 'true');
-      await expect(teamSettings.hostExpiryHelpText).toBeVisible();
+      // Ticked for either setting, locked only by the global one.
+      await expect(teamSettings.hostExpiryCheckbox).toHaveAttribute(
+        'aria-checked',
+        String(fleetEnabled || globalEnabled),
+      );
+      await expect(teamSettings.hostExpiryCheckbox).toHaveAttribute(
+        'aria-disabled',
+        String(globalEnabled),
+      );
 
+      // The help text is the explanation for the lock, so it appears with it.
+      if (globalEnabled) {
+        await expect(teamSettings.hostExpiryHelpText).toBeVisible();
+      } else {
+        await expect(teamSettings.hostExpiryHelpText).toHaveCount(0);
+      }
+
+      // The label tooltip describes the setting regardless of either state.
       await teamSettings.hostExpiryLabel.hover();
       await expect(page.getByRole('tooltip')).toContainText(
         'allows automatic cleanup of',

@@ -17,6 +17,20 @@ export async function getFleetWebhookSettings(
   return ((await res.json()).team?.webhook_settings ?? {}) as Record<string, unknown>;
 }
 
+/**
+ * A fleet's own `host_expiry_settings`. Fleet-level expiry stacks on top of the
+ * global setting rather than replacing it, so reading the UI's expected state
+ * needs both this and `getAppConfig`.
+ */
+export async function getFleetHostExpirySettings(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<{ host_expiry_enabled?: boolean; host_expiry_window?: number }> {
+  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  return (await res.json()).team?.host_expiry_settings ?? {};
+}
+
 /** Writes a fleet's `webhook_settings` subtree back verbatim. */
 export async function setFleetWebhookSettings(
   request: APIRequestContext,
