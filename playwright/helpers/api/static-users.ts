@@ -28,7 +28,7 @@ export type StaticUserKey =
   // Premium-only humans.
   | 'global-observer-plus'
   | 'global-technician'
-  | 'ws-admin'
+  | 'team-admin'
   | 'ws-maintainer'
   | 'ws-observer'
   // Premium-only API users.
@@ -72,6 +72,8 @@ export interface StaticUserSpec {
 // rename only happens in one place.
 export const WORKSTATIONS_FLEET = 'Workstations';
 export const QA_FLEET = 'QA';
+/** Home of the real (non-simulated) QA VMs on premium. */
+export const VMS_FLEET = 'VMs';
 
 const FREE_AND_PREMIUM: SuiteTier[] = ['free', 'premium'];
 const PREMIUM_ONLY: SuiteTier[] = ['premium'];
@@ -140,11 +142,19 @@ export const STATIC_USERS: Readonly<Record<StaticUserKey, StaticUserSpec>> = {
   },
 
   // ── Premium fleet-scoped humans ────────────────────────────────────────────
-  'ws-admin': {
-    email: 'ws-admin@fleetdm.com',
-    name: 'QA Static Workstations Admin',
+  // Admin of two fleets rather than one, so a spec can tell "this team admin
+  // may act here" from "…but not on a fleet they don't administer".
+  'team-admin': {
+    email: 'team-admin@fleetdm.com',
+    name: 'QA Static Team Admin',
     apiOnly: false,
-    role: { kind: 'fleets', assignments: [{ fleet: WORKSTATIONS_FLEET, role: 'admin' }] },
+    role: {
+      kind: 'fleets',
+      assignments: [
+        { fleet: WORKSTATIONS_FLEET, role: 'admin' },
+        { fleet: VMS_FLEET, role: 'admin' },
+      ],
+    },
     tiers: PREMIUM_ONLY,
   },
   'ws-maintainer': {

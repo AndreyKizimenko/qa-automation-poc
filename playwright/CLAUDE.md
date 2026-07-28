@@ -6,6 +6,7 @@ This folder contains the Playwright end-to-end suite for Fleet. The standards be
 
 - **playwright-test-author** — auto-invoked when writing or scaffolding new tests, page objects, component objects, or fixtures.
 - **playwright-test-reviewer** — invoke explicitly with `/playwright-test-reviewer` to audit existing specs and POMs.
+- **playwright-run-reviewer** — triage a finished run (CI or local): per failing/flaky test, decide flake vs test-bug vs product-defect. Invoke with `/playwright-run-reviewer`, or by pasting a Playwright Actions run URL / pointing at `playwright-report/`.
 
 ## Comment style (always-on)
 
@@ -118,4 +119,4 @@ Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment nami
 npm run check          # tsc --noEmit + eslint
 ```
 
-This is the local gate (no CI for the suite yet).
+This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`.github/workflows/playwright-{premium,free}.yml`), but don't rely on that to catch what `npm run check` would.

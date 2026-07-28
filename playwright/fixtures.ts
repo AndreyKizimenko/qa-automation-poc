@@ -13,7 +13,12 @@
  */
 import { test as base } from '@playwright/test';
 import { monitorConsoleErrors, monitorNetworkFailures } from './helpers/console';
-import { findFleetByName, withApiRequest } from './helpers/api';
+import {
+  findFleetByName,
+  findOnlineHost,
+  withApiRequest,
+  type OnlineHostRef,
+} from './helpers/api';
 
 import {
   LoginPage,
@@ -21,6 +26,7 @@ import {
   DashboardPage,
   HostsListPage,
   HostDetailsPage,
+  HostQueryReportPage,
   SoftwareTitlesPage,
   SoftwareLibraryPage,
   SoftwareVersionsPage,
@@ -93,6 +99,14 @@ type FleetWorkerFixtures = {
   qaFleetId: number;
 
   /**
+   * Resolved id of the "VMs" fleet on the premium instance — home of the real
+   * (non-simulated) QA VMs, and the second fleet the `team-admin` static user
+   * administers. Throws with a `premium-only` error if requested on any other
+   * tier.
+   */
+  vmsFleetId: number;
+
+  /**
    * Numeric id of the fleet (team) holding the loadtest dataset on the
    * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, which the
    * workflow that provisions the team sets per run. Required by the
@@ -100,6 +114,27 @@ type FleetWorkerFixtures = {
    * missing or non-numeric.
    */
   loadtestFleetId: number;
+
+  /**
+   * The online **real** macOS VM, resolved once per worker via the Fleet API,
+   * with the vitals a spec asserts against. Backs every spec that needs genuine
+   * device behaviour — live reports that actually run the query's SQL, refetch,
+   * real local users and agent versions.
+   *
+   * Resolved by platform + online status + MDM enrollment rather than by name or
+   * a pinned id, since ids change on re-enrollment. MDM enrollment is what
+   * separates the real VMs from the osquery-perf load fleet sharing these
+   * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
+   * fleet, but free has no fleets, so enrollment is the cross-tier signal.
+   *
+   * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
+   * should draw from the simulated pool via `findSimulatedHostIds` instead —
+   * there are only a couple of real VMs per tier and they must not be destroyed.
+   *
+   * Fails loud when none is online, so a downed VM surfaces as a clear setup
+   * error instead of a puzzling mid-spec assertion failure.
+   */
+  liveMacosHost: OnlineHostRef;
 };
 
 type FleetFixtures = {
@@ -111,6 +146,7 @@ type FleetFixtures = {
   dashboard: DashboardPage;
   hostsList: HostsListPage;
   hostDetails: HostDetailsPage;
+  hostQueryReport: HostQueryReportPage;
 
   // Software + vulnerabilities
   softwareTitles: SoftwareTitlesPage;
@@ -213,6 +249,24 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     await use(await resolvePremiumFleetId('qaFleetId', 'QA'));
   }, { scope: 'worker', box: true }],
 
+  vmsFleetId: [async ({}, use) => {
+    await use(await resolvePremiumFleetId('vmsFleetId', 'VMs'));
+  }, { scope: 'worker', box: true }],
+
+  liveMacosHost: [async ({}, use) => {
+    const host = await withApiRequest((request) =>
+      findOnlineHost(request, 'darwin', { kind: 'real' }),
+    );
+    if (!host) {
+      throw new Error(
+        `[liveMacosHost] no online, MDM-enrolled macOS VM on ${process.env.FLEET_URL}. ` +
+        `Real-device specs need one — check the QA macOS VM is powered on and still enrolled ` +
+        `(GET /api/v1/fleet/hosts?status=online&mdm_enrollment_status=enrolled).`,
+      );
+    }
+    await use(host);
+  }, { scope: 'worker', box: true }],
+
   pageHealth: [async ({ page }, use, testInfo) => {
     const errors = monitorConsoleErrors(page);
     const failures = monitorNetworkFailures(page);
@@ -271,6 +325,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   hostDetails: [async ({ page }, use) => {
     await use(new HostDetailsPage(page));
+  }, { box: true }],
+  hostQueryReport: [async ({ page }, use) => {
+    await use(new HostQueryReportPage(page));
   }, { box: true }],
   softwareTitles: [async ({ page }, use) => {
     await use(new SoftwareTitlesPage(page));

@@ -33,10 +33,18 @@ export interface HostStatusWebhook {
   [key: string]: unknown;
 }
 
+/** Streams every activity-feed entry to a destination; the dashboard calls it "Manage automations". */
+export interface ActivitiesWebhook {
+  enable_activities_webhook?: boolean;
+  destination_url?: string;
+  [key: string]: unknown;
+}
+
 export interface WebhookSettings {
   vulnerabilities_webhook?: VulnerabilitiesWebhook;
   failing_policies_webhook?: FailingPoliciesWebhook;
   host_status_webhook?: HostStatusWebhook;
+  activities_webhook?: ActivitiesWebhook;
   [key: string]: unknown;
 }
 

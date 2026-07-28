@@ -7,7 +7,7 @@ import { test, expect } from '@fixtures';
 import {
   getApiToken,
   findHostByPlatform,
-  findVulnerableSoftwareBySource,
+  findVulnerableSoftwareBySources,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -28,25 +28,21 @@ const OS_LABELS: Record<OsKey, string> = {
   windows: 'Windows',
 };
 
-const softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
+let softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
 const hostByOS: Partial<Record<OsKey, HostRef>> = {};
 
 test.beforeAll(async () => {
   const baseURL = process.env.FLEET_URL!;
   const token = await getApiToken(baseURL);
 
-  const [macSw, debSw, winSw, macHost, linuxHost, winHost] = await Promise.all([
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.macos),
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.deb),
-    findVulnerableSoftwareBySource(baseURL, token, OS_SOURCES.windows),
+  // No `fleetId`: free has no fleets, so the lookup runs against the one scope.
+  softwareByOS = await findVulnerableSoftwareBySources(baseURL, token, OS_SOURCES);
+
+  const [macHost, linuxHost, winHost] = await Promise.all([
     findHostByPlatform(baseURL, token, 'darwin'),
     findHostByPlatform(baseURL, token, 'linux'),
     findHostByPlatform(baseURL, token, 'windows'),
   ]);
-
-  if (macSw) softwareByOS.macos = macSw;
-  if (debSw) softwareByOS.deb = debSw;
-  if (winSw) softwareByOS.windows = winSw;
 
   if (macHost) hostByOS.macos = macHost;
   if (linuxHost) hostByOS.deb = linuxHost;
@@ -153,10 +149,15 @@ test.describe('Software vulnerabilities', () => {
       // packages (most vulnerable items); switch to the full list.
       await hostDetails.showFullInventory();
 
+      // Retrying waits, not `isVisible()` reads. The host is chosen via the API
+      // *because* it reports vulnerable software, so an empty table here is a real
+      // failure — and a one-shot `isVisible()` can catch the previous view's empty
+      // state mid-refetch and skip the test on a false negative, which is how this
+      // silently stopped covering anything.
+      await expect(hostDetails.table.firstRow).toBeVisible();
+
       await hostDetails.applyVulnerableFilter();
-      await expect(hostDetails.table.rowOrEmpty()).toBeVisible();
-      const hasRows = await hostDetails.table.firstRow.isVisible();
-      test.skip(!hasRows, `No vulnerable software on ${OS_LABELS[osKey]} host`);
+      await expect(hostDetails.table.firstRow).toBeVisible();
 
       await hostDetails.clickFirstSoftware();
 

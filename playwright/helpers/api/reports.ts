@@ -43,11 +43,18 @@ export async function createReport(
   return { id: query.id, name: query.name };
 }
 
-/** List every saved report on the instance. */
-export async function listReports(request: APIRequestContext): Promise<ReportRef[]> {
+/**
+ * List saved reports. Without `fleetId` this is the global scope; reports owned
+ * by a fleet are only returned when that fleet is named, so a fleet-scoped
+ * report is invisible to the default call.
+ */
+export async function listReports(
+  request: APIRequestContext,
+  fleetId?: number,
+): Promise<ReportRef[]> {
   const res = await request.get(apiUrl('queries'), {
     headers: authHeaders(),
-    params: { per_page: '500' },
+    params: { per_page: '500', ...(fleetId !== undefined ? { team_id: String(fleetId) } : {}) },
   });
   if (!res.ok()) return [];
   const body = await res.json();
@@ -64,6 +71,37 @@ export async function findReportById(
   id: number,
 ): Promise<ReportRef | null> {
   return (await listReports(request)).find((r) => r.id === id) ?? null;
+}
+
+/** Find a report by its exact name (null when absent). */
+export async function findReportByName(
+  request: APIRequestContext,
+  name: string,
+  fleetId?: number,
+): Promise<ReportRef | null> {
+  return (await listReports(request, fleetId)).find((r) => r.name === name) ?? null;
+}
+
+/**
+ * When a report last stored a result **for one host**, or null if it never has.
+ * A report card's "Show details" action is gated on this, so a spec that drills
+ * into per-host results should check it before asserting on the UI.
+ */
+export async function getHostReportLastFetched(
+  request: APIRequestContext,
+  hostId: number,
+  reportName: string,
+): Promise<string | null> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/queries`), {
+    headers: authHeaders(),
+    params: { per_page: '100' },
+  });
+  if (!res.ok()) return null;
+  const reports = ((await res.json()).reports ?? []) as Array<{
+    name: string;
+    last_fetched: string | null;
+  }>;
+  return reports.find((r) => r.name === reportName)?.last_fetched ?? null;
 }
 
 /** Delete a report by id; safe to call on an already-deleted id. */

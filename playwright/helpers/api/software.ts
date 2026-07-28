@@ -16,30 +16,87 @@ export interface SoftwarePackageRef {
 }
 
 /**
- * Find one vulnerable software title matching any of the given osquery
- * `source` values (e.g. `apps` macOS, `deb_packages`, `programs` Windows,
- * `chocolatey_packages`, `rpm_packages`).
+ * Find one vulnerable software title per group of osquery `source` values —
+ * e.g. `{ macos: ['apps'], deb: ['deb_packages'], windows: ['programs'] }`.
+ * Groups with no match on the instance are absent from the result, which
+ * callers turn into a platform skip.
+ *
+ * Resolves every group in a single paged sweep rather than one sweep per group.
+ * That matters for load, not just tidiness: `vulnerable=true` is an expensive
+ * query, and firing one per platform per worker has been enough to exhaust the
+ * QA MySQL's temp-table space (`Error 1114 … table is full`), which used to
+ * surface as a silently missing title.
+ *
+ * Pages up to `maxPages × perPage`. Paging is load-bearing: the QA instances
+ * carry hundreds of vulnerable titles and the default ordering puts the deb
+ * packages first, so a single-page lookup can only ever match `deb_packages`
+ * and starves the macOS/Windows callers into skipping.
+ *
+ * A match must carry a CVE on one of the versions returned *for the requested
+ * scope*, because callers drill from the title into a vulnerable version.
+ * Fleet's `vulnerable=true` filter is not fleet-scoped
+ * ([fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059)), so a
+ * title can be listed on the strength of a version that lives in another fleet
+ * and expose no CVE to drill into here.
+ *
+ * `fleetId` scopes the lookup; pass the same scope the spec then navigates to.
+ * Omit it on free, which has no fleets.
+ *
+ * A failed request throws rather than resolving to "no match": swallowing it
+ * would report an API or instance problem as missing test data and silently
+ * drop the caller's coverage.
  */
-export async function findVulnerableSoftwareBySource(
+export async function findVulnerableSoftwareBySources<K extends string>(
   baseURL: string,
   token: string,
-  sources: string[],
-  perPage = 100,
-): Promise<SoftwareTitleRef | null> {
-  const res = await fetch(
-    `${baseURL}${apiUrl('software/titles')}?vulnerable=true&per_page=${perPage}`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!res.ok) return null;
+  sourceGroups: Record<K, string[]>,
+  opts: { fleetId?: number; perPage?: number; maxPages?: number } = {},
+): Promise<Partial<Record<K, SoftwareTitleRef>>> {
+  const { fleetId, perPage = 100, maxPages = 5 } = opts;
+  const found: Partial<Record<K, SoftwareTitleRef>> = {};
+  const pending = Object.keys(sourceGroups) as K[];
 
-  const body = await res.json();
-  const titles = body.software_titles as Array<{ id: number; name: string; source: string }>;
-  if (!titles?.length) return null;
+  for (let page = 0; page < maxPages && pending.length; page++) {
+    const params = new URLSearchParams({
+      vulnerable: 'true',
+      per_page: String(perPage),
+      page: String(page),
+    });
+    if (fleetId !== undefined) params.set('fleet_id', String(fleetId));
 
-  const match = titles.find((t) => sources.includes(t.source));
-  if (!match) return null;
+    const res = await fetch(`${baseURL}${apiUrl('software/titles')}?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(
+        `[findVulnerableSoftwareBySources] page ${page}: ` +
+          `${res.status} ${(await res.text()).slice(0, 300)}`,
+      );
+    }
 
-  return { id: match.id, name: match.name, source: match.source };
+    const body = await res.json();
+    const titles = (body.software_titles ?? []) as Array<{
+      id: number;
+      name: string;
+      source: string;
+      versions?: Array<{ vulnerabilities?: string[] | null }> | null;
+    }>;
+    if (!titles.length) break;
+
+    const vulnerableHere = titles.filter((t) =>
+      (t.versions ?? []).some((v) => (v.vulnerabilities ?? []).length > 0),
+    );
+
+    for (const key of [...pending]) {
+      const match = vulnerableHere.find((t) => sourceGroups[key].includes(t.source));
+      if (match) {
+        found[key] = { id: match.id, name: match.name, source: match.source };
+        pending.splice(pending.indexOf(key), 1);
+      }
+    }
+  }
+
+  return found;
 }
 
 /**

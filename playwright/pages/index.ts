@@ -25,6 +25,7 @@ export { DashboardPage } from './DashboardPage';
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';
 export { HostDetailsPage } from './hosts/HostDetailsPage';
+export { HostQueryReportPage } from './hosts/HostQueryReportPage';
 
 // Software + vulnerabilities
 export { SoftwareTitlesPage } from './software/SoftwareTitlesPage';
@@ -96,6 +97,7 @@ export { PackEditPage } from './packs/PackEditPage';
 export { OrganizationInfoPage } from './settings/OrganizationInfoPage';
 export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
+export { TeamSettingsPage } from './settings/TeamSettingsPage';
 export {
   UsersPage,
   CreateUserPage,
