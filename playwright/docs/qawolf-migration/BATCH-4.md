@@ -94,6 +94,10 @@ scope by. **Never destroy a real VM**: there are only three per tier and no re-p
 
 > ⚠️ **The real Linux VMs are not MDM-enrolled, so they fall inside the `'simulated'` set.** Destructive specs
 > must target **`darwin` or `windows`**, never `linux`, or they risk deleting a real VM.
+>
+> Separately, `?platform=linux` returns **0 hosts** from the Fleet API even though ~100 Ubuntu sims exist —
+> the `platform` param matches *label groups*, and `linux` isn't one. Resolving Linux hosts needs a different
+> approach; nothing in this batch does.
 
 Why it matters beyond convenience: the sims are actively unfaithful. They ignore live-query SQL (answering any
 query with one canned dpkg row), return no rows ~20% of the time, and match **contradictory labels** — a single
@@ -245,9 +249,14 @@ restore reliably and consider whether these should run less-parallel.
   deleted host is **wrong**: osquery-perf's `enroll()` runs once at agent start and has **no node-invalid
   recovery**, so a deleted sim just keeps posting a dead node key and never comes back. Verified live — a host
   deleted at 22:16 had not returned 3 minutes later, and the online count stayed down.
-  - **The pool is repopulated by the scheduled daily refresh** in `tools/perf-hosts/`, so the budget is
-    per-day rather than per-run. Agreed ceiling: **delete at most ~5 hosts per run.** This file currently
-    deletes **4** (2 bulk + 1 from details + 1 team-admin); anything added must stay inside that.
+  - **Budget: delete at most ~5 hosts per run** (agreed with the lead). This file deletes **4** (2 bulk +
+    1 from details + 1 team-admin); anything added must stay inside that.
+  - The pool is expected to be repopulated by the **daily refresh** (`com.fleetqa.perf.refresh.plist`, 09:00
+    VM-local). That job is **opt-in** — `install.sh --daily-refresh`, and the README recommends against it —
+    so confirm it is actually loaded on the VM rather than assuming:
+    `sudo launchctl print system/com.fleetqa.perf.refresh`. It could not be verified from the test side.
+  - Headroom if it is ever off: the usable disposable pool is ~83 macOS + ~93 Windows sims, so 4/run lasts
+    weeks. `host_expiry` only removes *offline* hosts, so it doesn't refill anything.
   - Fleet's own delete modal says hosts "will re-appear unless Fleet's agent is uninstalled" — true of real
     fleetd, **not** of osquery-perf. Don't trust that copy for the sim fleet.
 - [x] **`team-admin` delete** (C1 #26) — a team admin can delete a host on a fleet they administer
