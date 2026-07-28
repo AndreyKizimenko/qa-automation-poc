@@ -199,10 +199,15 @@ for (const osKey of OS_KEYS) {
     // packages (most vulnerable items); switch to the full list.
     await hostDetails.showFullInventory();
 
+    // Retrying waits, not `isVisible()` reads. The host is chosen via the API
+    // *because* it reports vulnerable software, so an empty table here is a real
+    // failure — and a one-shot `isVisible()` can catch the previous view's empty
+    // state mid-refetch and skip the test on a false negative, which is how this
+    // silently stopped covering anything.
+    await expect(hostDetails.table.firstRow).toBeVisible();
+
     await hostDetails.applyVulnerableFilter();
-    await expect(hostDetails.table.rowOrEmpty()).toBeVisible();
-    const hasRows = await hostDetails.table.firstRow.isVisible();
-    test.skip(!hasRows, `No vulnerable software on ${OS_LABELS[osKey]} host`);
+    await expect(hostDetails.table.firstRow).toBeVisible();
 
     await hostDetails.clickFirstSoftware();
 

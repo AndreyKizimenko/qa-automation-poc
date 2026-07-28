@@ -170,6 +170,14 @@ export class HostDetailsPage {
    * dropdown or the vulnerable filter modal; options carry `dropdown-option`.
    */
   async showFullInventory(): Promise<void> {
+    // The dropdown renders in the same controls row as the search field, so
+    // waiting for that field is what makes the absence check meaningful. Reading
+    // `count()` straight after the tab click is a non-retrying query: on a host
+    // whose Applications view is empty the controls may not have rendered yet,
+    // and the method would silently no-op — leaving the caller on a view with no
+    // rows and a disabled "Add filters" button.
+    await expect(this.softwareSearch).toBeVisible();
+
     const trigger = this.page.locator(
       '.host-software-table__software-filter .react-select__control',
     );

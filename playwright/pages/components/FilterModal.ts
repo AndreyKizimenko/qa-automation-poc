@@ -25,8 +25,14 @@ export class FilterModal {
     this.cancelButton = page.getByRole('button', { name: 'Cancel' });
   }
 
-  /** Open the filter modal. */
+  /**
+   * Open the filter modal. Fleet disables the trigger when the table has nothing
+   * to filter, so this asserts it's enabled first — otherwise the click waits out
+   * the whole test timeout and reports a bare `locator.click` failure instead of
+   * the real problem (an empty table).
+   */
   async open(): Promise<void> {
+    await expect(this.openButton).toBeEnabled();
     await this.openButton.click();
   }
 
