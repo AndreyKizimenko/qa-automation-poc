@@ -193,10 +193,26 @@ export class HostDetailsPage {
     await this.filter.applyVulnerable();
   }
 
-  /** Display name of the first software row (its title link text). */
-  async firstSoftwareName(): Promise<string> {
-    const link = this.table.firstRowWithLink.locator('td').first().getByRole('link').first();
-    return (await link.textContent())?.trim() ?? '';
+  /**
+   * Titles listed in the host's software table, in row order. Read from the
+   * Name column's links rather than row text, so values carried by other
+   * columns — a File path like `C:\Program Files\Adobe\DNG Converter` — are not
+   * mistaken for titles. The Name cell is addressed positionally because the
+   * table's cells expose no role or label distinguishing one column from
+   * another.
+   */
+  async softwareNames(): Promise<string[]> {
+    const links = this.table.table.locator('tbody tr td:first-child a');
+    return (await links.allInnerTexts()).map((t) => t.trim());
+  }
+
+  /**
+   * The Name-column link for one software title. Matched on the link's exact
+   * accessible name so a title contained in a longer one — "Dropbox" inside
+   * "Dropbox Update Helper" — still resolves to a single row.
+   */
+  softwareNameLink(name: string): Locator {
+    return this.table.table.getByRole('link', { name, exact: true });
   }
 
   /** Filters the host's software table by name (server-side `query` param). */

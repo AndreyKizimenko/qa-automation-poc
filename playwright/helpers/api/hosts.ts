@@ -201,6 +201,15 @@ export async function findOnlineHost(
  * `offset` claims a distinct slice of the pool. The suite runs fully parallel,
  * so two mutating specs on the same platform must not be handed the same hosts —
  * each picks a slice and the offsets are kept distinct across specs.
+ *
+ * Pages the pool until `offset + count` hosts of the requested platform have
+ * been collected, rather than reading the slice off one fixed-size page: the
+ * `platform` param matches a *label group* that also returns other platforms,
+ * so the share of any one page that survives `matchesPlatform` is a property of
+ * the live pool mix, not something the caller can size for. Stops early once a
+ * short page proves the pool is exhausted, and returns fewer hosts than asked
+ * for when the pool genuinely cannot cover the slice — callers assert on the
+ * length they need.
  */
 export async function findSimulatedHostIds(
   request: APIRequestContext,
@@ -208,15 +217,20 @@ export async function findSimulatedHostIds(
   count: number,
   offset = 0,
 ): Promise<HostRef[]> {
-  const hosts = await listOnlineHosts(
-    request,
-    platform,
-    Math.max((count + offset) * 3, 50),
-    'simulated',
-    'desc',
-  );
-  return hosts
-    .filter((h) => matchesPlatform(h.platform, platform))
+  const needed = offset + count;
+  const perPage = 100;
+  // Bounds the walk at 1000 online hosts so a pool that can never satisfy the
+  // slice fails the caller's assertion instead of paging indefinitely.
+  const maxPages = 10;
+  const matches: OnlineHost[] = [];
+
+  for (let page = 0; matches.length < needed && page < maxPages; page++) {
+    const batch = await listOnlineHosts(request, platform, perPage, 'simulated', 'desc', page);
+    matches.push(...batch.filter((h) => matchesPlatform(h.platform, platform)));
+    if (batch.length < perPage) break;
+  }
+
+  return matches
     .slice(offset, offset + count)
     .map((h) => ({ id: h.id, displayName: h.display_name }));
 }
@@ -292,6 +306,7 @@ async function listOnlineHosts(
   perPage: number,
   kind?: HostKind,
   direction: 'asc' | 'desc' = 'asc',
+  page = 0,
 ): Promise<OnlineHost[]> {
   // Fleet's `platform` param matches *label groups*, and there is no "linux"
   // group — passing it returns zero hosts even when Linux hosts exist. For linux
@@ -303,6 +318,7 @@ async function listOnlineHosts(
       status: 'online',
       ...(platform === 'linux' ? {} : { platform }),
       per_page: String(perPage),
+      page: String(page),
       order_key: 'display_name',
       order_direction: direction,
       ...(kind === 'real' ? { mdm_enrollment_status: 'enrolled' } : {}),
