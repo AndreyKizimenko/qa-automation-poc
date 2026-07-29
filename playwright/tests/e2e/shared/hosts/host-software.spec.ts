@@ -29,17 +29,25 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
   await hostDetails.openSoftwareTab();
   await hostDetails.showFullInventory();
 
-  const name = await hostDetails.firstSoftwareName();
-  expect(name.length).toBeGreaterThan(0);
+  const names = await hostDetails.softwareNames();
+  expect(names.length, 'expected the host to list software titles').toBeGreaterThan(0);
+
+  const name = names[0];
   const token = firstToken(name);
 
-  // Search narrows the host's software table to a matching row (retrying
-  // locator absorbs the keepPreviousData refetch).
-  await hostDetails.searchSoftware(token);
-  await expect(hostDetails.table.rowWith(token)).toBeVisible();
+  // A listed title the token cannot match. Asserting it disappears is what
+  // proves the search reached the server and narrowed the table — the searched
+  // title is on the page before the filter lands too, so its presence alone
+  // would also hold against the unfiltered list.
+  const filteredOut = names.find((n) => !n.toLowerCase().includes(token.toLowerCase()));
+  expect(filteredOut, `expected a listed title not matching "${token}"`).toBeDefined();
 
-  // Drill the first matching software → its title → filtered hosts list.
-  await hostDetails.clickFirstSoftware();
+  await hostDetails.searchSoftware(token);
+  await expect(hostDetails.softwareNameLink(name)).toBeVisible();
+  await expect(hostDetails.softwareNameLink(filteredOut!)).toHaveCount(0);
+
+  // Drill the searched title → its title page → filtered hosts list.
+  await hostDetails.softwareNameLink(name).click();
   await expect(softwareTitleDetail.displayHeading).toBeVisible();
   const titleName = await softwareTitleDetail.displayName();
 
