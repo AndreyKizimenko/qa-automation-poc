@@ -3,32 +3,41 @@ import { qaTestPassword } from '@helpers/api';
 
 test.describe('Create-user form validation', () => {
   test.describe('Regular user', () => {
-    test('clearing Full name disables Add', async ({ createUserPage }) => {
+    test('clearing Full name blocks Add without disabling it', async ({
+      createUserPage,
+      page,
+    }) => {
       await createUserPage.goto();
 
       await createUserPage.form.fullName.fill('QA Validation');
       await createUserPage.form.email.fill('qa-test-validation@fleetdm.com');
       await createUserPage.form.password.fill(qaTestPassword());
-      await createUserPage.form.password.press('Tab');
-      await expect(createUserPage.submitButton).toBeEnabled();
 
+      // Clearing a required field surfaces that field's error on blur while Add
+      // stays clickable; submitting is what refuses, keeping us on the form.
       await createUserPage.form.fullName.fill('');
       await createUserPage.form.fullName.press('Tab');
-      await expect(createUserPage.submitButton).toBeDisabled();
+      await expect(page.getByText('Name field must be completed')).toBeVisible();
+      await expect(createUserPage.submitButton).toBeEnabled();
+
+      await createUserPage.submitButton.click();
+      await expect(page).toHaveURL(/\/settings\/users\/new\/human\b/);
     });
 
-    test('clearing Email disables Add', async ({ createUserPage }) => {
+    test('clearing Email blocks Add without disabling it', async ({ createUserPage, page }) => {
       await createUserPage.goto();
 
       await createUserPage.form.fullName.fill('QA Validation');
       await createUserPage.form.email.fill('qa-test-validation@fleetdm.com');
       await createUserPage.form.password.fill(qaTestPassword());
-      await createUserPage.form.password.press('Tab');
-      await expect(createUserPage.submitButton).toBeEnabled();
 
       await createUserPage.form.email.fill('');
       await createUserPage.form.email.press('Tab');
-      await expect(createUserPage.submitButton).toBeDisabled();
+      await expect(page.getByText('Email field must be completed')).toBeVisible();
+      await expect(createUserPage.submitButton).toBeEnabled();
+
+      await createUserPage.submitButton.click();
+      await expect(page).toHaveURL(/\/settings\/users\/new\/human\b/);
     });
 
     test('invalid email format surfaces an inline error', async ({ createUserPage, page }) => {

@@ -29,11 +29,17 @@ test.describe('Edit user', () => {
     await withApiRequest((request) => deleteUser(request, userId, { ignoreMissing: true }));
   });
 
-  test('Save is disabled while Full name is empty', async ({ editUserPage }) => {
+  test('clearing Full name blocks Save without disabling it', async ({ editUserPage, page }) => {
     await editUserPage.goto(userId);
     await editUserPage.form.fullName.fill('');
     await editUserPage.form.fullName.press('Tab');
-    await expect(editUserPage.saveButton).toBeDisabled();
+    await expect(page.getByText('Name field must be completed')).toBeVisible();
+    await expect(editUserPage.saveButton).toBeEnabled();
+
+    // Save refuses the empty name, so the edit never reaches the API and the
+    // user this serial block goes on to edit is left untouched.
+    await editUserPage.saveButton.click();
+    await expect(page).toHaveURL(/\/settings\/users\/\d+\/edit\b/);
   });
 
   test('admin edits via row Actions → Edit; users row reflects the change', async ({
