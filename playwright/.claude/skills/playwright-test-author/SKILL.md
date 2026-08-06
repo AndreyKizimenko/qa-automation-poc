@@ -84,6 +84,36 @@ Tests should be grounded in the underlying code, not just what the UI looks like
 3. Then provide a short rationale tied to Playwright best practices.
 4. If useful, suggest extracting a new page object, component object, or fixture.
 
+## Verify before you're done
+
+`npm run check` (tsc + eslint) is the floor, not proof. A green local run is easy to get for
+the wrong reason, so:
+
+1. **Run the spec on every tier it targets.** A spec in `shared/` runs on free *and* premium —
+   verify both. Premium enters at the "All fleets" scope, where fleet-scoped rows (Controls,
+   software-add, library) don't render at all.
+2. **Run it headed at least once.** Headless on an idle machine hides render-order and
+   dismissal-layer races that surface the moment CI or UI mode adds load.
+3. **Run it at least once *with* dependencies** — no `--no-deps`. `cleanup-setup` drains every
+   global report, every global policy and Workstations' policies *before* the first test. A
+   spec that reads pre-existing data passes with `--no-deps` and fails every nightly.
+4. **Repeat anything timing-sensitive** (`--repeat-each=5`) rather than trusting one pass.
+
+## Fleet-specific traps
+
+- **Seed your own preconditions.** Don't reach for gitops-provisioned reports or policies:
+  the cleanup projects delete them at run start. Team-scoped reports survive (the wipe lists
+  the global scope only); global ones never do. Create what you need and remove it in the same
+  test.
+- **`browser.newContext()` inherits the project's `use` options**, `storageState` and
+  `baseURL` included — an argument-less call is still authenticated as the admin, and Fleet
+  will redirect it off `/login`. Use `withCleanContext` from `@helpers/auth` when a test needs
+  a genuinely session-less context.
+- **Picker/table searches hit the server**, so a name that is a prefix of a sibling's breaks
+  strict-mode row lookups. Resolve a value the API narrows to exactly one row.
+- **Never hard-code host names** — the QA pools are osquery-perf simulations with random
+  names. Resolve by platform + status through the API.
+
 ## Code style
 
 - TypeScript

@@ -10,6 +10,7 @@ export { PlatformDropdown } from './components/PlatformDropdown';
 export type { AppStorePlatformLabel } from './components/PlatformDropdown';
 export { StatusFilter } from './components/StatusFilter';
 export { LabelFilter } from './components/LabelFilter';
+export { CommandPalette } from './components/CommandPalette';
 export { clickHoverAction } from './components/clickHoverAction';
 
 // Auth
