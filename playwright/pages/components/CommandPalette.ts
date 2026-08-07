@@ -98,8 +98,16 @@ export class CommandPalette {
    * the start rather than matching the whole name keeps the lookup working
    * when a row carries a trailing fleet chip ("Add report All fleets") or,
    * for a sub-item promoted into Best match, its parent's label.
+   *
+   * Pass `{ exact: true }` to match the whole name instead, which is what
+   * isolates a bare-label row from a sibling sharing its prefix — "Users"
+   * exists both as a Settings row and as a promoted Setup-experience sub-item
+   * whose accessible name reads "Users Setup experience".
    */
-  item(label: string): Locator {
+  item(label: string, opts: { exact?: boolean } = {}): Locator {
+    if (opts.exact) {
+      return this.list.getByRole('option', { name: label, exact: true });
+    }
     return this.list.getByRole('option', {
       name: new RegExp(`^${escapeForRegExp(label)}(\\s|$)`),
     });
