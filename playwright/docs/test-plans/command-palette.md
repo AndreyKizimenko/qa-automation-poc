@@ -152,6 +152,12 @@ so no rule element exists in the DOM.
   while several suites hammered the instance concurrently, and does not reproduce on an idle
   machine, so treat the anchor as load-insurance rather than something a local run will prove.
   `Cmd+K` (Fleet's own document listener) and overlay click are unaffected.
+- **Entering a fleet scope in a premium palette spec** is awkward: `DashboardPage` exposes no
+  team dropdown, and `hostsList.goto({ fleetId })` blocks on a first row — Workstations has
+  **0 hosts**, so it never gets one. `reportsList.goto({ fleetId })` +
+  `reportsList.teamDropdown.select('Workstations')` is the working entry point: that page
+  object anchors on "row or empty", so it renders whether or not cleanup wiped the fleet's
+  reports.
 - **`shared/` specs run on premium in the All-fleets scope**, where the whole Controls group,
   `View software library` and the four software-add commands are hidden (they need
   `hasTeamOrUnassigned`). Anything scope-dependent — including the `filevault` and `fma`
@@ -259,6 +265,28 @@ Driven with `withStaticUser`, same pattern as `premium/labels/role-access.spec.t
 | 59 | Observer+: `Run live report` present, `Run live policy` absent | P1 | P |
 | 60 | Team admin (`team-admin`): Controls + report/policy automations for their own fleet; no Settings group | P2 | P |
 | 61 | Fleet maintainer (`ws-maintainer`): `Add script` present, `Manage policy automations` absent (admin-only) | P2 | P |
+
+### Added after the first pass (not in the original 85)
+
+Cases the first sweep didn't consider, found by re-reading the implementation for
+untested branches rather than by re-reading the story.
+
+| # | Case | Pri | Tier |
+|---|---|---|---|
+| 86 | **Host-picker authorization.** The picker calls the hosts endpoint with **no fleet id** (host details resolves the fleet from the host record), so the server is the only thing scoping results. `team-admin` (Workstations + VMs) finds the VMs macOS VM but must **not** find a host in Unassigned; the signed-in global admin finds that same host, proving it was searchable. Both halves are load-bearing: Workstations has **0 hosts**, so a Workstations-only role sees nothing regardless and would pass a one-sided test trivially | P1 | P |
+| 87 | **The item list rebuilds after an in-place fleet switch.** Switching doesn't reload — it sets the fleet in context and pushes a URL — so the rows a fleet unlocks (Controls, `Add custom package`) must appear while the dialog stays open. The dialog still being visible is what proves no reload happened | P1 | P |
+| 88 | **`Enter` on the switcher must not reach the list.** The button lives inside cmdk's keyboard surface; without its `stopPropagation` a press would both open switch-fleet and activate the highlighted row. Search first so the highlighted row's destination differs from the current page, then reach the button by `Tab` (which also pins the tab order) | P1 | P |
+| 89 | **Deep-linked fleet context survives the param strip.** `Add hosts` from a fleet arrives with both `fleet_id` and `add_hosts`; the destination strips the modal param by rewriting the query, and `fleet_id` must survive — enrolling hosts into the wrong fleet is a damaging outcome | P1 | P |
+| 90 | **Rows sharing a label both render.** cmdk treats a row's `value` as its identity, so duplicates collide and one silently disappears; the palette folds the item id in to prevent it. "Users" exists both in Settings and as a Setup-experience sub-item | P2 | P |
+| 91 | **Focus lands in the input when a picker sub-page opens** — proved by *typing* rather than asserting focus state, since a user who selects `View host` and types immediately depends on it | P1 | S |
+| 92 | **`Tab` keeps focus inside the dialog** (Radix focus trap), asserted by containment rather than by a specific element, since the tab order differs per tier | P2 | S |
+
+Deliberately not taken: browser-Back after a palette navigation (the router owns it),
+emoji-in-fleet-name rendering (QA fleets are plain text, so it would test a fixture), and
+dark-mode visual checks (no visual-snapshot infrastructure, and not worth introducing here).
+Palette open latency and picker search against a high-scale instance belong in
+`tests/loadtest/` — the one class of palette bug e2e structurally cannot see — and are
+deferred.
 
 ### `premium/command-palette/fleet-switcher.spec.ts`
 

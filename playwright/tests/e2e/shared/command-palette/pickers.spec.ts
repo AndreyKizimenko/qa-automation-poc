@@ -328,6 +328,27 @@ test.describe('Command palette • pickers', () => {
     await expect(palette.dialog).toBeHidden();
   });
 
+  test('focus lands in the input when a picker sub-page opens', async ({
+    palette,
+    page,
+    dashboard,
+  }) => {
+    await dashboard.goto();
+    await openHostPicker(palette);
+
+    // `page.keyboard.type` sends the keystrokes to whatever currently holds
+    // focus, so the characters reach the palette input only if the sub-page put
+    // focus there by itself. Filling the input would focus it as part of the
+    // action and prove nothing.
+    await page.keyboard.type(JUNK_QUERY);
+
+    await expect(palette.input).toHaveValue(JUNK_QUERY);
+    // The picker consumed the typed text rather than merely holding it: the
+    // query is unmatchable on both instances, so the empty state is the
+    // deterministic reaction.
+    await expect(palette.list.getByText(`No hosts match "${JUNK_QUERY}".`)).toBeVisible();
+  });
+
   test('Escape on a picker sub-page returns to the root list without closing', async ({
     palette,
     dashboard,

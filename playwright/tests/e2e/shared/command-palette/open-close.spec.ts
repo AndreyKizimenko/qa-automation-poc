@@ -164,6 +164,25 @@ test.describe('Command palette • open and close', () => {
     await expect(palette.list).toHaveAttribute('aria-label', 'Suggestions');
   });
 
+  test('Tab keeps focus inside the dialog', async ({ palette, dashboard, page }) => {
+    await dashboard.goto();
+    await palette.open();
+
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.press('Tab');
+    }
+
+    // Containment rather than a named element: the dialog's tab order differs
+    // per tier because the fleet switcher button renders on premium only, so
+    // "focus is somewhere in the dialog" is the assertion that holds on both.
+    await expect
+      .poll(() => palette.dialog.evaluate((d) => d.contains(document.activeElement)), {
+        message: 'expected Tab to keep focus trapped inside the palette dialog',
+      })
+      .toBe(true);
+    await expect(palette.dialog).toBeVisible();
+  });
+
   test('the non-native modifier is ignored', async ({ palette, dashboard, page }) => {
     await dashboard.goto();
 
