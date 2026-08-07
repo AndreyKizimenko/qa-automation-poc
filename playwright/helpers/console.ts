@@ -24,6 +24,18 @@ export function monitorConsoleErrors(
   };
 }
 
+// Uncaught exceptions inside the page — a React render blowing up, an
+// unhandled rejection reaching the top level. Chromium does not report these
+// as console messages, so `monitorConsoleErrors` never sees them and a broken
+// render passes unless a spec assertion happens to trip over the consequence.
+export function monitorPageErrors(page: Page): { getErrors: () => string[] } {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => {
+    errors.push(error.message);
+  });
+  return { getErrors: () => errors };
+}
+
 // Server errors only — 4xx is normal app behaviour (auth probes, "no
 // resource yet" 404s, premium-gated 402s) and assertions catch the
 // meaningful ones. 5xx is always a real backend bug worth surfacing.
