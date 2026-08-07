@@ -57,6 +57,7 @@ export class MyWidget {
 | `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger) |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
 | `TeamDropdown` | Most pages | Team / fleet picker in the page header |
+| `CommandPalette` | Every authenticated page (rendered by `CoreLayout`) | Fleet spotlight (⌘/Ctrl + K). cmdk supplies real roles — `dialog` / `combobox` / `listbox` / `option` / `group` — so rows and groups are role-addressed; only the Radix backdrop and the fleet chip fall back to classes. Resolves the platform modifier at runtime (Cmd on macOS, Ctrl on CI) |
 | `PlatformDropdown` | `/software/add/app-store` | Apple-vs-Android selector for the App Store add-software form (react-select v5) |
 | `Toast` | Anywhere a CRUD action confirms via a Sonner toast | Anchors on `role="alert"` narrowed by `.toast-notification__card--{success,error}`; has `expectSuccess` / `expectError` |
 | `FileUploader` | Bootstrap, scripts, profiles, custom packages, setup-assistant | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |

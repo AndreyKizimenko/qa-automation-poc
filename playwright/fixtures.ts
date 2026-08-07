@@ -25,6 +25,7 @@ import {
 } from './helpers/api';
 
 import {
+  CommandPalette,
   LoginPage,
   ForgotPasswordPage,
   DashboardPage,
@@ -142,6 +143,15 @@ type FleetWorkerFixtures = {
 };
 
 type FleetFixtures = {
+  /**
+   * Fleet spotlight. A component object rather than a page object, and the
+   * only one exposed as a fixture: `CoreLayout` mounts the palette on every
+   * authenticated page, so it belongs to no page object and every spec that
+   * drives it would otherwise construct it by hand. Components owned by a
+   * page (Toast, DataTable) stay composed onto that page instead.
+   */
+  palette: CommandPalette;
+
   // Auth
   loginPage: LoginPage;
   forgotPasswordPage: ForgotPasswordPage;
@@ -320,6 +330,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     await use(id);
   }, { scope: 'worker', box: true }],
 
+  palette: [async ({ page }, use) => {
+    await use(new CommandPalette(page));
+  }, { box: true }],
   loginPage: [async ({ page }, use) => {
     await use(new LoginPage(page));
   }, { box: true }],
