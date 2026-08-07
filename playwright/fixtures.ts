@@ -12,7 +12,11 @@
  *   - Tests call `<page>.goto()` themselves so the spec body stays explicit.
  */
 import { test as base } from '@playwright/test';
-import { monitorConsoleErrors, monitorNetworkFailures } from './helpers/console';
+import {
+  monitorConsoleErrors,
+  monitorNetworkFailures,
+  monitorPageErrors,
+} from './helpers/console';
 import {
   findFleetByName,
   findOnlineHost,
@@ -215,9 +219,9 @@ type FleetFixtures = {
 
   /**
    * Auto-applied page-health monitor. Starts before the test body, asserts
-   * at teardown that no un-ignored console errors or 5xx server
-   * failures occurred. Tests that intentionally trigger errors can opt
-   * out with `pageHealth.disable()`. Defaults are tuned in
+   * at teardown that no uncaught page exceptions, un-ignored console errors
+   * or 5xx server failures occurred. Tests that intentionally trigger errors
+   * can opt out with `pageHealth.disable()`. Defaults are tuned in
    * `helpers/console.ts`.
    */
   pageHealth: { disable: () => void };
@@ -279,6 +283,7 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
 
   pageHealth: [async ({ page }, use, testInfo) => {
     const errors = monitorConsoleErrors(page);
+    const exceptions = monitorPageErrors(page);
     const failures = monitorNetworkFailures(page);
     let disabled = false;
 
@@ -290,8 +295,12 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     if (disabled || testInfo.status !== 'passed') return;
 
     const errs = errors.getErrors();
+    const excs = exceptions.getErrors();
     const fails = failures.getFailures();
     const messages: string[] = [];
+    // Listed first: an uncaught exception means the page itself broke, which
+    // explains any console or network noise reported alongside it.
+    if (excs.length) messages.push(`Uncaught page exceptions:\n  ${excs.join('\n  ')}`);
     if (errs.length) messages.push(`Console errors:\n  ${errs.join('\n  ')}`);
     if (fails.length) messages.push(`Server errors (5xx):\n  ${fails.join('\n  ')}`);
     if (messages.length) throw new Error(`Page health issues:\n${messages.join('\n')}`);
