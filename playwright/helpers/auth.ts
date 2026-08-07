@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Browser, BrowserContextOptions, Page, expect } from '@playwright/test';
 
+import { apiUrl, withApiRequest } from './api/core';
 import {
   staticUser,
   staticUserPassword,
@@ -93,14 +94,39 @@ function writeSession(key: StaticUserKey, state: StoredSession): void {
 }
 
 /**
+ * Whether Fleet still accepts the session held in a cached storage state.
+ *
+ * The session token travels in a cookie, but Fleet's API authenticates it as
+ * a bearer token and rejects the cookie on its own (401), so the value is read
+ * out of the cookie and sent as a header. One request settles it.
+ *
+ * Probing the API rather than loading a page is deliberate: navigating to
+ * /dashboard and reading `page.url()` races the SPA's own auth check, which
+ * renders the dashboard first and redirects to /login only once `GET /me`
+ * comes back 401. An expired session still reads as /dashboard at that moment,
+ * so the caller would be handed a page that signs itself out mid-test.
+ */
+async function isSessionLive(session: StoredSession): Promise<boolean> {
+  const token = session.cookies?.find((c) => c.name.endsWith('token'))?.value;
+  if (!token) return false;
+  return withApiRequest(async (request) => {
+    const res = await request.get(apiUrl('me'), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok();
+  });
+}
+
+/**
  * Log into a context as the given static human user and run `fn` against the
  * authenticated page. Throws on API-only catalog entries — those auth via
  * bearer token and cannot use the login form.
  *
  * The first call for a user logs in and caches the resulting session; later
- * calls in the same worker restore it instead of logging in again. A cached
- * session that has expired or been invalidated falls back to a fresh login, so
- * callers can't be handed a signed-out page.
+ * calls restore it instead of logging in again. The cache has no expiry of its
+ * own and outlives Fleet's server-side session, so a restored session is
+ * probed against the API before use and a dead one falls back to a fresh
+ * login. Callers can't be handed a signed-out page.
  */
 export async function withStaticUser<T>(
   browser: Browser,
@@ -113,14 +139,10 @@ export async function withStaticUser<T>(
   }
 
   const cached = readSession(key);
-  if (cached) {
+  if (cached && (await isSessionLive(cached))) {
     const context = await browser.newContext({ storageState: cached });
-    const page = await context.newPage();
     try {
-      // A session that has expired or been invalidated bounces to /login; fall
-      // through to a fresh login rather than handing `fn` a signed-out page.
-      await page.goto('/dashboard');
-      if (!/\/login/.test(page.url())) return await fn(page);
+      return await fn(await context.newPage());
     } finally {
       await context.close();
     }
