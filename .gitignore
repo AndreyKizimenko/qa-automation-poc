@@ -12,11 +12,22 @@ Icon
 *.swp
 *.swo
 
-# Claude Code local settings
+# Claude Code. Two things here are shared and MUST stay checked in:
+#   .claude/skills/       — the skills tree (test-author, test-reviewer,
+#     run-reviewer, fleet-upgrade-preflight). It has to sit at the REPO ROOT:
+#     a nested .claude/skills/ (e.g. under playwright/) is treated as
+#     directory-scoped, which namespaces the commands to `playwright:<name>`
+#     and ties them to files under that directory. Root keeps them as plain
+#     `/playwright-test-author` etc., repo-wide.
+#   .claude/settings.json — the permission allowlist (no secrets).
+# Everything else at the repo root is machine-local harness state.
 .claude/settings.local.json
-# Repo-root harness state (scheduled-task locks, etc.). Keep
-# playwright/.claude/ checked in — that's the shared skills tree.
-/.claude/
+/.claude/*
+!/.claude/settings.json
+!/.claude/skills/
+
+# Python bytecode (playwright-run-reviewer ships a parse script).
+__pycache__/
 
 # Logs
 *.log

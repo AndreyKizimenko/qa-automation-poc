@@ -1,9 +1,11 @@
 ---
 name: playwright-test-reviewer
-description: Use when reviewing existing Playwright tests, page objects, fixtures, or the overall test suite for POM, locator, assertion, isolation, or fixture issues. Triggers on "review this Playwright test", "audit our test suite", "check for brittle selectors", "review my spec".
+description: Use when reviewing existing Playwright test *code* — specs, page objects, fixtures — for POM, locator, assertion, isolation, or fixture design issues. Triggers on "review this Playwright test", "audit our specs/POMs", "check for brittle selectors", "review my spec". NOT for triaging a test *run*'s results (flake vs bug vs product-defect) — that's playwright-run-reviewer; this skill reads source, not run reports.
 ---
 
 Review this Playwright test suite as a strict senior automation engineer for a large app that uses POM.
+
+> Scope note: this skill critiques **test code**. If the ask is "why did this run fail / was it a flake or a real bug", that's a run-triage job — use **playwright-run-reviewer**, which reads the run's report and artifacts. The two are complementary: run-reviewer decides *what's wrong*; this skill and playwright-test-author fix the code when the answer is a test-bug.
 
 ## Evaluate against
 
