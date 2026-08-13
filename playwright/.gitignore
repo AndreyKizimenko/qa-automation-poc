@@ -15,7 +15,12 @@ node_modules/
 # reviews stay local.
 docs/run-reviews/
 
-# Claude Code local settings
+# Pre-upgrade impact reports from the fleet-upgrade-preflight skill. Derived
+# from two Fleet commits and regenerated in seconds, so the report itself is
+# disposable — anything worth keeping goes into the POM fix or TODO.md.
+docs/upgrade-preflight/
+
+# Claude Code local settings (the skills tree beside it is checked in)
 .claude/settings.local.json
 
 # Local environment — never commit real credentials
