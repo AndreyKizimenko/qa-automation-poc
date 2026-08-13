@@ -37,6 +37,14 @@
              "responded". -->
         <string>--live_query_no_results_prob</string>
         <string>0</string>
+        <!-- Default is 0.1: ~10% of agents request a host identity certificate at
+             startup. That endpoint (/api/fleet/orbit/host_identity/scep) is served
+             only from Fleet's ee/ tree, so on FREE it 404s — and osquery-perf
+             treats the failure as fatal for that agent (returns out of runLoop, no
+             retry). Left at the default, free settles at ~270 hosts instead of 300.
+             Premium serves the endpoint, so its plist keeps the default. -->
+        <string>--http_message_signature_prob</string>
+        <string>0</string>
     </array>
 
     <!-- Keep the simulator running: relaunch on crash and at boot. -->

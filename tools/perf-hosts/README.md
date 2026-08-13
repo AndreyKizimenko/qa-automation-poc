@@ -144,6 +144,14 @@ Also set: `--live_query_no_results_prob 0` (default `0.2`). osquery-perf otherwi
 returns *no rows* for ~20% of live queries; forcing 0 makes results deterministic
 so live-query specs can assert an actual result row instead of just "responded".
 
+**Free only:** `--http_message_signature_prob 0` (default `0.1`). ~10% of agents
+otherwise request a host identity certificate from
+`/api/fleet/orbit/host_identity/scep`, which is served only from Fleet's `ee/`
+tree. On free it 404s, and osquery-perf treats that as fatal for the agent — it
+returns out of `runLoop` and never retries — so free lands ~270 hosts instead of
+300, with `Failed to get CA cert: 404` spam in the log. Premium serves the
+endpoint and keeps the default.
+
 ### Want zero churn (stable hosts even across reboots)?
 
 Add `--node_key_file /usr/local/var/fleet-perf-<instance>.nodekeys` to a plist.
