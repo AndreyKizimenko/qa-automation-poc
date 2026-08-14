@@ -46,10 +46,10 @@ export class SoftwareTitlesPage {
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
-    // AutomationsButton renders a settings icon + the visible label "Automations";
-    // clicking it (when enabled) opens the "Manage automations" modal. Only global
-    // admins see it, and only under the "All fleets" aggregate is it enabled.
-    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    // AutomationsButton renders the visible label "Manage automations"; clicking
+    // it (when enabled) opens the modal of the same name. Only global admins see
+    // it, and only under the "All fleets" aggregate is it enabled.
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     // Fleet's Modal renders a role-less title <span>, so target the shared
     // container class filtered by the modal's title text.
     this.manageAutomationsModal = page

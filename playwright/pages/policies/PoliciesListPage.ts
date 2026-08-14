@@ -50,9 +50,9 @@ export class PoliciesListPage {
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete policies' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
 
-    // AutomationsButton renders the visible label "Automations"; it's disabled
-    // until the scope has at least one policy.
-    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    // AutomationsButton renders the visible label "Manage automations"; it's
+    // disabled until the scope has at least one policy.
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     // The modal's title is "Automations" (role-less Modal span).
     this.automationsModal = page.locator('.modal__modal_container').filter({ hasText: 'Automations' });
     // Enable/disable is Fleet's Slider (role="switch" button); the "Destination

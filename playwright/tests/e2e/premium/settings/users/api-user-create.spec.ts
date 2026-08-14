@@ -14,7 +14,7 @@ import type { ApiGlobalRole } from '@pages';
 async function assertApiUserRow(row: Locator, name: string, role: string): Promise<void> {
   await expect(row).toBeVisible();
   await expect(row.locator('.data-table__tooltip-truncated-text').first()).toHaveText(name);
-  await expect(row.locator('.pill-badge')).toHaveText('API');
+  await expect(row.locator('.tag')).toHaveText('API');
   // Anchored on `.role__cell` with exact text so Observer and Observer+
   // never collide.
   await expect(row.locator('.role__cell')).toHaveText(role);

@@ -1,11 +1,13 @@
 /**
  * Premium • Hosts • CTA visibility by role.
  *
- * The hosts-list write CTAs ("Add hosts", "Enroll secrets") are gated on the
- * enroll-hosts role (global/team admin or maintainer); "Export hosts" has no
- * role gate. Global admin and global maintainer see all three; a global
- * observer sees only Export. Purely role-based (not team-scoped). Each role
- * logs into a fresh context via `withStaticUser`.
+ * The hosts-list write CTAs are gated on the enroll-hosts role (global/team
+ * admin or maintainer): "Add hosts" sits in the header, "Enroll secrets" sits
+ * inside the "Hosts page settings" gear menu. "Export hosts" has no role gate.
+ * Global admin and global maintainer see all three; a global observer sees only
+ * Export — and with no gear items available to it, no gear at all. Purely
+ * role-based (not team-scoped). Each role logs into a fresh context via
+ * `withStaticUser`.
  */
 import { test, expect } from '@fixtures';
 import { withStaticUser } from '@helpers/auth';
@@ -22,8 +24,10 @@ test.describe('Premium • Hosts • CTA visibility by role', () => {
         await hosts.goto();
 
         await expect(hosts.addHostsButton).toBeVisible();
-        await expect(hosts.enrollSecretsButton).toBeVisible();
         await expect(hosts.exportHostsButton).toBeVisible();
+
+        await hosts.hostsPageSettingsButton.click();
+        await expect(hosts.enrollSecretsOption).toBeVisible();
       });
     });
   }
@@ -35,7 +39,9 @@ test.describe('Premium • Hosts • CTA visibility by role', () => {
 
       await expect(hosts.exportHostsButton).toBeVisible();
       await expect(hosts.addHostsButton).toHaveCount(0);
-      await expect(hosts.enrollSecretsButton).toHaveCount(0);
+      // An observer grants none of the gear's items, so the gear itself is
+      // what's absent — there's no menu left to open and look inside.
+      await expect(hosts.hostsPageSettingsButton).toHaveCount(0);
     });
   });
 });

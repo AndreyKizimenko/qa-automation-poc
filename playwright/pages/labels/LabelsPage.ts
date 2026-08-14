@@ -28,6 +28,10 @@ export class LabelsPage {
   readonly heading: Locator;
   readonly addLabelButton: Locator;
 
+  /** Row most recently targeted by {@link openRowActions}, used to scope
+   * single-action buttons that every row renders its own copy of. */
+  private actionsRow?: Locator;
+
   // Add / edit form
   readonly nameInput: Locator;
   readonly descriptionInput: Locator;
@@ -166,20 +170,36 @@ export class LabelsPage {
   }
 
   /**
-   * Open a label row's Actions dropdown (without picking an option). Pages to
-   * the row first; the dropdown reveals on row hover and its option menu
-   * portals to <body>. Use with `rowActionOption` to inspect which actions a
-   * role is offered.
+   * Reveal a label row's actions (without picking one). Pages to the row
+   * first; the actions reveal on row hover.
+   *
+   * A row offers two shapes depending on how many actions the role has. With
+   * more than one it's a dropdown whose option menu portals to <body>, so the
+   * control has to be clicked to expose the options. With exactly one — a
+   * viewer who can only "View all hosts" — the row renders that action as a
+   * plain button and there is nothing to open, so hovering is the whole job.
+   * Use with `rowActionOption` to inspect which actions a role is offered.
    */
   async openRowActions(name: string): Promise<void> {
     const row = await this.locateRow(name);
     await row.hover();
-    await row.locator('.actions-dropdown-select__control').click();
+    const control = row.locator('.actions-dropdown-select__control');
+    if (await control.count()) await control.click();
+    this.actionsRow = row;
   }
 
-  /** A row-actions menu option by its visible label (matched by text). */
+  /**
+   * A row action by its visible label, matching either shape: a portalled
+   * dropdown option, or the single-action button rendered inside the row.
+   * The button branch is scoped to the row `openRowActions` last targeted —
+   * every row carries its own copy, so a table-wide match would be ambiguous.
+   */
   rowActionOption(action: LabelRowAction): Locator {
-    return this.page.locator('.actions-dropdown-select__option').filter({ hasText: action });
+    const option = this.page
+      .locator('.actions-dropdown-select__option')
+      .filter({ hasText: action });
+    if (!this.actionsRow) return option;
+    return option.or(this.actionsRow.getByRole('button', { name: action, exact: true }));
   }
 
   /** Open a label row's Actions dropdown and pick an option. */

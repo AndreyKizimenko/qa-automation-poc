@@ -43,7 +43,8 @@ export class HostsListPage {
 
   readonly search: Locator;
   readonly addHostsButton: Locator;
-  readonly enrollSecretsButton: Locator;
+  readonly hostsPageSettingsButton: Locator;
+  readonly enrollSecretsOption: Locator;
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
@@ -96,9 +97,17 @@ export class HostsListPage {
 
     this.search = page.getByPlaceholder('Search');
     this.addHostsButton = page.getByRole('button', { name: 'Add hosts' });
-    // Exact so it doesn't also match the empty-state "Manage enroll secrets"
-    // banner link. Both this and Add hosts are gated on the enroll-hosts role.
-    this.enrollSecretsButton = page.getByRole('button', { name: 'Enroll secrets', exact: true });
+    // Page-level settings live behind a gear ActionsDropdown whose accessible
+    // name comes from its `placeholder`. The gear renders only when the role
+    // grants at least one of its items, so its absence is what a read-only
+    // role asserts against.
+    this.hostsPageSettingsButton = page.getByRole('button', { name: 'Hosts page settings' });
+    // ActionsDropdown options keep no role, so they're reached by the shared
+    // option class. Enroll secrets sits inside the gear menu and is gated on
+    // the enroll-hosts role, the same gate as Add hosts.
+    this.enrollSecretsOption = page
+      .locator('.actions-dropdown__option')
+      .filter({ hasText: 'Enroll secrets' });
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
     this.exportHostsButton = page.getByRole('button', { name: 'Export hosts' });
     // FilterPill (frontend/.../ManageHostsPage/components/FilterPill) renders

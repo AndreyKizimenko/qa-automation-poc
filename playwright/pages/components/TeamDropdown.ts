@@ -5,9 +5,15 @@ export type TeamScope = 'All fleets' | 'Workstations' | 'Unassigned';
 
 /**
  * Team / fleet scope dropdown shown on Hosts, Software, Reports, Policies,
- * Controls. Backed by react-select v5 — the visible trigger has no
- * accessible role and the rendered options have no role either, so a class
- * selector is the only stable target here.
+ * Controls.
+ *
+ * The visible trigger is a real `<button>` (`aria-haspopup="listbox"`), so the
+ * trigger and its label could be reached by role. The class is used instead
+ * because react-select stays mounted alongside it for keyboard nav, rendering
+ * a second, visually-hidden control whose own label would make a role query
+ * ambiguous. The options keep no role at all — react-select v5 drives
+ * highlighting through `aria-activedescendant` rather than `role="option"` —
+ * so a class selector is the only stable target for those.
  *
  * On the free tier the dropdown isn't rendered. `select()` no-ops in that
  * case so specs don't have to branch on SUITE.
@@ -19,8 +25,8 @@ export class TeamDropdown {
 
   constructor(page: Page) {
     this.page = page;
-    this.trigger = page.locator('.team-dropdown__control');
-    this.currentValue = page.locator('.team-dropdown__single-value');
+    this.trigger = page.locator('.fleet-dropdown__button');
+    this.currentValue = page.locator('.fleet-dropdown__button-label');
   }
 
   /**
@@ -43,7 +49,14 @@ export class TeamDropdown {
    * another that merely contains it.
    */
   async selectByLabel(label: string): Promise<void> {
-    if ((await this.trigger.count()) === 0) return;
+    // Free has no fleet scoping, so the dropdown never renders there. The
+    // tier is the gate rather than the trigger's presence: keying off a
+    // missing trigger would turn any premium markup change into a silent
+    // no-op, letting scope-loop specs run against whatever fleet the URL
+    // happened to carry instead of failing where the breakage is.
+    if (process.env.SUITE !== 'premium') return;
+
+    await expect(this.trigger).toBeVisible();
 
     const current = (await this.currentValue.textContent())?.trim();
     if (current === label) return;
@@ -51,7 +64,7 @@ export class TeamDropdown {
     await this.trigger.click();
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     await this.page
-      .locator('.team-dropdown__option')
+      .locator('.fleet-dropdown__option')
       .filter({ hasText: new RegExp(`^${escaped}$`) })
       .click();
     await expect(this.currentValue).toHaveText(label);
