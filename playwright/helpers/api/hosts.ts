@@ -188,12 +188,16 @@ export interface OnlineHostRequirements {
  * The pool is **paged** rather than read off one window. `kind` is decided from
  * the hardware model, which Fleet has no query param for, so it can only be
  * applied client-side — and a handful of real VMs among hundreds of simulations
- * will not reliably land in the first page. `maxScan` bounds how many *matching*
- * candidates are considered, and paging stops as soon as that many are in hand
- * or a short page proves the pool is exhausted.
+ * will not reliably land in the first page.
  *
- * Fetching per-host vitals costs one extra request per candidate, so this only
- * walks candidates while a requirement is unmet.
+ * Each page's candidates are tried before the next page is fetched, so the walk
+ * stops on the page holding the first host that satisfies `requirements`. That
+ * matters for `kind: 'real'`: only a few hosts on the instance can ever match,
+ * so collecting candidates up-front would read every page on every call and put
+ * a needless multiple of that load on a shared QA instance.
+ *
+ * `maxScan` bounds how many candidates have their vitals fetched, which is the
+ * expensive part — one extra request each.
  */
 export async function findOnlineHost(
   request: APIRequestContext,
@@ -205,24 +209,25 @@ export async function findOnlineHost(
   // Bounds the walk at 1000 online hosts so an instance with no matching host
   // returns null instead of paging indefinitely.
   const maxPages = 10;
-  const candidates: OnlineHost[] = [];
+  let scanned = 0;
 
-  for (let page = 0; candidates.length < maxScan && page < maxPages; page++) {
+  for (let page = 0; scanned < maxScan && page < maxPages; page++) {
     const batch = await listOnlineHosts(request, platform, perPage, 'asc', page);
-    candidates.push(
-      ...batch.filter(
-        (h) => matchesPlatform(h.platform, platform) && matchesKind(h, requirements.kind),
-      ),
-    );
-    if (batch.length < perPage) break;
-  }
 
-  for (const candidate of candidates.slice(0, maxScan)) {
-    const host = await getOnlineHostVitals(request, candidate);
-    if (!host) continue;
-    if (requirements.withUsers && host.usernames.length === 0) continue;
-    if (requirements.withOrbit && !host.orbitVersion) continue;
-    return host;
+    for (const candidate of batch) {
+      if (scanned >= maxScan) break;
+      if (!matchesPlatform(candidate.platform, platform)) continue;
+      if (!matchesKind(candidate, requirements.kind)) continue;
+
+      scanned += 1;
+      const host = await getOnlineHostVitals(request, candidate);
+      if (!host) continue;
+      if (requirements.withUsers && host.usernames.length === 0) continue;
+      if (requirements.withOrbit && !host.orbitVersion) continue;
+      return host;
+    }
+
+    if (batch.length < perPage) break;
   }
   return null;
 }
