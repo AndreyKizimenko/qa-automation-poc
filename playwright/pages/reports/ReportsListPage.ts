@@ -58,7 +58,7 @@ export class ReportsListPage {
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete reports' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
 
-    this.manageAutomationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     this.manageAutomationsModal = page
       .locator('.modal__modal_container')
       .filter({ hasText: 'Manage automations' });

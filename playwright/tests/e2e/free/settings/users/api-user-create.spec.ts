@@ -24,7 +24,7 @@ async function findApiUserIdByName(
 async function assertApiUserRow(row: Locator, name: string, role: string): Promise<void> {
   await expect(row).toBeVisible();
   await expect(row.locator('.data-table__tooltip-truncated-text').first()).toHaveText(name);
-  await expect(row.locator('.pill-badge')).toHaveText('API');
+  await expect(row.locator('.tag')).toHaveText('API');
   // Anchored on `.role__cell` with exact text. Free has no Observer+ so
   // the collision can't fire here, but the helper stays consistent with
   // premium.

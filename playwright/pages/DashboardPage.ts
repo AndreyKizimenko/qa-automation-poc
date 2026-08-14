@@ -66,7 +66,7 @@ export class DashboardPage {
       .first();
     this.activityNext = this.activityFeedCard.getByRole('button', { name: 'Next' });
 
-    this.automationsButton = page.getByRole('button', { name: 'Automations', exact: true });
+    this.automationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     // The modal class is on both the container and its inner form div, so the
     // container is pinned by the shared modal-container class as well.
     this.automationsModal = page.locator(

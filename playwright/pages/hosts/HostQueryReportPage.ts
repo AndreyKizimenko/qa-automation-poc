@@ -25,7 +25,7 @@ export class HostQueryReportPage {
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to host details' });
-    this.viewAllHostsButton = page.getByRole('button', { name: 'View data for all hosts' });
+    this.viewAllHostsButton = page.getByRole('button', { name: 'View report for all hosts' });
   }
 
   async waitForReady(): Promise<void> {
