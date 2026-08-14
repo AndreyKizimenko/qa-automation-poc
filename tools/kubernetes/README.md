@@ -3,15 +3,19 @@
 Deploy a given Fleet release to Docker Desktop's built-in Kubernetes, so a
 release candidate's Helm chart can be smoke-tested before it ships.
 
-> **Run these from inside a `fleetdm/fleet` clone, not from this repo.** Both
-> scripts resolve the repo root with `git rev-parse` and then use that repo's
-> `charts/fleet` and `docker-compose.yml`. They live here because they're QA
-> tooling, but the working directory has to be the Fleet checkout:
+> **These scripts need a `fleetdm/fleet` clone** — the Helm chart
+> (`charts/fleet`) and the MySQL/Redis compose file come from it. They find it
+> automatically: the current git toplevel if that happens to be a Fleet
+> checkout, otherwise `~/repositories/fleet` or `~/fleet`. Set `FLEET_REPO` to
+> override. So both of these work:
 >
 > ```bash
-> cd ~/fleet
-> ~/repositories/qa-automation/tools/kubernetes/fleet-helm-test.sh v4.90.0
+> ./fleet-helm-test.sh v4.90.0                        # from anywhere
+> FLEET_REPO=~/work/fleet ./fleet-helm-test.sh v4.90.0 # explicit checkout
 > ```
+>
+> Each run prints which checkout it picked. If none is found the script exits
+> before touching the cluster.
 
 They automate parts 2 and 4–10 of the "Test Fleet Helm Chart With Docker
 Desktop" runbook: switch kube-context, bring up MySQL + Redis via Compose, prep
@@ -70,6 +74,7 @@ Rarely needed; all have working defaults.
 
 | Var | Default | What it does |
 |---|---|---|
+| `FLEET_REPO` | git toplevel if it's a Fleet clone, else `~/repositories/fleet`, `~/fleet` | The Fleet checkout supplying `charts/fleet` and `docker-compose.yml` |
 | `KUBE_CONTEXT` | `docker-desktop` | Context to deploy into |
 | `NAMESPACE` | `fleet` | Kubernetes namespace |
 | `LOCAL_PORT` | `8081` | Port-forward port (dev uses 8080) |

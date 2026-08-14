@@ -20,6 +20,9 @@
 # First run does first-time-setup; later runs reuse it.
 #
 # Env overrides (rarely needed):
+#   FLEET_REPO     (default: git toplevel if it's a Fleet clone, else ~/repositories/fleet
+#                   or ~/fleet) — the fleetdm/fleet checkout supplying docker-compose.yml
+#                   and charts/fleet. Lets you run this from anywhere.
 #   KUBE_CONTEXT   (default: docker-desktop)
 #   NAMESPACE      (default: fleet)
 #   LOCAL_PORT     (default: 8081) — dev server uses 8080
@@ -47,9 +50,32 @@ REDIS_DB="${REDIS_DB:-1}"
 
 IMAGE_TAG="$1"
 
-# --- repo root -------------------------------------------------------------
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside the Fleet git repo"
+# --- Fleet repo root -------------------------------------------------------
+# This script lives in the qa-automation repo but operates on a fleetdm/fleet
+# clone (docker-compose.yml for MySQL+Redis, charts/fleet for the chart), so the
+# git toplevel of the invocation directory is not good enough — running it from
+# any other git repo used to silently pass this check and then fail at
+# `docker compose` with "no configuration file provided".
+looks_like_fleet() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/charts/fleet" ]; }
+
+if [ -n "${FLEET_REPO:-}" ]; then
+  looks_like_fleet "$FLEET_REPO" \
+    || die "FLEET_REPO=$FLEET_REPO is not a Fleet checkout (needs docker-compose.yml and charts/fleet)"
+  REPO_ROOT="$FLEET_REPO"
+else
+  REPO_ROOT=""
+  for candidate in \
+    "$(git rev-parse --show-toplevel 2>/dev/null || true)" \
+    "$HOME/repositories/fleet" \
+    "$HOME/fleet"; do
+    [ -n "$candidate" ] || continue
+    if looks_like_fleet "$candidate"; then REPO_ROOT="$candidate"; break; fi
+  done
+  [ -n "$REPO_ROOT" ] \
+    || die "could not find a Fleet checkout — set FLEET_REPO=/path/to/fleet or run from inside one"
+fi
 cd "$REPO_ROOT"
+ok "Using Fleet checkout $REPO_ROOT"
 
 # --- tool checks -----------------------------------------------------------
 for bin in kubectl helm docker; do
