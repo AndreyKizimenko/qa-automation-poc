@@ -123,14 +123,34 @@ export interface OnlineHostRef extends HostRef {
  *    reports contradictory label membership. Use where the test needs *volume*
  *    (bulk select/transfer/delete) and the individual host is incidental.
  *
- * Implemented with Fleet's documented `mdm_enrollment_status` filter: the real
- * macOS/Windows VMs are MDM-enrolled and no simulation is.
+ * Told apart by **hardware model**: the QA VMs run on virtualized hardware and
+ * report `VirtualMac2,1` or `QEMU Virtual Machine`, while osquery-perf reports
+ * fixed consumer models (`MacBookPro11,4`, `Surface Laptop 2`). The model is a
+ * property of the machine, so it holds on both tiers and across re-enrollment.
  *
- * Caveat: the real **Linux** VMs are not MDM-enrolled, so they fall inside
- * `'simulated'`. Destructive specs must therefore target `darwin` or `windows`,
- * never `linux`, or they risk deleting a real VM.
+ * MDM enrollment is deliberately *not* the discriminator. It used to be, on the
+ * premise that only real VMs were enrolled — which stopped being true once the
+ * `perf-hosts` tooling began enrolling a share of the simulations, at which
+ * point `'real'` started returning simulations and `'simulated'` could return a
+ * VM. A host's enrollment also flaps independently of what kind of host it is.
+ *
+ * Because the model covers Linux too, `'simulated'` now excludes the real Linux
+ * VMs as well, so a destructive spec targeting `linux` can no longer draw one.
  */
 export type HostKind = 'real' | 'simulated';
+
+/**
+ * The QA VMs are the only hosts on virtualized hardware. Matched
+ * case-insensitively against the reported hardware model, which covers
+ * `VirtualMac2,1` (macOS) and `QEMU Virtual Machine` (Windows and Linux).
+ */
+const REAL_DEVICE_MODEL = /virtual|qemu/i;
+
+function matchesKind(host: OnlineHost, kind?: HostKind): boolean {
+  if (!kind) return true;
+  const isReal = REAL_DEVICE_MODEL.test(host.hardware_model ?? '');
+  return kind === 'real' ? isReal : !isReal;
+}
 
 /**
  * Extra guarantees a spec needs from its host. Simulated hosts report different
@@ -164,6 +184,14 @@ export interface OnlineHostRequirements {
  * Fleet's `platform` param filters by *label group*, which can return hosts of
  * other platforms, so results are re-filtered on each host's own `platform`
  * field. Ordering by display name keeps the pick stable across calls in a run.
+ *
+ * The pool is **paged** rather than read off one window. `kind` is decided from
+ * the hardware model, which Fleet has no query param for, so it can only be
+ * applied client-side — and a handful of real VMs among hundreds of simulations
+ * will not reliably land in the first page. `maxScan` bounds how many *matching*
+ * candidates are considered, and paging stops as soon as that many are in hand
+ * or a short page proves the pool is exhausted.
+ *
  * Fetching per-host vitals costs one extra request per candidate, so this only
  * walks candidates while a requirement is unmet.
  */
@@ -173,11 +201,23 @@ export async function findOnlineHost(
   requirements: OnlineHostRequirements = {},
   maxScan = 100,
 ): Promise<OnlineHostRef | null> {
-  const candidates = (
-    await listOnlineHosts(request, platform, maxScan, requirements.kind)
-  ).filter((h) => matchesPlatform(h.platform, platform));
+  const perPage = 100;
+  // Bounds the walk at 1000 online hosts so an instance with no matching host
+  // returns null instead of paging indefinitely.
+  const maxPages = 10;
+  const candidates: OnlineHost[] = [];
 
-  for (const candidate of candidates) {
+  for (let page = 0; candidates.length < maxScan && page < maxPages; page++) {
+    const batch = await listOnlineHosts(request, platform, perPage, 'asc', page);
+    candidates.push(
+      ...batch.filter(
+        (h) => matchesPlatform(h.platform, platform) && matchesKind(h, requirements.kind),
+      ),
+    );
+    if (batch.length < perPage) break;
+  }
+
+  for (const candidate of candidates.slice(0, maxScan)) {
     const host = await getOnlineHostVitals(request, candidate);
     if (!host) continue;
     if (requirements.withUsers && host.usernames.length === 0) continue;
@@ -189,9 +229,8 @@ export async function findOnlineHost(
 
 /**
  * Simulated hosts of a platform — the disposable pool for specs that mutate or
- * destroy hosts. Excludes every MDM-enrolled host so a real VM can never be
- * selected; pass `darwin` or `windows` (see {@link HostKind} on why `linux` is
- * unsafe here).
+ * destroy hosts. Excludes every host on virtualized hardware so a real VM can
+ * never be selected (see {@link HostKind}).
  *
  * Drawn from the **end** of the display-name ordering on purpose: the read-only
  * pickers other specs use (`findOnlineHost`, `findHostWithSoftware`) all take the
@@ -225,8 +264,12 @@ export async function findSimulatedHostIds(
   const matches: OnlineHost[] = [];
 
   for (let page = 0; matches.length < needed && page < maxPages; page++) {
-    const batch = await listOnlineHosts(request, platform, perPage, 'simulated', 'desc', page);
-    matches.push(...batch.filter((h) => matchesPlatform(h.platform, platform)));
+    const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
+    matches.push(
+      ...batch.filter(
+        (h) => matchesPlatform(h.platform, platform) && matchesKind(h, 'simulated'),
+      ),
+    );
     if (batch.length < perPage) break;
   }
 
@@ -298,13 +341,16 @@ interface OnlineHost {
   id: number;
   display_name: string;
   platform: string;
+  /** Reported hardware model — what {@link matchesKind} reads to tell a QA VM
+   * from an osquery-perf simulation. Absent on a host that hasn't reported
+   * vitals yet, which reads as "not a real device". */
+  hardware_model?: string;
 }
 
 async function listOnlineHosts(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
   perPage: number,
-  kind?: HostKind,
   direction: 'asc' | 'desc' = 'asc',
   page = 0,
 ): Promise<OnlineHost[]> {
@@ -321,8 +367,6 @@ async function listOnlineHosts(
       page: String(page),
       order_key: 'display_name',
       order_direction: direction,
-      ...(kind === 'real' ? { mdm_enrollment_status: 'enrolled' } : {}),
-      ...(kind === 'simulated' ? { mdm_enrollment_status: 'unenrolled' } : {}),
     },
   });
   if (!res.ok()) return [];
