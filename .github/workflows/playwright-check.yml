@@ -1,19 +1,20 @@
 name: Playwright — Check
 
-# Static checks (tsc + eslint) for the Playwright suite. Runs on any PR
-# touching playwright/ so type or lint regressions are caught before merge,
-# and on push to main so the same check registers for branch protection.
+# Static checks (tsc + eslint) for the Playwright suite, so type or lint
+# regressions are caught before merge.
+#
+# Runs on EVERY pull request, deliberately — no `paths:` filter. `check` is a
+# required status check in main's branch protection, and GitHub treats a
+# required context that never reports as pending forever rather than as passed.
+# With a path filter, any PR not touching playwright/ (tools/, gitops/, .github/)
+# was permanently unmergeable: no job to run, no context reported, and
+# enforce_admins leaves no override. Running it unconditionally costs ~1-2
+# minutes on unrelated PRs and keeps the branch protection satisfiable.
 
 on:
   pull_request:
-    paths:
-      - 'playwright/**'
-      - '.github/workflows/playwright-check.yml'
   push:
     branches: [main]
-    paths:
-      - 'playwright/**'
-      - '.github/workflows/playwright-check.yml'
   workflow_dispatch:
 
 defaults:

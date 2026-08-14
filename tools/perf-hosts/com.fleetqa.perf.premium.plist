@@ -36,6 +36,15 @@
              "responded". -->
         <string>--live_query_no_results_prob</string>
         <string>0</string>
+        <!-- MDM enrollment. mdm_prob applies to macOS and Windows only (Ubuntu is
+             unaffected), so 0.3 over the 200 macOS+Windows sims yields ~60
+             MDM-enrolled hosts — enough headroom that a spec batch-deleting hosts
+             can't strand the suite with zero. The challenge is the server's static
+             SCEP shared secret, substituted by install.sh from perf-hosts.env. -->
+        <string>--mdm_prob</string>
+        <string>0.3</string>
+        <string>--mdm_scep_challenge</string>
+        <string>__PREMIUM_MDM_SCEP_CHALLENGE__</string>
     </array>
 
     <!-- Keep the simulator running: relaunch on crash and at boot. -->

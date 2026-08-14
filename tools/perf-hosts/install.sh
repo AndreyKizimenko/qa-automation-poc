@@ -35,7 +35,8 @@ if [[ -f "$SECRETS_FILE" ]]; then
   # shellcheck source=/dev/null  # path is user-configurable via SECRETS_FILE
   set -a; . "$SECRETS_FILE"; set +a
 fi
-for var in PREMIUM_FLEET_URL PREMIUM_ENROLL_SECRET FREE_FLEET_URL FREE_ENROLL_SECRET; do
+for var in PREMIUM_FLEET_URL PREMIUM_ENROLL_SECRET FREE_FLEET_URL FREE_ENROLL_SECRET \
+           PREMIUM_MDM_SCEP_CHALLENGE FREE_MDM_SCEP_CHALLENGE; do
   [[ -n "${!var:-}" ]] || {
     echo "error: $var is not set. Copy perf-hosts.env.example to perf-hosts.env and fill it in"
     echo "       (or export the four vars yourself). Values come from each instance's"
@@ -64,10 +65,12 @@ install_daemon() {
   case "$label" in
     premium)
       sed -e "s|__PREMIUM_FLEET_URL__|${PREMIUM_FLEET_URL}|" \
-          -e "s|__PREMIUM_ENROLL_SECRET__|${PREMIUM_ENROLL_SECRET}|" "$src" > "$rendered" ;;
+          -e "s|__PREMIUM_ENROLL_SECRET__|${PREMIUM_ENROLL_SECRET}|" \
+          -e "s|__PREMIUM_MDM_SCEP_CHALLENGE__|${PREMIUM_MDM_SCEP_CHALLENGE}|" "$src" > "$rendered" ;;
     free)
       sed -e "s|__FREE_FLEET_URL__|${FREE_FLEET_URL}|" \
-          -e "s|__FREE_ENROLL_SECRET__|${FREE_ENROLL_SECRET}|" "$src" > "$rendered" ;;
+          -e "s|__FREE_ENROLL_SECRET__|${FREE_ENROLL_SECRET}|" \
+          -e "s|__FREE_MDM_SCEP_CHALLENGE__|${FREE_MDM_SCEP_CHALLENGE}|" "$src" > "$rendered" ;;
     *)
       cp "$src" "$rendered" ;;   # refresh carries no credentials
   esac

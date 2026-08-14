@@ -144,6 +144,100 @@ Also set: `--live_query_no_results_prob 0` (default `0.2`). osquery-perf otherwi
 returns *no rows* for ~20% of live queries; forcing 0 makes results deterministic
 so live-query specs can assert an actual result row instead of just "responded".
 
+**Free only:** `--http_message_signature_prob 0` (default `0.1`). ~10% of agents
+otherwise request a host identity certificate from
+`/api/fleet/orbit/host_identity/scep`, which is served only from Fleet's `ee/`
+tree. On free it 404s, and osquery-perf treats that as fatal for the agent — it
+returns out of `runLoop` and never retries — so free lands ~270 hosts instead of
+300, with `Failed to get CA cert: 404` spam in the log. Premium serves the
+endpoint and keeps the default.
+
+## MDM enrollment
+
+Both plists set `--mdm_prob 0.3` and `--mdm_scep_challenge`, so ~30% of the
+simulated hosts enroll into Fleet MDM. `mdm_prob` applies to **macOS and Windows
+only** (Ubuntu is unaffected), so 0.3 across the 200 macOS+Windows sims yields
+~60 MDM-enrolled hosts per instance — deliberate headroom, so a spec that
+batch-deletes hosts can't leave the suite with zero MDM hosts to target.
+
+This is what unblocks the lock/wipe flows, which were parked because the sims
+had no MDM enrollment.
+
+Prerequisite: each instance must have MDM turned on. Check with
+`GET /api/v1/fleet/config` → `mdm.enabled_and_configured: true`.
+
+### Getting the SCEP challenge
+
+The challenge is a static shared secret the Fleet server issues MDM identity
+certificates against. It is created on first boot
+(`cmd/fleet/serve.go`): the value of `FLEET_MDM_APPLE_SCEP_CHALLENGE` if that env
+var is set, otherwise a random UUID. It is then stored in the
+`mdm_config_assets` table **encrypted** with `FLEET_SERVER_PRIVATE_KEY`, so
+reading that column directly gets you ciphertext, not the challenge.
+
+**Premium** — one authenticated call. Fleet embeds the challenge in plaintext in
+the manual enrollment profile:
+
+```bash
+curl -sS -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/enrollment_profiles/manual" \
+  | grep -A1 '<key>Challenge</key>' | tail -1 \
+  | sed -E 's|.*<string>(.*)</string>.*|\1|'
+```
+
+**Free** — that endpoint returns `402 Requires Fleet Premium license`; the free
+build of `GetMDMManualEnrollmentProfile` returns `ErrMissingLicense`
+unconditionally. The OTA endpoint is unauthenticated but needs a PKCS7-signed
+payload from a real Apple device, so it is not curl-able either. Two options:
+
+1. **If `FLEET_MDM_APPLE_SCEP_CHALLENGE` is set on the instance** (Render env
+   vars), that value *is* the challenge — copy it and you're done.
+2. **Otherwise decrypt it.** Fleet's QA instances run on Render, whose MySQL is
+   not reachable from outside its private network — use the Render-hosted
+   Adminer:
+
+   ```sql
+   SELECT HEX(value) FROM mdm_config_assets
+   WHERE name = 'scep_challenge' AND deleted_at IS NULL;
+   ```
+
+   Then decrypt locally with `FLEET_SERVER_PRIVATE_KEY` from the Render env.
+   It's AES-GCM with the nonce prepended (`server/datastore/mysql/apple_mdm.go`,
+   `encrypt`/`decrypt`):
+
+   ```bash
+   python3 -c '
+   import sys
+   from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+   key, blob = sys.argv[1].encode(), bytes.fromhex(sys.argv[2])
+   print(AESGCM(key).decrypt(blob[:12], blob[12:], None).decode())
+   ' "$FLEET_SERVER_PRIVATE_KEY" "<hex from Adminer>"
+   ```
+
+   The key is used as **raw string bytes** (`aes.NewCipher([]byte(privateKey))`),
+   so it has to be exactly 16, 24 or 32 characters — 32 in practice. Fleet only
+   validates "at least 32", but a longer key would make `aes.NewCipher` fail
+   outright, so a working instance's key is exactly 32. If what you copied is
+   longer (e.g. 44 chars, the length of `openssl rand -base64 32` output) you
+   picked up extra characters — try its first 32.
+
+   Sanity checks on the blob before you go key-hunting: it should be
+   `12 + len(plaintext) + 16` bytes, so a UUID challenge gives exactly **64**
+   bytes / 128 hex chars. And GCM authenticates — if it decrypts at all, the key
+   is right; there is no "close enough".
+
+A third option, if you'd rather not decrypt anything: delete the
+`scep_challenge` row via Adminer, set `FLEET_MDM_APPLE_SCEP_CHALLENGE` to a value
+you choose, and restart the service — the boot path only inserts when the asset
+is absent, so setting the env var alone does nothing while a row exists. This
+rotates the challenge, which invalidates enrollment for any device holding the
+old one. Harmless on a QA instance with only simulated hosts; don't do it on
+anything real.
+
+If MDM is ever reconfigured on an instance the challenge can rotate, and the
+daemon will silently stop enrolling hosts into MDM while everything else keeps
+working — re-read it and re-run `install.sh`.
+
 ### Want zero churn (stable hosts even across reboots)?
 
 Add `--node_key_file /usr/local/var/fleet-perf-<instance>.nodekeys` to a plist.
