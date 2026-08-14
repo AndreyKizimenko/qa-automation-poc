@@ -14,6 +14,8 @@
 #                                    #   volumes incl. your local dev `fleet` database)
 #
 # Env overrides:
+#   FLEET_REPO (default: git toplevel if it's a Fleet clone, else ~/repositories/fleet
+#               or ~/fleet) — the checkout supplying docker-compose.yml
 #   NAMESPACE  (default: fleet)
 #   DB_NAME    (default: fleet_helm)
 
@@ -33,10 +35,35 @@ case "${1:-}" in
   *)         echo "unknown flag: $1" >&2; exit 1 ;;
 esac
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "not inside the Fleet git repo" >&2; exit 1; }
+# Resolve the Fleet checkout the same way fleet-helm-test.sh does — the git
+# toplevel of the invocation directory is not enough, since this script lives in
+# the qa-automation repo but needs Fleet's docker-compose.yml.
+looks_like_fleet() { [ -f "$1/docker-compose.yml" ] && [ -d "$1/charts/fleet" ]; }
+
+if [ -n "${FLEET_REPO:-}" ]; then
+  looks_like_fleet "$FLEET_REPO" || {
+    echo "FLEET_REPO=$FLEET_REPO is not a Fleet checkout (needs docker-compose.yml and charts/fleet)" >&2
+    exit 1
+  }
+  REPO_ROOT="$FLEET_REPO"
+else
+  REPO_ROOT=""
+  for candidate in \
+    "$(git rev-parse --show-toplevel 2>/dev/null || true)" \
+    "$HOME/repositories/fleet" \
+    "$HOME/fleet"; do
+    [ -n "$candidate" ] || continue
+    if looks_like_fleet "$candidate"; then REPO_ROOT="$candidate"; break; fi
+  done
+  [ -n "$REPO_ROOT" ] || {
+    echo "could not find a Fleet checkout — set FLEET_REPO=/path/to/fleet or run from inside one" >&2
+    exit 1
+  }
+fi
 # This script runs without `set -e`, so guard the cd explicitly — the docker
 # compose calls below would otherwise run against whatever directory we're in.
 cd "$REPO_ROOT" || { echo "cannot cd to $REPO_ROOT" >&2; exit 1; }
+ok "Using Fleet checkout $REPO_ROOT"
 
 info "Uninstalling Helm release 'fleet'"
 helm -n "$NAMESPACE" uninstall fleet 2>/dev/null && ok "Release removed" || ok "No release to remove"
