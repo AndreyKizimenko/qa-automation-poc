@@ -1,0 +1,97 @@
+name: GitOps Nightly CLI Checks
+
+# fleetctl checks that are only meaningful immediately after the min GitOps
+# apply:
+#   * `generate-gitops` output reproduces the config that produced the state
+#   * `gitops --dry-run` of that same config proposes no deletions
+#
+# Ordering is load-bearing: this must run immediately after the min apply and
+# BEFORE the Playwright suite, whose cleanup-setup project drains every global
+# report and policy. Run it later and the comparison is against an empty
+# instance.
+#
+# Read-only — it generates and dry-runs, and never applies anything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
+        required: true
+        type: choice
+        options:
+          - free
+          - premium
+  workflow_call:
+    inputs:
+      suite:
+        description: 'Which Fleet instance / env to load (free | premium)'
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      FLEET_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_URL || secrets.FLEET_PREMIUM_URL }}
+      FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}
+    defaults:
+      run:
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: playwright/package-lock.json
+
+      - run: npm ci
+
+      # Mirrors the install step in .github/gitops-action/action.yml. A client
+      # older than the server still runs, but prints a version-mismatch banner on
+      # every command and can lag behind new output keys, so match the server.
+      - name: Install fleetctl matching the server
+        run: |
+          set -e
+          SERVER_VERSION="$(
+            curl -fsSL "$FLEET_URL/api/v1/fleet/version" \
+              --header "Authorization: Bearer $FLEET_API_TOKEN" \
+              | jq -r '.version' || true
+          )"
+          if [[ "$SERVER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            INSTALL_VERSION="$SERVER_VERSION"
+          else
+            INSTALL_VERSION="4.85.0"
+          fi
+          echo "Installing fleetctl@$INSTALL_VERSION (server reported: ${SERVER_VERSION:-unknown})"
+          npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
+          fleetctl --version
+
+      - name: Run nightly gitops CLI checks
+        env:
+          SUITE: ${{ inputs.suite }}
+          # The min configs interpolate these, and gitops refuses to parse
+          # without them. Same set the gitops-action passes when applying.
+          FLEET_ENROLL_SECRET: ${{ secrets.FLEET_FREE_ENROLL_SECRET }}
+          FLEET_SSO_METADATA_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_SSO_METADATA_URL || secrets.FLEET_PREMIUM_SSO_METADATA_URL }}
+          FLEET_EUA_METADATA_URL: ${{ secrets.FLEET_EUA_METADATA_URL }}
+          FLEET_ABM_ORG_NAME: ${{ secrets.FLEET_ABM_ORG_NAME }}
+          FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
+        run: npx playwright test --project=gitops-nightly
+
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: gitops-nightly-cli-report-${{ inputs.suite }}
+          path: playwright/playwright-report/
+          retention-days: 7

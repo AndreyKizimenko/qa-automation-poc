@@ -18,6 +18,8 @@
     "test:gitops-verify:premium-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/workstations.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min/fleets/workstations.yml playwright test --project=gitops-verify",
+    "test:gitops-nightly:premium": "SUITE=premium playwright test --project=gitops-nightly",
+    "test:gitops-nightly:free": "SUITE=free playwright test --project=gitops-nightly",
     "test:all": "npm run test:premium && npm run test:free",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

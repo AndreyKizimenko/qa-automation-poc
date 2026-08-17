@@ -22,6 +22,7 @@ const SUITE_AMBIGUOUS_PROJECTS: ReadonlySet<string> = new Set([
   'cleanup-setup',
   'cleanup-teardown',
   'gitops-verify',
+  'gitops-nightly',
 ]);
 
 function parseProjectArg(argv: readonly string[]): string | undefined {
@@ -151,7 +152,12 @@ export default defineConfig({
     {
       name: 'premium',
       testDir: './tests',
-      testIgnore: ['**/gitops-verify/**', '**/free/**', '**/loadtest/**'],
+      testIgnore: [
+        '**/gitops-verify/**',
+        '**/cli/nightly/**',
+        '**/free/**',
+        '**/loadtest/**',
+      ],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
@@ -169,7 +175,12 @@ export default defineConfig({
     {
       name: 'free',
       testDir: './tests',
-      testIgnore: ['**/gitops-verify/**', '**/premium/**', '**/loadtest/**'],
+      testIgnore: [
+        '**/gitops-verify/**',
+        '**/cli/nightly/**',
+        '**/premium/**',
+        '**/loadtest/**',
+      ],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',
@@ -189,6 +200,22 @@ export default defineConfig({
           Authorization: `Bearer ${process.env.FLEET_API_TOKEN ?? ''}`,
         },
       },
+      retries: 0,
+    },
+
+    // ── gitops-nightly (nightly GitOps chain only) ────────────────────────────
+    // CLI checks that are only meaningful in one window: immediately after the
+    // min GitOps apply, before the Playwright suite's cleanup-setup drains
+    // global reports and policies. Covers `generate-gitops` output against the
+    // config that produced the state, and a `gitops --dry-run` of that same
+    // config reporting no deletions. Excluded from premium and free; the
+    // nightly workflow runs it with --project=gitops-nightly.
+    {
+      name: 'gitops-nightly',
+      testDir: './tests/cli/nightly',
+      // A whole-instance generate walks every fleet and downloads software
+      // icons — well past the 60s the browser projects need.
+      timeout: 180_000,
       retries: 0,
     },
 
