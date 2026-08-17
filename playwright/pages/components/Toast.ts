@@ -18,12 +18,27 @@ export class Toast {
   readonly page: Page;
   readonly success: Locator;
   readonly error: Locator;
+  readonly dismissButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
     const card = page.getByRole('alert');
     this.success = card.and(page.locator('.toast-notification__card--success'));
     this.error = card.and(page.locator('.toast-notification__card--error'));
+    this.dismissButton = page.getByRole('button', { name: 'Dismiss notification' });
+  }
+
+  /**
+   * Clears every visible toast card. Because a success card lingers for 5s, a
+   * flow that acts twice in quick succession can satisfy `expectSuccess` with
+   * the *previous* action's card and so never wait for its own. Clearing first
+   * makes the next `expectSuccess` match only the card the next action raises.
+   */
+  async dismissAll(): Promise<void> {
+    for (const button of await this.dismissButton.all()) {
+      await button.click();
+    }
+    await expect(this.dismissButton).toHaveCount(0);
   }
 
   /**

@@ -50,7 +50,18 @@ export class SetupExperienceUsersPage {
     await expect(this.heading).toBeVisible();
   }
 
+  /**
+   * Saves the form and waits for the save to have fully settled.
+   *
+   * Fleet raises the success toast only after awaiting the config (and, for a
+   * fleet scope, the fleet) refetch that follows the write, and the form
+   * re-initialises from that refetch — so a toggle clicked before it lands is
+   * discarded. Clearing older toasts first means the toast waited on here is
+   * the one this save raises, which makes it a barrier for the whole write +
+   * refetch cycle and leaves the form safe to drive again.
+   */
   async save(): Promise<void> {
+    await this.toast.dismissAll();
     await this.saveButton.click();
     await this.toast.expectSuccess('Successfully updated.');
   }

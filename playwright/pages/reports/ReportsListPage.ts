@@ -48,7 +48,11 @@ export class ReportsListPage {
     this.toast = new Toast(page);
 
     this.search = page.getByPlaceholder('Search by name');
-    this.addReportButton = page.getByRole('button', { name: /add report/i });
+    // The "Add report" label is shared by the page-header CTA and the
+    // empty-state card's CTA; both open the new-report editor. The header one
+    // comes first in the DOM, so take it to stay single-match on a list that
+    // renders empty (or is still refetching over an empty render).
+    this.addReportButton = page.getByRole('button', { name: /add report/i }).first();
     this.platformFilter = page.locator('.queries-table__platform-dropdown .react-select__control');
 
     // Bulk-action bar appears once a row is selected; the trash-labelled
