@@ -43,7 +43,11 @@ export class PoliciesListPage {
     this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
 
-    this.addPolicyButton = page.getByRole('button', { name: /add policy/i });
+    // The "Add policy" label is shared by the page-header CTA and the
+    // empty-state card's CTA; both open the add-policy flow. The header one
+    // comes first in the DOM, so take it to stay single-match on a list that
+    // renders empty (or is still refetching over an empty render).
+    this.addPolicyButton = page.getByRole('button', { name: /add policy/i }).first();
     this.search = page.getByPlaceholder('Search by name');
 
     this.bulkDeleteButton = page.getByRole('button', { name: 'Delete', exact: true });
