@@ -51,6 +51,28 @@ jobs:
           FLEET_STATIC_TOKEN_API_GLOBAL_OBSERVER=${{ secrets.FLEET_FREE_STATIC_TOKEN_API_GLOBAL_OBSERVER }}
           EOF
 
+      # tests/cli/ drives the real fleetctl binary. Match the server version:
+      # an older client still runs but prints a version-mismatch banner on every
+      # command and can lag behind new output keys.
+      - name: Install fleetctl matching the server
+        env:
+          FLEET_URL: ${{ secrets.FLEET_FREE_URL }}
+          FLEET_API_TOKEN: ${{ secrets.FLEET_FREE_API_TOKEN }}
+        run: |
+          set -e
+          SERVER_VERSION="$(
+            curl -fsSL "$FLEET_URL/api/v1/fleet/version" \
+              --header "Authorization: Bearer $FLEET_API_TOKEN" \
+              | jq -r '.version' || true
+          )"
+          if [[ "$SERVER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            INSTALL_VERSION="$SERVER_VERSION"
+          else
+            INSTALL_VERSION="4.85.0"
+          fi
+          npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
+          fleetctl --version
+
       - run: npm run test:free
 
       - uses: actions/upload-artifact@v5

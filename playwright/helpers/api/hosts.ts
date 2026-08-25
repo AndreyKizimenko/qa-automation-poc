@@ -1,5 +1,5 @@
 import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders, type HostRef } from './core';
+import { apiLatestUrl, apiUrl, authHeaders, type HostRef } from './core';
 
 /**
  * The `platform` query param returns a label group that can include hosts
@@ -283,6 +283,128 @@ export async function findSimulatedHostIds(
     .map((h) => ({ id: h.id, displayName: h.display_name }));
 }
 
+/** Lock/wipe state as Fleet reports it on the host detail endpoint. */
+export interface HostDeviceState {
+  /** 'unlocked' | 'locked' | 'wiped' — absent until the host has an action. */
+  deviceStatus: string | null;
+  /** 'lock' | 'unlock' | 'wipe' while one is in flight, '' when settled. */
+  pendingAction: string | null;
+}
+
+/**
+ * The host's lock/wipe state. Only the **detail** endpoint carries these; the
+ * list endpoint omits `device_status` unless explicitly asked for it.
+ */
+export async function getHostDeviceState(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostDeviceState> {
+  const res = await request.get(apiLatestUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const mdm = (await res.json()).host?.mdm ?? {};
+  return { deviceStatus: mdm.device_status ?? null, pendingAction: mdm.pending_action ?? null };
+}
+
+/**
+ * Deletes a host. Used as the last-resort cleanup for lock/wipe specs: a
+ * simulation left locked would otherwise sit in the pool misreporting its state
+ * to every later spec.
+ *
+ * A deleted simulation does **not** re-enrol on its own — osquery-perf enrols
+ * once at startup — so the pool is only replenished by the daily refresh in
+ * `tools/perf-hosts/`. Callers must therefore delete a small, fixed number of
+ * hosts, never a number that scales with anything.
+ */
+export async function deleteHost(request: APIRequestContext, hostId: number): Promise<void> {
+  await request.delete(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+}
+
+/** A simulated host resolved for a `fleetctl mdm` command. */
+export interface MdmTargetHost extends HostRef {
+  /** What `fleetctl mdm <cmd> --host` must be given. */
+  hostname: string;
+  platform: string;
+  mdmConnected: boolean;
+}
+
+export interface MdmHostRequirements {
+  /**
+   * Whether the host must be connected to Fleet MDM.
+   *
+   * **This must be chosen, not left to chance.** `fleetctl mdm` refuses a host
+   * that isn't MDM-connected *client-side* (`hostMdmActionSetup` in
+   * `cmd/fleetctl/fleetctl/mdm.go`), before it ever calls the server — but only
+   * for platforms where `MDMTurnedOnSupported` is true (darwin, ios, ipados,
+   * windows, android; **not** Linux). That refusal is what makes the error-path
+   * specs safe: a *connected* macOS or Windows simulation would sail through and
+   * enqueue a real lock or wipe. About a third of the pool is enrolled, so
+   * picking blind is a coin flip.
+   *
+   * `false` for premium error-path specs. `true` is only safe on **free**, where
+   * the licence check short-circuits before anything is enqueued.
+   */
+  mdmConnected: boolean;
+  /**
+   * Require a host that runs orbit.
+   *
+   * Only ~40% of the pool does (`osquery-perf --orbit_prob` defaults to 0.5), and
+   * **only those can ever complete a lock or unlock**: on Windows and Linux both
+   * run as scripts, which orbit is what polls for. Lock a simulation without
+   * orbit and it sits at `pending_action: 'lock'` forever — after which Fleet
+   * refuses every further lock *and* unlock, so the host can only be deleted.
+   *
+   * Required for any spec that performs a real lock. Leave unset for error-path
+   * specs, which never reach the server and would only shrink their pool.
+   */
+  withOrbit?: boolean;
+  /** Claims a distinct slice so parallel specs don't collide. */
+  offset?: number;
+}
+
+/**
+ * A simulated host suitable for a `fleetctl mdm` command.
+ *
+ * Reads the list endpoint alone — it carries `hostname`, `mdm.connected_to_fleet`
+ * and `orbit_version`, so no per-host detail fetch is needed. Draws from the
+ * **end** of the display-name ordering, like {@link findSimulatedHostIds}, to stay
+ * clear of the read-only pickers.
+ */
+export async function findSimulatedHostForMdm(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  requirements: MdmHostRequirements,
+): Promise<MdmTargetHost | null> {
+  const { mdmConnected, withOrbit = false, offset = 0 } = requirements;
+  const perPage = 100;
+  const maxPages = 10;
+  const matches: OnlineHost[] = [];
+
+  for (let page = 0; matches.length <= offset && page < maxPages; page++) {
+    const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
+    matches.push(
+      ...batch.filter(
+        (h) =>
+          matchesPlatform(h.platform, platform) &&
+          matchesKind(h, 'simulated') &&
+          Boolean(h.mdm?.connected_to_fleet) === mdmConnected &&
+          (!withOrbit || Boolean(h.orbit_version)) &&
+          Boolean(h.hostname),
+      ),
+    );
+    if (batch.length < perPage) break;
+  }
+
+  const host = matches[offset];
+  if (!host) return null;
+  return {
+    id: host.id,
+    displayName: host.display_name,
+    hostname: host.hostname!,
+    platform: host.platform,
+    mdmConnected,
+  };
+}
+
 /**
  * When Fleet last stored a full set of vitals for the host (`detail_updated_at`).
  * A refetch advances it, so a spec can prove the UI's "Last fetched less than a
@@ -350,6 +472,13 @@ interface OnlineHost {
    * from an osquery-perf simulation. Absent on a host that hasn't reported
    * vitals yet, which reads as "not a real device". */
   hardware_model?: string;
+  /** The host's own hostname, which diverges from `display_name` on macOS
+   * ("macos-prem's Virtual Machine" vs "macos-prems-Virtual-Machine.local").
+   * fleetctl resolves `--host` / `--hosts` against this, not the display name. */
+  hostname?: string;
+  mdm?: { enrollment_status?: string | null; connected_to_fleet?: boolean | null };
+  /** Set only when the simulation runs orbit — see {@link findSimulatedHostForMdm}. */
+  orbit_version?: string | null;
 }
 
 async function listOnlineHosts(

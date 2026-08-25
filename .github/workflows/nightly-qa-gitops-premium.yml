@@ -71,3 +71,16 @@ jobs:
       suite: premium
       gitops-target: gitops/premium-fleetqa-min/fleets/workstations.yml
     secrets: inherit
+
+  # fleetctl checks against the min config just applied: generate-gitops
+  # reproduces it, and a dry-run of it proposes no deletions. Must stay inside
+  # this chain — the Playwright suite's cleanup-setup drains global reports and
+  # policies, after which neither comparison means anything.
+  verify-gitops-cli:
+    needs:
+      - verify-min-no-team
+      - verify-min-workstations
+    uses: ./.github/workflows/gitops-nightly-cli.yml
+    with:
+      suite: premium
+    secrets: inherit
