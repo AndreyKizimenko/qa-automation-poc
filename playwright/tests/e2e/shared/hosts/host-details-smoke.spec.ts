@@ -27,22 +27,32 @@ test('Host details — refetch re-collects the host vitals', async ({
   liveMacosHost,
   request,
 }) => {
+  // The round trip against the real VM is bounded by the host's poll cadence and
+  // measures 70-120s, on top of waiting out any refetch already in flight.
+  test.setTimeout(300_000);
+
   const before = await getHostDetailUpdatedAt(request, liveMacosHost.id);
 
   await hostDetails.goto(liveMacosHost.id);
   await hostDetails.refetch();
 
-  // The round trip waits on the host's distributed interval, so allow well over
-  // one poll cycle for the header to catch up.
-  await expect(hostDetails.lastFetched).toContainText('Last fetched less than a minute ago', {
-    timeout: 60_000,
-  });
+  // Fleet took the request: the header button reports the collection in flight.
+  await expect(hostDetails.refetchingButton).toBeVisible();
 
   // Fleet stored a newer set of vitals — proves the refresh came from the
   // refetch and not from a background detail cycle that was already recent.
   await expect
-    .poll(() => getHostDetailUpdatedAt(request, liveMacosHost.id), { timeout: 30_000 })
+    .poll(() => getHostDetailUpdatedAt(request, liveMacosHost.id), { timeout: 180_000 })
     .not.toBe(before);
+
+  // `HostDetailsPage` polls for the result for 60s, then gives up with "You'll
+  // see an update when the host responds" and leaves the open page on the old
+  // time, so the header is only meaningful on a fresh load. Fleet renders the
+  // relative time through date-fns with `addSuffix`, which phrases a timestamp
+  // the browser clock hasn't reached yet as "in less than a minute" and one it
+  // has as "less than a minute ago" — the vitals are fresh either way.
+  await hostDetails.goto(liveMacosHost.id);
+  await expect(hostDetails.lastFetched).toContainText(/Last fetched (in )?less than a minute/);
 });
 
 test('Host details — local user accounts card filters by username', async ({

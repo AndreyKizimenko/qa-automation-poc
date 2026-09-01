@@ -32,6 +32,12 @@ export class HostDetailsPage {
   readonly hostHeading: Locator;
   readonly backButton: Locator;
   readonly refetchButton: Locator;
+  /**
+   * The same header button while a refetch is in flight — `HostHeader` swaps the
+   * one button's label and disables it, so this and `refetchButton` never
+   * resolve at the same time.
+   */
+  readonly refetchingButton: Locator;
   readonly actionsButton: Locator;
   /**
    * The header's "Last fetched <relative time>" line. `HostHeader` renders it as
@@ -74,6 +80,17 @@ export class HostDetailsPage {
   readonly inventoryTab: Locator;
   readonly libraryTab: Locator;
   readonly softwareSearch: Locator;
+  /**
+   * The Software tab's inventory table. `HostSoftwareTable` renders as a
+   * role-less wrapper div, and its own class is the only scope that separates
+   * it from the "Munki issues" table the same tab renders for macOS hosts — an
+   * unscoped `getByRole('table')` matches both, and resolves to Munki rows
+   * whenever the inventory is empty.
+   */
+  readonly softwareTable: Locator;
+  readonly softwareRows: Locator;
+  /** Name-column links in the inventory table, in row order. */
+  readonly softwareNameLinks: Locator;
 
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
@@ -97,10 +114,10 @@ export class HostDetailsPage {
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
-    // Matches the idle-state label only; during a refetch the button reads
-    // "Fetching fresh vitals…" and is disabled, so readiness must be re-checked
-    // by other means rather than re-asserting this name.
+    // Matches the idle-state label only; `refetchingButton` matches the same
+    // button once a refetch is under way.
     this.refetchButton = page.getByRole('button', { name: 'Refetch' });
+    this.refetchingButton = page.getByRole('button', { name: 'Fetching fresh vitals' });
     this.actionsButton = page.getByRole('button', { name: 'Actions' });
     this.lastFetched = page.locator('.host-header__last-fetched');
 
@@ -133,6 +150,9 @@ export class HostDetailsPage {
     this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.libraryTab = page.getByRole('tab', { name: 'Library' });
     this.softwareSearch = page.getByPlaceholder('Search by name or vulnerability (CVE)');
+    this.softwareTable = page.locator('.host-software-table');
+    this.softwareRows = this.softwareTable.locator('tbody').getByRole('row');
+    this.softwareNameLinks = this.softwareRows.locator('td:first-child a');
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
@@ -151,11 +171,16 @@ export class HostDetailsPage {
 
   async openSoftwareTab(): Promise<void> {
     await this.softwareTab.click();
-    // Wait for the table to settle to either rows or its empty state — a macOS
-    // host defaults to the "Applications" view, which is empty when the host
-    // reports only non-app packages (so `firstRow` alone would never resolve;
-    // callers switch to full inventory via showFullInventory() next).
-    await expect(this.table.rowOrEmpty()).toBeVisible();
+    // Settle on either rows or the empty state — a macOS host defaults to the
+    // "Applications" view, which is empty when the host reports only non-app
+    // packages (so rows alone would never resolve; callers switch to full
+    // inventory via showFullInventory() next).
+    await expect(this.softwareRowOrEmpty()).toBeVisible();
+  }
+
+  /** First inventory row, or the table's empty state — the tab has settled either way. */
+  softwareRowOrEmpty(): Locator {
+    return this.softwareRows.first().or(this.softwareTable.locator('.empty-state'));
   }
 
   /**
@@ -184,8 +209,10 @@ export class HostDetailsPage {
     if ((await trigger.count()) === 0) return;
     await trigger.click();
     await this.page.getByTestId('dropdown-option').filter({ hasText: 'Full inventory' }).click();
-    // The selection drives the list via the `macos_applications` query param;
-    // waiting on it confirms the table has switched before downstream steps.
+    // The selection drives the list via the `macos_applications` query param.
+    // The URL flips as soon as the option is picked, ahead of the response that
+    // repaints the table, so callers that read rows wait on the table itself —
+    // which view is empty depends on the host, so that wait belongs to them.
     await expect(this.page).toHaveURL(/macos_applications=false/);
   }
 
@@ -202,8 +229,7 @@ export class HostDetailsPage {
    * another.
    */
   async softwareNames(): Promise<string[]> {
-    const links = this.table.table.locator('tbody tr td:first-child a');
-    return (await links.allInnerTexts()).map((t) => t.trim());
+    return (await this.softwareNameLinks.allInnerTexts()).map((t) => t.trim());
   }
 
   /**
@@ -212,7 +238,7 @@ export class HostDetailsPage {
    * "Dropbox Update Helper" — still resolves to a single row.
    */
   softwareNameLink(name: string): Locator {
-    return this.table.table.getByRole('link', { name, exact: true });
+    return this.softwareTable.getByRole('link', { name, exact: true });
   }
 
   /** Filters the host's software table by name (server-side `query` param). */
@@ -225,15 +251,17 @@ export class HostDetailsPage {
   }
 
   /**
-   * Asks Fleet to re-collect the host's vitals. While a refetch is in flight the
-   * button is relabelled "Fetching fresh vitals...this may take a moment" and
-   * disabled, so this waits for the idle label before clicking to avoid racing a
-   * refetch already underway. The round trip is bounded by the host's
-   * distributed interval, so callers assert readiness on `lastFetched` (which
-   * settles to "less than a minute ago") rather than on the button.
+   * Asks Fleet to re-collect the host's vitals. While a refetch is in flight
+   * `HostHeader` relabels the one button to "Fetching fresh vitals...this may
+   * take a moment" and disables it, so the idle "Refetch" label is what marks
+   * the control as clickable again. The wait spans a whole round trip: the live
+   * hosts are shared, so another spec — or a previous attempt of this one — can
+   * leave a refetch running, and this rides that out instead of failing on a
+   * button that isn't rendered yet. The result lands on the host's own poll
+   * cadence, so callers confirm it through the API rather than the button.
    */
   async refetch(): Promise<void> {
-    await expect(this.refetchButton).toBeEnabled();
+    await expect(this.refetchButton).toBeEnabled({ timeout: 60_000 });
     await this.refetchButton.click();
   }
 

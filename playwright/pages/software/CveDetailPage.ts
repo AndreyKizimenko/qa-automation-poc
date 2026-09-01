@@ -62,7 +62,11 @@ export class CveDetailPage {
         this.page.context().waitForEvent('page'),
         this.nvdLink.click(),
       ]);
-      await expect(newPage).toHaveURL(new RegExp(`nvd\\.nist\\.gov/vuln/detail/${cve}`));
+      // NVD 301-redirects the CVE path to lowercase, so the landed URL doesn't
+      // carry the identifier's original case.
+      await expect(newPage).toHaveURL(
+        new RegExp(`nvd\\.nist\\.gov/vuln/detail/${cve}`, 'i'),
+      );
       await newPage.close();
     }
 
