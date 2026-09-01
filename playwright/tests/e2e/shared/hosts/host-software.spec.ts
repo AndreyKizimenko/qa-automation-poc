@@ -29,6 +29,13 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
   await hostDetails.openSoftwareTab();
   await hostDetails.showFullInventory();
 
+  // Retrying wait, not a one-shot read: switching to full inventory updates the
+  // URL as soon as the option is picked, while the table only repaints when the
+  // response lands, so reading names straight after it captures the previous
+  // view's empty tbody. The host is API-chosen because it reports software, so
+  // an empty table here is a real failure.
+  await expect(hostDetails.softwareNameLinks.first()).toBeVisible();
+
   const names = await hostDetails.softwareNames();
   expect(names.length, 'expected the host to list software titles').toBeGreaterThan(0);
 
