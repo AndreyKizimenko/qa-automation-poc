@@ -5,6 +5,14 @@
  * Scope: Unassigned only (the premium variant of a tier-agnostic flow;
  * a Workstations variant isn't included because vulnerability data is
  * surfaced from osquery hosts, not from team-scoped uploads).
+ *
+ * Every test here drives Fleet's `vulnerable=true` software-titles query, which
+ * is by far the slowest the suite issues — 8-15s per page on the QA instances
+ * against 0.5s unfiltered — and it degrades sharply when requests overlap: four
+ * at once measured ~60s each. Under the project's `fullyParallel` these tests
+ * would be split across workers and spend that cost on each other, so the file
+ * runs in one worker. `default` rather than `serial` keeps them independent, so
+ * one failure doesn't skip the rest.
  */
 import { test, expect } from '@fixtures';
 import type { Page } from '@playwright/test';
@@ -17,6 +25,14 @@ import {
   type SoftwareTitleRef,
 } from '@helpers/api';
 import { expectRowHasVulnData, expectSingleCve, assertVulnTooltip } from '@helpers/vuln';
+
+test.describe.configure({ mode: 'default' });
+
+// Even unopposed, a flow that applies the filter and turns three pages spends
+// most of a minute waiting on the server, which is the whole project default.
+test.beforeEach(() => {
+  test.setTimeout(180_000);
+});
 
 const OS_KEYS = ['macos', 'deb', 'windows'] as const;
 type OsKey = typeof OS_KEYS[number];
@@ -37,6 +53,13 @@ let softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
 const hostByOS: Partial<Record<OsKey, HostRef>> = {};
 
 test.beforeAll(async () => {
+  // findVulnerableSoftwareBySources walks up to five pages of `vulnerable=true`
+  // sequentially, and that query costs 8-15s per page idle on the QA instance —
+  // more when a sibling worker is on it. Sequential is deliberate (the query
+  // degrades sharply under concurrency), so the budget has to cover the walk;
+  // at the 60s hook default a slow instance takes down every test in the file.
+  test.setTimeout(240_000);
+
   const baseURL = process.env.FLEET_URL!;
   const token = await getApiToken(baseURL);
 

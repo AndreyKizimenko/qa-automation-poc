@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { waitForTableSettled } from './DataTable';
 
 /**
  * The "Add filters" modal used on /software/titles and the host details
@@ -47,7 +48,11 @@ export class FilterModal {
     // The vulnerable filter is reflected in the URL on both the software-titles
     // list and the host software tab, so asserting it confirms the filter took
     // effect without depending on the row count changing (a fully-vulnerable list
-    // keeps its count). The caller waits for the filtered table to render.
+    // keeps its count).
     await expect(this.page).toHaveURL(/[?&]vulnerable=true/);
+    // The URL flips on click, well ahead of the filtered result: `vulnerable=true`
+    // is the slowest query the suite issues. Settling here means every caller
+    // reads the filtered table rather than the unfiltered one it replaces.
+    await waitForTableSettled(this.page);
   }
 }
