@@ -49,6 +49,8 @@ export { SoftwareAppStoreAndroidPage } from './software/SoftwareAppStoreAndroidP
 export { ControlsPage } from './controls/ControlsPage';
 export { OsUpdatesPage } from './controls/OsUpdatesPage';
 export { OsSettingsPage } from './controls/OsSettingsPage';
+export { DiskEncryptionPage } from './controls/DiskEncryptionPage';
+export type { DiskEncryptionPlatform } from './controls/DiskEncryptionPage';
 export { ConfigurationProfilesPage } from './controls/ConfigurationProfilesPage';
 export { CertificatesPage } from './controls/CertificatesPage';
 export { InstallSoftwarePage } from './controls/InstallSoftwarePage';

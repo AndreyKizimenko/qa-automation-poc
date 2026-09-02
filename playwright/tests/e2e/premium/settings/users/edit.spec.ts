@@ -36,7 +36,7 @@ test.describe('Edit user', () => {
     await editUserPage.goto(userId);
     await editUserPage.form.fullName.fill('');
     await editUserPage.form.fullName.press('Tab');
-    await expect(page.getByText('Name field must be completed')).toBeVisible();
+    await expect(page.getByText('Enter a name')).toBeVisible();
     await expect(editUserPage.saveButton).toBeEnabled();
 
     // Save refuses the empty name, so the edit never reaches the API and the

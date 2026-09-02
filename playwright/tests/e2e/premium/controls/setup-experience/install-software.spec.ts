@@ -190,10 +190,14 @@ for (const scope of SCOPES) {
 
       const titleIds: number[] = [];
       try {
-        const refs = await Promise.all(
-          slugs.map((slug) => addFmaToFleet(request, fleetId, slug)),
-        );
-        titleIds.push(...refs.map((r) => r.titleId));
+        // Each add makes Fleet download the installer, so eleven at once puts
+        // eleven fetches in flight and the instance times out its own POST
+        // before any of them return. Adding one at a time keeps each request
+        // inside its budget.
+        for (const slug of slugs) {
+          const { titleId } = await addFmaToFleet(request, fleetId, slug);
+          titleIds.push(titleId);
+        }
 
         await dashboard.goto();
         await dashboard.navbar.goToControls();

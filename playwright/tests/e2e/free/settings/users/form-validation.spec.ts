@@ -17,7 +17,7 @@ test.describe('Create-user form validation', () => {
       // stays clickable; submitting is what refuses, keeping us on the form.
       await createUserPage.form.fullName.fill('');
       await createUserPage.form.fullName.press('Tab');
-      await expect(page.getByText('Name field must be completed')).toBeVisible();
+      await expect(page.getByText('Enter a name')).toBeVisible();
       await expect(createUserPage.submitButton).toBeEnabled();
 
       await createUserPage.submitButton.click();
@@ -33,7 +33,7 @@ test.describe('Create-user form validation', () => {
 
       await createUserPage.form.email.fill('');
       await createUserPage.form.email.press('Tab');
-      await expect(page.getByText('Email field must be completed')).toBeVisible();
+      await expect(page.getByText('Enter an email')).toBeVisible();
       await expect(createUserPage.submitButton).toBeEnabled();
 
       await createUserPage.submitButton.click();
@@ -44,18 +44,18 @@ test.describe('Create-user form validation', () => {
       await createUserPage.goto();
       await createUserPage.form.email.fill('not-an-email');
       await createUserPage.form.email.press('Tab');
-      await expect(page.getByText('Email is not a valid email')).toBeVisible();
+      await expect(page.getByText('Enter a valid email')).toBeVisible();
     });
   });
 
   test.describe('API-only user', () => {
-    test('submitting an empty Name surfaces "Name is required"', async ({
+    test('submitting an empty Name surfaces "Enter a name"', async ({
       createApiUserPage,
       page,
     }) => {
       await createApiUserPage.goto();
       await createApiUserPage.submitButton.click();
-      await expect(page.getByText('Name is required')).toBeVisible();
+      await expect(page.getByText('Enter a name')).toBeVisible();
     });
   });
 });
