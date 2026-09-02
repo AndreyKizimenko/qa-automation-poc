@@ -33,7 +33,7 @@ export class SoftwareLibraryPage {
 
     this.tab = page.getByRole('tab', { name: 'Library' });
     this.search = page.getByPlaceholder('Search by name');
-    this.selfServiceSwitch = page.getByRole('switch', { name: 'Self-service only' });
+    this.selfServiceSwitch = page.getByRole('switch', { name: 'Self service only' });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
   }
 
