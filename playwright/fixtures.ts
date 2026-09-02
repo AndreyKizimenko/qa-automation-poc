@@ -49,6 +49,7 @@ import {
   ControlsPage,
   OsUpdatesPage,
   OsSettingsPage,
+  DiskEncryptionPage,
   ConfigurationProfilesPage,
   CertificatesPage,
   InstallSoftwarePage,
@@ -182,6 +183,7 @@ type FleetFixtures = {
   controls: ControlsPage;
   osUpdates: OsUpdatesPage;
   osSettings: OsSettingsPage;
+  diskEncryption: DiskEncryptionPage;
   configurationProfiles: ConfigurationProfilesPage;
   certificates: CertificatesPage;
   installSoftware: InstallSoftwarePage;
@@ -403,6 +405,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   osSettings: [async ({ page }, use) => {
     await use(new OsSettingsPage(page));
+  }, { box: true }],
+  diskEncryption: [async ({ page }, use) => {
+    await use(new DiskEncryptionPage(page));
   }, { box: true }],
   configurationProfiles: [async ({ page }, use) => {
     await use(new ConfigurationProfilesPage(page));

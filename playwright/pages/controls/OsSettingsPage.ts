@@ -38,6 +38,16 @@ export class OsSettingsPage {
     await expect(this.statusLinks.first()).toBeVisible();
   }
 
+  /**
+   * Fleet redirects the sub-page's bare path to its default platform tab, so
+   * the URL settles on `/disk-encryption/<platform>` rather than the path the
+   * sidebar link points at.
+   */
+  async goToDiskEncryption(): Promise<void> {
+    await this.diskEncryptionLink.click();
+    await expect(this.page).toHaveURL(/\/controls\/os-settings\/disk-encryption/);
+  }
+
   async goToConfigurationProfiles(): Promise<void> {
     await this.configurationProfilesLink.click();
     await expect(this.page).toHaveURL(/\/controls\/os-settings\/configuration-profiles/);
