@@ -27,6 +27,13 @@ test('Host details — runs a saved report live against the host', async ({
   request,
   page,
 }) => {
+  // The live-run wait below is bounded by Fleet's rest period rather than by the
+  // host, so it alone can use most of the 60s project default — and the cleanup
+  // in `finally` then runs against a context Playwright is already tearing down,
+  // which surfaces as "Target page, context or browser has been closed" from the
+  // delete helper instead of the timeout that caused it.
+  test.setTimeout(180_000);
+
   const marker = `pw-hostlq-${Date.now()}-${rand()}`;
   // A constant-selecting query so the expected result is fixed regardless of
   // what the host actually has installed.

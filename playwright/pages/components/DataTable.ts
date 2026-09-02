@@ -1,4 +1,24 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
+
+/**
+ * Fleet's DataTable renders `.loading-overlay` only while its request is in
+ * flight, as a sibling of the `<table>` inside `.data-table-block`, so it can't
+ * be reached from a table locator. It has no role of its own.
+ */
+export const tableLoadingOverlay = (page: Page): Locator =>
+  page.locator('.data-table-block .loading-overlay');
+
+/**
+ * Blocks while any list on the page is fetching. The overlay covers the table
+ * for the full round trip and the previous result stays visible beneath it, so
+ * this is what separates "the new data is on screen" from "the old data still
+ * is". The budget is server time, not render time: the vulnerable-filtered
+ * software-titles query costs 8-15s idle on the QA instances and tens of
+ * seconds when workers overlap on it.
+ */
+export async function waitForTableSettled(page: Page, timeout = 90_000): Promise<void> {
+  await expect(tableLoadingOverlay(page)).toHaveCount(0, { timeout });
+}
 
 /**
  * Reusable component object for Fleet's DataTable — the `<table>` used on
@@ -17,10 +37,11 @@ import { Page, Locator } from '@playwright/test';
  *   - `cellByColumn(row, header)` — find a cell by visible column header text
  *
  * For waiting after pagination, use `Pagination.nextIfEnabled(table)` /
- * `previousIfEnabled(table)` — they assert the first row's text changed.
- * For waiting after a tab switch or filter change, await
- * `expect(table.firstRow).toBeVisible()` (after capturing previous text if
- * you also need to confirm content changed).
+ * `previousIfEnabled(table)` — they settle the table, then assert the first
+ * row's text changed. After a tab switch or filter change, call
+ * `waitForSettled()` before any read: Fleet leaves the previous result on
+ * screen under a translucent overlay for the whole request, so a read taken
+ * mid-fetch reports stale rows rather than an empty table.
  */
 export class DataTable {
   readonly page: Page;
@@ -35,6 +56,8 @@ export class DataTable {
    */
   readonly firstRowPrimaryLink: Locator;
   readonly emptyState: Locator;
+  /** Present only while the table's request is in flight. */
+  readonly loadingOverlay: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -45,6 +68,12 @@ export class DataTable {
     this.firstRowPrimaryLink = this.firstRowWithLink.getByRole('link').first();
     // EmptyState wrapper has no role.
     this.emptyState = page.locator('.empty-state');
+    this.loadingOverlay = tableLoadingOverlay(page);
+  }
+
+  /** See {@link waitForTableSettled}. */
+  async waitForSettled(timeout?: number): Promise<void> {
+    await waitForTableSettled(this.page, timeout);
   }
 
   /** firstRow OR empty-state — use when the page might have no data. */

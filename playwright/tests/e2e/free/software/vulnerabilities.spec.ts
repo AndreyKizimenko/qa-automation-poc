@@ -2,6 +2,12 @@
  * Software vulnerability flows on free — list, version, CVE detail, and
  * host-level vulnerable software click-through. No team dropdown on free,
  * so navigation skips the scope-selection step.
+ *
+ * Every test here drives Fleet's `vulnerable=true` software-titles query, the
+ * slowest the suite issues, and it degrades sharply when requests overlap. The
+ * file therefore runs in one worker rather than being split by the project's
+ * `fullyParallel`; `default` rather than `serial` keeps the tests independent,
+ * so one failure doesn't skip the rest.
  */
 import { test, expect } from '@fixtures';
 import {
@@ -12,6 +18,14 @@ import {
   type SoftwareTitleRef,
 } from '@helpers/api';
 import { expectRowHasVulnData, expectSingleCve, assertVulnTooltip } from '@helpers/vuln';
+
+test.describe.configure({ mode: 'default' });
+
+// Even unopposed, a flow that applies the filter and turns pages spends most of
+// a minute waiting on the server, which is the whole project default.
+test.beforeEach(() => {
+  test.setTimeout(180_000);
+});
 
 const OS_KEYS = ['macos', 'deb', 'windows'] as const;
 type OsKey = typeof OS_KEYS[number];
@@ -32,6 +46,11 @@ let softwareByOS: Partial<Record<OsKey, SoftwareTitleRef>> = {};
 const hostByOS: Partial<Record<OsKey, HostRef>> = {};
 
 test.beforeAll(async () => {
+  // findVulnerableSoftwareBySources walks up to five pages of `vulnerable=true`
+  // sequentially, and each costs several seconds on the QA instance. At the 60s
+  // hook default a slow instance takes down every test in the file.
+  test.setTimeout(240_000);
+
   const baseURL = process.env.FLEET_URL!;
   const token = await getApiToken(baseURL);
 
