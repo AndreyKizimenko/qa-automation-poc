@@ -52,6 +52,11 @@ Playwright earns its keep on four things:
 - **The pack queries table renders Query / Frequency / Performance impact only.** Platform
   and Logging exist in the table config but are not rendered, so logging mode is asserted
   through the API.
+- **The target picker does not filter by host status.** `POST /targets` returns offline
+  hosts alongside online ones, and about half the QA fleet is offline at any moment, so
+  "the first host in the picker" is not a host a pack will run on. Count assertions are
+  unaffected; anything asserting execution resolves an online host through
+  `liveMacosHost` instead.
 - **`cleanup-setup` deletes every pack on the instance** before the first test, so nothing
   gitops-provisioned can be used as a precondition. Specs seed their own.
 

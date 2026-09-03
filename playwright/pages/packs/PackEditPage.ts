@@ -92,6 +92,13 @@ export class PackEditPage {
   /**
    * Open the target picker, search for hosts matching `query`, and add the
    * first matching host to the pack.
+   *
+   * The picker's search (`POST /targets`) does not filter by status, so the
+   * host this lands on may well be offline — roughly half the QA fleet is at
+   * any time. That is fine for asserting a pack's host *count*, which is all
+   * this is used for. A test that needs the pack to actually run must resolve
+   * an online host instead: see the `liveMacosHost` worker fixture and
+   * tests/api/packs-execution.spec.ts.
    */
   async addFirstHostTarget(query: string): Promise<void> {
     await this.targetPickerPlaceholder.click();
