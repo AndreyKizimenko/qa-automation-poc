@@ -9,13 +9,6 @@ export const DEFAULT_IGNORED_CONSOLE_ERRORS = [
   'ResizeObserver',
   'Failed to load resource: the server responded with a status of',
   'data: Object, status:',
-  // TODO(fleetdm/fleet#52434): remove once the scripts editor registers Fleet's
-  // ace theme again. Since 4.92 `components/Editor` mounts without the theme
-  // module in scope, so ace tries to fetch it over the network and Fleet 404s
-  // it. Cosmetic (the editor falls back to ace's default theme) and the scripts
-  // flows themselves pass, so this stays an ignored error rather than a skip —
-  // see docs/blocked-by-product-bugs.md.
-  'theme-fleet.js',
 ];
 
 export function monitorConsoleErrors(

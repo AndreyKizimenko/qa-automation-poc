@@ -37,27 +37,10 @@ unblock condition.
 
 | Ignored substring | Affected flows | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
-| `theme-fleet.js` | Controls → Scripts → Library (every editor mount) | premium + free | [fleetdm/fleet#52434](https://github.com/fleetdm/fleet/issues/52434) | 2026-09-02 (v4.92.0-rc) | Scripts editor registers Fleet's ace theme again (`.ace_editor` carries `ace-fleet`, no request for `/assets/theme-fleet.js`) — then drop the allowlist entry |
+
+_None active._
 
 ### Notes
-
-**#52434 — scripts editor loses Fleet's ace theme.** `components/Editor` renders
-`<AceEditor theme="fleet">` but never imports the module that defines that
-theme; it only worked because `components/SQLEditor` (which does
-`import "./theme"`) used to be statically bundled, registering
-`ace/theme/fleet` before any editor mounted. Fleet 4.92 made both editors
-`React.lazy` into a shared `ace-editor` chunk (fleetdm/fleet#52038), and webpack
-only *evaluates* the module actually imported — so a page that mounts `Editor`
-without `SQLEditor` leaves the theme unregistered, ace falls back to fetching
-`/assets/theme-fleet.js`, and Fleet 404s it. Verified on the DOM: the scripts
-editor carries ace's default `ace-tm`, while the policy editor (a `SQLEditor`
-consumer) still carries `ace-fleet`.
-
-The upload / edit / save flows all pass — the failure was entirely the
-`pageHealth` fixture reacting to the console error. Left as an ignored error
-rather than a skip because skipping would have cost 9 tests plus ~30 more
-aborted downstream in the same serial blocks, to hide a styling bug. Surfaced by
-the 4.92 upgrade runs (13 premium / 8 free failures, reproducible 4/4).
 
 **#49913 — CVE detail 404 for matched-but-unenriched CVEs.** Fleet lists a CVE
 that's matched to host software (`software_cve` + `vulnerability_host_counts`,
@@ -105,4 +88,28 @@ titles in that scope shows the symptom. Skip stays as-is.
 
 ## Resolved
 
-_None yet._
+| Flow / test | Concession | Fleet issue | Discovered | Resolved |
+|---|---|---|---|---|
+| Controls → Scripts → Library (every editor mount) | ignored `theme-fleet.js` console error | [fleetdm/fleet#52434](https://github.com/fleetdm/fleet/issues/52434) | 2026-09-02 (v4.92.0-rc) | 2026-09-03 — fixed by fleetdm/fleet#52441, cherry-picked as #52468 |
+
+**#52434 — scripts editor loses Fleet's ace theme.** `components/Editor` renders
+`<AceEditor theme="fleet">` but never imports the module that defines that
+theme; it only worked because `components/SQLEditor` (which does
+`import "./theme"`) used to be statically bundled, registering
+`ace/theme/fleet` before any editor mounted. Fleet 4.92 made both editors
+`React.lazy` into a shared `ace-editor` chunk (fleetdm/fleet#52038), and webpack
+only *evaluates* the module actually imported — so a page that mounts `Editor`
+without `SQLEditor` leaves the theme unregistered, ace falls back to fetching
+`/assets/theme-fleet.js`, and Fleet 404s it. Verified on the DOM: the scripts
+editor carries ace's default `ace-tm`, while the policy editor (a `SQLEditor`
+consumer) still carries `ace-fleet`.
+
+**Fixed 2026-09-03** by fleetdm/fleet#52441 (cherry-picked to the RC as #52468), which moves the
+theme into a shared `utilities/ace_theme` module that `Editor`, `SQLEditor` and `YamlAce` all import,
+so registration no longer depends on which editor mounts first. The allowlist entry is gone.
+
+The upload / edit / save flows all passed throughout — the failure was entirely the
+`pageHealth` fixture reacting to the console error. Left as an ignored error
+rather than a skip because skipping would have cost 9 tests plus ~30 more
+aborted downstream in the same serial blocks, to hide a styling bug. Surfaced by
+the 4.92 upgrade runs (13 premium / 8 free failures, reproducible 4/4).
