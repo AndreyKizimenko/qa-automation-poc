@@ -115,11 +115,6 @@ export class PackEditPage {
     await expect(this.editHeading).toBeVisible();
   }
 
-  async goto(packId: number): Promise<void> {
-    await this.page.goto(`/packs/${packId}/edit`);
-    await expect(this.editHeading).toBeVisible();
-  }
-
   /** A row in the pack's scheduled-queries table, matched by query name. */
   scheduledQueryRow(queryName: string): Locator {
     return this.page.getByRole('row').filter({ hasText: queryName });

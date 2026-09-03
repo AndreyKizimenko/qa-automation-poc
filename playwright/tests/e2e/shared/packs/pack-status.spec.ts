@@ -1,10 +1,15 @@
 /**
- * Enabling and disabling a pack from the packs list. Tier-agnostic: packs
- * carry no team scope, so the same flow runs on free and premium.
+ * Enabling and disabling a pack from the packs list. Tier-agnostic: same flow
+ * runs on free and premium, no team scope. Each step is its own serial
+ * sub-test so a per-step failure pinpoints which action regressed.
  *
  * A disabled pack stops being served to hosts in their osquery config, so
  * this is the switch that decides whether a pack runs at all — the execution
  * side of that contract lives in tests/api/packs-execution.spec.ts.
+ *
+ * Enable / disable emit no activity of their own (Fleet records
+ * created_pack / edited_pack / deleted_pack only), so there is no closing
+ * activity-feed sub-test.
  */
 import { test, expect } from '@fixtures';
 import { createPack, deletePack, withApiRequest } from '@helpers/api';
@@ -15,6 +20,9 @@ test.describe('Packs status', () => {
   const packName = `Status Pack ${Date.now()}`;
   let packId: number;
 
+  // The pack is a precondition, not the behaviour under test — creating one
+  // through the UI is packs.spec.ts's job. Seeding it over the API keeps each
+  // sub-test below on the enable/disable flow alone.
   test.beforeAll(async () => {
     const pack = await withApiRequest((request) =>
       createPack(request, { name: packName, description: 'Enable/disable coverage' }),
@@ -22,11 +30,14 @@ test.describe('Packs status', () => {
     packId = pack.id;
   });
 
+  // The pack outlives every sub-test in the block, so it is torn down here
+  // rather than inside one of them.
   test.afterAll(async () => {
     await withApiRequest((request) => deletePack(request, packId));
   });
 
   test('new pack is enabled', async ({ packsList }) => {
+    // Packs has no top-nav entry; the list at /packs/manage is the way in.
     await packsList.goto();
     await expect(await packsList.statusCell(packName)).toHaveText('Enabled');
   });
@@ -35,6 +46,8 @@ test.describe('Packs status', () => {
     await packsList.goto();
     await packsList.setEnabled(packName, false);
 
+    // Reload to confirm the change persisted server-side rather than only in
+    // the table's post-action render.
     await packsList.goto();
     await expect(await packsList.statusCell(packName)).toHaveText('Disabled');
   });
