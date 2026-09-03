@@ -119,6 +119,10 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     ignoreHTTPSErrors: true,
+    // Playback throttle for watching a headed run by eye: PW_SLOW_MO=500 pauses
+    // half a second between browser actions. Unset resolves to 0, so normal and
+    // CI runs are unaffected.
+    launchOptions: { slowMo: Number(process.env.PW_SLOW_MO) || 0 },
   },
 
   projects: [
