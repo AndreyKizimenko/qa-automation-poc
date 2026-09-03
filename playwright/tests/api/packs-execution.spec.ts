@@ -82,9 +82,11 @@ test.describe('Packs execution', () => {
       expect(queryStats?.output_size).toBeGreaterThan(0);
 
       // A real execution timestamp, not the zero-value placeholder Fleet
-      // renders for a schedule the host has not run yet.
+      // renders for a schedule the host has not run yet. The pack did not exist
+      // before `stamp`, so anything earlier than that (allowing for clock skew
+      // between the runner and the server) is the placeholder.
       const lastExecuted = new Date(queryStats?.last_executed ?? 0).getTime();
-      expect(lastExecuted).toBeGreaterThan(stamp - 60 * 60_000);
+      expect(lastExecuted).toBeGreaterThan(stamp - 10 * 60_000);
     } finally {
       await deletePack(request, pack.id);
       await deleteReport(request, report.id);

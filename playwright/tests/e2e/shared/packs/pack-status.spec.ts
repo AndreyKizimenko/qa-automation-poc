@@ -12,7 +12,7 @@
  * activity-feed sub-test.
  */
 import { test, expect } from '@fixtures';
-import { createPack, deletePack, withApiRequest } from '@helpers/api';
+import { createPack, deletePack, setPackDisabled, withApiRequest } from '@helpers/api';
 
 test.describe('Packs status', () => {
   test.describe.configure({ mode: 'serial' });
@@ -39,7 +39,8 @@ test.describe('Packs status', () => {
   test('new pack is enabled', async ({ packsList }) => {
     // Packs has no top-nav entry; the list at /packs/manage is the way in.
     await packsList.goto();
-    await expect(await packsList.statusCell(packName)).toHaveText('Enabled');
+    const status = await packsList.statusCell(packName);
+    await expect(status).toHaveText('Enabled');
   });
 
   test('disable pack', async ({ packsList }) => {
@@ -50,14 +51,21 @@ test.describe('Packs status', () => {
     // after the update — so this reload is checking that the status renders
     // correctly on a cold mount, not that the write persisted.
     await packsList.goto();
-    await expect(await packsList.statusCell(packName)).toHaveText('Disabled');
+    const status = await packsList.statusCell(packName);
+    await expect(status).toHaveText('Disabled');
   });
 
-  test('enable pack', async ({ packsList }) => {
+  test('enable pack', async ({ packsList, request }) => {
+    // Put the pack in the state this test acts on. Without it the sub-test
+    // reads as passing when run alone — the seeded pack is already enabled, so
+    // enabling it again would assert the state it started in.
+    await setPackDisabled(request, packId, true);
+
     await packsList.goto();
     await packsList.setEnabled(packName, true);
 
     await packsList.goto();
-    await expect(await packsList.statusCell(packName)).toHaveText('Enabled');
+    const status = await packsList.statusCell(packName);
+    await expect(status).toHaveText('Enabled');
   });
 });

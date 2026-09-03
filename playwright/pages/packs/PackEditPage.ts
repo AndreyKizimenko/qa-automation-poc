@@ -122,9 +122,14 @@ export class PackEditPage {
     await expect(this.editHeading).toBeVisible();
   }
 
-  /** A row in the pack's scheduled-queries table, matched by query name. */
+  /**
+   * A row in the pack's scheduled-queries table, matched on the Query cell
+   * exactly so a name that is a prefix of a sibling's can't resolve two rows.
+   */
   scheduledQueryRow(queryName: string): Locator {
-    return this.page.getByRole('row').filter({ hasText: queryName });
+    return this.page.getByRole('row').filter({
+      has: this.page.getByRole('cell', { name: queryName, exact: true }),
+    });
   }
 
   /**

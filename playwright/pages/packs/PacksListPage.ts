@@ -1,7 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
-import { Toast } from '../components/Toast';
 
 /**
  * /packs/manage — list of osquery packs. Has an "Add new pack" button and
@@ -12,7 +11,6 @@ export class PacksListPage {
   readonly page: Page;
   readonly navbar: Navbar;
   readonly table: DataTable;
-  readonly toast: Toast;
 
   readonly heading: Locator;
   readonly createNewPackButton: Locator;
@@ -26,7 +24,6 @@ export class PacksListPage {
     this.page = page;
     this.navbar = new Navbar(page);
     this.table = new DataTable(page);
-    this.toast = new Toast(page);
 
     this.heading = page.getByRole('heading', { name: 'Packs', exact: true });
     // The header button and the empty-state primary button both carry this
