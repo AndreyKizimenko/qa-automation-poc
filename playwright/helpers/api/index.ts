@@ -17,6 +17,7 @@ export * from './users';
 export * from './reports';
 export * from './labels';
 export * from './policies';
+export * from './packs';
 export * from './variables';
 export * from './enroll-secrets';
 export * from './static-users';

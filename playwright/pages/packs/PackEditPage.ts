@@ -28,6 +28,14 @@ export class PackEditPage {
   readonly firstHostOption: Locator;
   readonly uniqueHostCount: Locator;
 
+  // Scheduled queries ("reports") attached to the pack
+  readonly addReportButton: Locator;
+  readonly queryEditorModal: Locator;
+  readonly querySelect: Locator;
+  readonly frequencyInput: Locator;
+  readonly addQueryConfirmButton: Locator;
+  readonly noReportsHeading: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -46,6 +54,28 @@ export class PackEditPage {
     // The targets-count label renders "N unique host(s)" and reads "0 unique hosts" on
     // mount, so require a non-zero count: the locator only resolves once a host is added.
     this.uniqueHostCount = page.getByText(/[1-9]\d* unique hosts?/);
+
+    this.addReportButton = page.getByRole('button', { name: /add report/i });
+    this.noReportsHeading = page.getByRole('heading', { name: /your pack has no reports/i });
+    // "Select query" is the dropdown's placeholder, not a label — it is replaced by
+    // the chosen query name — so the modal is identified by the form it wraps, which
+    // is stable for the modal's whole lifetime.
+    this.queryEditorModal = page.locator('.modal__modal_container').filter({
+      has: page.locator('.pack-query-editor-modal__form'),
+    });
+    // Fleet renders this dropdown with react-select, whose visible control carries no
+    // role and whose only labelled node is plain text, so scope by the modal's own
+    // per-field wrapper class (PackQueryEditorModal's `baseClass`) instead.
+    this.querySelect = this.queryEditorModal.locator(
+      '.pack-query-editor-modal__select-query-dropdown-wrapper',
+    );
+    // Frequency and Shard are the modal's only two number inputs and neither field
+    // associates its label with the control, so position is the only discriminator.
+    this.frequencyInput = this.queryEditorModal.getByRole('spinbutton').first();
+    this.addQueryConfirmButton = this.queryEditorModal.getByRole('button', {
+      name: 'Add query',
+      exact: true,
+    });
   }
 
   async gotoNew(): Promise<void> {
@@ -83,6 +113,34 @@ export class PackEditPage {
     await this.page.getByRole('button', { name: /save query pack/i }).click();
     await expect(this.page).toHaveURL(/\/packs\/\d+/);
     await expect(this.editHeading).toBeVisible();
+  }
+
+  async goto(packId: number): Promise<void> {
+    await this.page.goto(`/packs/${packId}/edit`);
+    await expect(this.editHeading).toBeVisible();
+  }
+
+  /** A row in the pack's scheduled-queries table, matched by query name. */
+  scheduledQueryRow(queryName: string): Locator {
+    return this.page.getByRole('row').filter({ hasText: queryName });
+  }
+
+  /**
+   * Attach an existing saved query to the pack on a schedule. `intervalSeconds`
+   * is what the form calls "Frequency (seconds)"; the table renders it back
+   * humanised (60 → "1 minute").
+   */
+  async addScheduledQuery(queryName: string, intervalSeconds: number): Promise<void> {
+    await this.addReportButton.click();
+    await expect(this.queryEditorModal).toBeVisible();
+
+    await this.querySelect.click();
+    await this.queryEditorModal.getByRole('option', { name: queryName, exact: true }).click();
+    await this.frequencyInput.fill(String(intervalSeconds));
+
+    await expect(this.addQueryConfirmButton).toBeEnabled();
+    await this.addQueryConfirmButton.click();
+    await expect(this.queryEditorModal).toBeHidden();
   }
 
   /** On the edit page, update description and click Save. */
