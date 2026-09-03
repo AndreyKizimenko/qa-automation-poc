@@ -79,9 +79,13 @@ export class PacksListPage {
   }
 
   /**
-   * Select a pack by checkbox and apply a bulk Enable/Disable. Settles on the
-   * row's own Status cell rather than the success toast, which auto-dismisses
-   * after 5s and would race a slow list refetch.
+   * Select a pack by checkbox and apply a bulk Enable/Disable.
+   *
+   * The closing wait on the Status cell is this method's completion signal, not
+   * a verdict on the feature: Fleet refetches the list in a `.finally()` after
+   * the update, so returning any earlier would leave the request in flight for
+   * a caller that navigates next. The success toast can't serve as that signal
+   * — it auto-dismisses after 5s and races a slow refetch.
    */
   async setEnabled(name: string, enabled: boolean): Promise<void> {
     // Selection lives in table state, so a click landing before the list's

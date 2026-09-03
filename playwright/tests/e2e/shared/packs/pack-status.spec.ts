@@ -46,8 +46,9 @@ test.describe('Packs status', () => {
     await packsList.goto();
     await packsList.setEnabled(packName, false);
 
-    // Reload to confirm the change persisted server-side rather than only in
-    // the table's post-action render.
+    // The post-action table already holds server data — the page refetches
+    // after the update — so this reload is checking that the status renders
+    // correctly on a cold mount, not that the write persisted.
     await packsList.goto();
     await expect(await packsList.statusCell(packName)).toHaveText('Disabled');
   });
