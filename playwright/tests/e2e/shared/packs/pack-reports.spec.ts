@@ -26,7 +26,9 @@ import {
 test.describe('Pack reports', () => {
   test.describe.configure({ mode: 'serial' });
 
-  const stamp = Date.now();
+  // Timestamp plus a random tag: the timestamp alone collides under
+  // --repeat-each, where the describe re-runs and re-seeds the same names.
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const packName = `Report Pack ${stamp}`;
   const queryName = `report_pack_query_${stamp}`;
   let packId: number;

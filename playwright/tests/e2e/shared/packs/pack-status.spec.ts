@@ -17,7 +17,9 @@ import { createPack, deletePack, setPackDisabled, withApiRequest } from '@helper
 test.describe('Packs status', () => {
   test.describe.configure({ mode: 'serial' });
 
-  const packName = `Status Pack ${Date.now()}`;
+  // Timestamp plus a random tag: the timestamp alone collides under
+  // --repeat-each, where the describe re-runs and re-seeds the same name.
+  const packName = `Status Pack ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let packId: number;
 
   // The pack is a precondition, not the behaviour under test — creating one

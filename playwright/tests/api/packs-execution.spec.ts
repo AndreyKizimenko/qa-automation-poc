@@ -33,7 +33,9 @@ test.describe('Packs execution', () => {
   }) => {
     test.setTimeout(8 * 60_000);
 
-    const stamp = Date.now();
+    const startedAt = Date.now();
+    // Timestamp plus a random tag keeps names unique under --repeat-each.
+    const stamp = `${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
     const report = await createReport(request, {
       name: `pack_exec_q_${stamp}`,
       query: 'SELECT 1;',
@@ -83,10 +85,10 @@ test.describe('Packs execution', () => {
 
       // A real execution timestamp, not the zero-value placeholder Fleet
       // renders for a schedule the host has not run yet. The pack did not exist
-      // before `stamp`, so anything earlier than that (allowing for clock skew
-      // between the runner and the server) is the placeholder.
+      // before the test started, so anything earlier than that (allowing for
+      // clock skew between the runner and the server) is the placeholder.
       const lastExecuted = new Date(queryStats?.last_executed ?? 0).getTime();
-      expect(lastExecuted).toBeGreaterThan(stamp - 10 * 60_000);
+      expect(lastExecuted).toBeGreaterThan(startedAt - 10 * 60_000);
     } finally {
       await deletePack(request, pack.id);
       await deleteReport(request, report.id);

@@ -26,7 +26,7 @@ test.describe('Packs API', () => {
   test('scheduling is served at /schedule on v1 and /packs/schedule on latest', async ({
     request,
   }) => {
-    const stamp = Date.now();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const report = await createReport(request, { name: `sched_ver_q_${stamp}` });
     const pack = await createPack(request, { name: `sched_ver_pack_${stamp}` });
 
@@ -57,7 +57,7 @@ test.describe('Packs API', () => {
   });
 
   test('scheduled query records its logging mode', async ({ request }) => {
-    const stamp = Date.now();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const snapshotQuery = await createReport(request, { name: `log_snap_q_${stamp}` });
     const differentialQuery = await createReport(request, { name: `log_diff_q_${stamp}` });
     const pack = await createPack(request, { name: `logging_pack_${stamp}` });
@@ -90,7 +90,7 @@ test.describe('Packs API', () => {
   });
 
   test('removing a scheduled query detaches it from the pack', async ({ request }) => {
-    const stamp = Date.now();
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const report = await createReport(request, { name: `detach_q_${stamp}` });
     const pack = await createPack(request, { name: `detach_pack_${stamp}` });
 
@@ -111,7 +111,9 @@ test.describe('Packs API', () => {
   });
 
   test('disabled flag round trips', async ({ request }) => {
-    const pack = await createPack(request, { name: `disabled_pack_${Date.now()}` });
+    const pack = await createPack(request, {
+      name: `disabled_pack_${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    });
 
     try {
       expect((await getPack(request, pack.id)).disabled).toBe(false);
@@ -127,7 +129,7 @@ test.describe('Packs API', () => {
   });
 
   test('duplicate pack name is rejected', async ({ request }) => {
-    const name = `dupe_pack_${Date.now()}`;
+    const name = `dupe_pack_${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const pack = await createPack(request, { name });
 
     try {
