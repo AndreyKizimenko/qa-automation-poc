@@ -19,7 +19,8 @@ Skips are tracked in one of two places depending on who owns the fix:
 
 | Test | Why | Unblock |
 |---|---|---|
-| `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
+
+_None._
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md) — currently
