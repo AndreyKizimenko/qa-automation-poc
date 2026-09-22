@@ -279,3 +279,41 @@ export async function getSoftwarePackage(
   if (!pkg) return null;
   return { name: pkg.name, selfService: !!pkg.self_service };
 }
+
+/**
+ * First CVE in `cves` that Fleet's CVE detail endpoint can actually render, or
+ * null when none of them can.
+ *
+ * `GET /vulnerabilities/:cve` 404s ("This is not a known CVE") for a CVE that
+ * Fleet's software matcher has attached to a version but that no vulnerability
+ * source carries metadata for yet — the detail handler inner-joins `cve_meta`
+ * while the rest of the product treats that table as optional
+ * ([fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913)). The
+ * software-version page links such a CVE regardless, so a flow that clicks the
+ * top row lands on Fleet's "Vulnerability not detected" empty state.
+ *
+ * The condition is a race with NVD enrichment rather than a property of any
+ * platform: a CVE matched in the last few hours 404s and the same CVE resolves
+ * a day later. Whichever row happens to sort first is therefore the *most*
+ * likely to be unrenderable, which is why callers pass the CVEs in the order
+ * the page renders them and click the one this returns instead of the first.
+ *
+ * Probes sequentially and stops at the first hit — the renderable CVE is
+ * usually the first or second row, and these run against a shared QA instance.
+ *
+ * TODO(fleetdm/fleet#49913): drop this probe and click the first row again once
+ * the detail endpoint renders matched-but-unenriched CVEs. Tracked in
+ * docs/blocked-by-product-bugs.md.
+ */
+export async function findRenderableCve(
+  request: APIRequestContext,
+  cves: string[],
+): Promise<string | null> {
+  for (const cve of cves) {
+    const res = await request.get(apiUrl(`vulnerabilities/${cve}`), {
+      headers: authHeaders(),
+    });
+    if (res.ok()) return cve;
+  }
+  return null;
+}
