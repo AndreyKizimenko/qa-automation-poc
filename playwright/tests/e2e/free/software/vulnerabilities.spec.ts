@@ -14,6 +14,7 @@ import {
   getApiToken,
   findHostByPlatform,
   findVulnerableSoftwareBySources,
+  findRenderableCve,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -106,6 +107,7 @@ test.describe('Software vulnerabilities', () => {
       softwareVersionDetail,
       cveDetail,
       page,
+      request,
     }) => {
       test.skip(!softwareByOS[osKey], `No ${OS_LABELS[osKey]} software found`);
       const ref = softwareByOS[osKey]!;
@@ -119,10 +121,23 @@ test.describe('Software vulnerabilities', () => {
       await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
 
       await softwareVersionDetail.waitForReady();
-      const cveText = await softwareVersionDetail.clickFirstCve();
+      // Fleet links every CVE it has matched to this version, but 404s the
+      // detail page for any the vulnerability feeds carry no metadata for yet,
+      // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
+      // one the detail endpoint can serve, so this covers the click-through
+      // rather than racing NVD enrichment.
+      const cveText = await findRenderableCve(
+        request,
+        await softwareVersionDetail.cveNames(),
+      );
+      test.skip(
+        !cveText,
+        'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+      );
+      await softwareVersionDetail.clickCve(cveText!);
 
       await expect(page).toHaveURL(/\/software\/vulnerabilities\/CVE-/);
-      await cveDetail.assertOk(cveText, { clickNvdLink: osKey === 'macos' });
+      await cveDetail.assertOk(cveText!, { clickNvdLink: osKey === 'macos' });
     });
   }
 
@@ -158,6 +173,7 @@ test.describe('Software vulnerabilities', () => {
       softwareVersionDetail,
       cveDetail,
       page,
+      request,
     }) => {
       test.skip(!hostByOS[osKey], `No ${OS_LABELS[osKey]} host with vulnerable software`);
       const host = hostByOS[osKey]!;
@@ -184,10 +200,23 @@ test.describe('Software vulnerabilities', () => {
       await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
 
       await softwareVersionDetail.waitForReady();
-      const cveText = await softwareVersionDetail.clickFirstCve();
+      // Fleet links every CVE it has matched to this version, but 404s the
+      // detail page for any the vulnerability feeds carry no metadata for yet,
+      // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
+      // one the detail endpoint can serve, so this covers the click-through
+      // rather than racing NVD enrichment.
+      const cveText = await findRenderableCve(
+        request,
+        await softwareVersionDetail.cveNames(),
+      );
+      test.skip(
+        !cveText,
+        'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+      );
+      await softwareVersionDetail.clickCve(cveText!);
 
       await expect(page).toHaveURL(/\/software\/vulnerabilities\/CVE-/);
-      await cveDetail.assertOk(cveText);
+      await cveDetail.assertOk(cveText!);
     });
   }
 });

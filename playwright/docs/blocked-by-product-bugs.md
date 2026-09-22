@@ -21,9 +21,20 @@ the filed Fleet issue so we can unblock the moment it's fixed.
 
 | Flow / test | Spec | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
-| Linux (deb) host → vulnerable software → version → CVE detail | [vulnerabilities.spec.ts:256](../tests/e2e/premium/software/vulnerabilities.spec.ts#L256) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | CVE detail endpoint renders matched-but-unenriched CVEs (no 404) — then drop the `osKey === 'deb'` skip |
-| Linux (deb) software titles → version → CVE detail | [vulnerabilities.spec.ts:161](../tests/e2e/premium/software/vulnerabilities.spec.ts#L161) | premium, Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-28 (v4.90.0-rc) | Same as above — one fix unblocks both deb variants |
 | Every vulnerable-filtered software title reports vulnerability data | [vulnerabilities.spec.ts:102](../tests/e2e/premium/software/vulnerabilities.spec.ts#L102) | premium, Unassigned | [fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059) | 2026-07-28 (v4.90.0-rc; latent in GA ≥4.80) | `vulnerable=true` respects the fleet scope (or the column shows the matching CVEs) — then un-skip the test |
+
+## Worked around in the suite
+
+Not skips either. Where a product bug makes only *part* of the data un-navigable,
+the test can steer around it and keep covering the flow. Same rules as above: a
+filed issue, a `TODO(fleetdm/fleet#NNNNN)` at the workaround, and a concrete
+unblock condition. Listed here so the workaround is found when the bug closes —
+an un-skipped test hides its concession far better than a skipped one.
+
+| Flow / test | Workaround | Scope | Fleet issue | Discovered | Unblock condition |
+|---|---|---|---|---|---|
+| software titles → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L104), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L146) | drill into a CVE whose detail endpoint answers, not the top row | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | detail endpoint renders matched-but-unenriched CVEs — then drop `findRenderableCve` and click the first row |
+| host → vulnerable software → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L170), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L247) | same | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | same — one fix unblocks all six variants |
 
 ## Ignored console errors
 
@@ -42,33 +53,63 @@ _None active._
 
 ### Notes
 
-**#49913 — CVE detail 404 for matched-but-unenriched CVEs.** Fleet lists a CVE
-that's matched to host software (`software_cve` + `vulnerability_host_counts`,
-host_count ≥ 1) but its premium detail endpoint inner-joins `cve_meta` and 404s
-when the CVE has no NVD metadata yet — while the list treats `cve_meta` as
-optional. The deb host's `accountsservice` package surfaces such CVEs
-(CVE-2026-61897/61898), so the deb variant deterministically fails. Only the deb
-variants are skipped; the macOS/Windows host→CVE variants still run (they land on
-enriched CVEs today, but could hit the same bug if their newest CVE is ever
-unenriched). First surfaced in premium run
-[29901965767](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/29901965767).
+**#49913 — CVE detail 404 for matched-but-unenriched CVEs.** Fleet matches a CVE
+to host software (`software_cve`) and links it from the software-version page,
+but the CVE detail endpoint inner-joins `cve_meta` and 404s
+(*"This is not a known CVE. None of Fleet's vulnerability sources are aware of
+this CVE."*) while the rest of the product treats that table as optional. The UI
+renders the 404 as *"Vulnerability not detected — No hosts are affected by
+CVE-…"*, so a drill-in that Fleet itself offered dead-ends on an empty state.
+First surfaced in premium run
+[29901965767](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/29901965767)
+on the deb host's `accountsservice` package (CVE-2026-61897/61898), then from the
+software-titles direction in
+[30368075570](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/30368075570).
 
-Both the host path and the software-titles path reach `accountsservice`'s
-unenriched CVE, so both deb variants carry the skip — the titles path was added
-after premium run
-[30368075570](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/30368075570)
-hit the same 404 from the other direction.
+*Re-verified 2026-09-02 on v4.92.0-rc — bug unfixed, trigger absent.* The premium
+detail query is byte-identical in 4.92 (`FROM cve_meta cm JOIN (…)`, still an
+inner join). NVD had caught up for `CVE-2026-61897/61898` (both **200**,
+`cvss_score 7.8`, `published 2026-08-20`), so the deb variants would have passed.
+The skips stayed, on the reasoning that the trigger would return on someone's
+unlucky day.
 
-*Re-verified 2026-09-02 on v4.92.0-rc — bug unfixed, trigger currently absent.*
-The premium detail query is byte-identical in 4.92 (`FROM cve_meta cm JOIN (…)`,
-still an inner join), so the defect is intact. But NVD metadata has since caught
-up for the two CVEs we relied on: `CVE-2026-61897/61898` now return **200** with
-`cvss_score 7.8`, `published 2026-08-20`, so the join succeeds and the deb
-variants would pass today. **Keep the skips.** The failure condition is
-data-dependent — it returns the moment `accountsservice`'s newest matched CVE is
-one NVD hasn't published yet — and un-skipping would buy back two tests at the
-cost of an intermittent failure that only reproduces on someone else's unlucky
-day. Revisit when #49913 actually lands.
+*It returned, on a platform nobody had skipped.* The free nightly failed this
+flow **two nights running** — run
+[35591082037](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/35591082037)
+(2026-09-21) on `CVE-2026-85893` and run
+[35714274093](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/35714274093)
+(2026-09-22) on `CVE-2026-88097`, both via **Microsoft Edge 104.0.1293.47**
+(`programs`, version id 1635 on free), both deterministic across all three
+attempts. That is the escape the note above had predicted for macOS/Windows.
+
+**The mechanism is a race with NVD enrichment, not a property of any platform.**
+CVE-2026-88097 was matched onto that version at 08:31 UTC and the run started at
+10:07 UTC; `GET /vulnerabilities/CVE-2026-88097` 404s. The *previous* night's
+offender, CVE-2026-85893, returns **200** with `hosts_count: 166` a day later —
+it healed once metadata landed. So any freshly-matched CVE 404s for a window of
+hours, and the version-detail table sorts newest-CVE-first, which put the
+un-renderable row at the top exactly where the test clicked. Worth noting for the
+issue: for these very fresh matches `GET /vulnerabilities?query=<cve>` returns
+**zero** results too, so `software/versions/:id` is ahead of both `cve_meta` *and*
+`vulnerability_host_counts` — a step beyond the "list shows it, detail 404s"
+shape originally filed.
+
+**Concession changed from skip to workaround (2026-09-22).** Because the trigger
+is the *newest* CVE rather than any platform, skipping per-OS was the wrong
+instrument — it kept two deb tests dark while leaving four others exposed to the
+same bug, and free's deb variant was never skipped at all. The six drill-in
+variants now resolve which CVE to click through
+[`findRenderableCve`](../helpers/api/software.ts), which probes the rendered CVEs
+in page order and returns the first whose detail endpoint answers; the flow skips
+only in the genuine dead end where *every* CVE on the version 404s. The two
+`osKey === 'deb'` skips are gone.
+
+Verified 2026-09-22 against both live instances: free's whole
+`software/vulnerabilities` spec passes 11/11 with CVE-2026-88097 still 404ing (so
+the probe is doing real work), and the two premium deb variants pass unskipped.
+Note the premium deb pass is joint evidence — `accountsservice`'s CVEs are
+enriched again today, so that pair would pass either way; the free Windows case is
+the one that proves the workaround.
 
 **#50059 — `vulnerable=true` is not fleet-scoped.** The software-titles filter
 joins `software` → `software_cve` on `s.title_id = st.id` with no team predicate,

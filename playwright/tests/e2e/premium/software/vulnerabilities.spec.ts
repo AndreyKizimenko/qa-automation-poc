@@ -21,6 +21,7 @@ import {
   getApiToken,
   findHostByPlatform,
   findVulnerableSoftwareBySources,
+  findRenderableCve,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -148,17 +149,9 @@ for (const osKey of OS_KEYS) {
     softwareVersionDetail,
     cveDetail,
     page,
+    request,
   }) => {
     test.skip(!softwareByOS[osKey], `No ${OS_LABELS[osKey]} software found`);
-    // The first vulnerable deb title on both QA instances is `accountsservice`,
-    // whose newest CVEs (CVE-2026-61897/61898) are matched to host software but
-    // absent from `cve_meta`; Fleet's premium CVE detail endpoint inner-joins
-    // that table and 404s, so this variant deterministically lands on a
-    // "Vulnerability not detected" page. Same product bug as the host-path deb
-    // variant below. Tracked in docs/blocked-by-product-bugs.md.
-    // TODO(fleetdm/fleet#49913): remove once the detail endpoint renders
-    // matched-but-unenriched CVEs consistently with the vulnerabilities list.
-    test.skip(osKey === 'deb', 'Blocked by fleetdm/fleet#49913 — CVE detail 404 for matched-but-unenriched CVE');
     const ref = softwareByOS[osKey]!;
 
     await softwareTitles.goto();
@@ -171,10 +164,23 @@ for (const osKey of OS_KEYS) {
     await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
 
     await softwareVersionDetail.waitForReady();
-    const cveText = await softwareVersionDetail.clickFirstCve();
+    // Fleet links every CVE it has matched to this version, but 404s the
+    // detail page for any the vulnerability feeds carry no metadata for yet,
+    // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
+    // one the detail endpoint can serve, so this covers the click-through
+    // rather than racing NVD enrichment.
+    const cveText = await findRenderableCve(
+      request,
+      await softwareVersionDetail.cveNames(),
+    );
+    test.skip(
+      !cveText,
+      'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+    );
+    await softwareVersionDetail.clickCve(cveText!);
 
     await expect(page).toHaveURL(/\/software\/vulnerabilities\/CVE-/);
-    await cveDetail.assertOk(cveText, { clickNvdLink: osKey === 'macos' });
+    await cveDetail.assertOk(cveText!, { clickNvdLink: osKey === 'macos' });
   });
 }
 
@@ -244,16 +250,9 @@ for (const osKey of OS_KEYS) {
     softwareVersionDetail,
     cveDetail,
     page,
+    request,
   }) => {
     test.skip(!hostByOS[osKey], `No ${OS_LABELS[osKey]} host with vulnerable software`);
-    // Fleet's CVE detail endpoint 404s for CVEs matched to host software but
-    // absent from cve_meta (NVD metadata); the deb host's accountsservice
-    // package carries such CVEs, so this variant deterministically lands on a
-    // "Vulnerability not detected" detail page. Tracked in
-    // docs/blocked-by-product-bugs.md.
-    // TODO(fleetdm/fleet#49913): remove once the detail endpoint renders
-    // matched-but-unenriched CVEs consistently with the vulnerabilities list.
-    test.skip(osKey === 'deb', 'Blocked by fleetdm/fleet#49913 — CVE detail 404 for matched-but-unenriched CVE');
     const host = hostByOS[osKey]!;
 
     await hostDetails.goto(host.id);
@@ -278,9 +277,22 @@ for (const osKey of OS_KEYS) {
     await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
 
     await softwareVersionDetail.waitForReady();
-    const cveText = await softwareVersionDetail.clickFirstCve();
+    // Fleet links every CVE it has matched to this version, but 404s the
+    // detail page for any the vulnerability feeds carry no metadata for yet,
+    // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
+    // one the detail endpoint can serve, so this covers the click-through
+    // rather than racing NVD enrichment.
+    const cveText = await findRenderableCve(
+      request,
+      await softwareVersionDetail.cveNames(),
+    );
+    test.skip(
+      !cveText,
+      'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+    );
+    await softwareVersionDetail.clickCve(cveText!);
 
     await expect(page).toHaveURL(/\/software\/vulnerabilities\/CVE-/);
-    await cveDetail.assertOk(cveText);
+    await cveDetail.assertOk(cveText!);
   });
 }

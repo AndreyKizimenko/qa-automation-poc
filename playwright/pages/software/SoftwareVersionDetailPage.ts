@@ -17,15 +17,25 @@ export class SoftwareVersionDetailPage {
     this.table = new DataTable(page);
   }
 
-  /** Click into the first CVE row. Returns the clicked CVE identifier. */
-  async clickFirstCve(): Promise<string> {
-    const firstRow = this.table.firstRowWithLink;
-    const cveCell = await this.table.cellByColumn(firstRow, 'Vulnerability');
-    const cveLink = cveCell.getByRole('link');
-    await expect(cveLink).toHaveText(/^CVE-\d{4}-\d+$/);
-    const cveText = (await cveLink.innerText()).trim();
+  /**
+   * The CVE identifiers rendered on the current page, in the order the table
+   * shows them. Pair with `findRenderableCve` from `@helpers/api` to choose one
+   * Fleet's CVE detail endpoint can serve, then hand it to {@link clickCve} —
+   * the top row is the newest match and so the likeliest to 404
+   * (fleetdm/fleet#49913).
+   */
+  async cveNames(): Promise<string[]> {
+    const links = this.table.table.locator('tbody a', { hasText: /^CVE-\d{4}-\d+$/ });
+    await expect(links.first()).toBeVisible();
+    const names = await links.allInnerTexts();
+    return names.map((n) => n.trim()).filter((n) => /^CVE-\d{4}-\d+$/.test(n));
+  }
+
+  /** Click a named CVE's row link. */
+  async clickCve(cve: string): Promise<void> {
+    const cveLink = this.table.table.locator('tbody a', { hasText: cve }).first();
+    await expect(cveLink).toHaveText(cve);
     await cveLink.click();
-    return cveText;
   }
 
   async waitForReady(): Promise<void> {
