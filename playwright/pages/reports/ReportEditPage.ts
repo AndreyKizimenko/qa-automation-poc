@@ -122,7 +122,11 @@ export class ReportEditPage {
     this.observersCanRunCheckbox = page.getByRole('checkbox', { name: 'Observers can run' });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
     this.liveReportButton = page.getByRole('button', { name: /Live report/ });
-    this.sqlSyntaxError = page.getByText('Syntax error. Please review before saving.');
+    // Same validator as the policy editor, so the same three messages apply —
+    // see PolicyEditPage for the breakdown.
+    this.sqlSyntaxError = page.getByText(
+      /Syntax error(?: on line \d+, column \d+)?\. Please review before saving\.|Expected a SELECT statement on line \d+\./,
+    );
 
     this.editFromDetailsButton = page.getByRole('button', { name: 'Edit report' });
 

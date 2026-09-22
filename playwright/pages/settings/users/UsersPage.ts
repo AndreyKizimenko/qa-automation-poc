@@ -8,7 +8,7 @@ import { Toast } from '../../components/Toast';
  * `/settings/users` — user management list page. Hosts:
  *   - "Add user" dropdown (Regular user / API-only user options) — both
  *     options navigate to dedicated sub-pages, not modals.
- *   - User table with Name / Role / Fleets (premium) / Status / Email /
+ *   - User table with Name / Permissions / Fleets (premium) / Status / Email /
  *     Actions columns. Rows have no link cells; navigation happens via
  *     the per-row Actions dropdown.
  *   - Inline modals: Delete user, Require password reset, Reset sessions.

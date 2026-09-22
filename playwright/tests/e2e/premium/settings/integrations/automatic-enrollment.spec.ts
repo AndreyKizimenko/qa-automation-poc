@@ -48,7 +48,7 @@ test.describe('Premium • Settings • Automatic enrollment — EULA', () => {
 });
 
 test.describe('Premium • Settings • Automatic enrollment — end-user authentication (SSO)', () => {
-  test('IdP form renders and Save is gated on the required fields', async ({ integrationsPage }) => {
+  test('IdP form renders and flags a cleared required field', async ({ integrationsPage }) => {
     await integrationsPage.gotoSsoEndUsers();
 
     await expect(integrationsPage.idpNameField).toBeVisible();
@@ -57,16 +57,20 @@ test.describe('Premium • Settings • Automatic enrollment — end-user authen
     await expect(integrationsPage.metadataField).toBeVisible();
 
     // Client-side only — the form is filled but never saved, so no global
-    // config is mutated. With every required field set, Save enables; clearing
-    // a required field (identity provider name) disables it again.
+    // config is mutated.
     await integrationsPage.fillEndUserAuth({
       idpName: 'pw-idp',
       entityId: 'pw-entity-id',
       metadataUrl: 'https://idp.example.com/metadata.xml',
     });
-    await expect(integrationsPage.endUserAuthSaveButton).toBeEnabled();
+    await expect(integrationsPage.idpNameError).toBeHidden();
 
+    // Save is not gated on the required fields; a field surfaces its own error
+    // on blur instead. An entirely empty form is valid — that is how an admin
+    // clears the configuration — so only the identity provider name is cleared
+    // here, leaving its siblings populated to keep the form non-empty.
     await integrationsPage.idpNameField.fill('');
-    await expect(integrationsPage.endUserAuthSaveButton).toBeDisabled();
+    await integrationsPage.idpNameField.blur();
+    await expect(integrationsPage.idpNameError).toBeVisible();
   });
 });

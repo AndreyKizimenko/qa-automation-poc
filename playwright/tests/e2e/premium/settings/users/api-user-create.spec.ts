@@ -10,14 +10,34 @@ import type { ApiGlobalRole } from '@pages';
  * an "API" pill badge. These assertions verify both — anchoring on the
  * pill class gives a stronger check than `row.toContainText('API')`,
  * which would also match an `API` substring of the name field.
+ *
+ * A user restricted to specific endpoints carries a second pill counting
+ * them, in the Permissions cell next to the role. Pass `apiEndpointCount`
+ * for those users: the API pill is then matched by its own exact text
+ * rather than as the row's only `.tag`, and the count joins the expected
+ * Permissions text.
  */
-async function assertApiUserRow(row: Locator, name: string, role: string): Promise<void> {
+async function assertApiUserRow(
+  row: Locator,
+  name: string,
+  role: string,
+  apiEndpointCount?: number,
+): Promise<void> {
   await expect(row).toBeVisible();
   await expect(row.locator('.data-table__tooltip-truncated-text').first()).toHaveText(name);
-  await expect(row.locator('.tag')).toHaveText('API');
-  // Anchored on `.role__cell` with exact text so Observer and Observer+
-  // never collide.
-  await expect(row.locator('.role__cell')).toHaveText(role);
+  await expect(row.locator('.tag').filter({ hasText: /^API$/ })).toBeVisible();
+  // The role and the endpoint-count pill are sibling spans in one cell, so the
+  // cell's text is their concatenation. Anchoring the whole cell keeps the role
+  // exact — Observer and Observer+ never collide — while tolerating whatever
+  // whitespace the layout puts between the two. `+` is the only regex
+  // metacharacter any Fleet role contains.
+  const endpointPill =
+    apiEndpointCount === undefined
+      ? ''
+      : `\\s*${apiEndpointCount} API endpoint${apiEndpointCount === 1 ? '' : 's'}`;
+  await expect(row.locator('.permissions__cell')).toHaveText(
+    new RegExp(`^${role.replace('+', '\\+')}${endpointPill}$`),
+  );
 }
 
 const PREMIUM_API_ROLES: readonly ApiGlobalRole[] = [
@@ -222,8 +242,9 @@ test.describe('Create API-only user (premium)', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    // Role for this user is the per-fleet "Observer" we picked.
-    await assertApiUserRow(await usersPage.findRowByName(name), name, 'Observer');
+    // Role for this user is the per-fleet "Observer" we picked, and the
+    // Permissions cell counts the two endpoints the user is restricted to.
+    await assertApiUserRow(await usersPage.findRowByName(name), name, 'Observer', 2);
 
     const id = await findApiUserIdByName(request, name);
     if (id !== null) createdUserIds.push(id);

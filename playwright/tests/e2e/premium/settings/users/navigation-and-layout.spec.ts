@@ -12,7 +12,7 @@ test.describe('Users page navigation and layout', () => {
     await expect(usersPage.table.firstRow).toBeVisible();
   });
 
-  test('first-page rows expose name, role, fleets, status, and Actions', async ({ usersPage }) => {
+  test('first-page rows expose name, permissions, fleets, status, and Actions', async ({ usersPage }) => {
     await usersPage.goto();
 
     const rows = usersPage.table.table.locator('tbody').getByRole('row');
@@ -22,12 +22,12 @@ test.describe('Users page navigation and layout', () => {
     for (let i = 0; i < count; i++) {
       const row = rows.nth(i);
       const name = await usersPage.table.cellByColumn(row, 'Name');
-      const role = await usersPage.table.cellByColumn(row, 'Role');
+      const permissions = await usersPage.table.cellByColumn(row, 'Permissions');
       const fleets = await usersPage.table.cellByColumn(row, 'Fleets');
       const status = await usersPage.table.cellByColumn(row, 'Status');
 
       await expect(name).not.toBeEmpty();
-      await expect(role).not.toBeEmpty();
+      await expect(permissions).not.toBeEmpty();
       // Fleets cell exists; content is "Global" or a fleet list.
       await expect(fleets).toBeAttached();
       await expect(status).not.toBeEmpty();
