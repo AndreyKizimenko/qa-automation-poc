@@ -24,11 +24,13 @@ async function findApiUserIdByName(
 async function assertApiUserRow(row: Locator, name: string, role: string): Promise<void> {
   await expect(row).toBeVisible();
   await expect(row.locator('.data-table__tooltip-truncated-text').first()).toHaveText(name);
-  await expect(row.locator('.tag')).toHaveText('API');
-  // Anchored on `.role__cell` with exact text. Free has no Observer+ so
+  // Matched on its own exact text rather than as the row's only `.tag`, so a
+  // second pill in the row can't turn this into a strict-mode violation.
+  await expect(row.locator('.tag').filter({ hasText: /^API$/ })).toBeVisible();
+  // Anchored on `.permissions__cell` with exact text. Free has no Observer+ so
   // the collision can't fire here, but the helper stays consistent with
   // premium.
-  await expect(row.locator('.role__cell')).toHaveText(role);
+  await expect(row.locator('.permissions__cell')).toHaveText(role);
 }
 
 test.describe('Create API-only user (free)', () => {

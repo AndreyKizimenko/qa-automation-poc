@@ -44,6 +44,7 @@ export class IntegrationsPage {
   readonly metadataUrlField: Locator;
   readonly metadataField: Locator;
   readonly endUserAuthSaveButton: Locator;
+  readonly idpNameError: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -98,6 +99,14 @@ export class IntegrationsPage {
       name: 'Save',
       exact: true,
     });
+    // Fleet's FormField renders a field's validation error *in place of* its
+    // label (`{error || label}`), so the error is the label element's text and
+    // `idpNameField`'s accessible name changes while it is showing. Assert on
+    // the message, not on the field, once validation has fired.
+    this.idpNameError = this.endUserAuthSection.getByText(
+      'Enter an identity provider name',
+      { exact: true },
+    );
   }
 
   async goto(): Promise<void> {

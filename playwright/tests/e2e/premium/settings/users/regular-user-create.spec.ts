@@ -62,9 +62,9 @@ test.describe('Create regular user (premium)', () => {
       const row = await usersPage.findRowByEmail(email);
       await expect(row).toBeVisible();
       await expect(row).toContainText(name);
-      // Anchored on `.role__cell` with exact text so Observer and Observer+
+      // Anchored on `.permissions__cell` with exact text so Observer and Observer+
       // never collide.
-      await expect(row.locator('.role__cell')).toHaveText(role);
+      await expect(row.locator('.permissions__cell')).toHaveText(role);
       // Email cell shows the address we submitted — confirms the UI →
       // API → UI round-trip on the email field.
       await expect(row.locator('.email__cell')).toHaveText(email);
@@ -100,7 +100,7 @@ test.describe('Create regular user (premium)', () => {
     const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
     await expect(row).toContainText(name);
-    await expect(row.locator('.role__cell')).toHaveText('Maintainer');
+    await expect(row.locator('.permissions__cell')).toHaveText('Maintainer');
     await expect(row.locator('.email__cell')).toHaveText(email);
     await expect(row).toContainText('Workstations');
 
@@ -135,7 +135,7 @@ test.describe('Create regular user (premium)', () => {
     await expect(row).toBeVisible();
     // Fleet collapses mixed-role assignments to "2 fleets" + "Various".
     await expect(row).toContainText('2 fleets');
-    await expect(row.locator('.role__cell')).toHaveText('Various');
+    await expect(row.locator('.permissions__cell')).toHaveText('Various');
     await expect(row.locator('.email__cell')).toHaveText(email);
 
     const created = await findUserByEmail(request, email);
@@ -168,9 +168,9 @@ test.describe('Create regular user (premium)', () => {
     const row = await usersPage.findRowByEmail(email);
     await expect(row).toBeVisible();
     // Same role across fleets → Role cell shows the role name (exact),
-    // not "Various". Anchoring on `.role__cell` keeps the match precise.
+    // not "Various". Anchoring on `.permissions__cell` keeps the match precise.
     await expect(row).toContainText('2 fleets');
-    await expect(row.locator('.role__cell')).toHaveText('Observer');
+    await expect(row.locator('.permissions__cell')).toHaveText('Observer');
     await expect(row.locator('.email__cell')).toHaveText(email);
 
     const created = await findUserByEmail(request, email);

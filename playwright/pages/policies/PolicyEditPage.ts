@@ -95,7 +95,14 @@ export class PolicyEditPage {
     // `incompatible-platform` (close) icon.
     this.platformCompatibility = page.locator('.platform-compatibility');
     this.compatiblePlatforms = this.platformCompatibility.locator('.compatible-platform');
-    this.sqlSyntaxError = page.getByText('Syntax error. Please review before saving.');
+    // Fleet's query validator (`components/forms/validators/validate_query`)
+    // emits one of three messages, so the alternation covers all three: a
+    // located syntax error for a typo inside a statement, "Expected a SELECT
+    // statement on line N" when the input is not a SELECT at all, and the bare
+    // generic message when the parser reports no location.
+    this.sqlSyntaxError = page.getByText(
+      /Syntax error(?: on line \d+, column \d+)?\. Please review before saving\.|Expected a SELECT statement on line \d+\./,
+    );
 
     this.nameInput = page.locator('input[name="policy-name"]');
     this.descriptionInput = page.locator('textarea[name="policy-description"]');
