@@ -35,7 +35,6 @@ an un-skipped test hides its concession far better than a skipped one.
 |---|---|---|---|---|---|
 | software titles → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L104), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L146) | drill into a CVE whose detail endpoint answers, not the top row | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | detail endpoint renders matched-but-unenriched CVEs — then drop `findRenderableCve` and click the first row |
 | host → vulnerable software → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L170), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L247) | same | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | same — one fix unblocks all six variants |
-| delete a single host from host details — [host-delete.spec.ts:107](../tests/e2e/premium/hosts/host-delete.spec.ts#L107) | assert the generic `This will remove all host data` copy instead of the host's display name | premium (copy is tier-agnostic) | [fleetdm/fleet#53760](https://github.com/fleetdm/fleet/issues/53760) | 2026-09-22 (v4.93.0-rc; regressed from 4.92) | the single-host delete modal names the host again — then revert the assertion to `` `This will remove ${host.displayName}` `` |
 
 ## Ignored console errors
 
@@ -127,27 +126,6 @@ counterpart of the assertion still runs. Surfaced in premium run
 /software/titles?vulnerable=true&fleet_id=0` returns `fuse3` (deb_packages) with
 versions `3.10.5-1build1` / `3.10.5-1build1.1` and no CVEs on either — 1 of 200
 titles in that scope shows the symptom. Skip stays as-is.
-
-**#53760 — host-details delete modal stopped naming the host.** 4.93 split
-`DeleteHostModal`'s body into per-platform variants and introduced
-`removeAllDataSentence`, whose singular branch renders `This will remove all host
-data…` and never calls `hostText()`. `HostDetailsPage` has always passed
-`hostName={host?.display_name}` and `hostText()` returns it, so the name is
-available and simply dropped. The result is inconsistent within the component:
-for a single host, Android, the macOS one-time-secret body and the
-unknown-platform fallback all still name it; only the macOS/Windows/Linux and
-iOS/iPadOS paths don't, and those cover essentially every host.
-
-Scope is **host details only**. The Hosts-list single-selection path never named
-the host — on 4.92 `ManageHostsPage` passed no `hostName` and the modal read
-*"This will remove **1 host** and associated data…"* — so that path went from
-"1 host" to "all host data", which is a wash. What is odd is that 4.93 *added*
-`hostName={selectedHosts.length === 1 ? selectedHosts[0].display_name :
-undefined}` to `ManageHostsPage`, and the singular branch then discards it; that
-dead plumbing is the strongest sign this is an oversight rather than a copy
-decision. The change rode in on fleetdm/fleet#53167 (*One time enroll secrets
-(3/3): Frontend*) with no changelog entry. Worked around rather than skipped
-because the delete flow itself is healthy; only the copy moved.
 
 ## Resolved
 

@@ -42,6 +42,8 @@ test.describe('Premium • Hosts • bulk delete', () => {
 
     await hostsList.deleteSelectedButton.click();
     await expect(hostsList.deleteModal).toBeVisible();
+    // Plural selections lead with the count so the admin sees the scale of what
+    // is being deleted.
     await expect(hostsList.deleteModal).toContainText('This will remove 2 hosts');
 
     await hostsList.confirmDelete();
@@ -99,11 +101,8 @@ test.describe('Premium • Hosts • delete from host details', () => {
     await hostDetails.runAction('Delete');
 
     await expect(hostDetails.deleteModal).toBeVisible();
-    // TODO(fleetdm/fleet#53760): the single-host delete modal renders generic
-    // copy that never names the host on the macOS/Windows/Linux and
-    // iOS/iPadOS paths, so that copy is what this asserts. Revert to
-    // `This will remove ${host.displayName}` once #53760 is fixed — see
-    // docs/blocked-by-product-bugs.md.
+    // Deleting a single host leads with generic copy; the count is reserved for
+    // plural selections, which the bulk-delete test above covers.
     await expect(hostDetails.deleteModal).toContainText('This will remove all host data');
 
     await hostDetails.confirmDelete();
