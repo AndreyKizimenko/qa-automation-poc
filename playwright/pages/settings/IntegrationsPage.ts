@@ -121,6 +121,17 @@ export class IntegrationsPage {
   }
 
   /**
+   * One titled card on an Integrations subpage (Fleet's `SettingsSection`).
+   * The card is an unnamed `<section>`, which exposes no landmark role, so
+   * the tag is filtered by its exact heading.
+   */
+  settingsSection(title: string): Locator {
+    return this.page
+      .locator('section')
+      .filter({ has: this.page.getByRole('heading', { name: title, exact: true }) });
+  }
+
+  /**
    * Stages a PDF into the EULA FileUploader (which auto-submits) and waits for
    * the uploaded EULA to render. `file` is a path or an in-memory payload.
    */
