@@ -1,11 +1,12 @@
 import { test, expect } from '@fixtures';
+import { IntegrationsPage } from '@pages';
 
 const PAYWALL_TEXT = /This feature is included in Fleet Premium/i;
 
 // Every URL below is reachable on free but the page body renders the
 // "Fleet Premium" paywall. Failing here means a feature gate regressed
 // (either the paywall disappeared or the page itself stopped rendering).
-const PAYWALLED_PAGES: Array<{ name: string; url: string; expectedBanners?: number }> = [
+const PAYWALLED_PAGES: Array<{ name: string; url: string }> = [
   { name: 'Controls — OS updates', url: '/controls/os-updates' },
   { name: 'Controls — OS settings (root → disk encryption)', url: '/controls/os-settings' },
   { name: 'Controls — OS settings / Disk encryption', url: '/controls/os-settings/disk-encryption' },
@@ -17,7 +18,6 @@ const PAYWALLED_PAGES: Array<{ name: string; url: string; expectedBanners?: numb
   { name: 'Controls — Setup experience / Run script', url: '/controls/setup-experience/run-script' },
   { name: 'Controls — Setup experience / Setup assistant', url: '/controls/setup-experience/setup-assistant' },
   { name: 'Controls — Setup experience / Users', url: '/controls/setup-experience/users' },
-  { name: 'Settings — Integrations / MDM (ABM + Microsoft Entra cards)', url: '/settings/integrations/mdm', expectedBanners: 2 },
   { name: 'Settings — Integrations / Calendars', url: '/settings/integrations/calendars' },
   { name: 'Settings — Integrations / Identity provider', url: '/settings/integrations/identity-provider' },
   { name: 'Settings — Integrations / Conditional access', url: '/settings/integrations/conditional-access' },
@@ -25,15 +25,29 @@ const PAYWALLED_PAGES: Array<{ name: string; url: string; expectedBanners?: numb
   { name: 'Settings — Integrations / Certificate authorities', url: '/settings/integrations/certificate-authorities' },
 ];
 
+// The MDM subpage mixes free MDM toggles with premium-only cards, each
+// rendering its own paywall under the card's heading.
+const MDM_PAYWALLED_SECTIONS = ['Android zero-touch', 'Apple Business (AB)', 'Microsoft Entra'];
+
 test.describe('Free • paywall presence', () => {
   for (const page of PAYWALLED_PAGES) {
     test(page.name, async ({ page: pw }) => {
       await pw.goto(page.url);
       const banners = pw.getByText(PAYWALL_TEXT);
       await expect(banners.first()).toBeVisible();
-      await expect(banners).toHaveCount(page.expectedBanners ?? 1);
+      await expect(banners).toHaveCount(1);
     });
   }
+
+  test('Settings — Integrations / MDM (Android zero-touch, Apple Business, Microsoft Entra cards)', async ({ page }) => {
+    const integrations = new IntegrationsPage(page);
+    await page.goto('/settings/integrations/mdm');
+
+    for (const title of MDM_PAYWALLED_SECTIONS) {
+      await expect.soft(integrations.settingsSection(title).getByText(PAYWALL_TEXT), `${title} card`).toBeVisible();
+    }
+    await expect(page.getByText(PAYWALL_TEXT)).toHaveCount(MDM_PAYWALLED_SECTIONS.length);
+  });
 
   test('Settings — no Teams nav link', async ({ page }) => {
     await page.goto('/settings/organization/info');
