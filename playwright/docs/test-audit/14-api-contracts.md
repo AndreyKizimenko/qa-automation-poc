@@ -1,6 +1,6 @@
 # API contract specs — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 27 entries (34 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 30 entries (37 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
 
 This area holds the suite's non-browser contract checks: the shape of `GET /config`, the free-tier
 license value, the 402 premium paywall on the API, Fleet's request/file-size limits, one query
@@ -17,7 +17,7 @@ Andrey can paste. All commands assume `$FLEET_URL` and `$FLEET_API_TOKEN` are ex
 otherwise ([`playwright.config.ts:77`](../../playwright.config.ts)).
 
 `Mode` legend: **API** (real Fleet request, asserted on the response) · **UNIT** (no Fleet call at
-all — pure in-process assertion; a fifth mode this area needs, all 14 activity-copy tests are this).
+all — pure in-process assertion; a fifth mode this area needs, all 17 activity-copy tests are this — API-01…14 and API-28…30).
 
 ## Contents
 
@@ -50,6 +50,9 @@ all — pure in-process assertion; a fifth mode this area needs, all 14 activity
 | API-25 | `api/premium/max-request-file-sizes.spec.ts` | … › a batch of configuration profiles over the 26.21MB request limit is rejected | API | ☐ |
 | API-26 | `api/premium/max-request-file-sizes.spec.ts` | … › a batch of scripts over the 26.21MB request limit is rejected | API | ☐ |
 | API-27 | `api/host-software-payload.spec.ts` | API • host by identifier › `exclude_software` drops the software list and nothing else | API | ☐ |
+| API-28 | `api/activity-copy.spec.ts` | activityCopy › script runs — one host, this host, a batch | UNIT | ☐ |
+| API-29 | `api/activity-copy.spec.ts` | activityCopy › mdmCommand.* — feed, this host, and the command item | UNIT | ☐ |
+| API-30 | `api/activity-copy.spec.ts` | activityCopy › hostSoftware.* — installed / uninstalled, failed and upcoming | UNIT | ☐ |
 
 ---
 
@@ -84,10 +87,10 @@ not here.
 
 ---
 
-## What `activity-copy.spec.ts` actually protects (read before API-01…API-14)
+## What `activity-copy.spec.ts` actually protects (read before API-01…API-14 and API-28…API-30)
 
-[`helpers/activity-copy.ts`](../../helpers/activity-copy.ts) builds the `RegExp`s that **21 e2e
-specs** feed to `dashboard.expectActivities()`
+[`helpers/activity-copy.ts`](../../helpers/activity-copy.ts) builds the `RegExp`s that **26 e2e
+specs** feed to `dashboard.expectActivities()` (and, for the host-scoped builders, to `hostDetails.activityItem()`)
 ([`pages/DashboardPage.ts:177`](../../pages/DashboardPage.ts)) as the final sub-test of every CRUD
 lifecycle. Those regexes encode Fleet's rendered feed sentence: verb + article + name + a
 resource-specific scope suffix, tier-aware for profiles and role changes.
@@ -100,6 +103,9 @@ Consumer map (who breaks if a builder is wrong):
 | `report.*` | [premium/reports](../../tests/e2e/premium/reports/reports.spec.ts), [free/reports](../../tests/e2e/free/reports/reports.spec.ts) | All fleets, Workstations |
 | `pack.*` | [shared/packs](../../tests/e2e/shared/packs/packs.spec.ts) | n/a (global) |
 | `script.*` | [premium/controls/scripts/library](../../tests/e2e/premium/controls/scripts/library.spec.ts), [free/…/library](../../tests/e2e/free/controls/scripts/library.spec.ts) | Unassigned, Workstations |
+| `script.ran` / `ranOnThisHost` / `ranBatch` | [shared/hosts/host-run-script](../../tests/e2e/shared/hosts/host-run-script.spec.ts), [premium/controls/scripts/batch-run](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts) | n/a (host / host count) |
+| `mdmCommand.*` | [shared/hosts/mdm-commands](../../tests/e2e/shared/hosts/mdm-commands.spec.ts) | n/a |
+| `hostSoftware.*` | [premium/software/install-on-host](../../tests/e2e/premium/software/install-on-host.spec.ts), [premium/software/uninstall-from-host](../../tests/e2e/premium/software/uninstall-from-host.spec.ts) | n/a — `failedToInstall`, `toldToInstall`, `toldToUninstall` have no consumer |
 | `software.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts), [premium/software/edit-package](../../tests/e2e/premium/software/edit-package.spec.ts) | Unassigned, Workstations |
 | `appStoreApp.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts) | Unassigned, Workstations |
 | `configurationProfile.*` | [premium](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts) + [free os-settings](../../tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts) | Unassigned, Workstations (free: none) |
@@ -112,7 +118,7 @@ claims "when Fleet changes copy upstream this file fails before the CRUD specs d
 the spec makes no Fleet call and reads no Fleet source. Both sides of every assertion live in this
 repo — a regex from `helpers/activity-copy.ts` and a hand-transcribed literal in the spec. If Fleet
 renames "created a policy" to "added a policy", *both* stay stale and this file keeps passing while
-21 e2e specs go red. What it genuinely protects is **helper-refactor regression**: change a
+26 e2e specs go red. What it genuinely protects is **helper-refactor regression**: change a
 preposition, a scope suffix, or the `esc()` behaviour and you learn in milliseconds, locally, without
 a Fleet instance, instead of via a red CRUD run 20 minutes later. It is also executable documentation
 of the copy contract (one place to read the whole matrix). That is real value, cheap — keep it, but
@@ -126,12 +132,12 @@ protects the *record*, the UI assertion the *rendering*, and API-01…API-14 pro
 caveat: it is a self-consistency test, so it can only ever tell you the helper changed — it can never
 tell you the helper is *right*.
 
-**Cost:** `tests/api/activity-copy.spec.ts` is not in any `testIgnore` list, so all 14 tests run in
+**Cost:** `tests/api/activity-copy.spec.ts` is not in any `testIgnore` list, so all 17 tests run in
 **both** the premium and free projects. Because the two SUITE-sensitive tests (API-09, API-12) stub
-`process.env.SUITE` themselves, the free run is byte-identical to the premium run — 14 duplicate
+`process.env.SUITE` themselves, the free run is byte-identical to the premium run — 17 duplicate
 executions per nightly pair.
 
-**Manual repro (applies to all of API-01…API-14).** Two levels:
+**Manual repro (applies to all of API-01…API-14 and API-28…API-30).** Two levels:
 1. *Helper self-check* — `npx playwright test tests/api/activity-copy.spec.ts --project=premium`
    (no instance needed; the spec imports `@playwright/test` directly, so no browser and no auth).
 2. *Contract check against real Fleet* — do the action in the UI, then read the dashboard **Activity**
@@ -544,7 +550,7 @@ other:
    - ✅ *(UNIT)* **negative:** `enabled()` does **not** match `disabled activity automations.`
 
 **Assessment**
-- *Value:* the only test in the file with a negative assertion — and it matters here, because "enabled"/"disabled" are substrings of one another's context. This is the pattern the other 13 entries should copy.
+- *Value:* one of only two tests in the file with a negative assertion (API-30 is the other) — and it matters here, because "enabled"/"disabled" are substrings of one another's context. This is the pattern the other 13 entries should copy.
 - *Coverage gaps:* none for this family. Consumer: [premium/dashboard/automations-activity](../../tests/e2e/premium/dashboard/automations-activity.spec.ts) (premium-only, yet this test also runs on free).
 - *Redundancy:* none.
 - *Efficiency / smells:* the builders' `@see` line citations (1671/1674/1677) collide with the `report.*` citations — see API-03.
@@ -1084,6 +1090,99 @@ other:
 
 ---
 
+### API-28 · activityCopy › script runs — one host, this host, a batch
+
+- **File:** [`playwright/tests/api/activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) (L45)
+- **Grep:** `npx playwright test tests/api/activity-copy.spec.ts --project=premium -g "script runs"`
+- **Project:** premium + free · **Mode:** UNIT · **Isolation:** none needed
+- **Preconditions:** none · **Data created:** none
+
+**Flow**
+
+1. ☐ Build the three run builders and test each against its literal.
+   - ✅ *(UNIT)* `script.ran({ name: 'x.sh', host: 'mac (1)' })` → `ran the x.sh script on mac (1).` — the dashboard feed's wording, host named; the `(1)` checks `esc()` on a host name with parentheses.
+   - ✅ *(UNIT)* `script.ranOnThisHost({ name: 'x.sh' })` → `ran the x.sh script on this host.` — the host's own Activity card, host implied.
+   - ✅ *(UNIT)* `script.ranBatch({ hostCount: 3 })` → `ran the x.sh script on 3 hosts.`
+   - ✅ *(UNIT)* `script.ranBatch({ hostCount: 1 })` → `ran the x.sh script on 1 host.` — the `hosts?` singular branch.
+
+**Assessment**
+- *Value:* moderate. The three sentences differ only in their tail, and the e2e consumers pick among them by entry point — [HOST-19/20](02-hosts-shared-and-free.md) use `ran` (feed) and `ranOnThisHost` (Activity card), [CTL-24](11-controls-profiles-scripts-variables.md) uses `ranBatch`. The singular/plural case is the one a hand edit would most plausibly break.
+- *Coverage gaps:* **no negative assertion** — nothing proves `ranOnThisHost` rejects the feed sentence, or that `ranBatch({ hostCount: 3 })` rejects `on 1 host.`, so a builder loosened to `.*` in its tail would still pass. None of the builders is anchored with `^`, so any sentence *containing* the phrase matches — relevant because the feed prefixes the actor. The `ranBatch` singular branch is never used by a consumer (CTL-24 always passes 3).
+- *Redundancy:* none — new builders. Shares `esc()` with every other family (API-13).
+- *Efficiency / smells:* the builders' JSDoc says failed and timed-out runs read the same as successful ones in the feed; that is a real product fact the e2e specs rely on (HOST-20 clicks a failed run through `ranOnThisHost`), and nothing here pins it — it would take a Fleet call to.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-29 · activityCopy › mdmCommand.* — feed, this host, and the command item
+
+- **File:** [`playwright/tests/api/activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) (L56)
+- **Grep:** `npx playwright test tests/api/activity-copy.spec.ts --project=premium -g "mdmCommand"`
+- **Project:** premium + free · **Mode:** UNIT · **Isolation:** none needed
+- **Preconditions:** none · **Data created:** none
+
+**Flow**
+
+1. ☐ Build the three custom-MDM-command builders for `requestType: 'UserList'`.
+   - ✅ *(UNIT)* `mdmCommand.ran({ host: 'mac (1)' })` → `ran UserList as a custom MDM command on mac (1).` — dashboard feed.
+   - ✅ *(UNIT)* `mdmCommand.ranOnThisHost()` → `ran UserList as a custom MDM command on this host.` — host Activity card, "Show MDM commands" **off**.
+   - ✅ *(UNIT)* `mdmCommand.acknowledged()` → matches `The UserList command was acknowledged. less than a minute ago` — the command item with "Show MDM commands" **on**. The literal carries the **relative-time suffix** on purpose: an Activity-card item's accessible name is its sentence *plus* the time, and this builder is anchored with `^` at the start only, so it must tolerate the tail.
+
+**Assessment**
+- *Value:* moderate. The only consumer is [HOST-23](02-hosts-shared-and-free.md), which uses all three; `acknowledged` is the one builder in the file whose literal models the accessible name as rendered (sentence + time), which is the right shape for `getByRole('button', { name })` matching.
+- *Coverage gaps:* no negative case, and the interesting one is obvious — `acknowledged` must **not** match the pending sentence (`The UserList command is pending.`); HOST-23 asserts that absence with an inline regex instead of a builder, so a `pending` builder plus a mutual-exclusion test would move that copy under this file's protection. No request type with a Fleet-friendly name (the builders assume a type "Fleet has no friendly name for renders as itself" — a type that *has* one would render differently, untested). No failed/Error command sentence.
+- *Redundancy:* none.
+- *Efficiency / smells:* the `^` anchor on `acknowledged` alone is inconsistent with its two siblings (unanchored) — deliberate (the command item has no actor prefix), but undocumented in the spec.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-30 · activityCopy › hostSoftware.* — installed / uninstalled, failed and upcoming
+
+- **File:** [`playwright/tests/api/activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) (L65)
+- **Grep:** `npx playwright test tests/api/activity-copy.spec.ts --project=premium -g "hostSoftware"`
+- **Project:** premium + free · **Mode:** UNIT · **Isolation:** none needed
+- **Preconditions:** none · **Data created:** none
+
+**Flow**
+
+1. ☐ Build four of the six host-software builders for `title: 'fleet-pw (x64)'` and test each against an **actor-prefixed** literal (`admin …`) — the builders deliberately leave the actor out, since an admin's run names the admin and an automatic one names Fleet.
+   - ✅ *(UNIT)* `installed` → `admin installed fleet-pw (x64) on this host.`
+   - ✅ *(UNIT)* `uninstalled` → `admin uninstalled fleet-pw (x64) on this host.`
+   - ✅ *(UNIT)* `failedToUninstall` → `admin failed to uninstall fleet-pw (x64) on this host.`
+   - ✅ *(UNIT)* `toldToInstall` → `admin told Fleet to install fleet-pw (x64) on this host.` — the **Upcoming**-tab wording.
+   - ✅ *(UNIT)* **negative:** `installed` does **not** match `admin uninstalled fleet-pw (x64) on this host.` — an uninstall's sentence *contains* "installed", and the builder's leading `\b` is what keeps the install matcher from taking it.
+
+**Assessment**
+- *Value:* good — the negative case is the one that matters for this family (substring collision between install/uninstall), and it copies API-14's pattern. The `(x64)` title exercises `esc()` on a real-looking package title.
+- *Coverage gaps:* **`failedToInstall` and `toldToUninstall` are never tested** — two of six builders; `failedToInstall` is also unused by any e2e spec. `toldToInstall` is tested here but **consumed nowhere**: the Upcoming item is never asserted in the UI (a queued install is picked up within seconds), so this test protects a builder no spec uses. No negative between `failedToUninstall` and `uninstalled` (the latter's `uninstalled … on this host.` does not occur inside "failed to uninstall …", so it holds — but untested), nor between `toldToInstall` and `installed`.
+- *Redundancy:* none. Consumers: [`premium/software/install-on-host`](../../tests/e2e/premium/software/install-on-host.spec.ts) (`installed`) and [`premium/software/uninstall-from-host`](../../tests/e2e/premium/software/uninstall-from-host.spec.ts) (`uninstalled`, `failedToUninstall`) — both premium-only, yet this test also runs on free.
+- *Efficiency / smells:* the JSDoc cites `INSTALL_STATUS_PREDICATES` in `frontend/interfaces/software.ts` rather than a component line — a better citation than the `GlobalActivityItem.tsx:<line>` ones elsewhere in the helper, which drift (see API-03).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1095,14 +1194,14 @@ other:
 | Premium API gating (402) | API-18 (8 endpoints) | MDM profiles, team scripts, calendars, conditional access, integrations, vulnerabilities, host lock/wipe; no unauthenticated variant; no premium positive control |
 | Request/file-size limits | API-20…API-26 (4 caps across 6 routes) | **one** positive control (API-24, `commands/run` only) — the other five are rejection-only; no boundary case at any exact cap; no "nothing persisted" check on the two destructive batch routes; software-installer and bootstrap-package caps untested; not run on free although the middleware is tier-agnostic |
 | Host payload query parameters | API-27 (`exclude_software` on `/hosts/identifier/:id`) | not tested on `GET /hosts/:id`, which takes the same parameter; no `exclude_software=false`; nothing measures that the payload is actually smaller, which is the parameter's whole purpose; one host per run |
-| Activity-feed copy contract | API-01…API-14 | self-consistency only — cannot detect upstream Fleet copy change (the file's stated purpose); scope matrix incomplete where consumers rely on it (`script` add/Workstations, edit/Unassigned, delete/Unassigned; profile delete premium-Unassigned) |
+| Activity-feed copy contract | API-01…API-14, API-28…API-30 | self-consistency only — cannot detect upstream Fleet copy change (the file's stated purpose); scope matrix incomplete where consumers rely on it (`script` add/Workstations, edit/Unassigned, delete/Unassigned; profile delete premium-Unassigned) |
 | Role/permission gating | `tests/api/role-access/**` (out of scope here) | no overlap with license gating — verified, `402` appears nowhere in role-access |
 | General API contract hygiene | — | nothing on `/version`, `/me`, unauthenticated 401 shape, 404/422 validation-error shape, `/activities` pagination + `order_key` (which `findActivity` depends on), or `v1` vs `latest` parity |
 
 **Duplication**
 
 1. **Four `GET /config` requests for four field assertions** — API-15, API-16, API-17, API-19. One request in a `beforeAll` (or one test with four `expect`s) would do.
-2. **`activity-copy.spec.ts` runs twice** (premium + free) with a byte-identical result, because the only tier-sensitive tests stub `process.env.SUITE` themselves. 14 duplicate executions per nightly pair.
+2. **`activity-copy.spec.ts` runs twice** (premium + free) with a byte-identical result, because the only tier-sensitive tests stub `process.env.SUITE` themselves. 17 duplicate executions per nightly pair.
 3. **Five entries share one middleware, and three share one number.** API-21, API-22, API-23, API-25 and API-26 all exercise the request-body-size middleware; of those, API-22, API-25 and API-26 assert the *same* `max size limit of 26.21MB` string on three different routes, at a combined ~90 MB of upload per run. Any one of the five catches a middleware regression; the other four only catch a per-route cap change.
 4. **API-01 / API-02 / API-03** are three tests over one shared `fleetSuffix()`; a single table would read better and make the missing scopes obvious.
 5. **API-10 / API-11** are two 3-line tests over the same `user.*` builders.
@@ -1119,7 +1218,7 @@ Everything here is API by design, and that is right for tier gating, config shap
 
 1. Swap `@fixtures` → `@playwright/test` in [`config.spec.ts`](../../tests/api/config.spec.ts), [`free/endpoints.spec.ts`](../../tests/api/free/endpoints.spec.ts), [`free/license.spec.ts`](../../tests/api/free/license.spec.ts), [`premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts), [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts) — drops 20 needless Chromium launches per run.
 2. Fix the false claim in the [`activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) header ("fails before the CRUD specs do" when Fleet changes copy) — it detects *helper* edits only, and the wrong comment will mislead the next agent into trusting it.
-3. Add negative assertions to the policy / script / software / profile / role families, copying API-14's pattern — today a suffix that loosened to `.*` passes every one of the 13 other tests.
+3. Add negative assertions to the policy / script / software / profile / role families, copying API-14's pattern — today a suffix that loosened to `.*` passes every one of the 15 other tests.
 4. Add a premium mirror of API-19 asserting `license.tier === 'premium'` and `license.expiration` in the future, so an expired QA license fails once and clearly instead of cascading.
 5. Tighten `toBeGreaterThanOrEqual(400)` to the exact status at [`max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) lines 55, 76, 100, 114, 152 and 173 — API-24 already pins `toBe(404)` ten lines away, so the file disagrees with itself about how precise a status assertion should be.
 6. Add the two "nothing was replaced" follow-ups that cost one GET each and guard the area's two **destructive** routes: `GET /mdm/profiles?team_id=0` after API-25 and `GET /scripts?team_id=0` after API-26. Today "the rejected batch wiped nothing" is inferred from the 4xx, on routes whose success path replaces an entire fleet's set.
@@ -1128,5 +1227,5 @@ Everything here is API by design, and that is right for tier gating, config shap
 **Bigger bets**
 
 1. **Make the copy contract actually detect upstream drift.** Either vendor the relevant `GlobalActivityItem.tsx` strings from `fleetdm/fleet` as a checked-in snapshot the spec diffs against, or add a nightly job that performs one action per family and matches the *rendered* feed text — the current file cannot fail when Fleet renames copy, which is the risk it was written for.
-2. **Move the 14 unit tests out of Playwright** into `npm run check` (vitest/tsx). They would gate every PR in milliseconds, stop consuming shared-instance worker slots, run once instead of twice, and no longer need `process.env.SUITE` mutation if the tier were a helper parameter.
+2. **Move the 17 unit tests out of Playwright** into `npm run check` (vitest/tsx). They would gate every PR in milliseconds, stop consuming shared-instance worker slots, run once instead of twice, and no longer need `process.env.SUITE` mutation if the tier were a helper parameter.
 3. **Promote the tier-agnostic contracts out of `tests/api/premium/` and build one error-contract layer** — size limits, 402/401/403/404/413/422 shapes, and `/version` `/me` liveness in one table-driven spec shared with the role-access probes, with positive controls alongside every rejection path.

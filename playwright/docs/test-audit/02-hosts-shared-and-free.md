@@ -1,10 +1,10 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 10 files · **Test declarations:** 18 (16 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases) · **Projects:** premium + free (the 8 `shared/hosts` specs run in **both** projects), free only (the 2 `free/hosts` specs)
+**Specs covered:** 12 files · **Test declarations:** 23 entries (21 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **26 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 2 `free/hosts` specs)
 
-This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Actions menu, live report against one host). The eight `shared/` specs carry no serial describes and no shared mutable state (three files now hold two tests each, but the tests within a file are independent); the two `free/` specs are role/paywall matrices that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
+This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, and a custom **MDM command** read back through the Activity card). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The two `free/` specs are role/paywall matrices that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
-**Host-population split — read this before reproducing anything manually.** Five of the 14 tests bind to the *real* MDM-enrolled macOS VM through the `liveMacosHost` worker fixture ([`fixtures.ts:256`](../../fixtures.ts)); the rest run against whatever osquery-perf simulation the API resolver happens to return. Simulated hosts ignore live-query SQL, report thin/absent vitals, and are not MDM-enrolled.
+**Host-population split — read this before reproducing anything manually.** There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM.** On premium they sit on the **VMs** fleet (id 103); on free they are in Unassigned. Specs reach them with `findOnlineHost(..., { kind: 'real' })` ([`helpers/api/hosts.ts:202`](../../helpers/api/hosts.ts)), which keys on the reported **hardware model** (`VirtualMac2,1`, `QEMU Virtual Machine`) — **not** on MDM enrollment: since perf-hosts PR #45 roughly 30% of the osquery-perf simulations are MDM-enrolled too, so enrollment no longer tells a real device from a simulation. `liveMacosHost` ([`fixtures.ts:276`](../../fixtures.ts)) is the macOS VM resolved that way (its error message still says "MDM-enrolled"; it does not check). Everything else runs against whatever simulation the API resolver returns. Simulations ignore live-query SQL, report thin/absent vitals, **never execute a script and never acknowledge an MDM command** — which is why HOST-19…HOST-23 are real-VM-only by construction. The macOS VMs lack the Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub; Python is exercised on Linux.
 
 | Test | Host population |
 |---|---|
@@ -17,6 +17,9 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-07, HOST-08, HOST-09, HOST-10, HOST-11 | no specific host; whatever tops/fills the list |
 | HOST-12, HOST-13 | real MDM-enrolled macOS / Windows VM (`kind: 'real'`) |
 | HOST-14 | any online Linux host — real Linux VMs are *not* MDM-enrolled, so this can land on either a real VM or a simulation |
+| HOST-19, HOST-23 | real macOS VM (`findOnlineHost(…, { kind: 'real' })` inline) — **mandatory**: a script or MDM command must reach a device that executes/answers it. HOST-23 additionally asserts the VM is MDM-enrolled (`On …`) |
+| HOST-20, HOST-21 | real **Ubuntu** VM (`kind: 'real'`) — mandatory |
+| HOST-22 | one real VM per variant: macOS (zsh), Ubuntu (bash, Python), **Windows** (PowerShell) — mandatory |
 
 ## Contents
 
@@ -40,6 +43,11 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-16 | `shared/hosts/host-certificates.spec.ts` | Host details — a certificate row opens its full details | UI+API | ☐ |
 | HOST-17 | `shared/hosts/host-software.spec.ts` | Hosts — the Applications view narrows the inventory to top-level applications | UI | ☐ |
 | HOST-18 | `shared/hosts/host-reports-tab.spec.ts` | Host details — the results-recency sorts keep reports awaiting results last | UI | ☐ |
+| HOST-19 | `shared/hosts/host-run-script.spec.ts` | Run script › a script changes the host, and a report run by that host reads the change back | UI+API | ☐ |
+| HOST-20 | `shared/hosts/host-run-script.spec.ts` | Run script › a script that exits non-zero reads as an error, with the output it recorded | UI+API | ☐ |
+| HOST-21 | `shared/hosts/host-run-script.spec.ts` | Run script › a script that outlives the agent timeout is stopped, and the details say why | UI+API | ☐ |
+| HOST-22 | `shared/hosts/host-run-script.spec.ts` | Run script › a `<interpreter>` script runs under `<interpreter>` (4 cases: zsh, bash, Python, PowerShell) | UI+API | ☐ |
+| HOST-23 | `shared/hosts/mdm-commands.spec.ts` | a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it | UI+API | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -59,14 +67,15 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 1. ☐ *(API precondition)* `GET /hosts/:id` → record `host.detail_updated_at` as `before` — `getHostDetailUpdatedAt` ([`helpers/api/hosts.ts:244`](../../helpers/api/hosts.ts), which itself asserts the response is OK).
 2. ☐ Open `/hosts/:id` via URL; page is considered ready when the **Disk space available** vital is visible (`HostDetailsPage.goto`).
 3. ☐ Wait for **Refetch** to be enabled, then click it (`refetch()` waits for the idle label so it can't race a refetch already in flight).
-   - ✅ *(UI)* The header's `Last fetched …` line settles to **"Last fetched less than a minute ago"** (60s budget).
-   - ✅ *(API)* `GET /hosts/:id` `detail_updated_at` polls to a value **different from `before`** (30s budget) — proves the fresh vitals came from this refetch, not a background detail cycle.
+   - ✅ *(UI)* The header button flips to **Fetching fresh vitals** (`refetchingButton`) — Fleet took the request.
+   - ✅ *(API)* `waitForHostRefetch(request, id, { since: before, timeout: 180_000 })` ([`helpers/api/hosts.ts:471`](../../helpers/api/hosts.ts)) — polls `GET /hosts/:id` every 5s until `detail_updated_at` is **later than `before`** (180s budget; the real-VM round trip measures 70–120s) — proves the fresh vitals came from this refetch, not a background detail cycle. Replaces the old inline poll; the same helper serves any spec that needs "the host re-reported".
+   - ✅ *(UI)* After a **fresh load** of `/hosts/:id`, the header's `Last fetched …` line matches `/Last fetched (in )?less than a minute/` — reloaded because the open page stops polling after 60s and stays on the old time; `(in )?` absorbs date-fns phrasing a timestamp slightly ahead of the browser clock as "in less than a minute".
 
 **Assessment**
 - *Value:* real regression catch — the refetch button actually round-trips to the agent and Fleet stores + renders newer vitals. The API delta makes it a genuine assertion rather than a copy check.
-- *Coverage gaps:* no assertion on the transient **"Fetching fresh vitals…"** disabled state; no assertion that a *specific* vital changed; no offline-host path (Fleet shows an error/"host is offline" affordance) and no error toast path.
+- *Coverage gaps:* the transient **Fetching fresh vitals** state is asserted only as visible (not as disabled); no assertion that a *specific* vital changed; no offline-host path (Fleet shows an error/"host is offline" affordance) and no error toast path.
 - *Redundancy:* none.
-- *Efficiency / smells:* clean. `lastFetched` is a class locator (`.host-header__last-fetched`) but that is justified in the POM ([`pages/hosts/HostDetailsPage.ts:36`](../../pages/hosts/HostDetailsPage.ts) — role-less div). Worst case is a slow test (up to ~90s of waits) rather than a weak one.
+- *Efficiency / smells:* clean. `lastFetched` is a class locator (`.host-header__last-fetched`) but that is justified in the POM ([`pages/hosts/HostDetailsPage.ts:36`](../../pages/hosts/HostDetailsPage.ts) — role-less div). Worst case is a slow test (up to ~240s of waits, budget 300s) rather than a weak one.
 
 **Notes (Andrey)**
 ```
@@ -749,6 +758,255 @@ other:
 
 ---
 
+### HOST-19 · Shared • Hosts • Run script › a script changes the host, and a report run by that host reads the change back
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-run-script.spec.ts`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a script changes the host, and a report run by that host reads the change back"` (`--project=free` for the free run)
+- **Project:** premium + free (shared) · **Scopes:** n/a — the script and report go to whichever fleet the host is in, read off the host at run time (`getHostFleetId`): the **VMs** fleet on premium, Unassigned on free
+- **Mode:** UI+API · **Isolation:** standalone; first of four independent tests in the describe (HOST-20…22 are the others). Budget 420s.
+- **Preconditions:** **the real macOS VM is mandatory** — resolved inline with `findOnlineHost(request, 'darwin', { kind: 'real' })`, which throws with a "power it on" message if none is online. osquery-perf simulations never execute a script, so a run against one proves nothing. The VM runs its scripts **one at a time**, so this test can queue behind any other script spec (HOST-20…22, the batch runs in [CTL-24/25](11-controls-profiles-scripts-variables.md)) — the 180s script wait and 420s budget absorb that. Script execution must be on in organization settings (`cleanup-setup` guarantees it).
+- **Data created:** per run, all named with a nonce (`<base36 ms><4 hex>`):
+  - a report `pw-run-script-effect-<id>` — `SELECT sha256 FROM hash WHERE path = '/tmp/fleet-playwright-run-script-<id>';`, `platform: darwin`, **`interval: 60`**; **team-scoped to the VMs fleet on premium** (so only the VMs run it), **global on free** (where `cleanup-setup`'s `deleteAllQueries` would sweep it if the test died);
+  - a library script `pw-run-script-effect-<id>.sh` — `printf '%s' '<id>' > <marker>; echo "wrote <id>"`;
+  - on the VM, the file `/tmp/fleet-playwright-run-script-<id>` holding the nonce.
+  All three are removed in `finally`: script and report via the API, the marker file by a fire-and-forget **ad-hoc** script (`queueAdHocScript` → `POST /scripts/run`, `rm -f <marker>`) whose result nobody checks. On premium, `cleanup-setup`'s VMs-fleet sweep also deletes `pw-` scripts and `pw-run-script-` reports left by a dead run. The script-run and ad-hoc-run **activities** stay in the feed permanently.
+
+**Flow**
+
+1. ☐ *(API setup)* `POST /queries` → the 60s report, created **first** so its schedule is already counting down while the script runs. Then `POST /scripts` (multipart) → the library script, with `fleet_id` omitted on free (free rejects `fleet_id=0`).
+2. ☐ Open the VM at `/hosts/:id` via URL → ✅ *(UI)* **Disk space available** visible.
+3. ☐ Click **Actions** → **Run script** (react-select option by exact text).
+   - ✅ *(UI)* the `.run-script-modal` is visible and its table rendered (`RunScriptModal.expectOpen`).
+   - ✅ *(UI)* the script's **Status** cell reads `---` — never run on this host (the name is new every run).
+4. ☐ In the script's row, open the row **Actions** dropdown → **Run**.
+   - ✅ *(UI)* the **Run script?** confirmation reads `<script> will run on <host display name>.`
+5. ☐ Click **Run** in the confirmation.
+   - ✅ *(UI)* success toast **"Script is running or will run when the host comes online."**; the list modal is visible again underneath.
+6. ☐ *(wait — no user action)* the VM picks the script up on its next check-in and reports back.
+   - ✅ *(API)* `GET /hosts/:id/scripts?per_page=100` → this script's `last_execution.status` polls to **`ran`** (3s interval, 180s budget; `getHostScriptLastExecution`). This is a *wait*, not the assertion: the modal only refetches its list after its own actions, so the settled status is read by reopening it (next step).
+   - The **Upcoming** tab of the Activity card would briefly show the pending run here, but the VM picks it up within seconds, so the item is **not asserted anywhere** in the suite.
+7. ☐ Click **Close** on the modal, then **Actions → Run script** again.
+   - ✅ *(UI)* the script's Status cell reads **Ran**.
+8. ☐ Row **Actions** → **Show run details**.
+   - ✅ *(UI)* the `.run-script-details-modal` and its status line are visible (`ScriptDetailsModal.expectOpen`).
+   - ✅ *(UI)* status line reads exactly **`Exit code: 0 (Script ran successfully.)`**.
+   - ✅ *(UI)* the recorded output reads exactly `wrote <id>`.
+9. ☐ Click **Close** on the details.
+   - ✅ *(UI)* the script's Status cell **still reads Ran** — closing the details does not revert the row to "Pending". Then **Close** the Run script modal.
+10. ☐ Reload `/hosts/:id` (fresh load), click the Activity card's **Past** tab.
+    - ✅ *(UI)* the tab is `aria-selected="true"`.
+11. ☐ Click the activity **"… ran the `<script>` script on this host."** (`activityCopy.script.ranOnThisHost`).
+    - ✅ *(UI)* the same Script details modal opens; its output reads `wrote <id>`. **Close**.
+12. ☐ Open the **Dashboard**.
+    - ✅ *(UI)* the activity feed has **"… ran the `<script>` script on `<host display name>`."** (`activityCopy.script.ran`; `expectActivity` walks up to 15 pages and reloads up to 10 times for a late activity).
+13. ☐ *(wait — no user action)* the VM runs the report on its 60s schedule and Fleet stores the row. Measured: the first row lands **~66s** after the report is created.
+    - ✅ *(API)* `GET /hosts/:id/reports/:reportId` → first row's `sha256` polls to **SHA-256 of this run's nonce** (5s interval, 240s budget; `getHostReportRows`). Hashing a per-run nonce at a per-run path means a file left by an earlier run cannot satisfy it.
+14. ☐ Reload `/hosts/:id`, click the **Reports** tab.
+    - ✅ *(UI)* URL ends in `/reports`; cards or the empty state rendered (`openReportsTab`).
+15. ☐ Type the report name into the Reports tab's **Search** box.
+    - ✅ *(UI)* the report's card (exact `h3` name) is visible.
+    - ✅ *(UI)* the card's inline first result — read in one DOM pass by `reportCardFirstResult` ([`HostDetailsPage.ts:529`](../../pages/hosts/HostDetailsPage.ts)) — **equals** `{ sha256: <expected hash> }` exactly (no other columns, no other value).
+16. ☐ *(API teardown)* delete script, delete report, queue the ad-hoc `rm -f` on the VM.
+
+**Assessment**
+- *Value:* the strongest real-device test in the area and arguably in the suite. It proves the **effect** of a script, not that one was sent: the device writes a nonce, the *same device* reads it back through osquery on a schedule, and the Reports-tab card renders that exact hash. One flow crosses script execution, the Run script modal, the details modal from two entry points, the host Activity card, the dashboard feed and stored host report results — each tied to this run by the nonce.
+- *Coverage gaps:* the **Upcoming** activity and the modal's **Pending** state are never observed (the VM is too fast — structurally hard to assert without a slow script); the Run script modal's script-**content** preview (the name button) is unused; no re-run of the same script (does the Status row and the history show two runs?); the dashboard-feed entry is never *clicked* (the feed opens the same details modal — a third entry point left untested); the host's Activity item is matched by name only, so its actor ("admin") is unasserted.
+- *Redundancy:* shares the Run script modal steps (3–9) with HOST-20/21/22 via the spec-local `runFromModal`; the Reports-tab card read overlaps HOSTP-09 ([03](03-hosts-premium.md)) — but this is the only test that gets a stored result *inside its own lifetime*, which HOSTP-09 and HOST-18 both explicitly say can't be done cheaply. It can; it costs ~70s.
+- *Efficiency / smells:*
+  - The two long waits (script status, report rows) are API polls — justified: the modal doesn't refetch, and the host page has no live-updating surface for stored results. The UI then re-asserts both values, so nothing is validated *only* through the API.
+  - Navigates by direct URL (`goto(host.id)`), not dashboard → Hosts → click-through as `playwright/CLAUDE.md` asks of e2e specs. Defensible for a host resolved by id, but it is a convention deviation.
+  - **On free the report is global**, `platform: darwin`, every 60s — every darwin osquery-perf simulation on the free instance is scheduled to run it for the test's lifetime too. Whether the sims actually post results is unverified here, but free's MySQL is the box already pegged at ~100% memory; worth a look if free flakes cluster around this spec.
+  - The marker cleanup is fire-and-forget and runs only from `finally` — a timed-out test (Playwright skips `finally` on timeout) leaves a few bytes in `/tmp` on the VM. Harmless, but it's the one piece of VM state nothing else sweeps.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-20 · Shared • Hosts • Run script › a script that exits non-zero reads as an error, with the output it recorded
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-run-script.spec.ts`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a script that exits non-zero reads as an error"`
+- **Project:** premium + free (shared) · **Scopes:** n/a (host's own fleet: VMs on premium, Unassigned on free)
+- **Mode:** UI+API · **Isolation:** standalone; independent of HOST-19/21/22. Budget 300s.
+- **Preconditions:** **the real Ubuntu VM** (`findOnlineHost(request, 'linux', { kind: 'real' })`, throws if none) — mandatory; a simulation never runs the script. Shares that VM's one-at-a-time script queue with HOST-21 and two HOST-22 variants.
+- **Data created:** library script `pw-run-script-fails-<id>.sh` (`#!/bin/bash`, `echo "failing on purpose <id>"`, `exit 3`) on the host's fleet; deleted in `finally`. The run's activity stays in the feed.
+
+**Flow**
+
+1. ☐ *(API setup)* upload the script to the host's fleet.
+2. ☐ Open the VM at `/hosts/:id` → **Actions → Run script**.
+   - ✅ *(UI)* the modal is open; the script's Status cell reads `---`.
+3. ☐ Row **Actions → Run** → confirmation reads `<script> will run on <host>.` → click **Run**.
+   - ✅ *(UI)* toast **"Script is running or will run when the host comes online."**
+4. ☐ *(wait)* ✅ *(API)* `last_execution.status` polls to **`error`** (180s).
+5. ☐ **Close** the modal, reopen **Actions → Run script**.
+   - ✅ *(UI)* the Status cell reads **Error**.
+6. ☐ Row **Actions → Show run details**.
+   - ✅ *(UI)* status line reads exactly **`Exit code: 3 (Script failed.)`** — the real exit code, not a generic failure.
+   - ✅ *(UI)* the output reads exactly **`failing on purpose <id> script execution error: exit status 3`** — what the script printed, followed by the line **Orbit appends to recorded output** on a non-zero exit (`script execution error: exit status N`). `toHaveText` normalises the newline between them to a space.
+7. ☐ **Close** the details, **Close** the modal.
+8. ☐ Reload `/hosts/:id` → Activity card **Past** tab.
+9. ☐ Click **"… ran the `<script>` script on this host."** — a failed run reads the same as a successful one in the activity list; only the details tell them apart.
+   - ✅ *(UI)* the details modal opens with status line **`Exit code: 3 (Script failed.)`**. **Close**.
+
+**Assessment**
+- *Value:* pins the failure path end to end on both the modal and the Activity-card entry points, and the exact-output assertion pins Orbit's appended error line — a genuine contract that the effect test can't see.
+- *Coverage gaps:* the dashboard feed is not checked here (HOST-19 covers the shape, and a failed run reads identically there — `activityCopy.script.ran` says so); the Activity-card details re-assert only the status line, not the output; no failure on macOS or Windows (only Linux/bash); no "script not found / interpreter missing" failure mode (which is what macOS Python would produce — see HOST-22).
+- *Redundancy:* steps 2–5 are HOST-19's modal round trip again; the Activity-card entry point duplicates HOST-19 step 11 with a different status line.
+- *Efficiency / smells:* hard-codes Orbit's error wording (`script execution error: exit status 3`) — correct and deliberate, but an Orbit copy change fails this spec with a product-side cause that has nothing to do with Fleet server; worth a comment pointing at the Orbit source. Direct-URL navigation, as HOST-19.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-21 · Shared • Hosts • Run script › a script that outlives the agent timeout is stopped, and the details say why
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-run-script.spec.ts`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a script that outlives the agent timeout is stopped"`
+- **Project:** premium + free (shared) · **Scopes:** n/a
+- **Mode:** UI+API · **Isolation:** standalone, but **writes shared configuration**: it lowers `script_execution_timeout` to **60s** on the host's fleet's agent options — **the VMs fleet on premium, the global agent options on free** (free has no fleets) — and restores the snapshot in `finally`. Budget 360s.
+- **Preconditions:** **the real Ubuntu VM** (`kind: 'real'`), mandatory. Why agent options at all: Fleet's default script timeout is **300s** and a host runs scripts one at a time, so a script sitting out the default would block every other spec's script on that VM for five minutes. The lowered value reaches the host in the same orbit config poll that delivers the pending script, so it is in force for this run. While lowered it also caps software uninstalls on those hosts (all finish well inside 60s) — and **on free, the global write applies to every host on the instance**, the ~300 simulations included.
+- **Data created:** library script `pw-run-script-timeout-<id>.sh` (`echo "started <id>"; sleep 180; echo "finished <id>"`), deleted in `finally`; the agent-options write, restored in `finally`. The snapshot logic drops a `script_execution_timeout` that already equals 60 rather than restoring it — only an earlier run of this test that died before `finally` (or a concurrent `--repeat-each` copy) can have left that value, and restoring it would strand the lowered timeout.
+
+**Flow**
+
+1. ☐ *(API snapshot)* read agent options — `GET /fleets/:id` → `fleet.agent_options` on premium, `GET /config` → `agent_options` on free (`getAgentOptions`). Upload the script.
+2. ☐ *(API setup)* write the snapshot back with `script_execution_timeout: 60` — `POST /fleets/:id/agent_options` (premium) or `PATCH /config { agent_options }` (free). Both replace the **whole document**, which is why a full snapshot is passed. *Manually:* **Settings → Organization settings → Agent options** (free) or **Settings → Fleets → VMs → Agent options** (premium), add a top-level `script_execution_timeout: 60` (a sibling of `config:`), Save — and put the original back afterwards.
+3. ☐ Open the Ubuntu VM at `/hosts/:id` → **Actions → Run script** → ✅ *(UI)* Status `---` → row **Actions → Run** → confirm → ✅ *(UI)* toast "Script is running or will run when the host comes online."
+4. ☐ *(wait)* ✅ *(API)* `last_execution.status` polls to **`error`** (**240s** budget — shorter than the 300s default timeout, so if the lowered value had *not* reached the host the kill would come too late and this wait would fail; that is the only thing that ties the test to the configured value, see below).
+5. ☐ **Close**, reopen **Actions → Run script** → ✅ *(UI)* Status reads **Error**.
+6. ☐ Row **Actions → Show run details**.
+   - ✅ *(UI)* status line reads exactly **`Error: Timeout. Fleet stopped the script to protect host performance.`** — **with no duration.** `RunScriptDetailsModal` fills in "after N seconds" only when it finds that phrase in the script's **output**, never from the configured timeout, so for this script the line carries none. The script's output is kept free of the word "seconds" so the copy stays fixed. **`TODO(fleetdm/fleet#54262)`** in the spec: once the modal reads the server's message, the line becomes "…after 60 seconds…" and the assertion should include `timeoutSeconds`.
+   - ✅ *(UI)* output reads exactly **`started <id> script execution error: signal: killed`** — what printed before the `sleep` is kept, `finished <id>` never ran, and **Orbit appends `signal: killed`** for the kill.
+7. ☐ *(API teardown)* restore the agent-options snapshot; delete the script.
+
+**Assessment**
+- *Value:* the only coverage of Fleet's script timeout, and the output assertion is precise in the right way — it proves the script was killed mid-run (before, not after, the `sleep`) rather than merely failing. The snapshot-restore is careful about its own leftovers.
+- *Coverage gaps:* **the configured timeout value itself is never asserted on screen** — blocked by fleetdm/fleet#54262 (the modal can't show it); until then the 60s is proven only indirectly, by the 240s wait being shorter than the 300s default. A slow queue that pushed pickup past ~180s would blur that. No check that the Activity card or feed distinguishes a timeout (they don't — worth a line saying so). No macOS/Windows timeout. The agent-options UI is never touched (setup is API).
+- *Redundancy:* modal round trip shared with HOST-19/20/22.
+- *Efficiency / smells:*
+  - ⚠️ **The restore lives only in `finally`, with no `afterEach`.** Playwright aborts a timed-out test before its `finally` runs (see README → "Things the audit's own conclusions should absorb"), so a timeout here leaves the 60s cap in place — on free, **globally** — until the *next* run of this test drops it. Every script and uninstall on those hosts in between runs under the lowered cap. `cleanup-setup` does not reset agent options.
+  - On premium the VMs fleet's agent options are gitops-declared (`agent_options: path: ../../lib/agent-options.yml` in `gitops/premium-fleetqa/fleets/vms.yml`); the test's write is invisible to gitops and would be overwritten by a concurrent apply (and vice versa).
+  - Costs ~60–70s of real wall-clock on the Linux VM's single script queue by design.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-22 · Shared • Hosts • Run script › a `<interpreter>` script runs under `<interpreter>` — zsh · bash · Python · PowerShell
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-run-script.spec.ts`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Run script › a .* script runs under"` (one variant: `-g "a Python script runs under Python"`)
+- **Project:** premium + free (shared) · **Variants (4, one `for` loop):**
+
+  | Variant | VM | File | Content | Output must match |
+  |---|---|---|---|---|
+  | zsh | **macOS** | `.sh` | `#!/bin/zsh` · `echo "zsh $ZSH_VERSION"` | `/^zsh \d+\.\d+/` |
+  | bash | **Ubuntu** | `.sh` | `#!/bin/bash` · `echo "bash $BASH_VERSION"` | `/^bash \d+\.\d+/` |
+  | Python | **Ubuntu** | `.py` | `#!/usr/bin/env python3` · prints `python <major>.<minor>` | `/^python 3\.\d+/` |
+  | PowerShell | **Windows** | `.ps1` | `Write-Output "powershell $($PSVersionTable.PSVersion)"` | `/^powershell \d+\.\d+/` |
+
+- **Mode:** UI+API · **Isolation:** four independent tests; budget 300s each.
+- **Preconditions:** one **real VM per variant** (`findOnlineHost(…, platform, { kind: 'real' })`), mandatory. **Python runs on Linux on purpose:** the macOS VMs have no Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub and exits non-zero. This is the only test in the area that uses the **Windows** VM for execution.
+- **Data created:** one library script `pw-run-script-<label>-<id><ext>` per variant on the host's fleet; deleted in `finally`.
+
+**Flow** (per variant)
+
+1. ☐ *(API setup)* upload the script.
+2. ☐ Open the variant's VM at `/hosts/:id` → **Actions → Run script** → ✅ *(UI)* Status `---` → row **Actions → Run** → confirm → ✅ *(UI)* toast "Script is running or will run when the host comes online."
+3. ☐ *(wait)* ✅ *(API)* `last_execution.status` polls to **`ran`** (180s).
+4. ☐ **Close**, reopen → ✅ *(UI)* Status **Ran**.
+5. ☐ Row **Actions → Show run details**.
+   - ✅ *(UI)* status line **`Exit code: 0 (Script ran successfully.)`**.
+   - ✅ *(UI)* output matches the variant's regex. Each script prints **its own interpreter's version variable**, which is empty (or a syntax error) under any other shell — so the output proves *which* interpreter ran, not just that something exited 0. E.g. `$ZSH_VERSION` is unset under `/bin/sh`, so a zsh script run by sh prints `zsh ` and fails the regex.
+
+**Assessment**
+- *Value:* good design — the version-variable trick makes each row falsifiable against "Fleet ran it under the wrong interpreter", which is the actual regression risk for shebang handling.
+- *Coverage gaps:* no Python on macOS (environmental — the stub; worth a note that a CLT-equipped VM would unlock it); no `.sh` without a shebang (Fleet's default `/bin/sh` path on macOS vs Linux), no `#!/bin/sh` row at all; no Windows `.bat`/`.cmd` rejection; the Activity card and feed are not checked (HOST-19 covers them).
+- *Redundancy:* four copies of the same modal round trip, plus HOST-19/20/21's. The loop could run all four uploads up front and poll them together, but the VMs execute serially anyway, so the saving would be navigation only.
+- *Efficiency / smells:* the regexes anchor at `^` but not `$`, so trailing noise is tolerated — fine for a version string. Direct-URL navigation, as HOST-19.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-23 · Shared • Hosts • a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it
+
+- **File:** [`playwright/tests/e2e/shared/hosts/mdm-commands.spec.ts`](../../tests/e2e/shared/hosts/mdm-commands.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a custom MDM command is acknowledged by the host"`
+- **Project:** premium + free (shared) — free and premium send custom commands the same way and render the same Activity card, toggle and details modal with the same copy · **Scopes:** n/a
+- **Mode:** UI+API (+CLI) · **Isolation:** standalone, no describe. Budget 240s.
+- **Preconditions:** **the real macOS VM** (`findOnlineHost(request, 'darwin', { kind: 'real' })`) — ✅ *(API)* found, and ✅ *(API)* its `mdm.enrollment_status` (`GET /hosts/:id`, `getHostMdmIdentity`) starts with **`On`**. An MDM-enrolled *simulation* never acknowledges anything, so the enrollment check alone would not be enough — `kind: 'real'` is what excludes them. The `fleetctl` binary must be on `PATH` (or `FLEETCTL_BIN`); it runs against an isolated per-suite config (`helpers/fleetctl.ts`), not `~/.fleetctl`.
+- **Data created:** a `UserList` MDM command in the VM's command history and its activity (both permanent — commands can't be withdrawn); the payload file under the test's output dir. **`UserList` is read-only** — it asks the Mac to list local users and changes nothing. Anything sent to a real VM must be (see `playwright/CLAUDE.md` → Test hosts).
+
+**Flow**
+
+1. ☐ *(CLI)* Write the plist (`<key>RequestType</key><string>UserList</string>`) to a file and run `fleetctl mdm run-command --payload <file> --hosts <hostname>`.
+   - ✅ *(CLI)* exit code 0.
+   - ✅ *(CLI)* stdout contains **"Hosts will run the command the next time they check into Fleet."**
+   - ✅ *(CLI)* stdout carries the results hint `fleetctl get mdm-command-results --id=<uuid>` — the **command UUID** is parsed out of it and ties every later view to *this* command.
+2. ☐ *(CLI, wait)* `fleetctl get mdm-command-results --id=<uuid>` until **STATUS** reads **`Acknowledged`** (5s interval, 180s — the VM answers in seconds but only on its next MDM check-in).
+   - ✅ *(CLI)* the results also show **TYPE** `UserList` and **HOSTNAME** `<hostname>`.
+3. ☐ Open the VM at `/hosts/:id` → Activity card **Past** tab → make sure **Show MDM commands** is **off** (`showMdmCommands(false)` clicks the switch only if needed, then asserts `aria-checked="false"`).
+4. ☐ Click the first **"… ran UserList as a custom MDM command on this host."** activity.
+   - ✅ *(UI)* the `.command-details-modal` opens with its request payload visible.
+   - ✅ *(UI)* its status line matches that same sentence (`activityCopy.mdmCommand.ranOnThisHost`).
+   - ✅ *(UI)* **Request payload** textarea contains `<string>UserList</string>` … `<key>CommandUUID</key><string><uuid></string>` — this run's command, not an earlier identical one (the `.first()` pick is safe because a wrong pick fails here rather than passing).
+   - ✅ *(UI)* **Response from `<hostname>`** textarea contains `<string><uuid></string>` followed by `<key>Status</key><string>Acknowledged</string>`. **Close**.
+5. ☐ Turn **Show MDM commands** **on**.
+   - ✅ *(UI)* the "ran UserList as a custom MDM command on this host." activity is **gone** (count 0) — the switch swaps the feed wholesale from activities to commands.
+6. ☐ Click the first **"The UserList command was acknowledged."** item (`activityCopy.mdmCommand.acknowledged`, anchored at `^`).
+   - ✅ *(UI)* status line contains **"The UserList command was acknowledged by `<hostname>`"**.
+   - ✅ *(UI)* the same payload + response UUID checks as step 4. **Close**.
+7. ☐ Click the **Upcoming** tab (switch still on).
+   - ✅ *(UI)* no item matching `^The UserList command is pending\.` — acknowledged means no longer upcoming. (The *pending* state itself is never observed: the VM acknowledges within seconds, so the Upcoming item is not asserted positively anywhere.)
+8. ☐ Open the **Dashboard**.
+   - ✅ *(UI)* the feed has **"… ran UserList as a custom MDM command on `<host display name>`."** (`activityCopy.mdmCommand.ran`).
+
+**Assessment**
+- *Value:* high. The only test that sends an MDM command to a real device and reads the **device's answer** back — through the CLI, both Activity-card views, and the feed — with the host views pinned to the command by UUID. It also covers the **Show MDM commands** toggle, which nothing else touches. Choosing a read-only command is exactly right for a VM that can't be rebuilt.
+- *Coverage gaps:* the command is sent via **CLI only** — the UI has no custom-command sender, so that is inherent, but `POST /commands/run` and the `GET /commands/results` API are not asserted directly either; the **response body's content** (the user list itself) is never checked beyond the Acknowledged status — asserting it contains a known local username would prove the device actually *executed* UserList; no Error/NotNow response path; `fleetctl get mdm-commands` (the list view) untested; Windows MDM commands (SyncML) untested although the Windows VM is enrolled.
+- *Redundancy:* the CLI steps overlap area 19's `fleetctl mdm` coverage ([19-fleetctl-cli.md](19-fleetctl-cli.md)) — but those can't reach a real device's acknowledgement, so this is complementary.
+- *Efficiency / smells:*
+  - ⚠️ **The dashboard assertion (step 8) is not tied to this run.** Its sentence carries no UUID, and every run sends the same `UserList` to the same host, so any earlier run's activity within the feed's first 15 pages satisfies it. The host-card checks are pinned by UUID; this one is decorative. Clicking through to the details modal from the feed and re-running `carriesThisCommand` would fix it.
+  - Step 7 is an absence-only check against a tab whose contents aren't otherwise waited on — `showUpcomingActivities` asserts the tab is selected, not that its list rendered, so it can pass on a still-loading panel.
+  - `CommandUUID` is matched by a regex over the payload textarea with `s` (dotall) — fine, but it depends on Fleet echoing the UUID into the rendered payload, which is Fleet's own injection, not what the test sent.
+  - Direct-URL navigation to the host.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -770,9 +1028,11 @@ other:
 | Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS Applications/Full-inventory filter is covered (HOST-17) but the *absence* of that dropdown on Windows/Linux is not |
 | Host reports tab | HOST-06, HOST-18 | "don't store results" toggle behaviour and card Actions untested; the Newest/Oldest sorts are covered only as an "awaiting results sorts last" partition, so the recency ordering itself is unasserted (and vacuous on free) |
 | Host live report | HOST-05 | Stop/cancel, Errors tab, results CSV, 0%-responded path |
-| Host Actions menu | HOST-12/13/14 (presence/absence only) | Transfer/Run script/Delete from details on free untested; Lock/Wipe/Unlock **commands never fired** (deliberate, `PARITY.md` §6) |
+| Host Actions menu | HOST-12/13/14 (presence/absence only); **Run script** fired by HOST-19…22 on both tiers | Transfer/Delete from details on free untested; Lock/Wipe/Unlock **commands never fired** (deliberate, `PARITY.md` §6); Run script's *disabled* state is covered by [CTL-26](11-controls-profiles-scripts-variables.md) |
+| Run script on a host (modal → run → details) | HOST-19 (effect, read back by a report), HOST-20 (non-zero exit), HOST-21 (timeout), HOST-22 (zsh / bash / Python / PowerShell) | Pending / Upcoming state never observed; no re-run; script-content preview unused; configured timeout value unassertable until fleetdm/fleet#54262; no Python on macOS (no Xcode CLT on the VMs) |
+| Custom MDM command | HOST-23 (`UserList` via `fleetctl`, read back on both Activity-card views + feed) | response *content* unchecked; no Error/NotNow path; no Windows command; the dashboard assertion is not tied to this run's UUID |
 | Host policies tab | — | **not covered** in this area (`policiesTab` locator exists, unused) |
-| Host activity card | — | **not covered** (`firstActivityTimestamp` / `activityEmptyState` locators exist, unused here) |
+| Host activity card | HOST-19, HOST-20 (Past → script run → details modal), HOST-23 (Past, **Show MDM commands** toggle, Upcoming) | the **Upcoming** tab is only ever asserted *empty* (HOST-23) — a queued item is picked up within seconds, so no spec sees one; no pagination; empty state (`activityEmptyState`) unused |
 | Host certificates card (Details tab) | HOST-15, HOST-16 | Issued/Expires columns compared to nothing; no Windows host; no user-scope certificate; no "host reports none → no card" negative; My-device copy of the card untested |
 
 **Duplication**
@@ -781,16 +1041,18 @@ other:
 2. **HOST-10/11 vs `premium/hosts/cta-visibility.spec.ts`** — the observer test is byte-identical across tiers and the admin case is a subset of the premium role loop. These CTAs have **no license gate**, so there is no tier matrix to express: this is straight duplication. (Contrast HOST-12/13/14, where the inversion is the whole point.)
 3. **Export hosts button** — visibility asserted in HOST-10, HOST-11 and both premium CTA tests; clicked only in HOST-08.
 4. **Report seeding** — HOST-05 and HOST-06 each create global marker reports via `POST /queries` and clean up with `deleteReportsMatching`; the reports area does the same again. Consistent pattern, worth a shared `disposableReport` fixture.
-5. **`findOnlineHost(..., { kind: 'real' })`** is invoked by HOST-12 and HOST-13 directly and by the `liveMacosHost` fixture for HOST-01/02/03/05/06/15/16/17/18 — nine tests on essentially the same machine per run, per tier. Only HOST-01/02/03/15/16/17 genuinely need a real device; HOST-05, HOST-06 and HOST-18 take it for a host id or a display name. Contention on the one VM is now the area's biggest scheduling cost.
+5. **`findOnlineHost(..., { kind: 'real' })`** is invoked by HOST-12 and HOST-13 directly and by the `liveMacosHost` fixture for HOST-01/02/03/05/06/15/16/17/18 — nine tests on essentially the same machine per run, per tier. Only HOST-01/02/03/15/16/17 genuinely need a real device; HOST-05, HOST-06 and HOST-18 take it for a host id or a display name. HOST-19…23 add **execution** load on top: the macOS VM takes HOST-19, HOST-23 and the zsh variant; the Ubuntu VM takes HOST-20, HOST-21 and two HOST-22 variants; the Windows VM takes PowerShell — and all three also take the batch runs in [CTL-24/25](11-controls-profiles-scripts-variables.md). A host runs scripts **one at a time**, so these queue behind each other (HOST-21 alone holds the Ubuntu queue ~60s), which is why their waits run to 180–240s. Contention on the VMs is now the area's biggest scheduling cost.
 
 **UI-vs-API balance**
 
-Healthy overall — 16 of 18 tests validate through the browser, and the two API assertions that carry weight are both *justified* rather than shortcuts:
+Healthy overall — 21 of 23 entries validate through the browser, and the two API assertions that carry weight are both *justified* rather than shortcuts:
 
 - **HOST-01** uses `GET /hosts/:id → detail_updated_at` to prove the "Last fetched less than a minute ago" text followed from *this* refetch. There is no UI-only way to distinguish that from a background detail cycle, so the API check is the assertion, not a shortcut.
 - **HOST-09** compares the downloaded enroll-secret file against `GET /spec/enroll_secret`. Correctness here *is* a value-match against server state; the UI cannot self-verify it.
 
 HOST-15/HOST-16 sit between the two: the API read is the **source of the expected values** (which certificates, with which issuer and scope), and the only assertion made on it is the precondition guard `total > 0`. That is the right shape for a table whose contents rotate with every VM re-provision — the alternative, fixed certificate names, would go stale on the next re-enrollment.
+
+HOST-19…23 use the API (and, in HOST-23, `fleetctl`) as **the clock**: the script-status poll, the report-rows poll and the `mdm-command-results` poll are waits for a real device, because the UI surfaces don't refetch on their own. Each waited-for value is then re-asserted in the UI (Status cell, details modal, report card, both Activity-card views), so none of them validates *only* through the API. HOST-23's CLI assertions are a surface in their own right, not a shortcut.
 
 API use elsewhere is **precondition/setup only** (host resolution, report seeding, teardown) — which is the right shape. No test in this area substitutes an API read for a UI assertion it could have made. The opposite problem exists instead: several UI assertions are weaker than they need to be (see quick wins 1 and 2), and the **absence-only** assertions in HOST-13/HOST-14 have no API counterpart proving the gate is enforced server-side (a `402` probe on `POST /hosts/:id/lock` in `tests/api/free/endpoints.spec.ts` would close that, and that file currently has no host/lock probes).
 
@@ -803,6 +1065,8 @@ API use elsewhere is **precondition/setup only** (host resolution, report seedin
 5. In HOST-04, replace the filter-pill `firstToken` substring check with the full title text, and assert the filtered hosts list actually contains the host the test drilled from ([`host-software.spec.ts:55`](../../tests/e2e/shared/hosts/host-software.spec.ts)).
 6. Harden HOST-15's two row assertions ([`host-certificates.spec.ts:66-67`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)): guard the issuer against `''` before asserting it (`toContainText('')` always passes), and read **Scope** out of its own cell instead of matching `System`/`User` anywhere in the row. Both are one-line changes and both currently admit a silent pass.
 7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* Full-inventory result rather than from page 1, or assert first that the Applications view is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
+8. Give HOST-21's agent-options restore an `afterEach` twin ([`host-run-script.spec.ts:320`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)) — Playwright skips `finally` on a test timeout, and on free the stranded 60s cap is **global**. Alternatively have `cleanup-setup` drop a `script_execution_timeout` of 60 the way it re-enables script execution.
+9. Tie HOST-23's dashboard assertion to this run ([`mdm-commands.spec.ts:134`](../../tests/e2e/shared/hosts/mdm-commands.spec.ts)): click the feed item and run `carriesThisCommand()` on the modal it opens, as the host-card steps already do. Today any earlier run's `UserList` activity satisfies it.
 
 **Bigger bets**
 

@@ -26,12 +26,17 @@
 #        run. They are presence checks, not patch policies: a patch policy would
 #        auto-update the host and erase the "behind" state the spec creates.
 #      - `playwright/setup/cleanup.steps.ts` clears a version pin the update spec
-#        left behind if it died mid-run (it never deletes anything here).
+#        left behind if it died mid-run. It never touches Claude, its policies
+#        or the report.
 #
 # Everything else on this fleet is per-run: specs upload their own scripts and
 # installers here and delete them in the same test. `cleanup.steps.ts` does not
-# wipe this fleet (the durable fixtures above live here), so a spec that dies
-# before its own cleanup leaves its leftovers until the next apply of this file,
+# wipe this fleet (the durable fixtures above live here); it sweeps only what the
+# host-execution specs name as their own — `fleet-pw-*` / `fleet-playwright-*`
+# packages, `7z2601-arm64.exe`, Itsycal, `pw-` scripts, `pw-run-script-` reports and
+# `[Install software] fleet-pw-` policies — so a spec that dies before its own
+# cleanup leaves nothing past the next run. The sweep deletes titles; it never
+# uninstalls from a VM. Anything else stays until the next apply of this file,
 # which deletes whatever it does not declare.
 #
 # Applied by hand, like qa.yml — not by the nightly. See the gitops README for
