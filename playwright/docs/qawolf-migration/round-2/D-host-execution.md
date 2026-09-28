@@ -2,6 +2,110 @@
 
 **31 source flows → 9 specs.** `Script execution and MDM commands` · `Software install / uninstall`
 
+> ## ▶ Start here — handoff, 2026-09-28
+>
+> Batches A, B, C and gitops-mode V1 are **merged** (PRs #61, #62); `main` is at the #62 merge. D is next and
+> is **not blocked on anything** — the real VMs are up and the Fleet-maintained app shelf is provisioned.
+>
+> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it — it carries the locator
+> priority, POM rules, Fleet-specific traps and the verification bar. `CLAUDE.md` calls it auto-invoked; do
+> not rely on that.
+>
+> Then read, in order: [README.md](README.md) (standing rules, the real-VM rules, the batch table),
+> `playwright/CLAUDE.md` (suite contract, especially **Test hosts**), then this file.
+>
+> Andrey has asked for three things to be designed, not just ported. They are the substance of this batch —
+> the source-flow table below is the floor.
+
+---
+
+### 1. A durable FMA fixture set — design this before writing install tests
+
+`gitops/premium-fleetqa/fleets/qa.yml` parks **10 apps × macOS/Windows on the QA fleet (id 102)**, permanently,
+because Fleet's catalog publishes exactly one version per app and only the hourly
+`maintained_apps_auto_update` cron accumulates an n-1 build. `cleanup.steps.ts` wipes Unassigned and
+Workstations and touches no other fleet, which is what makes the shelf durable.
+
+**Andrey wants this extended into a fleet that holds FMAs in deliberately different states** — some pinned,
+some tracking latest, some already installed on a host, some deliberately behind — so update/pin/install
+behaviour has stable subjects instead of whatever a previous run left behind. Design that: which states, on
+which fleet, provisioned how, and what keeps them in those states over weeks.
+
+Two hard constraints, both verified:
+
+- **A literal pin freezes that title's auto-update.** `ee/server/service/maintained_apps_auto_update.go`
+  early-returns when `pin != "" && !strings.HasPrefix(pin, "^")`. A caret pin (`^major`) keeps updating; an
+  exact pin does not. So "a permanently pinned app" and "an app that accumulates versions" cannot be the same
+  title.
+- **A stranded pin is a live hazard.** `version-pinning.spec.ts` clears its pin in a `finally` and asserts on
+  entry that it inherited an unpinned title — but **Playwright aborts a timed-out test before its `finally`
+  runs** (found empirically this session; it stranded a fleet). The robust home for the restore is
+  `setup/cleanup.steps.ts`, which already self-heals state however it got there — as a narrow, commented
+  exception that **unpins only, never deletes**, since that project deliberately touches nothing on QA today.
+
+### 2. Scripts — prove the script *did* something
+
+Asserting exit status and the activity feed is not enough. Andrey wants a script whose effect is
+**independently observable**, then verified through a saved report against the same host. That gives one flow
+covering script execution + the activity feed + host report results, and it deepens report coverage at the
+same time.
+
+File creation is the obvious lever but not the only one, and it may not be the best — pick something a report
+can read cleanly and that leaves the VM no worse off. Whatever it is, it must be **idempotent and reversible**:
+these are the three real VMs per tier and there is no re-provisioning automation.
+
+**Failing scripts need covering too** — an intentionally failing script, asserting the activity is correct and
+that the script list and details modal render the failure properly. Check whether QA Wolf covered this before
+designing from scratch; `controls/error-script-fails-in-ui-*` and `controls/script-timeout-*` are in the
+source table below.
+
+### 3. Software — the update path, not just install/uninstall
+
+Beyond install → verify → uninstall, Andrey wants the **Update** button exercised against an app that is
+*always installed* on the VM. **Claude is the suggested subject because the shelf carries it on both macOS and
+Windows.** The contract to assert:
+
+- the Update button is offered **only** when the available version is higher than the installed one;
+- when installed == available, **no** Update button;
+- after updating and a refetch, installed and available **match**.
+
+That is a real product contract and nothing covers it today.
+
+### 4. A wait-for-refetch helper
+
+Host actions depend on refetch, and a software install triggers one automatically — the tests just have to
+wait for it. That is the same wait in several specs across this batch, so build it once: a helper (or fixture)
+that waits for a host's vitals to be re-collected. `getHostDetailUpdatedAt` already exists and
+`host-details-smoke` proves the refresh through `detail_updated_at` rather than a relative-time string —
+start there rather than polling UI copy.
+
+### Traps this batch will hit
+
+- **`>1 GB installer` needs a decision before it is built** (2 source flows). Generating a gigabyte and pushing
+  it through the browser upload path is not the same problem as `Buffer.alloc` against an API endpoint, and the
+  assertion is about a progress affordance, not the limit. Raise it rather than guessing.
+- **Deleted simulations never come back.** osquery-perf enrols once at startup; the pool is only repopulated by
+  the daily refresh in `tools/perf-hosts/`. Budget deletions.
+- **premium-fleetqa is a 2 GB Render box.** Large software batches have 502'd it three times. Stage uploads;
+  a batch is all-or-nothing.
+- **Never assert an absolute count on a shared list.** Two specs were fixed for this in one day; sibling specs
+  delete and transfer hosts while yours runs.
+- **Never deploy a passcode profile to a real host** — permanent lockout, no re-provisioning. See
+  [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
+- **Free coverage is a standing goal.** Ask per flow whether free has the same surface; `shared/` when
+  identical, an explicit `free/` sibling when not, never `if (isPremium)`.
+- **The nightly runs at 05:00 (gitops) and 05:30 UTC (Playwright).** Don't let a long verification run overlap.
+- **`fleetctl` must match the server's minor version.** The suite ran 4.85.1 against 4.93 for two months and it
+  silently no-op'd a whole gitops `software:` section.
+
+### Done when
+
+The batch file's own **Done when** applies, plus: the FMA fixture design is written down where the next person
+finds it (a section in this file or a sibling doc), and anything it provisions is in `gitops/`, not seeded per
+run.
+
+---
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 

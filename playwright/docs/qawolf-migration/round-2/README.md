@@ -194,7 +194,7 @@ Not new — the round-1 lessons that cost the most, restated where builders will
    the React component for the role and accessible name, then confirm against the live DOM for anything
    conditional — a field's label is swapped for an error message when invalid, so `getByLabel` stops resolving
    exactly when the test needs it.
-2. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
+7. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
    ids change on every daemon restart. `kind: 'real'` for behaviour, `'simulated'` for volume.
 3. **Scope every assertion to your own records.** Never an absolute count on a shared list.
 4. **Snapshot and restore global config inside the test, not in a hook.**
@@ -208,17 +208,22 @@ Not new — the round-1 lessons that cost the most, restated where builders will
 
 ## 7. How a batch runs
 
-1. **Read the sources.** Paths in each batch file are relative to
+1. **Invoke the `playwright-test-author` skill first**, via the Skill tool, and follow it. `CLAUDE.md`
+   describes it as auto-invoked; do not rely on that — call it explicitly before writing anything. It carries
+   the locator priority, the POM rules, the Fleet-specific traps and the verification bar this suite is held
+   to. `playwright-test-reviewer` is the explicit counterpart when auditing existing specs rather than
+   writing new ones.
+2. **Read the sources.** Paths in each batch file are relative to
    `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/`. Mine `node-20-helpers-premium.js` for toast copy
    and nav paths; port none of it.
-2. **Open the existing spec for every augment row before writing anything.** Titles lie. Round 1's most common
+3. **Open the existing spec for every augment row before writing anything.** Titles lie. Round 1's most common
    rework was rebuilding something we already had.
-3. **Build the page objects first.** The POM table is the batch's real dependency graph.
-4. **Ship in slices** — one concern per commit: POM + spec + doc update, `npm run check` clean, live-run green.
+4. **Build the page objects first.** The POM table is the batch's real dependency graph.
+5. **Ship in slices** — one concern per commit: POM + spec + doc update, `npm run check` clean, live-run green.
    Don't batch five specs and run them at the end; you lose failure attribution.
-5. **Append to [../DELIVERY-LOG.md](../DELIVERY-LOG.md)** when a slice lands. Claims are verified by `grep`ing
+6. **Append to [../DELIVERY-LOG.md](../DELIVERY-LOG.md)** when a slice lands. Claims are verified by `grep`ing
    the spec path, not by ticking a box — round 1's per-batch checkbox trackers drifted and were deleted.
-6. **When a flow won't go green,** decide which of the three it is — test bug, infrastructure gap, or real
+7. **When a flow won't go green,** decide which of the three it is — test bug, infrastructure gap, or real
    product defect — and act accordingly. "Make it green" is the wrong instinct; see
    [../PLAYBOOK.md §8](../PLAYBOOK.md#8-when-a-flow-wont-go-green) and
    [`../blocked-by-product-bugs.md`](../../blocked-by-product-bugs.md).
