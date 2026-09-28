@@ -1,8 +1,8 @@
 # Labels, packs, dashboard automations, free paywalls — test audit
 
-**Specs covered:** 6 files · **Entries:** 21 · **Test declarations:** 37 (the paywall spec's 17 loop-generated cases are documented as one entry, MISC-20) · **Projects:** premium / free (packs runs in both)
+**Specs covered:** 10 files · **Entries:** 29 · **Test declarations:** 47 (loop-generated cases counted individually — the paywall spec contributes 16 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
 
-This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the dashboard's **activity-feed automations** modal (the global `activities_webhook`), and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits.
+This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the **dashboard** itself — its platform filter, the "Hosts enrolled" chart, the historical chart card and the per-fleet switches that empty it, plus the **activity-feed automations** modal (the global `activities_webhook`) — and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits. The four dashboard specs are read-only apart from MISC-27, which is the only test in the suite that creates and deletes a fleet of its own — a sanctioned exception, for a reason worth reading before re-running it by hand.
 
 ## Contents
 
@@ -29,6 +29,14 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-19 | `premium/dashboard/automations-activity.spec.ts` | enabling, editing, and disabling each land in the activity feed | UI+API | ☐ |
 | MISC-20 | `free/paywalls.spec.ts` | Free • paywall presence › ×17 URL cases (one `test()` per row) | UI | ☐ |
 | MISC-21 | `free/paywalls.spec.ts` | Settings — no Teams nav link | UI | ☐ |
+| MISC-22 | `shared/dashboard/platform-cards.spec.ts` | Dashboard • platform cards › the platform filter defaults to All and swaps in each platform view | UI | ☐ |
+| MISC-23 | `shared/dashboard/platform-cards.spec.ts` | … › the `<platform>` row in Hosts enrolled opens its enrolled hosts (×3) | UI | ☐ |
+| MISC-24 | `premium/dashboard/fleet-scoped-cards.spec.ts` | Hosts online renders for a fleet scope, with its controls | UI+API | ☐ |
+| MISC-25 | `premium/dashboard/fleet-scoped-cards.spec.ts` | switching to Vulnerability exposure re-requests the chart for the fleet | UI+API | ☐ |
+| MISC-26 | `premium/dashboard/fleet-scoped-cards.spec.ts` | applying a platform filter narrows the request and flags the chart Filtered | UI+API | ☐ |
+| MISC-27 | `premium/dashboard/historical-data-collection.spec.ts` | each fleet switch empties its own chart dataset, and re-enabling restores both | UI+API | ☐ |
+| MISC-28 | `free/dashboard/historical-data-collection.spec.ts` | the chart card offers one dataset and charts it | UI | ☐ |
+| MISC-29 | `free/dashboard/historical-data-collection.spec.ts` | Activity & data retention offers the hosts online switch and not the premium one | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
@@ -761,6 +769,396 @@ other:
 
 ---
 
+### MISC-22 · Dashboard • platform cards › the platform filter defaults to All and swaps in each platform view
+
+- **File:** [`playwright/tests/e2e/shared/dashboard/platform-cards.spec.ts`](../../tests/e2e/shared/dashboard/platform-cards.spec.ts)
+- **Grep:** `npx playwright test -g "the platform filter defaults to All and swaps in each platform view"`
+- **Projects:** premium **and** free (a `shared/` spec — it runs once per tier) · **Scopes:** none; the case never touches the fleet dropdown, so premium runs it under whatever scope the dashboard opens with
+- **Mode:** UI · **Isolation:** independent, read-only; no shared state
+- **Preconditions:** the instance carries hosts on **macOS, Windows and Linux** (both osquery-perf pools do). ChromeOS / iOS / iPadOS / Android are deliberately left out of the case table — neither instance has hosts for them, so their rows render as inert text rather than links.
+- **Data created:** none
+
+> **The dashboard has no "platform cards" any more.** The name is the QA Wolf flow's, kept on the file. Fleet replaced that row of cards with the **Hosts enrolled** bar chart (`HostsEnrolledCard`), which is what MISC-23 clicks. What survives under the old name is the **Platform:** filter and the host-count cards it swaps in and out — this case.
+
+**Flow**
+
+1. ☐ Open `/dashboard` via URL (`DashboardPage.goto()`).
+   - ✅ *(UI)* The first dashboard card is visible — `goto()` anchors on `data-testid="card"`.
+   - ✅ *(UI)* The **Platform:** filter's single-value reads exactly `All`.
+   - ✅ *(UI)* The **Total hosts** host-count card is visible. `hostCountCard(name)` matches a *link* whose accessible name ends in the card name (the rendered name is `<count> Total hosts`), so the count itself is never asserted.
+2. ☐ For each platform in turn — **macOS** → `/dashboard/mac`, **Windows** → `/dashboard/windows`, **Linux** → `/dashboard/linux` — pick it in the **Platform:** filter.
+   - ✅ *(UI)* URL matches that platform's path (asserted inside `selectPlatform()`, then again in the spec — selecting a platform is a `router.push`, so the path *is* the proof the filter took effect).
+   - ✅ *(UI)* The filter's single-value reads the platform label (inside `selectPlatform()`).
+   - ✅ *(UI)* **Total hosts** count is **0** — the all-platforms aggregate card is dropped from every platform view.
+   - ✅ *(UI)* An **Operating systems** `<h2>` is visible — the card that only a platform view renders.
+   - ✅ *(UI)* **macOS / Windows only:** the vendor sentence `Apple releases updates and fixes for supported operating systems.` / `Microsoft releases …` is visible. Linux carries no vendor, so that assertion is skipped for it.
+3. ☐ Set the filter back to **All**.
+   - ✅ *(UI)* **Total hosts** is visible again.
+
+**Assessment**
+- *Value:* the only functional coverage the dashboard's platform routing has. It pins four things at once: the filter's default, the three `router.push` destinations, the aggregate card disappearing on a platform view, and the per-platform **Operating systems** card arriving with the right vendor copy. Cheap and deterministic — one page load, no writes.
+- *Coverage gaps:* the OS card's *contents* (the version list, the host counts, the "View all hosts" link) are never touched; **Missing hosts** / **Low disk space hosts** / **ABM issue hosts** cards are never asserted on any view, nor the premium-only extra card; no host-count value is compared to anything, so a card reading `0 Total hosts` on a 300-host instance passes; the four platforms the instances carry no hosts for (ChromeOS, iOS, iPadOS, Android) are never visited, so their `/dashboard/<platform>` routes are unproven; direct-URL entry to `/dashboard/mac` (rather than picking the filter) is never exercised, so the filter's *rehydration* from the URL is untested.
+- *Redundancy:* none. `DashboardPage.goto()` is used as an anchor by a dozen specs across the suite, but nothing else asserts a dashboard card.
+- *Efficiency / smells:*
+  - The vendor sentence is built with a raw `dashboard.page.getByText(...)` in the spec body rather than a POM accessor — the one raw locator in the file.
+  - `platformFilter` / `platformFilterValue` are react-select v5 class selectors (`.dashboard-page__platform-filter .react-select__control`), documented in the POM as unavoidable because the trigger exposes no role.
+  - `selectPlatform()` is idempotent (reads the current value and returns without clicking if it already matches), so the closing "back to All" step is a real navigation only because the loop left it on Linux.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-23 · Dashboard • platform cards › the `<platform>` row in Hosts enrolled opens its enrolled hosts — ×3 platforms
+
+- **File:** [`playwright/tests/e2e/shared/dashboard/platform-cards.spec.ts`](../../tests/e2e/shared/dashboard/platform-cards.spec.ts)
+- **Grep:** one case at a time — `npx playwright test -g "the macOS row in Hosts enrolled opens its enrolled hosts"` (likewise `Windows`, `Linux`); the whole group with `-g "row in Hosts enrolled"`
+- **Projects:** premium **and** free · **Scopes:** none
+- **Mode:** UI · **Isolation:** three independent loop-generated tests (macOS / Windows / Linux), documented here as one entry; each is its own page load, none share state
+- **Preconditions:** hosts enrolled on all three platforms, and Fleet's **built-in platform labels** present (they always are — Fleet ships them)
+- **Data created:** none
+
+> **Read this before "fixing" a green run.** The QA pools are osquery-perf **simulations** that answer *every* built-in label query, so the "macOS" label holds ~200 mostly-**Ubuntu** hosts on both instances. That is a fixture artefact, not a Fleet bug. The spec therefore asserts the **link contract** — that clicking a platform row opens the hosts list scoped to the label named for that platform, enrolled hosts only — and **never** the rows behind it. A "every row on this page is a Mac" assertion would be red because of our hosts, not Fleet, and a green one would prove nothing.
+
+**Flow** *(per platform)*
+
+1. ☐ Open `/dashboard` via URL.
+   - ✅ *(UI)* First dashboard card visible (`goto()` anchor).
+   - ✅ *(UI)* The **Hosts enrolled** `<h2>` is visible.
+2. ☐ Click the platform's row in the **Hosts enrolled** chart — the y-axis tick, a `role="button"` whose accessible name is `"<platform> hosts"` (Fleet's `ClickableYAxisTick`). A platform with no hosts and no label to link to renders as inert text instead, so `toHaveCount(0)` is how "not clickable" would read.
+   - ✅ *(UI)* URL matches `/hosts/manage/labels/\d+` — Fleet resolves the built-in label's id server-side, so only the **shape** is pinned, never a literal id.
+   - ✅ *(UI)* URL contains `status=enrolled`.
+   - ✅ *(UI)* The hosts list's label-filter trigger reads exactly the platform label — `HostsListPage.labelFilter.trigger` (`.label-filter-select__control`; react-select v5, no role). This is the assertion that ties the opened page to the platform that was clicked.
+   - ✅ *(UI)* A data row **or** the empty state is visible — `DataTable.rowOrEmpty()`.
+
+**Assessment**
+- *Value:* pins `MANAGE_HOSTS_LABEL(labelId)` + `status=enrolled` — the one place in the suite where the dashboard's most-clicked link is proven to land somewhere coherent. The filter-reads-the-platform-name assertion is what makes it more than a smoke test: a wiring bug that sent every row to the same label id would fail on it.
+- *Coverage gaps:* by design, nothing about **which hosts** come back (see the box above) — and by consequence nothing proves the label id in the URL is the *right* built-in label rather than merely *a* label whose filter chip happens to be named after the platform. The bar's host **count** is never read, nor compared with the hosts list's own count; a row for a platform with zero hosts is never asserted to be inert (the "renders as inert text" behaviour is documented in the POM but never tested); the chart's own heading is the only part of `HostsEnrolledCard` asserted.
+- *Redundancy:* the `rowOrEmpty()` tail overlaps every hosts-list spec in [`02-hosts-shared-and-free.md`](02-hosts-shared-and-free.md); the unique content is the URL shape plus the label-filter value.
+- *Efficiency / smells:* three tests × (one dashboard load + one hosts-list load) to assert one link template three times — the platform axis buys the "not all rows point at the same label" guarantee and nothing else. `hostsList` is pulled as a fixture purely for `labelFilter.trigger` and `table.rowOrEmpty()`.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-24 · Premium • Dashboard • fleet-scoped chart card › Hosts online renders for a fleet scope, with its controls
+
+- **File:** [`playwright/tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts`](../../tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts)
+- **Grep:** `npx playwright test -g "Hosts online renders for a fleet scope, with its controls"`
+- **Project:** premium · **Scope:** the **VMs** fleet (`vmsFleetId` worker fixture, resolved once per worker by name via `GET /fleets`; it throws if the fleet is missing)
+- **Mode:** UI+API · **Isolation:** independent, read-only — the card writes nothing
+- **Preconditions:**
+  - The **VMs** fleet exists and has **≥30 days of host check-in history**. This is why the spec is not on Workstations: Workstations holds no hosts, so its chart is a field of "No data" cells that cannot tell a working query from a broken one.
+  - Deployment-wide historical collection is **on** for `uptime`. Not asserted as a precondition — it surfaces as a failure on the "Data collection is disabled" count-0 assertion.
+- **Data created:** none
+- **Cross-link:** free's cut-down counterpart is **MISC-28**; the write half of this surface is **MISC-27**.
+
+**Flow**
+
+1. ☐ Open `/dashboard` via URL.
+   - ✅ *(UI)* First dashboard card visible.
+2. ☐ Select **VMs** in the fleet dropdown (`TeamDropdown.selectByLabel('VMs')`), with a response listener armed **before** the click.
+   - ✅ *(API)* A `GET …/charts/uptime?…fleet_id=<vmsFleetId>` response arrives with status **200**. Arming the wait first is what makes this an assertion rather than decoration: it proves the scope change actually re-queried the chart *for that fleet*, and it is the synchronisation point every cell assertion below depends on.
+   - ✅ *(UI)* The dropdown's value is exactly `VMs` (asserted inside `selectByLabel()`, which is anchored to the whole label so one fleet name can't select another that contains it).
+3. ☐ (No user action) Read the card's chrome.
+   - ✅ *(UI)* The dataset dropdown's single-value reads `Hosts online`.
+   - ✅ *(UI)* `.chart-card__title` count is **0** — premium must render the dataset *dropdown*, not free's plain heading. This is the tier-shape assertion, and it is the exact mirror of MISC-28's.
+   - ✅ *(UI)* The card's info icon is visible.
+   - ✅ *(UI)* **Configure chart filters** is visible.
+   - ✅ *(UI)* The checkerboard legend contains both `No data` and `More`.
+4. ☐ (No user action) Read the chart body.
+   - ✅ *(UI)* The **Data collection is disabled** heading count is **0** — without this, an instance-wide setting that emptied the chart would pass as "no data yet".
+   - ✅ *(UI)* At least one cell **with hosts** is visible — `chartCellsWithHosts` matches only cells whose accessible name ends `: N hosts`, excluding `No data` cells. The stronger of the two cell locators.
+
+**Assessment**
+- *Value:* the premium tier-shape check (dropdown, not heading) plus proof that picking a fleet re-issues a *fleet-scoped* chart query that returns real hours. The `fleet_id=` predicate on the response is the only place in the suite that proves the chart is scoped at all.
+- *Coverage gaps:* the chart's **values** are never checked against anything (no comparison with the host count, no 30-day window assertion); the info icon's tooltip copy is unread; the legend is matched on two words, not its buckets; switching *back* to All fleets / Unassigned is untested, so a scope that sticks would pass; no negative case for a fleet with no history (which is exactly what MISC-27's throwaway fleet renders, but that spec asserts presence rather than emptiness).
+- *Redundancy:* the "controls are visible" trio (info icon, Configure chart filters, disabled-heading count 0) repeats in MISC-25 and again in MISC-28; only the legend and `chartCellsWithHosts` assertions are unique here.
+- *Efficiency / smells:*
+  - The card is scoped by `.chart-card` and its internals by BEM/`checkerboard-viz` classes — documented in the POM (the card has no heading of its own on premium), but it means the whole entry rests on class selectors.
+  - The `waitForResponse` here carries **no timeout**, and the project leaves `actionTimeout` unset, which makes the wait unbounded — a chart request that never lands burns the whole test budget instead of failing where it broke. MISC-27's helper caps the same wait at 60 s; this file does not.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-25 · Premium • Dashboard • fleet-scoped chart card › switching to Vulnerability exposure re-requests the chart for the fleet
+
+- **File:** [`playwright/tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts`](../../tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts)
+- **Grep:** `npx playwright test -g "switching to Vulnerability exposure re-requests the chart for the fleet"`
+- **Project:** premium · **Scope:** **VMs** fleet
+- **Mode:** UI+API · **Isolation:** independent, read-only
+- **Preconditions:** as MISC-24, plus deployment-wide collection on for `vulnerabilities`
+- **Data created:** none
+
+> **⚠️ `/charts/cve` takes 10–11 seconds on the QA instances, even when they are idle** — longer than the suite's 10 s assertion timeout. This is the single most important fact for re-running any of MISC-25 / MISC-27 by hand: the chart body genuinely is empty for ten seconds after the dataset switch, and that is normal. Every positive chart assertion in these specs waits on the `/charts/<metric>` response *first*, and asserting on cells without that wait fails as an empty chart under any load.
+
+**Flow**
+
+1. ☐ Open `/dashboard` via URL, select **VMs** in the fleet dropdown.
+   - ✅ *(UI)* Dataset dropdown reads `Hosts online` — the starting state.
+2. ☐ Switch the dataset dropdown to **Vulnerability exposure**, with a response listener armed before the click.
+   - ✅ *(API)* `GET …/charts/cve?…fleet_id=<vmsFleetId>` → **200**. Ten to eleven seconds (see the box).
+   - ✅ *(UI)* The dataset dropdown reads `Vulnerability exposure` (inside `selectChartDataset()`).
+3. ☐ (No user action) Read the card.
+   - ✅ *(UI)* **Data collection is disabled** heading count **0**.
+   - ✅ *(UI)* The first chart cell is visible — note this uses `chartCells`, which matches `No data` cells **too**, so it is weaker than MISC-24's `chartCellsWithHosts`. Deliberate: a fleet can legitimately have no CVE exposure in a given hour.
+   - ✅ *(UI)* Info icon visible; **Configure chart filters** visible — the controls survive a dataset switch.
+
+**Assessment**
+- *Value:* the only coverage of the premium-gated `cve` dataset and of the dataset dropdown as a control (that switching re-queries, scoped, rather than re-slicing a cached payload).
+- *Coverage gaps:* the cve chart's contents are entirely unasserted beyond "a cell exists"; nothing checks the dataset selection survives a reload, or that switching *back* to Hosts online re-requests `uptime`; free's absence of this dataset is asserted in MISC-28 by the dropdown's absence rather than by a paywall, so `cve` has no explicit tier gate anywhere.
+- *Redundancy:* the controls trio duplicates MISC-24; MISC-27 also switches to Vulnerability exposure and waits on `/charts/cve` three times, so this dataset switch is exercised four times per premium run at ~11 s a call.
+- *Efficiency / smells:* the unbounded `waitForResponse` noted in MISC-24 applies here too, and it matters more — `cve` is precisely the request most likely to hang. Two dashboard loads per run (this and MISC-24) each re-select VMs from scratch rather than entering with `goto({ fleetId })`, which the CRUD-spec convention in `playwright/CLAUDE.md` prescribes for scope-aware navigation.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-26 · Premium • Dashboard • fleet-scoped chart card › applying a platform filter narrows the request and flags the chart Filtered
+
+- **File:** [`playwright/tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts`](../../tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts)
+- **Grep:** `npx playwright test -g "applying a platform filter narrows the request and flags the chart Filtered"`
+- **Project:** premium · **Scope:** **VMs** fleet
+- **Mode:** UI+API · **Isolation:** independent. **Nothing persists** — `ChartCard` keeps filter state in component state only ("UI edits are not saved"), so the reload at the end *is* the cleanup, and asserting the pill is gone is the proof nothing was written.
+- **Preconditions:** as MISC-24
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open `/dashboard` via URL, select **VMs**.
+   - ✅ *(UI)* Dataset dropdown reads `Hosts online`.
+   - ✅ *(UI)* The **Filtered** pill count is **0** — the pill appears only once the applied filters differ from the card's seeded defaults, so its absence here is the baseline the rest of the case is measured against.
+2. ☐ Click **Configure chart filters**.
+   - ✅ *(UI)* The `.chart-filter-modal` is visible (inside `openChartFilters()`).
+3. ☐ In the modal's platforms field (Fleet's legacy react-select v1 `Dropdown`, whose closed control shows its `All platforms` placeholder), pick **macOS**.
+4. ☐ Click **Apply**, with a response listener armed before the click.
+   - ✅ *(UI)* The modal is hidden afterwards (inside `applyChartFilters()`).
+   - ✅ *(API)* `GET …/charts/uptime?…fleet_id=<vmsFleetId>…platforms=darwin` → **200**. The `platforms=darwin` predicate is the whole point: it proves the UI label **macOS** is translated to Fleet's platform token and reaches the server, which no DOM assertion could show.
+   - ✅ *(UI)* The **Filtered** pill is visible.
+5. ☐ Reload the page.
+   - ✅ *(UI)* Dataset dropdown reads `Hosts online`.
+   - ✅ *(UI)* The **Filtered** pill count is **0** again — filters live in component state, never in config.
+
+**Assessment**
+- *Value:* the only assertion in the suite that a UI filter label is translated into the API's own vocabulary (`macOS` → `darwin`), and the only "this control deliberately does not persist" check on the dashboard. Both are the kind of thing a DOM-only test cannot see.
+- *Coverage gaps:* only the **platforms** half of the filter modal is used — the **Labels** field is never touched, nor a multi-select of two platforms, nor clearing a filter back to `All platforms` (the pill's disappearance is only ever observed via a reload, never via the UI path); the modal's **Cancel** is never clicked; the chart body is not re-read after filtering, so nothing checks the narrowed data actually rendered — only that the request went out and a pill appeared.
+- *Redundancy:* the VMs selection and the `Hosts online` baseline repeat MISC-24 and MISC-25 for a third time in the same file.
+- *Efficiency / smells:* `selectChartFilterPlatforms()` opens the field by clicking `getByText('All platforms')` — the placeholder text, which doubles as the "nothing selected" state, so the method can only ever open a *fresh* filter field; re-opening it after a selection would not find that text. Fine for this one case, a trap for the next author. Same unbounded `waitForResponse` as MISC-24/25.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-27 · Premium • Dashboard • historical data collection › each fleet switch empties its own chart dataset, and re-enabling restores both
+
+- **File:** [`playwright/tests/e2e/premium/dashboard/historical-data-collection.spec.ts`](../../tests/e2e/premium/dashboard/historical-data-collection.spec.ts)
+- **Grep:** `npx playwright test -g "each fleet switch empties its own chart dataset, and re-enabling restores both"`
+- **Project:** premium · **Scope:** a **throwaway fleet the test creates and deletes**
+- **Mode:** UI+API · **Isolation:** one standalone test, `test.setTimeout(180_000)` — three fleet-settings saves (two behind a confirmation), four dashboard loads, three waits on `/charts/cve`
+- **Preconditions:** deployment-wide historical collection **on for both datasets** — read via `getGlobalHistoricalData` and `test.skip`ped otherwise. That is not just a data guard: the per-fleet checkboxes grey out with a "Disabled globally" tooltip when the matching global switch is off, so there would be nothing to click.
+- **Data created / mutated:** a fleet `pw-historical-data-<epoch-ms>-<parallelIndex>` via `POST /fleets`, created **before the first page load** so the fleet dropdown (which reads the team list once at app boot) already lists it; the `parallelIndex` suffix keeps the name unique under `--repeat-each`, since Fleet rejects a duplicate fleet name. Its `features.historical_data.{uptime,vulnerabilities}` are written three times and left back at `{true, true}`. The fleet is then deleted.
+- **Cross-link:** the read-only half of this surface is **MISC-24…26**; free's read-only half is **MISC-28 / MISC-29**.
+
+> **⚠️ Blast radius — the reason this spec creates its own fleet.** Ticking a retention checkbox **deletes the history Fleet has already collected** for that scope. Fleet's own confirmation says so: *"Previously collected data will be deleted. This cannot be undone."* A fleet made seconds earlier has nothing to lose; every standing fleet does — and the VMs fleet's 30 days is exactly what MISC-24…26 plot, in parallel with this. Running this by hand against **Workstations, VMs or any fleet the instance keeps** destroys data with no recovery path.
+>
+> **This is a sanctioned, documented exception to `playwright/CLAUDE.md`'s "do not create or delete teams from test bodies".** That rule exists to protect the gitops-provisioned Workstations fleet, which nothing may delete. A fleet that lives only between the top of this test and its `finally` is a different thing, and it is the only safe subject here. Do not "simplify" it onto a standing fleet.
+>
+> **The deployment-wide switches on Advanced options are read, never written.** They delete *every* fleet's history at once. The original QA Wolf flow flipped them as setup; this spec does not, and neither should a manual runner.
+
+> **⚠️ Polarity trap.** The checkboxes on a fleet's settings page are **disables** — ticked means "stopped collecting" — while the API field is their opposite (`features.historical_data.uptime: true` means "still collecting"), and the deployment-wide checkboxes on Advanced options are **enables** (see MISC-29). All of them render Fleet's `Checkbox`, whose accessible name is the `name` prop rather than the visible label, so the per-fleet *disable* and the deployment-wide *enable* **both resolve as `disableHostsActive`** while meaning opposite things. Read the helper name and the expected value, never the locator's name.
+
+**Flow**
+
+1. ☐ (No user action) Read `GET /config` → `features.historical_data`.
+   - ✅ *(API)* Both `uptime` and `vulnerabilities` are `true`; otherwise the test skips.
+2. ☐ Create the throwaway fleet (`POST /fleets`) — before any page load.
+3. ☐ Open `/dashboard?fleet_id=<id>` and select the new fleet in the dropdown.
+   - ✅ *(API)* `/charts/uptime?…fleet_id=<id>` → 200, waited on **before** any cell assertion, capped at 60 s (`withChartResponse`).
+   - ✅ *(UI)* The dropdown reads the fleet's name.
+   - ✅ *(UI)* `.data-collection-disabled-state` count **0**.
+   - ✅ *(UI)* The first chart cell is visible. A brand-new fleet has no hosts and no history, so this grid is entirely `No data` cells — the grid's **presence**, not its values, is the signal that the dataset is still being collected. (Hence `chartCells`, not `chartCellsWithHosts`.)
+4. ☐ Switch the dataset to **Vulnerability exposure**.
+   - ✅ *(API)* `/charts/cve?…fleet_id=<id>` → 200 — **10–11 s**, capped at 60 s.
+   - ✅ *(UI)* Disabled panel count 0; first chart cell visible.
+5. ☐ Open `/settings/fleets/settings?fleet_id=<id>` (`TeamSettingsPage.goto()`).
+   - ✅ *(UI)* **Webhook settings** heading visible (the `goto()` anchor).
+   - ✅ *(UI)* **Activity & data retention** heading visible.
+6. ☐ Tick **Disable hosts online historical reporting** — leaving vulnerabilities alone — dismiss any lingering toasts, and click **Save**.
+   - ✅ *(UI)* The checkbox reads `aria-checked="true"` (inside `setHistoricalDataDisabled('hostsOnline', true)`).
+   - ✅ *(UI)* The confirmation modal contains `fleet "<fleet name>"` — the proof that a **per-fleet** switch, not the deployment-wide one, is about to be written.
+   - ✅ *(UI)* The modal's list items are exactly `['Hosts online']`. Fleet lists only the datasets *this save newly turns off*, so a dataset already disabled is absent — which is what makes step 11's assertion meaningful.
+7. ☐ Click **Save and disable**.
+   - ✅ *(UI)* The modal is hidden and a success toast `Successfully updated settings.` shows (both inside `confirmDisable()`).
+   - ✅ *(API)* The fleet's `features.historical_data` equals `{ uptime: false, vulnerabilities: true }`.
+8. ☐ Re-open `/dashboard?fleet_id=<id>`, re-select the fleet, switch the dataset to **Hosts online**.
+   - ✅ *(UI)* The **Data collection is disabled** heading is visible.
+   - ✅ *(UI)* The panel's sentence contains `to see data for this fleet` — the sentence names the scope the switch applied to, which is how "this fleet" is told apart from "all fleets".
+   - ✅ *(UI)* `chartCells` count is **0**.
+9. ☐ Switch the dataset to **Vulnerability exposure**.
+   - ✅ *(API)* `/charts/cve?…fleet_id=<id>` → 200 (again 10–11 s).
+   - ✅ *(UI)* Disabled panel count 0; first chart cell visible — **one dataset collapses while the other keeps charting**, which toggling both at once could never show. This is the case's central assertion.
+10. ☐ Switch back to **Hosts online** and click **Turn on** in the disabled panel.
+    - ✅ *(UI)* URL matches `/settings/fleets/settings?fleet_id=<id>` — the card's way back routes to the switch that emptied it.
+    - ✅ *(UI)* **Activity & data retention** heading visible.
+    - ✅ *(UI)* The hosts-online checkbox reads `aria-checked="true"`.
+11. ☐ Tick **Disable vulnerability exposure historical reporting**, dismiss toasts, click **Save**.
+    - ✅ *(UI)* The confirmation lists exactly `['Vulnerability exposure']` — hosts online is already off, so it is not re-listed.
+12. ☐ Click **Save and disable**.
+    - ✅ *(UI)* Modal hidden + success toast.
+    - ✅ *(API)* `features.historical_data` equals `{ uptime: false, vulnerabilities: false }`.
+13. ☐ Re-open `/dashboard?fleet_id=<id>`, re-select the fleet, and step through **both** datasets.
+    - ✅ *(UI)* For each: the **Data collection is disabled** heading is visible and `chartCells` count is 0. Neither dataset issues a chart request now — `ChartCard` gates the query on collection being enabled — so both panels render straight from the fleet's config and there is nothing to wait on.
+14. ☐ Click **Turn on**, untick **both** checkboxes, dismiss toasts, click **Save**.
+    - ✅ *(UI)* **Activity & data retention** heading visible.
+    - ✅ *(UI)* Success toast `Successfully updated settings.`
+    - ✅ *(UI)* The confirmation modal count is **0** — re-enabling deletes nothing, so Fleet raises no confirmation. A confirmation appearing here would be the product defect.
+    - ✅ *(API)* `features.historical_data` equals `{ uptime: true, vulnerabilities: true }`.
+15. ☐ Re-open `/dashboard?fleet_id=<id>` — a **fresh page load**, not a dataset switch — and re-select the fleet.
+    - ✅ *(API)* `/charts/uptime?…fleet_id=<id>` → 200.
+    - ✅ *(UI)* Disabled panel count 0; first chart cell visible.
+16. ☐ Switch to **Vulnerability exposure**.
+    - ✅ *(API)* `/charts/cve?…fleet_id=<id>` → 200.
+    - ✅ *(UI)* Disabled panel count 0; first chart cell visible.
+    - *Why a fresh load each time:* `ChartCard` holds every dataset for **five minutes**, so a chart "restored" without reloading could be the copy fetched before anything was turned off.
+17. ☐ Delete the throwaway fleet.
+    - ✅ *(API)* `DELETE /fleets/<id>` succeeds, retried on a schedule for up to 30 s and tolerating a 404 (`deleteFleetWithRetry` — the QA gateway serves the occasional 502, so one attempt is not enough of a guarantee). It runs in the test's `finally` **and** again in an `afterEach`: Playwright aborts a timed-out test *before* its `finally` runs but still gives hooks their own budget, and nothing else in the suite sweeps a stray fleet — it would sit in every other spec's fleet dropdown until somebody noticed.
+
+**Assessment**
+- *Value:* the highest-information test in this area. It proves the two per-fleet retention switches are genuinely independent, that the confirmation names the correct scope and lists only the newly-disabled datasets, that the disabled panel's copy distinguishes fleet from deployment scope, that "Turn on" routes back to the switch responsible, that re-enabling needs no confirmation, and that the chart actually comes back on a cold load rather than from ChartCard's five-minute cache. Each of those is a distinct regression a narrower test would miss.
+- *Coverage gaps:* the **deployment-wide** switches are never written by anything (correctly — see the box — but it means the "all fleets" wording of the disabled panel, and the "Disabled globally" greyed-out tooltip on the per-fleet checkboxes, have **zero coverage**); the confirmation's **Cancel** path is never taken, so `confirmDisableCancelButton` is dead code; nothing asserts the data was *actually deleted* (a new fleet has none, which is the price of the safe subject); the **team-admin** role on a fleet's own settings page is untested for these switches (SET-07 covers the webhook on the same page as a team admin); and the throwaway fleet means the case can never observe a chart going from *populated* to empty — only from `No data` grid to panel.
+- *Redundancy:* the "card renders with its controls" opening overlaps MISC-24; the dataset switch to Vulnerability exposure overlaps MISC-25 — at ~11 s a call, this spec pays for it three more times.
+- *Efficiency / smells:*
+  - Everything is one test declaration. A failure anywhere in a 17-step, 180 s flow gives one red line and no attribution — the suite's own CRUD convention (`playwright/CLAUDE.md`) would split this into serial sub-tests, and this is the strongest candidate in the area for it.
+  - `withChartResponse` caps its wait at 60 s **because the project leaves `actionTimeout` unset**, which makes page waits unbounded. That cap exists only in this file; `fleet-scoped-cards.spec` has the same waits with no cap (MISC-24).
+  - `toast.dismissAll()` before every `save()` is a workaround for toasts overlaying the Save button; it is applied three times and never explained at the call sites.
+  - The fleet is deleted in **two** places for one object. Correct and deliberate, but it means the delete helper must stay idempotent (`ignoreMissing: true`) forever.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-28 · Free • Dashboard • historical data collection › the chart card offers one dataset and charts it
+
+- **File:** [`playwright/tests/e2e/free/dashboard/historical-data-collection.spec.ts`](../../tests/e2e/free/dashboard/historical-data-collection.spec.ts)
+- **Grep:** `npx playwright test -g "the chart card offers one dataset and charts it"`
+- **Project:** free · **Scope:** n/a — free has no fleets, so "all fleets" is the only scope a switch or chart can apply to
+- **Mode:** UI · **Isolation:** independent and **read-only by design** (see the box)
+- **Preconditions:** `getGlobalHistoricalData().uptime === true`, else the test skips (the card would render its disabled state). The free instance must have hosts checking in — the final assertion needs at least one hour with a non-zero host count.
+- **Data created:** none
+- **Cross-link:** premium mirror = **MISC-24**
+
+> **Deliberately read-only, and it must stay that way.** Free has no per-fleet scope, so the only switch this tier exposes is the **deployment-wide** one — and turning it off *deletes the history already collected*, for the whole instance, permanently ("This cannot be undone"). There is no throwaway scope to fall back on the way premium has one (MISC-27). Flipping it off and on again would leave the free instance's chart a field of "No data" for 30 days. **Do not tick anything here by hand.**
+
+**Flow**
+
+1. ☐ (No user action) Read `GET /config` → `features.historical_data.uptime`.
+   - ✅ *(API)* Skip gate only — `true` or the test skips.
+2. ☐ Open `/dashboard` via URL.
+   - ✅ *(UI)* First dashboard card visible.
+3. ☐ (No user action) Read the card's shape.
+   - ✅ *(UI)* `.chart-card__title` reads exactly `Hosts online` — a single dataset means Fleet renders a **heading** where premium renders a dropdown.
+   - ✅ *(UI)* The premium dataset dropdown's single-value count is **0**. Together with the line above, this is the tier gate on the `cve` dataset — asserted as an absent control, not as a paywall banner.
+   - ✅ *(UI)* The fleet dropdown's trigger count is **0** — free has no fleets at all.
+   - ✅ *(UI)* The info icon is visible.
+   - ✅ *(UI)* **Configure chart filters** is visible — the filter control is *not* premium-gated.
+4. ☐ (No user action) Read the chart body.
+   - ✅ *(UI)* `.data-collection-disabled-state` count **0**.
+   - ✅ *(UI)* At least one cell **with hosts** is visible (`chartCellsWithHosts`, matching `: N hosts` and excluding `No data`) — a grid of "No data" cells alone cannot tell a working query from a broken one.
+
+**Assessment**
+- *Value:* net-new free coverage of a surface QA Wolf only ever ran on premium, and the only place the free/premium *shape* difference on this card is pinned from the free side. The `chartCellsWithHosts` assertion makes it a real data check rather than a render check.
+- *Coverage gaps:* the filter modal is present-but-unopened here (MISC-26 covers the premium filter round-trip; free's is untested end to end); the disabled state is never *seen* on free — the case skips rather than asserting it, so free's "Data collection is disabled" panel and its "all fleets" wording have no coverage anywhere; no reload/persistence check.
+- *Redundancy:* mirrors MISC-24's controls assertions on the other tier. Per the suite's tier-separation convention this duplication is intended.
+- *Efficiency / smells:* **no `waitForResponse` at all** — and that is correct rather than an oversight: the 10–11 s trap is `/charts/cve`, which free does not offer, and `uptime` returns promptly. Worth knowing before somebody "harmonises" this file with the premium one. The skip gate costs a `GET /config` on every run.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-29 · Free • Dashboard • historical data collection › Activity & data retention offers the hosts online switch and not the premium one
+
+- **File:** [`playwright/tests/e2e/free/dashboard/historical-data-collection.spec.ts`](../../tests/e2e/free/dashboard/historical-data-collection.spec.ts)
+- **Grep:** `npx playwright test -g "Activity & data retention offers the hosts online switch and not the premium one"`
+- **Project:** free · **Scope:** global (Advanced options is a deployment-wide page)
+- **Mode:** UI+API · **Isolation:** independent, **read-only** — the checkbox is read, never clicked
+- **Preconditions:** free admin session. No skip gate: the expected checkbox state is *derived* from the config rather than assumed, so either value passes.
+- **Data created:** none
+
+> **⚠️ Polarity trap — this is the opposite of MISC-27's checkbox.** On Advanced options the checkbox is an **enable**: *"Hosts online historical reporting"*, ticked = **still collecting**. On a fleet's settings page (MISC-27) the checkbox is a **disable**: ticked = **stopped**. Both render Fleet's `Checkbox`, whose accessible name is the `name` prop rather than the visible label, so **both resolve as `disableHostsActive`** while meaning opposite things. Trust the assertion's expected value over the locator's name — and note the POM member here is called `hostsOnlineHistoricalCheckbox` precisely to stop that name leaking into the spec.
+>
+> **Untick nothing.** This switch is deployment-wide on an instance with no fleet scope; turning it off deletes free's entire uptime history irreversibly (see MISC-28).
+
+**Flow**
+
+1. ☐ (No user action) Read `GET /config` → `features.historical_data` — used as the **expected value**, not as a gate.
+2. ☐ Open `/settings/organization/advanced` (`OrganizationAdvancedPage.goto()`).
+   - ✅ *(UI)* The **Host lifecycle** heading is visible — the `goto()` anchor; the page has no "Advanced options" title of its own and opens straight into its sections.
+   - ✅ *(UI)* The **Activity & data retention** heading is visible.
+3. ☐ (No user action) Read the hosts-online switch.
+   - ✅ *(UI+API)* Its `aria-checked` equals `String(config.features.historical_data.uptime)` — the UI is compared against the config rather than a fixture, so what this can catch is "the page disagrees with the server", not "the value is right".
+   - ✅ *(UI)* Its `aria-disabled` is `false` — free's switch is editable (the spec simply declines to use it).
+4. ☐ (No user action) Check the premium switch is absent.
+   - ✅ *(UI)* The `disableVulnerabilities` checkbox count is **0**.
+   - ✅ *(UI)* The text `Vulnerability exposure historical reporting` count is **0** — premium-gated in Fleet's `ActivityDataRetentionSection`. Two assertions rather than one because the control and its label could regress independently.
+
+**Assessment**
+- *Value:* the free-tier gate on the vulnerabilities retention switch, asserted both as an absent control and as absent copy; plus a config-vs-UI consistency check on the surviving switch. Cheap, deterministic, mutates nothing.
+- *Coverage gaps:* nothing on **premium's** Advanced options page asserts the mirror (that the vulnerabilities switch *is* present and editable there) — the premium half of this gate is untested; the switch is never toggled anywhere, so the deployment-wide write path, its confirmation modal, and the "Disabled globally" tooltip it puts on the per-fleet checkboxes are wholly uncovered (deliberately — see the box, and the same gap is called out in MISC-27); the page's other Activity & data retention controls (activity expiry) are untouched, and SET-04 in [`10-settings-org-and-integrations.md`](10-settings-org-and-integrations.md) only asserts the Advanced card's fields don't disturb each other.
+- *Redundancy:* none — this is the only spec that reads the Advanced options retention section. It shares the page with SET-04, which writes a different field on it.
+- *Efficiency / smells:* the second absence assertion uses a raw `organizationAdvanced.page.getByText(...)` in the spec body rather than a POM accessor. The two checkbox members on `OrganizationAdvancedPage` carry the *visible* semantics in their names (`hostsOnlineHistoricalCheckbox`) while their locators carry Fleet's inverted `name` prop — a documented mismatch, and the reason the POM's comment block is longer than the class.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -778,6 +1176,12 @@ other:
 | Packs CRUD (UI) | MISC-14…16 | no query ever added to a pack; label/team targets untested; rename/enable-disable untested |
 | Pack execution / scheduling | MISC-18 (**skipped**, 405) | zero live coverage; may be unreachable on simulated hosts anyway |
 | Dashboard activity automations | MISC-19 | webhook never observed firing; URL validation, Cancel, URL pre-fill unchecked |
+| Dashboard platform filter + platform views | MISC-22 | OS-card contents; the Missing / Low-disk-space / ABM-issue cards; host-count values; the four platforms with no hosts (ChromeOS, iOS, iPadOS, Android); direct-URL entry to `/dashboard/<platform>` |
+| "Hosts enrolled" chart → built-in label link | MISC-23 | **label membership is deliberately not assertable** (the osquery-perf pool answers every built-in label query — the "macOS" label holds mostly Ubuntu hosts); bar counts never read; the inert no-hosts row never checked |
+| Historical chart card — read (premium) | MISC-24, MISC-25, MISC-26 | chart values never compared to anything; the **Labels** half of the filter modal; Cancel; switching scope back to All fleets; a fleet-with-no-history negative case |
+| Historical chart card — read (free) | MISC-28 | free's filter round-trip; free's "Data collection is disabled" panel (the case skips instead of asserting it) |
+| Per-fleet historical-data switches | MISC-27 | the confirmation's Cancel path (`confirmDisableCancelButton` is dead code); team-admin role on the same page; no proof data was actually deleted (a throwaway fleet has none) |
+| **Deployment-wide historical-data switches** | MISC-29 (free, presence + state only) | **never written by anything, on either tier** — so the "all fleets" wording of the disabled panel and the "Disabled globally" tooltip on the per-fleet checkboxes have zero coverage. Deliberate: the write is irreversible and instance-wide. Premium's Advanced options page has no counterpart to MISC-29 at all |
 | Dashboard cards / software widget / platform tabs | — | `DashboardPage` exposes `cards`, `softwareTable`, `/dashboard/{mac,windows,…}` — **no spec in this area asserts any of it** (only `firstCard` visibility as a `goto` anchor) |
 | Free paywall banners (17 pages) | MISC-20 | never asserts the gated feature UI is absent; no URL/heading anchor; CTA link unchecked |
 | Free "no Teams" gate | MISC-21 | vacuous — no positive control that the page rendered |

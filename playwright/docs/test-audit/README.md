@@ -12,40 +12,40 @@ those notes into spec changes.
 Written 2026-07-29 against `main` @ `a420f1c`. Suite at that commit: **113 spec
 files · ~350 test declarations · 4 projects**.
 
-> **⚠️ The audit is behind the suite.** As of `main` @ `45ecf28` (2026-09-28) the suite is
-> **158 spec files · 549 test declarations · 5 projects · 83 page objects**. The 306 entries
-> below still describe the tests they were written against, but roughly 45 specs are newer than
-> the audit and have no entry yet. What is missing, and where it belongs, is listed in
-> [Not yet audited](#not-yet-audited) at the bottom of this file.
+> **Brought current 2026-09-28** against `main` @ `45ecf28`: **158 spec files · 549 test
+> declarations · 5 projects · 83 page objects**. The QA Wolf round-2 specs (batches A–C and the
+> new `gitops-mode` project) are audited — see area **20** and the round-2 additions throughout.
+> The migration record is in [../qawolf-migration/round-2/](../qawolf-migration/round-2/).
 
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 14 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 18 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 12 | premium |
-| 04 | [Policies](04-policies.md) | 22 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 21 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 15 | premium, free |
-| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 15 | premium, free |
+| 04 | [Policies](04-policies.md) | 24 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 32 | premium, free |
+| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 31 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
-| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 11 | premium, free |
+| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
 | 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 23 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 21 | premium, free |
-| 14 | [API contract specs](14-api-contracts.md) | 22 | premium, free |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
+| 14 | [API contract specs](14-api-contracts.md) | 27 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 11 (per spec file) | loadtest (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
-| 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 42 | premium, free, gitops-nightly |
+| 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
+| 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
 
-**306 entries** covering every test in the suite. An entry can expand into several
+**416 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 11 (23 entries → 74 executions), area
-17 (11 → 73), area 06 (15 → 56), area 08 (31 → 40), area 13 (21 → 37). Specs under
+the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (23 → 74), area
+17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 
 Plus **[FINDINGS.md](FINDINGS.md)** — the cross-cutting analysis: quick wins,
@@ -135,46 +135,7 @@ Some things belong in the repo's existing records rather than in a Notes block:
 
 ---
 
-## Not yet audited
-
-Everything below landed **after** this audit was written and has no entry in the area files yet. Most came in
-with QA Wolf round 2 ([PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61), 2026-09-28);
-the migration record is in [../qawolf-migration/round-2/](../qawolf-migration/round-2/).
-
-Auditing these means the same treatment as the rest: steps a person performs, validations the test makes, a
-`☐` box and a Notes block. They are grouped by the area file they belong in.
-
-### New area — needs its own file
-
-**`20-gitops-mode.md`** — the `gitops-mode` project, which did not exist when this audit was written. It runs
-last, single-worker, after the premium project, and disables the mode again in teardown.
-
-| spec | tests |
-|---|---:|
-| `premium/gitops-mode/01-indicator-and-links` | 3 |
-| `premium/gitops-mode/02-gated-surfaces` | 6 |
-| `premium/gitops-mode/03-exceptions` | 4 (1 skipped — fleetdm/fleet#48218) |
-| `premium/gitops-mode/zz-everything-is-back` | 6 |
-| `free/settings/gitops-mode` | 2 |
-
-Worth auditing early: it is the only project whose *teardown* failing is worse than the tests failing — a run
-that leaves gitops mode on disables the next run's whole suite.
-
-### Additions to existing area files
-
-| Area file | New specs | Augmented specs |
-|---|---|---|
-| [02 / 03 Hosts](02-hosts-shared-and-free.md) | `shared/hosts/host-certificates` | `shared/hosts/host-software`, `shared/hosts/host-reports-tab`, `premium/hosts/host-report-details` |
-| [04 Policies](04-policies.md) | — | `premium/policies/policy-automations`, `free/policies/policy-automations` |
-| [05 Reports](05-reports.md) | — | `premium/reports/reports` (live-report targets) |
-| [06 Software library](06-software-library.md) | `shared/software/titles-table`, `premium/software/titles-table`, `role-access`, `fleet-maintained-filters`, `add-software-validation`, `custom-icons`, `display-name`, `version-pinning`, `script-only-package`, `package-scripts` | `library`, `manage-automations-access`, `no-teams-views` |
-| [07 Software vulns & OS](07-software-vulnerabilities-and-os.md) | `free/software/os` | `premium/software/os`, `premium/software/vulnerabilities`, `free/software/vulnerabilities` |
-| [10 Settings — org](10-settings-org-and-integrations.md) | `shared/settings/organization/custom-logo` | — |
-| [13 Labels, packs, dashboard](13-labels-packs-dashboard-paywalls.md) | `shared/dashboard/platform-cards`, `premium/dashboard/fleet-scoped-cards`, `premium/dashboard/historical-data-collection`, `free/dashboard/historical-data-collection` | — |
-| [14 API contracts](14-api-contracts.md) | `api/host-software-payload` | `api/premium/max-request-file-sizes` (4 new size boundaries) |
-| [19 fleetctl CLI](19-fleetctl-cli.md) | — | `cli/shared/get-read-only` (`--host` now required), `cli/free/licensing` (2 skipped — fleetdm/fleet#53965) |
-
-### Things the audit's own conclusions should absorb
+## Things the audit's own conclusions should absorb
 
 Findings from round 2 that change how existing entries should be judged, not just what to add:
 

@@ -1,8 +1,8 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 9 files · **Test declarations:** 14 · **Projects:** premium + free (the 7 `shared/hosts` specs run in **both** projects), free only (the 2 `free/hosts` specs)
+**Specs covered:** 10 files · **Test declarations:** 18 (16 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases) · **Projects:** premium + free (the 8 `shared/hosts` specs run in **both** projects), free only (the 2 `free/hosts` specs)
 
-This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Software tab, Reports tab, Actions menu, live report against one host). The seven `shared/` specs are one-flow-per-file with no serial describes and no shared mutable state; the two `free/` specs are role/paywall matrices that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
+This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Actions menu, live report against one host). The eight `shared/` specs carry no serial describes and no shared mutable state (three files now hold two tests each, but the tests within a file are independent); the two `free/` specs are role/paywall matrices that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
 **Host-population split — read this before reproducing anything manually.** Five of the 14 tests bind to the *real* MDM-enrolled macOS VM through the `liveMacosHost` worker fixture ([`fixtures.ts:256`](../../fixtures.ts)); the rest run against whatever osquery-perf simulation the API resolver happens to return. Simulated hosts ignore live-query SQL, report thin/absent vitals, and are not MDM-enrolled.
 
@@ -10,6 +10,9 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 |---|---|
 | HOST-01, HOST-02, HOST-03 | real macOS VM (`liveMacosHost`) |
 | HOST-05, HOST-06 | real macOS VM (`liveMacosHost`) — HOST-06 does not actually need it |
+| HOST-15, HOST-16 | real macOS VM (`liveMacosHost`) — **mandatory**: a simulation reports no certificates, so the card never mounts |
+| HOST-17 | real macOS VM (`liveMacosHost`) — **mandatory**: the Applications filter is macOS-only and a simulation reports no application paths |
+| HOST-18 | real macOS VM (`liveMacosHost`) — host id only; does not actually need it |
 | HOST-04 | first host by name reporting software — in practice a simulation |
 | HOST-07, HOST-08, HOST-09, HOST-10, HOST-11 | no specific host; whatever tops/fills the list |
 | HOST-12, HOST-13 | real MDM-enrolled macOS / Windows VM (`kind: 'real'`) |
@@ -33,6 +36,10 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-12 | `free/hosts/mdm-actions-availability.spec.ts` | macOS (MDM-enrolled) offers only Turn off MDM | UI | ☐ |
 | HOST-13 | `free/hosts/mdm-actions-availability.spec.ts` | Windows (MDM-enrolled) offers none of Lock, Wipe or Turn off MDM | UI | ☐ |
 | HOST-14 | `free/hosts/mdm-actions-availability.spec.ts` | Ubuntu (no MDM) offers none of Lock, Wipe or Turn off MDM | UI | ☐ |
+| HOST-15 | `shared/hosts/host-certificates.spec.ts` | Host details — the certificates card lists every reported certificate | UI+API | ☐ |
+| HOST-16 | `shared/hosts/host-certificates.spec.ts` | Host details — a certificate row opens its full details | UI+API | ☐ |
+| HOST-17 | `shared/hosts/host-software.spec.ts` | Hosts — the Applications view narrows the inventory to top-level applications | UI | ☐ |
+| HOST-18 | `shared/hosts/host-reports-tab.spec.ts` | Host details — the results-recency sorts keep reports awaiting results last | UI | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -142,7 +149,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/shared/hosts/host-software.spec.ts`](../../tests/e2e/shared/hosts/host-software.spec.ts)
 - **Grep:** `npx playwright test -g "software tab search filters, and a title links to filtered hosts"`
-- **Project:** premium + free (shared) · **Mode:** UI · **Isolation:** standalone, read-only
+- **Project:** premium + free (shared) · **Mode:** UI · **Isolation:** standalone, read-only; first of two independent tests in the file (HOST-17 is the second)
 - **Preconditions:** **a simulated host, not the VM.** `findHostWithSoftware` ([`helpers/api/hosts.ts:77`](../../helpers/api/hosts.ts)) takes the first host by `display_name` ascending (scans up to 50) whose `GET /hosts/:id/software` returns anything — on the QA instances that is an osquery-perf simulation. The host must report **at least two** titles whose names differ in their first alphanumeric token (otherwise the `filteredOut` guard hard-fails). The chosen title must also have a software-title detail page with a **Hosts** count link. Host may be offline — last-reported inventory persists.
 - **Data created:** none
 
@@ -169,8 +176,8 @@ other:
 **Assessment**
 - *Value:* decent — covers three joins in one pass (host inventory renders, host-scoped software search hits the server, software-title → filtered-hosts-list deep link carries its filter).
 - *Coverage gaps:* the **Vulnerable** filter on the host's software tab is never applied here (`applyVulnerableFilter()` exists and is unused by this area); CVE search (the same input accepts a CVE) untested; the **Library** sub-tab untested from the host side; no assertion that the filtered hosts list actually contains the host we came from — which would be the real payoff of step 7; version/type/last-used columns unasserted.
-- *Redundancy:* the software-title → hosts-list pill hop overlaps the software area's own title-detail specs (see the software audit file); the host-side entry point is the unique part.
-- *Efficiency / smells:* (a) the final pill assertion is weak — `toContainText(firstToken(titleName))` ([`host-software.spec.ts:56`](../../tests/e2e/shared/hosts/host-software.spec.ts)) accepts a partial name match, so a pill naming the *wrong* title with a shared first word passes; (b) `showFullInventory()`'s `if ((await trigger.count()) === 0) return;` ([`HostDetailsPage.ts:184`](../../pages/hosts/HostDetailsPage.ts)) is a deliberate but silent branch — the test cannot tell you whether it ran the macOS or the non-macOS path; (c) `rowOrEmpty()` in step 2 tolerates an empty table (the test still fails one step later at `names.length > 0`, so this is a diagnosability smell, not a silent pass); (d) the subject title is whatever sorts first for that host, so the test is not reproducible by hand without the API read.
+- *Redundancy:* the software-title → hosts-list pill hop overlaps the software area's own title-detail specs (see the software audit file); the host-side entry point is the unique part. Shares the file and the `showFullInventory()` call with HOST-17, but runs against a different (API-chosen, simulated) host, so the two never observe the same inventory.
+- *Efficiency / smells:* (a) the final pill assertion is weak — `toContainText(firstToken(titleName))` ([`host-software.spec.ts:56`](../../tests/e2e/shared/hosts/host-software.spec.ts)) accepts a partial name match, so a pill naming the *wrong* title with a shared first word passes; (b) `showFullInventory()`'s `if ((await trigger.count()) === 0) return;` ([`HostDetailsPage.ts:234`](../../pages/hosts/HostDetailsPage.ts)) is a deliberate but silent branch — *this* test still cannot tell you whether it ran the macOS or the non-macOS path (HOST-17 now pins the macOS branch, on the VM; the non-macOS branch remains unobserved on both tiers); (c) `rowOrEmpty()` in step 2 tolerates an empty table (the test still fails one step later at `names.length > 0`, so this is a diagnosability smell, not a silent pass); (d) the subject title is whatever sorts first for that host, so the test is not reproducible by hand without the API read.
 
 **Notes (Andrey)**
 ```
@@ -232,7 +239,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/shared/hosts/host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts)
 - **Grep:** `npx playwright test -g "reports tab lists the host reports, searches, and sorts"`
-- **Project:** premium + free (shared) · **Mode:** UI · **Isolation:** standalone; seeds + deletes two marker reports in `try/finally`
+- **Project:** premium + free (shared) · **Mode:** UI · **Isolation:** standalone; seeds + deletes two marker reports in `try/finally`. First of two independent tests in the file (HOST-18 is the second)
 - **Preconditions:** binds to **the real macOS VM** (`liveMacosHost`) — but only uses its `displayName` in the "awaiting results" copy. ⚠️ Nothing here needs a real device; any online host would do. Manually reproducible on any host.
 - **Data created:** two global saved reports `pw-hostrpt-<ts>-<rand>-omega` then `-alpha` (created omega-first so default "Newest results" order differs from name order), query defaults to `SELECT 1;`, no platform restriction → they apply to every host. Both deleted in `finally`.
 
@@ -258,8 +265,8 @@ other:
 
 **Assessment**
 - *Value:* moderate. The sort assertions are real (URL param **and** rendered order), and the marker scoping makes them robust under parallel workers. The "awaiting results" copy assertion is a nice product-behaviour check.
-- *Coverage gaps:* the **"don't store results" toggle is asserted at its default and never flipped** — its actual filtering behaviour is untested, which is the only interesting thing about it. **Newest/Oldest results** sort options untested. Card **Actions → View report for all hosts** never exercised; **Show details** is knowingly out of scope (needs a stored result). The unfiltered count is never reconciled with the number of cards. No empty-state path.
-- *Redundancy:* overlaps `premium/hosts/host-report-details.spec.ts` (the stored-result drill) on tab entry; overlaps the reports area on report creation.
+- *Coverage gaps:* the **"don't store results" toggle is asserted at its default and never flipped** — its actual filtering behaviour is untested, which is the only interesting thing about it (and HOST-18 doesn't flip it either). The **Newest/Oldest results** sorts are now covered by HOST-18, in the same file — but only as a *partition* invariant, so the recency ordering itself is still unasserted. Card **Actions → View report for all hosts** never exercised; **Show details** is knowingly out of scope (needs a stored result). The unfiltered count is never reconciled with the number of cards. No empty-state path.
+- *Redundancy:* overlaps `premium/hosts/host-report-details.spec.ts` (the stored-result drill) on tab entry; overlaps the reports area on report creation; and now overlaps HOST-18, which pays the same VM page load and tab entry again to drive the other two options of the same sort dropdown.
 - *Efficiency / smells:* (a) **uses the scarce `liveMacosHost` fixture for a display-name string** — this puts avoidable contention on the one real VM and couples an otherwise host-agnostic test to VM uptime; swap to `findOnlineHost(..., 'darwin')` or `findHostWithSoftware`. (b) `reportsCount` matching `/\d+ reports?/` is a shape check, not a value check — it would pass on `0 reports`. (c) `openReportsTab()`'s `.or(reportsEmptyState)` tolerates an empty tab; the later `toHaveCount(2)` is what saves the test.
 
 **Notes (Andrey)**
@@ -548,6 +555,200 @@ other:
 
 ---
 
+### HOST-15 · Host details — the certificates card lists every reported certificate
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-certificates.spec.ts`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)
+- **Grep:** `npx playwright test -g "the certificates card lists every reported certificate"`
+- **Project:** premium + free (shared) · **Scopes:** n/a (single host, no team dropdown)
+- **Mode:** UI+API · **Isolation:** standalone test, no describe, read-only
+- **Preconditions:** **the real macOS VM is mandatory, not a preference.** Fleet mounts the card only for an **Apple or Windows** host that reports **at least one certificate** (`HostDetailsPage.tsx`, `showCertificatesCard`); an osquery-perf simulation reports none, so against one the card never renders and every assertion below would be vacuous. `liveMacosHost` resolves the real VM ([`fixtures.ts:256`](../../fixtures.ts)) and *throws* if it is off or unenrolled. The card is **not premium-gated** — the mount condition is platform and data only, which is why the spec lives in `shared/` and runs on both tiers. Both tiers' macOS VMs carry the same four system-keychain certificates (two Apple defaults plus Fleet's own CA and its identity certificate). Manually: pick the real VM in Hosts, Details tab, scroll to **Certificates**.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API precondition)* `GET /hosts/:id/certificates?per_page=10&order_key=common_name&order_direction=asc` — `getHostCertificates` ([`helpers/api/hosts.ts:458`](../../helpers/api/hosts.ts)) deliberately mirrors the card's **own** page size and default sort (`DEFAULT_CERTIFICATES_PAGE_SIZE` = 10, `CERTIFICATES_DEFAULT_SORT`), so the comparison below stays row-for-row even if a VM ever reports more certificates than one page holds.
+   - ✅ *(API)* the host's `count` is > 0, with a failure message naming the host and the mount condition.
+2. ☐ Open `/hosts/:id` via URL.
+   - ✅ *(UI)* **Disk space available** vital visible (`HostDetailsPage.goto` anchor).
+3. ☐ *(no user action)* the card mounts.
+   - ✅ *(UI)* the **Certificates** heading is visible **and** the first table row is visible — `CertificatesCard.waitForReady` ([`pages/components/CertificatesCard.ts:64`](../../pages/components/CertificatesCard.ts)). Note this is an `and`, not an `or`: unlike the Software/Reports tabs, an empty card is *not* an accepted settle state here.
+4. ☐ Read the column headers.
+   - ✅ *(UI)* **Name**, **Issuer**, **Scope**, **Issued**, **Expires** each resolve as a `columnheader` with that exact label.
+5. ☐ *(no user action)* count and row tally.
+   - ✅ *(UI)* the card's results count reads exactly `<N> certificate` / `<N> certificates` where `N` is the API's **total** (the singular/plural branch is in the spec, not the page object).
+   - ✅ *(UI)* the number of rendered rows equals the length of the API **page** — the count is the host's total, the table shows one page of it.
+6. ☐ *(no user action)* per-certificate row check — repeated for every certificate the API returned.
+   - ✅ *(UI)* a row whose **Name cell** is exactly that certificate's common name is visible. **The row locator is pinned to the Name column** ([`CertificatesCard.ts:57`](../../pages/components/CertificatesCard.ts)) — a certificate row cannot be matched on "any cell", because Fleet issues every host both a `Fleet` CA certificate **and** a `Fleet Identity` certificate whose Issuer cell reads `Fleet`, so a text filter resolves two rows.
+   - ✅ *(UI)* that row contains the **issuer common name** the API reports for it.
+   - ✅ *(UI)* that row contains `System` or `User` — Fleet renders `source` capitalised, and a user-scope certificate renders the bare word "User" with the username in a tooltip (`CertificatesTableConfig.tsx`).
+
+**Assessment**
+- *Value:* the only coverage of the Certificates card anywhere in the suite, and the assertion shape is the right one — rows are compared against what Fleet's API reports for *this* host rather than against fixed names, because the VMs are re-provisioned and re-enrolled, which rotates the Fleet identity certificate and changes its dates. Catches the card failing to mount, a row dropped between API and table, a mis-wired Issuer or Scope column, and a count that disagrees with the rows.
+- *Coverage gaps:* the **Issued** and **Expires** columns are never compared to `not_valid_before` / `not_valid_after` even though the helper already returns both — three of the five columns are asserted and two are only checked for existence; no expired / expiring-soon rendering; no sort, no pagination (a VM reporting >10 certificates leaves row 11+ unasserted — the count-vs-rows assertion is the only thing that would hint at it); **no Windows host**, though the card mounts for Windows too; no user-keychain (`source: "user"`) certificate, so the `'User'` branch is dead in practice on these VMs; no negative case (an Apple host reporting nothing must render **no card at all**); the same card on the end-user **My device** page is untested.
+- *Redundancy:* none — no other spec touches this card. It is named in `HostDetailsPage`'s comments only as the reason the Local user accounts card needs scoping.
+- *Efficiency / smells:*
+  - **Soft-pass:** `toContainText(certificate.issuerCommonName)` passes trivially when the API returns an issuer with no common name — `getHostCertificates` defaults it to `''` and `toContainText('')` is always true.
+  - `toContainText('System' | 'User')` is a **row-wide** substring match, not a Scope-column assertion: an issuer or subject containing the word satisfies it without the Scope cell rendering at all. `'User'` is especially loose.
+  - `row(commonName)` resolves more than one row if a host ever reports two certificates sharing a common name (plausible across the system and login keychains) — that surfaces as a strict-mode violation rather than a clean assertion.
+  - The QA Wolf source flow ended on a `toHaveScreenshot` of the table; dropped deliberately (it fails on font rendering and never says what changed). Worth keeping dropped.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-16 · Host details — a certificate row opens its full details
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-certificates.spec.ts`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)
+- **Grep:** `npx playwright test -g "a certificate row opens its full details"`
+- **Project:** premium + free (shared) · **Scopes:** n/a
+- **Mode:** UI+API · **Isolation:** standalone, read-only; independent of HOST-15 (re-reads the API itself)
+- **Preconditions:** identical to HOST-15 — the real macOS VM via `liveMacosHost`, card mounts only for an Apple/Windows host reporting ≥1 certificate, not premium-gated.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API precondition)* `getHostCertificates` again; take `certificates[0]` — the first by common name ascending, i.e. the card's own first row.
+   - ✅ *(API)* at least one certificate is returned.
+2. ☐ Open `/hosts/:id` via URL → ✅ *(UI)* **Disk space available** visible; card ready (heading + first row).
+3. ☐ Hover that certificate's row and click its **View details**.
+   - ✅ *(UI)* the `.certificate-details-modal` is visible (`CertificatesCard.openDetails`). "View details" is a `row-hover-button` Fleet keeps hidden until the row is hovered, so the click goes through `clickHoverAction` to survive a hover lost to a re-render.
+4. ☐ *(no user action)* modal shape.
+   - ✅ *(UI)* **Subject name**, **Issuer name** and **Validity period** each render as an `h3` section heading. The remaining sections (**Key info**, **Basic constraints**, **Signature**) are asserted *nowhere* — `CertificateDetailsModal.tsx` renders each only when the certificate carries a value for it, so they are deliberately out of scope.
+5. ☐ *(no user action)* the modal is **this row's** certificate.
+   - ✅ *(UI)* **Subject name › Common name** equals the API's `common_name`.
+   - ✅ *(UI)* **Issuer name › Common name** equals the API's issuer common name. Both sections carry a "Common name" term, so each value is read from **inside its own section** ([`CertificatesCard.ts:102`](../../pages/components/CertificatesCard.ts)) — an unscoped lookup matches two elements.
+6. ☐ Click **Close**.
+   - ✅ *(UI)* the modal is hidden.
+   - 📌 **Manual gotcha:** Escape closes it too — Fleet's `Modal` closes on Escape. That matters on the *other* modals on this page: if a Fleet `Modal` contains a react-select whose menu is open, Escape takes the **whole dialog** down with the menu, so a menu is dismissed by **re-clicking its trigger**, not with Escape (see [`FilterModal.ts:67`](../../pages/components/FilterModal.ts), the **Add filters** modal on this page's Software tab).
+
+**Assessment**
+- *Value:* proves the row→modal wiring carries the right certificate rather than an arbitrary one, which is the only thing that can silently go wrong here; and it does so on two fields in two different sections, so a section-scoping regression is caught.
+- *Coverage gaps:* only `certificates[0]` is ever opened — no second row, so "each row opens *its own* certificate" is evidenced by one sample; the validity **dates** shown in the modal are never compared to the API's `not_valid_before` / `not_valid_after`, despite the helper carrying both and the **Validity period** section being asserted as present; serial number, key algorithm, signature algorithm and basic constraints unasserted; no Windows certificate; no check that the modal's values match the **row's** rendered cells (the comparison is modal-vs-API, not modal-vs-row).
+- *Redundancy:* re-does HOST-15's `goto` + `waitForReady` + a second `GET /certificates` on the same host in the same file — two VM page loads where one test with an extra step would do. Defensible for failure attribution (card-renders vs modal-opens are different failures), expensive on the one scarce real VM.
+- *Efficiency / smells:*
+  - The subject row is "whichever certificate sorts first by common name", so the test is not reproducible by hand without reading the API first — same shape as HOST-04's API-chosen title.
+  - `closeDetails()` asserts the modal hides, which is the only thing the last step buys; the test would lose nothing measurable if it ended at step 5, and would then not depend on the modal's Close button's accessible name.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-17 · Hosts — the Applications view narrows the inventory to top-level applications
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-software.spec.ts`](../../tests/e2e/shared/hosts/host-software.spec.ts)
+- **Grep:** `npx playwright test -g "the Applications view narrows the inventory to top-level applications"`
+- **Project:** premium + free (shared) · **Scopes:** n/a
+- **Mode:** UI · **Isolation:** standalone, read-only; second test in the file and independent of HOST-04 (different host, different entry)
+- **Preconditions:** **the real macOS VM** (`liveMacosHost`), unlike HOST-04 which takes an API-chosen host. macOS hosts default the Software tab to **Applications** (top-level apps only) and offer **Full inventory**; the filter is **platform-gated, not tier-gated** (`HostSoftwareTable.tsx`, `showApplicationsFilter`), which is why this runs on both tiers rather than premium-only. A simulation reports a synthetic inventory with no application paths, so the narrowing against one would be meaningless. The VM must report ≥1 top-level application **and** ≥1 non-application package that lands on page 1 of Full inventory (see the smell below).
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open the VM at `/hosts/:id` via URL → ✅ *(UI)* **Disk space available** visible.
+2. ☐ Click the **Software** tab.
+   - ✅ *(UI)* the table settles to rows **or** its empty state (`openSoftwareTab`).
+   - ✅ *(UI)* the view dropdown's value reads **Applications** — macOS's default, asserted nowhere else in the suite.
+   - ✅ *(UI)* the first Name-column link is visible.
+3. ☐ Read the **N items** count and the Name-column links of the Applications view.
+   - ✅ *(UI)* at least one top-level application is listed.
+4. ☐ Switch the view dropdown to **Full inventory**.
+   - ✅ *(UI)* the URL gains `macos_applications=false` (asserted inside `selectSoftwareView`).
+   - ✅ *(UI)* the **N items** count **polls** to a value **strictly greater** than the Applications count — the strict-subset claim, and the headline assertion of this test. Polled rather than read once: Fleet keeps the previous view's rows under a translucent loading overlay for the whole round trip.
+5. ☐ *(no user action)* derive a subject.
+   - ✅ *(derived guard)* the full inventory lists a title the Applications view does not ("expected the full inventory to list something the Applications view does not").
+6. ☐ Type that title into **Search by name or vulnerability (CVE)** (still under Full inventory).
+   - ✅ *(UI)* its Name link is visible.
+7. ☐ Switch the view back to **Applications**, search the same term.
+   - ✅ *(UI)* the software table's `.empty-state` is visible.
+   - ✅ *(UI)* its Name link has count 0 — the entry is reported by the host but is **not** a top-level application.
+8. ☐ Search for the application captured in step 3.
+   - ✅ *(UI)* its Name link is visible — so the empty result in step 7 is the filter at work and not a broken search.
+
+**Assessment**
+- *Value:* good. The claim is genuinely two-sided — a count inequality *plus* a named title that resolves in one view and not the other, plus a control search proving the narrowed view still finds things. Asserted as set membership rather than on fixed titles, and both subjects are searched for explicitly in each view, so the *searches* don't depend on which page a title lands on.
+- *Coverage gaps:* the reverse membership is never asserted — that an application appears under **both** views (step 8 searches only under Applications); no Windows/Linux assertion that the dropdown is **absent**, so `selectSoftwareView`'s silent no-op branch stays unobserved on both tiers; the `.empty-state` **copy** is not asserted, only its presence; the view filter is never combined with the **Vulnerable** filter or with pagination; `macos_applications=true` on the way back is asserted inside the POM but not re-checked after the search.
+- *Redundancy:* shares the file, the tab entry and `showFullInventory()` with HOST-04 — but HOST-04 runs against an API-chosen (simulated) host and this one against the VM, so the two never observe the same inventory. This test answers, for macOS only, the "which branch did `showFullInventory` take?" smell recorded against HOST-04.
+- *Efficiency / smells:*
+  - ⚠️ **The subject derivation is page-1-bound, and this is the test's real fragility.** `packageOnly` is the first *Full-inventory page 1* name absent from the *Applications page 1* names. If the VM ever reports more applications than one page holds, an application that sorts onto Applications page 2 is indistinguishable from a package, gets picked as the subject, and step 7's `.empty-state` assertion then **fails on correct product behaviour**. The searches are pagination-proof; the choice of subject is not. The spec's own header claims pagination-independence, which is true of the assertions and not of the derivation.
+  - `expect.poll(() => hostDetails.softwareItemCount())` — `softwareItemCount()` **throws** on an unparseable count string rather than returning null, and a throw inside `expect.poll` is not retried away. In practice the count keeps its previous value under the loading overlay so it parses; the hazard is latent rather than live.
+  - `.empty-state` is a raw class locator reached straight off `softwareTable` in the spec ([`host-software.spec.ts:115`](../../tests/e2e/shared/hosts/host-software.spec.ts)) rather than through the page object, which already owns `softwareRowOrEmpty()`.
+  - Costs a second real-VM page load in a file whose other test deliberately avoids the VM.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-18 · Host details — the results-recency sorts keep reports awaiting results last
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts)
+- **Grep:** `npx playwright test -g "the results-recency sorts keep reports awaiting results last"`
+- **Project:** premium + free (shared) · **Scopes:** n/a
+- **Mode:** UI · **Isolation:** standalone; seeds one marker report and deletes it in `finally`. Second test in the file, independent of HOST-06.
+- **Preconditions:** binds to **the real macOS VM** (`liveMacosHost`) but uses only its **host id** — ⚠️ nothing here needs a real device (same avoidable binding as HOST-06). What the tiers *do* differ on is what populates the partition:
+  - **premium** — the instance furniture `pw-host-report-results` on the **VMs** fleet (see [HOSTP-09](03-hosts-premium.md)) keeps a fresh stored result for the VM, so the partition has something on both sides.
+  - **free** — the partition is **trivially satisfied**: free has no report that can hold a stored result (no fleet to park a long-lived one on, and `cleanup-setup` wipes every global report), so all cards are "awaiting". What the test still proves there is that each sort reaches the server and keeps the host's reports listed.
+- **Data created:** one global saved report `pw-hostsort-<ts>-<rand>-alpha` (`SELECT 1;`, no platform restriction → applies to every host); deleted in `finally`.
+
+**Flow**
+
+1. ☐ *(API setup)* `POST /queries` → the marker report.
+2. ☐ Open `/hosts/:id` via URL, click the **Reports** tab.
+   - ✅ *(UI)* URL ends in `/reports`; report cards **or** the "No reports scheduled" empty state have rendered.
+3. ☐ *(no user action)* default state.
+   - ✅ *(UI)* the sort dropdown's value reads **Newest results** — Fleet's default.
+   - ✅ *(UI)* the seeded report's card is visible.
+   - ✅ *(UI)* **partition invariant** (see below), under "Newest results".
+4. ☐ Open the sort dropdown, pick **Oldest results**.
+   - ✅ *(UI)* the URL contains `sort=oldest_results`.
+   - ✅ *(UI)* the dropdown's value reads **Oldest results**.
+   - ✅ *(UI)* the seeded card is still visible — so the re-sort narrowed nothing.
+   - ✅ *(UI)* **partition invariant** again. This is the point of the test: **report cards awaiting results stay last under *both* recency sorts.** `order_direction=asc` on `last_fetched` still returns the dated report first — nulls do **not** float to the top. What is asserted is therefore a *partition* invariant, not a plain ordering one, and the relative order of the awaiting cards among themselves is explicitly **not** a contract.
+5. ☐ Open the sort dropdown, pick **Newest results**.
+   - ✅ *(UI)* the URL has **no** `sort` param at all (`not.toHaveURL(/sort=/)`) — **selecting "Newest results" removes the `sort` param rather than setting one**, because it is the default and `HostReportsTab.onSortChange` writes the default as `undefined`.
+   - ✅ *(UI)* the dropdown's value, the seeded card, and the partition invariant, all again.
+6. ☐ *(API teardown)* delete every report matching the marker.
+
+**How the partition invariant is expressed.** Every rendered card is read in **one DOM pass** — `reportCardResultStates` ([`HostDetailsPage.ts:408`](../../pages/hosts/HostDetailsPage.ts)) returns `{name, hasResults}` per card, where `hasResults` is "the card rendered its Last updated / Last ran line", which `HostReportCard` emits only once `last_fetched` is set. The spec then asserts the boolean sequence **equals itself sorted descending**, i.e. every card with a stored result precedes every card without one — phrased that way so the assertion holds, and stays readable, whichever side is empty. One pass rather than two locator queries because the unfiltered tab is shared mutable state: sibling specs seed global reports that apply to this host too, so two passes can observe different card sets and pair a name with the wrong card's state.
+
+**Assessment**
+- *Value:* on premium this is a real product assertion that a naive ordering check would get wrong — it encodes that Fleet deliberately parks null-`last_fetched` cards at the bottom under both directions. The "default sort removes the param" assertion is the other genuinely useful half: it pins behaviour that looks like a bug from the URL alone.
+- *Coverage gaps:* the **ordering among cards that *do* have results** — the actual recency claim — is never asserted. With a single dated report on the instance, `asc` and `desc` are indistinguishable, so a Fleet regression that ignored `order_direction` entirely would still pass. The "don't store results" toggle is still never flipped (HOST-06 leaves it at its default too). No empty-state path; no assertion reconciling the tab's `N reports` count with the number of cards read.
+- *Redundancy:* shares the file, the host and the tab entry with HOST-06; the Name A-Z / Z-A sorts there and the recency sorts here drive the same control through the same POM method. A single test covering all four options would pay the page load once.
+- *Efficiency / smells:*
+  - ⚠️ **On free the headline assertion is vacuous** — an all-`false` sequence sorts to itself, so only the URL / dropdown-value / card-visibility checks carry weight there. The spec header says so honestly; worth deciding whether it should be premium-only rather than shared.
+  - Uses the scarce `liveMacosHost` fixture for a host id (HOST-06's smell, repeated) — this file now takes the VM twice per run.
+  - Reads the **unfiltered** list on purpose (the seeded report is awaiting results, and no test can seed a stored result inside its own lifetime), so the assertion's input is shared mutable state. The single-pass read mitigates the name/state mispairing, not the run-to-run variability in what is on the tab.
+  - `not.toHaveURL(/sort=/)` also passes if the URL lost its whole query string for an unrelated reason — it asserts the absence of a param, not the presence of the default.
+  - Depends, on premium, on furniture owned by a *different* area's spec (HOSTP-09's `pw-host-report-results`) with no guard of its own: if that report disappears, this test silently degrades to free's vacuous form instead of failing.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -566,13 +767,13 @@ other:
 | Host details vitals | HOST-01, HOST-03 | only Agent + (implicitly) Disk space; Memory, Processor, OS, Disk encryption, IPs, Added to Fleet unasserted |
 | Refetch | HOST-01 | no in-flight/disabled state, no offline-host path |
 | Local user accounts card | HOST-02 | no empty state, no clear-search, other columns unasserted |
-| Host software tab | HOST-04 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing |
-| Host reports tab | HOST-06 | "don't store results" toggle behaviour, Newest/Oldest sorts, card Actions untested |
+| Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS Applications/Full-inventory filter is covered (HOST-17) but the *absence* of that dropdown on Windows/Linux is not |
+| Host reports tab | HOST-06, HOST-18 | "don't store results" toggle behaviour and card Actions untested; the Newest/Oldest sorts are covered only as an "awaiting results sorts last" partition, so the recency ordering itself is unasserted (and vacuous on free) |
 | Host live report | HOST-05 | Stop/cancel, Errors tab, results CSV, 0%-responded path |
 | Host Actions menu | HOST-12/13/14 (presence/absence only) | Transfer/Run script/Delete from details on free untested; Lock/Wipe/Unlock **commands never fired** (deliberate, `PARITY.md` §6) |
 | Host policies tab | — | **not covered** in this area (`policiesTab` locator exists, unused) |
 | Host activity card | — | **not covered** (`firstActivityTimestamp` / `activityEmptyState` locators exist, unused here) |
-| Host certificates table (Details tab) | — | **not covered** (only referenced as the reason `usersCard` needs scoping) |
+| Host certificates card (Details tab) | HOST-15, HOST-16 | Issued/Expires columns compared to nothing; no Windows host; no user-scope certificate; no "host reports none → no card" negative; My-device copy of the card untested |
 
 **Duplication**
 
@@ -580,14 +781,16 @@ other:
 2. **HOST-10/11 vs `premium/hosts/cta-visibility.spec.ts`** — the observer test is byte-identical across tiers and the admin case is a subset of the premium role loop. These CTAs have **no license gate**, so there is no tier matrix to express: this is straight duplication. (Contrast HOST-12/13/14, where the inversion is the whole point.)
 3. **Export hosts button** — visibility asserted in HOST-10, HOST-11 and both premium CTA tests; clicked only in HOST-08.
 4. **Report seeding** — HOST-05 and HOST-06 each create global marker reports via `POST /queries` and clean up with `deleteReportsMatching`; the reports area does the same again. Consistent pattern, worth a shared `disposableReport` fixture.
-5. **`findOnlineHost(..., { kind: 'real' })`** is invoked by HOST-12 and HOST-13 directly and by the `liveMacosHost` fixture for HOST-01/02/03/05/06 — five worker-level resolutions of essentially the same machine per run.
+5. **`findOnlineHost(..., { kind: 'real' })`** is invoked by HOST-12 and HOST-13 directly and by the `liveMacosHost` fixture for HOST-01/02/03/05/06/15/16/17/18 — nine tests on essentially the same machine per run, per tier. Only HOST-01/02/03/15/16/17 genuinely need a real device; HOST-05, HOST-06 and HOST-18 take it for a host id or a display name. Contention on the one VM is now the area's biggest scheduling cost.
 
 **UI-vs-API balance**
 
-Healthy overall — 12 of 14 tests validate through the browser, and the two API assertions are both *justified* rather than shortcuts:
+Healthy overall — 16 of 18 tests validate through the browser, and the two API assertions that carry weight are both *justified* rather than shortcuts:
 
 - **HOST-01** uses `GET /hosts/:id → detail_updated_at` to prove the "Last fetched less than a minute ago" text followed from *this* refetch. There is no UI-only way to distinguish that from a background detail cycle, so the API check is the assertion, not a shortcut.
 - **HOST-09** compares the downloaded enroll-secret file against `GET /spec/enroll_secret`. Correctness here *is* a value-match against server state; the UI cannot self-verify it.
+
+HOST-15/HOST-16 sit between the two: the API read is the **source of the expected values** (which certificates, with which issuer and scope), and the only assertion made on it is the precondition guard `total > 0`. That is the right shape for a table whose contents rotate with every VM re-provision — the alternative, fixed certificate names, would go stale on the next re-enrollment.
 
 API use elsewhere is **precondition/setup only** (host resolution, report seeding, teardown) — which is the right shape. No test in this area substitutes an API read for a UI assertion it could have made. The opposite problem exists instead: several UI assertions are weaker than they need to be (see quick wins 1 and 2), and the **absence-only** assertions in HOST-13/HOST-14 have no API counterpart proving the gate is enforced server-side (a `402` probe on `POST /hosts/:id/lock` in `tests/api/free/endpoints.spec.ts` would close that, and that file currently has no host/lock probes).
 
@@ -595,9 +798,11 @@ API use elsewhere is **precondition/setup only** (host resolution, report seedin
 
 1. Add `withUsers: true` and `withOrbit: true` to the `liveMacosHost` fixture ([`fixtures.ts:256`](../../fixtures.ts)) — turns HOST-02's and HOST-03's data-luck failures into clear precondition errors and removes the unsafe `orbitVersion!` at [`host-details-smoke.spec.ts:76`](../../tests/e2e/shared/hosts/host-details-smoke.spec.ts).
 2. Strengthen HOST-08: search the hosts list for the first host's name before exporting, then assert the CSV has a header row + exactly one data row and the expected column names ([`export-csv.spec.ts:20`](../../tests/e2e/shared/hosts/export-csv.spec.ts)).
-3. Repoint HOST-06 off `liveMacosHost` to any online host ([`host-reports-tab.spec.ts:28`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts)) — it only needs a display name, and this frees the real VM for the four tests that genuinely need it.
+3. Repoint HOST-06 **and HOST-18** off `liveMacosHost` to any online host ([`host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts)) — one needs a display name and the other a host id, and this frees the real VM for the six tests that genuinely need it.
 4. Add one positive option assertion (e.g. **Transfer** present) to HOST-13 and HOST-14 ([`mdm-actions-availability.spec.ts:72`](../../tests/e2e/free/hosts/mdm-actions-availability.spec.ts)) so the all-absent cases can't pass on a half-rendered menu.
 5. In HOST-04, replace the filter-pill `firstToken` substring check with the full title text, and assert the filtered hosts list actually contains the host the test drilled from ([`host-software.spec.ts:55`](../../tests/e2e/shared/hosts/host-software.spec.ts)).
+6. Harden HOST-15's two row assertions ([`host-certificates.spec.ts:66-67`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)): guard the issuer against `''` before asserting it (`toContainText('')` always passes), and read **Scope** out of its own cell instead of matching `System`/`User` anywhere in the row. Both are one-line changes and both currently admit a silent pass.
+7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* Full-inventory result rather than from page 1, or assert first that the Applications view is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
 
 **Bigger bets**
 

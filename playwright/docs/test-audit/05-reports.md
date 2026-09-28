@@ -1,12 +1,13 @@
 # Reports / queries — test audit
 
-**Specs covered:** 7 files · **Test declarations:** 21 · **Projects:** premium / free
+**Specs covered:** 7 files · **Test declarations:** 22 · **Projects:** premium / free
 
 Fleet's "Reports" are saved queries (`/reports/manage`, `/reports/new`, `/reports/:id`,
 `/reports/:id/edit`, `/reports/:id/live`; the REST API still calls them `queries`). The area
 splits into a serial CRUD lifecycle spec per tier (create → run live → edit → delete →
-activity-feed), plus small single-purpose specs for the list filters, the per-report
-automations modal, and "Save as new". Premium runs the lifecycle twice via a
+activity-feed), plus small single-purpose describes for SQL validation, new-report defaults
+and the live-report target picker, and small single-purpose specs for the list filters, the
+per-report automations modal, and "Save as new". Premium runs the lifecycle twice via a
 `for (const scope of ['All fleets', 'Workstations'])` loop; free mirrors it without the team
 dropdown. Every seeded report in the non-lifecycle specs is created and deleted through
 `@helpers/api/reports`.
@@ -43,6 +44,7 @@ can, and it does. See RPT-02 / RPT-15.
 | RPT-19 | `free/reports/automations.spec.ts` | Free • Reports • automations › enabling a report's automations persists | UI+API | ☐ |
 | RPT-20 | `free/reports/save-as-new.spec.ts` | Free • Reports • Save as new › pre-fills "Copy of \<name\>" and creates a duplicate | UI | ☐ |
 | RPT-21 | `free/reports/save-as-new.spec.ts` | Free • Reports • Save as new › rejects a name that already exists | UI | ☐ |
+| RPT-22 | `premium/reports/reports.spec.ts` | Reports — live report targets › selecting a fleet targets its hosts and enables Run | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions
 via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -992,6 +994,59 @@ other:
 
 ---
 
+### RPT-22 · Reports — live report targets › selecting a fleet targets its hosts and enables Run
+
+- **File:** [`playwright/tests/e2e/premium/reports/reports.spec.ts`](../../tests/e2e/premium/reports/reports.spec.ts)
+- **Grep:** `npx playwright test --project=premium premium/reports/reports.spec.ts -g "selecting a fleet targets its hosts and enables Run"`
+- **Project:** premium · **Scopes:** All fleets (the list is opened unscoped; the *target* is the **VMs** fleet)
+- **Mode:** UI · **Isolation:** standalone `test.describe('Reports — live report targets')` with a single test, **not** serial and not part of the scoped CRUD loop. Self-contained: the report is **created and deleted over the API inside the same test**, in `try/finally`. Nothing is run, so the only state it leaves is the UI state of a page that is never persisted.
+- **Preconditions:** premium license (fleets are a premium concept — this is the one genuinely premium thing in the file). **The `VMs` fleet must exist and hold hosts** — it is the fleet that owns the real QA VMs and therefore the one fleet guaranteed to have something for "N hosts targeted" to count. Empty reports list is not required (the test searches by its own name).
+- **Data created:** one global report `playwright-live-targets-<ts>` with `SELECT 1 AS one;` — deleted in `finally`; `cleanup-teardown`'s `deleteAllQueries` sweeps it if the test aborts.
+
+**Flow**
+
+1. ☐ *(API setup)* `POST /queries` → `playwright-live-targets-<ts>`.
+2. ☐ Open `/reports/manage` via URL, select **All fleets**.
+   - ✅ *(UI)* a row or the empty state is visible (`ReportsListPage.goto` anchor); the dropdown reads "All fleets".
+3. ☐ Type the report's name into **Search by name**, click its row link.
+   - ✅ *(UI)* URL matches `/reports/:id` (`openReport`).
+4. ☐ Click **Edit**, then **Live report** in the editor.
+   - ✅ *(UI)* URL matches `/reports/:id/edit` (`clickEdit`), then `/reports/:id/live` (`clickLiveReport`).
+   - ✅ *(UI)* the **Select targets** `h1` is visible (`ReportLivePage.waitForReady`).
+5. ☐ *(no user action)* the empty picker state — the baseline the rest of the test is measured against.
+   - ✅ *(UI)* **Run** is **disabled**.
+   - ✅ *(UI)* the targeted-host summary is **empty** (`.run-query-page__targets-total-count` — role-less spans, so scoped by the page's own class).
+6. ☐ Click the **VMs** fleet chip.
+   - ✅ *(UI)* the chip flips to selected — `toggleTarget` reads `data-selected` rather than the accessible name, because each chip's name is prefixed by its state icon ("plus" unselected, "check" selected).
+   - ✅ *(UI)* the summary now matches `/\d+\s*hosts?\s*targeted/`. **Whitespace-class, not a literal space:** Fleet joins the summary's parts with **non-breaking** spaces, so `"N hosts targeted"` with a literal space never matches.
+   - ✅ *(UI)* **Run** is **enabled** — selecting a target is what turns the run on.
+7. ☐ Click the **VMs** chip again to deselect it.
+   - ✅ *(UI)* the chip flips back to unselected.
+   - ✅ *(UI)* the summary is empty again.
+   - ✅ *(UI)* **Run** is disabled again. The reversal is the load-bearing half: it proves the count came from *this* fleet selection and not from a default the page had all along.
+8. ☐ *(API teardown)* `DELETE /queries/:id` in `finally`.
+
+**Assessment**
+- *Value:* closes the biggest hole RPT-02 / RPT-15 leave open. Those two reach `/reports/:id/live` and stop; this one exercises the picker itself — that **Run** is gated on having a target, that a fleet chip is a valid target, that Fleet computes and renders a host count for it, and that all three reverse. It is also the only assertion in the area that touches the premium-only **fleet** row of the target picker (platforms and labels are offered on both tiers; fleets are not). And it does all of that **without running a campaign**, so it stays on the safe side of the simulated-host line described above.
+- *Coverage gaps:* **Run is never clicked** — the area still has no coverage of *Running report* → *Report finished*, the `N targeted / P% responded` summary on the run screen, Stop / Run again / Close, or the Errors tab; the **selected-targets table** (`targetRows`) is never read, so nothing asserts *which* hosts were picked, only that a number appeared; the count is matched as a shape (`\d+`), never reconciled against `GET /hosts?fleet_id=<VMs>`, so a chip that targeted the *wrong* fleet passes; the other target kinds (**All hosts**, a platform, a label, an individual host) are untested, as is multi-select and the "(P% online)" half of the summary; no free counterpart, which is correct for the fleet chip but leaves platform/label targeting uncovered on both tiers.
+- *Redundancy:* steps 2–4 re-walk the list → details → edit → live navigation that RPT-02/RPT-15 already perform and that RPT-03/RPT-16 perform again immediately after — the fifth copy of that walk in this file. The only unique steps are 5–7.
+- *Efficiency / smells:*
+  - ⚠️ **The fleet is a hardcoded string, not the `vmsFleetId` worker fixture.** `const fleet = 'VMs'` ([`reports.spec.ts:156`](../../tests/e2e/premium/reports/reports.spec.ts)) — the suite resolves this fleet by id everywhere else. If the fleet is renamed the failure is a chip-not-found timeout rather than a clear precondition error, and there is **no guard** asserting the fleet exists or holds hosts (contrast HOSTP-09, which turns exactly this class of missing furniture into a readable message).
+  - ⚠️ **`targetChip(name)` is an unscoped, substring `getByRole('button', { name })`** ([`ReportLivePage.ts:89`](../../pages/reports/ReportLivePage.ts)). A label named `VMs`, a second chip containing the word, or any other button on the page whose accessible name contains it resolves to two elements and fails strict mode. The picker offers fleets **and** labels side by side, so this is a live collision risk, not a theoretical one.
+  - `toggleTarget` early-returns when `data-selected` already matches, so on a page that rendered the chip *pre-selected* the test would assert the post-click state without ever clicking — the selection half would pass vacuously. The deselect step is what would catch it.
+  - `toBeEmpty()` on the summary passes both for "rendered but blank" and — in practice — for an element that exists with no text for an unrelated reason; it is a weaker baseline than asserting the Run button alone.
+  - The report is created with a query (`SELECT 1 AS one;`) that is never used — nothing is run — so the seed could be any report at all; it exists only to have a `/reports/:id/live` route to open.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1008,7 +1063,8 @@ other:
 | Inherited (global → team) | RPT-11 | converse direction; inherited-report read-only affordances |
 | Per-report automations | RPT-08, RPT-19 | disable direction; UI re-verification; global automations/log-destination config |
 | Save as new | RPT-12/13, RPT-20/21 | proof the duplicate is a *new* id; SQL/description carry-over; the premium-only **Fleet** dropdown in the modal |
-| Live report | RPT-02, RPT-15 (**navigation only — never clicks Run**) | target selection, Run, *Running* → *Report finished*, `N targeted / P% responded`, Stop / Run again / Close, Errors tab. Real-result coverage lives only in [`shared/hosts/host-live-query.spec.ts`](../../tests/e2e/shared/hosts/host-live-query.spec.ts) against `liveMacosHost` |
+| Live report — navigation | RPT-02, RPT-15 (**navigation only — never clicks Run**) | see the row below; real-result coverage lives only in [`shared/hosts/host-live-query.spec.ts`](../../tests/e2e/shared/hosts/host-live-query.spec.ts) against `liveMacosHost` |
+| Live report — target picker | RPT-22 (**fleet chip only**, premium) | **Run** still never clicked: *Running* → *Report finished*, `N targeted / P% responded`, Stop / Run again / Close and the Errors tab remain untested. Within the picker: the selected-targets table is never read, the host count is matched as `\d+` rather than reconciled against `GET /hosts?fleet_id=`, and **All hosts** / platform / label / individual-host targets and multi-select are untested (no free counterpart, so platform + label targeting is uncovered on both tiers) |
 | SQL validation + new-report defaults | RPT-06, RPT-07 (**premium file only**) | no free counterpart, despite the editor being tier-agnostic and free/policies having its own mirror |
 | Reports list pagination / sorting / column set | — | untested (only `tests/loadtest/reports.spec.ts` touches the list at scale, for timing) |
 | Report scheduling actually running (stored results) | — | untested and arguably untestable here: needs a scheduled interval to elapse on a real host |
@@ -1021,7 +1077,10 @@ What it *cannot* assert: any result value, any row count, or that the report's S
 that ran — the osquery-perf simulations ignore the SQL and return no rows a meaningful fraction of
 the time. RPT-02 / RPT-15 stay on the safe side of that line, so **no test in this area fakes
 result validation**; the defect is the opposite — their titles claim a run they never perform, and
-they stop three steps before the plumbing that *is* assertable.
+they stop three steps before the plumbing that *is* assertable. RPT-22 takes one of those three
+steps — the target picker, Run's enablement, and the targeted-host count — and deliberately stops
+before pressing **Run**, so the area still has no coverage of the run screen itself even though the
+list above says most of it is assertable.
 
 **Duplication**
 
@@ -1037,7 +1096,7 @@ they stop three steps before the plumbing that *is* assertable.
    create/edit/delete, once via the dashboard feed in the final sub-test. On premium that is
    3 API + 3 UI assertions per scope, ×2 scopes, plus 3 + 3 on free = 12 assertions of the same
    6 copy strings, on top of `tests/api/activity-copy.spec.ts`.
-5. **RPT-02/RPT-15's list→details→edit walk is re-run verbatim** by RPT-03/RPT-16 immediately after.
+5. **RPT-02/RPT-15's list→details→edit walk is re-run verbatim** by RPT-03/RPT-16 immediately after — and a fifth time by RPT-22, whose only unique steps are the three picker assertions at the end.
 6. **The SQL-syntax-error assertion pair** appears in RPT-06 and in both policies
    `sql-validation.spec.ts` files — four copies of one `SQLEditor` behaviour.
 
@@ -1078,6 +1137,14 @@ they stop three steps before the plumbing that *is* assertable.
    searches per scope ([`reports.spec.ts:52`](../../tests/e2e/premium/reports/reports.spec.ts)).
 5. Drop the unfalsifiable `expect(reportsList.table.rowOrEmpty()).toBeVisible()` in RPT-04/RPT-17,
    and tighten RPT-12/RPT-20's URL check to assert the id differs from `baseId`.
+6. Resolve RPT-22's target fleet through the `vmsFleetId` worker fixture instead of the hardcoded
+   `const fleet = 'VMs'` ([`reports.spec.ts:156`](../../tests/e2e/premium/reports/reports.spec.ts)),
+   and scope `ReportLivePage.targetChip()` to the picker's own container with an exact-ish match
+   ([`ReportLivePage.ts:89`](../../pages/reports/ReportLivePage.ts)) — today a label sharing the
+   fleet's name breaks the locator under strict mode.
+7. Reconcile RPT-22's `\d+ hosts targeted` against `GET /hosts?fleet_id=<VMs>&status=online` so the
+   count proves the *right* fleet was targeted. One API call, and it turns a shape check into a
+   value check.
 
 **Bigger bets**
 

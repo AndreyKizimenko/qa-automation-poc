@@ -1,13 +1,14 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 22 · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 24 · **Projects:** premium / free
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
 `/policies/new` + `/policies/:id/edit` and a results page at `/policies/:id`. The specs
 split three ways per tier: a serial CRUD lifecycle (create → edit → delete → activity
-feed), one global failing-policies-webhook automations test, and a batch of read-only
-form checks (platform compatibility, SQL syntax error, save gating). Premium and free
+feed), a **serial** two-test automations describe (the global failing-policies webhook,
+and the form's in-flight lock), and a batch of read-only form checks (platform
+compatibility, SQL syntax error, save gating). Premium and free
 carry near-identical copies of all three; entries below are paired premium-then-free so
 the duplication is visible.
 
@@ -37,6 +38,8 @@ the duplication is visible.
 | POL-20 | `free/policies/sql-validation.spec.ts` | SQL validation › a syntax error is surfaced but Save stays enabled | UI | ☐ |
 | POL-21 | `premium/policies/sql-validation.spec.ts` | save gating › the Save policy modal disables Save until a platform is selected | UI | ☐ |
 | POL-22 | `free/policies/sql-validation.spec.ts` | save gating › the Save policy modal disables Save until a platform is selected | UI | ☐ |
+| POL-23 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
+| POL-24 | `free/policies/policy-automations.spec.ts` | Free • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
 
 ---
 
@@ -353,7 +356,8 @@ other:
 - **File:** [`playwright/tests/e2e/premium/policies/policy-automations.spec.ts`](../../tests/e2e/premium/policies/policy-automations.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "Premium • Policies • automations"`
 - **Project:** premium · **Scopes:** All fleets only
-- **Mode:** UI+API · **Isolation:** standalone test with `beforeEach` / `afterEach`. **Mutates global app config** (`webhook_settings.failing_policies_webhook`) — snapshot + restore, so it is not safe to run concurrently with another spec touching the same subtree.
+- **Mode:** UI+API · **Isolation:** **serial describe, step 1 of 2** — `test.describe.configure({ mode: 'serial' })` ([`policy-automations.spec.ts:28`](../../tests/e2e/premium/policies/policy-automations.spec.ts)); POL-23 is step 2, and a failure here skips it. Own `beforeEach` / `afterEach`, no shared closure state. **Mutates global app config** (`webhook_settings.failing_policies_webhook`) — snapshot + restore, so it is not safe to run concurrently with another spec touching the same subtree.
+- **Why the describe is serial:** both tests snapshot and restore the **same global config key**. Run in parallel they raced — one test's `afterEach` restore landed between the other's save and its read-back, so the read-back saw the restored value and failed on correct product behaviour. ⚠️ **Not `--repeat-each`-safe:** serial mode orders tests *within one describe in one worker*, while `--repeat-each` produces copies Playwright may schedule in parallel workers, reinstating the race.
 - **Preconditions (API):** `GET /config` snapshots the current failing-policies webhook; `POST /global/policies` seeds `pw-policy-auto-<ts>` with `SELECT 1;` so the **Automations** button is enabled (Fleet disables it when the scope has no policies).
 - **Data created:** one API-seeded global policy (deleted in `afterEach` via `POST /global/policies/delete`); the config subtree is PATCHed back to its snapshot.
 
@@ -376,7 +380,7 @@ other:
 **Assessment**
 - *Value:* Proves the automations modal actually persists both fields (toast alone would not) and that the Webhook radio reveals the URL input.
 - *Coverage gaps:* The modal is never reopened, so UI rehydration of the saved toggle/URL is untested — a classic Fleet regression spot. No policy is selected in the modal's per-policy list, so `policy_ids` stays empty and the "which policies trigger the webhook" UI is untested. No negative validation (empty or malformed URL with the toggle on). None of the premium-only workflows are touched: **install software**, **run script**, **calendar events**, ticket integrations (Jira/Zendesk). No team-scoped run (Workstations) even though scope handling is the premium-specific risk. Disable-again path untested.
-- *Redundancy:* POL-10 is byte-identical except for the dropdown line — this premium spec asserts nothing premium.
+- *Redundancy:* POL-10 is byte-identical except for the dropdown line — this premium spec asserts nothing premium. Steps 1–5 are re-walked wholesale by POL-23, which differs only in what it does after the **Save** click.
 - *Efficiency / smells:* `automationsModal.getByRole('switch')` ([`PoliciesListPage.ts:60`](../../pages/policies/PoliciesListPage.ts)) assumes exactly one switch in the modal — strict-mode break the moment Fleet adds another. `automationsModal` is `.modal__modal_container` filtered by the text "Automations", which will also match any nested modal containing that word. Global-config mutation from an e2e test is a parallel-safety hazard shared with `premium/dashboard/automations-activity.spec.ts` and `premium/settings/team-host-status-webhook.spec.ts` (different subtrees today).
 
 **Notes (Andrey)**
@@ -393,7 +397,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/free/policies/policy-automations.spec.ts`](../../tests/e2e/free/policies/policy-automations.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "Free • Policies • automations"`
-- **Project:** free · **Mode:** UI+API · **Isolation:** standalone; mutates global app config with snapshot/restore in `beforeEach`/`afterEach`
+- **Project:** free · **Mode:** UI+API · **Isolation:** **serial describe, step 1 of 2** ([`policy-automations.spec.ts:26`](../../tests/e2e/free/policies/policy-automations.spec.ts)); POL-24 is step 2 and is skipped if this fails. Mutates global app config with snapshot/restore in `beforeEach`/`afterEach`. Serial for the same reason as POL-09 — two tests sharing one global config key raced, with one's restore landing between the other's save and read-back. ⚠️ **Not `--repeat-each`-safe** (serial orders within a describe in one worker; repeat-each copies can run in parallel workers)
 - **Preconditions (API):** `GET /config` snapshot; `POST /global/policies` seeds `pw-policy-auto-<ts>` to enable the **Automations** button
 - **Data created:** one seeded policy (API-deleted after); config restored
 
@@ -406,7 +410,7 @@ other:
 **Assessment**
 - *Value:* Confirms failing-policies webhooks are genuinely available on free (not paywalled) and persist.
 - *Coverage gaps:* Same as POL-09, plus: no assertion that the premium-only workflows are hidden/paywalled in this modal on free — which is the one thing this file is uniquely positioned to check.
-- *Redundancy:* Identical to POL-09 apart from the missing `teamDropdown.select('All fleets')`.
+- *Redundancy:* Identical to POL-09 apart from the missing `teamDropdown.select('All fleets')`; the same holds for POL-24 vs POL-23, so the whole free automations file mirrors the premium one test-for-test.
 - *Efficiency / smells:* Same single-`switch` and text-filtered-modal assumptions.
 
 **Notes (Andrey)**
@@ -768,6 +772,94 @@ other:
 
 ---
 
+### POL-23 · Premium • Policies • automations › the automations form locks itself while the save is in flight
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-automations.spec.ts`](../../tests/e2e/premium/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Premium • Policies • automations › the automations form locks itself while the save is in flight"`
+- **Project:** premium · **Scopes:** All fleets only
+- **Mode:** UI · **Isolation:** **serial describe, step 2 of 2** — `test.describe.configure({ mode: 'serial' })` ([`policy-automations.spec.ts:28`](../../tests/e2e/premium/policies/policy-automations.spec.ts)). Shares no closure state with POL-09, but shares its `beforeEach` / `afterEach` **and the global config key they drive**. Still **mutates global app config** (`webhook_settings.failing_policies_webhook`) — snapshot + restore — so it is not safe to run concurrently with any other spec touching that subtree. ⚠️ **Not `--repeat-each`-safe:** serial mode orders the two tests *within one describe in one worker*; `--repeat-each` produces independent copies that Playwright is free to schedule in parallel workers, which reinstates exactly the race serial was added to remove.
+- **Why serial:** the two tests in this describe snapshot and restore the **same global config key**. Run in parallel they raced — one test's `afterEach` restore landed between the other's save and its read-back, so the read-back saw the *restored* value and the assertion failed on correct product behaviour. Serial keeps the two hook cycles from interleaving. (Consequence: a failure in POL-09 skips this test.)
+- **Preconditions (API):** identical to POL-09 — `GET /config` snapshots the failing-policies webhook; `POST /global/policies` seeds `pw-policy-auto-<ts>` so the **Manage automations** button is enabled (Fleet disables it when the scope has no policies).
+- **Data created:** one API-seeded global policy (deleted in `afterEach`); the config subtree is PATCHed back to its snapshot. Note the in-flight PATCH **is released and does land**, so this test really does enable the webhook with `https://example.com/pw-policy-webhook-inflight` before the restore undoes it.
+
+**Flow**
+
+1. ☐ *(test setup, no user action)* Install a `page.route` on `/api/*/fleet/config` that **holds the PATCH open** until the in-flight assertions have run, then releases it. Non-PATCH methods `fallback()` straight through, so the page's own config **reads** are untouched.
+   - 📌 **The hold replaces a sleep.** Holding the response keeps the in-flight window open exactly as long as the assertions need and no longer — there is no timing constant to tune and no race to lose on a slow instance. Manually, the equivalent is throttling the network or using devtools request blocking; there is no pure-UI way to widen this window.
+   - 📌 The route is installed on the **page**, not the API `request` context, so `afterEach`'s restore PATCH (which goes through `request`) is not intercepted.
+2. ☐ Open `/policies/manage` via URL, select **All fleets** in the dropdown.
+   - ✅ *(UI)* Row-or-empty visible; dropdown reads "All fleets".
+3. ☐ Click **Manage automations**.
+   - ✅ *(UI)* the automations modal is visible (`openAutomations`).
+4. ☐ Flip the enable switch on, click the **Webhook** radio label, fill the destination URL.
+   - ✅ *(UI)* switch has `aria-checked="true"`; the **Destination URL** field is visible.
+5. ☐ Click **Save** — and, because the PATCH is held, the form stays in its saving state.
+   - ✅ *(UI)* the modal's **Save** button is **disabled**.
+   - ✅ *(UI)* the modal's **disabled-content overlay** is visible — `.modal__content-wrapper-disabled` inside the automations modal. Fleet passes `isUpdating` down as the `Modal`'s `isContentDisabled`, which both disables the submit button *and* lays an overlay over the form. The overlay is a bare `div` with no role and no text, so **the modifier class its wrapper gains is the only way to see it** — a documented class-fallback, not a shortcut.
+6. ☐ *(test action, no user action)* Release the held PATCH.
+   - ✅ *(UI)* the automations modal is hidden — the save completed and Fleet closed the dialog.
+   - ✅ *(UI)* success toast `Successfully updated policy automations.`
+7. ☐ *(API teardown)* restore the config snapshot; delete the seeded policy.
+
+**Assessment**
+- *Value:* the only double-submit guard asserted anywhere in Policies, and the only assertion in the area that Fleet's `Modal` disables its *content* and not just its submit button — two different props, and a regression can break either independently. The `page.route` hold makes it deterministic rather than a timing gamble, which is what earns it a place in a nightly suite.
+- *Coverage gaps:* never attempts the thing the lock exists to prevent — no second **Save** click, no field edit, no Escape / **Cancel** while the save is in flight, so "locked" is asserted as *appearance* rather than as *behaviour*; no failure path (a PATCH released with a 4xx/5xx must re-enable the form and surface an error, and a form left permanently locked after a failed save is the more likely real bug); the enable-switch and URL input are never individually asserted as disabled, only the wrapper class; free's copy (POL-24) is not cross-checked against premium's.
+- *Redundancy:* POL-24 is byte-identical apart from the missing `teamDropdown.select('All fleets')` line. Steps 2–4 re-walk POL-09's entire happy path purely to get back into the modal — the two tests differ only in what they do after the **Save** click.
+- *Efficiency / smells:*
+  - The premium copy again asserts **nothing premium** (see POL-09) — it runs on `All fleets`, drives global config, and never touches a team-scoped automations modal.
+  - `.modal__content-wrapper-disabled` is a raw class locator **in the spec**, not in `PoliciesListPage`. The page object already owns `automationsModal` and `saveAutomationsButton`; the overlay belongs there too, with the same explanatory comment.
+  - If an assertion in step 5 fails, `release()` is never called and the held route is abandoned — harmless (the context is torn down) but it means the failure screenshot always shows the modal mid-save, which is at least legible.
+  - `page.route(/\/api\/[^/]+\/fleet\/config$/)` bypasses `apiUrl()` and hardcodes the route shape the suite otherwise routes through a helper. Justified (this is a *browser* route pattern, not an API call) but worth a note if Fleet ever versions the path differently.
+  - The webhook really is enabled by this test before the restore, so it shares POL-09's global-config blast radius with `premium/dashboard/automations-activity.spec.ts` and `premium/settings/team-host-status-webhook.spec.ts` (different subtrees today).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-24 · Free • Policies • automations › the automations form locks itself while the save is in flight
+
+- **File:** [`playwright/tests/e2e/free/policies/policy-automations.spec.ts`](../../tests/e2e/free/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Policies • automations › the automations form locks itself while the save is in flight"`
+- **Project:** free · **Mode:** UI
+- **Isolation:** **serial describe, step 2 of 2** — `test.describe.configure({ mode: 'serial' })` ([`policy-automations.spec.ts:26`](../../tests/e2e/free/policies/policy-automations.spec.ts)), for the same reason as POL-23: both tests in the describe snapshot and restore the same global config key, and in parallel one test's `afterEach` restore landed between the other's save and its read-back. Mutates global app config with snapshot/restore in `beforeEach` / `afterEach`. ⚠️ **Not `--repeat-each`-safe** — serial orders tests within one describe in one worker, while `--repeat-each` copies are schedulable in parallel workers.
+- **Preconditions (API):** `GET /config` snapshot; `POST /global/policies` seeds `pw-policy-auto-<ts>` to enable the **Manage automations** button.
+- **Data created:** one seeded policy (API-deleted after); config restored. The held PATCH is released and lands before the restore.
+
+**Flow**
+
+1. ☐ *(test setup)* Hold Fleet's config **PATCH** open with `page.route`; non-PATCH methods fall through.
+2. ☐ Open `/policies/manage` via URL (no team dropdown on free) → click **Manage automations** → flip the switch on → click the **Webhook** radio → fill the destination URL.
+   - ✅ *(UI)* modal visible; `aria-checked="true"`; Destination URL field visible.
+3. ☐ Click **Save**; while the PATCH is held:
+   - ✅ *(UI)* **Save** is disabled.
+   - ✅ *(UI)* the modal's `.modal__content-wrapper-disabled` overlay is visible (`isUpdating` → `Modal`'s `isContentDisabled`; the overlay is a role-less, text-less `div`, so the wrapper's modifier class is the only handle).
+4. ☐ Release the held PATCH.
+   - ✅ *(UI)* the modal is hidden.
+   - ✅ *(UI)* toast `Successfully updated policy automations.`
+5. ☐ *(API teardown)* restore config; delete the seeded policy.
+
+**Assessment**
+- *Value:* confirms the in-flight lock is not premium-gated — the same `isUpdating` plumbing runs on free. That is a thin claim on its own; its value is as the free half of a pair, not as an independent test.
+- *Coverage gaps:* same as POL-23 (no second submit, no error path, no per-control disabled assertions), plus the one thing free's file is uniquely positioned to check and doesn't: that the **premium-only workflows are absent or paywalled** in this modal while it is locked or otherwise.
+- *Redundancy:* **byte-identical to POL-23 apart from the missing `teamDropdown.select('All fleets')`.** With POL-09 ↔ POL-10 that makes the whole free automations file a copy of the premium one, now at two tests each rather than one.
+- *Efficiency / smells:* same as POL-23 — spec-level `.modal__content-wrapper-disabled` class locator that belongs in `PoliciesListPage`, spec-level `page.route` regex, and the abandoned hold on an assertion failure. Cost is one extra full browser session per nightly free run for an assertion the premium copy already makes against the same React component.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -783,6 +875,7 @@ other:
 | Policy details page | POL-01/03 (name/desc/resolution, **Show query**, button presence) | **Run policy** never clicked; passing/failing host tabs + host links untested; **Platforms** field never read (locator exists, unused) |
 | Team scoping of policies (premium) | POL-01/03/05 via the dropdown + `fleet_id` | No cross-scope leakage check (a Workstations policy must not appear under Unassigned); `Unassigned` scope not in `SCOPES` at all |
 | Failing-policies webhook automation | POL-09, POL-10 | Modal never reopened (no rehydration check); `policy_ids` selection untested; no disable path; no invalid-URL validation |
+| Automations modal in-flight lock (double-submit guard) | POL-23, POL-24 | Asserted as appearance (Save disabled + `.modal__content-wrapper-disabled` overlay), never as behaviour — no second submit attempt, no Cancel/Escape mid-save, and **no failed-save path**, which is where a permanently-locked form would actually ship |
 | Other policy automations: install software, run script, calendar events (premium), Jira/Zendesk tickets | — | **Entirely untested** — the largest genuine hole in this area |
 | Platform-compatibility badge | POL-11…POL-18 | Only macOS-specific tables sampled; no Windows/Linux-only table; identity asserted in 3 of 6 cases |
 | SQL syntax warning + save gating | POL-19…POL-22 | Re-enable path untested; broken SQL never actually saved |
@@ -792,7 +885,7 @@ other:
 
 **Duplication**
 
-1. **Free ↔ premium mirrors.** 9 of 22 entries are near-exact copies: CRUD (POL-01/03/05/07 ↔ POL-02/04/06/08) and automations (POL-09 ↔ POL-10). Per the suite's tier-separation preference the CRUD pair is defensible (different license path). The automations pair is not — POL-09 asserts nothing premium and POL-10 asserts nothing free-specific.
+1. **Free ↔ premium mirrors.** 10 of 24 entries are near-exact copies: CRUD (POL-01/03/05/07 ↔ POL-02/04/06/08) and automations (POL-09 ↔ POL-10, POL-23 ↔ POL-24). Per the suite's tier-separation preference the CRUD pair is defensible (different license path). The automations pairs are not — POL-09/POL-23 assert nothing premium and POL-10/POL-24 assert nothing free-specific. The mirror now costs two browser sessions per tier rather than one.
 2. **sql-validation mirrors.** POL-11/13/15/19/21 ↔ POL-12/14/16/20/22 are the same client-side component checks on both tiers, with premium arbitrarily holding two extras (POL-17, POL-18). `PlatformCompatibility` / `PolicyForm` have no tier branch, so the free copies are pure cost.
 3. **Triple existence proof.** Each CRUD step confirms the same fact three ways: details page render + `/activities` API + a list-row search.
 4. **Activity double-coverage.** The three `assertActivity` calls in the CRUD spec assert the same events POL-07/08 then walk in the UI, and the regexes themselves are unit-tested in `tests/api/activity-copy.spec.ts`.
@@ -804,7 +897,8 @@ other:
 - POL-09/10's `GET /config` check is **justified** — the toast is not evidence of persistence and Fleet has no other surface for it. But the missing complement is a UI one: reopen the modal and assert the saved toggle + URL render. Right now a rehydration bug ships green.
 - POL-05/06 rely on `deleted_policy` as the only proof the record is gone; the UI side is a name-filtered `toHaveCount(0)` plus a tautological `rowOrEmpty()`. Either assert the unfiltered list/empty state properly or check `GET /policies` — currently neither is strong.
 - POL-11…POL-22 make **no server calls at all**. They are React component tests running in a full browser session against a live instance.
-- Setup/teardown in POL-09/10 is correctly API-driven (seed policy, snapshot/restore config).
+- Setup/teardown in POL-09/10 (and POL-23/24) is correctly API-driven (seed policy, snapshot/restore config).
+- POL-23/24 make **no assertion through the API at all** and are the better shape for it: the claim is about what the *form* does while a request is open, so the network is the instrument (`page.route` holding the PATCH), not the oracle. Worth copying wherever else the suite wants an in-flight state — it replaces a sleep with a deterministic hold.
 
 **Quick wins**
 
@@ -812,6 +906,8 @@ other:
 2. Replace the tautological `expect(table.rowOrEmpty()).toBeVisible()` in both delete steps with `expect(table.emptyState).toBeVisible()` ([`policies.spec.ts:96`](../../tests/e2e/premium/policies/policies.spec.ts), [`free/…/policies.spec.ts:77`](../../tests/e2e/free/policies/policies.spec.ts)).
 3. Drop two of the three `assertActivity` calls in each CRUD spec (keep `deleted_policy`); POL-07/08 already assert create/edit/delete through the UI.
 4. Reopen the automations modal after save and assert the toggle + URL rehydrate, in POL-09/10 ([`policy-automations.spec.ts:54`](../../tests/e2e/premium/policies/policy-automations.spec.ts)).
+6. Move `.modal__content-wrapper-disabled` out of both in-flight specs and onto `PoliciesListPage` (next to `automationsModal` / `saveAutomationsButton`), with the `isUpdating` → `isContentDisabled` explanation attached — it is a legitimate class fallback, and it currently lives duplicated in two spec bodies ([`premium/…/policy-automations.spec.ts:103`](../../tests/e2e/premium/policies/policy-automations.spec.ts), [`free/…/policy-automations.spec.ts:99`](../../tests/e2e/free/policies/policy-automations.spec.ts)).
+7. Add the failed-save half to POL-23: release the held PATCH with a 500 and assert the form **re-enables** and surfaces an error. A form that stays locked after a failed save is the regression the lock itself invites, and the `page.route` scaffolding to test it is already there.
 5. Search before `openPolicy()` in the edit step so it matches `deletePolicy`'s pagination-safe pattern ([`policies.spec.ts:73`](../../tests/e2e/premium/policies/policies.spec.ts)), and tighten POL-18's `not.toContainText('No platforms')` into `toHaveCount(4)`.
 
 **Bigger bets**
