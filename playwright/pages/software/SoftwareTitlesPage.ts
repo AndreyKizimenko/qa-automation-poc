@@ -30,10 +30,14 @@ export class SoftwareTitlesPage {
   readonly vulnWebhookUrlInput: Locator;
   readonly saveAutomationsButton: Locator;
 
-  // Tabs (Inventory / OS / Vulnerabilities)
+  // Tabs (Inventory / OS / Vulnerabilities / Library)
   readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
+  readonly libraryTab: Locator;
+
+  /** "N items" summary above the table, plus its "Updated <time> ago" line. */
+  readonly resultsCount: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -69,6 +73,11 @@ export class SoftwareTitlesPage {
     this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
+    this.libraryTab = page.getByRole('tab', { name: 'Library' });
+
+    // TableContainer renders the count as a role-less <div>; there is no
+    // heading or label to anchor on.
+    this.resultsCount = page.locator('.table-container__results-count');
   }
 
   async goto(opts: {
@@ -96,6 +105,57 @@ export class SoftwareTitlesPage {
   async searchByName(name: string): Promise<void> {
     await this.search.fill(name);
     await expect(this.table.firstRow).toBeVisible();
+  }
+
+  /** Visible column headers, in render order, with the trailing action column dropped. */
+  async columnHeaders(): Promise<string[]> {
+    const headers = await this.table.table.locator('thead th').allInnerTexts();
+    return headers.map((h) => h.trim()).filter(Boolean);
+  }
+
+  /**
+   * The header's sort control. Fleet renders sortable headers as
+   * `<button class="sortable-header">` and non-sortable ones as a plain div, so
+   * a zero count is how "this column can't be sorted" reads.
+   */
+  sortControl(column: string): Locator {
+    return this.table.table.locator('thead').getByRole('button', { name: column, exact: true });
+  }
+
+  /**
+   * Click a column's sort control and wait for the re-fetched page. Sorting is
+   * server-side: the click flips `order_key` / `order_direction` in the URL
+   * well before the new rows arrive, so the URL is asserted first and the
+   * loading overlay is what separates the new page from the old one.
+   */
+  async sortBy(column: string, orderKey: string, direction: 'asc' | 'desc'): Promise<void> {
+    await this.sortControl(column).click();
+    await expect(this.page).toHaveURL(new RegExp(`order_key=${orderKey}(&|$)`));
+    await expect(this.page).toHaveURL(new RegExp(`order_direction=${direction}(&|$)`));
+    await this.table.waitForSettled();
+  }
+
+  /** Trimmed values of one column across the rows currently rendered. */
+  async columnValues(column: string): Promise<string[]> {
+    const rows = this.table.table.locator('tbody tr');
+    const count = await rows.count();
+    const values: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const cell = await this.table.cellByColumn(rows.nth(i), column);
+      values.push((await cell.innerText()).trim());
+    }
+    return values;
+  }
+
+  /**
+   * Click into the "Library" tab — the installer-backed titles (custom
+   * packages, FMA, VPP, Android), as opposed to Inventory's host-reported
+   * software. Carries the currently selected fleet scope.
+   */
+  async gotoLibraryTab(): Promise<void> {
+    await this.libraryTab.click();
+    await expect(this.page).toHaveURL(/\/software\/library/);
+    await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 
   /**

@@ -17,6 +17,19 @@ export class FleetMaintainedAppsPage {
   readonly table: Locator;
   readonly searchInput: Locator;
 
+  // Catalog filters. The platform picker is Fleet's DropdownWrapper over
+  // react-select v5 (no role on the control, options carry
+  // data-testid="dropdown-option"); the "Hide added apps" slider is a
+  // role="switch" with no accessible name of its own, so both are scoped by
+  // the table's own BEM filter classes.
+  readonly platformFilter: Locator;
+  readonly platformFilterValue: Locator;
+  readonly hideAddedAppsToggle: Locator;
+  /** "N items" summary. Role-less <div> rendered by TableContainer. */
+  readonly resultsCount: Locator;
+  readonly rows: Locator;
+  readonly nameCells: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -25,6 +38,19 @@ export class FleetMaintainedAppsPage {
     this.tab = page.getByRole('tab', { name: 'Fleet-maintained' });
     this.table = page.getByRole('table');
     this.searchInput = page.getByPlaceholder(/search/i);
+
+    this.platformFilter = page.locator(
+      '.fleet-maintained-apps-table__platform-filter .react-select__control',
+    );
+    this.platformFilterValue = page.locator(
+      '.fleet-maintained-apps-table__platform-filter .react-select__single-value',
+    );
+    this.hideAddedAppsToggle = page
+      .locator('.fleet-maintained-apps-table__status-filter')
+      .getByRole('switch');
+    this.resultsCount = page.locator('.table-container__results-count');
+    this.rows = this.table.locator('tbody tr');
+    this.nameCells = this.table.locator('tbody tr td:first-child');
   }
 
   /**
@@ -77,6 +103,63 @@ export class FleetMaintainedAppsPage {
     await expect(this.searchInput).toBeVisible();
     await this.searchInput.fill(name);
     await expect(this.rowByName(name)).toBeVisible();
+  }
+
+  /**
+   * Every row's cell for one platform column. Addressed positionally because
+   * the platform columns carry no per-cell label — the header is the only thing
+   * naming them, and it can't be reached from a cell. Index matches
+   * {@link cellByPlatform}: Name is column 1, macOS 2, Windows 3.
+   */
+  platformColumnCells(platform: 'macOS' | 'Windows'): Locator {
+    const nth = platform === 'macOS' ? 2 : 3;
+    return this.table.locator(`tbody tr td:nth-child(${nth})`);
+  }
+
+  /**
+   * Parses the "N items" summary. **Not** the rendered row count: the table
+   * groups an app's macOS and Windows entries into one row while the count
+   * stays per-platform, so a three-row "zoom" search reads "5 items".
+   */
+  async itemCount(): Promise<number> {
+    const text = await this.resultsCount.innerText();
+    const match = text.match(/([\d,]+)\s+items?/);
+    if (!match) throw new Error(`Could not read an item count from "${text}"`);
+    return Number(match[1].replace(/,/g, ''));
+  }
+
+  /**
+   * Idempotently narrow the catalog to one platform. The filter is server-side
+   * (`platform=` on the apps request), so this settles on the item count
+   * changing rather than on the click.
+   */
+  async selectPlatform(label: 'All platforms' | 'macOS' | 'Windows'): Promise<void> {
+    const current = (await this.platformFilterValue.textContent())?.trim();
+    if (current === label) return;
+    const before = await this.itemCount();
+    await this.platformFilter.click();
+    await this.page
+      .getByTestId('dropdown-option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
+    await expect(this.platformFilterValue).toHaveText(label);
+    await expect.poll(() => this.itemCount()).not.toBe(before);
+  }
+
+  /**
+   * Flip the "Hide added apps" slider. Reads the current state from
+   * `aria-checked` so the call is idempotent, and waits for the `status=`
+   * query param Fleet writes, which is the signal the refetch was issued.
+   */
+  async setHideAddedApps(hidden: boolean): Promise<void> {
+    const isOn = (await this.hideAddedAppsToggle.getAttribute('aria-checked')) === 'true';
+    if (isOn !== hidden) await this.hideAddedAppsToggle.click();
+    await expect(this.hideAddedAppsToggle).toHaveAttribute('aria-checked', String(hidden));
+    if (hidden) {
+      await expect(this.page).toHaveURL(/status=available/);
+    } else {
+      await expect(this.page).not.toHaveURL(/status=available/);
+    }
   }
 
   rowByName(name: string): Locator {

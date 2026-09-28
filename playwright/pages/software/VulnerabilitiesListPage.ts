@@ -75,6 +75,19 @@ export class VulnerabilitiesListPage {
     return (await cveLink.innerText()).trim();
   }
 
+  /**
+   * Every CVE identifier on the current page, in row order. Gives a caller a
+   * pool to pick from rather than only the top row, which matters because Fleet
+   * matches CVEs faster than its feeds enrich them and 404s the detail page for
+   * any it has no metadata for — and the newest match sorts first
+   * (fleetdm/fleet#49913). Pair with `findRenderableCve`.
+   */
+  async cveNames(): Promise<string[]> {
+    const links = this.table.table.locator('tbody tr td:first-child a');
+    await expect(links.first()).toBeVisible();
+    return (await links.allInnerTexts()).map((name) => name.trim());
+  }
+
   /** Click the first CVE in the table. Returns the clicked CVE identifier. */
   async clickFirstCve(): Promise<string> {
     const firstRow = this.table.firstRowWithLink;

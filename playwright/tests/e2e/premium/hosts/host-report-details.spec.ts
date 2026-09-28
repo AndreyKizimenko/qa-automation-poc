@@ -7,6 +7,11 @@
  * scheduled run the host actually performed. That's why this couldn't be written
  * against the osquery-perf fleet: simulations never execute a scheduled query.
  *
+ * The card also prints that result's **first row** inline as a term/value grid,
+ * with any remainder behind "View full report". The drill-through therefore has
+ * to land on the same values the card previewed — that comparison is what proves
+ * the inline preview is of this report's stored result and not a placeholder.
+ *
  * ## Precondition — a durable seeded report
  *
  * The spec depends on `pw-host-report-results` existing on the **VMs** fleet with
@@ -60,6 +65,15 @@ test.describe('Premium • Hosts • host report results', () => {
     await hostDetails.searchReports(REPORT_NAME);
     await expect(hostDetails.reportCard(REPORT_NAME)).toBeVisible();
 
+    // The card prints the report's first stored row inline; the drill-through
+    // below must land on the same values, which is what proves the card shows a
+    // real result rather than a placeholder.
+    const cardResult = await hostDetails.reportCardFirstResult(REPORT_NAME);
+    expect(
+      Object.keys(cardResult).length,
+      'expected the card to render the report\'s first result inline',
+    ).toBeGreaterThan(0);
+
     await hostDetails.runReportCardAction(REPORT_NAME, 'Show details');
 
     // The per-host results page titles itself with the host, not the report.
@@ -70,6 +84,16 @@ test.describe('Premium • Hosts • host report results', () => {
     // The stored row is what the query selected, proving these are real results
     // rather than an empty shell.
     await expect(hostQueryReport.table.firstRow).toContainText('bar');
+
+    // Every column the card showed inline holds the same value in the full
+    // report's first row — the card is a preview of that row, not of some other.
+    for (const [column, value] of Object.entries(cardResult)) {
+      const cell = await hostQueryReport.table.cellByColumn(
+        hostQueryReport.table.firstRow,
+        column,
+      );
+      await expect(cell).toHaveText(value);
+    }
 
     await hostQueryReport.viewAllHosts();
 

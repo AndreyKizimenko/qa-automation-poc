@@ -7,6 +7,8 @@
  * would duplicate that coverage and flake against it.
  */
 import { test, expect } from '@playwright/test';
+import { withApiRequest } from '@helpers/api';
+import { findOnlineHost } from '@helpers/api/hosts';
 import { fleetctl, output } from '@helpers/fleetctl';
 
 test.describe('fleetctl · read-only get subcommands', () => {
@@ -45,8 +47,20 @@ test.describe('fleetctl · read-only get subcommands', () => {
     expect(res.stdout).toContain('Renew date:');
   });
 
-  test('get mdm-commands lists recent commands', async () => {
-    const res = await fleetctl(['get', 'mdm-commands']);
+  test('get mdm-commands lists the commands run on a host', async () => {
+    // `--host` is required (fleetdm/fleet#45476), and it takes a hostname, UUID
+    // or serial. The host is resolved at run time: the pools are osquery-perf
+    // simulations whose names change on every daemon restart.
+    const host = await withApiRequest(async (request) => {
+      for (const platform of ['darwin', 'windows', 'linux'] as const) {
+        const found = await findOnlineHost(request, platform);
+        if (found) return found;
+      }
+      return null;
+    });
+    test.skip(!host, 'no online host to query MDM commands for');
+
+    const res = await fleetctl(['get', 'mdm-commands', '--host', host!.displayName]);
     expect(res.code).toBe(0);
     // Either a populated table or the explicit empty state — both are healthy.
     expect(output(res)).toMatch(/most recent commands|No MDM commands/);

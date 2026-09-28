@@ -74,6 +74,7 @@ import {
   OrganizationInfoPage,
   OrganizationAdvancedPage,
   IntegrationsPage,
+  ChangeManagementPage,
   UsersPage,
   CreateUserPage,
   CreateApiUserPage,
@@ -214,6 +215,7 @@ type FleetFixtures = {
   organizationInfo: OrganizationInfoPage;
   organizationAdvanced: OrganizationAdvancedPage;
   integrationsPage: IntegrationsPage;
+  changeManagement: ChangeManagementPage;
   usersPage: UsersPage;
   createUserPage: CreateUserPage;
   createApiUserPage: CreateApiUserPage;
@@ -486,6 +488,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   integrationsPage: [async ({ page }, use) => {
     await use(new IntegrationsPage(page));
+  }, { box: true }],
+  changeManagement: [async ({ page }, use) => {
+    await use(new ChangeManagementPage(page));
   }, { box: true }],
   usersPage: [async ({ page }, use) => {
     await use(new UsersPage(page));

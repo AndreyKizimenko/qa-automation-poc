@@ -44,6 +44,57 @@ export async function setFleetWebhookSettings(
   await expect(res, `Failed to update fleet ${fleetId} webhook settings`).toBeOK();
 }
 
+/**
+ * A fleet's whole `features` subtree — `enable_host_users`,
+ * `enable_software_inventory` and the `historical_data` collection switches the
+ * dashboard's chart card reads.
+ *
+ * Snapshot and restore the **entire** object, same as `webhook_settings`: a
+ * PATCH replaces the subtree wholesale, so sending back only `historical_data`
+ * would silently turn off the fleet's host-users and software-inventory
+ * collection.
+ */
+export async function getFleetFeatures(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<Record<string, unknown>> {
+  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  return ((await res.json()).team?.features ?? {}) as Record<string, unknown>;
+}
+
+/** Writes a fleet's `features` subtree back verbatim. */
+export async function setFleetFeatures(
+  request: APIRequestContext,
+  fleetId: number,
+  features: Record<string, unknown>,
+): Promise<void> {
+  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+    headers: authHeaders(),
+    data: { features },
+  });
+  await expect(res, `Failed to update fleet ${fleetId} features`).toBeOK();
+}
+
+/**
+ * Whether a fleet is still collecting each historical dataset. `true` means
+ * collecting — the UI's checkboxes are phrased the other way round ("Disable
+ * hosts online historical reporting"), so don't read one as the other.
+ */
+export async function getFleetHistoricalData(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<{ uptime: boolean; vulnerabilities: boolean }> {
+  const historical = ((await getFleetFeatures(request, fleetId)).historical_data ?? {}) as {
+    uptime?: boolean;
+    vulnerabilities?: boolean;
+  };
+  return {
+    uptime: historical.uptime ?? true,
+    vulnerabilities: historical.vulnerabilities ?? true,
+  };
+}
+
 /** Exact name match. The `query` API param is fuzzy, so we filter client-side. */
 export async function findFleetByName(
   request: APIRequestContext,

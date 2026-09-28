@@ -1,6 +1,6 @@
 # QA Wolf → Playwright migration
 
-**Status: complete.** 269 flows handed over, 267 audited, 250 portable, **250 covered**. Lock and Wipe are the
+**Round 1: complete.** 269 flows handed over, 267 audited, 250 portable, **250 covered**. Lock and Wipe are the
 only commands never fired — their **availability is asserted across macOS, Windows and Ubuntu on both tiers**,
 so the gating is covered even though the destructive act isn't. Shipped in PR #35 (Batches 1–3) and PR #36
 (Batch 4).
@@ -17,6 +17,7 @@ transcripts**: harvest *what* each tested, re-author *how* against this suite's 
 | know whether we replaced QA Wolf, with numbers | **[PARITY.md](PARITY.md)** |
 | know what shipped and why, batch by batch | **[DELIVERY-LOG.md](DELIVERY-LOG.md)** |
 | check one specific flow's fate | **[audit/](audit/)** — per-flow disposition tables, C1–C10 |
+| work on **round 2** (the 2026-08-28 export) | **[round-2/README.md](round-2/README.md)** — batches, POM work, standing rules |
 | understand a specific spec's decisions | **the spec's own header comment** — that's where grounding lives |
 
 `audit/` is the primary evidence: every flow, its disposition, its target path, and the notes behind the call.
@@ -32,9 +33,15 @@ they're invisible to anyone re-provisioning an instance, so they're recorded her
 | `team-admin@fleetdm.com` — admin on **Workstations + VMs**, shared `FLEET_STATIC_USER_PASSWORD`, `force_password_reset: false` | premium | every team-admin case (C1 #16/#26/#27, labels role-access) | recreate via `POST /users/admin`, then clear the reset flag — `PATCH` won't do it, see [PLAYBOOK §6](PLAYBOOK.md#6-instance-level-gotchas-worth-knowing-up-front) |
 | Report **`pw-host-report-results`** on the **VMs** fleet — interval 300, `SELECT 'bar' AS foo` | premium | `premium/hosts/host-report-details.spec.ts` | recreate per that spec's header, then allow ~3.5 min for one scheduled run |
 | Real VMs online (macOS/Windows MDM-enrolled) + the osquery-perf load fleet | both | every host-dependent spec | see "Keeping the host population online" below |
+| **Fleet-maintained app shelf on the QA fleet** — 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `gitops/premium-fleetqa/fleets/qa.yml` with `--context qa-premium`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
 
 The report has to live on a **fleet**: `cleanup.steps.ts` wipes global reports at the start of every run, and
 never touches other fleets. Verified to survive overnight plus repeated cleanup cycles.
+
+The same reasoning puts the software shelf on **QA**: `cleanup.steps.ts` wipes installable software on
+Unassigned and Workstations only. QA is also the only fleet it was safe to bring under gitops — gitops deletes
+whatever a declared fleet doesn't list, and QA started empty. **VMs must stay out of gitops** for exactly that
+reason. See [round-2/README §8](round-2/README.md#8-standing-preconditions-this-round-adds).
 
 ## Two host populations
 
@@ -73,6 +80,15 @@ Two consequences the specs are written around: host IDs change across a daemon
 restart (so fixtures resolve hosts by API at run time, never by stored id), and a
 deleted simulation never returns on its own — osquery-perf enrolls once at startup
 with no node-invalid recovery.
+
+## Round 2 — in progress
+
+A second export (`qa-wolf/Fleet_20260828 (1)/`) arrived 2026-08-28 with QA Wolf's live free and premium
+environments. Three of its five folders were round 1 re-exported as TypeScript and have been removed; of the
+**156 new flows, 29 were cut** and the surviving **127 map to 60 target specs across seven batches.**
+
+**Everything round 2 lives in [`round-2/`](round-2/)** — start at its [README](round-2/README.md).
+We keep their coverage, not their tests.
 
 ## Source flows
 

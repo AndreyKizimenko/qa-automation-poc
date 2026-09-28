@@ -8,7 +8,13 @@ export const DEFAULT_IGNORED_CONSOLE_ERRORS = [
   'net::ERR',
   'ResizeObserver',
   'Failed to load resource: the server responded with a status of',
+  // Fleet's API client logs the whole failed axios response object on a 4xx.
+  // Two shapes, depending on the request's responseType: JSON endpoints log
+  // `data: Object`, blob endpoints (software icons, org logos, installer
+  // downloads) log `data: Blob`. 4xx is normal app behaviour — a removed icon
+  // 404s until the title refetch lands — and specs assert the meaningful ones.
   'data: Object, status:',
+  'data: Blob, status:',
 ];
 
 export function monitorConsoleErrors(

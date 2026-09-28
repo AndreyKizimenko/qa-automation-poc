@@ -12,6 +12,8 @@ const VALID_SUITES: readonly Suite[] = ['free', 'premium', 'loadtest'] as const;
 const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   premium: 'premium',
   'premium-setup': 'premium',
+  'gitops-mode': 'premium',
+  'gitops-mode-teardown': 'premium',
   free: 'free',
   'free-setup': 'free',
   loadtest: 'loadtest',
@@ -157,6 +159,10 @@ export default defineConfig({
         '**/cli/nightly/**',
         '**/free/**',
         '**/loadtest/**',
+        // Enabling gitops mode is a global config write that disables the
+        // controls every other mutating spec depends on. It gets its own
+        // single-worker project, which runs after this one finishes.
+        '**/gitops-mode/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -164,6 +170,36 @@ export default defineConfig({
       },
       dependencies: ['premium-setup', 'cleanup-setup'],
       teardown: 'cleanup-teardown',
+    },
+
+    // ── GitOps mode (runs last, single worker) ────────────────────────────────
+    // The teardown turns the flag back off however the run ended. It is not the
+    // only safety net: `cleanup-setup` clears the flag too, because a Playwright
+    // teardown project doesn't run on a SIGKILL and a stuck flag disables the
+    // *next* run's entire premium suite.
+    {
+      name: 'gitops-mode-teardown',
+      testDir: './setup',
+      testMatch: /gitops-mode\.teardown\.ts/,
+    },
+    {
+      name: 'gitops-mode',
+      testDir: './tests/e2e/premium/gitops-mode',
+      workers: 1,
+      // Explicit even though `workers: 1` already serialises: the top-level
+      // `fullyParallel: true` would otherwise interleave a file's tests across
+      // the single worker's queue, and zz-everything-is-back.spec.ts has to run
+      // after everything that turns the flag on.
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/premium-admin.json',
+      },
+      dependencies: ['premium'],
+      teardown: 'gitops-mode-teardown',
+      // A retry re-enters a test whose setup assumes a known exception state,
+      // and a gitops failure is something to read rather than paper over.
+      retries: 0,
     },
 
     // ── Free ───────────────────────────────────────────────────────────────────

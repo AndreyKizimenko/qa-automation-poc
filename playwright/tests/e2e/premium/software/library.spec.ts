@@ -141,6 +141,18 @@ for (const scope of SCOPES) {
         await expect(softwareTitleDetail.installerCard.card).toBeVisible();
         titleName = await softwareTitleDetail.displayName();
         expect(titleName.length).toBeGreaterThan(0);
+
+        // The summary card's Type line is how an admin tells an App Store or
+        // Play Store app apart from a package of the same name once it's added
+        // — the only visible difference on the title page. Fleet derives it
+        // from the title's osquery source (`SOURCE_TYPE_CONVERSION`), so
+        // `android_apps` reads "Application (Android)" and `ios_apps` reads
+        // "Application (iOS)".
+        if (c.kind === 'android') {
+          await expect(softwareTitleDetail.typeValue).toHaveText('Application (Android)');
+        } else if (c.kind === 'vpp') {
+          await expect(softwareTitleDetail.typeValue).toHaveText(`Application (${c.platform})`);
+        }
         const activity = await assertActivity(
           request,
           addActivity,

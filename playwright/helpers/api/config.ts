@@ -9,8 +9,25 @@ export interface OrgInfo {
   org_name?: string;
   // The "Organization support URL" field maps to `contact_url` in the API.
   contact_url?: string;
+  /**
+   * Custom org logo URLs. Fleet keeps two pairs: the mode-aware fields the UI
+   * writes today (`*_light_mode` / `*_dark_mode`) and the deprecated aliases
+   * they shadow (`org_logo_url_light_background` / `org_logo_url`). A logo
+   * upload writes both members of a pair, and Fleet reads the alias when the
+   * mode-aware field is empty — so anything clearing a logo must clear both.
+   */
+  org_logo_url_light_mode?: string;
+  org_logo_url_light_background?: string;
+  org_logo_url_dark_mode?: string;
+  org_logo_url?: string;
   [key: string]: unknown;
 }
+
+/** The two logo variants Fleet stores and serves (`GET /logo?mode=`). */
+export type OrgLogoMode = 'light' | 'dark';
+
+/** One serving URL per mode; an empty string means "no custom logo". */
+export type OrgLogoUrls = Record<OrgLogoMode, string>;
 
 export interface VulnerabilitiesWebhook {
   enable_vulnerabilities_webhook?: boolean;
@@ -135,6 +152,92 @@ export async function setGlobalDiskEncryption(
   if (!res.ok()) {
     throw new Error(`[setGlobalDiskEncryption] ${res.status()}: ${await res.text()}`);
   }
+}
+
+/**
+ * The custom org-logo URL currently in force for each mode, resolved the same
+ * way Fleet resolves it: the mode-aware field wins, the deprecated alias is
+ * the fallback. Use as the snapshot a logo-mutating spec restores from.
+ */
+export async function getOrgLogoUrls(request: APIRequestContext): Promise<OrgLogoUrls> {
+  const org = (await getAppConfig(request)).org_info ?? {};
+  return {
+    light: org.org_logo_url_light_mode || org.org_logo_url_light_background || '',
+    dark: org.org_logo_url_dark_mode || org.org_logo_url || '',
+  };
+}
+
+/**
+ * Remove the stored logo for one mode (DELETE /logo?mode=). This is the only
+ * call that clears *both* the mode-aware field and its deprecated alias and
+ * drops the blob from the object store — a `PATCH /config` that empties one
+ * field leaves the other pointing at the old URL.
+ *
+ * Tolerates "nothing stored": the endpoint is the restore path for a spec that
+ * may have failed before it uploaded anything.
+ */
+export async function deleteOrgLogo(
+  request: APIRequestContext,
+  mode: OrgLogoMode,
+): Promise<void> {
+  const res = await request.delete(apiUrl('logo'), {
+    headers: authHeaders(),
+    params: { mode },
+  });
+  if (!res.ok() && res.status() !== 404) {
+    throw new Error(`[deleteOrgLogo:${mode}] ${res.status()}: ${await res.text()}`);
+  }
+}
+
+/**
+ * Put one mode's org logo back the way a snapshot found it: deleted if there
+ * was none, patched back to its recorded URL if there was.
+ *
+ * Restores one mode, never both. The two logos are independent settings and a
+ * spec that changed only one must leave the other alone — restoring a mode it
+ * never touched would roll back whatever a parallel sibling is doing to it.
+ *
+ * Restoring a pre-existing logo restores its *URL*, not its bytes: an upload
+ * overwrites the stored blob for that mode. Specs that upload a logo should
+ * therefore only run where none is configured.
+ */
+export async function restoreOrgLogo(
+  request: APIRequestContext,
+  mode: OrgLogoMode,
+  url: string,
+): Promise<void> {
+  if (!url) {
+    await deleteOrgLogo(request, mode);
+    return;
+  }
+  const restored: Record<string, string> =
+    mode === 'light'
+      ? { org_logo_url_light_mode: url, org_logo_url_light_background: url }
+      : { org_logo_url_dark_mode: url, org_logo_url: url };
+  await patchAppConfig(request, { org_info: restored });
+}
+
+/**
+ * Whether the deployment is still collecting each historical dataset for the
+ * dashboard's chart card. `true` means collecting.
+ *
+ * Read-only on purpose, and there is deliberately no setter: turning either
+ * dataset off deletes the history of **every** fleet at once and cannot be
+ * undone, which would empty the charts the dashboard specs assert against.
+ * Per-fleet collection is `getFleetHistoricalData` / `setFleetFeatures`, and
+ * the effective state is the AND of the two.
+ */
+export async function getGlobalHistoricalData(
+  request: APIRequestContext,
+): Promise<{ uptime: boolean; vulnerabilities: boolean }> {
+  const features = (await getAppConfig(request)).features as
+    | { historical_data?: { uptime?: boolean; vulnerabilities?: boolean } }
+    | undefined;
+  const historical = features?.historical_data ?? {};
+  return {
+    uptime: historical.uptime ?? true,
+    vulnerabilities: historical.vulnerabilities ?? true,
+  };
 }
 
 /** Fetch the full app config (GET /config). */

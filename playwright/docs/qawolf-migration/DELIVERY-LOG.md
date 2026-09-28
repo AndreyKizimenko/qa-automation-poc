@@ -111,7 +111,212 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch C — live host, read-only
+
+Host-details cards, inventory filters, report-card results, OS drill-downs, affected-host counts. All reads,
+all against the **real VMs** (`liveMacosHost` / `kind: 'real'`) — every assertion here depends on a genuine
+device answering, and an osquery-perf simulation reports no certificates, no application paths and no
+scheduled-query results.
+
+Shipped: `shared/hosts/host-certificates.spec.ts` (new, + `CertificatesCard`) · `shared/hosts/host-software.spec.ts`
+(Applications vs Full inventory) · `shared/hosts/host-reports-tab.spec.ts` (results-recency sorts) ·
+`premium/hosts/host-report-details.spec.ts` (card first result ↔ report first row) · `premium/software/os.spec.ts`
++ new `free/software/os.spec.ts` (OS drill-in, Hosts sort) · `premium/software/vulnerabilities.spec.ts`
+(affected-hosts hand-off, severity bands) + the free half in `free/software/vulnerabilities.spec.ts`.
+
+**Three of the batch's eight rows pointed at the wrong file**, all caught by opening the existing spec first
+([C-host-reads.md](round-2/C-host-reads.md#retargets-and-one-hand-off) has the detail):
+
+- `host-certificates` was scheduled as premium-only, but `showCertificatesCard` gates on platform and data,
+  not tier — both tiers' macOS VMs carry the same four system-keychain certificates, so it went `shared/`.
+- Both `reports-filter-by-newer-results` flows are **host-details** flows, not `/reports/manage` ones. They
+  landed in `shared/hosts/host-reports-tab.spec.ts`, where one shared test covers the premium and free rows
+  at once and the reports-list specs were left untouched.
+- The vitals-refetch row's read-only half was already covered; its actual subject — an install triggering the
+  refetch — needs an install and was handed to batch D.
+
+Free gained three specs it had no equivalent of: the certificates card, the OS drill-in, and the CVE
+affected-hosts hand-off. The free OS spec asserts what free *doesn't* get, too —
+`SoftwareVulnerabilitiesTableConfig` strips Severity, Probability of exploit and Published off-premium.
+
+Two findings worth carrying:
+
+- **Fleet keeps awaiting-results report cards last under both recency sorts**, not at whichever end a null
+  key falls. `order_direction=asc` on `last_fetched` still returns the dated report first, so the sort
+  assertion is a partition invariant rather than a plain ordering one.
+- **A host's certificate rows can't be matched on "any cell".** Fleet issues every host both a `Fleet` CA
+  certificate and a `Fleet Identity` certificate *issued by* `Fleet`, so a row filter on cell text resolves
+  "Fleet" to two rows; `CertificatesCard.row()` is pinned to the Name column.
+
+## Round 2 · Batch B — self-contained mutation
+
+Everything here creates a record and removes it inside one test body: software-library CRUD on a title the
+test seeds itself, and the organization logo.
+
+Shipped: `premium/software/custom-icons.spec.ts` (new — lifecycle + validation, both A's and B's rows) ·
+`premium/software/display-name.spec.ts` (new) · `premium/software/script-only-package.spec.ts` (new) ·
+`premium/software/package-scripts.spec.ts` (new) · `premium/software/version-pinning.spec.ts` (new) ·
+`shared/settings/organization/custom-logo.spec.ts` (new, **free gains it**) ·
+`premium/software/library.spec.ts` (augmented with the app-store Type assertion) ·
+`premium/dashboard/historical-data-collection.spec.ts` (new — moved in from batch A mid-flight, since its
+subject is a fleet config write rather than a read-only surface).
+
+New component objects: `EditAppearanceModal` (Fleet's `EditIconModal`) and `VersionsModal`. Grown:
+`SoftwareTitleDetailPage` (summary card, both edit affordances, Versions entry), `SoftwareInstallerCard`
+(pin badges, Edit / Download), `EditSoftwareModal` (Advanced options + `normalizeScript`),
+`OrganizationInfoPage` (logo cards), `Navbar` (`logoImage`), `TeamSettingsPage` (the "Activity & data
+retention" switches and their disable confirmation). New API helpers: `getOrgLogoUrls` / `deleteOrgLogo` /
+`restoreOrgLogo`, `getFleetFeatures` / `setFleetFeatures` / `getFleetHistoricalData`, and
+`getSoftwarePackage` extended with the stored scripts, hash and version pin.
+
+**The org logo is a free feature and QA Wolf only ever tested it on premium**, so `custom-logo` went
+`shared/` — the cards, the buttons and the nav swap are identical on both tiers and the spec is green on
+both. That is the batch's free-coverage win.
+
+`vpp/add-android-software-from-add-app-page` is a **DUP**: `library.spec` already runs
+`{ kind: 'android', applicationId: 'com.openai.chatgpt' }` end to end. The one thing the source asserted that
+we didn't was the summary card's Type line, so that became a three-line augment rather than a spec.
+
+Findings worth carrying:
+
+- **"Pin to an older version" is not reproducible, and doesn't need to be.** QA Wolf's three pinning flows
+  relied on the instance having cached two AdGuard builds from earlier runs. A freshly-added app caches
+  exactly one, and Fleet only caches a second when upstream ships an update — nothing a test can arrange. An
+  exact pin sends the version string verbatim whichever build it names, so the spec resolves the options
+  from the app's own `fleet_maintained_versions` and pins the newest. What it checks is that the pin sticks
+  and that exactly one row is badged, not which number it is.
+- **Every software spec has to claim its own title.** A premium title holds several packages, so two specs
+  uploading a fixture with the same product name to the same fleet leave the Library accordion with two rows
+  and every row-scoped locator ambiguous. Each of these specs seeds a distinct Fleet-maintained slug
+  (`anydesk`, `archaeology`, `clockify`, `bruno` — none of them among the eleven `install-software.spec`
+  claims), and the two custom-package fixtures are generated precisely so their titles are unique.
+- **The Library tab is disabled under "All fleets"**, which is where premium lands. Select the scope first,
+  then click the tab — clicking it first silently waits out the timeout on a greyed-out tab.
+- **`getSoftwarePackage().name` is the installer filename**, not the title name. Searching a list with it
+  finds nothing.
+- **`SoftwareInstallerCard.header` was filtered on `expanded: false`**, so it resolved to nothing once the row
+  opened and `count()` couldn't tell "already expanded" from "not rendered yet". Now matched by class and
+  gated on `aria-expanded`, which also fixed the app-store delete path.
+- **Turning historical reporting off deletes the data already collected.** The confirmation says so and it
+  cannot be undone, so the dashboard spec runs against Workstations (no hosts, no history) and leaves the
+  deployment-wide switches alone — flipping those would wipe the 30 days of VMs-fleet history that
+  `fleet-scoped-cards.spec` plots. The two dashboard specs point at different fleets on purpose.
+- **Fleet logs failed blob requests to the console as `{data: Blob, status: 404 …}`.** Removing a custom icon
+  raises one while the title refetch is in flight. `DEFAULT_IGNORED_CONSOLE_ERRORS` already ignored the JSON
+  shape (`data: Object, status:`); the blob shape is the same class of noise and now sits beside it.
+
+## Round 2 · Batch A — no setup
+
+Read-only surfaces, negative-path validation and API size contracts. Nothing in the batch creates, uploads or
+configures anything that outlives its test, and nothing needs a host resolved.
+
+Shipped: `shared/dashboard/platform-cards.spec.ts` (new, **both tiers**) ·
+`premium/dashboard/fleet-scoped-cards.spec.ts` (new) · `shared/software/titles-table.spec.ts` (new, **both
+tiers**) + `premium/software/titles-table.spec.ts` (the Library half) ·
+`premium/software/role-access.spec.ts` (new) · `premium/software/fleet-maintained-filters.spec.ts` (new) ·
+`premium/software/add-software-validation.spec.ts` (new) · `tests/api/host-software-payload.spec.ts` (new,
+**both tiers**) · augments to `premium/software/manage-automations-access.spec.ts` (fleet-scoped and
+single-fleet roles), `premium/software/no-teams-views.spec.ts` ("All fleets" across the navbar),
+`premium/reports/reports.spec.ts` (live-report fleet targets), `premium/policies/policy-automations.spec.ts`
+and its free sibling (the form locking itself mid-save), and
+`tests/api/premium/max-request-file-sizes.spec.ts` (MDM-command and batch profile/script limits).
+
+Page objects grown: `DashboardPage` (platform filter, "Hosts enrolled" rows, host-count cards, the whole
+chart card and its Settings modal), `SoftwareTitlesPage` (column list, sort controls, column values, Library
+tab, results count), `FleetMaintainedAppsPage` (platform filter, "Hide added apps", item count, platform
+columns), `FileUploader` (`expectRejected` — the rejection reason lives in the toast's collapsed panel),
+`ReportLivePage` (target chips + targeted-host summary), `TeamDropdown` (`options`), and
+`countFleetMaintainedApps` in `helpers/api/fma.ts`. `fixtures.ts` was not touched.
+
+**The dashboard has no platform cards any more.** Fleet replaced the macOS/Windows/Linux host-count cards
+with the "Hosts enrolled" bar chart, whose y-axis ticks are `role="button"` named `"<platform> hosts"` and
+link to that platform's built-in label with `status=enrolled`. The source flows' `:below()` CSS and
+`[data-testid="card"]:has-text("Windows")` describe a page that no longer exists.
+
+Free gained three specs it had no equivalent of: the platform cards, the inventory table's columns and
+sorting, and the `exclude_software` API contract. The last one sits at the root of `tests/api/` rather than
+under `premium/` as planned — the parameter is not premium-gated, and free had no coverage of it at all.
+
+Findings worth carrying:
+
+- **Built-in platform labels are unusable as an assertion on these instances.** The osquery-perf pool answers
+  every built-in label query, so the "macOS" label holds 201 hosts of which most report Ubuntu. Clicking a
+  platform row is asserted on the *link contract* (label route + `status=enrolled` + the filter's own name),
+  never on the rows behind it.
+- **The Fleet-maintained item count is not the row count.** The table groups an app's macOS and Windows
+  entries into one row while the count stays per-platform: a three-row "zoom" search reads "5 items". Counts
+  are cross-checked against `GET /software/fleet_maintained_apps` under the same filters instead.
+- **"Hide added apps" hides added *entries*, not rows.** An app added on macOS but still available on Windows
+  keeps its row and shows both states at once.
+- **Two tests that snapshot the same global config key cannot run in parallel.** Adding a second case to
+  `policy-automations` made one test's `afterEach` restore land between the other's save and its read-back;
+  both tiers' describes are `mode: 'serial'` now. They were never `--repeat-each`-safe and still aren't —
+  repeating a serial describe runs the copies concurrently.
+- **`software-installer-selecting-no-team-prompts-user-to-choose-team` is a DUP** of the "Add software is
+  disabled under All fleets, with a tooltip" case round 1 put in `library.spec.ts`, so
+  `add-software-validation` carries the file-type rejections only.
+- **`other-workflows-modal-saving-disables-form-inputs` never asserted its own title.** The source only
+  checked the toast — which the existing spec already covered — so the augment is the assertion the title
+  promises: Fleet passes `isUpdating` into the Modal as `isContentDisabled`, disabling submit and overlaying
+  the form. Held open with a route rather than a sleep.
+
+**Parked, with reasons:** `general/disable-hosts-online-and-vulnerabilities-chart-fleets-only` — its subject
+is a global *and* per-fleet config write (turning historical reporting off, then back on), which is
+self-contained mutation, not a read-only surface; batch A covers the chart's read-only half. And the
+under-limit MDM command case is written to prove the payload cleared the size gate (Fleet answers
+`404 No hosts targeted`) rather than to queue a real command, which would need an MDM-enrolled host and would
+leave a command in its history with no way to withdraw it.
+
 ---
+
+---
+
+---
+
+## Round 2 · Batch G — gitops mode (V1)
+
+The one batch that cannot share an instance with anything else: enabling gitops mode is a global config write
+that turns every mutating control in the UI read-only. It gets its own project — `gitops-mode`, `workers: 1`,
+`fullyParallel: false`, `dependencies: ['premium']`, `retries: 0` — so it runs after the premium suite has
+finished, and `'**/gitops-mode/**'` is added to premium's `testIgnore` so premium never picks it up itself.
+`'gitops-mode'` and `'gitops-mode-teardown'` also go in `PROJECT_TO_SUITE`, because `resolveSuite()` throws at
+config load for any `--project` it doesn't recognise.
+
+Shipped: `premium/gitops-mode/01-indicator-and-links.spec.ts` · `02-gated-surfaces.spec.ts` ·
+`03-exceptions.spec.ts` · `zz-everything-is-back.spec.ts` · `free/settings/gitops-mode.spec.ts` (the premium
+gate: the Change-management paywall renders *instead of* the form, not above a working one).
+
+Helpers and page objects: `helpers/api/gitops-mode.ts` (get/set/enable/disable/setException plus a
+`withGitOpsMode` snapshot-and-restore) · `pages/components/gitopsMode.ts` (`expectGatedByGitOps`,
+`expectNotGatedByGitOps`, `expectGitOpsTooltip`, `gitopsWrapperFor`, `gitopsWrappers`) ·
+`pages/settings/ChangeManagementPage.ts` · `pages/components/EnrollSecretModal.ts` ·
+`Navbar.gitopsIndicator`.
+
+**Two teardown lifecycles, deliberately.** `setup/gitops-mode.teardown.ts` disables the mode promptly and
+asserts it, and `setup/cleanup.steps.ts` — already the "self-heals regardless of how state got there" project,
+and a dependency of both tiers — calls `disableGitOpsMode` too. Measured, not assumed: a `SIGINT` mid-run runs
+the teardown project and the instance ends up off; a `SIGKILL` of the whole process group does not, the flag
+stays on, and the next run's `cleanup-setup` clears it. `disableGitOpsMode` never touches `repository_url` or
+the exceptions, because the URL is itself part of the gate for three surfaces.
+
+Three things worth remembering:
+
+1. **"Disabled" is four different DOM shapes, and the only invariant is the wrapper.** A native `disabled`, a
+   `div[role=checkbox][aria-disabled=true]`, a react-select with no disabled accessible element at all, and a
+   raw `disabled` with no wrapper and no tooltip. `.gitops-mode-tooltip-wrapper` is in the DOM *iff* gitops
+   mode is effectively enabled for that control, exceptions included — every assertion is built on that.
+2. **`filter({ has })` cannot find an ancestor.** It re-resolves its argument *underneath* each candidate, so
+   "the wrapper around this button in that modal" silently matched nothing while "the wrapper around this
+   react-select" matched all fifteen of them. `gitopsWrapperFor` walks up with an xpath ancestor axis instead.
+3. **A concurrent app-config write turns the flag off mid-run.** A parallel agent saving Organization ›
+   Advanced on the shared instance flipped `gitops_mode_enabled` back to `false` one second before a
+   screenshot, failing a test that passes in isolation. This is the mechanical reason the project is last,
+   single-worker and dependent on `premium`.
+
+Deferred to V2, with reasons: the `software` exception (its two probes are the two bugs below, and its only
+zero-seed surface — the Fleet-maintained app form — needs a "not yet added" catalog resolver); Controls ›
+Variables' split gating (the best over-gating detector, but it needs a seeded variable); the Change-management
+*UI* write flow and its activity copy; Policies, Reports, Software-title and OS-settings gated surfaces.
 
 ## Suite bugs found and fixed while porting
 

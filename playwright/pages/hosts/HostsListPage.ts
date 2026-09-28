@@ -48,6 +48,8 @@ export class HostsListPage {
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
+  /** "N hosts" above the table — the list's total for the current filters. */
+  readonly resultsCount: Locator;
 
   readonly editColumnsModal: Locator;
   readonly saveColumnsButton: Locator;
@@ -114,6 +116,7 @@ export class HostsListPage {
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
     this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
+    this.resultsCount = page.locator('.table-container__results-count');
 
     this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });
     this.saveColumnsButton = this.editColumnsModal.getByRole('button', { name: 'Save', exact: true });
@@ -160,6 +163,18 @@ export class HostsListPage {
     const qs = params.toString();
     await this.page.goto(`/hosts/manage${qs ? '?' + qs : ''}`);
     await expect(this.table.firstRowWithLink).toBeVisible();
+  }
+
+  /**
+   * How many hosts the list reports for the current filters. Fleet localises
+   * the figure past 999 ("1,024 hosts"), so the separators are stripped before
+   * parsing.
+   */
+  async hostCount(): Promise<number> {
+    const text = (await this.resultsCount.innerText()).trim();
+    const match = text.match(/([\d,]+)\s+hosts?/);
+    if (!match) throw new Error(`Unexpected hosts count: "${text}"`);
+    return Number(match[1].replace(/,/g, ''));
   }
 
   /** Read the display name of the first host in the list. */

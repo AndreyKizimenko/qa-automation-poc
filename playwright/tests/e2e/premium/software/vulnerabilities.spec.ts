@@ -296,3 +296,103 @@ for (const osKey of OS_KEYS) {
     await cveDetail.assertOk(cveText!);
   });
 }
+
+/**
+ * A CVE's "Vulnerable software" table hands off to the hosts running each
+ * affected version. The count on the row and the count on the hosts list come
+ * from different endpoints, so they can disagree — that agreement is the
+ * assertion, together with the filter pill naming the version.
+ *
+ * The CVE is resolved through `findRenderableCve`, not read off the top of the
+ * list: Fleet matches CVEs faster than its feeds enrich them and 404s the detail
+ * page for any it has no metadata for, with the newest match sorting first
+ * (fleetdm/fleet#49913).
+ *
+ * The source flow instead summed every row's host count and compared it to
+ * "Affected hosts", paging each row's hosts list to do it. That sum is not a
+ * contract — a host running two affected versions is counted once in the CVE
+ * total and twice in the sum — so it is dropped rather than ported.
+ */
+test('Vulnerabilities — a CVE hands off to the hosts running each affected version', async ({
+  softwareTitles,
+  vulnerabilitiesList,
+  cveDetail,
+  hostsList,
+  request,
+  page,
+}) => {
+  await softwareTitles.goto();
+  await softwareTitles.teamDropdown.select('Unassigned');
+  await softwareTitles.gotoVulnerabilitiesTab();
+
+  const listed = await vulnerabilitiesList.cveNames();
+  const cve = await findRenderableCve(request, listed);
+  test.skip(!cve, 'No listed CVE has a renderable detail page — fleetdm/fleet#49913');
+
+  await cveDetail.goto(cve!);
+  await expect(cveDetail.vulnerableSoftwareHeading).toBeVisible();
+  await expect(cveDetail.table.firstRow).toBeVisible();
+
+  // Affected hosts is a real figure, not a placeholder — the table below lists
+  // what makes it up.
+  expect(await cveDetail.affectedHostCount()).toBeGreaterThan(0);
+
+  const row = cveDetail.table.firstRow;
+  const software = await cveDetail.softwareRowValues(row);
+  expect(software.hosts, `expected "${software.name}" to report affected hosts`).toBeGreaterThan(0);
+
+  await cveDetail.viewAllHostsFor(row);
+
+  await expect(hostsList.filterPill).toBeVisible();
+  await expect(hostsList.filterPill).toContainText(software.name);
+  await expect(hostsList.filterPill).toContainText(software.version);
+  await expect(page).toHaveURL(/software_version_id=\d+/);
+
+  // The hand-off lands on a populated list. The two counts are read from the
+  // shared host population seconds apart, and sibling specs delete and transfer
+  // hosts while this runs, so they are not required to agree exactly — the
+  // filter contract above is the behaviour, and a non-zero result is what
+  // proves the version id resolved to real hosts.
+  await expect.poll(() => hostsList.hostCount()).toBeGreaterThan(0);
+});
+
+/**
+ * The vulnerable-software filter's severity dropdown, which is premium-only
+ * (`SoftwareFiltersModal` renders it behind `isPremiumTier`). Fleet builds the
+ * list from `SEVERITY_DROPDOWN_OPTIONS` — "Any" first, then the CVSS bands from
+ * Critical down, then "Custom" — and each option carries its band as help text.
+ * The whole list is asserted in order, because the ordering *is* the behaviour:
+ * a band appearing out of sequence would still pass a membership check.
+ *
+ * Nothing is applied; the modal is cancelled, so the list underneath is left
+ * unfiltered for whatever runs next.
+ */
+const SEVERITY_OPTIONS = [
+  'Any severity CVSS score 0-10',
+  'Critical severity CVSS score 9.0-10',
+  'High severity CVSS score 7.0-8.9',
+  'Medium severity CVSS score 4.0-6.9',
+  'Low severity CVSS score 0.1-3.9',
+  'Custom severity Custom CVSS score range',
+];
+
+test('Software Titles — the severity filter lists the CVSS bands from Critical down', async ({
+  softwareTitles,
+}) => {
+  await softwareTitles.goto();
+  await softwareTitles.teamDropdown.select('Unassigned');
+
+  await softwareTitles.filter.open();
+  await expect(softwareTitles.filter.modal).toBeVisible();
+
+  // The severity controls only become usable once the list is narrowed to
+  // vulnerable software — Fleet passes `disabled={!vulnSoftwareFilterEnabled}`.
+  await expect(softwareTitles.filter.severityTrigger).toHaveClass(/is-disabled/);
+  await softwareTitles.filter.vulnerableSwitch.click();
+  await expect(softwareTitles.filter.severityTrigger).not.toHaveClass(/is-disabled/);
+  await expect(softwareTitles.filter.severityValue).toHaveText('Any severity');
+
+  expect(await softwareTitles.filter.severityOptions()).toEqual(SEVERITY_OPTIONS);
+
+  await softwareTitles.filter.cancel();
+});

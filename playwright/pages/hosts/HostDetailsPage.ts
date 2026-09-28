@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { CertificatesCard } from '../components/CertificatesCard';
 import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
@@ -22,6 +23,11 @@ export class HostDetailsPage {
   readonly filter: FilterModal;
   /** Vitals term/value pairs in the host's summary panel (Agent, Memory, …). */
   readonly vitals: DataSet;
+  /**
+   * Details tab — the "Certificates" card. Only mounts for Apple/Windows hosts
+   * that report at least one certificate, so specs reading it need a real VM.
+   */
+  readonly certificates: CertificatesCard;
   readonly selectReportModal: SelectReportModal;
   /** Raised by Actions → Transfer; the same component the hosts list uses. */
   readonly transferModal: TransferHostModal;
@@ -69,6 +75,8 @@ export class HostDetailsPage {
   readonly dontStoreResultsToggle: Locator;
   readonly reportsSearch: Locator;
   readonly reportsSortTrigger: Locator;
+  /** The sort dropdown's current label ("Newest results", "Name A-Z", …). */
+  readonly reportsSortValue: Locator;
   readonly reportCards: Locator;
   readonly reportsEmptyState: Locator;
 
@@ -91,6 +99,15 @@ export class HostDetailsPage {
   readonly softwareRows: Locator;
   /** Name-column links in the inventory table, in row order. */
   readonly softwareNameLinks: Locator;
+  /** "N items" above the inventory table, scoped to the host software card. */
+  readonly softwareCount: Locator;
+  /**
+   * Current value of the macOS `/Applications` view filter ("Applications" or
+   * "Full inventory"). react-select renders the value as a role-less div, so
+   * it's reached through the filter's own container class. Absent on
+   * Windows/Linux hosts, where Fleet renders no filter at all.
+   */
+  readonly softwareViewValue: Locator;
 
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
@@ -107,6 +124,7 @@ export class HostDetailsPage {
     this.table = new DataTable(page);
     this.filter = new FilterModal(page);
     this.vitals = new DataSet(page);
+    this.certificates = new CertificatesCard(page);
     this.selectReportModal = new SelectReportModal(page);
     this.transferModal = new TransferHostModal(page);
     this.toast = new Toast(page);
@@ -139,6 +157,9 @@ export class HostDetailsPage {
     this.reportsSortTrigger = this.reportsTabPanel.locator(
       '.host-reports-tab__sort-dropdown .react-select__control',
     );
+    this.reportsSortValue = this.reportsTabPanel.locator(
+      '.host-reports-tab__sort-dropdown .react-select__single-value',
+    );
     this.reportCards = this.reportsTabPanel.locator('.host-report-card');
     this.reportsEmptyState = page.getByRole('heading', { name: 'No reports scheduled' });
 
@@ -153,6 +174,10 @@ export class HostDetailsPage {
     this.softwareTable = page.locator('.host-software-table');
     this.softwareRows = this.softwareTable.locator('tbody').getByRole('row');
     this.softwareNameLinks = this.softwareRows.locator('td:first-child a');
+    this.softwareCount = this.softwareTable.locator('.table-container__results-count');
+    this.softwareViewValue = page.locator(
+      '.host-software-table__software-filter .react-select__single-value',
+    );
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
@@ -186,15 +211,15 @@ export class HostDetailsPage {
   /**
    * macOS hosts default the Software list to the "Applications" view (top-level
    * apps only) and expose a filter dropdown to switch it; other platforms show
-   * the full list and render no dropdown. Selects "Full inventory" so the table
-   * lists every reported package. No-op on Windows/Linux hosts, where the
-   * dropdown isn't present.
+   * the full list and render no dropdown (`HostSoftwareTable.tsx`,
+   * `showApplicationsFilter`). Picks one of the two views. No-op on
+   * Windows/Linux hosts, where the dropdown isn't present.
    *
    * The react-select trigger has no accessible role, so it's scoped by the host
    * software table's filter container class to avoid colliding with the team
    * dropdown or the vulnerable filter modal; options carry `dropdown-option`.
    */
-  async showFullInventory(): Promise<void> {
+  async selectSoftwareView(view: 'Applications' | 'Full inventory'): Promise<void> {
     // The dropdown renders in the same controls row as the search field, so
     // waiting for that field is what makes the absence check meaningful. Reading
     // `count()` straight after the tab click is a non-retrying query: on a host
@@ -207,13 +232,21 @@ export class HostDetailsPage {
       '.host-software-table__software-filter .react-select__control',
     );
     if ((await trigger.count()) === 0) return;
+    if ((await this.softwareViewValue.textContent())?.trim() === view) return;
     await trigger.click();
-    await this.page.getByTestId('dropdown-option').filter({ hasText: 'Full inventory' }).click();
+    await this.page.getByTestId('dropdown-option').filter({ hasText: view }).click();
     // The selection drives the list via the `macos_applications` query param.
     // The URL flips as soon as the option is picked, ahead of the response that
     // repaints the table, so callers that read rows wait on the table itself —
     // which view is empty depends on the host, so that wait belongs to them.
-    await expect(this.page).toHaveURL(/macos_applications=false/);
+    await expect(this.page).toHaveURL(
+      view === 'Full inventory' ? /macos_applications=false/ : /macos_applications=true/,
+    );
+  }
+
+  /** Switches the Software tab to the full package list. See {@link selectSoftwareView}. */
+  async showFullInventory(): Promise<void> {
+    await this.selectSoftwareView('Full inventory');
   }
 
   async applyVulnerableFilter(): Promise<void> {
@@ -244,6 +277,18 @@ export class HostDetailsPage {
   /** Filters the host's software table by name (server-side `query` param). */
   async searchSoftware(term: string): Promise<void> {
     await this.softwareSearch.fill(term);
+  }
+
+  /**
+   * The "N items" total above the inventory table, as a number. Fleet localises
+   * the figure once it passes a thousand ("1,401 items"), so the separators are
+   * stripped before parsing.
+   */
+  async softwareItemCount(): Promise<number> {
+    const text = (await this.softwareCount.innerText()).trim();
+    const match = text.match(/^([\d,]+)\s+items?$/);
+    if (!match) throw new Error(`Unexpected software count: "${text}"`);
+    return Number(match[1].replace(/,/g, ''));
   }
 
   async clickFirstSoftware(): Promise<void> {
@@ -347,6 +392,49 @@ export class HostDetailsPage {
       .getByRole('heading', { level: 3 })
       .allInnerTexts();
     return names.map((n) => n.trim());
+  }
+
+  /**
+   * Every rendered report card in order, with whether it carries a stored result
+   * for this host. `HostReportCard` renders its "Last updated"/"Last ran" line
+   * only once `last_fetched` is set, so that line's presence is what tells a
+   * card with results apart from one still awaiting them.
+   *
+   * Read in one DOM pass rather than as two locator queries: the unfiltered
+   * Reports tab is shared state — sibling specs seed global reports that apply
+   * to this host too — so two passes can observe different card sets and pair a
+   * name with the wrong card's state.
+   */
+  async reportCardResultStates(): Promise<Array<{ name: string; hasResults: boolean }>> {
+    return this.reportCards.evaluateAll((cards) =>
+      cards.map((card) => ({
+        name: card.querySelector<HTMLElement>('.host-report-card__name')?.innerText.trim() ?? '',
+        hasResults: card.querySelector('.host-report-card__last-updated') !== null,
+      })),
+    );
+  }
+
+  /**
+   * The first stored result a report card renders inline, as column → value.
+   * `HostReportCard` prints `first_result` as a term/value grid and keeps the
+   * rest behind "View full report", so this is what a spec compares against the
+   * first row of the report's full results.
+   *
+   * The grid has no roles of its own — Fleet's `DataSet` emits `<dt>`/`<dd>`
+   * inside a role-less wrapper — so it's reached through the card's own class,
+   * and read in one pass so a term can't be paired with the wrong value.
+   */
+  async reportCardFirstResult(reportName: string): Promise<Record<string, string>> {
+    return this.reportCard(reportName)
+      .locator('.host-report-card__data-grid')
+      .evaluate((grid) =>
+        Object.fromEntries(
+          [...grid.querySelectorAll('.data-set')].map((set) => [
+            set.querySelector<HTMLElement>('dt')?.innerText.trim() ?? '',
+            set.querySelector<HTMLElement>('dd')?.innerText.trim() ?? '',
+          ]),
+        ),
+      );
   }
 
   /** Filters the Reports tab by report name (server-side `query` param). */

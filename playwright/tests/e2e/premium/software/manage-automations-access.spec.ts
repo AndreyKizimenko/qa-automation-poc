@@ -3,7 +3,8 @@
  * (which opens the "Manage automations" modal) is global-admin-only, and even
  * for an admin it is enabled only under the "All fleets" aggregate — selecting
  * a specific fleet disables it with an explanatory tooltip. Non-admins never
- * see the button at all, on any scope.
+ * see the button at all, on any scope — global, fleet-scoped, or
+ * single-fleet (where Fleet drops the scope picker altogether).
  *
  * Each static human logs into a fresh context via `withStaticUser` so the
  * shared admin storage state is left untouched.
@@ -11,15 +12,29 @@
 import { test, expect } from '@fixtures';
 import { withStaticUser } from '@helpers/auth';
 import type { StaticUserKey } from '@helpers/api';
-import { SoftwareTitlesPage, type TeamScope } from '@pages';
+import { SoftwareTitlesPage } from '@pages';
 
-// The button gates on isGlobalAdmin, so these roles never see it regardless of
-// the selected fleet — assert absence, not a disabled state.
-const NON_ADMIN_KEYS: StaticUserKey[] = ['global-maintainer', 'global-observer'];
+/**
+ * The button gates on isGlobalAdmin, so none of these roles ever see it —
+ * assert absence, not a disabled state.
+ *
+ * `scopes` is what each role's picker actually offers: a global role sweeps the
+ * aggregate plus both fleet kinds, a team admin sweeps only the fleets they
+ * administer, and a single-fleet role has no picker at all (empty list — the
+ * one view they have is the one that gets asserted). Sweeping scopes honors the
+ * original "unable to click on any team" coverage without re-deriving the gate.
+ */
+interface NonAdminCase {
+  key: StaticUserKey;
+  scopes: string[];
+}
 
-// Visibility is role-gated, not team-gated. Sweeping scopes honors the original
-// "unable to click across every team" coverage without re-deriving the gate.
-const SCOPES: TeamScope[] = ['All fleets', 'Workstations', 'Unassigned'];
+const NON_ADMINS: NonAdminCase[] = [
+  { key: 'global-maintainer', scopes: ['All fleets', 'Workstations', 'Unassigned'] },
+  { key: 'global-observer', scopes: ['All fleets', 'Workstations', 'Unassigned'] },
+  { key: 'team-admin', scopes: ['VMs', 'Workstations'] },
+  { key: 'ws-maintainer', scopes: [] },
+];
 
 test.describe('Premium • Software • Manage automations access', () => {
   test('global admin can open the Manage automations modal on All fleets', async ({ browser }) => {
@@ -48,14 +63,20 @@ test.describe('Premium • Software • Manage automations access', () => {
     });
   });
 
-  for (const key of NON_ADMIN_KEYS) {
+  for (const { key, scopes } of NON_ADMINS) {
     test(`${key} never sees the Automations button, on any fleet`, async ({ browser }) => {
       await withStaticUser(browser, key, async (page) => {
         const software = new SoftwareTitlesPage(page);
         await software.goto();
 
-        for (const scope of SCOPES) {
-          await software.teamDropdown.select(scope);
+        if (scopes.length === 0) {
+          await expect(software.teamDropdown.trigger).toHaveCount(0);
+          await expect(software.manageAutomationsButton).toHaveCount(0);
+          return;
+        }
+
+        for (const scope of scopes) {
+          await software.teamDropdown.selectByLabel(scope);
           await expect(software.manageAutomationsButton).toHaveCount(0);
         }
       });

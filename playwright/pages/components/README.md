@@ -61,11 +61,13 @@ export class MyWidget {
 | `PlatformDropdown` | `/software/add/app-store` | Apple-vs-Android selector for the App Store add-software form (react-select v5) |
 | `Toast` | Anywhere a CRUD action confirms via a Sonner toast | Anchors on `role="alert"` narrowed by `.toast-notification__card--{success,error}`; has `expectSuccess` / `expectError` |
 | `FileUploader` | Bootstrap, scripts, profiles, custom packages, setup-assistant | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |
-| `SoftwareInstallerCard` | `/software/titles/:id` | The Library section's installer accordion row; exposes the active row + its Delete action |
+| `SoftwareInstallerCard` | `/software/titles/:id` | The Library section's installer accordion row; exposes the active row, its pin-state badges (Latest / Pinned / Major version), and its Edit / Download / Delete actions |
 | `DataSet` | Detail pages + side panels (host vitals, policy details, my-account) | Fleet's `<dt>`/`<dd>` term-value pairs, which carry no role — looks up a value by its term. Construct with a scoped container |
 | `AddHostsModal` | Hosts list | The "Add hosts" modal; its Advanced tab and "Plain osquery" reveal expose the certificate / enroll-secret / flagfile downloads |
 | `TransferHostModal` | Hosts list bulk-select bar, host Actions menu | Fleet picker for moving hosts between fleets (and back to Unassigned) |
-| `EditSoftwareModal` | `/software/titles/:id` Library accordion | The edit-package form. Titled "Edit package" on premium custom packages and "Edit software" otherwise, so the container is scoped by whichever is present |
+| `EditSoftwareModal` | `/software/titles/:id` Library accordion | The edit-package form. Titled "Edit package" on premium custom packages and "Edit software" otherwise, so the container is scoped by whichever is present. Also owns Advanced options — the four Ace editors, told apart by their wrapper ids, plus `normalizeScript` for comparing what they render against what the API stored |
+| `EditAppearanceModal` | `/software/titles/:id` summary card | Fleet's `EditIconModal`: custom icon + display name behind one Save. The file control swaps between an empty uploader and a staged-file card, so it targets `input[type="file"]` rather than a fixed id |
+| `VersionsModal` | `/software/titles/:id` summary card + accordion badge | Version pinning for Fleet-maintained apps: latest / exact / major-version radios. `pinTargetLabel` and `pinTargetApiValue` map a target to its radio label and to the `version` value Fleet stores |
 | `SelectReportModal` | Host Actions → Live report | Lists the reports the host's fleet can run; picking one navigates to its edit screen with the host pre-targeted |
 | `clickHoverAction` | Any hover-revealed row/card icon (download, trash, refetch) | Not a class — a helper function. Fleet keeps these icons `display: none` until the parent is hovered, and a plain `hover()` + `click()` can lose the hover mid-click |
 

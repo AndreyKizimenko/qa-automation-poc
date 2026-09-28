@@ -112,7 +112,25 @@ the wrong reason, so:
 - **Picker/table searches hit the server**, so a name that is a prefix of a sibling's breaks
   strict-mode row lookups. Resolve a value the API narrows to exactly one row.
 - **Never hard-code host names** — the QA pools are osquery-perf simulations with random
-  names. Resolve by platform + status through the API.
+  names. Resolve by platform + status through the API via
+  `findOnlineHost(request, platform, { kind })`.
+- **Pick the right host population.** `kind: 'real'` is a handful of genuine VMs per tier (the
+  **VMs** fleet on premium; `liveMacosHost` for macOS) that run real osquery, install real
+  packages and receive real profiles — anything asserting software inventory, script output,
+  profile delivery, certificates or agent versions needs one. `kind: 'simulated'` is ~300
+  osquery-perf hosts for volume work only: they ignore live-query SQL, return no rows ~20% of
+  runs and never install anything, so a green assertion against one proves nothing.
+- **NEVER deploy a passcode profile to a real host.** It blocks access to the VM permanently —
+  there is no recovery and no re-provisioning automation, so one deployed passcode payload ends
+  every other real-host spec until someone rebuilds the machine by hand. No
+  `com.apple.mobiledevice.passwordpolicy`, no `forcePIN` / `minLength` / `maxInactivity` /
+  `allowSimple`, for any reason. The same goes for anything else gating entry: screen lock,
+  inactivity timeout, FileVault, login-window restrictions, or disabling SSH / remote management
+  / the MDM channel. `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** one
+  of these — it is safe only in the library upload/download/delete lifecycle, which never reaches
+  a host. For a delivery test, write an inert fixture (a harmless preference domain that changes
+  nothing about access) and remove it in the same test. If you are unsure whether a payload is
+  safe, it is not — ask first.
 
 ## Code style
 

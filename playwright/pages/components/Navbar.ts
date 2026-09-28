@@ -7,11 +7,25 @@ import { Page, Locator, expect } from '@playwright/test';
 export class Navbar {
   readonly nav: Locator;
   readonly logo: Locator;
+  /**
+   * The org-logo `<img>` inside the nav link. Fleet swaps its `src` for the
+   * custom logo matching the active theme and marks the built-in Fleet avatar
+   * with a `default-fleet-logo` class, so this element is where a custom
+   * organization logo becomes visible.
+   */
+  readonly logoImage: Locator;
   readonly hosts: Locator;
   readonly controls: Locator;
   readonly software: Locator;
   readonly reports: Locator;
   readonly policies: Locator;
+
+  /**
+   * The "GitOps mode" badge, rendered only while gitops mode is enabled.
+   * Global admins get a link into Change management; every other role gets
+   * plain text with no link.
+   */
+  readonly gitopsIndicator: Locator;
 
   // User menu
   readonly userMenuTrigger: Locator;
@@ -26,11 +40,13 @@ export class Navbar {
     this.nav = page.getByRole('navigation');
 
     this.logo = this.nav.getByRole('link', { name: 'Organization Logo' });
+    this.logoImage = this.logo.getByRole('img', { name: 'Organization Logo' });
     this.hosts = this.nav.getByRole('link', { name: 'Hosts' });
     this.controls = this.nav.getByRole('link', { name: 'Controls' });
     this.software = this.nav.getByRole('link', { name: 'Software' });
     this.reports = this.nav.getByRole('link', { name: 'Reports' });
     this.policies = this.nav.getByRole('link', { name: 'Policies' });
+    this.gitopsIndicator = this.nav.getByRole('link', { name: 'GitOps mode' });
 
     this.userMenuTrigger = page.getByTestId('user-menu');
     this.myAccountItem = page.getByRole('menuitem', { name: 'My account' });
@@ -50,8 +66,17 @@ export class Navbar {
     await this.signOutItem.click();
   }
 
-  // Section navigation. Clicks preserve the current `fleet_id` query param.
+  // Section navigation. The nav items below preserve the current `fleet_id`
+  // query param, because Fleet re-navigates an already-active item to the
+  // current path (`SiteTopNav.tsx`, the `active && !isActiveDetailPage` branch).
 
+  /**
+   * Returns to the dashboard by clicking the org logo, which **drops any
+   * `fleet_id`** — the logo is a plain `<Link to={navItem.location.pathname}>`
+   * with no query string (`SiteTopNav.tsx:189`), unlike the section items.
+   * A caller that needs a scoped dashboard should use
+   * `dashboard.goto({ fleetId })` instead of clicking through.
+   */
   async goToDashboard(): Promise<void> {
     await this.logo.click();
     await expect(this.nav.page()).toHaveURL(/\/dashboard/);

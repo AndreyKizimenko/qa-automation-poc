@@ -1,5 +1,19 @@
 # macOS configuration-profile fixtures
 
+> ## ⚠️ `fleet-test-passcode.mobileconfig` must never be deployed to a host
+>
+> It carries a `com.apple.mobiledevice.passwordpolicy` payload (`forcePIN`, `minLength`, `maxInactivity`,
+> `allowSimple`). Delivered to one of the real QA VMs it **permanently blocks access** — there are only a few
+> per tier and no re-provisioning automation, so recovering one is a manual rebuild that ends every other
+> real-host spec until it is done.
+>
+> It is safe where it is used today: the library upload → download → delete lifecycle, which never reaches a
+> host. **Any spec that asserts profile *delivery* needs a different fixture** — an inert one that sets a
+> harmless preference domain and changes nothing about access, removed in the same test that deployed it.
+>
+> See `playwright/CLAUDE.md` → "Test hosts".
+
+
 - `fleet-test-passcode.mobileconfig` — a plain (unsigned) XML profile. The happy-path
   upload/download/delete lifecycle spec (`premium/controls/os-settings/configuration-profiles.spec.ts`)
   uses it.
