@@ -21,6 +21,7 @@ the filed Fleet issue so we can unblock the moment it's fixed.
 
 | Flow / test | Spec | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
+| `exceptions.secrets` reaches the fleet-settings entry point | [03-exceptions.spec.ts:91](../tests/e2e/premium/gitops-mode/03-exceptions.spec.ts#L91) | premium, Workstations | [fleetdm/fleet#NNNNN](https://github.com/fleetdm/fleet/issues/NNNNN) *(to file)* | 2026-09-27 (v4.93.0-rc) | `Manage enroll secrets` on a fleet's settings page carries `entityType="secrets"` on its `GitOpsModeTooltipWrapper` — today it has none, so the exception can't reach the only documented way into the modal it governs. Then un-skip the test |
 | Every vulnerable-filtered software title reports vulnerability data | [vulnerabilities.spec.ts:102](../tests/e2e/premium/software/vulnerabilities.spec.ts#L102) | premium, Unassigned | [fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059) | 2026-07-28 (v4.90.0-rc; latent in GA ≥4.80) | `vulnerable=true` respects the fleet scope (or the column shows the matching CVEs) — then un-skip the test |
 
 ## Worked around in the suite
@@ -33,6 +34,7 @@ an un-skipped test hides its concession far better than a skipped one.
 
 | Flow / test | Workaround | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
+| gitops-mode fleet-settings action buttons — [02-gated-surfaces.spec.ts:104](../tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts#L104) | narrow each action to the rendered button with `.filter({ visible: true })` | premium, Workstations | [fleetdm/fleet#NNNNN](https://github.com/fleetdm/fleet/issues/NNNNN) *(to file)* | 2026-09-27 (v4.93.0-rc) | `ActionButtons` renders every secondary action twice — a gated inline button and an **ungated** copy inside a "More options" dropdown that CSS reveals at ~900px, which is a supported width and a real gitops-mode bypass. When the dropdown stops duplicating ungated actions, drop the visibility filter |
 | software titles → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L104), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L146) | drill into a CVE whose detail endpoint answers, not the top row | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | detail endpoint renders matched-but-unenriched CVEs — then drop `findRenderableCve` and click the first row |
 | host → vulnerable software → version → CVE detail (macOS · deb · Windows) — [free](../tests/e2e/free/software/vulnerabilities.spec.ts#L170), [premium](../tests/e2e/premium/software/vulnerabilities.spec.ts#L247) | same | both tiers; premium Unassigned | [fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) | 2026-07-22 (v4.90.0-rc; latent in GA ≥4.80) | same — one fix unblocks all six variants |
 

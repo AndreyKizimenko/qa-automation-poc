@@ -31,6 +31,22 @@ Review this Playwright test suite as a strict senior automation engineer for a l
 10. Abstractions that make tests harder to read.
 11. Places where Fleet-like repeated admin flows (team switching, table filter/sort, modal confirmation, policy/software/report actions) should be extracted into shared helpers.
 
+## Always flag as a blocker
+
+Two classes of finding are not style opinions — stop and call them out before anything else:
+
+1. **A configuration profile deployed to a real host that gates access to it.** Any passcode payload
+   (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`, `maxInactivity`, `allowSimple`), screen
+   lock, inactivity timeout, FileVault, login-window restriction, or anything disabling SSH / remote
+   management / the MDM channel. There are only a few real VMs per tier and no re-provisioning automation, so
+   this permanently blocks access and ends every other real-host spec until the machine is rebuilt by hand.
+   Note that `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` is such a profile — safe in the
+   library lifecycle where it is used today, never safe to deploy.
+2. **An assertion against a simulated host that only a real host can answer.** Software inventory, script
+   output, profile delivery, certificates and agent versions all need `kind: 'real'`; osquery-perf simulations
+   ignore live-query SQL, return no rows ~20% of runs and never install anything, so the test passes without
+   testing anything.
+
 ## Output format
 
 - **Problems found** — concise list, each tied to one of the checks above.

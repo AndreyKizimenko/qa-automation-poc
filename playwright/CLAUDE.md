@@ -25,6 +25,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
   - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
+- `tests/cli/` — `fleetctl` specs, in the same `shared/` / `premium/` / `free/` split as `tests/e2e/`, plus `cli/nightly/` which only the `gitops-nightly` project picks up.
 - `tests/loadtest/` — page-load timing tests. Run locally only — they
   need a high-scale instance and a team provisioned via
   [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
@@ -36,6 +37,38 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`).
 - `docs/` — `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `qawolf-migration/` (the migration record + per-flow audit), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
+
+## Test hosts
+
+Two host populations share each instance and are good at opposite jobs. Resolve both at run time via
+`findOnlineHost(request, platform, { kind })` — **never by stored name or id**, because the load-fleet daemons
+regenerate both on every restart.
+
+- **`kind: 'real'`** — a handful of genuine VMs per tier, on the **VMs** fleet on premium (`vmsFleetId` worker
+  fixture; `liveMacosHost` for a macOS one). They run real osquery, install real packages and receive real
+  profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
+  versions must use them. `kind: 'real'` keys on `hardware_model` matching `/virtual|qemu/i`, not on MDM
+  enrollment.
+- **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
+  pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
+  assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
+
+### Never deploy a passcode profile to a real host
+
+**A passcode profile blocks access to the VM permanently.** There is no recovery path and no re-provisioning
+automation — one deployed passcode payload ends every other real-host spec until somebody rebuilds the machine
+by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, no `forcePIN`, `minLength`,
+`maxInactivity` or `allowSimple`, on any real host, for any reason.
+
+The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
+FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel.
+
+`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile. It is safe only where
+it is used today — library upload → download → delete, which never reaches a host. Do not extend it to a
+delivery test; write an inert fixture instead (a harmless preference domain that changes nothing about access,
+removed in the same test that deployed it).
+
+If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 
 ## Locators and waits (Fleet-specific gotchas)
 
@@ -64,17 +97,18 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Four browser/API projects target three Fleet environments. Each has its own env file
+Five browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder — no tags. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/premium-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**` | `.auth/premium-admin.json` |
 | `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
+| `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`) | n/a | `.auth/premium-admin.json` |
 
 Folder conventions:
 
@@ -82,6 +116,10 @@ Folder conventions:
 - Free-only flow (paywall checks, free-license assertions) → `tests/e2e/free/<area>/` (or `tests/api/free/`, `tests/api/role-access/free/`).
 - Tier-agnostic flow (auth, packs, generic API contracts) → `tests/e2e/shared/<area>/` or root of `tests/api/`.
 - Loadtest spec → `tests/loadtest/**`.
+- Anything that turns gitops mode **on** → `tests/e2e/premium/gitops-mode/`. Enabling it is a global config
+  write that makes every mutating control in the UI read-only, so it cannot share a window with any other
+  project. Adding a `--project` name also means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`,
+  which throws at config load for a name it doesn't know.
 
 ## Project pipeline (premium)
 
@@ -91,7 +129,15 @@ Folder conventions:
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
 
-The `free` project depends only on `free-setup`. The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is independent — no cross-project sharing.
+The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the *Workstations* step inside `cleanup.steps.ts` skips on free (that fleet is premium-only); `wipe unassigned state` runs on both, and its `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
+
+The `gitops-mode` project runs **after** premium (`dependencies: ['premium']`), pinned to `workers: 1` with
+`fullyParallel: false` and `retries: 0`, and its `gitops-mode-teardown` project turns the flag back off.
+`cleanup-setup` calls `disableGitOpsMode` as well, because a teardown project doesn't run on a `SIGKILL` and a
+stuck flag disables the *next* run's entire suite. Run it with `npm run test:gitops-mode` (full chain) or
+`npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
+
+The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is otherwise independent — no cross-project sharing.
 
 ## Env vars
 
