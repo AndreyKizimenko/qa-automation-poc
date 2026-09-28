@@ -21,6 +21,7 @@ import {
   deleteAllScripts,
   deleteAllTeamPolicies,
   disableGitOpsMode,
+  enableScriptExecution,
   findFleetByName,
   resetSetupExperience,
 } from '@helpers/api';
@@ -49,6 +50,9 @@ test('wipe unassigned state', async ({ request }) => {
   // same way the resource wipes do. No-ops when the flag is already off, which
   // is every run on free.
   await disableGitOpsMode(request);
+  // Script execution is the other global switch a dead run can strand: an
+  // exclusive spec turns it off, and nothing else in the suite turns it back on.
+  await enableScriptExecution(request);
   await resetSetupExperience(request, 0);
   await Promise.all([
     deleteAllQueries(request),

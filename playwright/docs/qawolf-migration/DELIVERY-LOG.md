@@ -137,6 +137,13 @@ through `fleetctl get mdm-command-results`, the activity, the command itself and
 tied to this run's command UUID. QA Wolf's three premium flows asserted a screenshot of a CLI table; the fourth
 never sent a command at all.
 
+**Script execution off** — `shared/exclusive/script-execution-disabled.spec.ts` (new). Settings → Advanced
+options → "Script execution" off and back on, asserting the host Actions tooltip, the Scripts-library banner and
+Fleet's own 403. The switch is global and Fleet refuses and holds *every* script while it is off, so the spec
+runs in the new single-worker **`premium-exclusive` / `free-exclusive`** projects after the main one, and
+`cleanup-setup` turns script execution back on at the start of every run. The premium source flow's cleanup
+called `uncheck()` twice and left scripts disabled for whatever ran next.
+
 **Wait-for-refetch helper** — `waitForHostRefetch(request, hostId, { since, field, refetch })` in
 `helpers/api/hosts.ts`, comparing `detail_updated_at` or `software_updated_at` against a baseline taken
 before the action. `shared/hosts/host-details-smoke.spec.ts` now uses it in place of its own poll.

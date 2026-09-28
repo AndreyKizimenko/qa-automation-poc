@@ -97,18 +97,20 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Five browser/API projects target three Fleet environments. Each has its own env file
+Seven browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder — no tags. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**` | `.auth/premium-admin.json` |
-| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/free-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**`, `**/exclusive/**` | `.auth/premium-admin.json` |
+| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`) | n/a | `.auth/premium-admin.json` |
+| `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, after `premium`, one worker | n/a | `.auth/premium-admin.json` |
+| `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, after `free`, one worker | n/a | `.auth/free-admin.json` |
 
 Folder conventions:
 
@@ -120,6 +122,13 @@ Folder conventions:
   write that makes every mutating control in the UI read-only, so it cannot share a window with any other
   project. Adding a `--project` name also means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`,
   which throws at config load for a name it doesn't know.
+- A spec that flips a global setting which breaks specs running beside it — turning off script execution,
+  say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). The
+  `premium-exclusive` / `free-exclusive` projects run those on one worker once the main project has finished;
+  `npm run test:premium` / `test:free` include them. Filter by file name, not path, when running one
+  (`playwright test --project=free-exclusive script-execution-disabled`): the exclusive projects' `testDir` is
+  `tests/e2e`, so a `tests/e2e/…` path filter never matches. A dependency always runs in full, so running an
+  exclusive project with deps runs its whole main project first; `test:<tier>:exclusive` is the `--no-deps` form.
 
 ## Project pipeline (premium)
 
@@ -136,6 +145,9 @@ The `gitops-mode` project runs **after** premium (`dependencies: ['premium']`), 
 `cleanup-setup` calls `disableGitOpsMode` as well, because a teardown project doesn't run on a `SIGKILL` and a
 stuck flag disables the *next* run's entire suite. Run it with `npm run test:gitops-mode` (full chain) or
 `npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
+
+`cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
+and a run killed mid-spec would otherwise leave every script spec of the next run failing.
 
 The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is otherwise independent — no cross-project sharing.
 
