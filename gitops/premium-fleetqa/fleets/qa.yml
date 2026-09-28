@@ -1,0 +1,68 @@
+# "QA" fleet — the suite's durable Fleet-maintained-app shelf.
+#
+# Why this fleet and not another: `playwright/setup/cleanup.steps.ts` wipes the
+# Unassigned (fleet_id=0) and Workstations scopes before and after every run, so
+# anything parked there is destroyed. QA is wiped by neither, holds no hosts of
+# its own, and held no policies, scripts, profiles or reports before this file
+# existed — so bringing it under gitops (which deletes whatever it does not
+# declare) costs nothing. The VMs fleet is deliberately NOT under gitops: it
+# owns the `pw-host-report-results` report that
+# `tests/e2e/premium/hosts/host-report-details.spec.ts` reads.
+#
+# Why these apps: version-dependent specs — chiefly
+# `tests/e2e/premium/software/version-pinning.spec.ts` — need a Fleet-maintained
+# app with more than one cached version, and a freshly added app caches exactly
+# one. Fleet keeps the previous build (n-1, and briefly n-2) each time it pulls
+# a newer one, so an app that lives here permanently grows a version history on
+# its own. Every app below ships updates on a scale of weeks or faster and is
+# offered on both macOS and Windows, which doubles the chances that at least one
+# entry has moved by the time a test runs.
+#
+# Installer size is a constraint, not a detail: the premium QA instance is a
+# 2 GB Render box and a ~1.7 GB Windows installer (Docker Desktop) 502'd it
+# mid-apply. Keep every entry on this list small enough to download without
+# taking the instance down. A software batch is all-or-nothing, so a 502 on the
+# last app throws away every download before it; on a fresh instance, apply the
+# macOS block first and widen to the full list once those are in storage.
+#
+# Nothing here is self-service or part of the setup experience: these titles
+# exist to be *listed*, not installed. Keep it that way — QA is also the target
+# fleet for the host-transfer specs, and an install-on-enroll flag would start
+# real work on hosts those specs move in.
+name: QA
+
+agent_options:
+  path: ../../lib/agent-options.yml
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+
+software:
+  fleet_maintained_apps:
+    # macOS
+    - slug: 1password/darwin # 1Password
+    - slug: claude/darwin # Claude
+    - slug: firefox/darwin # Mozilla Firefox
+    - slug: google-chrome/darwin # Google Chrome
+    - slug: notion/darwin # Notion
+    - slug: postman/darwin # Postman
+    - slug: slack/darwin # Slack
+    - slug: visual-studio-code/darwin # Microsoft Visual Studio Code
+    - slug: zed/darwin # Zed
+    - slug: zoom/darwin # Zoom
+    # Windows
+    - slug: 1password/windows # 1Password
+    - slug: claude/windows # Claude
+    - slug: firefox/windows # Mozilla Firefox
+    - slug: google-chrome/windows # Google Chrome
+    - slug: notion/windows # Notion
+    - slug: postman/windows # Postman
+    - slug: slack/windows # Slack
+    - slug: visual-studio-code/windows # Microsoft Visual Studio Code
+    - slug: zed/windows # Zed
+    - slug: zoom/windows # Zoom
