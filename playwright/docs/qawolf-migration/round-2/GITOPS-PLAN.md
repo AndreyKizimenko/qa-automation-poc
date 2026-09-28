@@ -504,6 +504,17 @@ Three, in descending order of severity. All need Fleet issues filed under the
 
 ### 8.1 `exceptions.software` leaves the Install-software form unsavable — **functional dead end**
 
+> **CORRECTION (2026-09-28): the `exceptions.software` finding below is withdrawn.**
+> It was filed as fleetdm/fleet#54169 and closed as not reproducible. Re-checked by
+> reading the DOM rather than the rendered appearance, on `rc-minor-fleet-v4.93.0`:
+> with GitOps mode **off** — zero `.gitops-mode-tooltip-wrapper` elements on the page —
+> "Cancel setup if software fails", the row checkboxes and Save are *all* still
+> `disabled`. Whatever disables this form is unrelated to GitOps mode. The original
+> evidence was a dotted underline appearing on the label, which is TooltipWrapper
+> styling and says nothing about enabled state. **Do not re-file this without a DOM
+> check across all three states (exception on / off / GitOps off).**
+
+
 `[live]` + `[src]` `pages/ManageControlsPage/SetupExperience/cards/InstallSoftware/components/InstallSoftwareForm/InstallSoftwareForm.tsx`
 
 With `gitops_mode_enabled: true` and `exceptions.software: true`, on
