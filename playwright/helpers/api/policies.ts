@@ -38,3 +38,31 @@ export async function deletePolicies(request: APIRequestContext, ids: number[]):
     .post(apiUrl('global/policies/delete'), { headers: authHeaders(), data: { ids } })
     .catch((err) => console.warn('[deletePolicies]', err));
 }
+
+/** A fleet's own policies (not inherited global ones). */
+export async function listFleetPolicies(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<Array<PolicyRef & { query: string }>> {
+  const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
+  if (!res.ok()) throw new Error(`[listFleetPolicies] ${res.status()}: ${await res.text()}`);
+  return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string }) => ({
+    id: p.id,
+    name: p.name,
+    query: p.query,
+  }));
+}
+
+/** Delete a fleet's policies by id; safe on already-deleted ids. */
+export async function deleteFleetPolicies(
+  request: APIRequestContext,
+  fleetId: number,
+  ids: number[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const res = await request.post(apiUrl(`fleets/${fleetId}/policies/delete`), {
+    headers: authHeaders(),
+    data: { ids },
+  });
+  if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()}: ${await res.text()}`);
+}

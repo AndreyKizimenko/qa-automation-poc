@@ -419,13 +419,17 @@ export async function getHostDetailUpdatedAt(
 }
 
 /**
- * The two timestamps Fleet advances when a host re-reports:
+ * Two timestamps Fleet keeps per host, which mean different things:
  *
- *  - `detail_updated_at` — vitals (OS, disk, users, agent versions).
- *  - `software_updated_at` — the software inventory. This is the one the host's
- *    Software tab compares against an install's timestamp to decide whether a
- *    title still reads "recently installed/updated" or has settled, so software
- *    specs wait on it rather than on the vitals.
+ *  - `detail_updated_at` — when the host last reported a full collection. Every
+ *    refetch advances it, so it's the proof that a collection ran after a point
+ *    in time.
+ *  - `software_updated_at` — when the host's software inventory last *changed*.
+ *    Fleet skips the write when an ingest finds nothing new (`nothingChanged` in
+ *    `server/datastore/mysql/software.go`), so it only advances if the software
+ *    list differs. Wait on it only for "until the inventory changes", and only
+ *    with a baseline taken before the change could have been ingested; to know
+ *    the inventory is current, wait on `detail_updated_at` instead.
  */
 export type HostCollectedAtField = 'detail_updated_at' | 'software_updated_at';
 

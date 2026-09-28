@@ -62,6 +62,18 @@ test.describe('activityCopy', () => {
       .test(`The UserList command was acknowledged. less than a minute ago`)).toBe(true);
   });
 
+  test('hostSoftware.* — installed / uninstalled, failed and upcoming', () => {
+    const title = 'fleet-pw (x64)';
+    expect(activityCopy.hostSoftware.installed({ title }).test(`admin installed ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.uninstalled({ title }).test(`admin uninstalled ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.failedToUninstall({ title })
+      .test(`admin failed to uninstall ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.toldToInstall({ title })
+      .test(`admin told Fleet to install ${title} on this host.`)).toBe(true);
+    // An uninstall's sentence contains "installed"; the install matcher must not take it.
+    expect(activityCopy.hostSoftware.installed({ title }).test(`admin uninstalled ${title} on this host.`)).toBe(false);
+  });
+
   test('label.* — "a label" on create, "the label" on edit/delete', () => {
     expect(activityCopy.label.created({ name: NAME })
       .test(`created a label ${NAME}.`)).toBe(true);

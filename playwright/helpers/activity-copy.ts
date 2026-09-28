@@ -195,6 +195,24 @@ export const activityCopy = {
       new RegExp(`^The ${esc(requestType)} command was acknowledged\\.`),
   },
 
+  // A software install or uninstall on one host, as the host's own Activity card
+  // words it. The actor is left out: an admin's run names the admin, an
+  // automatic one names Fleet.
+  hostSoftware: {
+    /** @see frontend/interfaces/software.ts INSTALL_STATUS_PREDICATES — `installed <b>TITLE</b> on this host.` */
+    installed: ({ title }: { title: string }) => new RegExp(`\\binstalled ${esc(title)} on this host\\.`),
+    failedToInstall: ({ title }: { title: string }) =>
+      new RegExp(`failed to install ${esc(title)} on this host\\.`),
+    /** Upcoming tab. */
+    toldToInstall: ({ title }: { title: string }) =>
+      new RegExp(`told Fleet to install ${esc(title)} on this host\\.`),
+    uninstalled: ({ title }: { title: string }) => new RegExp(`uninstalled ${esc(title)} on this host\\.`),
+    failedToUninstall: ({ title }: { title: string }) =>
+      new RegExp(`failed to uninstall ${esc(title)} on this host\\.`),
+    toldToUninstall: ({ title }: { title: string }) =>
+      new RegExp(`told Fleet to uninstall ${esc(title)} on this host\\.`),
+  },
+
   // VPP and Android app-store entries. The feed renders the title with a
   // `(Platform)` parens suffix before the preposition. Scope suffix is
   // asymmetric on Unassigned — see {@link appStoreAppScope}.

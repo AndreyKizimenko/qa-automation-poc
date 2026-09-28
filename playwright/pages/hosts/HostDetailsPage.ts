@@ -3,10 +3,12 @@ import { CertificatesCard } from '../components/CertificatesCard';
 import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
+import { HostSoftwareLibrary } from '../components/HostSoftwareLibrary';
 import { MdmCommandDetailsModal } from '../components/MdmCommandDetailsModal';
 import { Navbar } from '../components/Navbar';
 import { RunScriptModal } from '../components/RunScriptModal';
 import { ScriptDetailsModal } from '../components/ScriptDetailsModal';
+import { InstallDetailsModal, UninstallDetailsModal } from '../components/SoftwareActionDetailsModal';
 import { SelectReportModal } from '../components/SelectReportModal';
 import { Toast } from '../components/Toast';
 import { TransferHostModal } from '../components/TransferHostModal';
@@ -40,6 +42,10 @@ export class HostDetailsPage {
   readonly scriptDetailsModal: ScriptDetailsModal;
   /** An MDM command's request and response — from the Activity card. */
   readonly mdmCommandDetailsModal: MdmCommandDetailsModal;
+  /** Software → Library: installers offered to this host, with install/uninstall actions. */
+  readonly library: HostSoftwareLibrary;
+  readonly installDetailsModal: InstallDetailsModal;
+  readonly uninstallDetailsModal: UninstallDetailsModal;
   readonly toast: Toast;
   /** Confirmation raised by Actions → Delete; its own modal class. */
   readonly deleteModal: Locator;
@@ -155,6 +161,9 @@ export class HostDetailsPage {
     this.runScriptModal = new RunScriptModal(page);
     this.scriptDetailsModal = new ScriptDetailsModal(page);
     this.mdmCommandDetailsModal = new MdmCommandDetailsModal(page);
+    this.library = new HostSoftwareLibrary(page);
+    this.installDetailsModal = new InstallDetailsModal(page);
+    this.uninstallDetailsModal = new UninstallDetailsModal(page);
     this.toast = new Toast(page);
     this.deleteModal = page.locator('.delete-host-modal');
 
@@ -234,6 +243,30 @@ export class HostDetailsPage {
     // packages (so rows alone would never resolve; callers switch to full
     // inventory via showFullInventory() next).
     await expect(this.softwareRowOrEmpty()).toBeVisible();
+  }
+
+  /**
+   * Software → Library, filtered to one title. Waits for that title's row: the
+   * Library is server-searched, and a title just added to the host's fleet is
+   * listed as soon as the tab loads.
+   */
+  async openLibrary(title: string): Promise<void> {
+    await this.softwareTab.click();
+    await this.libraryTab.click();
+    await expect(this.page).toHaveURL(/\/software\/library/);
+    await this.library.searchFor(title);
+    await expect(this.library.row(title)).toBeVisible();
+  }
+
+  /**
+   * Software → Inventory, filtered to one title — what the host last reported
+   * installed, as opposed to what the Library offers it.
+   */
+  async openInventory(title: string): Promise<void> {
+    await this.softwareTab.click();
+    await this.inventoryTab.click();
+    await expect(this.softwareSearch).toBeVisible();
+    await this.searchSoftware(title);
   }
 
   /** First inventory row, or the table's empty state — the tab has settled either way. */
