@@ -2,7 +2,7 @@
 
 **31 source flows → 9 specs.** `Script execution and MDM commands` · `Software install / uninstall`
 
-> **Status, 2026-09-28: built — all nine planned specs plus `update-on-host`, green live.** What landed and what
+> **Status, 2026-09-28: built — every planned spec (the MDM pair merged into one shared spec) plus `update-on-host`, green live.** What landed and what
 > changed from the plan is in [What landed](#what-landed-and-what-changed-from-the-plan); the FMA design is in
 > [The FMA fixture set](#the-fma-fixture-set). The handoff below is kept as the brief the work answered.
 >
