@@ -2,6 +2,8 @@
 
 **28 source flows → 14 specs.** `Read-only surfaces` · `Validation and gating` · `API size contracts`
 
+**✅ Shipped 2026-09-28** — [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61). Two source rows were dropped as DUPs and one moved to batch B; `titles-table` split into a `shared/` and a `premium/` spec because columns and sorting are identical on free. See [DELIVERY-LOG § Round 2 · Batch A](../DELIVERY-LOG.md).
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 

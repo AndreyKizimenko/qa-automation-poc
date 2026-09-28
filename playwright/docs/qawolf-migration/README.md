@@ -81,11 +81,17 @@ restart (so fixtures resolve hosts by API at run time, never by stored id), and 
 deleted simulation never returns on its own — osquery-perf enrolls once at startup
 with no node-invalid recovery.
 
-## Round 2 — in progress
+## Round 2 — in progress (54 of 127 flows shipped)
 
 A second export (`qa-wolf/Fleet_20260828 (1)/`) arrived 2026-08-28 with QA Wolf's live free and premium
 environments. Three of its five folders were round 1 re-exported as TypeScript and have been removed; of the
 **156 new flows, 29 were cut** and the surviving **127 map to 60 target specs across seven batches.**
+
+| | |
+|---|---|
+| **shipped** | batches **A**, **B**, **C** and **gitops-mode V1** — 54 flows, [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61) |
+| **next** | **D** (host execution) — needs nothing that doesn't already exist |
+| **blocked** | **F** — mailbox, IdP and Fedora host; **E** needs an inert profile fixture first |
 
 **Everything round 2 lives in [`round-2/`](round-2/)** — start at its [README](round-2/README.md).
 We keep their coverage, not their tests.

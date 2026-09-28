@@ -1,11 +1,13 @@
 # `fleetctl` CLI — test audit
 
-**Specs covered:** 12 files · **Entries:** 42 (59 test declarations) · **Projects:** premium, free, gitops-nightly
+**Specs covered:** 13 files · **Entries:** 43 (44 `test()` declarations → 60 runtime tests after the loops expand) · **Projects:** premium, free, gitops-nightly
 
-The only area in the suite with **no browser and no HTTP client of its own**. Every entry shells
-out to the real `fleetctl` binary and asserts on its exit code, stdout and stderr. Three entries
-also read the Fleet API — but only to set up or verify a CLI-driven mutation, never as the thing
-under test.
+The only area in the suite with **no browser** and no page objects. Every entry shells out to the
+real `fleetctl` binary and asserts on its exit code, stdout and stderr. **Eight entries** also read
+the Fleet API — FCTL-06, 15, 31, 34, 35, 36, 37, 38 — but only to resolve a target host, set up a
+CLI-driven mutation or verify one, never as the thing under test. FCTL-06 is the newest of these and
+the only one in `cli/shared/`: it resolves an online host purely to satisfy a flag `fleetctl` now
+requires.
 
 Design rationale, the full licensing matrix, and what these specs deliberately leave to Fleet's
 own Go tests live in [`../test-plans/fleetctl.md`](../test-plans/fleetctl.md). Read that first if
@@ -42,8 +44,8 @@ command`). Entries that assert on those check message content, never exit code.
 | `tests/cli/free/` | free | yes |
 | `tests/cli/nightly/` | `gitops-nightly` | **no** — nightly GitOps chain only |
 
-59 declarations → **70 executions** in the regular projects (39 premium / 31 free, the 16 shared
-ones counted twice) plus **12** in the nightly project (6 per tier).
+The 54 runtime tests in the regular folders → **70 executions** (39 premium / 31 free, the 16
+shared ones counted twice), plus the 6 nightly ones → **12** (6 per tier).
 
 `tests/cli/nightly/` is excluded from both browser projects via
 `'**/cli/nightly/**'` in their `testIgnore`, exactly as `gitops-verify` is. It is
@@ -57,9 +59,47 @@ resolve the server's version and `npm install -g fleetctl@<that version>` before
 `FLEETCTL_BIN` points at an existing binary; without it the area fails hard rather than skipping,
 per the suite's no-new-skip-gates rule.
 
-**A stale local binary is the most likely cause of a confusing failure in this area.** A 4.85
-client against a 4.91 server passes most entries but can lag behind new output keys. Check
-`fleetctl --version` against `/api/v1/fleet/version` before filing anything.
+### The client must match the server's minor version — read this first
+
+**A stale client does not fail this area. It makes it pass for the wrong reason.** That is not a
+hypothetical: until 2026-09-27 the suite ran **fleetctl 4.85.1 against a 4.93 server**, and the
+skew was silently costing real coverage in three ways.
+
+1. **It silently no-ops an entire gitops `software:` section.** A client that predates a config key
+   ignores it rather than erroring, so a `fleetctl gitops` apply reports success having applied
+   part of the file. Everything downstream — the `--dry-run` entries, the nightly `generate-gitops`
+   round-trips, `gitops-verify` — then agrees with a server state that the config never fully
+   described.
+2. **It hid a required flag.** `get mdm-commands` gained a mandatory `--host`
+   ([fleetdm/fleet#45476](https://github.com/fleetdm/fleet/issues/45476)); 4.85.1 accepted the bare
+   invocation, so **FCTL-06 passed for two months against a command the server no longer offers in
+   that form**.
+3. **It hid a live P1 product bug.** `generate-gitops` exits 1 on Free whenever Apple MDM is
+   configured ([fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)). 4.85.1
+   predates DDM assets support (4.90.0), so it never took the failing branch — **FCTL-24 and
+   FCTL-25 passed for two months against a command that is broken on this tier.** Upgrading the
+   client is what surfaced it.
+
+**The fix when the released client is behind the server.** `npm install -g fleetctl@<version>` only
+works for a version that has shipped; against an RC it will not. Build one from the Fleet checkout
+instead and point `FLEETCTL_BIN` at it:
+
+```bash
+cd ~/repositories/fleet && go build -o /tmp/fleetctl ./cmd/fleetctl
+export FLEETCTL_BIN=/tmp/fleetctl
+```
+
+**Before filing anything in this area, or trusting a green run in it, check the skew:**
+
+```bash
+fleetctl --version
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/version" | jq -r .version
+```
+
+The harness strips fleetctl's three-line version-mismatch banner off stderr on *every* command
+(see **How a CLI test runs**), which is necessary for the stderr assertions to be skew-independent —
+but it also means **the warning never reaches a run log**. Nothing in a passing run tells you the
+client is old. That is the mechanism by which two specs passed for the wrong reason.
 
 ## Contents
 
@@ -70,7 +110,7 @@ client against a 4.91 server passes most entries but can lag behind new output k
 | FCTL-03 | `cli/shared/get-read-only.spec.ts` | get enroll_secret emits an enroll_secret spec | CLI | ☐ |
 | FCTL-04 | `cli/shared/get-read-only.spec.ts` | get software renders a table | CLI | ☐ |
 | FCTL-05 | `cli/shared/get-read-only.spec.ts` | get mdm-apple reports APNs certificate details | CLI | ☐ |
-| FCTL-06 | `cli/shared/get-read-only.spec.ts` | get mdm-commands lists recent commands | CLI | ☐ |
+| FCTL-06 | `cli/shared/get-read-only.spec.ts` | get mdm-commands lists the commands run on a host | CLI + API | ☐ |
 | FCTL-07 | `cli/shared/get-read-only.spec.ts` | get carves succeeds | CLI | ☐ |
 | FCTL-08 | `cli/shared/get-read-only.spec.ts` | debug migrations reports the schema is current | CLI | ☐ |
 | FCTL-09 | `cli/shared/new.spec.ts` | scaffolds a GitOps repository with the given org name | CLI | ☐ |
@@ -88,8 +128,8 @@ client against a 4.91 server passes most entries but can lag behind new output k
 | FCTL-21 | `cli/free/licensing.spec.ts` | get fleets is refused | CLI | ☐ |
 | FCTL-22 | `cli/free/licensing.spec.ts` | get teams (deprecated alias) is refused | CLI | ☐ |
 | FCTL-23 | `cli/free/licensing.spec.ts` | get mdm-apple-bm is refused | CLI | ☐ |
-| FCTL-24 | `cli/free/licensing.spec.ts` | generate-gitops omits premium-only SSO fields | CLI | ☐ |
-| FCTL-25 | `cli/free/licensing.spec.ts` | generate-gitops omits software, which is premium-only | CLI | ☐ |
+| FCTL-24 | `cli/free/licensing.spec.ts` | generate-gitops omits premium-only SSO fields **(skipped — #53965)** | CLI | ☐ |
+| FCTL-25 | `cli/free/licensing.spec.ts` | generate-gitops omits software, which is premium-only **(skipped — #53965)** | CLI | ☐ |
 | FCTL-31 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` refuses a `{darwin,windows}` host with MDM off (6) | CLI + API | ☐ |
 | FCTL-32 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` reports an unknown host identifier (3) | CLI | ☐ |
 | FCTL-33 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` requires the --host flag (3) | CLI | ☐ |
@@ -281,26 +321,55 @@ other:
 
 ---
 
-### FCTL-06 · fleetctl · read-only get subcommands › get mdm-commands lists recent commands
+### FCTL-06 · fleetctl · read-only get subcommands › get mdm-commands lists the commands run on a host
 
-- **File:** [`playwright/tests/cli/shared/get-read-only.spec.ts`](../../tests/cli/shared/get-read-only.spec.ts)
-- **Grep:** `-g "get mdm-commands lists recent commands"`
-- **Project:** premium **and** free · **Mode:** CLI
+- **File:** [`playwright/tests/cli/shared/get-read-only.spec.ts`](../../tests/cli/shared/get-read-only.spec.ts) (L50)
+- **Grep:** `-g "get mdm-commands lists the commands run on a host"`
+- **Project:** premium **and** free · **Mode:** CLI + API
+- **Preconditions:** an online host of **any** platform. Resolved at run time, not named — see below. `test.skip('no online host to query MDM commands for')` if the instance has none.
 
 **Flow**
 
-1. ☐ Run `fleetctl get mdm-commands`.
+1. ☐ (No user action) resolve a host through the Fleet API — `withApiRequest` opens its own request
+   context and tries `findOnlineHost(request, platform)` for `darwin`, then `windows`, then `linux`,
+   taking the first hit.
+   - ☐ **Skips** if all three return null.
+2. ☐ Run `fleetctl get mdm-commands --host <that host's display name>`.
    - ✅ *(CLI)* Exit code is `0`.
    - ✅ *(CLI)* stdout+stderr matches `/most recent commands|No MDM commands/` — populated table **or** explicit empty state.
 
-**Manual repro** — `fleetctl get mdm-commands`. Prints "The list of 20 most recent commands:"
-followed by a table, or the empty-state line when the instance has issued none.
+**Manual repro** — pick any online host from **Hosts**, then
+`fleetctl get mdm-commands --host <hostname>`. Prints "The list of 20 most recent commands:"
+followed by a table, or the empty-state line when that host has none. `--host` also accepts a UUID
+or a hardware serial. Running it **without** `--host` is the regression this entry now guards:
+against a current server that is an error, not a listing.
 
 **Assessment**
-- *Value:* moderate — the only entry tolerant of an empty instance by design, which is correct here since MDM command history depends on what other specs did.
-- *Coverage gaps:* the either/or regex means a *malformed* table still passes as long as the preamble prints. Tightening it would require seeding a command, which needs a real MDM-enrolled host and would pull this out of `shared/`.
-- *Redundancy:* none.
-- *Efficiency / smells:* the alternation is the right call for a shared-state instance, but it does make the entry near-unfalsifiable. Judge whether that is worth keeping.
+- *Value:* moderate as a data test, high as a **skew canary**. `--host` became mandatory in
+  [fleetdm/fleet#45476](https://github.com/fleetdm/fleet/issues/45476); the spec called the command
+  bare until 2026-09-27 and passed anyway, because the pinned client (4.85.1) predated the change.
+  This is one of the two entries the intro's version-skew warning is drawn from — it is *the*
+  worked example of a CLI test passing against a command signature the server no longer offers.
+- *Coverage gaps:* the either/or regex still means a *malformed* table passes as long as the
+  preamble prints, and now there is a second escape hatch — a host that has received no commands
+  (which is every simulated host) always takes the `No MDM commands` branch, so in practice this
+  asserts the empty state and an exit code. Nothing checks that `--host` is actually **required**
+  (a bare invocation asserted to fail would pin the contract this entry was broken by); nothing
+  checks the flag accepts a UUID or serial as documented; nothing checks an *unknown* host
+  identifier is reported.
+- *Redundancy:* none. It is the only entry that resolves a host through the API purely to satisfy a
+  flag.
+- *Efficiency / smells:*
+  - The host lookup costs up to three `findOnlineHost` sweeps (each paging up to 10×100 online
+    hosts, plus a vitals fetch per candidate) **before** a CLI call that will almost certainly print
+    the empty state. That is the most expensive setup in the area for the weakest assertion in it.
+  - Resolving at run time rather than naming a host is correct and load-bearing: the pools are
+    osquery-perf simulations whose display names are regenerated on every daemon restart, so a
+    hardcoded name would rot within days. Worth keeping even if the rest of the entry is trimmed.
+  - This is now the only entry in `cli/shared/` that touches the Fleet API, which makes the file's
+    "no HTTP client of its own" framing (see the area intro) one exception short of true.
+  - The alternation makes the entry near-unfalsifiable. Judge whether that is worth keeping — the
+    strongest cheap version of this test may be the *negative* one (bare invocation must fail).
 
 **Notes (Andrey)**
 ```
@@ -872,24 +941,41 @@ other:
 
 ### FCTL-24 · fleetctl · free licence gating › generate-gitops omits premium-only SSO fields
 
-- **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts)
+- **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts) (L38)
 - **Grep:** `-g "generate-gitops omits premium-only SSO fields"`
 - **Project:** free · **Mode:** CLI
+- **Status:** **`test.skip(true, …)` — blocked by [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)** (P1, milestone 4.93.0). Logged in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a matching `TODO(fleetdm/fleet#53965)` on the skip.
 
-**Flow**
+**Why it is skipped.** `generate-gitops` **exits 1 on Free whenever Apple MDM is configured**, so it
+writes nothing and neither premium-omission assertion can run. The mechanism: `generateControls`
+calls `generateAssets` unconditionally, and `GET /assets` 402s on Free. This instance has Apple MDM
+on, so it fails every time — the skip is unconditional (`test.skip(true, …)`) rather than gated on
+instance state, because on a Free instance with Apple MDM configured there is no passing path.
+
+**This was invisible until the client caught up.** fleetctl 4.85.1 predates DDM assets support
+(added in 4.90.0), so the old client never took the failing branch and this entry passed for two
+months against a broken command. Upgrading to a 4.93-matching client surfaced it. See the
+[version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+
+**Unblock condition:** `generate-gitops` succeeds on Free with Apple MDM configured — i.e. the
+assets fetch is skipped on Free. Then delete both skips (this entry and FCTL-25) and re-run.
+
+**Flow** *(what it asserts when un-skipped)*
 
 1. ☐ Run `fleetctl generate-gitops --key org_settings.sso_settings` on free.
    - ✅ *(CLI)* Exit code is `0`.
    - ✅ *(CLI)* stdout does **not** contain `enable_jit_provisioning`.
    - ✅ *(CLI)* stdout **does** contain `enable_sso` — proving the command ran and produced SSO output, not nothing.
 
-**Manual repro** — run on free, then premium, and diff. Only `enable_jit_provisioning` differs.
+**Manual repro** — on free today: `fleetctl generate-gitops --key org_settings.sso_settings` exits
+**1** and writes nothing (that is the bug, and the quickest confirmation of whether #53965 is still
+live). Once fixed, run on free, then premium, and diff: only `enable_jit_provisioning` differs.
 
 **Assessment**
-- *Value:* high — the **free half** of the pair with FCTL-16, and a well-constructed negative test. The `enable_sso` positive assertion is what keeps it honest: without it, a command that output nothing at all would pass.
-- *Coverage gaps:* two other premium-only omissions on this path are unasserted — `microsoft_graph_credentials` (`generate_gitops.go:930`) and the Google Workspace IdP entry in `integrations` (`:976`). Both are one-line additions in the same shape.
-- *Redundancy:* none.
-- *Efficiency / smells:* none. This is the entry other negative tests in the area should be modelled on.
+- *Value:* high **when it runs** — the **free half** of the pair with FCTL-16, and a well-constructed negative test. The `enable_sso` positive assertion is what keeps it honest: without it, a command that output nothing at all would pass. That positive assertion is also, ironically, what would have caught #53965 had the client been current.
+- *Coverage gaps:* dark today, so the free half of the JIT-provisioning pair is currently uncovered, and FCTL-16 (premium) asserts only its own side. Two other premium-only omissions on this path are unasserted — `microsoft_graph_credentials` (`generate_gitops.go:930`) and the Google Workspace IdP entry in `integrations` (`:976`). Both are one-line additions in the same shape.
+- *Redundancy:* FCTL-30's free branch (nightly) asserts the *structural* tier contract on the generated tree and does not go through `--key`, so it is the nearest thing to cover for this while the skip stands — but it runs only in the nightly chain, and it is subject to the same `generate-gitops` failure on Free, so ⚠️ **check whether FCTL-30's free branch is also broken by #53965** rather than assuming it covers the gap.
+- *Efficiency / smells:* the skip is correctly narrow (two tests, not the describe) and correctly recorded per `CLAUDE.md` — issue filed first, row in `blocked-by-product-bugs.md`, `TODO(fleetdm/fleet#53965)` comment on the skip. The `test.skip(true, …)` form sits *inside* the test body, so the assertions below it remain type-checked and reviewable, which is the right shape for a temporary block.
 
 **Notes (Andrey)**
 ```
@@ -903,24 +989,31 @@ other:
 
 ### FCTL-25 · fleetctl · free licence gating › generate-gitops omits software, which is premium-only
 
-- **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts)
+- **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts) (L52)
 - **Grep:** `-g "generate-gitops omits software, which is premium-only"`
 - **Project:** free · **Mode:** CLI
+- **Status:** **`test.skip(true, …)` — blocked by [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)**, same cause and same unblock condition as FCTL-24. One fix un-skips both.
 
-**Flow**
+**Why it is skipped.** Identical to FCTL-24: `generate-gitops` exits 1 on Free with Apple MDM
+configured (`generateControls` → `generateAssets` → `GET /assets` 402s on Free), so the command
+produces no output for the assertion to inspect. Also masked by fleetctl 4.85.1 until 2026-09-27 —
+see the [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+
+**Flow** *(what it asserts when un-skipped)*
 
 1. ☐ Run `fleetctl generate-gitops --key software` on free.
    - ✅ *(CLI)* Exit code is `0`.
    - ✅ *(CLI)* Output contains `Key software not found`.
 
-**Manual repro** — run on free. `generate_gitops.go:2077` hard-returns `nil` for software on the
-free tier, so the key never appears in the generated tree.
+**Manual repro** — on free today the command exits **1** and prints nothing usable. Once #53965 is
+fixed: `generate_gitops.go:2077` hard-returns `nil` for software on the free tier, so the key never
+appears in the generated tree.
 
 **Assessment**
-- *Value:* moderate. Covers a clean, explicit licence branch.
-- *Coverage gaps:* `Key software not found` is also what you would get on **premium** for a fleet with no installable software — so this assertion does not actually distinguish "omitted because free" from "empty because nothing installed". On free that ambiguity is harmless (the branch is unconditional), but the test does not prove what its name claims. FCTL-30's structural check is the stronger form.
-- *Redundancy:* overlaps FCTL-30's free branch, which asserts `default.yml` has no `software` key at all.
-- *Efficiency / smells:* the ambiguity above is the one thing worth fixing in this entry — asserting on the generated tree rather than the `--key` miss would remove it.
+- *Value:* moderate **when it runs**. Covers a clean, explicit licence branch. Dark today.
+- *Coverage gaps:* `Key software not found` is also what you would get on **premium** for a fleet with no installable software — so this assertion does not actually distinguish "omitted because free" from "empty because nothing installed". On free that ambiguity is harmless (the branch is unconditional), but the test does not prove what its name claims. FCTL-30's structural check is the stronger form. ⚠️ Note this entry is the **weaker** of the two skipped here: FCTL-24's `enable_sso` positive assertion would have failed loudly on #53965, whereas this one asserts only the absence of a key — so had the client been current, this test would have failed on its *exit-code* assertion rather than telling anyone what was wrong.
+- *Redundancy:* overlaps FCTL-30's free branch, which asserts `default.yml` has no `software` key at all — but see the ⚠️ under FCTL-24: FCTL-30's free branch drives the same `generate-gitops` command and may be broken by the same bug, so it cannot be assumed to be covering this gap. Worth checking the last nightly free run before deciding.
+- *Efficiency / smells:* the ambiguity above is the one thing worth fixing in this entry — asserting on the generated tree rather than the `--key` miss would remove it, and would also survive #53965 differently. Skip is correctly narrow and correctly recorded.
 
 **Notes (Andrey)**
 ```
@@ -1689,6 +1782,17 @@ other:
 Things that are true of the area rather than any one entry — start here if you are deciding where
 to spend review time.
 
+0. **Client/server version skew is this area's dominant failure mode, and it fails *silently*.**
+   Nothing else in the suite has a test dependency that can make tests pass for the wrong reason.
+   The 4.85.1-against-4.93 episode cost two entries' real coverage for two months (FCTL-06's flag
+   contract, FCTL-24/25's exposure to a live P1) and would silently no-op an entire gitops
+   `software:` section, which reaches well past this area into the `--dry-run` entries, the nightly
+   round-trips and `gitops-verify`. The harness strips fleetctl's mismatch banner from stderr — which
+   it must, or every stderr assertion becomes skew-dependent — so a run log never shows it. **The
+   cheapest fix is a guard, not a habit:** one assertion (or a project-setup step) comparing
+   `fleetctl --version` against `/api/v1/fleet/version` and failing on a minor-version mismatch
+   would have caught all of this on day one. See the
+   [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
 1. **The shared `get` entries are smoke tests wearing data-test names.** FCTL-01/02/04 assert only
    that column headers render. That is a defensible scope (data contracts belong to `tests/api/`
    and `gitops-verify`), but the entry names promise more than they deliver. Either rename them or
@@ -1698,9 +1802,13 @@ to spend review time.
    cert and FCTL-23's premium counterpart would read ABM; both print a renew date (May 2027 on
    these instances) and neither asserts it is in the future. An expired APNs cert breaks MDM
    enrolment across the whole suite, and nothing else in the suite would catch it early.
-3. **Three tier pairs are complete; one is half-built.** 14↔21 (fleets), 16↔24 (JIT), 17↔30
-   (controls scoping) each assert both sides. But `get mdm-apple-bm` has only the free denial
-   (FCTL-23) with no premium positive — the one asymmetric pair.
+3. **Three tier pairs are complete on paper; two are half-built in practice.** 14↔21 (fleets),
+   16↔24 (JIT), 17↔30 (controls scoping) each assert both sides. But `get mdm-apple-bm` has only the
+   free denial (FCTL-23) with no premium positive, and **16↔24 is currently one-sided too** —
+   FCTL-24 is skipped for [#53965](https://github.com/fleetdm/fleet/issues/53965), so the JIT pair
+   is premium-only until that closes. FCTL-25 is dark for the same reason, and ⚠️ FCTL-30's *free*
+   branch drives the same broken command, so the "covered elsewhere" argument for both skips needs
+   checking against a real nightly free run rather than assumed.
 4. **Exit-0-on-error is a real product wart, pinned in three places.** FCTL-18/19/20 all assert
    message content because the command returns nil. If Fleet fixes this, all three need updating
    to assert exit 1 — they should not be "fixed" by loosening.

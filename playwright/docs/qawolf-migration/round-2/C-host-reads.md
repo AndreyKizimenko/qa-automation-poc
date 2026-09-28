@@ -2,6 +2,8 @@
 
 **8 source flows → 8 specs.** `Host detail reads`
 
+**✅ Shipped 2026-09-28** — [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61). Three retargets (certificates landed `shared/`, both reports-recency rows were host-details flows) and the vitals-refetch row moved to batch D. See [DELIVERY-LOG § Round 2 · Batch C](../DELIVERY-LOG.md).
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 

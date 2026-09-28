@@ -1,10 +1,11 @@
 # API contract specs — test audit
 
-**Specs covered:** 5 files · **Test declarations:** 22 entries (29 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 27 entries (34 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
 
 This area holds the suite's non-browser contract checks: the shape of `GET /config`, the free-tier
-license value, the 402 premium paywall on the API, Fleet's request/file-size limits, and a pure-unit
-snapshot of the activity-feed copy helper. Folder routing decides the tier — `tests/api/*.spec.ts`
+license value, the 402 premium paywall on the API, Fleet's request/file-size limits, one query
+parameter's payload contract (`exclude_software`), and a pure-unit snapshot of the activity-feed
+copy helper. Folder routing decides the tier — `tests/api/*.spec.ts`
 runs in **both** premium and free, `tests/api/free/` only in free, `tests/api/premium/` only in
 premium ([`playwright.config.ts:151-179`](../../playwright.config.ts)).
 
@@ -44,6 +45,42 @@ all — pure in-process assertion; a fifth mode this area needs, all 14 activity
 | API-20 | `api/premium/max-request-file-sizes.spec.ts` | Premium • API • max request/file sizes › a script over 500,000 characters is rejected | API | ☐ |
 | API-21 | `api/premium/max-request-file-sizes.spec.ts` | … › a configuration profile over the 1.573MB request limit is rejected | API | ☐ |
 | API-22 | `api/premium/max-request-file-sizes.spec.ts` | … › an EULA PDF over the 26.21MB request limit is rejected | API | ☐ |
+| API-23 | `api/premium/max-request-file-sizes.spec.ts` | … › an MDM command over the 2.097MB request limit is rejected | API | ☐ |
+| API-24 | `api/premium/max-request-file-sizes.spec.ts` | … › an MDM command under the limit gets past the size gate | API | ☐ |
+| API-25 | `api/premium/max-request-file-sizes.spec.ts` | … › a batch of configuration profiles over the 26.21MB request limit is rejected | API | ☐ |
+| API-26 | `api/premium/max-request-file-sizes.spec.ts` | … › a batch of scripts over the 26.21MB request limit is rejected | API | ☐ |
+| API-27 | `api/host-software-payload.spec.ts` | API • host by identifier › `exclude_software` drops the software list and nothing else | API | ☐ |
+
+---
+
+## Every size-limit payload is generated at run time (read before API-20…API-26)
+
+**Nothing multi-MB is committed to this repo.** All seven cases in
+[`max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) build
+their body in memory with `Buffer.alloc(n, 'a')` (or `'a'.repeat(n)`) and, where the endpoint takes
+JSON, `.toString('base64')`. There is no fixture under `test-data/` for any of them, and there
+should never be — a 27 MB padding file in git to prove a 26.21 MB limit would cost every clone
+forever for a byte pattern the spec can produce in a line. `MIB = 1024 * 1024` at the top of the
+file is the only shared constant.
+
+Consequences worth knowing before judging these entries:
+
+- **Nothing here is valid content.** Only the EULA case bothers with a magic prefix (`%PDF-1.7`),
+  and only because it reads better; the request-body-size middleware rejects before any handler
+  parses the payload, so a wall of `a` is as good as a real `.mobileconfig` or `.pdf`.
+- **The cost is bandwidth, not disk.** Each run pushes ~27 MB (EULA) + 35 MB (batch profiles) +
+  ~30 MB (batch scripts) + 4 MB (MDM command) + 2 MB (profile) + 0.5 MB (script) at the shared QA
+  instance, ×2 on a CI retry. That is the single biggest byte cost in the non-browser suite.
+
+**Why six of the seven are rejection paths only.** A rejected upload persists nothing, so the spec
+needs no cleanup and can run against a shared instance with no coordination — that is stated in the
+file header and it is the reason the positive controls flagged as gaps in API-20…API-22 were never
+written. API-24 is the one exception and shows the shape a safe positive control has to take: it
+sends an **under-limit** MDM command to a syntactically valid UUID that belongs to no host, so the
+request must get past the size gate and then fail on its *target* (404 `No hosts targeted`) rather
+than queueing anything. Queuing a real command would need an MDM-enrolled host and would leave an
+un-withdrawable entry in that host's command history — which belongs with the host-execution specs,
+not here.
 
 ---
 
@@ -717,7 +754,7 @@ other:
 
 **Assessment**
 - *Value:* real. This is Fleet's per-script **business** limit (handler-level, distinct from the request-size middleware in API-21/22), and the payload really is over the line, so the test exercises the limit rather than mocking it. The message assertion is what gives it teeth.
-- *Coverage gaps:* no positive control — nothing uploads a just-under-limit script and expects 2xx, so a misconfiguration that rejected *all* scripts would pass here (the scripts-library e2e spec does upload a small script, which partially covers it, but on a different instance state). Also no boundary case at exactly 500,000, and no team-scoped (`team_id`) variant.
+- *Coverage gaps:* no positive control — nothing uploads a just-under-limit script and expects 2xx, so a misconfiguration that rejected *all* scripts would pass here (the scripts-library e2e spec does upload a small script, which partially covers it, but on a different instance state). Also no boundary case at exactly 500,000, and no team-scoped (`team_id`) variant. **API-24 now shows how a safe positive control is built** (under-limit body, unroutable target), and the same trick has no analogue here — a valid small script would persist, which is exactly what this spec avoids.
 - *Redundancy:* none in this area.
 - *Efficiency / smells:* `expect(res.status()).toBeGreaterThanOrEqual(400)` ([`max-request-file-sizes.spec.ts:31`](../../tests/api/premium/max-request-file-sizes.spec.ts)) tolerates 401/403/500 — pin the exact status Fleet returns. `@fixtures` import → needless browser launch (see API-15). Tier placement is questionable: script size limits are not premium-only, so this belongs in `tests/api/` root and currently never runs on free.
 
@@ -756,7 +793,7 @@ other:
 **Assessment**
 - *Value:* genuinely exercises the request-body-size middleware with a real 2 MB upload, and the exact-limit string in the message means a change in Fleet's cap (or its wording) is caught rather than absorbed.
 - *Coverage gaps:* no positive control (a valid small profile uploading successfully is covered only by the os-settings e2e specs); no boundary case just under 1.573 MB; nothing asserts *nothing was persisted* — the "no cleanup needed" claim is inferred from the rejection, not verified by a follow-up `GET /mdm/profiles`.
-- *Redundancy:* shares the middleware under test with API-22 — one of the two would catch a middleware-wide regression; they differ only in cap and endpoint.
+- *Redundancy:* shares the middleware under test with API-22, **API-23, API-25 and API-26** — five entries now exercise the same request-body-size middleware at three caps across five routes. Any one of them catches a middleware-wide regression; the other four only catch a per-route cap change.
 - *Efficiency / smells:* loose `>= 400` ([line 52](../../tests/api/premium/max-request-file-sizes.spec.ts)); `@fixtures` → browser launch; request-size middleware is tier-agnostic, so `tests/api/premium/` placement means free never checks it.
 
 **Manual repro**
@@ -795,8 +832,8 @@ other:
 **Assessment**
 - *Value:* same middleware as API-21 at a different cap, and it does push a real 27 MB body over the wire.
 - *Coverage gaps:* no positive control; no boundary case; no verification that no EULA was persisted (`GET /setup_experience/eula/metadata` would settle it — relevant because a stray EULA changes the DEP setup-experience e2e specs).
-- *Redundancy:* highest in this area — API-21 already covers the middleware; the marginal regression this adds is "the EULA route's cap changed".
-- *Efficiency / smells:* uploads ~27 MB per run (×2 CI retries on failure) against the shared QA instance for one string assertion — the worst cost/benefit ratio in the area. Loose `>= 400` ([line 76](../../tests/api/premium/max-request-file-sizes.spec.ts)); `@fixtures` → browser launch.
+- *Redundancy:* **API-25 and API-26 now assert the identical 26.21 MB cap and the identical message string** on two other routes, so this entry is one of three claims about one number. API-21 already covers the middleware itself; the marginal regression each of the three adds is "this route's cap changed".
+- *Efficiency / smells:* uploads ~27 MB per run (×2 CI retries on failure) against the shared QA instance for one string assertion — and it is no longer alone: API-25 and API-26 each push a comparable body for the same assertion, so the 26.21 MB cap costs ~90 MB per run to verify three times. Loose `>= 400` ([line 76](../../tests/api/premium/max-request-file-sizes.spec.ts)); `@fixtures` → browser launch.
 
 **Manual repro**
 ```bash
@@ -818,6 +855,235 @@ other:
 
 ---
 
+### API-23 · … › an MDM command over the 2.097MB request limit is rejected
+
+- **File:** [`playwright/tests/api/premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) (L104)
+- **Grep:** `npx playwright test tests/api/premium/max-request-file-sizes.spec.ts --project=premium -g "an MDM command over the"`
+- **Project:** premium only · **Mode:** API · **Isolation:** independent; creates nothing so no cleanup
+- **Preconditions:** premium instance + admin token · **Data created:** none (rejected on size, before any handler runs)
+
+**Flow**
+
+1. ☐ Allocate 3 MiB of `a` in memory and base64-encode it — the command travels base64 inside the JSON body, so the encoded string is what has to clear the 2.097 MB (2 MiB) cap. Generated at run time; nothing is committed.
+2. ☐ `POST /api/v1/fleet/commands/run` with JSON `{ command: <base64>, host_uuids: ['00000000-0000-4000-8000-000000000000'] }`.
+   - ✅ *(API)* status ≥ 400.
+   - ✅ *(API)* response text contains `max size limit of 2.097MB` — the size-specific message, sourced from `MaxMDMCommandSize` in `server/fleet/request.go` and formatted by `units.HumanSize` in `server/platform/http/errors.go` (hence a MiB value rendered in MB).
+
+**Assessment**
+- *Value:* the only coverage of `POST /commands/run`'s body cap, and the cap that is easiest to break by accident — it is the one route here whose payload is base64, so a change in encoding shifts the effective limit by a third without anyone touching the constant. Paired with API-24 it is the area's only rejected/accepted **boundary pair**, which is worth more than either half alone.
+- *Coverage gaps:* no case at exactly 2.097 MB; nothing asserts the command was not queued (inferred from the rejection and from the unroutable UUID, not verified); the `host_uuids` array is never exercised with more than one target, and a per-target multiplier on the body size would not be caught.
+- *Redundancy:* same middleware as API-21/22/25/26, third distinct cap. The one genuinely new claim is the 2.097 MB number.
+- *Efficiency / smells:* loose `expect(res.status()).toBeGreaterThanOrEqual(400)` ([line 114](../../tests/api/premium/max-request-file-sizes.spec.ts)) — API-24, ten lines below, pins `toBe(404)` for its own case, so the file is inconsistent with itself about how precise a status assertion should be. `@fixtures` import → a Chromium launch this test never uses. Tier placement is wrong in the same way as API-20…API-22: the request-size middleware is not premium-gated, but `POST /commands/run` reaches MDM, which on free is a different question — worth a verdict rather than an assumption.
+
+**Manual repro**
+```bash
+python3 -c "import base64,sys; sys.stdout.write(base64.b64encode(b'a'*3*1024*1024).decode())" > /tmp/cmd.b64
+jq -n --rawfile c /tmp/cmd.b64 '{command:$c, host_uuids:["00000000-0000-4000-8000-000000000000"]}' \
+  | curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" -H 'Content-Type: application/json' \
+      -d @- "$FLEET_URL/api/v1/fleet/commands/run"
+# expect: 4xx containing "max size limit of 2.097MB"
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-24 · … › an MDM command under the limit gets past the size gate
+
+- **File:** [`playwright/tests/api/premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) (L118)
+- **Grep:** `npx playwright test tests/api/premium/max-request-file-sizes.spec.ts --project=premium -g "under the limit gets past the size gate"`
+- **Project:** premium only · **Mode:** API · **Isolation:** independent
+- **Preconditions:** premium instance + admin token · **Data created:** **none, by construction** — the target UUID `00000000-0000-4000-8000-000000000000` is syntactically valid and belongs to no host, so Fleet has nothing to queue the command against
+
+**Flow**
+
+1. ☐ Allocate 1 MiB of `a` and base64-encode it (~1.4 MB encoded — comfortably inside the 2.097 MB cap). Generated at run time.
+2. ☐ `POST /api/v1/fleet/commands/run` with that body and the unknown host UUID.
+   - ✅ *(API)* The response text does **not** contain `max size limit` — the actual point of the test: the request cleared the size gate.
+   - ✅ *(API)* status is exactly **404** (not `>= 400` — this is the file's one precise status assertion).
+   - ✅ *(API)* response text contains `No hosts targeted` — Fleet's *own handler* answering about the target, which is the proof the body was read in full, because the size middleware never reaches the handler.
+
+**Assessment**
+- *Value:* the highest-value entry in this spec, and the only **positive control** in the whole size-limit group. Without it, a regression that set every cap to zero would pass API-20…API-23, API-25 and API-26 — six green tests proving only that Fleet rejects things. The `No hosts targeted` assertion is what makes it airtight: it is a message only the handler can emit, so "got past the gate" is proven rather than inferred from the absence of an error string.
+- *Coverage gaps:* it proves the gate is not set *too low*, not that it is set *exactly* right — a cap raised to 200 MB passes this and API-23 both (3 MiB would still exceed a 2.097 MB cap, but a cap of e.g. 4 MiB would fail API-23, so the pair does bracket the value to within one order of magnitude, no more). No equivalent positive control exists for profiles, EULA, batch profiles or batch scripts; the spec header explains why (each would persist something), but `POST /mdm/profiles` with an invalid-but-small `.mobileconfig` would fail on parsing rather than size, which is the same trick and is not used.
+- *Redundancy:* none — it is the inverse of API-23 and the two belong together.
+- *Efficiency / smells:* `@fixtures` → unused browser launch. The three assertions are ordered body-then-status, so a 500 with an unexpected body reports the *body* mismatch first, which reads oddly in a failure trace but is otherwise harmless. Naming `UNKNOWN_HOST_UUID` as a module constant is right; it deserves the same treatment in any future positive control.
+
+**Manual repro**
+```bash
+python3 -c "import base64,sys; sys.stdout.write(base64.b64encode(b'a'*1024*1024).decode())" > /tmp/cmd-ok.b64
+jq -n --rawfile c /tmp/cmd-ok.b64 '{command:$c, host_uuids:["00000000-0000-4000-8000-000000000000"]}' \
+  | curl -sk -i -H "Authorization: Bearer $FLEET_API_TOKEN" -H 'Content-Type: application/json' \
+      -d @- "$FLEET_URL/api/v1/fleet/commands/run"
+# expect: HTTP 404, body containing "No hosts targeted" and NOT "max size limit"
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-25 · … › a batch of configuration profiles over the 26.21MB request limit is rejected
+
+- **File:** [`playwright/tests/api/premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) (L139)
+- **Grep:** `npx playwright test tests/api/premium/max-request-file-sizes.spec.ts --project=premium -g "a batch of configuration profiles over"`
+- **Project:** premium only · **Mode:** API · **Isolation:** independent
+- **Preconditions:** premium instance + admin token · **Data created:** none — the middleware rejects before any profile is parsed, so nothing is written to `fleet_id=0`
+
+**Flow**
+
+1. ☐ Build 7 MiB of `a`, base64-encode it, and repeat it across **5** array entries — 35 MiB of body, over the 26.21 MB (25 MiB) cap. Generated at run time.
+2. ☐ `POST /api/v1/fleet/configuration_profiles/batch?team_id=0` with JSON `{ profiles: [{profile}, … ×5] }`.
+   - ✅ *(API)* status ≥ 400.
+   - ✅ *(API)* response text contains `max size limit of 26.21MB` (cap from `MaxBatchProfileSize`).
+
+**Assessment**
+- *Value:* moderate, with one property the single-file cases lack — it is the only entry where the limit applies to an **aggregate** rather than one file, which is the shape a real gitops apply takes. `configuration_profiles/batch` is also **destructive by design** (it replaces a fleet's whole profile set), so the size gate is genuinely load-bearing for safety here, not just a resource guard.
+- *Coverage gaps:* no positive control — and unlike API-24's, a safe one is hard, because any request that clears the gate replaces the fleet's profiles. Nothing asserts the fleet's existing profiles survived (a follow-up `GET /mdm/profiles?team_id=0` would settle it, and the destructive nature of the route makes that check more valuable here than anywhere else in the file). No case where the individual entries are each small but the array is long, which is the aggregate-limit bug a batch route actually has.
+- *Redundancy:* the **same cap and the same asserted string** as API-22 and API-26. Three routes, one number.
+- *Efficiency / smells:* ~35 MiB pushed per run for one string. Loose `>= 400`. `@fixtures` → unused browser launch. `team_id: '0'` is passed as a query param here while API-21 passes it as a multipart field for the single-profile route — correct per Fleet's API, but worth noting when reproducing by hand.
+
+**Manual repro**
+```bash
+python3 - <<'PY' > /tmp/batch-profiles.json
+import base64, json
+p = base64.b64encode(b'a' * 7 * 1024 * 1024).decode()
+print(json.dumps({"profiles": [{"profile": p} for _ in range(5)]}))
+PY
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" -H 'Content-Type: application/json' \
+  -d @/tmp/batch-profiles.json "$FLEET_URL/api/v1/fleet/configuration_profiles/batch?team_id=0"
+# expect: 4xx containing "max size limit of 26.21MB"
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/mdm/profiles?team_id=0" | jq '.profiles | length'
+# expect: unchanged — proving the rejected batch replaced nothing
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-26 · … › a batch of scripts over the 26.21MB request limit is rejected
+
+- **File:** [`playwright/tests/api/premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) (L156)
+- **Grep:** `npx playwright test tests/api/premium/max-request-file-sizes.spec.ts --project=premium -g "a batch of scripts over"`
+- **Project:** premium only · **Mode:** API · **Isolation:** independent
+- **Preconditions:** premium instance + admin token · **Data created:** none — rejected on size
+
+**Flow**
+
+1. ☐ Build `#!/bin/sh\n# ` + 6 MiB of `a`, base64-encode it, and repeat it across **5** named entries (`pw-oversized-0.sh` … `-4.sh`) — ~30 MiB of body, over the 26.21 MB cap. Generated at run time.
+2. ☐ `POST /api/v1/fleet/scripts/batch?team_id=0` with JSON `{ scripts: [{name, script_contents}, … ×5] }`.
+   - ✅ *(API)* status ≥ 400.
+   - ✅ *(API)* response text contains `max size limit of 26.21MB` (cap from `MaxBatchScriptSize`).
+
+**Assessment**
+- *Value:* the **safety argument is the value here**, and the spec says so outright: batch-setting scripts *replaces* a fleet's entire script set, so a request that got through would wipe `fleet_id=0`'s scripts on a shared QA instance. The assertion that it is refused on size is what makes the case safe to run at all. As a *contract* test it adds one number to a cap already asserted twice.
+- *Coverage gaps:* nothing verifies the fleet's scripts survived — the same follow-up `GET /scripts?team_id=0` that API-25 wants, and for the same reason. No per-script business-limit interaction: API-20 proves a single script over 500,000 characters is refused by the handler, but nothing checks what a *batch* of individually-oversized-but-collectively-small scripts does, which is the interesting boundary between the two limits.
+- *Redundancy:* **highest in the area.** Same cap, same message, same middleware as API-22 and API-25. If one of the three is cut, this is the one whose contract value is most covered elsewhere — though it is also the one whose *safety* framing argues hardest for keeping it.
+- *Efficiency / smells:* ~30 MiB per run. Loose `>= 400`. `@fixtures` → unused browser launch. Note the padding is built with `'a'.repeat(6 * MIB)` inside a template literal and *then* base64-encoded, so the wire payload is ~4/3 of the nominal figure — the comment's "25MiB ceiling" arithmetic is about the cap, not the body, which is easy to misread.
+
+**Manual repro**
+```bash
+python3 - <<'PY' > /tmp/batch-scripts.json
+import base64, json
+s = base64.b64encode(b'#!/bin/sh\n# ' + b'a' * 6 * 1024 * 1024).decode()
+print(json.dumps({"scripts": [{"name": f"pw-oversized-{i}.sh", "script_contents": s} for i in range(5)]}))
+PY
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" -H 'Content-Type: application/json' \
+  -d @/tmp/batch-scripts.json "$FLEET_URL/api/v1/fleet/scripts/batch?team_id=0"
+# expect: 4xx containing "max size limit of 26.21MB"
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/scripts?team_id=0" | jq '.scripts | length'
+# expect: unchanged — a batch that got through would have replaced the whole set
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-27 · API • host by identifier › `exclude_software` drops the software list and nothing else
+
+- **File:** [`playwright/tests/api/host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts)
+- **Grep:** `npx playwright test tests/api/host-software-payload.spec.ts --project=premium -g "exclude_software drops the software list"` (swap `--project=free` for the other tier)
+- **Project:** **both** — the spec sits at the root of `tests/api/`, so premium *and* free pick it up
+- **Mode:** API · **Isolation:** independent, read-only (three GETs, no mutation)
+- **Preconditions:** at least one of the first 50 hosts (by display name, ascending) reports software — otherwise `test.skip('no host on this instance reports software')`. The resolved host must also have a non-empty `hostname`, asserted explicitly because it is the lookup key for the next two calls.
+- **Data created:** none
+
+**Why it is tier-agnostic:** `exclude_software` is not premium-gated. The parameter, the endpoint and
+the payload are identical on free, so filing it under `tests/api/premium/` would have left free with
+no coverage of either — the mistake API-20…API-26 all make. The spec's header states this
+explicitly, and it is the one placement decision in this area that is unambiguously right.
+
+**Flow**
+
+1. ☐ `GET /api/v1/fleet/hosts?per_page=50&order_key=display_name&order_direction=asc`, then `GET /hosts/:id/software?per_page=1` per candidate until one reports software — `findHostWithSoftware` ([`helpers/api/hosts.ts:77`](../../helpers/api/hosts.ts)). **Skips** if none of the 50 does.
+2. ☐ `GET /api/v1/fleet/hosts/:id` to read that host's `hostname`.
+   - ✅ *(API)* Response is OK.
+   - ✅ *(API)* `hostname` is truthy — *"the resolved host must have a hostname to look up by"*.
+3. ☐ `GET /api/v1/fleet/hosts/identifier/<url-encoded hostname>` — the full payload.
+   - ✅ *(API)* Response is OK.
+   - ✅ *(API)* `host.hostname` equals the hostname looked up — i.e. the identifier resolved to the same host.
+   - ✅ *(API)* `host.software.length > 0` — the **precondition guard**: without it the next assertion would be vacuous on a host that reports nothing.
+4. ☐ `GET /api/v1/fleet/hosts/identifier/<same>?exclude_software=true` — the trimmed payload.
+   - ✅ *(API)* Response is OK.
+   - ✅ *(API)* `host.software.length === 0` (treating a missing key as 0).
+   - ✅ *(API)* Six identity fields are **unchanged**: `id`, `uuid`, `hostname`, `hardware_serial`, `platform`, `team_id` — each with its own failure message naming the field.
+   - ✅ *(API)* `Object.keys(trimmed).sort()` equals `Object.keys(full).sort()` — every key the full payload carries is still present. The parameter **empties** `software`; it does not thin the response out.
+
+**Assessment**
+- *Value:* high for its size. This is a narrow contract that is easy to break in exactly one direction — an optimisation that skips loading software also skipping something *else* it happened to be joined to — and the key-set comparison is precisely the assertion that catches that, which no hand-written field list would. Grounded in `server/service/hosts.go` (`hostByIdentifierRequest.ExcludeSoftware` → `fleet.HostDetailOptions{ExcludeSoftware}`), so the reviewer can check the test against the code path rather than against a guess. It is also the only entry in this area that covers a **query parameter's** behaviour rather than a payload shape or a status code.
+- *Coverage gaps:* one host, chosen by whatever sorts first with software — a platform-specific difference in what `exclude_software` drops would be invisible. Only `/hosts/identifier/:identifier` is covered; `GET /hosts/:id` takes the same parameter and is not tested with it. No `exclude_software=false` case (the explicit-negative should behave as the default). No assertion that the trimmed response is actually *smaller* — the stated motivation is payload size and nothing measures it, which one `Content-Length` comparison would fix. Nothing checks `software_updated_at` or the `software` key's *type* (an empty array vs `null` are both accepted by `?.length ?? 0`).
+- *Redundancy:* none anywhere in the suite — no e2e or gitops-verify spec touches this parameter.
+- *Efficiency / smells:*
+  - **The structural-not-deep comparison is the right call and is documented as such.** The two payloads are fetched seconds apart from a live host, so `detail_updated_at`, `seen_time` and `percent_disk_space_available` legitimately differ; the source QA Wolf flow used deep equality and would fail on any host that checked in mid-test. Worth preserving that reasoning if anyone tries to "strengthen" this back to `toEqual`.
+  - `findHostWithSoftware` scans up to 50 hosts with one extra request each — up to 51 requests before the test starts, and it returns `null` (→ skip) on **any** non-OK response rather than failing. Same silent-skip shape flagged for `findHostByPlatform` in area 07.
+  - `@fixtures` import → an unused Chromium launch, the fifth spec in this area to pay for one.
+  - The host is drawn from the **ascending** display-name ordering, which is where the read-only pickers all draw from — so it can collide with a host another spec is mutating from the same end only if that spec ignores the documented offset convention.
+
+**Manual repro**
+```bash
+H=$(curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/hosts?per_page=50&order_key=display_name&order_direction=asc" \
+  | jq -r '.hosts[0].hostname')
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/hosts/identifier/$H" | jq '{n: (.host.software | length), keys: (.host | keys | length)}'
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/hosts/identifier/$H?exclude_software=true" | jq '{n: (.host.software | length), keys: (.host | keys | length)}'
+# expect: software length > 0 then 0; the key count identical in both
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -827,7 +1093,8 @@ other:
 | App config shape (`GET /config`) | API-15, API-16, API-17 | truthiness/presence only; no comparison to `FLEET_URL`; no `mdm.*_enabled_and_configured` flags; no `PATCH /config` round-trip at this layer |
 | License tier | API-19 (free) | **no premium mirror** — nothing asserts `tier === 'premium'` or a future `license.expiration` |
 | Premium API gating (402) | API-18 (8 endpoints) | MDM profiles, team scripts, calendars, conditional access, integrations, vulnerabilities, host lock/wipe; no unauthenticated variant; no premium positive control |
-| Request/file-size limits | API-20, API-21, API-22 | rejection paths only — no under-limit positive control, no boundary case, no "nothing persisted" check; software-installer and bootstrap-package caps untested; not run on free although the middleware is tier-agnostic |
+| Request/file-size limits | API-20…API-26 (4 caps across 6 routes) | **one** positive control (API-24, `commands/run` only) — the other five are rejection-only; no boundary case at any exact cap; no "nothing persisted" check on the two destructive batch routes; software-installer and bootstrap-package caps untested; not run on free although the middleware is tier-agnostic |
+| Host payload query parameters | API-27 (`exclude_software` on `/hosts/identifier/:id`) | not tested on `GET /hosts/:id`, which takes the same parameter; no `exclude_software=false`; nothing measures that the payload is actually smaller, which is the parameter's whole purpose; one host per run |
 | Activity-feed copy contract | API-01…API-14 | self-consistency only — cannot detect upstream Fleet copy change (the file's stated purpose); scope matrix incomplete where consumers rely on it (`script` add/Workstations, edit/Unassigned, delete/Unassigned; profile delete premium-Unassigned) |
 | Role/permission gating | `tests/api/role-access/**` (out of scope here) | no overlap with license gating — verified, `402` appears nowhere in role-access |
 | General API contract hygiene | — | nothing on `/version`, `/me`, unauthenticated 401 shape, 404/422 validation-error shape, `/activities` pagination + `order_key` (which `findActivity` depends on), or `v1` vs `latest` parity |
@@ -836,7 +1103,7 @@ other:
 
 1. **Four `GET /config` requests for four field assertions** — API-15, API-16, API-17, API-19. One request in a `beforeAll` (or one test with four `expect`s) would do.
 2. **`activity-copy.spec.ts` runs twice** (premium + free) with a byte-identical result, because the only tier-sensitive tests stub `process.env.SUITE` themselves. 14 duplicate executions per nightly pair.
-3. **API-21 / API-22** exercise the same request-body-size middleware; only the cap and route differ.
+3. **Five entries share one middleware, and three share one number.** API-21, API-22, API-23, API-25 and API-26 all exercise the request-body-size middleware; of those, API-22, API-25 and API-26 assert the *same* `max size limit of 26.21MB` string on three different routes, at a combined ~90 MB of upload per run. Any one of the five catches a middleware regression; the other four only catch a per-route cap change.
 4. **API-01 / API-02 / API-03** are three tests over one shared `fleetSuffix()`; a single table would read better and make the missing scopes obvious.
 5. **API-10 / API-11** are two 3-line tests over the same `user.*` builders.
 6. **API-18 vs [`free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts)** — same feature gate, different layer. Genuine complement (status/body vs banner), keep both.
@@ -844,15 +1111,19 @@ other:
 
 **UI-vs-API balance**
 
-Everything here is API by design, and that is right for tier gating, config shape, and size limits — none has a UI surface worth clicking. Two caveats. (a) The activity-copy tests are not even API: they are unit tests wearing a Playwright costume, sitting in the browser projects, consuming worker slots on a shared QA instance for pure in-process work. (b) Four of the five specs import from `@fixtures`, which activates the auto `pageHealth` fixture ([`fixtures.ts:270`](../../fixtures.ts)); it depends on `page`, so **all 15 API tests launch a Chromium context they never use** — `playwright/CLAUDE.md` explicitly permits `@playwright/test` here. The genuine API-instead-of-UI shortcut risk in this area is low; the genuine problem is the reverse — browser cost on browser-free tests.
+Everything here is API by design, and that is right for tier gating, config shape, size limits and payload-shape parameters — none has a UI surface worth clicking. Two caveats. (a) The activity-copy tests are not even API: they are unit tests wearing a Playwright costume, sitting in the browser projects, consuming worker slots on a shared QA instance for pure in-process work. (b) Five of the six specs import from `@fixtures`, which activates the auto `pageHealth` fixture ([`fixtures.ts:270`](../../fixtures.ts)); it depends on `page`, so **20 API tests launch a Chromium context they never use** — `playwright/CLAUDE.md` explicitly permits `@playwright/test` here. The genuine API-instead-of-UI shortcut risk in this area is low; the genuine problem is the reverse — browser cost on browser-free tests.
+
+**On rejection-only coverage.** Six of the seven size-limit entries assert only that Fleet refuses something, which is a deliberate design constraint rather than laziness: a rejected upload persists nothing, so the spec needs no cleanup and can run unsynchronised against a shared instance. The cost is that the set is only falsifiable in one direction — API-24 alone stands between this group and a build where every cap is zero. That single positive control is load-bearing, and the pattern it uses (an under-limit body aimed at a target that cannot exist) is the template for extending the idea to the other routes.
 
 **Quick wins**
 
-1. Swap `@fixtures` → `@playwright/test` in [`config.spec.ts`](../../tests/api/config.spec.ts), [`free/endpoints.spec.ts`](../../tests/api/free/endpoints.spec.ts), [`free/license.spec.ts`](../../tests/api/free/license.spec.ts), [`premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) — drops 15 needless Chromium launches per run.
+1. Swap `@fixtures` → `@playwright/test` in [`config.spec.ts`](../../tests/api/config.spec.ts), [`free/endpoints.spec.ts`](../../tests/api/free/endpoints.spec.ts), [`free/license.spec.ts`](../../tests/api/free/license.spec.ts), [`premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts), [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts) — drops 20 needless Chromium launches per run.
 2. Fix the false claim in the [`activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) header ("fails before the CRUD specs do" when Fleet changes copy) — it detects *helper* edits only, and the wrong comment will mislead the next agent into trusting it.
 3. Add negative assertions to the policy / script / software / profile / role families, copying API-14's pattern — today a suffix that loosened to `.*` passes every one of the 13 other tests.
 4. Add a premium mirror of API-19 asserting `license.tier === 'premium'` and `license.expiration` in the future, so an expired QA license fails once and clearly instead of cascading.
-5. Tighten `toBeGreaterThanOrEqual(400)` to the exact status at [`max-request-file-sizes.spec.ts:31,52,76`](../../tests/api/premium/max-request-file-sizes.spec.ts) and add one under-limit positive control per endpoint.
+5. Tighten `toBeGreaterThanOrEqual(400)` to the exact status at [`max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) lines 55, 76, 100, 114, 152 and 173 — API-24 already pins `toBe(404)` ten lines away, so the file disagrees with itself about how precise a status assertion should be.
+6. Add the two "nothing was replaced" follow-ups that cost one GET each and guard the area's two **destructive** routes: `GET /mdm/profiles?team_id=0` after API-25 and `GET /scripts?team_id=0` after API-26. Today "the rejected batch wiped nothing" is inferred from the 4xx, on routes whose success path replaces an entire fleet's set.
+7. Move [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts)'s pattern to `max-request-file-sizes.spec.ts` — the former is correctly tier-agnostic at the root of `tests/api/`, the latter is tier-agnostic middleware filed under `premium/` and so never runs on free.
 
 **Bigger bets**
 

@@ -38,6 +38,14 @@ const caseInsensitive = (a: string, b: string): number =>
 const isSorted = (values: string[], compare: (a: string, b: string) => number): boolean =>
   values.every((value, i) => i === 0 || compare(values[i - 1], value) <= 0);
 
+/**
+ * Host counts are read from the rendered cell, and Fleet formats a count over
+ * 999 with a thousands separator — `Number('1,234')` is `NaN`, which would make
+ * every ordering comparison silently false rather than failing. Both QA instances
+ * sit well under that today; a loadtest-scale instance would not.
+ */
+const hostCount = (cell: string): number => Number(cell.replace(/,/g, ''));
+
 test.describe('Software • inventory table', () => {
   test('renders its columns and marks only Name and Hosts sortable', async ({ softwareTitles }) => {
     await softwareTitles.goto();
@@ -77,12 +85,12 @@ test.describe('Software • inventory table', () => {
     await softwareTitles.teamDropdown.select('Unassigned');
 
     await softwareTitles.sortBy('Hosts', 'hosts_count', 'asc');
-    const ascending = (await softwareTitles.columnValues('Hosts')).map(Number);
+    const ascending = (await softwareTitles.columnValues('Hosts')).map(hostCount);
     expect(ascending.length).toBeGreaterThan(1);
     expect(ascending.every((n, i) => i === 0 || ascending[i - 1] <= n)).toBe(true);
 
     await softwareTitles.sortBy('Hosts', 'hosts_count', 'desc');
-    const descending = (await softwareTitles.columnValues('Hosts')).map(Number);
+    const descending = (await softwareTitles.columnValues('Hosts')).map(hostCount);
     expect(descending.every((n, i) => i === 0 || descending[i - 1] >= n)).toBe(true);
     expect(descending[0]).toBeGreaterThan(ascending[0]);
   });

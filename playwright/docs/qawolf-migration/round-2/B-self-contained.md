@@ -2,6 +2,8 @@
 
 **13 source flows → 8 specs.** `Library CRUD` · `Global config`
 
+**✅ Shipped 2026-09-28** — [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61). One source row dropped as a DUP; picked up the historical-data-collection row from batch A once it turned out to be a config write. See [DELIVERY-LOG § Round 2 · Batch B](../DELIVERY-LOG.md).
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 

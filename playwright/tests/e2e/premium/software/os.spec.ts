@@ -109,7 +109,14 @@ test('OS tab — a row drills into that OS with matching version and counts', as
   await expect(softwareOsDetail.vulnerabilitiesHeading).toBeVisible();
   await softwareOsDetail.waitForReady();
 
-  expect(await softwareOsDetail.hostCount()).toBe(listed.hosts);
+  // The list row and the detail page are read seconds apart from a host population
+  // that sibling specs delete from, so the two counts are not required to be equal.
+  // Hosts only ever leave during a run — nothing enrols mid-run — so the detail
+  // count being non-zero and no larger than the list's is the invariant that holds,
+  // and a detail page showing a different OS would still break it.
+  const detailHosts = await softwareOsDetail.hostCount();
+  expect(detailHosts, `${listed.name} reports no hosts on its detail page`).toBeGreaterThan(0);
+  expect(detailHosts).toBeLessThanOrEqual(listed.hosts);
   expect(await softwareOsDetail.vulnerabilityCount()).toBe(listed.vulnerabilities);
 
   for (const column of VULNERABILITY_COLUMNS) {
@@ -147,6 +154,10 @@ test('OS tab — sorting by Hosts reorders the list', async ({
   await softwareOs.table.waitForSettled();
   const descending = await softwareOs.hostCounts();
   expect(descending).toEqual([...descending].sort((a, b) => b - a));
-  // The two directions are genuinely different orders, not one list read twice.
-  expect(descending).not.toEqual(ascending);
+  // Only assert the two directions differ when the data can tell them apart: if
+  // every OS reports the same host count, ascending and descending are legitimately
+  // the same list and a difference check would fail on correct behaviour.
+  if (Math.min(...ascending) !== Math.max(...ascending)) {
+    expect(descending).not.toEqual(ascending);
+  }
 });

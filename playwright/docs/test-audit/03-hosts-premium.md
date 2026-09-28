@@ -369,7 +369,7 @@ other:
 - **Grep:** `npx playwright test -g "a report with stored results drills into this host and out to all hosts"`
 - **Project:** premium · **Scope:** the **VMs** fleet
 - **Mode:** UI+API · **Isolation:** parallel; read-only
-- **Preconditions:** **instance furniture** — a report named `pw-host-report-results` on the VMs fleet with `interval: 300`, `platform: darwin`, `logging: snapshot`, query `SELECT 'bar' AS foo;`, plus at least one elapsed interval so the real macOS VM has a stored result. Deliberately not created by the test: global reports are wiped by `cleanup-setup`, and self-provisioning would cost ~3.5 min of waiting per run. The real macOS VM must be online (`liveMacosHost`).
+- **Preconditions:** **instance furniture** — a report named `pw-host-report-results` on the VMs fleet with `interval: 300`, `platform: darwin`, `logging: snapshot`, query `SELECT 'bar' AS foo;`, plus at least one elapsed interval so the real macOS VM has a stored result. The stored result is what makes the card print its **first row inline** as a term/value grid (with any remainder behind **View full report**) — the drill-through comparison below has nothing to compare against otherwise. Deliberately not created by the test: global reports are wiped by `cleanup-setup`, and self-provisioning would cost ~3.5 min of waiting per run. The real macOS VM must be online (`liveMacosHost`).
 - **Data created:** none
 
 **Flow**
@@ -384,20 +384,27 @@ other:
    - ✅ *(UI)* report cards or the "No reports scheduled" empty state have rendered (`openReportsTab`).
 5. ☐ Type the report name into **Search by name**.
    - ✅ *(UI)* a report card with that exact `h3` heading is visible.
-6. ☐ Open that card's Actions menu → **Show details**.
+6. ☐ *(no user action)* Read the card's **inline first result** — `reportCardFirstResult` ([`HostDetailsPage.ts:427`](../../pages/hosts/HostDetailsPage.ts)) reads the card's `data-grid` in **one DOM pass**, returning column → value, so a term can't be paired with the wrong value. The grid has no roles of its own (Fleet's `DataSet` emits `<dt>`/`<dd>` inside a role-less wrapper), so it is reached through the card's own class.
+   - ✅ *(UI)* the grid is non-empty — the card rendered the report's first result inline rather than a placeholder.
+7. ☐ Open that card's Actions menu → **Show details**.
    - ✅ *(UI)* the **Back to host details** button is visible (`HostQueryReportPage.waitForReady`).
    - ✅ *(UI)* URL matches `/hosts/<hostId>/reports/<reportId>`.
    - ✅ *(UI)* the page's `h1` equals the **host's** display name (the per-host results page titles itself with the host, not the report).
    - ✅ *(UI)* the first results row contains `bar` — the value the seeded query selects, proving real stored results rather than an empty shell.
-7. ☐ Click **View data for all hosts**.
+   - ✅ *(UI)* **cell-for-cell:** for **every** column the card previewed inline, the full report's first row holds the **same value** in that column. Each cell is resolved by **visible column header text** via `DataTable.cellByColumn` ([`DataTable.ts:105`](../../pages/components/DataTable.ts)), which walks the header row and **throws** if the header is missing — so the card's column names are implicitly asserted against the table's headers too. This is the assertion that proves the card's inline preview is a preview of *this* report's stored first row, and not of some other row or a placeholder.
+8. ☐ Click **View report for all hosts**.
    - ✅ *(UI)* URL matches `/reports/<reportId>`.
    - ✅ *(UI)* the report-details `h1` contains the report name.
 
 **Assessment**
-- *Value:* the only coverage of per-host stored query results and the host↔report navigation pair; catches a broken `Show details` gate, a mis-routed drill-down, or results that render empty.
-- *Coverage gaps:* doesn't assert the column header (`foo`), the row count, or the page's "last fetched" line; no negative case (a report *without* stored results must not offer **Show details**) — that's the other half of the `last_fetched` gate and would be cheap on a simulated host; no **Back to host details** round-trip.
+- *Value:* the only coverage of per-host stored query results and the host↔report navigation pair; catches a broken `Show details` gate, a mis-routed drill-down, or results that render empty. The cell-for-cell comparison is the strongest part: it ties two independent renderings of the same stored row together, so a card previewing a *different* row (or the wrong host's) fails here rather than passing a shape check.
+- *Coverage gaps:* the column headers are now asserted only *transitively* — `cellByColumn` throws on a header the card also previewed, so a column the card omits (anything past the first result's keys) is still unchecked, as are the row count and the page's "last fetched" line; the comparison covers the **first row only**, so a full report truncated to one row would pass; no negative case (a report *without* stored results must not offer **Show details**) — that's the other half of the `last_fetched` gate and would be cheap on a simulated host; no **Back to host details** round-trip; nothing asserts the card's **View full report** affordance for the rows the inline grid doesn't show.
 - *Redundancy:* the Reports-tab search/sort surface is covered by [`shared/hosts/host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts); this spec only re-uses the search to find its card.
-- *Efficiency / smells:* the two API preconditions are guardrails rather than validations — good, they turn missing furniture into a clear message instead of a puzzling UI failure. Its dependency on hand-seeded furniture is the fragility to watch: a `cleanup.steps.ts` change that starts wiping fleet-scoped reports silently breaks this test.
+- *Efficiency / smells:*
+  - The two API preconditions are guardrails rather than validations — good, they turn missing furniture into a clear message instead of a puzzling UI failure. Its dependency on hand-seeded furniture is the fragility to watch: a `cleanup.steps.ts` change that starts wiping fleet-scoped reports silently breaks this test.
+  - The cell-for-cell loop is only as strong as the card's grid is wide. The seeded query is `SELECT 'bar' AS foo;` — **one** column — so in practice the loop runs exactly once and the "every column" phrasing overstates what the instance exercises. Widening the furniture's query (e.g. two or three literal columns) would make the loop mean what it says, at zero runtime cost.
+  - `cellByColumn` is `async` and resolves the header index with a per-header `innerText()` read, so the loop re-walks the header row once per column — fine at one column, quadratic-ish if the furniture is ever widened.
+  - `toHaveText(value)` compares against text the spec itself scraped out of the DOM, so whitespace normalisation differences between the card's `<dd>` (read via `innerText().trim()`) and the table cell (matched by `toHaveText`, which normalises) are a plausible future flake source rather than a caught bug.
 
 **Notes (Andrey)**
 ```
@@ -529,7 +536,7 @@ other:
 | Single-host delete | HOSTP-07 (team admin), HOSTP-08 (admin) | cancel path; team observer denial; cross-fleet denial; redirect asserted without a URL check |
 | Host Actions menu gating by platform/MDM/tier | HOSTP-12 + free mirror | role dimension entirely absent; Unlock; enrolled-but-disconnected Apple host |
 | Hosts-list header CTAs by role | HOSTP-10, HOSTP-11 (+ free mirror) | fleet-scoped roles (`team-admin`, `ws-*`); observer-plus; technician |
-| Per-host stored report results | HOSTP-09 | negative case (no stored result → no **Show details**); column/row shape |
+| Per-host stored report results | HOSTP-09 | negative case (no stored result → no **Show details**); row count and "last fetched" line; the card-vs-report cell comparison covers the **first row** and, in practice, the furniture's **single** column |
 | Lock / Wipe / Unlock / Turn off MDM **execution** | — | intentionally uncovered (unrecoverable on QA VMs) |
 | Hosts-list filters (status, label, OS, policy), pagination, sorting, columns, CSV export, host details vitals/software/policies | not this area — `shared/hosts/*` and other audit files | `LabelFilter`, `StatusFilter`, `Pagination`, `clickHoverAction` are unused by these six specs |
 

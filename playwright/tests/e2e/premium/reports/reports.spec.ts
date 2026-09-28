@@ -6,6 +6,7 @@
  */
 import { test, expect } from '@fixtures';
 import { assertActivity, createReport, deleteReport } from '@helpers/api';
+import { VMS_FLEET } from '@helpers/api/static-users';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { ReportFormValues, SaveReportValues, TeamScope } from '@pages';
@@ -150,10 +151,14 @@ test.describe('Reports — live report targets', () => {
     reportEdit,
     reportLive,
     request,
+    vmsFleetId,
   }) => {
     // The fleet that owns the real QA VMs: it is the one fleet guaranteed to
-    // hold hosts, so "N hosts targeted" has something to count.
-    const fleet = 'VMs';
+    // hold hosts, so "N hosts targeted" has something to count. The worker
+    // fixture resolves it by name through the API, so a rename fails here with
+    // that message instead of surfacing later as a chip-not-found timeout.
+    expect(vmsFleetId, 'the VMs fleet must exist for the target picker to count hosts').toBeGreaterThan(0);
+    const fleet = VMS_FLEET;
     const report = await createReport(request, {
       name: `playwright-live-targets-${Date.now()}`,
       query: 'SELECT 1 AS one;',

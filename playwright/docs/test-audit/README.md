@@ -12,34 +12,40 @@ those notes into spec changes.
 Written 2026-07-29 against `main` @ `a420f1c`. Suite at that commit: **113 spec
 files · ~350 test declarations · 4 projects**.
 
+> **Brought current 2026-09-28** against `main` @ `45ecf28`: **158 spec files · 549 test
+> declarations · 5 projects · 83 page objects**. The QA Wolf round-2 specs (batches A–C and the
+> new `gitops-mode` project) are audited — see area **20** and the round-2 additions throughout.
+> The migration record is in [../qawolf-migration/round-2/](../qawolf-migration/round-2/).
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 14 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 18 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 12 | premium |
-| 04 | [Policies](04-policies.md) | 22 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 21 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 15 | premium, free |
-| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 15 | premium, free |
+| 04 | [Policies](04-policies.md) | 24 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 32 | premium, free |
+| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 31 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
-| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 11 | premium, free |
+| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
 | 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 23 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 21 | premium, free |
-| 14 | [API contract specs](14-api-contracts.md) | 22 | premium, free |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
+| 14 | [API contract specs](14-api-contracts.md) | 27 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 11 (per spec file) | loadtest (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
-| 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 42 | premium, free, gitops-nightly |
+| 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
+| 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
 
-**306 entries** covering every test in the suite. An entry can expand into several
+**416 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 11 (23 entries → 74 executions), area
-17 (11 → 73), area 06 (15 → 56), area 08 (31 → 40), area 13 (21 → 37). Specs under
+the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (23 → 74), area
+17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 
 Plus **[FINDINGS.md](FINDINGS.md)** — the cross-cutting analysis: quick wins,
@@ -126,3 +132,22 @@ Some things belong in the repo's existing records rather than in a Notes block:
 | An env-gated or deliberately deferred skip | A row in [../../TODO.md](../../TODO.md) |
 | A convention the whole suite should follow | [../../CLAUDE.md](../../CLAUDE.md) |
 | A locator fallback that needs justifying | The reviewer skill's sanctioned-fallback list |
+
+---
+
+## Things the audit's own conclusions should absorb
+
+Findings from round 2 that change how existing entries should be judged, not just what to add:
+
+- **The dashboard has no platform cards any more.** Fleet replaced them with the "Hosts enrolled" bar chart
+  (`HostsEnrolledCard`, `role="button"` named `"<platform> hosts"`). Any audit entry describing platform cards
+  is describing a UI that no longer exists.
+- **Built-in platform labels are not assertable on these instances.** The osquery-perf pool answers every
+  built-in label query, so the "macOS" label holds ~200 mostly-Ubuntu hosts. Assert the link contract, never
+  the rows behind it.
+- **`/charts/cve` takes 10–11 seconds idle**, longer than the suite's 10s assertion timeout. Any spec asserting
+  that dataset must wait on the response first.
+- **Playwright aborts a timed-out test before its `finally` runs.** Cleanup that must survive a timeout needs
+  an `afterEach` as well as the in-test `finally`.
+- **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. The
+  `fleet-test-passcode.mobileconfig` fixture is safe only in the library lifecycle that never reaches a host.
