@@ -20,6 +20,7 @@ import {
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
+  disableGitOpsMode,
   findFleetByName,
   resetSetupExperience,
 } from '@helpers/api';
@@ -42,6 +43,12 @@ test('wipe unassigned state', async ({ request }) => {
   // Setup Experience references install-software titles, and a referenced
   // title can't be deleted (Fleet returns 409). Clear Setup Experience first
   // so the software-title wipe below isn't racing the reference removal.
+  // gitops mode is a global, UI-only lock: a run that died before its teardown
+  // leaves every mutating spec in this run disabled, and nothing else in the
+  // suite would put it back. Clearing it here makes the run self-healing the
+  // same way the resource wipes do. No-ops when the flag is already off, which
+  // is every run on free.
+  await disableGitOpsMode(request);
   await resetSetupExperience(request, 0);
   await Promise.all([
     deleteAllQueries(request),
