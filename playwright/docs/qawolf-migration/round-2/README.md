@@ -84,7 +84,8 @@ That is **54 of the 127 flows**, and the whole `gitops-mode` project. The suite 
 | | | **remaining** | **73** | **33** |
 
 **D is built and in review** — see [D-host-execution.md](D-host-execution.md#what-landed-and-what-changed-from-the-plan).
-**Start E next.** It needs an inert profile fixture written first (see the warning in §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
+**Start E next** — the handoff is at the top of [E-label-targeting.md](E-label-targeting.md). It needs inert
+profile fixtures written first: *two* committed fixtures lock a real VM, not one (see there and §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
 the technician and team-admin rows, which the static-user catalog already covers and which could move earlier.
 
 Batch G's retry half is last on purpose: those specs wait through real 30–90 minute intervals and belong on
@@ -164,9 +165,10 @@ real-host spec until somebody rebuilds the VM by hand.
 The same is true of anything else that gates getting into the machine: screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel itself.
 
-This is not hypothetical — **the fixture we already ship is unsafe for host delivery.**
+This is not hypothetical — **two fixtures we already ship are unsafe for host delivery.**
 `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` sets `forcePIN`, `minLength`,
-`maxInactivity` and `allowSimple`. It is fine where round 1 uses it (library upload → download → delete, which
+`maxInactivity` and `allowSimple`; `test-data/windows/profiles/fleet-test-screenlock.xml` is a Windows DeviceLock
+policy (password enforcement, a 15-minute inactivity lock, PIN length). It is fine where round 1 uses it (library upload → download → delete, which
 never reaches a host), but batch E is specifically about profiles *applying to hosts*, and pushing that one at
 a real VM would lock it.
 

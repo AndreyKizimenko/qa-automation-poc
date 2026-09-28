@@ -2,6 +2,108 @@
 
 **21 source flows → 10 specs.** `Label targeting`
 
+> ## ▶ Start here — handoff, 2026-09-28
+>
+> Batches A–C and gitops-mode V1 are merged (#61, #62). **Batch D is in PR #63** — if it hasn't merged when you
+> start, branch from `playwright/qawolf-round2-batch-d`, not `main`: this batch reuses D's helpers, fixtures,
+> cleanup sweep and the VMs-fleet gitops file.
+>
+> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> [README.md](README.md) (standing rules; §5 is about exactly this batch), `playwright/CLAUDE.md` (**Test
+> hosts**, the exclusive projects), [D-host-execution.md → What landed](D-host-execution.md#what-landed-and-what-changed-from-the-plan)
+> for what D built, then this file.
+>
+> Every fact below was checked against the live instances on 2026-09-28.
+
+---
+
+### 1. Write the inert profile fixtures before anything else
+
+README §5 makes this the batch's blocker, and it is bigger than it says. **Two** committed fixtures lock a
+real VM, not one:
+
+| fixture | what it does | safe where |
+|---|---|---|
+| `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` | passcode policy (`forcePIN`, `minLength`, `maxInactivity`, `allowSimple`) | library upload/download/delete only |
+| `test-data/windows/profiles/fleet-test-screenlock.xml` | Windows **DeviceLock**: password enforcement, 15-min inactivity lock, PIN length | library upload/download/delete only |
+
+Neither may ever be delivered to a VM. Write an inert pair — one `.mobileconfig`, one Windows `.xml` — whose
+only job is to be observable: a custom preference domain on macOS; on Windows, a CSP that changes nothing about
+access. **If you are unsure a payload is safe, ask Andrey before delivering it.** Put the reasoning in a README
+next to the fixtures, the way `test-data/linux/software/README.md` does.
+
+**Verify delivery on the device, like D verified scripts.** D proved a script's effect with a report the VM ran
+itself; the same works here. osquery's `managed_policies` table (macOS) lists every delivered preference — and
+`registry` / `mdm_bridge` exist on the Windows VM. But **filter by your own domain**: an unfiltered
+`managed_policies` read returns fleetd's own config, *including the enroll secret*, which would then sit in
+stored report results and failure screenshots.
+
+### 2. Labels — only manual ones are assertable
+
+- **Dynamic labels are unusable as targets.** The osquery-perf pool answers every label query, so the
+  gitops-provisioned "Apple Silicon macOS hosts" holds 172 hosts and "Debian-based Linux hosts" 563. The
+  built-in platform labels are the same (see the audit README).
+- **Manual labels** with the real VMs as explicit members give a host set you control. Resolve membership
+  through the API and assert **set membership** — the profile is on exactly these hosts and none outside —
+  never a count.
+- **Nothing cleans up labels.** `cleanup.steps.ts` doesn't touch them. Name yours with a prefix and extend D's
+  VMs sweep (`sweep host-execution leftovers from the VMs fleet`) to cover labels, profiles and declarations by
+  that prefix — a timed-out test never reaches its `finally`.
+- **Custom targets are premium-only.** The profile modals only load labels when `isPremiumTier`. Free still
+  delivers profiles to all hosts — ask per flow whether there is a free half.
+
+### 3. Hosts and where profiles go
+
+- The real VMs: macOS and Windows are MDM-enrolled ("On (manual)"); **Ubuntu has no MDM**, so it can't take a
+  profile. All three are ARM. On premium they are on the **VMs** fleet, which is under gitops since D
+  (`gitops/premium-fleetqa/fleets/vms.yml`) — a profile you add there is yours to remove, and a re-apply of that
+  file deletes anything undeclared.
+- **macOS takes an MDM command in seconds** (D's `UserList` acknowledged within one poll). A profile's status
+  still goes through *verifying → verified*, which needs the host's next detail collection — use
+  `waitForHostRefetch` from D rather than polling copy. Windows delivery rides SyncML check-ins; measure it
+  before budgeting.
+
+### 4. Never touch OS updates on the VMs fleet
+
+The `macos-updates` and `ddm-conflict` flows need OS-update settings and DDM software-update declarations.
+**Setting a minimum macOS version or deadline, a Windows update deadline, or a software-update enforcement
+declaration on the VMs fleet makes the real VMs download and install an OS update** — reboots mid-suite, and
+possibly a version the suite doesn't expect. The DDM flows are about Fleet *refusing* the combination; run them
+on a fleet with no real hosts (Workstations), and restore whatever you set in the same test.
+
+### 5. Software targeting reuses D
+
+`software-label-targets` is D's install path plus a label scope. Reuse `uploadSoftwarePackageBuffer`,
+`installSoftwareOnHost`, `waitForSoftwareSettled`, `helpers/deb.ts`, and add a third role to
+`make-pkg.sh` / `make-msi.sh` rather than sharing D's packages — a premium title holds several packages, so two
+specs on one title share a Library row. A host outside the label must not be offered the title at all; assert
+that on its Library, not only on the one inside.
+
+### Traps this batch will hit
+
+- **Runtime.** The premium nightly is ~40 min of a 60-min job limit after D, and Andrey chose to keep the
+  VM-bound specs in the main suite for now. This batch adds more. Measure `WORKERS=2 npm run test:premium` at
+  the end and report it; if it passes ~50 min, raise it rather than trimming coverage.
+- **`fleetctl` must match the server's minor version.** Several of these flows shell out to it. The npm/released
+  client is 4.92.1 against a 4.93 RC server; build one from `~/repositories/fleet`
+  (`go build -o <scratchpad>/fleetctl ./cmd/fleetctl`) and point `FLEETCTL_BIN` at it.
+- **A missing locator's `click()` has no action timeout** — it waits out the whole test, and the `finally` then
+  runs on a closed request context, so its cleanup silently doesn't happen. Probe a locator before relying on
+  it; rely on the cleanup sweep for anything left on the VMs fleet.
+- **Global switches go in `exclusive/`.** If a flow has to flip something global (a label that every profile
+  depends on, an org-wide MDM setting), put it under `tests/e2e/<tier>/exclusive/` — the single-worker
+  project that runs after the main one.
+- **Never assert a count on a shared list**, and never an absolute host count behind a label.
+- **The nightly runs at 05:00 (gitops) and 05:30 UTC (Playwright).** Don't let a long verification run overlap.
+
+### Done when
+
+The batch's own **Done when** below, plus: the inert fixtures are committed with their safety reasoning written
+down; every profile a test delivers is removed in the same test *and* covered by the cleanup sweep; and every
+targeting assertion is set membership.
+
+---
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 

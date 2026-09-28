@@ -63,8 +63,10 @@ by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, n
 The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel.
 
-`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile. It is safe only where
-it is used today — library upload → download → delete, which never reaches a host. Do not extend it to a
+`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile, and so is its Windows
+counterpart `test-data/windows/profiles/fleet-test-screenlock.xml` (a DeviceLock policy: password enforcement,
+inactivity lock, PIN length). Both are safe only where they are used today — library upload → download →
+delete, which never reaches a host. Do not extend it to a
 delivery test; write an inert fixture instead (a harmless preference domain that changes nothing about access,
 removed in the same test that deployed it).
 

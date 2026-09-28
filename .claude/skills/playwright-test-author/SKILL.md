@@ -127,8 +127,9 @@ the wrong reason, so:
   `allowSimple`, for any reason. The same goes for anything else gating entry: screen lock,
   inactivity timeout, FileVault, login-window restrictions, or disabling SSH / remote management
   / the MDM channel. `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** one
-  of these — it is safe only in the library upload/download/delete lifecycle, which never reaches
-  a host. For a delivery test, write an inert fixture (a harmless preference domain that changes
+  of these, and so is `test-data/windows/profiles/fleet-test-screenlock.xml` (a Windows DeviceLock
+  policy) — both are safe only in the library upload/download/delete lifecycle, which never
+  reaches a host. For a delivery test, write an inert fixture (a harmless preference domain that changes
   nothing about access) and remove it in the same test. If you are unsure whether a payload is
   safe, it is not — ask first.
 
