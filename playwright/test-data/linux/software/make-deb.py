@@ -10,10 +10,9 @@ import os
 import sys
 import tarfile
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "fleet-playwright-pkg_1.0.0_amd64.deb"
-)
-NAME, VERSION, ARCH = "fleet-playwright-pkg", "1.0.0", "amd64"
+# make-deb.py [name version arch] — defaults build fleet-playwright-pkg_1.0.0_amd64.deb.
+NAME, VERSION, ARCH = sys.argv[1:4] if len(sys.argv) > 3 else ("fleet-playwright-pkg", "1.0.0", "amd64")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{NAME}_{VERSION}_{ARCH}.deb")
 MTIME = 0  # fixed epoch keeps the build byte-for-byte reproducible
 
 CONTROL = f"""Package: {NAME}
