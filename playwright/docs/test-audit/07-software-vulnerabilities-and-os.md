@@ -782,7 +782,7 @@ other:
 
 **Assessment**
 - *Value:* the only sort assertion in this area, and a well-built one: it asserts on the **rendered order**, not just the URL, and the final `not.toEqual` closes the "param changed, data didn't" hole that a URL-only check leaves open. `Hosts` is the OS table's only sortable column (`OSTableConfig.tsx` sets `disableSortBy` on every other), so this is complete coverage of OS-tab sorting.
-- *Coverage gaps:* sorting is only checked **within page 1** — a sort that is applied client-side to the current page rather than server-side across the whole set would pass. No third click to confirm the toggle cycles back. No check that the *row identities* changed rather than just the counts (an all-equal-count instance would satisfy both sort assertions and only the `not.toEqual` would catch it — and it would catch it by failing, which is a false positive, not a true one). ⚠️ unclear: on an instance where every OS has the same host count, `ascending` and `descending` are equal arrays and this test fails despite correct behaviour.
+- *Coverage gaps:* sorting is only checked **within page 1** — a sort that is applied client-side to the current page rather than server-side across the whole set would pass. No third click to confirm the toggle cycles back. No check that the *row identities* changed rather than just the counts (an all-equal-count instance would satisfy both sort assertions and only the `not.toEqual` would catch it — and it would catch it by failing, which is a false positive, not a true one). ~~⚠️ on an all-equal-count instance this failed despite correct behaviour.~~ **Fixed 2026-09-28:** the `not.toEqual` now runs only when `min !== max`, i.e. when the data can actually distinguish the two directions.
 - *Redundancy:* none — no other entry in the area sorts anything.
 - *Efficiency / smells:*
   - `hostCounts()` calls `cellByColumn` per row, which re-resolves the header row each time — O(rows × columns) header scans, the same pattern flagged in SWV-02/SWV-11.
@@ -926,7 +926,7 @@ Identical to SWV-18 with the team-dropdown step removed:
 - *Value:* free-tier parity for the CVE → hosts hand-off. The spec's own header states the justification: the hand-off is **not** premium-gated (only the summary's Severity and Probability of exploit are), so free would otherwise have no coverage of a flow it fully supports.
 - *Coverage gaps:* same as SWV-18 — non-empty landed list rather than a membership check, first affected version only. Additionally, **the tier difference this file could cheaply assert is skipped**: nothing checks that Severity / Probability of exploit are *absent* from the free CVE summary, which is the one thing a manual tester would look at on this page on free. SWV-21 does exactly that for the OS detail page's columns, in the same tier, in a sibling spec.
 - *Redundancy:* near-verbatim duplicate of SWV-18 minus `teamDropdown.select('Unassigned')`. Per the suite's tier-separation convention this duplication is intended.
-- *Efficiency / smells:* same `findRenderableCve` cost and silent-skip path; same direct-URL entry to the CVE page. **History note:** this test originally asserted `software.hosts === hostsList.hostCount()`; the exact comparison was dropped (commit `881f32a`) after the premium sibling had already lost it, on the reasoning that two reads of a shared, concurrently-mutating host population are not required to agree. That reasoning is worth holding against SWV-16, which *does* compare two counts exactly.
+- *Efficiency / smells:* same `findRenderableCve` cost and silent-skip path; same direct-URL entry to the CVE page. **History note:** this test originally asserted `software.hosts === hostsList.hostCount()`; the exact comparison was dropped (commit `881f32a`) after the premium sibling had already lost it, on the reasoning that two reads of a shared, concurrently-mutating host population are not required to agree. That reasoning was held against SWV-16 and **applied to it on 2026-09-28**: both OS specs now assert the detail count is non-zero and no larger than the list's, since hosts only ever leave during a run. The two specs no longer take opposite positions on the same hazard.
 
 **Notes (Andrey)**
 ```
@@ -966,7 +966,7 @@ Identical to SWV-16 with the scope step removed, and with the column contract **
 - *Coverage gaps:* absence is asserted only for the **OS detail** table. The CVE detail page (`CveDetailPage.description` is flagged premium-only in the POM and never asserted either way) and the Vulnerabilities-tab list columns get no equivalent check on free. As with SWV-16, the table contents are unread and only one OS is exercised.
 - *Redundancy:* deliberate free mirror of SWV-16. The file header explains why it is a separate file rather than a shared spec with a tier conditional: the premium variants select a fleet scope first and free has none — consistent with the suite's explicit-tier-separation preference.
 - *Efficiency / smells:*
-  - Inherits SWV-16's exact-count race against a shared instance, without SWV-16's excuse of also being the premium column check — this is the entry where a flaky count would be most annoying, since its unique value (the absent columns) does not need the counts at all.
+  - ~~Inherits SWV-16's exact-count race~~ **fixed 2026-09-28 in both tiers** — was: inherits SWV-16's exact-count race against a shared instance, without SWV-16's excuse of also being the premium column check — this is the entry where a flaky count would be most annoying, since its unique value (the absent columns) does not need the counts at all.
   - `columnHeader(name)` uses `exact: true`, so a header gaining a sort caret's accessible text would flip a present column to count 0 and read as a tier regression.
   - `PREMIUM_ONLY_COLUMNS` is duplicated as a literal here and as part of `VULNERABILITY_COLUMNS` in the premium spec; the two lists can drift apart silently.
 
@@ -1001,7 +1001,7 @@ Identical to SWV-17 with the scope step removed:
 
 **Assessment**
 - *Value:* free parity for the one sortable OS column. Sorting is not premium-gated, so without this free would have no OS-sort coverage at all.
-- *Coverage gaps:* identical to SWV-17 — page-1 only, no third toggle, and the `not.toEqual` guard produces a **false failure** on an instance where every OS carries the same host count.
+- *Coverage gaps:* identical to SWV-17 — page-1 only, no third toggle. ~~The `not.toEqual` guard produced a **false failure** on an all-equal-count instance.~~ **Fixed 2026-09-28** in both tiers: the guard is conditional on the counts being distinguishable.
 - *Redundancy:* byte-identical to SWV-17 apart from the missing `teamDropdown.select('Unassigned')` line. Of the two OS entries free gained, this is the one whose tier-specific value is hardest to argue: unlike SWV-21 it asserts nothing free-specific, so it is pure mirror coverage.
 - *Efficiency / smells:* same O(rows × columns) `hostCounts()` scan; two sorted fetches per run.
 

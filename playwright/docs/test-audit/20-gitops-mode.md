@@ -142,7 +142,7 @@ Two cautions on the manual write:
 | GITOPS-12 | `premium/gitops-mode/03-exceptions.spec.ts` | enroll secrets — the exception unlocks the enroll-secret modal | UI | ☐ |
 | GITOPS-13 | `premium/gitops-mode/03-exceptions.spec.ts` | enroll secrets — the exception reaches the fleet settings entry point — **skipped** (fleetdm/fleet#48218) | UI | ☐ |
 | GITOPS-14 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | the config says gitops mode is off | API | ☐ |
-| GITOPS-15 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | the navbar marker is gone and the dashboard renders nothing gated | UI | ☐ |
+| GITOPS-15 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | the navbar marker is gone | UI | ☐ |
 | GITOPS-16 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | Controls — Add script is editable again | UI | ☐ |
 | GITOPS-17 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | Advanced options — the host-expiry checkbox is editable again | UI | ☐ |
 | GITOPS-18 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | Fleets — Add fleet and the row actions are editable again | UI | ☐ |
@@ -705,10 +705,10 @@ other:
 
 ---
 
-### GITOPS-15 · Premium • gitops mode — everything is back › the navbar marker is gone and the dashboard renders nothing gated
+### GITOPS-15 · Premium • gitops mode — everything is back › the navbar marker is gone
 
 - **File:** [`playwright/tests/e2e/premium/gitops-mode/zz-everything-is-back.spec.ts`](../../tests/e2e/premium/gitops-mode/zz-everything-is-back.spec.ts)
-- **Grep:** `npm run test:gitops-mode:only -- -g "the navbar marker is gone and the dashboard renders nothing gated"`
+- **Grep:** `npm run test:gitops-mode:only -- -g "the navbar marker is gone"`
 - **Project:** gitops-mode · **Scopes:** none
 - **Mode:** UI · **Isolation:** independent
 - **Preconditions:** the describe's `beforeAll` has cleared the flag
@@ -877,7 +877,7 @@ other:
 - *Coverage gaps:* `repository_url` is not read back or compared, even though `disableGitOpsMode` is specifically documented as not touching it — so the one field the teardown promises to preserve is the one field nobody verifies.
 - *Redundancy:* the escape-hatch half overlaps GITOPS-09, in the opposite mode state. Complementary.
 - *Efficiency / smells:*
-  - ⚠️ **The exception comparison is weaker than its own comment claims.** The spec reads the exceptions from `GET /config` and asserts the UI matches *that same response*. Its inline comment says *"A spec that flipped an exception and died before restoring shows up here rather than in next week's triage"* — but it would not: the API would report `labels: true`, and the test would dutifully assert the box is ticked and pass. [GITOPS-PLAN §10](../qawolf-migration/round-2/GITOPS-PLAN.md) designed this as a comparison against the values captured at spec `02`'s `beforeAll`; as shipped it is a UI-vs-API agreement check with no baseline. The comment is stale relative to the code. Either capture a baseline (a project-level fixture, or re-read `repository_url` + exceptions in `zz`'s `beforeAll` before anything can have changed them) or rewrite the comment to say what it actually does.
+  - ⚠️ **The exception comparison is weaker than its own comment claims.** The spec reads the exceptions from `GET /config` and asserts the UI matches *that same response*. Its inline comment says *"A spec that flipped an exception and died before restoring shows up here rather than in next week's triage"* — but it would not: the API would report `labels: true`, and the test would dutifully assert the box is ticked and pass. [GITOPS-PLAN §10](../qawolf-migration/round-2/GITOPS-PLAN.md) designed this as a comparison against the values captured at spec `02`'s `beforeAll`; as shipped it is a UI-vs-API agreement check with no baseline. The comment is stale relative to the code. **Resolved 2026-09-28 by rewriting the comment**, not the assertion: this file's stated design is to take nothing from the specs before it and to pass even if every one of them failed, which a baseline would contradict. The comment now says the check proves UI-vs-API agreement and names the drift case it does *not* catch.
   - Loop-with-`if`/`else` in the spec body rather than a data-driven assertion; fine, but it is the only branching assertion in the area.
 
 **Notes (Andrey)**

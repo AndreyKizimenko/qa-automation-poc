@@ -63,8 +63,23 @@ test('Host details — the certificates card lists every reported certificate', 
   for (const certificate of certificates) {
     const row = hostDetails.certificates.row(certificate.commonName);
     await expect(row).toBeVisible();
-    await expect(row).toContainText(certificate.issuerCommonName);
-    await expect(row).toContainText(certificate.source === 'system' ? 'System' : 'User');
+
+    // Both assertions read their own column. A row-wide `toContainText` would
+    // pass because the word appeared anywhere in the row — and for the issuer it
+    // would pass unconditionally when Fleet reports no issuer common name, since
+    // the helper defaults that to '' and every string contains ''.
+    // `toContainText`, not `toHaveText`: Fleet renders these through
+    // `TooltipTruncatedTextCell`, which emits the value twice — once visible,
+    // once for the tooltip — so the cell's text content is the value doubled.
+    // The column scoping is what matters; it is the cell's own value either way.
+    if (certificate.issuerCommonName) {
+      await expect(
+        await hostDetails.certificates.cell(certificate.commonName, 'Issuer'),
+      ).toContainText(certificate.issuerCommonName);
+    }
+    await expect(
+      await hostDetails.certificates.cell(certificate.commonName, 'Scope'),
+    ).toContainText(certificate.source === 'system' ? 'System' : 'User');
   }
 });
 

@@ -87,7 +87,12 @@ export class ReportLivePage {
    * selection is read from `data-selected` rather than from the name.
    */
   targetChip(name: string): Locator {
-    return this.page.getByRole('button', { name });
+    // Anchored to the end of the accessible name so a target cannot be matched by
+    // a longer one that contains it. The picker lists fleets and labels side by
+    // side, so a label sharing a fleet's name is a real strict-mode collision,
+    // not a theoretical one. The state icon supplies the prefix.
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return this.page.getByRole('button', { name: new RegExp(`${escaped}\\s*$`) });
   }
 
   /** Toggles a target chip and waits for its selected state to settle. */

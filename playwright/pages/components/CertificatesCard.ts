@@ -60,6 +60,21 @@ export class CertificatesCard {
     });
   }
 
+  /**
+   * One cell of a certificate's row, addressed by its column's visible header.
+   * The table's cells carry no role or label of their own, so the column is
+   * resolved to an index from the header row and the cell taken positionally —
+   * which keeps an assertion on "the Issuer of this certificate" from passing
+   * because the word happened to appear in some other column.
+   */
+  async cell(commonName: string, column: string): Promise<Locator> {
+    const headers = this.card.getByRole('columnheader');
+    const labels = await headers.allInnerTexts();
+    const index = labels.findIndex((l) => l.trim() === column);
+    expect(index, `column "${column}" not found in the certificates table`).toBeGreaterThan(-1);
+    return this.row(commonName).locator('td').nth(index);
+  }
+
   /** Waits for the card to mount and render its first certificate. */
   async waitForReady(): Promise<void> {
     await expect(this.heading).toBeVisible();

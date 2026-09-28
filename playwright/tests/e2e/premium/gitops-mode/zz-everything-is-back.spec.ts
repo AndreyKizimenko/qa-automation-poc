@@ -28,14 +28,16 @@ test.describe('Premium • gitops mode — everything is back', () => {
     expect(gitops.gitops_mode_enabled, 'gitops mode is still enabled').toBe(false);
   });
 
-  test('the navbar marker is gone and the dashboard renders nothing gated', async ({
-    dashboard,
-    page,
-  }) => {
+  test('the navbar marker is gone', async ({ dashboard }) => {
     await dashboard.goto();
 
+    // The navbar marker is the discriminating half: it renders only while the
+    // mode is on. A wrapper count is deliberately not asserted here — the
+    // dashboard renders none in either state (its only wrapper lives inside the
+    // activity-automations modal, which this test never opens), so it would pass
+    // with gitops mode fully on. The pages below do render them, and assert it
+    // there where it can fail.
     await expect(dashboard.navbar.gitopsIndicator).toHaveCount(0);
-    await expect(gitopsWrappers(page)).toHaveCount(0);
   });
 
   test('Controls — Add script is editable again', async ({ scriptsLibrary, page }) => {
@@ -83,8 +85,12 @@ test.describe('Premium • gitops mode — everything is back', () => {
     await expect(changeManagement.gitopsModeToggle).not.toBeChecked();
     for (const entity of ['labels', 'software', 'secrets'] as const) {
       const checkbox = changeManagement.exceptionCheckbox(entity);
-      // A spec that flipped an exception and died before restoring shows up
-      // here rather than in next week's triage.
+      // This proves the form agrees with the API and is editable again — not
+      // that no spec left an exception flipped. The comparison is against the
+      // same `GET /config` read, so a left-over `labels: true` would make the
+      // API say true, the box tick, and this pass. Detecting that needs a
+      // baseline from before the project ran, which this file deliberately does
+      // not take: it has to pass even if every spec before it failed.
       await expect(checkbox, `${entity} exception`).toBeEnabled();
       if (gitops.exceptions[entity]) {
         await expect(checkbox, `${entity} exception`).toBeChecked();
