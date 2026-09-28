@@ -6,6 +6,7 @@ import { TeamDropdown } from '../components/TeamDropdown';
 import { StatusFilter } from '../components/StatusFilter';
 import { LabelFilter } from '../components/LabelFilter';
 import { AddHostsModal } from '../components/AddHostsModal';
+import { RunScriptBatchModal } from '../components/RunScriptBatchModal';
 import { TransferHostModal } from '../components/TransferHostModal';
 import { Toast } from '../components/Toast';
 
@@ -22,6 +23,7 @@ export class HostsListPage {
   readonly labelFilter: LabelFilter;
   readonly addHostsModal: AddHostsModal;
   readonly transferModal: TransferHostModal;
+  readonly runScriptBatchModal: RunScriptBatchModal;
   readonly toast: Toast;
 
   // Bulk-select bar. Selecting rows swaps the table's header for a
@@ -30,6 +32,8 @@ export class HostsListPage {
   readonly selectAllOnPageCheckbox: Locator;
   readonly selectionBar: Locator;
   readonly transferSelectedButton: Locator;
+  /** Selection bar → Run script: a batch run on the selected hosts (premium, one fleet at a time). */
+  readonly runScriptSelectedButton: Locator;
   readonly deleteSelectedButton: Locator;
   readonly clearSelectionButton: Locator;
   /**
@@ -71,6 +75,7 @@ export class HostsListPage {
     this.labelFilter = new LabelFilter(page);
     this.addHostsModal = new AddHostsModal(page);
     this.transferModal = new TransferHostModal(page);
+    this.runScriptBatchModal = new RunScriptBatchModal(page);
     this.toast = new Toast(page);
 
     // Fleet's Checkbox hides the real input behind a role="checkbox" div with no
@@ -83,6 +88,10 @@ export class HostsListPage {
     this.selectionBar = this.table.table.locator('thead.active-selection');
     this.transferSelectedButton = this.selectionBar.getByRole('button', {
       name: 'Transfer',
+      exact: true,
+    });
+    this.runScriptSelectedButton = this.selectionBar.getByRole('button', {
+      name: 'Run script',
       exact: true,
     });
     this.deleteSelectedButton = this.selectionBar.getByRole('button', {
@@ -205,6 +214,18 @@ export class HostsListPage {
    * Ticks the header checkbox, selecting every host on the current page and
    * raising the bulk-select bar.
    */
+  /**
+   * One host row's selection checkbox, found by the row's host link. Fleet's
+   * Checkbox has no accessible name of its own, so it's scoped by the row.
+   */
+  hostCheckbox(displayName: string): Locator {
+    return this.table.table
+      .locator('tbody')
+      .getByRole('row')
+      .filter({ has: this.page.getByRole('link', { name: displayName, exact: true }) })
+      .getByRole('checkbox');
+  }
+
   async selectAllOnPage(): Promise<void> {
     await this.selectAllOnPageCheckbox.click();
     await expect(this.selectionBar).toBeVisible();
