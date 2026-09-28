@@ -6,6 +6,7 @@
  */
 export * from './core';
 export * from './config';
+export * from './gitops-mode';
 export * from './activities';
 export * from './hosts';
 export * from './fleets';

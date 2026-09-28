@@ -2,6 +2,7 @@
 export { Navbar } from './components/Navbar';
 export { DataTable } from './components/DataTable';
 export { ContentList } from './components/ContentList';
+export { CertificatesCard } from './components/CertificatesCard';
 export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
@@ -11,7 +12,20 @@ export type { AppStorePlatformLabel } from './components/PlatformDropdown';
 export { StatusFilter } from './components/StatusFilter';
 export { LabelFilter } from './components/LabelFilter';
 export { CommandPalette } from './components/CommandPalette';
+export { EditAppearanceModal } from './components/EditAppearanceModal';
+export { EditSoftwareModal, normalizeScript } from './components/EditSoftwareModal';
+export { VersionsModal, pinTargetLabel, pinTargetApiValue } from './components/VersionsModal';
+export type { PinTarget } from './components/VersionsModal';
 export { clickHoverAction } from './components/clickHoverAction';
+export { EnrollSecretModal } from './components/EnrollSecretModal';
+export {
+  expectGatedByGitOps,
+  expectNotGatedByGitOps,
+  expectGitOpsTooltip,
+  gitopsWrapperFor,
+  gitopsWrappers,
+} from './components/gitopsMode';
+export type { GitOpsDisabledStyle, GitOpsGateOptions } from './components/gitopsMode';
 
 // Auth
 export { LoginPage } from './auth/LoginPage';
@@ -22,6 +36,7 @@ export { MyAccountPage } from './account';
 
 // Dashboard (its own top-level nav entry)
 export { DashboardPage } from './DashboardPage';
+export type { ChartDatasetLabel, DashboardPlatformLabel } from './DashboardPage';
 
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';
@@ -33,6 +48,7 @@ export { SoftwareTitlesPage } from './software/SoftwareTitlesPage';
 export { SoftwareLibraryPage } from './software/SoftwareLibraryPage';
 export { SoftwareVersionsPage } from './software/SoftwareVersionsPage';
 export { SoftwareTitleDetailPage } from './software/SoftwareTitleDetailPage';
+export type { SoftwareTitleAction } from './software/SoftwareTitleDetailPage';
 export { SoftwareVersionDetailPage } from './software/SoftwareVersionDetailPage';
 export { SoftwareOsPage } from './software/SoftwareOsPage';
 export { SoftwareOsDetailPage } from './software/SoftwareOsDetailPage';
@@ -100,6 +116,7 @@ export { PackEditPage } from './packs/PackEditPage';
 export { OrganizationInfoPage } from './settings/OrganizationInfoPage';
 export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
+export { ChangeManagementPage } from './settings/ChangeManagementPage';
 export { TeamSettingsPage } from './settings/TeamSettingsPage';
 export {
   UsersPage,

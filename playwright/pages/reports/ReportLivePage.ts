@@ -24,6 +24,12 @@ export class ReportLivePage {
   readonly cancelButton: Locator;
   /** Rows of the selected-targets table on the "Select targets" screen. */
   readonly targetRows: Locator;
+  /**
+   * "N hosts targeted (P% online)" under the picker. Rendered as role-less
+   * spans, so it's scoped by the page's own class; empty until something is
+   * selected.
+   */
+  readonly targetsTotalCount: Locator;
 
   // Run screen.
   readonly runningHeading: Locator;
@@ -50,6 +56,7 @@ export class ReportLivePage {
     this.runButton = page.getByRole('button', { name: 'Run', exact: true });
     this.cancelButton = page.getByRole('button', { name: 'Cancel', exact: true });
     this.targetRows = page.getByRole('table').locator('tbody').getByRole('row');
+    this.targetsTotalCount = page.locator('.run-query-page__targets-total-count');
 
     this.runningHeading = page.getByRole('heading', { name: 'Running report', level: 1 });
     this.finishedHeading = page.getByRole('heading', { name: 'Report finished', level: 1 });
@@ -71,6 +78,24 @@ export class ReportLivePage {
 
   async waitForReady(): Promise<void> {
     await expect(this.heading).toBeVisible();
+  }
+
+  /**
+   * A target chip — "All hosts", a platform, a fleet, or a label. Each is a
+   * button whose accessible name is the target's name prefixed by its state
+   * icon ("plus" unselected, "check" selected), so the match is a substring and
+   * selection is read from `data-selected` rather than from the name.
+   */
+  targetChip(name: string): Locator {
+    return this.page.getByRole('button', { name });
+  }
+
+  /** Toggles a target chip and waits for its selected state to settle. */
+  async toggleTarget(name: string, selected: boolean): Promise<void> {
+    const chip = this.targetChip(name);
+    if ((await chip.getAttribute('data-selected')) === String(selected)) return;
+    await chip.click();
+    await expect(chip).toHaveAttribute('data-selected', String(selected));
   }
 
   /** Starts the run; leaves the browser on the streaming results screen. */

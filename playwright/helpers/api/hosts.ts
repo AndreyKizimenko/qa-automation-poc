@@ -420,6 +420,73 @@ export async function getHostDetailUpdatedAt(
   return (await res.json()).host?.detail_updated_at ?? '';
 }
 
+/** One row of a host's Certificates card, as Fleet reports it. */
+export interface HostCertificate {
+  commonName: string;
+  issuerCommonName: string;
+  /** `system` or `user` — the card renders these as "System" / "User". */
+  source: string;
+  notValidBefore: string;
+  notValidAfter: string;
+}
+
+/**
+ * The Certificates card's own page size and default sort
+ * (`DEFAULT_CERTIFICATES_PAGE_SIZE`, `CERTIFICATES_DEFAULT_SORT`). Mirrored here
+ * so a spec can compare the rendered rows against the same page the card asked
+ * for, rather than against a longer list it would only show the first slice of.
+ */
+const CERTIFICATES_PAGE_SIZE = 10;
+
+/** A host's certificates as the card lists them, plus its total. */
+export interface HostCertificatesPage {
+  /** The first page, in the card's default order (common name ascending). */
+  certificates: HostCertificate[];
+  /** Every certificate the host reports — what the card's "N certificates" counts. */
+  total: number;
+}
+
+/**
+ * Certificates a host reports out of its system and login keychains, in the
+ * card's default order and page size, alongside the host's total.
+ *
+ * Only real devices report any: an osquery-perf simulation returns an empty
+ * list, and Fleet then doesn't mount the card at all
+ * (`HostDetailsPage.tsx`, `showCertificatesCard`). Resolve the host with
+ * `findOnlineHost(..., { kind: 'real' })` before calling this.
+ */
+export async function getHostCertificates(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostCertificatesPage> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/certificates`), {
+    headers: authHeaders(),
+    params: {
+      per_page: String(CERTIFICATES_PAGE_SIZE),
+      order_key: 'common_name',
+      order_direction: 'asc',
+    },
+  });
+  await expect(res, `Failed to read certificates for host ${hostId}`).toBeOK();
+  const body = await res.json();
+  const certificates = (body.certificates ?? []).map(
+    (c: {
+      common_name: string;
+      issuer: { common_name: string };
+      source: string;
+      not_valid_before: string;
+      not_valid_after: string;
+    }) => ({
+      commonName: c.common_name,
+      issuerCommonName: c.issuer?.common_name ?? '',
+      source: c.source,
+      notValidBefore: c.not_valid_before,
+      notValidAfter: c.not_valid_after,
+    }),
+  );
+  return { certificates, total: body.count ?? certificates.length };
+}
+
 /**
  * Whether Fleet still knows about a host id. Deletion specs assert on the id
  * rather than the display name: the load fleet's agents re-enroll after a

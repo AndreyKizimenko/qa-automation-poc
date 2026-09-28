@@ -1,22 +1,83 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from './components/Navbar';
+import { TeamDropdown } from './components/TeamDropdown';
 
 /**
  * /dashboard — the Fleet dashboard, with platform-specific variants:
  *   /dashboard, /dashboard/mac, /dashboard/windows, /dashboard/linux,
  *   /dashboard/chrome, /dashboard/ios, /dashboard/ipados
  *
- * Renders a grid of cards (platform totals), a Software block, and an
+ * Renders the "Hosts enrolled" bar chart and the historical chart card, a
+ * platform filter, a row of host-count cards, a Software block, and an
  * Activity feed.
  */
 type DashboardPlatform = 'mac' | 'windows' | 'linux' | 'chrome' | 'ios' | 'ipados';
 
+/** Visible labels in the dashboard's "Platform:" filter. */
+export type DashboardPlatformLabel =
+  | 'All'
+  | 'macOS'
+  | 'Windows'
+  | 'Linux'
+  | 'ChromeOS'
+  | 'iOS'
+  | 'iPadOS'
+  | 'Android';
+
+/**
+ * The route each platform label navigates to. Selecting a platform is a
+ * `router.push`, so the path is the assertion that the filter took effect.
+ */
+const PLATFORM_PATHS: Record<DashboardPlatformLabel, string> = {
+  All: '/dashboard',
+  macOS: '/dashboard/mac',
+  Windows: '/dashboard/windows',
+  Linux: '/dashboard/linux',
+  ChromeOS: '/dashboard/chrome',
+  iOS: '/dashboard/ios',
+  iPadOS: '/dashboard/ipados',
+  Android: '/dashboard/android',
+};
+
+/**
+ * Datasets offered by the historical chart card. "Vulnerability exposure" is
+ * premium-only: free has a single dataset, so the card renders a heading
+ * instead of the dropdown this type feeds.
+ */
+export type ChartDatasetLabel = 'Hosts online' | 'Vulnerability exposure';
+
 export class DashboardPage {
   readonly page: Page;
   readonly navbar: Navbar;
+  readonly teamDropdown: TeamDropdown;
 
   readonly cards: Locator;
   readonly firstCard: Locator;
+
+  // "Hosts enrolled" — the per-platform bar chart at the top of the page.
+  readonly hostsEnrolledHeading: Locator;
+
+  // "Platform:" filter. Backed by Fleet's DropdownWrapper over react-select v5:
+  // the trigger exposes no role of its own, so it's scoped by the dashboard's
+  // own BEM container class; each option carries data-testid="dropdown-option".
+  readonly platformFilter: Locator;
+  readonly platformFilterValue: Locator;
+
+  // Historical chart card ("Hosts online" / "Vulnerability exposure").
+  readonly chartCard: Locator;
+  readonly chartDatasetValue: Locator;
+  readonly chartTitle: Locator;
+  readonly chartInfoIcon: Locator;
+  readonly chartFilteredPill: Locator;
+  readonly configureChartFiltersButton: Locator;
+  readonly chartLegend: Locator;
+  readonly chartCells: Locator;
+  readonly chartCellsWithHosts: Locator;
+  readonly chartFilterModal: Locator;
+  readonly chartFilterApplyButton: Locator;
+  readonly dataCollectionDisabledHeading: Locator;
+  readonly dataCollectionDisabledPanel: Locator;
+  readonly chartTurnOnButton: Locator;
 
   readonly softwareHeading: Locator;
   readonly softwareTable: Locator;
@@ -41,10 +102,58 @@ export class DashboardPage {
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
+    this.teamDropdown = new TeamDropdown(page);
 
     // Fleet marks each dashboard widget card with data-testid="card"
     this.cards = page.getByTestId('card');
     this.firstCard = this.cards.first();
+
+    this.hostsEnrolledHeading = page.getByRole('heading', { name: 'Hosts enrolled', level: 2 });
+
+    this.platformFilter = page.locator('.dashboard-page__platform-filter .react-select__control');
+    this.platformFilterValue = page.locator(
+      '.dashboard-page__platform-filter .react-select__single-value',
+    );
+
+    // The chart card has no heading of its own on premium (the dataset
+    // dropdown takes its place), so the card is scoped by its component class.
+    this.chartCard = page.locator('.chart-card');
+    this.chartDatasetValue = page.locator(
+      '.chart-card__dataset-dropdown .react-select__single-value',
+    );
+    // Rendered only where a single dataset is offered (free); premium swaps in
+    // the dataset dropdown.
+    this.chartTitle = page.locator('.chart-card__title');
+    this.chartInfoIcon = this.chartCard.getByTestId('info-outline-icon');
+    // Appears once the applied filters differ from the card's seeded defaults.
+    this.chartFilteredPill = this.chartCard.getByRole('button', { name: 'Filtered' });
+    this.configureChartFiltersButton = this.chartCard.getByRole('button', {
+      name: 'Configure chart filters',
+    });
+    // Legend and cells are SVG/`div` internals of CheckerboardViz with no role
+    // of their own beyond each cell's role="img"; the legend wrapper is reached
+    // by class and the cells by their accessible "<day>, <hour>: N hosts" name.
+    this.chartLegend = this.chartCard.locator('.checkerboard-viz__legend');
+    this.chartCells = this.chartCard.getByRole('img', { name: /: (\d+ hosts?|No data)$/ });
+    // Cells for hours that actually reported — a chart rendering only "No data"
+    // cells is indistinguishable from a broken query without this.
+    this.chartCellsWithHosts = this.chartCard.getByRole('img', { name: /: \d+ hosts?$/ });
+    this.chartFilterModal = page.locator('.chart-filter-modal');
+    this.chartFilterApplyButton = this.chartFilterModal.getByRole('button', { name: 'Apply' });
+    this.dataCollectionDisabledHeading = page.getByRole('heading', {
+      name: 'Data collection is disabled',
+    });
+    // The panel that replaces the chart while the selected dataset's collection
+    // is off. Its sentence names the scope the switch applies to ("this fleet"
+    // vs "all fleets"), which is how a spec proves it flipped the per-fleet
+    // switch and not the deployment-wide one. No role/text anchor wraps the
+    // panel itself, so it's scoped by the component's class.
+    this.dataCollectionDisabledPanel = this.chartCard.locator(
+      '.data-collection-disabled-state',
+    );
+    this.chartTurnOnButton = this.dataCollectionDisabledPanel.getByRole('button', {
+      name: 'Turn on',
+    });
 
     this.softwareHeading = page.getByRole('heading', { name: 'Software' });
     this.softwareTable = page.getByRole('table');
@@ -82,6 +191,91 @@ export class DashboardPage {
       name: 'Save',
       exact: true,
     });
+  }
+
+  /**
+   * A platform's row in the "Hosts enrolled" chart. The y-axis tick is a
+   * `role="button"` named "<platform> hosts" only while the platform has hosts
+   * and a built-in label to link to — a platform with none renders as inert
+   * text, so `toHaveCount(0)` is how "not clickable" reads.
+   */
+  platformRow(label: Exclude<DashboardPlatformLabel, 'All'>): Locator {
+    return this.page.getByRole('button', { name: `${label} hosts` });
+  }
+
+  /**
+   * One of the host-count cards under the platform filter ("Total hosts",
+   * "Missing hosts", "Low disk space hosts", "ABM issue hosts"). Each is a link
+   * whose accessible name is "<count> <name>", so the match is on the name
+   * portion. Which cards render depends on the platform filter and the tier.
+   */
+  hostCountCard(name: string): Locator {
+    return this.page.getByRole('link', { name: new RegExp(`\\b${name}$`) });
+  }
+
+  /** A dashboard widget card by its heading ("Software", "Operating systems", …). */
+  cardHeading(name: string): Locator {
+    return this.page.getByRole('heading', { name, level: 2 });
+  }
+
+  /**
+   * Idempotently pick a platform in the "Platform:" filter. Fleet routes each
+   * platform to its own dashboard path, so this waits on the URL rather than on
+   * the cards that the new route renders.
+   */
+  async selectPlatform(label: DashboardPlatformLabel): Promise<void> {
+    const current = (await this.platformFilterValue.textContent())?.trim();
+    if (current === label) return;
+    await this.platformFilter.click();
+    // DropdownWrapper stamps data-testid="dropdown-option" on every option;
+    // anchored so "iOS" can't match "iPadOS".
+    await this.page
+      .getByTestId('dropdown-option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
+    await expect(this.page).toHaveURL(new RegExp(`${PLATFORM_PATHS[label]}(\\?|$)`));
+    await expect(this.platformFilterValue).toHaveText(label);
+  }
+
+  /**
+   * Switch the historical chart card to another dataset. Premium only — free
+   * offers a single dataset and renders {@link chartTitle} in place of the
+   * dropdown, so calling this there would find no control.
+   */
+  async selectChartDataset(label: ChartDatasetLabel): Promise<void> {
+    const current = (await this.chartDatasetValue.textContent())?.trim();
+    if (current === label) return;
+    await this.chartCard.locator('.chart-card__dataset-dropdown .react-select__control').click();
+    await this.page
+      .getByTestId('dropdown-option')
+      .filter({ hasText: new RegExp(`^${label}$`) })
+      .click();
+    await expect(this.chartDatasetValue).toHaveText(label);
+  }
+
+  /** Opens the chart card's "Settings" filter modal. */
+  async openChartFilters(): Promise<void> {
+    await this.configureChartFiltersButton.click();
+    await expect(this.chartFilterModal).toBeVisible();
+  }
+
+  /**
+   * Pick platforms in the chart filter modal's multi-select. The field is
+   * Fleet's legacy `Dropdown` (react-select v1): the closed control shows its
+   * "All platforms" placeholder, and each open option is a real `role="option"`
+   * carrying the platform as its accessible name.
+   */
+  async selectChartFilterPlatforms(labels: string[]): Promise<void> {
+    await this.chartFilterModal.getByText('All platforms', { exact: true }).click();
+    for (const label of labels) {
+      await this.chartFilterModal.getByRole('option', { name: label, exact: true }).click();
+    }
+  }
+
+  /** Applies the chart filter modal and waits for it to close. */
+  async applyChartFilters(): Promise<void> {
+    await this.chartFilterApplyButton.click();
+    await expect(this.chartFilterModal).toBeHidden();
   }
 
   /** Opens the "Manage automations" modal from the activity feed header. */

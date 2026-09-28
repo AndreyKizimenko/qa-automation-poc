@@ -253,6 +253,21 @@ export async function getSoftwareTitle(
 export interface SoftwarePackageDetail {
   name: string;
   selfService: boolean;
+  version: string;
+  /** SHA-256 Fleet recorded at upload; what a download should hash to. */
+  hashSha256: string;
+  /** Scripts Fleet generated (or the user edited) — what Advanced options renders. */
+  preInstallQuery: string;
+  installScript: string;
+  postInstallScript: string;
+  uninstallScript: string;
+  /**
+   * The title's version pin: `''` tracks latest, `'1.2.3'` pins that exact
+   * version, `'^1'` pins the 1.x major. Fleet-maintained apps only.
+   */
+  pinnedVersion: string;
+  /** Cached Fleet-maintained versions, newest first as the Versions modal lists them. */
+  fleetMaintainedVersions: string[];
 }
 
 /**
@@ -277,7 +292,20 @@ export async function getSoftwarePackage(
   const t = body.software_title;
   const pkg = t?.software_package ?? t?.packages?.[0];
   if (!pkg) return null;
-  return { name: pkg.name, selfService: !!pkg.self_service };
+  return {
+    name: pkg.name,
+    selfService: !!pkg.self_service,
+    version: pkg.version ?? '',
+    hashSha256: pkg.hash_sha256 ?? '',
+    preInstallQuery: pkg.pre_install_query ?? '',
+    installScript: pkg.install_script ?? '',
+    postInstallScript: pkg.post_install_script ?? '',
+    uninstallScript: pkg.uninstall_script ?? '',
+    pinnedVersion: pkg.pinned_version ?? '',
+    fleetMaintainedVersions: ((pkg.fleet_maintained_versions ?? []) as { version: string }[]).map(
+      (v) => v.version,
+    ),
+  };
 }
 
 /**

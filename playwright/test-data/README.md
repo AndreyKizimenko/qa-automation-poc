@@ -27,13 +27,15 @@ test-data/
 ├── linux/
 │   ├── scripts/                 # marker create/delete .sh scripts
 │   ├── setup-experience/        # .deb installed during setup experience
-│   └── software/                # .deb / .rpm / .tar.gz custom packages
+│   └── software/                # .deb / .rpm / .tar.gz custom packages (README)
 ├── windows/
 │   ├── profiles/                # .xml profiles
 │   ├── scripts/                 # marker create/delete .ps1 scripts
 │   ├── setup-experience/        # .msi installed during setup experience
 │   └── software/                # .msi / .exe custom packages
-└── shared/                      # (future) cross-platform fixtures
+└── shared/
+    ├── images/                  # PNG icons + org logo (README)
+    └── software/                # script-only package (.sh — macOS & Linux)
 ```
 
 ## Naming conventions
@@ -68,6 +70,24 @@ test-data/
 - **Setup Assistant**: `automatic-enrollment.dep.json` — a minimal
   DEP profile that the Setup Assistant smoke uploads, downloads, then
   deletes.
+
+## Generated fixtures
+
+Three fixtures are built by a script rather than downloaded, because what makes
+each one useful is a *number or a name that has to be exactly right*: a byte
+count on one side of a validation limit, a pixel dimension, or a package name no
+other spec can collide with. Each sits next to a `make-*.py` that regenerates it
+deterministically, with the standard library only:
+
+| what | where | recipe |
+|---|---|---|
+| icon + org-logo PNGs | `shared/images/` | [`shared/images/README.md`](shared/images/README.md) |
+| inert `.deb` package | `linux/software/` | [`linux/software/README.md`](linux/software/README.md) |
+| signed `.mobileconfig` | `apple/macos/profiles/` | [`apple/macos/profiles/README.md`](apple/macos/profiles/README.md) |
+
+`shared/software/fleet-playwright-script-package.sh` is written by hand but
+belongs to the same family: Fleet titles a script package after its filename
+minus the extension, so the filename *is* the title and has to stay unique.
 
 ## Adding new fixtures
 

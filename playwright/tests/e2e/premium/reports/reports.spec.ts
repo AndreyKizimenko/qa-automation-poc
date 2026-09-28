@@ -5,7 +5,7 @@
  * assertion.
  */
 import { test, expect } from '@fixtures';
-import { assertActivity } from '@helpers/api';
+import { assertActivity, createReport, deleteReport } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { ReportFormValues, SaveReportValues, TeamScope } from '@pages';
@@ -135,6 +135,56 @@ test.describe('Reports — SQL validation', () => {
     await reportEdit.setSql('SELECT * FRM osquery_info;');
     await expect(reportEdit.sqlSyntaxError).toBeVisible();
     await expect(reportEdit.saveButton).toBeEnabled();
+  });
+});
+
+// Premium's live-report picker offers fleets alongside platforms and labels.
+// Selecting one is what turns the run on: "Run" is disabled until something is
+// targeted, and the targeted-host summary appears only once it is. Nothing is
+// run here — the report is created and deleted over the API in the same test,
+// so the only thing left behind is the UI state of a page that isn't persisted.
+test.describe('Reports — live report targets', () => {
+  test('selecting a fleet targets its hosts and enables Run', async ({
+    reportsList,
+    reportDetails,
+    reportEdit,
+    reportLive,
+    request,
+  }) => {
+    // The fleet that owns the real QA VMs: it is the one fleet guaranteed to
+    // hold hosts, so "N hosts targeted" has something to count.
+    const fleet = 'VMs';
+    const report = await createReport(request, {
+      name: `playwright-live-targets-${Date.now()}`,
+      query: 'SELECT 1 AS one;',
+    });
+
+    try {
+      await reportsList.goto();
+      await reportsList.teamDropdown.select('All fleets');
+      await reportsList.searchByName(report.name);
+      await reportsList.openReport(report.name);
+      await reportDetails.clickEdit();
+      await reportEdit.clickLiveReport();
+      await reportLive.waitForReady();
+
+      await expect(reportLive.runButton).toBeDisabled();
+      await expect(reportLive.targetsTotalCount).toBeEmpty();
+
+      await reportLive.toggleTarget(fleet, true);
+      // The summary joins its parts with non-breaking spaces, so the match has
+      // to be whitespace-class rather than a literal space.
+      await expect(reportLive.targetsTotalCount).toContainText(/\d+\s*hosts?\s*targeted/);
+      await expect(reportLive.runButton).toBeEnabled();
+
+      // Deselecting returns the picker to its empty state, which is what
+      // proves the count came from this fleet and not from a default.
+      await reportLive.toggleTarget(fleet, false);
+      await expect(reportLive.targetsTotalCount).toBeEmpty();
+      await expect(reportLive.runButton).toBeDisabled();
+    } finally {
+      await deleteReport(request, report.id);
+    }
   });
 });
 

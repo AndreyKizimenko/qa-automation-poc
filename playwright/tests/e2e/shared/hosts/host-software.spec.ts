@@ -7,6 +7,9 @@
  * keep their last-reported software inventory — and tier-agnostic → shared. The
  * host is chosen via the API (first host reporting software) so the test never
  * depends on a fragile "first host" pick.
+ *
+ * The macOS `/Applications` view filter is covered separately at the bottom of
+ * this file, and that one *does* need the real VM — see its own header.
  */
 import { test, expect } from '@fixtures';
 import { findHostWithSoftware } from '@helpers/api';
@@ -61,4 +64,59 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
   await softwareTitleDetail.viewHosts();
   await expect(hostsList.filterPill).toBeVisible();
   await expect(hostsList.filterPill).toContainText(firstToken(titleName));
+});
+
+/**
+ * macOS hosts default the Software tab to "Applications" — top-level apps only
+ * — and offer "Full inventory" to see every reported package
+ * (`HostSoftwareTable.tsx`, `showApplicationsFilter`). The filter is platform-
+ * gated, not tier-gated, so this runs on both tiers against the real macOS VM:
+ * an osquery-perf simulation reports a synthetic inventory with no application
+ * paths, which makes the narrowing meaningless.
+ *
+ * Asserted as set membership rather than on fixed titles. Both are searched for
+ * explicitly in each view, so the result doesn't depend on which page of a
+ * paginated inventory a title happens to land on.
+ */
+test('Hosts — the Applications view narrows the inventory to top-level applications', async ({
+  hostDetails,
+  liveMacosHost,
+}) => {
+  await hostDetails.goto(liveMacosHost.id);
+  await hostDetails.openSoftwareTab();
+
+  await expect(hostDetails.softwareViewValue).toHaveText('Applications');
+  await expect(hostDetails.softwareNameLinks.first()).toBeVisible();
+
+  const appCount = await hostDetails.softwareItemCount();
+  const appNames = await hostDetails.softwareNames();
+  expect(appNames.length, 'expected the VM to report a top-level application').toBeGreaterThan(0);
+  const application = appNames[0];
+
+  await hostDetails.selectSoftwareView('Full inventory');
+  // The table keeps the previous view's rows under a loading overlay for the
+  // whole round trip, so the count is polled rather than read once.
+  await expect.poll(() => hostDetails.softwareItemCount()).toBeGreaterThan(appCount);
+
+  const fullNames = await hostDetails.softwareNames();
+  const packageOnly = fullNames.find((name) => !appNames.includes(name));
+  expect(
+    packageOnly,
+    'expected the full inventory to list something the Applications view does not',
+  ).toBeDefined();
+
+  await hostDetails.searchSoftware(packageOnly!);
+  await expect(hostDetails.softwareNameLink(packageOnly!)).toBeVisible();
+
+  // The same search under the Applications view returns nothing: the entry is
+  // reported by the host but is not a top-level application.
+  await hostDetails.selectSoftwareView('Applications');
+  await hostDetails.searchSoftware(packageOnly!);
+  await expect(hostDetails.softwareTable.locator('.empty-state')).toBeVisible();
+  await expect(hostDetails.softwareNameLink(packageOnly!)).toHaveCount(0);
+
+  // An application still resolves there, so the empty result above is the
+  // filter at work and not a broken search.
+  await hostDetails.searchSoftware(application);
+  await expect(hostDetails.softwareNameLink(application)).toBeVisible();
 });

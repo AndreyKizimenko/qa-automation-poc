@@ -22,11 +22,14 @@ export class TeamDropdown {
   readonly page: Page;
   readonly trigger: Locator;
   readonly currentValue: Locator;
+  /** The open menu's entries. Only meaningful after {@link trigger} is clicked. */
+  readonly options: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.trigger = page.locator('.fleet-dropdown__button');
     this.currentValue = page.locator('.fleet-dropdown__button-label');
+    this.options = page.locator('.fleet-dropdown__option');
   }
 
   /**
@@ -46,7 +49,13 @@ export class TeamDropdown {
    * specs stage into. Idempotent, and a no-op on free.
    *
    * Matching is anchored to the whole label so one fleet name can't select
-   * another that merely contains it.
+   * another that merely contains it, and the resulting value is asserted — a
+   * click that lands on a neighbouring row while a long menu is still settling
+   * fails here rather than silently scoping the rest of the test to the wrong
+   * fleet. A spec that creates several similarly-named fleets (a `--repeat-each`
+   * run of a throwaway-fleet spec, say) is the case that provokes it; prefer
+   * `<page>.goto({ fleetId })` for scope there, and keep this for the stable
+   * named fleets.
    */
   async selectByLabel(label: string): Promise<void> {
     // Free has no fleet scoping, so the dropdown never renders there. The

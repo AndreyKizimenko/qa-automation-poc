@@ -219,4 +219,54 @@ test.describe('Software vulnerabilities', () => {
       await cveDetail.assertOk(cveText!);
     });
   }
+
+  /**
+   * A CVE's "Vulnerable software" table hands off to the hosts running each
+   * affected version. The count on the row and the count on the hosts list come
+   * from different endpoints, so they can disagree — that agreement is the
+   * assertion, together with the filter pill naming the version.
+   *
+   * The CVE is resolved through `findRenderableCve`, not read off the top of
+   * the list: Fleet matches CVEs faster than its feeds enrich them and 404s the
+   * detail page for any it has no metadata for, with the newest match sorting
+   * first (fleetdm/fleet#49913).
+   *
+   * The hand-off itself is not premium-gated — only the summary's Severity and
+   * Probability of exploit are — so free covers the same flow, minus the fleet
+   * scope it has no dropdown for.
+   */
+  test('Vulnerabilities — a CVE hands off to the hosts running each affected version', async ({
+    softwareTitles,
+    vulnerabilitiesList,
+    cveDetail,
+    hostsList,
+    request,
+    page,
+  }) => {
+    await softwareTitles.goto();
+    await softwareTitles.gotoVulnerabilitiesTab();
+
+    const listed = await vulnerabilitiesList.cveNames();
+    const cve = await findRenderableCve(request, listed);
+    test.skip(!cve, 'No listed CVE has a renderable detail page — fleetdm/fleet#49913');
+
+    await cveDetail.goto(cve!);
+    await expect(cveDetail.vulnerableSoftwareHeading).toBeVisible();
+    await expect(cveDetail.table.firstRow).toBeVisible();
+
+    expect(await cveDetail.affectedHostCount()).toBeGreaterThan(0);
+
+    const row = cveDetail.table.firstRow;
+    const software = await cveDetail.softwareRowValues(row);
+    expect(software.hosts, `expected "${software.name}" to report affected hosts`).toBeGreaterThan(0);
+
+    await cveDetail.viewAllHostsFor(row);
+
+    await expect(hostsList.filterPill).toBeVisible();
+    await expect(hostsList.filterPill).toContainText(software.name);
+    await expect(hostsList.filterPill).toContainText(software.version);
+    await expect(page).toHaveURL(/software_version_id=\d+/);
+
+    await expect.poll(() => hostsList.hostCount()).toBe(software.hosts);
+  });
 });

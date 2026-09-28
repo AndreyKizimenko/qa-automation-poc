@@ -20,6 +20,27 @@ export class OrganizationAdvancedPage {
   readonly domainInput: Locator;
   readonly saveButton: Locator;
 
+  /**
+   * Activity & data retention — the deployment-wide historical collection
+   * switches behind the dashboard's chart card.
+   *
+   * **These read the opposite way round from the per-fleet ones on
+   * {@link TeamSettingsPage}.** Here the label is an *enable*
+   * ("Hosts online historical reporting", ticked = still collecting); there it
+   * is a *disable* ("Disable hosts online historical reporting", ticked =
+   * stopped). Both render Fleet's `Checkbox`, whose accessible name is the
+   * `name` prop rather than the visible label, so the two surfaces share the
+   * `disableHostsActive` / `disableVulnerabilities` names despite the flipped
+   * meaning. Read state from `aria-checked`.
+   *
+   * Turning either off deletes the data already collected for **every** fleet,
+   * so specs read these and never write them.
+   */
+  readonly retentionSectionHeading: Locator;
+  readonly hostsOnlineHistoricalCheckbox: Locator;
+  /** Premium-only: free's Advanced options never renders this checkbox. */
+  readonly vulnerabilitiesHistoricalCheckbox: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -30,6 +51,16 @@ export class OrganizationAdvancedPage {
 
     this.domainInput = page.getByLabel('Domain', { exact: true });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
+
+    this.retentionSectionHeading = page.getByRole('heading', {
+      name: 'Activity & data retention',
+    });
+    this.hostsOnlineHistoricalCheckbox = page.getByRole('checkbox', {
+      name: 'disableHostsActive',
+    });
+    this.vulnerabilitiesHistoricalCheckbox = page.getByRole('checkbox', {
+      name: 'disableVulnerabilities',
+    });
   }
 
   async goto(): Promise<void> {
