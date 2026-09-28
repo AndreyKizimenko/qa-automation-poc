@@ -145,6 +145,22 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:1145 — `deleted script <b>NAME</b> from <scope>.` */
     deleted: ({ name, scope }: { name: string; scope: TeamScope }) =>
       new RegExp(`deleted script ${esc(name)} from ${scriptScope(scope)}\\.`),
+    /**
+     * A run on one host, as the dashboard feed words it. Failed and timed-out
+     * runs read the same — only the details modal tells them apart.
+     * @see frontend/.../GlobalActivityItem.tsx:1213 — `ran the <b>NAME</b> script on <b>HOST</b>.`
+     */
+    ran: ({ name, host }: { name: string; host: string }) =>
+      new RegExp(`ran the ${esc(name)} script on ${esc(host)}\\.`),
+    /**
+     * The same run on the host's own Activity card, where the host is implied.
+     * @see frontend/.../RanScriptActivityItem.tsx — `ran the <b>NAME</b> script on this host.`
+     */
+    ranOnThisHost: ({ name }: { name: string }) =>
+      new RegExp(`ran the ${esc(name)} script on this host\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx:1225 — `ran the <b>NAME</b> script on N host(s).` */
+    ranBatch: ({ name, hostCount }: { name: string; hostCount: number }) =>
+      new RegExp(`ran the ${esc(name)} script on ${hostCount} hosts?\\.`),
   },
 
   // Custom packages + Fleet-Maintained Apps. The feed shows the installer
@@ -160,6 +176,23 @@ export const activityCopy = {
     /** @see frontend/.../GlobalActivityItem.tsx:1379 — `deleted <b>PACKAGE</b> from <scope>.` */
     deleted: ({ packageName, scope }: { packageName: string; scope: TeamScope }) =>
       new RegExp(`deleted ${esc(packageName)} from ${scriptScope(scope)}\\.`),
+  },
+
+  // Custom MDM commands (`fleetctl mdm run-command`, POST /commands/run). A
+  // request type Fleet has no friendly name for renders as itself.
+  mdmCommand: {
+    /** @see frontend/.../GlobalActivityItem.tsx:1203 — `ran <b>TYPE</b> as a custom MDM command on <b>HOST</b>.` */
+    ran: ({ requestType, host }: { requestType: string; host: string }) =>
+      new RegExp(`ran ${esc(requestType)} as a custom MDM command on ${esc(host)}\\.`),
+    /** @see frontend/.../RanCustomMdmCommandActivityItem.tsx — `… as a custom MDM command on this host.` */
+    ranOnThisHost: ({ requestType }: { requestType: string }) =>
+      new RegExp(`ran ${esc(requestType)} as a custom MDM command on this host\\.`),
+    /**
+     * The command itself, in the Activity card with "Show MDM commands" on.
+     * @see frontend/.../CommandItem.tsx — `The <b>TYPE</b> command was acknowledged.`
+     */
+    acknowledged: ({ requestType }: { requestType: string }) =>
+      new RegExp(`^The ${esc(requestType)} command was acknowledged\\.`),
   },
 
   // VPP and Android app-store entries. The feed renders the title with a

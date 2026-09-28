@@ -42,6 +42,26 @@ test.describe('activityCopy', () => {
       .test(`deleted the report ${NAME}.`)).toBe(true);
   });
 
+  test('script runs — one host, this host, a batch', () => {
+    expect(activityCopy.script.ran({ name: 'x.sh', host: 'mac (1)' })
+      .test(`ran the x.sh script on mac (1).`)).toBe(true);
+    expect(activityCopy.script.ranOnThisHost({ name: 'x.sh' })
+      .test(`ran the x.sh script on this host.`)).toBe(true);
+    expect(activityCopy.script.ranBatch({ name: 'x.sh', hostCount: 3 })
+      .test(`ran the x.sh script on 3 hosts.`)).toBe(true);
+    expect(activityCopy.script.ranBatch({ name: 'x.sh', hostCount: 1 })
+      .test(`ran the x.sh script on 1 host.`)).toBe(true);
+  });
+
+  test('mdmCommand.* — feed, this host, and the command item', () => {
+    expect(activityCopy.mdmCommand.ran({ requestType: 'UserList', host: 'mac (1)' })
+      .test(`ran UserList as a custom MDM command on mac (1).`)).toBe(true);
+    expect(activityCopy.mdmCommand.ranOnThisHost({ requestType: 'UserList' })
+      .test(`ran UserList as a custom MDM command on this host.`)).toBe(true);
+    expect(activityCopy.mdmCommand.acknowledged({ requestType: 'UserList' })
+      .test(`The UserList command was acknowledged. less than a minute ago`)).toBe(true);
+  });
+
   test('label.* — "a label" on create, "the label" on edit/delete', () => {
     expect(activityCopy.label.created({ name: NAME })
       .test(`created a label ${NAME}.`)).toBe(true);

@@ -415,9 +415,102 @@ export async function getHostDetailUpdatedAt(
   request: APIRequestContext,
   hostId: number,
 ): Promise<string> {
+  return getHostCollectedAt(request, hostId, 'detail_updated_at');
+}
+
+/**
+ * The two timestamps Fleet advances when a host re-reports:
+ *
+ *  - `detail_updated_at` — vitals (OS, disk, users, agent versions).
+ *  - `software_updated_at` — the software inventory. This is the one the host's
+ *    Software tab compares against an install's timestamp to decide whether a
+ *    title still reads "recently installed/updated" or has settled, so software
+ *    specs wait on it rather than on the vitals.
+ */
+export type HostCollectedAtField = 'detail_updated_at' | 'software_updated_at';
+
+/** When Fleet last stored `field` for the host (empty string if never). */
+export async function getHostCollectedAt(
+  request: APIRequestContext,
+  hostId: number,
+  field: HostCollectedAtField,
+): Promise<string> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
-  return (await res.json()).host?.detail_updated_at ?? '';
+  return (await res.json()).host?.[field] ?? '';
+}
+
+/** Asks Fleet to re-collect a host's vitals and software on its next check-in. */
+export async function requestHostRefetch(request: APIRequestContext, hostId: number): Promise<void> {
+  const res = await request.post(apiUrl(`hosts/${hostId}/refetch`), { headers: authHeaders() });
+  await expect(res, `Failed to request a refetch of host ${hostId}`).toBeOK();
+}
+
+/**
+ * Waits until the host has re-reported since `since` — the one wait every
+ * host-execution spec needs, because what they assert (an installed version, a
+ * cleared status) only reaches Fleet on the host's next collection.
+ *
+ * Take `since` from {@link getHostCollectedAt} *before* the action under test.
+ * Comparing against a baseline, rather than polling UI copy like "Last fetched
+ * less than a minute ago", proves the collection happened after the action and
+ * wasn't a background cycle that landed just before it.
+ *
+ * `refetch` also queues a refetch first. Leave it off where Fleet queues one
+ * itself: a completed software install or uninstall already does, so asking again
+ * only adds load on the shared instance.
+ *
+ * The default budget covers what the real VMs measure — a refetch lands in
+ * 70–120s — plus a refetch another spec may already have in flight on the same
+ * host. Returns the new timestamp so a caller can chain a second wait off it.
+ */
+export async function waitForHostRefetch(
+  request: APIRequestContext,
+  hostId: number,
+  opts: {
+    since: string;
+    field?: HostCollectedAtField;
+    refetch?: boolean;
+    timeout?: number;
+  },
+): Promise<string> {
+  const { since, field = 'detail_updated_at', refetch = false, timeout = 240_000 } = opts;
+  if (refetch) await requestHostRefetch(request, hostId);
+
+  const baseline = since ? Date.parse(since) : 0;
+  let latest = since;
+  await expect
+    .poll(
+      async () => {
+        latest = await getHostCollectedAt(request, hostId, field);
+        return latest ? Date.parse(latest) : 0;
+      },
+      {
+        message: `host ${hostId} never re-reported ${field} after ${since || '(never)'}`,
+        timeout,
+        intervals: [5_000],
+      },
+    )
+    .toBeGreaterThan(baseline);
+  return latest;
+}
+
+/** What a `fleetctl mdm` command needs to address a host, and whether it can reach it. */
+export interface HostMdmIdentity {
+  /** The host's own hostname — what `fleetctl mdm … --hosts` resolves against. */
+  hostname: string;
+  /** Fleet's MDM enrollment status ("On (manual)", "On (automatic)", "Off", …). */
+  enrollmentStatus: string | null;
+}
+
+export async function getHostMdmIdentity(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostMdmIdentity> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const { host } = await res.json();
+  return { hostname: host?.hostname ?? '', enrollmentStatus: host?.mdm?.enrollment_status ?? null };
 }
 
 /** One row of a host's Certificates card, as Fleet reports it. */

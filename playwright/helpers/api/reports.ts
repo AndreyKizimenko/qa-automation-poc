@@ -24,6 +24,13 @@ export async function createReport(
     teamId?: number;
     /** Comma-separated targeted platforms (e.g. "darwin", "windows"); all if omitted. */
     platform?: string;
+    /**
+     * Seconds between scheduled runs; 0 (the default) never schedules it. A
+     * report only stores results for a host once the host has run it on
+     * schedule, so a spec that reads host results needs one — 60s lands the
+     * first stored row on a real VM in about a minute.
+     */
+    interval?: number;
   },
 ): Promise<ReportRef> {
   const res = await request.post(apiUrl('queries'), {
@@ -34,6 +41,9 @@ export async function createReport(
       description: opts.description ?? '',
       ...(opts.teamId !== undefined ? { team_id: opts.teamId } : {}),
       ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
+      ...(opts.interval !== undefined
+        ? { interval: opts.interval, logging: 'snapshot', discard_data: false }
+        : {}),
     },
   });
   if (!res.ok()) {
@@ -102,6 +112,25 @@ export async function getHostReportLastFetched(
     last_fetched: string | null;
   }>;
   return reports.find((r) => r.name === reportName)?.last_fetched ?? null;
+}
+
+/**
+ * The rows a report last stored **for one host**, as column → value — empty
+ * until the host has run it on schedule. Each scheduled run replaces the set, so
+ * this is always the host's latest answer, which is what the host's Reports-tab
+ * card previews.
+ */
+export async function getHostReportRows(
+  request: APIRequestContext,
+  hostId: number,
+  reportId: number,
+): Promise<Array<Record<string, string>>> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/reports/${reportId}`), {
+    headers: authHeaders(),
+  });
+  if (!res.ok()) return [];
+  const results = ((await res.json()).results ?? []) as Array<{ columns: Record<string, string> }>;
+  return results.map((r) => r.columns);
 }
 
 /** Delete a report by id; safe to call on an already-deleted id. */

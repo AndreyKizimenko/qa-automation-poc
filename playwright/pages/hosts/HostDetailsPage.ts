@@ -3,7 +3,10 @@ import { CertificatesCard } from '../components/CertificatesCard';
 import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
+import { MdmCommandDetailsModal } from '../components/MdmCommandDetailsModal';
 import { Navbar } from '../components/Navbar';
+import { RunScriptModal } from '../components/RunScriptModal';
+import { ScriptDetailsModal } from '../components/ScriptDetailsModal';
 import { SelectReportModal } from '../components/SelectReportModal';
 import { Toast } from '../components/Toast';
 import { TransferHostModal } from '../components/TransferHostModal';
@@ -31,6 +34,12 @@ export class HostDetailsPage {
   readonly selectReportModal: SelectReportModal;
   /** Raised by Actions → Transfer; the same component the hosts list uses. */
   readonly transferModal: TransferHostModal;
+  /** Raised by Actions → Run script. */
+  readonly runScriptModal: RunScriptModal;
+  /** A script run's result — from the Activity card or the Run script modal. */
+  readonly scriptDetailsModal: ScriptDetailsModal;
+  /** An MDM command's request and response — from the Activity card. */
+  readonly mdmCommandDetailsModal: MdmCommandDetailsModal;
   readonly toast: Toast;
   /** Confirmation raised by Actions → Delete; its own modal class. */
   readonly deleteModal: Locator;
@@ -112,6 +121,22 @@ export class HostDetailsPage {
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
 
+  /**
+   * The Details tab's Activity card: Past and Upcoming tabs of host activities.
+   * Fleet's `Card` is a role-less div and the card holds the only "Past" /
+   * "Upcoming" tabs on the page, so the card class is the scope.
+   */
+  readonly activityCard: Locator;
+  readonly pastActivityTab: Locator;
+  /** Its accessible name gains a count ("Upcoming 1") while work is queued. */
+  readonly upcomingActivityTab: Locator;
+  /**
+   * "Show MDM commands" — swaps the open tab from activities to the MDM commands
+   * sent to the host. Fleet's `Slider` renders the label as a sibling span, so
+   * the switch has no accessible name; it is the only switch in the card.
+   */
+  readonly mdmCommandsToggle: Locator;
+
   readonly firstActivityTimestamp: Locator;
   // Empty-state placeholder rendered by the Activity card when the host has
   // no past activities yet. Use `firstActivityTimestamp.or(activityEmptyState)`
@@ -127,6 +152,9 @@ export class HostDetailsPage {
     this.certificates = new CertificatesCard(page);
     this.selectReportModal = new SelectReportModal(page);
     this.transferModal = new TransferHostModal(page);
+    this.runScriptModal = new RunScriptModal(page);
+    this.scriptDetailsModal = new ScriptDetailsModal(page);
+    this.mdmCommandDetailsModal = new MdmCommandDetailsModal(page);
     this.toast = new Toast(page);
     this.deleteModal = page.locator('.delete-host-modal');
 
@@ -181,6 +209,11 @@ export class HostDetailsPage {
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
+
+    this.activityCard = page.locator('.host-activity-card');
+    this.pastActivityTab = this.activityCard.getByRole('tab', { name: 'Past' });
+    this.upcomingActivityTab = this.activityCard.getByRole('tab', { name: /^Upcoming/ });
+    this.mdmCommandsToggle = this.activityCard.getByRole('tabpanel').getByRole('switch');
 
     // Activity rows are buttons whose aria-label ends with "ago".
     this.firstActivityTimestamp = page.getByRole('button', { name: /\bago\b/ }).first();
@@ -344,6 +377,42 @@ export class HostDetailsPage {
   async runAction(label: string): Promise<void> {
     await this.actionsButton.click();
     await this.actionOptions.filter({ hasText: new RegExp(`^${label}$`) }).click();
+  }
+
+  /** Opens the Run script modal via Actions → Run script. */
+  async openRunScript(): Promise<void> {
+    await this.runAction('Run script');
+    await this.runScriptModal.expectOpen();
+  }
+
+  // ── Activity card ─────────────────────────────────────────────────────────
+
+  /**
+   * An activity in the card's open tab. Each renders as a button whose
+   * accessible name is its sentence plus the relative time ("admin ran the
+   * x.sh script on this host. less than a minute ago"), so callers match the
+   * sentence with a RegExp and leave the time out of it.
+   */
+  activityItem(matcher: RegExp): Locator {
+    return this.activityCard.getByRole('tabpanel').getByRole('button', { name: matcher });
+  }
+
+  async showPastActivities(): Promise<void> {
+    await this.pastActivityTab.click();
+    await expect(this.pastActivityTab).toHaveAttribute('aria-selected', 'true');
+  }
+
+  async showUpcomingActivities(): Promise<void> {
+    await this.upcomingActivityTab.click();
+    await expect(this.upcomingActivityTab).toHaveAttribute('aria-selected', 'true');
+  }
+
+  /** Shows MDM commands (`on`) or activities (`off`) in the Activity card's open tab. */
+  async showMdmCommands(on: boolean): Promise<void> {
+    if ((await this.mdmCommandsToggle.getAttribute('aria-checked')) !== String(on)) {
+      await this.mdmCommandsToggle.click();
+    }
+    await expect(this.mdmCommandsToggle).toHaveAttribute('aria-checked', String(on));
   }
 
   /** Opens the "Select a report" modal via Actions → Live report. */

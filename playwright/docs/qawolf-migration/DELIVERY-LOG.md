@@ -111,6 +111,50 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch D — execution on hosts
+
+Real round-trips to the real VMs: run a script and read what it did, send an MDM command and read the answer,
+install and remove software. Every spec resolves its host with `findOnlineHost(..., { kind: 'real' })` — an
+osquery-perf simulation never runs a script, never answers MDM and never installs anything.
+
+**Scripts on one host** — `shared/hosts/host-run-script.spec.ts` (new, + `RunScriptModal`, `ScriptDetailsModal`,
+`helpers/api/scripts.ts`). Nine source flows, both tiers, one spec:
+
+- *Effect, not exit status.* The script writes a per-run nonce to `/tmp`; a seeded 60-second report run by the
+  same VM reads the file's SHA-256 back, and the host's Reports-tab card has to show that exact hash. One flow
+  covers the Run script modal, the host Activity card, the dashboard feed and host report results. A report's
+  first stored row lands ~66 s after it is created.
+- *Failure* (`exit 3`), *timeout* (agent `script_execution_timeout` lowered to 60 s for the case and restored),
+  and one row per interpreter — zsh on macOS, bash and Python on Linux, PowerShell on Windows.
+- The "finished script reverts to Pending when its details close" regression is an assertion inside the effect
+  flow rather than its own spec.
+- `--repeat-each=5`: 35/35 on both tiers.
+
+**MDM commands** — `shared/hosts/mdm-commands.spec.ts` (new, + `MdmCommandDetailsModal`). The plan had a premium
+and a free spec; free renders the same Activity card, "Show MDM commands" switch and details modal with the same
+copy, so it is one `shared/` spec. A read-only `UserList` sent with `fleetctl mdm run-command`, then read back
+through `fleetctl get mdm-command-results`, the activity, the command itself and the dashboard feed — each
+tied to this run's command UUID. QA Wolf's three premium flows asserted a screenshot of a CLI table; the fourth
+never sent a command at all.
+
+**Wait-for-refetch helper** — `waitForHostRefetch(request, hostId, { since, field, refetch })` in
+`helpers/api/hosts.ts`, comparing `detail_updated_at` or `software_updated_at` against a baseline taken
+before the action. `shared/hosts/host-details-smoke.spec.ts` now uses it in place of its own poll.
+
+Findings:
+
+- **The timeout message never names the timeout.** `RunScriptDetailsModal` fills in "after N seconds" by
+  regex-matching the script's *output*, not the configured limit — a script that prints nothing of the kind
+  reads "Fleet stopped the script to protect host performance.", and one that prints "sleeping 180 seconds"
+  would be reported as stopped after 180 s. Not filed yet; on the decision list.
+- **Orbit appends its own line to a failed script's output** — `script execution error: exit status 3`, or
+  `signal: killed` for a timeout — so the recorded output is never just what the script printed.
+- **The macOS VMs have no Xcode Command Line Tools**, so `/usr/bin/python3` is Apple's install-prompt stub.
+  Python scripts are exercised on the Linux VMs.
+- **Every VM is ARM** — Apple M4 macOS, ARM Windows 11, aarch64 Ubuntu. That decides which installers can land.
+- **Free rejects `fleet_id=0` on a script upload** ("The fleet does not exist"); Unassigned is the absence of the
+  field.
+
 ## Round 2 · Batch C — live host, read-only
 
 Host-details cards, inventory filters, report-card results, OS drill-downs, affected-host counts. All reads,

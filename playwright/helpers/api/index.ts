@@ -16,6 +16,7 @@ export * from './app-store';
 export * from './mdm';
 export * from './users';
 export * from './reports';
+export * from './scripts';
 export * from './labels';
 export * from './policies';
 export * from './variables';
