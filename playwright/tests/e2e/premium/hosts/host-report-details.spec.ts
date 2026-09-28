@@ -16,20 +16,17 @@
  *
  * The spec depends on `pw-host-report-results` existing on the **VMs** fleet with
  * an interval, so the real macOS VM keeps a fresh stored result for it. That
- * report is deliberately **instance furniture**, not something the test creates:
+ * report is deliberately **instance furniture**, provisioned by
+ * `gitops/premium-fleetqa/fleets/vms.yml` rather than created by the test:
  *
  *   - It has to live somewhere `cleanup.steps.ts` won't wipe. Global reports are
  *     wiped at the start of every run, which destroyed an earlier attempt at this
- *     mid-flight; the VMs fleet is untouched by cleanup.
+ *     mid-flight; the VMs fleet's sweep leaves gitops-declared content alone.
  *   - Self-provisioning would mean waiting for a real scheduled run — measured at
  *     ~3.5 minutes from creation — on every execution.
  *
- * If it goes missing, recreate it (and let one interval elapse):
- *
- *   POST /api/v1/fleet/queries
- *   { "name": "pw-host-report-results", "query": "SELECT 'bar' AS foo;",
- *     "team_id": <VMs fleet id>, "interval": 300, "platform": "darwin",
- *     "logging": "snapshot" }
+ * If it goes missing, re-apply that file (see gitops/premium-fleetqa/README.md)
+ * and let one interval elapse.
  */
 import { test, expect } from '@fixtures';
 import { findReportByName, getHostReportLastFetched } from '@helpers/api';

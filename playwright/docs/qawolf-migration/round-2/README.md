@@ -249,8 +249,9 @@ version history by itself. Provisioning beats seeding for anything whose value i
 **Why the QA fleet specifically.** `setup/cleanup.steps.ts` wipes installable software on Unassigned
 (`fleet_id=0`) and Workstations before and after every run and touches no other fleet — so those two are out.
 QA held nothing at all, which is what made it safe to bring under gitops: **a fleet named in a gitops run has
-everything not declared deleted.** The VMs fleet is the counterexample and must stay out of gitops — it owns
-`pw-host-report-results`, which `premium/hosts/host-report-details.spec.ts` reads.
+everything not declared deleted.** The shelf is kept off the VMs fleet because nothing on it is meant to be
+installed; VMs is under gitops too since batch D (`fleets/vms.yml`), for the fixtures that *are* installed —
+see [D-host-execution.md](D-host-execution.md#the-fma-fixture-set).
 
 **Consumed by** `tests/e2e/premium/software/version-pinning.spec.ts`, which throws with the re-apply path when
 an app is missing, and skips its older-version case (only that case) until some app on the shelf has cached a
