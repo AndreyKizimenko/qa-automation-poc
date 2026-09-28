@@ -247,6 +247,9 @@ test.describe('Premium • Software • Install on host', () => {
     vmsFleetId,
     request,
   }, testInfo) => {
+    // The longest test here: an upload, a policy run and an automatic install on
+    // a VM other specs queue work on, then its cleanup.
+    test.setTimeout(900_000);
     const host = await realHost(request, 'linux');
     const name = `fleet-pw-deploy-${Date.now().toString(36)}`;
     const file = testInfo.outputPath(`${name}_1.0.0_all.deb`);

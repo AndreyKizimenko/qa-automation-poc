@@ -509,14 +509,20 @@ export async function waitForHostSoftwareStatus(
  * install spec ends with, and the pre-clean for a fixed-name fixture a dead run
  * may have left installed. Uninstalls first when the host still has it, since
  * deleting a title from the library leaves whatever it installed on the host.
+ *
+ * As cleanup it waits for the uninstall only, not for the host to re-report:
+ * the refetch is hygiene for the *next* run, whose own pre-clean
+ * ({@link ensureNotInstalled}) already handles a stale inventory, and on a VM
+ * other specs are queueing work on it can cost minutes a `finally` doesn't have.
  */
 export async function removeTitleFromHost(
   request: APIRequestContext,
   fleetId: number,
   hostId: number,
   titleId: number,
+  opts: { settleInventory?: boolean } = {},
 ): Promise<void> {
-  await ensureNotInstalled(request, hostId, titleId);
+  await ensureNotInstalled(request, hostId, titleId, { settleInventory: opts.settleInventory ?? false });
   await deleteSoftwareTitle(request, fleetId, titleId);
 }
 
@@ -535,11 +541,16 @@ export async function ensureNotInstalled(
   request: APIRequestContext,
   hostId: number,
   titleId: number,
+  opts: { settleInventory?: boolean } = {},
 ): Promise<void> {
   const state = await getHostSoftwareState(request, hostId, titleId);
   if (!state || (state.status !== 'installed' && state.installedVersions.length === 0)) return;
   await uninstallSoftwareOnHost(request, hostId, titleId);
-  await waitForSoftwareSettled(request, hostId, titleId, null);
+  if (opts.settleInventory === false) {
+    await waitForHostSoftwareStatus(request, hostId, titleId, null);
+  } else {
+    await waitForSoftwareSettled(request, hostId, titleId, null);
+  }
 }
 
 /**
