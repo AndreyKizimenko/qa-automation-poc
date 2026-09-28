@@ -45,4 +45,9 @@ export class RunScriptBatchModal {
     await this.toast.expectSuccess(/^Successfully ran script\./);
     await expect(this.modal).toBeHidden();
   }
+
+  /** Follows the success toast's "Show script activity" link to Controls → Scripts → Batch progress. */
+  async showScriptActivity(): Promise<void> {
+    await this.toast.success.getByRole('link', { name: 'Show script activity' }).click();
+  }
 }

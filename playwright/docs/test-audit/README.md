@@ -46,9 +46,9 @@ files · ~350 test declarations · 4 projects**.
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
-| 21 | [Software on hosts](21-software-on-hosts.md) | 12 | premium |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 13 | premium |
 
-**439 entries** covering every test in the suite. An entry can expand into several
+**440 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
@@ -174,7 +174,9 @@ Findings from round 2 that change how existing entries should be judged, not jus
   `premium-exclusive` / `free-exclusive` projects, on one worker after the main project — turning script
   execution off makes Fleet refuse and hold every script. `npm run test:<tier>` includes them.
 - **`cleanup-setup` now reaches past Unassigned and Workstations**, narrowly: it clears stranded version pins on
-  the QA and VMs fleets and deletes the host-execution specs' named leftovers from VMs. It deletes titles; it
-  never uninstalls from a host.
+  the QA and VMs fleets and deletes the host-execution specs' named leftovers from VMs. Deleting a title never
+  uninstalls it, so the sweep also purges any `fleet-pw-*` package the Ubuntu VM still lists (one ad-hoc
+  `dpkg --purge` script, queued only when there is one); on the macOS and Windows VMs it deletes titles only,
+  and the fixed-name fixtures are uninstalled by the next run's pre-clean.
 - **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 60-min job limit.
   An entry whose verdict is "expand" on a VM-bound spec should price the minutes.

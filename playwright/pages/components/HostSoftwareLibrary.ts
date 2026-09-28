@@ -60,16 +60,17 @@ export class HostSoftwareLibrary {
   }
 
   /**
-   * The Installed version / Library version value. Each cell renders its value
-   * in a leading `span` — `---` when there is none — followed by a truncation
-   * tooltip that repeats it, so the cell's own text reads the version twice.
+   * The Installed version / Library version value. Fleet's `VersionCell` renders
+   * one version in a `TooltipTruncatedTextCell` — whose tooltip repeats it, so
+   * the cell's own text reads it twice — and none or several as a plain text
+   * cell: `---`, or "N versions".
    */
   async installedVersion(title: string): Promise<Locator> {
-    return (await this.cell(title, 'Installed version')).locator('span').first();
+    return versionValue(await this.cell(title, 'Installed version'));
   }
 
   async libraryVersion(title: string): Promise<Locator> {
-    return (await this.cell(title, 'Library version')).locator('span').first();
+    return versionValue(await this.cell(title, 'Library version'));
   }
 
   /** The row's install-side button by label; use `toHaveCount(0)` to assert one isn't offered. */
@@ -115,4 +116,10 @@ export class HostSoftwareLibrary {
     if (index < 0) throw new Error(`Library has no "${header}" column (got ${names.join(', ')})`);
     return this.row(title).getByRole('cell').nth(index);
   }
+}
+
+function versionValue(cell: Locator): Locator {
+  return cell
+    .locator('.data-table__tooltip-truncated-text')
+    .or(cell.getByText(/^(---|\d+ versions)$/));
 }

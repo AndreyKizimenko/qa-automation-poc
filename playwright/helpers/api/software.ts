@@ -2,7 +2,7 @@ import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { apiUrl, authHeaders } from './core';
-import { getHostCollectedAt, waitForHostRefetch } from './hosts';
+import { getHostCollectedAt, waitForHostRefetch, waitForNoPendingRefetch } from './hosts';
 
 export interface SoftwareTitleRef {
   id: number;
@@ -554,14 +554,21 @@ export async function ensureNotInstalled(
 }
 
 /**
- * Equal by Fleet's rule (`compareVersions` in the frontend): segment by segment,
- * a missing segment reads as 0 — so Windows' `2.7032.0.0` is `2.7032.0`.
+ * Fleet's version order (`compareVersions` in the frontend, which picks the
+ * Library's Update vs Reinstall): segment by segment, a missing segment reads as
+ * 0 — so Windows' `2.7032.0.0` is `2.7032.0`. Negative, zero or positive.
  */
-function sameVersion(a: string, b: string): boolean {
+export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number);
   const pb = b.split('.').map(Number);
-  return Array.from({ length: Math.max(pa.length, pb.length) }).every((_, i) => (pa[i] || 0) === (pb[i] || 0));
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return Math.sign(d);
+  }
+  return 0;
 }
+
+const sameVersion = (a: string, b: string): boolean => compareVersions(a, b) === 0;
 
 /**
  * Waits for an install or uninstall to finish *and* for the host's software
@@ -571,8 +578,12 @@ function sameVersion(a: string, b: string): boolean {
  * Three steps, in this order:
  *
  *  1. The status settles.
- *  2. A collection runs after that: baseline `detail_updated_at`, ask for a
- *     refetch, wait for it to move. A baseline taken before the action could be
+ *  2. A collection runs after that: wait out any refetch already outstanding,
+ *     then baseline `detail_updated_at`, ask for a refetch, wait for it to move.
+ *     Fleet queues a refetch after every install and uninstall, and one queued
+ *     by the previous action on this host can still be running on data from
+ *     before this one — a refetch asked for meanwhile merges into it, and its
+ *     landing would pass for this one's. A baseline taken before the action could be
  *     overtaken by a routine collection landing mid-install; and it's
  *     `detail_updated_at`, not `software_updated_at`, because the latter only
  *     moves when the inventory changes — never after a failed uninstall, say
@@ -581,43 +592,54 @@ function sameVersion(a: string, b: string): boolean {
  *  3. The inventory shows what the status implies: present after `installed`
  *     or `failed_uninstall`, absent after a clean uninstall or `failed_install`.
  *     The detail results of a refetch can be stored seconds before its software
- *     results, so step 2 alone can return a beat early.
+ *     results, so step 2 alone can return a beat early. If the inventory still
+ *     disagrees a minute after the collection, steps 2–3 run once more.
  *
  * Pass `version` when the host already had the title — an update — so the
- * wait is for that version, not for any. Pass `inventory: 'any'` for a title
- * Fleet can't tie to what the host reports (see {@link getHostInventoryVersions})
- * — its installed versions stay empty.
+ * wait is for that version, not for any. Pass `inventoryName` for a title Fleet
+ * can't tie to what the host reports (see {@link getHostInventoryVersions}): its
+ * installed versions stay empty, so step 3 reads the host's inventory by the
+ * name the host uses instead.
  */
 export async function waitForSoftwareSettled(
   request: APIRequestContext,
   hostId: number,
   titleId: number,
   status: HostSoftwareStatus,
-  opts: { timeout?: number; inventory?: 'present' | 'absent' | 'any'; version?: string } = {},
+  opts: { timeout?: number; inventory?: 'present' | 'absent'; version?: string; inventoryName?: string } = {},
 ): Promise<HostSoftwareState> {
   await waitForHostSoftwareStatus(request, hostId, titleId, status, opts.timeout);
-  const since = await getHostCollectedAt(request, hostId, 'detail_updated_at');
-  await waitForHostRefetch(request, hostId, { since, refetch: true });
 
   const inventory =
     opts.inventory ?? (status === 'installed' || status === 'failed_uninstall' ? 'present' : 'absent');
   let state: HostSoftwareState | null = null;
-  await expect
-    .poll(
-      async () => {
-        state = await getHostSoftwareState(request, hostId, titleId);
-        if (opts.version) return state?.installedVersions.some((v) => sameVersion(v, opts.version!)) ?? false;
-        if (inventory === 'any') return true;
-        return (state?.installedVersions.length ?? 0) > 0 === (inventory === 'present');
-      },
-      {
-        message: `host ${hostId}'s inventory never showed title ${titleId} ${opts.version ?? inventory} after ${status}`,
-        timeout: 120_000,
-        intervals: [5_000],
-      },
-    )
-    .toBe(true);
-  return state!;
+  const agrees = async (): Promise<boolean> => {
+    state = await getHostSoftwareState(request, hostId, titleId);
+    if (opts.version) return state?.installedVersions.some((v) => sameVersion(v, opts.version!)) ?? false;
+    const listed = opts.inventoryName
+      ? (await getHostInventoryVersions(request, hostId, opts.inventoryName)).length > 0
+      : (state?.installedVersions.length ?? 0) > 0;
+    return listed === (inventory === 'present');
+  };
+
+  // The refetch Fleet queued after the previous install or uninstall on this
+  // host may still be running on data from before this one, so it lands first.
+  // A second round covers a routine collection that was already in flight.
+  await waitForNoPendingRefetch(request, hostId);
+  for (let round = 1; round <= 2; round++) {
+    const since = await getHostCollectedAt(request, hostId, 'detail_updated_at');
+    await waitForHostRefetch(request, hostId, { since, refetch: true });
+    const settled = await expect
+      .poll(agrees, { timeout: 60_000, intervals: [5_000] })
+      .toBe(true)
+      .then(() => true)
+      .catch(() => false);
+    if (settled) return state!;
+  }
+  throw new Error(
+    `host ${hostId}'s inventory never showed ${opts.inventoryName ?? `title ${titleId}`} ` +
+      `${opts.version ?? inventory} after ${status}, over two collections`,
+  );
 }
 
 /**
@@ -677,4 +699,18 @@ export async function listInstallableTitles(
         fleetMaintained: !!t.software_package.fleet_maintained_app_id,
       }),
     );
+}
+
+/** Names in a host's software inventory that contain `query` (Fleet's own search). */
+export async function listHostSoftwareNames(
+  request: APIRequestContext,
+  hostId: number,
+  query: string,
+): Promise<string[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { query, per_page: '100' },
+  });
+  await expect(res, `Failed to read the software inventory of host ${hostId}`).toBeOK();
+  return (((await res.json()).software ?? []) as Array<{ name: string }>).map((r) => r.name);
 }

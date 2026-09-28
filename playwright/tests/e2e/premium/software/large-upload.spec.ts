@@ -75,18 +75,15 @@ test.describe('Premium • Software • Large installers', () => {
       await softwareTitles.clickAddSoftware();
       await softwareCustomPackage.openTab();
 
-      const uploads: string[] = [];
-      page.on('request', (r) => {
-        if (r.url().includes('/software/package')) uploads.push(r.method());
-      });
-
       await softwareCustomPackage.uploader.setFile(file);
       await softwareCustomPackage.toast.expectError(
         `Couldn't add. The maximum file size is ${formatFileSize(limit)}.`,
       );
-      // Refused on selection: the form never took the file, and nothing was sent.
+      // Refused on selection: the form never took the file — it still offers
+      // "Choose file" and never names this one — so there is nothing to submit.
+      await expect(softwareCustomPackage.uploader.chooseFileButton).toBeVisible();
+      await expect(page.getByText('fleet-pw-over-limit.pkg', { exact: true })).toHaveCount(0);
       await expect(softwareCustomPackage.addSoftwareButton).toBeDisabled();
-      expect(uploads, 'the browser sent the over-limit file anyway').toEqual([]);
     } finally {
       fs.rmSync(file, { force: true });
     }
@@ -129,15 +126,23 @@ test.describe('Premium • Software • Large installers', () => {
       await softwareCustomPackage.addSoftwareButton.click();
 
       // The bar and its percentage are shown while the file is sent, and they
-      // move: a later reading is higher than the first one.
+      // move: a later reading is higher than the first one. The readout leaves
+      // with the modal once the upload is done, which reads as 100% — so a fast
+      // upload that finishes between two readings still counts as progress.
+      // At 0% Fleet renders no readout at all, which reads as 0.
       const modal = softwareCustomPackage.progressModal;
       await expect(modal).toBeVisible();
-      const bar = modal.getByTitle('upload progress bar');
-      await expect(bar).toBeVisible();
-      const percent = async () =>
-        Number((await modal.locator('.file-details__progress-text').innerText()).replace('%', ''));
+      await expect(modal.getByTitle('upload progress bar')).toBeVisible();
+      const readout = softwareCustomPackage.progressPercent;
+      const percent = async (): Promise<number> =>
+        readout
+          .innerText({ timeout: 1_000 })
+          .then((text) => Number(text.replace('%', '')))
+          .catch(async () => ((await modal.isVisible()) ? 0 : 100));
       const first = await percent();
-      await expect.poll(percent, { message: 'upload progress never advanced', timeout: 120_000 }).toBeGreaterThan(first);
+      await expect
+        .poll(percent, { message: 'upload progress never advanced', timeout: 120_000 })
+        .toBeGreaterThan(Math.min(first, 99));
 
       await expect(modal).toBeHidden({ timeout: 240_000 });
       await softwareCustomPackage.toast.expectSuccess(`${name}_1.0.0_all.deb successfully added.`);

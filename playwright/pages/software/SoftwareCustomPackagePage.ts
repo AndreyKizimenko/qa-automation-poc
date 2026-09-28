@@ -24,6 +24,8 @@ export class SoftwareCustomPackagePage {
   readonly addSoftwareButton: Locator;
   readonly cancelButton: Locator;
   readonly progressModal: Locator;
+  /** The upload's "N%" readout under the progress bar, shown while the file is sent. */
+  readonly progressPercent: Locator;
   /**
    * "Deploy" — installs the package automatically on every host missing it, by
    * creating an `[Install software] <title> (<ext>)` policy with an install
@@ -44,6 +46,7 @@ export class SoftwareCustomPackagePage {
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software', exact: true });
     this.cancelButton = page.getByRole('button', { name: 'Cancel' });
     this.progressModal = page.locator('.file-progress-modal');
+    this.progressPercent = this.progressModal.getByText(/^\d{1,3}%$/);
     this.deploySwitch = page.locator('.software-deploy-slider__container').getByRole('switch');
   }
 

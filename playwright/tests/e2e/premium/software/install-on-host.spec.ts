@@ -44,13 +44,13 @@ import { inertDeb } from '@helpers/deb';
 import {
   deleteFleetPolicies,
   ensureNotInstalled,
-  findOnlineHost,
   findSoftwareTitleByPackageName,
   getHostSoftwareState,
   getSoftwarePackage,
   listFleetMaintainedTitles,
   listFleetPolicies,
   removeTitleFromHost,
+  requireRealHost,
   requestHostRefetch,
   waitForHostSoftwareStatus,
   waitForSoftwareSettled,
@@ -64,11 +64,6 @@ const TEST_DATA = path.resolve(__dirname, '../../../../test-data');
 
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-async function realHost(request: APIRequestContext, platform: Platform) {
-  const host = await findOnlineHost(request, platform, { kind: 'real' });
-  if (!host) throw new Error(`no online real ${platform} VM on ${process.env.FLEET_URL}`);
-  return host;
-}
 
 /** Dashboard → Software → the VMs fleet → Add software. */
 async function openAddSoftware(dashboard: DashboardPage, softwareTitles: SoftwareTitlesPage) {
@@ -164,7 +159,7 @@ test.describe('Premium • Software • Install on host', () => {
       vmsFleetId,
       request,
     }, testInfo) => {
-      const host = await realHost(request, pkg.platform);
+      const host = await requireRealHost(request, pkg.platform);
       const file = pkg.file((name) => testInfo.outputPath(name));
       const packageName = path.basename(file);
 
@@ -201,7 +196,7 @@ test.describe('Premium • Software • Install on host', () => {
     // A menu-bar calendar of a few MB, never launched. Anything but Claude,
     // which this fleet keeps installed on purpose (gitops/.../fleets/vms.yml).
     const app = { name: 'Itsycal' };
-    const host = await realHost(request, 'darwin');
+    const host = await requireRealHost(request, 'darwin');
 
     const leftover = (await listFleetMaintainedTitles(request, vmsFleetId)).find(
       (t) => t.name === app.name && t.platform === 'darwin',
@@ -250,7 +245,7 @@ test.describe('Premium • Software • Install on host', () => {
     // The longest test here: an upload, a policy run and an automatic install on
     // a VM other specs queue work on, then its cleanup.
     test.setTimeout(900_000);
-    const host = await realHost(request, 'linux');
+    const host = await requireRealHost(request, 'linux');
     const name = `fleet-pw-deploy-${Date.now().toString(36)}`;
     const file = testInfo.outputPath(`${name}_1.0.0_all.deb`);
     fs.writeFileSync(file, inertDeb(name, '1.0.0'));

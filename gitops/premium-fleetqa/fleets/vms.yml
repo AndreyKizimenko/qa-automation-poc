@@ -35,9 +35,11 @@
 # host-execution specs name as their own — `fleet-pw-*` / `fleet-playwright-*`
 # packages, `7z2601-arm64.exe`, Itsycal, `pw-` scripts, `pw-run-script-` reports and
 # `[Install software] fleet-pw-` policies — so a spec that dies before its own
-# cleanup leaves nothing past the next run. The sweep deletes titles; it never
-# uninstalls from a VM. Anything else stays until the next apply of this file,
-# which deletes whatever it does not declare.
+# cleanup leaves nothing past the next run. Deleting a title never uninstalls
+# it, so the sweep also purges any `fleet-pw-*` package the Ubuntu VM still
+# lists; on the macOS and Windows VMs it only deletes titles, and the next run's
+# pre-clean uninstalls the fixed-name fixtures. Anything else stays until the
+# next apply of this file, which deletes whatever it does not declare.
 #
 # Applied by hand, like qa.yml — not by the nightly. See the gitops README for
 # the command, and for why the client has to match the server's minor version.

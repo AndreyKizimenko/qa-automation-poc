@@ -201,6 +201,8 @@ Findings:
 - **`GET /labels/:id/hosts` leaves `orbit_version` null** for every host; `GET /hosts` fills it in.
 - **A batch reads "finished" 2–4 minutes after its last host reports** — a cron marks it, not the last result.
 
+**Post-review fixes** (2026-09-28, from the [test audit](../test-audit/21-software-on-hosts.md)): the scale batch's incompatible count is now the hosts that can't run a `.sh` (no orbit, scripts disabled, or not macOS / Linux), not just the orbit-less ones; the Claude update is its own test that skips on a level day; the `.exe` inventory reads poll; the cleanup sweep purges leftover `fleet-pw-*` packages from the Ubuntu VM; and the real-host lookup is one helper, `requireRealHost`.
+
 ## Round 2 · Batch C — live host, read-only
 
 Host-details cards, inventory filters, report-card results, OS drill-downs, affected-host counts. All reads,

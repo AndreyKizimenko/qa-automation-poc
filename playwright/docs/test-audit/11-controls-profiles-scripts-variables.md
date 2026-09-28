@@ -908,7 +908,7 @@ other:
 - **Grep:** `npx playwright test --project=premium premium/controls/scripts/batch-run.spec.ts -g "a batch on one VM of each platform"`
 - **Project:** premium only — batch runs are scoped to one fleet, and free has none · **Scopes:** the **VMs** fleet (`vmsFleetId` worker fixture)
 - **Mode:** UI+API · **Isolation:** standalone; first of two independent tests in the describe. Budget **720s** (describe-level).
-- **Preconditions:** **all three real VMs online** — macOS, Ubuntu and Windows, resolved in parallel with `findOnlineHost(…, { kind: 'real' })` (hardware model, not MDM), all on the VMs fleet (id 103). ✅ *(API)* one of each exists, else hard-fail. Each VM runs scripts one at a time and shares its queue with the host-execution specs ([HOST-19…22](02-hosts-shared-and-free.md)). Script execution on.
+- **Preconditions:** **all three real VMs online** — macOS, Ubuntu and Windows, resolved in parallel with `requireRealHost(request, platform)` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `findOnlineHost(…, { kind: 'real' })` underneath — hardware model, not MDM), all on the VMs fleet (id 103). ✅ *(API)* one of each exists, else it throws *"no online real <platform> VM … Check the <platform> VM is powered on and enrolled."* Each VM runs scripts one at a time and shares its queue with the host-execution specs ([HOST-19…22](02-hosts-shared-and-free.md)). Script execution on.
 - **Data created:** library script `pw-batch-run-<id>.sh` on the VMs fleet — `if [ "$(uname)" = Linux ]; then echo "fails on Linux"; exit 1; fi; echo "ran on $(uname)"` — deleted in `finally` (and by `cleanup-setup`'s `pw-` sweep of the VMs fleet if the test dies). The **batch record** (Batch progress → Finished) and the batch activity are permanent — nothing deletes a batch.
 
 **Flow**
@@ -923,7 +923,7 @@ other:
    - ✅ *(UI)* the **Run now** radio is checked (the default).
 6. ☐ Click **Run**.
    - ✅ *(UI)* success toast matching `/^Successfully ran script\./`; the modal closes.
-7. ☐ Click the **Show script activity** link.
+7. ☐ Click the success toast's **Show script activity** link (`RunScriptBatchModal.showScriptActivity()`).
    - ✅ *(UI)* Controls → Scripts → **Batch progress**, with the **Started** tab `aria-selected`.
    - ✅ *(UI)* the batch's list item contains **`/ 3 hosts`** — the denominator; the numerator is still moving.
 8. ☐ *(wait — no user action)* ✅ *(API)* `GET /scripts/batch?fleet_id=<VMs>` finds this script's newest batch; `GET /scripts/batch/:id` polls `status` to **`finished`** (10s interval, **480s** budget). Fleet marks a batch finished from a **cron**, which lands **2–4 minutes after the last host reports** — the page doesn't live-update, so the spec waits on the API rather than watching it.
@@ -948,7 +948,7 @@ other:
 - *Efficiency / smells:*
   - Most of the budget is Fleet's cron, not the test. At 2–4 min per batch plus a possibly busy VM queue, this is one of the slowest tests in the suite; the 720s budget is honest.
   - Resolves the three VMs *before* checking they're on the VMs fleet — if one were ever moved, `hostCheckbox` would fail on a missing row rather than with a clear precondition message.
-  - `page.getByRole('link', { name: 'Show script activity' })` is raw in the spec rather than on a page object.
+  - ~~**`page.getByRole('link', { name: 'Show script activity' })` is raw in the spec rather than on a page object.**~~ **Fixed 2026-09-28:** it is `RunScriptBatchModal.showScriptActivity()`, scoped to the success toast. Original finding: the raw page-wide link locator sat in the spec.
 
 **Notes (Andrey)**
 ```
@@ -971,35 +971,35 @@ other:
 
 **Flow**
 
-1. ☐ *(API precondition)* `GET /labels` → the built-in **macOS** label id. ✅ *(API)* it exists.
-2. ☐ *(API precondition)* the matching set, from two lists because neither holds both facts:
-   - `GET /labels/:id/hosts?fleet_id=0&status=online&per_page=1000` → **which** hosts the filter matches (but it returns **`orbit_version: null`** for every host);
-   - `GET /hosts?fleet_id=0&status=online&per_page=1000` → each host's real `orbit_version`, filtered to the label's ids.
+1. ☐ *(API precondition)* `getLabelId(request, 'macOS')` ([`helpers/api/labels.ts`](../../helpers/api/labels.ts); `GET /labels`) → the built-in **macOS** label id. ✅ *(API)* it exists (the helper throws `no label named "macOS"` otherwise).
+2. ☐ *(API precondition)* the matching set, from two lists because neither holds all the facts:
+   - `listLabelHostIds(request, labelId, { fleetId: 0, status: 'online' })` (`GET /labels/:id/hosts?fleet_id=0&status=online&per_page=1000`) → **which** hosts the filter matches (but that endpoint returns **`orbit_version: null`** for every host);
+   - `listFleetHosts(request, 0, { status: 'online' })` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `GET /hosts?fleet_id=0&status=online&per_page=1000`) → each host's `platform`, real `orbit_version` and `scripts_enabled`, filtered to the label's ids.
    - ✅ *(API)* the two lists agree on the count; ✅ *(API)* more than 50 match.
 3. ☐ *(API setup)* upload the script to Unassigned.
 4. ☐ Dashboard → navbar **Hosts** → fleet dropdown **Unassigned** → label filter **macOS** (the Platforms group's entry) → status filter **Online**.
 5. ☐ Tick the header checkbox (select all on page) → ✅ *(UI)* the selection bar appears → click **Select all matching hosts** → click **Run script**.
    - ✅ *(UI)* the modal reads **"Run a script on `<N>` hosts"**, `N` = the API's matching count, `toLocaleString()`-formatted.
 6. ☐ Hover the script → its **Run script** → ✅ *(UI)* "will run on compatible hosts (macOS and Linux)." → **Run now** checked → **Run** → ✅ *(UI)* toast `/^Successfully ran script\./`.
-7. ☐ *(wait)* ✅ *(API)* newest batch for the script on fleet 0 found; polls to **`finished`** (480s; the cron again).
+7. ☐ *(wait)* ✅ *(API)* newest batch for the script on fleet 0 found; polls to **`finished`** (480s; the cron again) — `findBatchId` / `waitForBatchFinished` in [`helpers/api/scripts.ts`](../../helpers/api/scripts.ts).
    - ✅ *(API)* `targeted` = the matching count — the batch hit exactly what the filter selected.
    - ✅ *(API)* `ran + errored + pending + incompatible + canceled` = `targeted` — every host lands in exactly one status.
-   - ✅ *(API)* `incompatible` = the matching hosts **without** `orbit_version` — simulations without orbit can't run scripts.
+   - ✅ *(API)* `incompatible` = the matching hosts that can't run a `.sh` — `incompatibleWithShell(h)`: **no `orbit_version`**, **`scripts_enabled === false`**, or a **non-Unix platform** (`windows`, `chrome`, `ios`, `ipados`, `android`). This mirrors the checks Fleet makes before queueing each host of a batch: `BatchExecuteIncompatibleFleetd` (no orbit, or scripts disabled) and `BatchExecuteIncompatiblePlatform` (`ValidateScriptPlatform`: a `.sh` runs only on darwin and Linux) — `server/datastore/mysql/scripts.go`.
    - ✅ *(API)* `ran > 0` and `errored > 0` — osquery-perf answers a script with a **random exit code**, so which host lands where is noise; that both buckets are non-empty is what holds.
 8. ☐ Open `/controls/scripts/progress/<batchId>` **by URL**.
    - ✅ *(UI)* `h2` = the script name; summary contains **`<targeted> hosts targeted`**.
    - ✅ *(UI)* tab names read **`Ran <ran>`**, **`Errored <errored>`**, **`Incompatible <incompatible>`** — the API's numbers.
 
 **Assessment**
-- *Value:* genuinely different from CTL-24: it exercises **Select all matching hosts** (a filter-based, not id-based, batch target) at a scale no hand-picked selection reaches, and the invariants chosen — targeted = matched, partition sums, incompatible = no-orbit — are the right ones for a noisy population. The two-list precondition dance around `orbit_version` is a real API quirk handled correctly.
+- *Value:* genuinely different from CTL-24: it exercises **Select all matching hosts** (a filter-based, not id-based, batch target) at a scale no hand-picked selection reaches, and the invariants chosen — targeted = matched, partition sums, incompatible = can't run a `.sh` — are the right ones for a noisy population. The two-list precondition dance around `orbit_version` is a real API quirk handled correctly.
 - *Coverage gaps:* the UI half only **mirrors** the API summary — the details page renders the same counts from the same endpoint, so steps 8's tab counts can't disagree with step 7 unless rendering breaks; no tab is opened and no host row read; no pagination through a large tab; the modal's filter-summary copy (it should name the filters, not just the count) unasserted; the "Select all matching" batch's server-side filter (label + status + fleet) is only checked through the count.
 - *Redundancy:* modal + run steps repeat CTL-24's.
 - *Efficiency / smells:*
-  - ⚠️ `incompatible == withoutOrbit` silently assumes **no Windows simulation sits in the macOS label** — a Windows sim with orbit would be incompatible with a `.sh` yet counted as orbit-capable, and the test would fail on correct product behaviour. Given the label's known mix, worth deriving `incompatible` from platform *and* orbit.
+  - ~~⚠️ **`incompatible == withoutOrbit` assumes no Windows simulation sits in the macOS label.**~~ **Fixed 2026-09-28:** `incompatible` is derived per host by `incompatibleWithShell` — no orbit, scripts disabled in fleetd, or a platform a `.sh` can't run on — the same three reasons Fleet's batch records (`BatchExecuteIncompatibleFleetd` / `BatchExecuteIncompatiblePlatform`). One difference remains: the spec lists the non-Unix platforms it knows, where Fleet's `IsUnixLike` allows darwin and its Linux list, so a host on some other platform would be counted differently — none is in the pool today. Original finding: a Windows sim with orbit would be incompatible with a `.sh` yet counted as orbit-capable, and the test would fail on correct product behaviour, given the label's known mix.
   - `ran > 0 && errored > 0` is probabilistic; at ~100 hosts it is effectively certain, below ~10 it would flake.
   - Step 8 navigates by URL where CTL-24 clicks through — inconsistent within one file.
   - Each run adds ~100 execution rows to premium's 2 GB MySQL that nothing ever deletes.
-  - Uses raw `apiUrl`/`authHeaders` calls in the spec body for labels/hosts rather than helpers (`helpers/api/labels.ts` exists).
+  - ~~**Uses raw `apiUrl`/`authHeaders` calls in the spec body for labels/hosts rather than helpers.**~~ **Fixed 2026-09-28:** the lookups are `getLabelId` / `listLabelHostIds` (`helpers/api/labels.ts`) and `listFleetHosts` (`helpers/api/hosts.ts`), and the batch reads `getBatchSummary` / `findBatchId` / `waitForBatchFinished` moved from the spec to `helpers/api/scripts.ts`.
 
 **Notes (Andrey)**
 ```
@@ -1017,7 +1017,7 @@ other:
 - **Grep:** `npm run test:premium:exclusive -- -g "turning script execution off disables running scripts everywhere Fleet offers it"` (free: `npm run test:free:exclusive -- -g "…"`). Filter by **title or file name, never by `tests/e2e/…` path** — the exclusive projects' `testDir` is `tests/e2e`, so a path filter never matches. The `:exclusive` scripts are the `--no-deps` form; with deps the whole main project runs first.
 - **Project:** **`premium-exclusive` + `free-exclusive`** (shared) — **not** `premium`/`free`, which `testIgnore` every `**/exclusive/**` path · **Scopes:** n/a (global setting); the Scripts library is opened on the host's own fleet — VMs on premium, Unassigned on free
 - **Mode:** UI+API · **Isolation:** **single worker, after the main project has finished** (`workers: 1`, `fullyParallel: false`, `dependencies: ['premium' | 'free']` in [`playwright.config.ts`](../../playwright.config.ts)). Why: `server_settings.scripts_disabled` is **global** — while it is on, Fleet rejects every new script run and stops handing queued ones to hosts, so running beside HOST-19…22 or CTL-24/25 would fail them. A dependency that fails skips this project, so on a red night it is reported as not run.
-- **Preconditions:** the real macOS VM (`findOnlineHost(…, 'darwin', { kind: 'real' })`) — used for its Actions menu and as the ad-hoc run target. ✅ *(API)* script execution **arrives on** (`isScriptExecutionEnabled`) — `cleanup-setup` turns it back on at the start of every run (`enableScriptExecution`), so arriving off means an earlier step of *this* run left it off.
+- **Preconditions:** the real macOS VM (`requireRealHost(request, 'darwin')`, which also returns the fleet it is on) — used for its Actions menu and as the ad-hoc run target. ✅ *(API)* script execution **arrives on** (`isScriptExecutionEnabled`) — `cleanup-setup` turns it back on at the start of every run (`enableScriptExecution`), so arriving off means an earlier step of *this* run left it off.
 - **Data created:** none persistent. The setting is flipped off and back on in the UI, and `enableScriptExecution` (`PATCH /config { server_settings: { scripts_disabled: false } }`) runs again in `finally`. A run killed while it is off is healed by the next run's `cleanup-setup`.
 
 **Flow**

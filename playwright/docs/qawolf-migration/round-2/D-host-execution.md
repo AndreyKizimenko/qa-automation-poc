@@ -163,7 +163,7 @@ start on a pinned title.
 Every app on both fleets has **one** cached build: the shelf was provisioned the day before and VMs today, and
 neither vendor had shipped since. The update spec's pin walk therefore **skips, saying why**, until Claude ships
 once more; its other Claude cases (the contract holds for the state the fleet is in) run today on both
-platforms. The Windows VM never takes the walk: Claude for Windows is an MSIX, and Windows won't provision an
+platforms, and the case that takes Claude's Update skips on a level day like this one, saying so. The Windows VM never takes the walk: Claude for Windows is an MSIX, and Windows won't provision an
 older MSIX over a newer one.
 
 ## What landed, and what changed from the plan

@@ -1,6 +1,6 @@
 # Software on hosts — test audit
 
-**Specs covered:** 5 files · **Entries:** 12 · **Runtime tests:** 18 (three parameterized loops collapsed into one entry each, every generated title listed; 1 skips on a data-availability guard today) · **Project:** premium
+**Specs covered:** 5 files · **Entries:** 13 · **Runtime tests:** 20 (three parameterized loops collapsed into four entries — the Claude loop declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
 This area covers Fleet **delivering software to a real device**: an installer added through Add software,
 installed from the host's Library, followed until the host reports it back, then uninstalled; plus the
@@ -13,9 +13,11 @@ inventory says so.
 
 **1. It runs on the real VMs, not the simulations.** Three genuine machines — **macOS, Windows 11 and
 Ubuntu, all ARM** (Apple M4, ARM Windows, aarch64) — on the **VMs** fleet (id 103 on premium QA, resolved by
-name through the `vmsFleetId` worker fixture). Specs pick them with
-`findOnlineHost(request, platform, { kind: 'real' })`, which keys on `hardware_model` matching
-`/virtual|qemu/i`, **not** on MDM enrollment. Never by name or id. An osquery-perf simulation never installs
+name through the `vmsFleetId` worker fixture). Specs pick them with `requireRealHost(request, platform)`
+([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts)), which wraps
+`findOnlineHost(request, platform, { kind: 'real' })` — keyed on `hardware_model` matching
+`/virtual|qemu/i`, **not** on MDM enrollment — and throws *"no online real <platform> VM on <url> … Check the
+<platform> VM is powered on and enrolled."* when there is none. Never by name or id. An osquery-perf simulation never installs
 anything, so a green assertion against one proves nothing. ARM decides which installers can land at all:
 that is why the Windows `.exe` is `7z2601-arm64.exe` and why an `amd64` `.deb` is a *deterministic* failed
 install on the Ubuntu VM.
@@ -25,7 +27,7 @@ install on the Ubuntu VM.
 **"Claude is installed"** *presence* policies (reinstall when missing, never update). It is **applied by
 hand**, not by the nightly. Claude tracks latest (no `version:` pin), so Fleet's hourly
 `maintained_apps_auto_update` cron downloads each new build and keeps the previous one — the ingredient the
-update spec (SWH-09/10) needs. Design and rationale:
+update spec (SWH-09/10/13) needs. Design and rationale:
 [D-host-execution.md → The FMA fixture set](../qawolf-migration/round-2/D-host-execution.md#the-fma-fixture-set).
 Everything else on the fleet is per-run, and a gitops apply deletes whatever the file does not declare.
 
@@ -45,13 +47,16 @@ installed is the Fleet-maintained **Itsycal** (a menu-bar calendar, never launch
 **4. The waits are the substance, and they are slow.** `waitForSoftwareSettled`
 ([`helpers/api/software.ts`](../../helpers/api/software.ts)) is the wait every flow here leans on, in three
 steps: **(a)** the install/uninstall status settles (≤ 5 min — a VM works one queue, shared with every other
-spec's scripts and installs); **(b)** a collection runs *after* that: baseline the host's
-`detail_updated_at`, ask for a refetch, wait for it to move (≤ 4 min) — `detail_updated_at`, **not**
+spec's scripts and installs); **(b)** a collection runs *after* that: wait until the host has no
+refetch outstanding — Fleet queues one after every install and uninstall, and one left by the previous
+action can still be running on pre-install data, which a new request would merge into — then baseline the
+host's `detail_updated_at`, ask for a refetch, wait for it to move (≤ 4 min) — `detail_updated_at`, **not**
 `software_updated_at`, because the latter only moves when the inventory *changes* and so never moves after a
-failed uninstall; **(c)** the inventory agrees with the status (≤ 2 min — a refetch's detail results can be
-stored seconds before its software results). **A refetch takes 60–120 s on a VM.** On a manual run, the
-equivalent is: wait for the Library Status to settle, click **Refetch** on the host, wait for "Last fetched"
-to update, then look.
+failed uninstall; **(c)** the inventory agrees with the status (≤ 1 min — a refetch's detail results can be
+stored seconds before its software results); if it still disagrees, (b)–(c) run once more. **A refetch
+takes 60–120 s on a VM.** On a manual run, the equivalent is: wait for the Library Status to settle, wait
+for "Last fetched" to move once on its own (Fleet's own refetch), then click **Refetch**, wait for it to
+move again, and look.
 
 **5. A failed install is retried.** Fleet makes `MaxSoftwareInstallAttempts` = **3** attempts and reports
 `pending_install` between them, so "Failed" only sticks **~6 minutes** after the click. SWH-07 depends on this
@@ -105,8 +110,14 @@ it costs no disk and no time.
 Each test removes its title in a `finally`, and `setup/cleanup.steps.ts` sweeps what these specs name as their
 own from the VMs fleet at the start and end of every premium run: titles whose package matches
 `fleet-pw-*` / `fleet-playwright-*` / `7z2601-arm64.exe`, the Fleet-maintained **Itsycal**, and policies named
-`[Install software] fleet-pw-*`; plus it clears version pins on **QA** and **VMs**. **The sweep deletes
-titles; it never uninstalls from a host.** So if you stop a manual flow midway, clean up in this order:
+`[Install software] fleet-pw-*`; plus it clears version pins on **QA** and **VMs**. **Deleting a title never
+uninstalls it**, so after the deletes the sweep checks the online Ubuntu VM's inventory for `fleet-pw-*`
+names and, if it finds any, queues one ad-hoc script on that VM —
+`dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge`. A host runs scripts and installs from
+one queue, so the purge finishes before any install the run queues after it. **The macOS and Windows VMs are
+never uninstalled from by the sweep:** the fixed-name `.pkg` / `.msi` / `.exe` come back with the next run,
+whose pre-clean (`ensureNotInstalled`) or own uninstall takes them off. So if you stop a manual flow midway on
+macOS or Windows — or want the Ubuntu VM clean before the next run — clean up in this order:
 
 1. **Uninstall from the host.** Host details → **Software** → **Library** → search the title → **Uninstall**.
    Wait for the Status to clear (a refetch lands 60–120 s later and the Installed version goes back to `---`).
@@ -120,7 +131,8 @@ titles; it never uninstalls from a host.** So if you stop a manual flow midway, 
 For SWH-05's package, whose uninstall script fails **by design**, step 1 will fail again: either edit the
 title's uninstall script first (title → **Edit software** → Advanced options) to
 `apt-get remove --purge --assume-yes <name>`, or run that as an ad-hoc script on the Ubuntu VM
-(`POST /api/v1/fleet/scripts/run` with `host_id` + `script_contents` — what the spec's `finally` does).
+(`POST /api/v1/fleet/scripts/run` with `host_id` + `script_contents` — what the spec's `finally` does). Its
+name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purges it.
 
 ### Preparing a manual run
 
@@ -153,6 +165,7 @@ title's uninstall script first (title → **Edit software** → Advanced options
 | SWH-07 | `premium/software/inventory-reflects-install.spec.ts` | a pending or failed install never appears in the Inventory, through every retry | UI+API | ☐ |
 | SWH-08 | `premium/software/update-on-host.spec.ts` | a package the library moves ahead of is offered Update, and only then | UI+API | ☐ |
 | SWH-09 | `premium/software/update-on-host.spec.ts` | Claude on the {darwin, windows} VM offers Update exactly when the library is ahead of it — **2 variants** | UI+API | ☐ |
+| SWH-13 | `premium/software/update-on-host.spec.ts` | Claude on the {darwin, windows} VM updates to the library's build when it is behind — **2 variants**, **skip** on a day Claude is level (listed beside SWH-09: the same loop declares both) | UI+API | ☐ |
 | SWH-10 | `premium/software/update-on-host.spec.ts` | Claude on the macOS VM: pinned back it is ahead, installed it is level, unpinned it updates — **skips** until a second Claude build is cached | UI+API | ☐ |
 | SWH-11 | `premium/software/large-upload.spec.ts` | a package over the size limit is refused in the browser, before any upload | UI+API | ☐ |
 | SWH-12 | `premium/software/large-upload.spec.ts` | a large upload shows its progress and ends in success | UI | ☐ |
@@ -169,7 +182,7 @@ npm run test:premium:headed -- -g "<title fragment>"     # watch it
 
 `-g` is a regex, and several titles contain `.` or `"` — quote the fragment with single quotes where it holds
 double quotes. All five files run **fully parallel** (the suite default) except the `Claude` describe, which is
-`mode: 'serial'`; with more than one worker, the Linux tests of all four VM specs queue on the **same Ubuntu
+`mode: 'serial'` (its five tests — SWH-09 and SWH-13 per platform, then SWH-10 — one after another); with more than one worker, the Linux tests of all four VM specs queue on the **same Ubuntu
 VM** — seven of them.
 
 ---
@@ -180,7 +193,7 @@ VM** — seven of them.
 - **Grep:** `npm run test:premium -- -g "added in the UI installs on the"` (three runtime tests: `a macOS .pkg added in the UI installs on the darwin VM and lands in its inventory`, `a Windows .msi added in the UI installs on the windows VM and lands in its inventory`, `a Linux .deb added in the UI installs on the linux VM and lands in its inventory`)
 - **Project:** premium · **Scope:** the **VMs** fleet (selected by label in the Software page's fleet dropdown) · **Host:** the real VM of the row's platform
 - **Mode:** UI+API · **Isolation:** parallel, self-contained; describe timeout 600 s. `finally` → `removeTitleFromHost` (uninstall if the host has it, wait for the status to clear — **not** for the refetch — then delete the title).
-- **Preconditions:** an online real VM of the platform (the spec throws `no online real <platform> VM on <url>` otherwise); the VMs fleet exists; the macOS/Windows rows' fixed-name fixture is not already a title on the fleet (pre-cleaned if it is).
+- **Preconditions:** an online real VM of the platform (`requireRealHost` throws `no online real <platform> VM on <url> …` otherwise); the VMs fleet exists; the macOS/Windows rows' fixed-name fixture is not already a title on the fleet (pre-cleaned if it is).
 - **Data created:** one title on the VMs fleet + the fixture installed on one VM — both removed in `finally`. The `.deb` row's file is written under the test's output dir.
 
 | variant | file | package name the details modal quotes |
@@ -235,7 +248,7 @@ VM** — seven of them.
   - The **Details** toggle in the Install details modal (the install script's output) is never opened. The dashboard-wide activity feed is not checked (only the host's). The Upcoming item is deliberately unasserted (see intro §6).
 - *Redundancy:* the Linux row and SWH-06 both install a per-run `.deb` on the Ubuntu VM and wait for it to reach inventory; SWH-06's only addition is the Inventory-tab view this entry lacks. The shared `installFromLibrary` helper is also run by SWH-02.
 - *Efficiency / smells:*
-  - **Worst-case budgets exceed the test timeout.** `waitForSoftwareSettled` alone may take 300 + 240 + 120 s = 11 min against a 10 min describe timeout, before `ensureNotInstalled` and the upload. A slow VM therefore ends as a *test timeout*, which aborts before the `finally` — cleanup then falls to the sweep, and the software stays installed on the VM (the sweep never uninstalls).
+  - **Worst-case budgets exceed the test timeout.** `waitForSoftwareSettled` alone may take 300 + 240 + 120 s = 11 min against a 10 min describe timeout, before `ensureNotInstalled` and the upload. A slow VM therefore ends as a *test timeout*, which aborts before the `finally` — cleanup then falls to the sweep, which deletes the title and purges a leftover `.deb` from the Ubuntu VM; a `.pkg` / `.msi` stays installed until the next run's pre-clean.
   - The `pending_install` read (step 9) is one-shot right after the toast. The header calls it deterministic; it is in practice (orbit polls, so there are seconds before pickup), but an idle VM completing and reporting a tiny `.deb` before the GET lands would fail it.
   - The macOS/Windows rows use **fixed file names**. Two concurrent copies of the same row (`--repeat-each` across workers) would share one title and step on each other's install; the per-run `.deb` naming exists precisely to avoid this and the committed fixtures cannot.
   - The pre-clean in step 2 is dead code for the `.deb` row (a per-run name can never have a leftover).
@@ -366,16 +379,16 @@ installed version, and the row is checked against the host inventory **by Displa
 
 **Flow**
 
-1. ☐ *(API setup)* Pre-clean a leftover title with the same package file name. Upload the package to the VMs fleet (with the row's scripts), queue the install, and wait for it to settle — status `installed`, a post-status refetch, and the inventory **present** (linked rows) or **any** (the `.exe` row).
-   - ✅ *(API)* The host's inventory lists the inventory name with at least one version (*"<title> installed but the host's inventory never listed <name>"* otherwise).
+1. ☐ *(API setup)* Pre-clean a leftover title with the same package file name. Upload the package to the VMs fleet (with the row's scripts), queue the install, and wait for it to settle — status `installed`, a post-status refetch, then a poll (≤ 2 min) until the inventory shows it **present**: for linked rows, the title's installed versions; for the `.exe` row, the host's own inventory searched by `7-Zip 26.01 (arm64)` (`waitForSoftwareSettled(…, { inventoryName })`).
+   - ✅ *(API)* The host's inventory lists it (*"host <id>'s inventory never showed <inventory name or title id> present after installed"* otherwise).
    - **By hand:** add the package through Add software on the VMs fleet (for the `.exe`, paste both scripts from the table into the form), install it from the VM's Library, wait for **Installed** and a refetch.
 2. ☐ Open the host's details page → **Software** → **Library** → search the title.
    - ✅ *(UI)* *(linked rows only)* **Installed version** is not `---`.
 3. ☐ Click **Uninstall** on the row.
    - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
    - ✅ *(API)* The host's status for the title is `pending_uninstall`.
-4. ☐ Wait for the status to clear, then **Refetch** and wait for "Last fetched" to move — `waitForSoftwareSettled(…, null, { inventory: 'absent' | 'any' })`.
-   - ✅ *(API)* Status clears to `null` (≤ 5 min); `detail_updated_at` moves (≤ 4 min); *(linked rows)* the inventory no longer lists an installed version (≤ 2 min).
+4. ☐ Wait for the status to clear, then **Refetch** and wait for "Last fetched" to move — `waitForSoftwareSettled(…, null, { inventoryName })` (`inventoryName` set only for the `.exe` row).
+   - ✅ *(API)* Status clears to `null` (≤ 5 min); `detail_updated_at` moves (≤ 4 min); the inventory no longer lists it (polled ≤ 2 min — the title's installed versions for linked rows, the host inventory by `7-Zip 26.01 (arm64)` for the `.exe`).
    - ✅ *(API)* The host inventory, searched by the inventory name, returns no versions.
 5. ☐ Reload the host → **Software** → **Library** → search the title.
    - ✅ *(UI)* **Installed version** reads `---`.
@@ -394,9 +407,9 @@ installed version, and the row is checked against the host inventory **by Displa
 - *Coverage gaps:* the Uninstall details modal's **Details** (the uninstall script's output) is not opened. For linked rows the "before" state is asserted as `not '---'` rather than `1.0.0`. The uninstall is only ever started from the host's Library — not from the title page or the host's Inventory.
 - *Redundancy:* SWH-05 reuses the same precondition helper; SWH-01's cleanup performs the same uninstall silently by API every run.
 - *Efficiency / smells:*
-  - **The `.exe` row's inventory checks are one-shot reads that can race.** With `inventory: 'any'`, `waitForSoftwareSettled` returns as soon as the refetch lands — but its own doc says a refetch's software results can land *seconds after* its detail results, which is why the linked path polls for 2 min. The `.exe` row then reads the inventory once: in step 1 (`.not.toEqual([])`) and step 4 (`.toEqual([])`). Either can fail on a refetch whose software half is a beat late. The fix is a short poll on `getHostInventoryVersions`, not a longer sleep.
+  - ~~⚠️ **The `.exe` row's inventory checks are one-shot reads that can race.**~~ **Fixed 2026-09-28:** `waitForSoftwareSettled` takes an `inventoryName` option, and when it is set step 3 polls `getHostInventoryVersions` by the host's own program name (≤ 2 min) until it is present or absent; `inventory: 'any'` no longer exists. `installedPackage` passes the row's `inventoryName` for the install wait and the uninstall wait passes it too, so the `.exe` row's step-1 read is the poll itself and its step-4 one-shot read sits behind one. Original finding: with `inventory: 'any'`, the wait returned as soon as the refetch landed, though a refetch's software results can land seconds after its detail results; the `.exe` row then read the inventory once in step 1 (`.not.toEqual([])`) and step 4 (`.toEqual([])`), and either could fail on a refetch whose software half was a beat late.
   - For the `.exe` row, step 5's **Installed version `---`** is non-discriminating — it read `---` before the uninstall too, since the title is never linked. The **Install** button and the absent **Uninstall** carry that row.
-  - Two Windows rows (plus SWH-01's `.msi` and SWH-09's Windows Claude) share the one Windows VM's queue in a parallel run.
+  - Two Windows rows (plus SWH-01's `.msi` and SWH-09/13's Windows Claude) share the one Windows VM's queue in a parallel run.
 
 **Notes (Andrey)**
 ```
@@ -443,7 +456,7 @@ other:
 - *Coverage gaps:* the **Inventory tab** is not opened — "still installed" is proved by API and the Library only (SWH-04 does open it for the success case). **Retry uninstall** is asserted visible, never clicked. Only Linux.
 - *Redundancy:* none.
 - *Efficiency / smells:*
-  - **The cleanup is unverified.** The ad-hoc purge is queued and not awaited, and the title is deleted in the same breath; if the script fails (or the VM's queue drops it), the package stays on the Ubuntu VM with no title to show for it and nothing reports it. The sweep would never catch it either — it deletes titles, it doesn't uninstall.
+  - **The cleanup is unverified.** The ad-hoc purge is queued and not awaited, and the title is deleted in the same breath; if the script fails (or the VM's queue drops it), the package stays on the Ubuntu VM with no title to show for it and nothing in this test reports it. ~~The sweep would never catch it either — it deletes titles, it doesn't uninstall.~~ **Partly fixed 2026-09-28:** the next premium run's sweep now purges any `fleet-pw-*` package the Ubuntu VM's inventory still lists, so a dropped purge is healed by the next run — though still never reported.
   - The modal's status assertion is the loose substring "uninstall <name> from <host>" — it matches "uninstalled …" as well as "failed to uninstall …", so the *failure* wording is carried by the activity matcher in step 5, not by the modal.
   - Showing an **Installed** status after a failed uninstall is Fleet's current UX, verified live; a manual re-runner should judge whether it reads well (the failure is only visible in the Retry uninstall label and the activity).
 
@@ -463,7 +476,7 @@ other:
 - **Grep:** `npm run test:premium -- -g "a package that installs appears in the Inventory once the host re-reports"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 900 s; `finally` → `removeTitleFromHost`
-- **Preconditions:** online real Ubuntu VM (`expected an online real Linux VM`)
+- **Preconditions:** online real Ubuntu VM (`requireRealHost` throws `no online real linux VM on <url> …` otherwise)
 - **Data created:** a per-run `fleet-pw-inventory-<base36>` **2.4.0** title, installed on the VM; removed in `finally`.
 
 **Flow**
@@ -527,7 +540,7 @@ other:
 **Assessment**
 - *Value:* the best-designed failure in the area. The failure is **deterministic and harmless** (the architecture mismatch means nothing touches the host), the pending-window read is *proved* to be inside the window by reading the status after it, and the three-attempt assertion documents a Fleet behaviour (`MaxSoftwareInstallAttempts`) that would otherwise surprise every manual tester.
 - *Coverage gaps:*
-  - **The failure's reason is never read.** The **Failed** button opens the Install details modal with dpkg's architecture error in **Details** — the most informative thing on screen, and the one assertion that would tell a wrong-arch refusal from any other failure. `InstallDetailsModal.output()` exists.
+  - **The failure's reason is never read.** The **Failed** button opens the Install details modal with dpkg's architecture error in **Details** — the most informative thing on screen, and the one assertion that would tell a wrong-arch refusal from any other failure. `InstallDetailsModal.revealOutput()` exists.
   - **Retry** is asserted visible, never clicked. The per-attempt activities are asserted via API only, not as three items in the host's Past tab.
 - *Redundancy:* none.
 - *Efficiency / smells:*
@@ -598,34 +611,71 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
 - **Grep:** `npm run test:premium -- -g "offers Update exactly when the library is ahead of it"` (two runtime tests: `Claude on the darwin VM offers Update exactly when the library is ahead of it`, `Claude on the windows VM offers Update exactly when the library is ahead of it`)
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS / Windows VM
-- **Mode:** UI+API · **Isolation:** **serial** describe `Claude` (darwin → windows → SWH-10), because SWH-10 pins the title these read. A failure in the darwin run **skips the Windows run and SWH-10**.
-- **Preconditions:** Claude (`claude/darwin`, `claude/windows`) is on the VMs fleet — *"Claude is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise; Claude is **installed** on the VM — *"… its 'Claude is installed' policy reinstalls it at the VM's next policy run (a refetch triggers one)"* otherwise.
-- **Data created:** none — **but when the library is ahead, it updates Claude on the VM** (a real app update).
+- **Mode:** UI+API · **Isolation:** **serial** describe `Claude`, five tests in this order: darwin SWH-09 → darwin SWH-13 → windows SWH-09 → windows SWH-13 → SWH-10 — because SWH-10 pins the title these read and SWH-13's update changes what they see. A failure in the darwin run **skips every test after it**.
+- **Preconditions:** an online real VM of the platform (`requireRealHost`); Claude (`claude/darwin`, `claude/windows`) is on the VMs fleet — *"Claude is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise; Claude is **installed** on the VM — *"… its 'Claude is installed' policy reinstalls it at the VM's next policy run (a refetch triggers one)"* otherwise. Both checks live in the `claudeOn()` helper SWH-09, SWH-10 and SWH-13 share.
+- **Data created:** none — it only reads. Taking the Update is SWH-13's job.
 
 **Flow**
 
-1. ☐ (No user action) Resolve the VM; find the Claude Fleet-maintained title for the platform (by name **and** platform — the two are separate titles with the same name).
+1. ☐ (No user action) `claudeOn()`: resolve the VM; find the Claude Fleet-maintained title for the platform (by name **and** platform — the two are separate titles with the same name).
    - ✅ *(API)* Claude is on the VMs fleet.
    - ✅ *(API)* The VM reports at least one installed Claude version.
-2. ☐ (No user action) Decide the state: **behind** iff any installed version is below the library version by Fleet's zero-padded rule. Recorded as a `claude-state` annotation on the test (`installed <versions>, library <version>`) — **read it in the report** to know which branch ran.
+   - Records a `claude-state` annotation on the test (`installed <versions>, library <version>`).
+2. ☐ (No user action) Decide the state: **behind** iff any installed version is below the library version by Fleet's zero-padded rule (`isBehind`, over `compareVersions` from [`helpers/api/software.ts`](../../helpers/api/software.ts)).
 3. ☐ Host details → **Software** → **Library** → search **Claude**.
    - ✅ *(UI)* **Library version** equals the API's.
    - ✅ *(UI)* **If behind:** **Update** is offered and **Reinstall** is not. **Otherwise:** **Reinstall** is offered and **Update** is not.
-4. ☐ **Only if behind:** click **Update**; wait for installed, **Refetch**, and for the inventory to report the library version.
-   - ✅ *(UI)* Install toast.
-   - ✅ *(API)* After the update, no installed version is below the library's (*"after updating, installed … vs library …"*).
-   - ☐ Reload → Library → search Claude.
-   - ✅ *(UI)* **Reinstall** offered, **Update** not.
 
 **Assessment**
 - *Value:* the contract on a **real, vendor-moved** Fleet-maintained app on the two platforms the deb pair can't reach, and the only place Windows' four-segment versions meet a three-segment library. The precondition messages are exemplary: each tells the reader exactly how to restore the fixture.
 - *Coverage gaps:*
-  - **Which branch runs is decided by the calendar.** Most days the VM is level and only the Reinstall half runs; the Update half runs once per vendor release — the first run after the hourly cron fetches a new build — and then the VM is level again. Both outcomes are green, and only the `claude-state` annotation distinguishes them. A regression in the Update branch can sit unnoticed until Claude next ships.
+  - ~~**Which branch runs is decided by the calendar.**~~ **Partly fixed 2026-09-28:** the update is its own test, SWH-13, which skips on a level day with the versions in the reason — so the report now shows whether the Update path ran (pass) or not (skip) without reading an annotation. What is left is the calendar itself: this test checks Update-offered only on a behind day, and SWH-13 only runs then. Original finding: most days the VM is level and only the Reinstall half runs; the Update half runs once per vendor release — the first run after the hourly cron fetches a new build — and then the VM is level again. Both outcomes were green, and only the `claude-state` annotation distinguished them. A regression in the Update branch can sit unnoticed until Claude next ships.
   - **Installed version text is not asserted** here (only Library version), unlike SWH-08 — because a VM can report several versions, or a four-segment one. That leaves the UI's rendering of the installed side on Windows unchecked.
 - *Redundancy:* the Reinstall-when-level half duplicates SWH-08 step 2 on a different platform.
 - *Efficiency / smells:*
-  - **The oracle is a re-implementation.** `isBehind` copies Fleet's `compareVersions` into the spec; if the product's rule changes, the test's copy and Fleet disagree and the test fails *for the right reason* — but if both are wrong the same way (a shared misunderstanding of padding, pre-release suffixes), it passes. SWH-08's literal versions are the counterweight; keep them.
+  - ~~**The oracle is a re-implementation.**~~ **Partly fixed 2026-09-28:** `isBehind` now builds on `compareVersions` exported from `helpers/api/software.ts` — the same copy `waitForSoftwareSettled` compares versions with — so the suite holds one copy of the rule instead of two. It is still a copy of Fleet's frontend `compareVersions`, so the finding stands: if the product's rule changes, the test's copy and Fleet disagree and the test fails *for the right reason* — but if both are wrong the same way (a shared misunderstanding of padding, pre-release suffixes), it passes. SWH-08's literal versions are the counterweight; keep them.
   - Serial coupling: a flaky macOS VM costs the Windows assertion too.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWH-13 · Premium • Software • Update on host › Claude › Claude on the {darwin, windows} VM updates to the library's build when it is behind
+
+- **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
+- **Grep:** `npm run test:premium -- -g "updates to the library's build when it is behind"` (two runtime tests: `Claude on the darwin VM updates to the library's build when it is behind`, `Claude on the windows VM updates to the library's build when it is behind`)
+- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS / Windows VM
+- **Mode:** UI+API · **Isolation:** serial describe `Claude`, each run straight after the same platform's SWH-09 (order under SWH-09).
+- **Preconditions:** as SWH-09 (`claudeOn()`: the VM, Claude on the fleet, Claude installed). **Skips** when the VM is not behind, with *"installed <versions> is level with library <version>"* — only a vendor release since the last run puts the host behind, so **most days both runs skip**.
+- **Data created:** none durable — **it updates Claude on the VM** (a real app update), which leaves it level for the runs after.
+
+**Flow**
+
+1. ☐ (No user action) `claudeOn()` — the same checks and `claude-state` annotation as SWH-09 step 1.
+2. ☐ (No user action) If no installed version is below the library's (`isBehind`), skip with the versions in the reason.
+3. ☐ Host details → **Software** → **Library** → search **Claude** → click **Update**.
+   - ✅ *(UI)* Install toast.
+4. ☐ Wait for installed, **Refetch**, and for the inventory to report the library version — `waitForSoftwareSettled(…, 'installed', { version: <library> })`.
+   - ✅ *(API)* After the update, no installed version is below the library's (*"after updating, installed … vs library …"*).
+5. ☐ Reload → **Software** → **Library** → search **Claude**.
+   - ✅ *(UI)* **Reinstall** offered, **Update** not (`toHaveCount(0)`).
+
+**Assessment**
+- *Value:* the only test that takes **Update** on a real, vendor-moved app as it naturally arrives — the path a customer hits after a release — on both platforms, including Windows' four-segment report settling level against a three-segment library. Split out of SWH-09 so a skipped update reads as a skip, not as a pass.
+- *Coverage gaps:*
+  - **It runs only on a behind day** — once per Claude release, the first run after the hourly cron fetches it. Between releases it has nothing to test, and a regression in Update can sit behind a string of skips. SWH-08 (Linux, on demand) and SWH-10 (macOS, on demand once two builds are cached) are what cover Update between releases; nothing does for Windows.
+  - Installed and Library version text are not asserted after the update (only the action), for SWH-09's reason — a VM can report several versions, or a four-segment one.
+  - The Update's details modal / activity are not checked.
+- *Redundancy:* SWH-10's last step is this update made deterministic on macOS, once SWH-10 runs.
+- *Efficiency / smells:*
+  - The oracle is `isBehind` over the suite's copy of Fleet's `compareVersions` — see SWH-09.
+  - A real app update (~100 MB) on the shared Windows / macOS VM queue on the day it runs, inside the describe's 600 s timeout with `waitForSoftwareSettled`'s 5 + 4 + 2 min budget — the same over-budget shape as SWH-01.
 
 **Notes (Andrey)**
 ```
@@ -642,14 +692,14 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
 - **Grep:** `npm run test:premium -- -g "pinned back it is ahead, installed it is level, unpinned it updates"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS VM
-- **Mode:** UI+API · **Isolation:** serial describe, step 3 of 3; `finally` **unpins** (`setPinnedVersion(…, '')`); `cleanup-setup` also clears any pin it finds on QA / VMs, for the timeout case where the `finally` never runs
-- **Preconditions:** Claude (darwin) on the VMs fleet; **at least two cached builds** (`fleet_maintained_versions`). **Skips** with *"the VMs fleet has cached one Claude build (…); the walk needs the previous one too"* until the vendor ships again and the hourly cron fetches it. **As of 2026-09-28 it skips** — one build cached. Also refuses to start on a pinned title (*"Claude arrived pinned — an earlier run died before restoring it"*).
+- **Mode:** UI+API · **Isolation:** serial describe, test 5 of 5; `finally` **unpins** (`setPinnedVersion(…, '')`); `cleanup-setup` also clears any pin it finds on QA / VMs, for the timeout case where the `finally` never runs
+- **Preconditions:** as SWH-09's `claudeOn()` for darwin — the macOS VM, Claude (darwin) on the VMs fleet, and Claude **installed** on the VM (checked before the skip, so a missing install fails this test even on a skip day); **at least two cached builds** (`fleet_maintained_versions`). **Skips** with *"the VMs fleet has cached one Claude build (…); the walk needs the previous one too"* until the vendor ships again and the hourly cron fetches it. **As of 2026-09-28 it skips** — one build cached. Also refuses to start on a pinned title (*"Claude arrived pinned — an earlier run died before restoring it"*).
 - **Data created:** none durable — but it **downgrades Claude on the macOS VM to the previous build and updates it back**. Windows never takes this walk: Claude for Windows is an MSIX, and Windows refuses to provision an older MSIX over a newer one.
 
 **Flow**
 
-1. ☐ (No user action) Find the Claude (darwin) title; read its cached versions, newest first: `[newest, previous]`.
-   - ✅ *(API)* Claude is on the fleet; the title is **not** pinned.
+1. ☐ (No user action) `claudeOn()` for darwin (as SWH-09 step 1, including the `claude-state` annotation); read the title's cached versions, newest first: `[newest, previous]`.
+   - ✅ *(API)* Claude is on the fleet and installed on the VM; the title is **not** pinned.
 2. ☐ **Pin back.** Title → **Versions** → pick the **previous** build (the spec: `PATCH /software/titles/:id/package` with `version=<previous>`). The host now has a newer build than the library offers.
    - `expectLibraryAction('Claude', 'Reinstall', { installed: <what the host has>, library: previous })` — **host ahead: no Update.**
 3. ☐ **Install the previous build** (the spec queues it by API; by hand, click **Reinstall**). Wait for installed, **Refetch**, and for the inventory to report `previous`.
@@ -670,10 +720,10 @@ other:
 - *Coverage gaps:*
   - **⚠️ It has never run past its skip.** Every green run to date is the skip. The walk — the pin, a macOS downgrade of a real app, the unpin, the update — is unverified end to end; treat its first real execution as an authoring check, not a regression result, and watch it.
   - The pin is set through the API, not the **Versions** modal it mimics; the downgrade is queued by API, not by clicking **Reinstall** in the "ahead" state (which would also cover SWH-08's unclicked downgrade).
-- *Redundancy:* its states are SWH-08's states on a real app; its final Update is SWH-09's behind branch made deterministic.
+- *Redundancy:* its states are SWH-08's states on a real app; its final Update is SWH-13 made deterministic.
 - *Efficiency / smells:*
   - Step 2 uses `installedVersions[0]` — it assumes the VM reports exactly one Claude build; a VM with two would make the expected Installed-version text arbitrary.
-  - If it dies *after* the downgrade (step 3) and before the update, the `finally` unpins but the VM is left **behind** — which self-heals, since the next run's SWH-09 then takes its Update branch. Worth knowing when reading the next run's `claude-state` annotation.
+  - If it dies *after* the downgrade (step 3) and before the update, the `finally` unpins but the VM is left **behind** — which self-heals, since the next run's SWH-13 then finds it behind and takes the Update. Worth knowing when reading the next run's `claude-state` annotation.
   - Three full install+refetch cycles of a real app (~100 MB) on one VM: the longest test in the area once it stops skipping.
 
 **Notes (Andrey)**
@@ -701,17 +751,17 @@ other:
    `python3 -c "open('fleet-pw-over-limit.pkg','wb').truncate(<limit> + 1)"`.
    - ✅ *(API)* The limit is a positive number.
 2. ☐ Dashboard → **Software** → fleet **Workstations** → **Add software** → **Custom package**.
-3. ☐ Start watching network requests (DevTools → Network, filter `software/package`), then choose the file.
+3. ☐ Choose the file.
    - ✅ *(UI)* An **error** toast: **"Couldn't add. The maximum file size is <limit>."**, the limit formatted the way Fleet's `formatFileSize` does it (four significant digits, whichever of decimal/binary units reads shorter — `10GiB` for 10 GiB). The spec re-implements that formatter.
-   - ✅ *(UI)* **Add software** is **disabled** — the form never took the file.
-   - ✅ *(UI — network)* No request to `/software/package` was made after the page loaded.
+   - ✅ *(UI)* The form never took the file: the uploader still offers **Choose file** (`uploader.chooseFileButton`), and the file name **`fleet-pw-over-limit.pkg`** appears nowhere on the page (`toHaveCount(0)`).
+   - ✅ *(UI)* **Add software** is **disabled** — there is nothing to submit.
 
 **Assessment**
 - *Value:* pins that the limit is **per instance** (it reads the config instead of trusting QA Wolf's 1 GiB) and that the check happens **client-side on selection**. The sparse file is a genuinely good trick: a 10 GiB test input that costs no disk and no time, and because the browser rejects it, not a byte is read.
 - *Coverage gaps:* the **server-side** enforcement is not tested — an API upload over the limit (or a file that lies about its size) is the enforcement layer, and a UI-only check over a permissive server is the shape worth worrying about. The boundary (exactly the limit, accepted) is not tested — impractical at 10 GiB through the browser, but cheap at the API.
 - *Redundancy:* none.
 - *Efficiency / smells:*
-  - **The "nothing was sent" assertion cannot fail as written.** An upload is only sent when **Add software** is clicked, and the test never clicks it — so `uploads` is empty whether the browser refused the file or accepted it. The load-bearing checks are the error toast and the disabled button; the request listener documents intent rather than proving it. To make it bite, try the click (a disabled button can't be clicked — use `{ force: true }` or `dispatchEvent`) and *then* assert no request, or drop the claim.
+  - ~~⚠️ **The "nothing was sent" assertion cannot fail as written.**~~ **Fixed 2026-09-28:** the request listener is gone; the test asserts instead that the form never took the file — the uploader still shows **Choose file**, the file name appears nowhere, and **Add software** is disabled — each of which a form that accepted the file would fail. Original finding: an upload is only sent when **Add software** is clicked, and the test never clicked it, so `uploads` was empty whether the browser refused the file or accepted it; the listener documented intent rather than proving it.
   - The formatter is copied from Fleet into the spec; a Fleet formatting change fails this on copy, which is acceptable but worth knowing when it goes red after an upgrade.
 
 **Notes (Andrey)**
@@ -740,7 +790,7 @@ other:
 3. ☐ Watch the upload modal.
    - ✅ *(UI)* The progress modal (`.file-progress-modal`) is visible.
    - ✅ *(UI)* A progress bar titled **upload progress bar** is visible inside it.
-   - ✅ *(UI)* The percentage text **advances**: a later reading is higher than the first (polled ≤ 120 s).
+   - ✅ *(UI)* The percentage **advances** (polled ≤ 120 s). A reading is the modal's **N%** readout (`SoftwareCustomPackagePage.progressPercent` — matched by its text, `/^\d{1,3}%$/`); **0** while the modal is up but shows no readout (Fleet renders none at 0 %); **100** once the modal is gone. The poll expects a reading above `min(first, 99)`, so an upload that finishes between two readings passes.
 4. ☐ Wait for it to finish.
    - ✅ *(UI)* The modal closes (≤ 240 s).
    - ✅ *(UI)* Success toast **"<file name> successfully added."** (exact file name).
@@ -752,8 +802,8 @@ other:
 - *Coverage gaps:* nothing checks the resulting title (version, size, type) beyond the toast and redirect. Cancelling mid-upload is untested.
 - *Redundancy:* the add path is every custom-package upload in the suite; the progress half is unique.
 - *Efficiency / smells:*
-  - **It fails on a fast link.** If the first reading is already 100 %, or the modal closes before a higher reading lands, `percent()`'s `innerText` on a detached `.file-details__progress-text` throws and the poll retries until its 120 s timeout — a *faster* instance or runner makes it flakier. Reading the bar's value attribute, or treating "modal gone + success toast" as progress completed, would remove the inversion.
-  - `.file-details__progress-text` is a class locator with no comment justifying it (the bar next to it is reached by title).
+  - ~~⚠️ **It fails on a fast link.**~~ **Fixed 2026-09-28:** a reading that finds no readout returns 100 once the modal is gone (0 while it is still up), and the poll wants a reading above `min(first, 99)` — so a first reading of 100 %, or a modal that closes between readings, passes instead of timing out. Original finding: if the first reading was already 100 %, or the modal closed before a higher reading landed, `percent()`'s `innerText` on a detached `.file-details__progress-text` threw and the poll retried until its 120 s timeout — a *faster* instance or runner made it flakier.
+  - ~~**`.file-details__progress-text` is a class locator with no comment justifying it.**~~ **Fixed 2026-09-28:** the readout is `SoftwareCustomPackagePage.progressPercent`, `progressModal.getByText(/^\d{1,3}%$/)` — reached by its text, scoped to the modal. Original finding: the class locator had no comment justifying it (the bar next to it is reached by title).
   - 100 MiB up through the browser to a 2 GB box while the rest of the suite runs in parallel: cheap as a test, not free as load.
 
 **Notes (Andrey)**
@@ -779,7 +829,7 @@ other:
 | Failed uninstall | SWH-05 | **Retry uninstall** clicked; the Inventory tab after a failure |
 | Failed install + Fleet's 3 attempts | SWH-07 | The failure reason in the details modal; **Retry** clicked |
 | Library vs Inventory distinction | SWH-04 (Inventory after uninstall), SWH-06 (after install), SWH-07 (pending/failed) | The Inventory tab after a `.pkg`, `.msi` or FMA install |
-| Update / Reinstall contract | SWH-08 (fixed oracle, Linux), SWH-09 (Claude, both, state-dependent), SWH-10 (Claude walk — **skipping**) | Deterministic Windows zero-padding case; library moved via **Edit software**; clicking Reinstall when the host is ahead |
+| Update / Reinstall contract | SWH-08 (fixed oracle, Linux), SWH-09 (Claude, both, state-dependent), SWH-13 (Claude's Update, both — **skips** on a level day), SWH-10 (Claude walk — **skipping**) | Deterministic Windows zero-padding case; library moved via **Edit software**; clicking Reinstall when the host is ahead |
 | Version pinning on a host | SWH-10 only — **never executed yet** | Pin via the Versions modal |
 | Upload size limit | SWH-11 (browser-side) | Server-side enforcement; the boundary |
 | Upload progress | SWH-12 | Cancel mid-upload |
@@ -788,7 +838,7 @@ other:
 **Duplication**
 
 1. **SWH-01 (Linux) vs SWH-06.** Same package type, same VM, same install-and-settle; SWH-06's unique content is one Inventory-tab look. Moving that look into `installFromLibrary` covers four install types and frees ~5 min on the busiest VM.
-2. **SWH-08 vs SWH-09/10.** Intentional — a fixed oracle and a real app — but three Update tests share one describe's worth of meaning; SWH-10 is SWH-09's Update branch made deterministic, once it runs.
+2. **SWH-08 vs SWH-09/13/10.** Intentional — a fixed oracle and a real app — but four Update tests share one describe's worth of meaning; SWH-10 is SWH-13 made deterministic, once it runs.
 3. **Every `finally` is a silent uninstall.** SWH-01/02/03/06/08 each end with the uninstall SWH-04 tests explicitly — correct hygiene, and the reason a Fleet uninstall regression would first surface as a cleanup error in an install test.
 
 **UI-vs-API balance**
@@ -796,7 +846,7 @@ other:
 - **Preconditions through the API are deliberate and right**: SWH-04/05 install by API so their failures are about uninstalling; SWH-06/07/08 upload by API so the add form isn't under test four more times. SWH-01/02/03 carry the UI add path.
 - **Status waits are API by necessity.** The host is the oracle and it reports on its own schedule; the UI then asserts the outcome on a fresh render. The `(API)` checks inside the waits (`pending_*`, `detail_updated_at` moving, inventory agreeing) are contract checks, not shortcuts.
 - **Where the API stands in for a UI check that should exist:** the Inventory tab after `.pkg` / `.msi` / FMA installs (SWH-01/02), the Deploy policy in the Policies UI (SWH-03), the Inventory tab after a failed uninstall (SWH-05), and the Library-version expectation taken from the API rather than the fixture (SWH-01).
-- **Weak-assertion watch list:** SWH-11's request listener (cannot fail — nothing submits); SWH-04's `.exe` `---` after uninstall (it was `---` before); SWH-06 step 2 (a brand-new name is trivially absent); SWH-05's modal substring (matches success wording too); SWH-09's pass on whichever branch the calendar picked.
+- **Weak-assertion watch list:** ~~SWH-11's request listener (cannot fail — nothing submits)~~ (**fixed 2026-09-28:** replaced by the form's own state); SWH-04's `.exe` `---` after uninstall (it was `---` before); SWH-06 step 2 (a brand-new name is trivially absent); SWH-05's modal substring (matches success wording too); ~~SWH-09's pass on whichever branch the calendar picked~~ (**partly fixed 2026-09-28:** the Update path is SWH-13, which skips visibly on a level day).
 
 **Product and fixture context a re-runner should carry**
 
@@ -804,21 +854,21 @@ other:
   [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). The Library will never show 7-Zip an installed version; that is not a regression.
 - **The automatic-install `created_policy` activity has no fleet suffix** — on the decision list, encoded in SWH-03.
 - **`software_updated_at` means "inventory last changed", not "last collected"** — don't wait on it by hand either; watch "Last fetched" (detail) instead.
-- **`vms.yml`'s header is partly stale:** it says `cleanup.steps.ts` does not touch the fleet and a dead spec's leftovers stay "until the next apply". The sweep now removes the specs' named titles and install policies every run (it still never uninstalls from a host).
+- ~~**`vms.yml`'s header is partly stale.**~~ **Fixed 2026-09-28:** the header describes the sweep — the specs' named titles, scripts, reports and install policies deleted every run, and `fleet-pw-*` packages purged from the Ubuntu VM. Original finding: it said `cleanup.steps.ts` did not touch the fleet and a dead spec's leftovers stayed "until the next apply", and later that the sweep never uninstalls from a VM.
 
 **Quick wins**
 
-1. **Poll the `.exe` row's inventory reads** in SWH-04 (`installedPackage`'s `.not.toEqual([])` and the post-uninstall `.toEqual([])`), the way `waitForSoftwareSettled` polls the linked path. As written they are single reads straight after a refetch whose software half can land seconds late — [uninstall-from-host.spec.ts:84](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L84), [:168](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L168).
+1. ~~**Poll the `.exe` row's inventory reads**~~ **Done 2026-09-28** — `waitForSoftwareSettled`'s `inventoryName` option. Originally: poll SWH-04's `installedPackage` `.not.toEqual([])` and post-uninstall `.toEqual([])` the way `waitForSoftwareSettled` polls the linked path — they were single reads straight after a refetch whose software half can land seconds late — [uninstall-from-host.spec.ts:84](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L84), [:168](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L168).
 2. **Assert the fixtures' known version** (`1.0.0`) as the Library version in SWH-01's custom-package rows instead of the API's reading, so a version-parse bug can't pass on the API agreeing with itself — [install-on-host.spec.ts:180](../../tests/e2e/premium/software/install-on-host.spec.ts#L180).
 3. **Open the Inventory tab in `installFromLibrary`** (SWH-01/02). Covers `.pkg`, `.msi` and the FMA, and makes SWH-06 a merge candidate.
 4. **Read the failure reason in SWH-07**: click **Failed** → Install details → **Details**, assert dpkg's architecture error. One click, and it is the only assertion that proves *why* the install failed.
-5. **Make SWH-11's "nothing sent" claim bite or drop it** — [large-upload.spec.ts:89](../../tests/e2e/premium/software/large-upload.spec.ts#L89).
-6. **Stop SWH-12 failing on a fast upload**: treat a vanished modal + the success toast as completed progress, or read the bar's value rather than `innerText` of a node that disappears.
-7. **Fix the `vms.yml` header** to describe the sweep, and name `MaxSoftwareInstallAttempts` at SWH-07's `toEqual([… × 3])`.
+5. ~~**Make SWH-11's "nothing sent" claim bite or drop it**~~ **Done 2026-09-28** — dropped, for the form's own state (Choose file, no file name, Add software disabled). Was: [large-upload.spec.ts:89](../../tests/e2e/premium/software/large-upload.spec.ts#L89).
+6. ~~**Stop SWH-12 failing on a fast upload**~~ **Done 2026-09-28** — a vanished modal reads as 100 %, and the readout is found by text. Was: treat a vanished modal + the success toast as completed progress, or read the bar's value rather than `innerText` of a node that disappears.
+7. ~~**Fix the `vms.yml` header** to describe the sweep~~ (**done 2026-09-28**), and name `MaxSoftwareInstallAttempts` at SWH-07's `toEqual([… × 3])`.
 
 **Bigger bets**
 
-1. **Budget the VMs, not just the tests.** With `fullyParallel`, seven tests queue on the one Ubuntu VM, four on Windows and five on macOS; each test's internal waits already sum past its own timeout, CI retries twice, and the job limit is 60 min against a ~40 min run. The 2026-09-28 `--repeat-each` failures were exactly this (one Ubuntu VM carrying ~50 serialized installs). A per-VM concurrency cap — one worker-scoped lock per platform, or grouping each platform's tests into one serial describe — trades a little wall time for runs that fail for product reasons rather than queue depth.
-2. **Uninstall what the sweep deletes.** The sweep removes titles but never touches the machine, so every timed-out run leaves its per-run `fleet-pw-*` `.deb` installed on the Ubuntu VM for good (the fixed-name `.pkg`/`.msi` are rescued by `ensureNotInstalled` on the next run; per-run names never are), and SWH-05's fire-and-forget purge is unverified. One ad-hoc script in `cleanup.steps.ts` — `dpkg-query -W -f '${Package}\n' 'fleet-pw-*' | xargs -r apt-get remove --purge -y` on the Ubuntu VM — would keep the VM's inventory from accumulating fixtures across months.
+1. **Budget the VMs, not just the tests.** With `fullyParallel`, seven tests queue on the one Ubuntu VM, four on Windows and five on macOS (one more each on a day SWH-13 runs); each test's internal waits already sum past its own timeout, CI retries twice, and the job limit is 60 min against a ~40 min run. The 2026-09-28 `--repeat-each` failures were exactly this (one Ubuntu VM carrying ~50 serialized installs). A per-VM concurrency cap — one worker-scoped lock per platform, or grouping each platform's tests into one serial describe — trades a little wall time for runs that fail for product reasons rather than queue depth.
+2. ~~**Uninstall what the sweep deletes.**~~ **Done 2026-09-28** for the Ubuntu VM: after deleting titles, the sweep checks the VM's inventory for `fleet-pw-*` names and, if any, queues `dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge` — a host runs scripts and installs from one queue, so the purge finishes before any install the run queues after it. The fixed-name `.pkg` / `.msi` / `.exe` are still only deleted as titles and left to the next run's pre-clean; SWH-05's own purge is still unverified in-test. Original bet: the sweep removed titles but never touched the machine, so every timed-out run leaves its per-run `fleet-pw-*` `.deb` installed on the Ubuntu VM for good (the fixed-name `.pkg`/`.msi` are rescued by `ensureNotInstalled` on the next run; per-run names never are), and SWH-05's fire-and-forget purge is unverified. One ad-hoc script in `cleanup.steps.ts` — `dpkg-query -W -f '${Package}\n' 'fleet-pw-*' | xargs -r apt-get remove --purge -y` on the Ubuntu VM — would keep the VM's inventory from accumulating fixtures across months.
 3. **Watch SWH-10's first real run.** The whole pin-back walk is authored and reviewed but has only ever skipped. When Claude next ships, the first nightly after the cron fetches the build is the walk's real verification — worth a manual headed run that day rather than trusting the green.
-4. **Cover the Update contract on Windows deterministically.** `make-msi.sh` already derives the UpgradeCode from the role so a newer build upgrades an older one; a 1.0.0 / 1.1.0 `.msi` pair (and a `1.0.0.0` vs `1.0.0` variant for the padding rule) would give Windows what SWH-08 gives Linux, and take SWH-09's calendar-dependence off the critical path.
+4. **Cover the Update contract on Windows deterministically.** `make-msi.sh` already derives the UpgradeCode from the role so a newer build upgrades an older one; a 1.0.0 / 1.1.0 `.msi` pair (and a `1.0.0.0` vs `1.0.0` variant for the padding rule) would give Windows what SWH-08 gives Linux, and take SWH-09/13's calendar-dependence off the critical path.

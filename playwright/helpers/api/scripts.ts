@@ -163,3 +163,72 @@ export async function setAgentOptions(
         });
   await expect(res, `Failed to set agent options on ${fleetId === 0 ? 'global' : `fleet ${fleetId}`}`).toBeOK();
 }
+
+/** A batch script run's counts, as `GET /scripts/batch/:id` reports them. */
+export interface BatchSummary {
+  status: string;
+  targeted: number;
+  ran: number;
+  errored: number;
+  pending: number;
+  incompatible: number;
+  canceled: number;
+}
+
+export async function getBatchSummary(request: APIRequestContext, batchId: string): Promise<BatchSummary> {
+  const res = await request.get(apiUrl(`scripts/batch/${batchId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read batch ${batchId}`).toBeOK();
+  const b = await res.json();
+  return {
+    status: b.status,
+    targeted: b.targeted_host_count,
+    ran: b.ran_host_count,
+    errored: b.errored_host_count,
+    pending: b.pending_host_count,
+    incompatible: b.incompatible_host_count,
+    canceled: b.canceled_host_count,
+  };
+}
+
+/**
+ * The newest batch on a fleet for `scriptName`. Script names in the specs are
+ * unique per run, so this is the batch the caller just started.
+ */
+export async function findBatchId(request: APIRequestContext, fleetId: number, scriptName: string): Promise<string> {
+  let id: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        const res = await request.get(apiUrl('scripts/batch'), {
+          headers: authHeaders(),
+          params: { fleet_id: String(fleetId), per_page: '20' },
+        });
+        await expect(res).toBeOK();
+        const batches = ((await res.json()).batch_executions ?? []) as Array<{
+          batch_execution_id: string;
+          script_name: string;
+        }>;
+        id = batches.find((b) => b.script_name === scriptName)?.batch_execution_id;
+        return id;
+      },
+      { message: `no batch for ${scriptName} on fleet ${fleetId}` },
+    )
+    .toBeTruthy();
+  return id!;
+}
+
+/**
+ * Waits for Fleet's batch cron to mark a batch finished — a couple of minutes
+ * after the last host reports — and returns its final counts.
+ */
+export async function waitForBatchFinished(request: APIRequestContext, batchId: string): Promise<BatchSummary> {
+  let summary: BatchSummary | undefined;
+  await expect
+    .poll(async () => (summary = await getBatchSummary(request, batchId)).status, {
+      message: `batch ${batchId} never finished`,
+      timeout: 480_000,
+      intervals: [10_000],
+    })
+    .toBe('finished');
+  return summary!;
+}

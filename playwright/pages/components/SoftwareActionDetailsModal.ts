@@ -32,7 +32,7 @@ class SoftwareActionDetailsModal {
   }
 
   /** The output the host recorded, revealed by the Details toggle. */
-  async output(): Promise<Locator> {
+  async revealOutput(): Promise<Locator> {
     await this.detailsButton.click();
     const output = this.modal.locator('.textarea');
     await expect(output.first()).toBeVisible();

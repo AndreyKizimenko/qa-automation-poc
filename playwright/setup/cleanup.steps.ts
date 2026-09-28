@@ -26,11 +26,14 @@ import {
   disableGitOpsMode,
   enableScriptExecution,
   findFleetByName,
+  findOnlineHost,
   getSoftwarePackage,
   listFleetMaintainedTitles,
   listFleetPolicies,
+  listHostSoftwareNames,
   listInstallableTitles,
   listReports,
+  queueAdHocScript,
   resetSetupExperience,
   setPinnedVersion,
 } from '@helpers/api';
@@ -126,8 +129,14 @@ test('clear stranded version pins on the durable app fleets', async ({ request }
 // policies to the VMs fleet — the only fleet with real hosts — and delete them in
 // a `finally`, which a timed-out test never reaches. This sweeps only what those
 // specs name as their own; everything gitops declares for the fleet (Claude, its
-// "Claude is installed" policies, pw-host-report-results) is left alone, and
-// nothing is uninstalled from a host — a spec that reinstalls clears that itself.
+// "Claude is installed" policies, pw-host-report-results) is left alone.
+//
+// Deleting a title never uninstalls it. The fixed-name .pkg / .msi / .exe come
+// back with the next run, whose pre-clean uninstalls them, but every .deb is
+// named per run and never returns — so the Ubuntu VM's own `fleet-pw-*`
+// packages are purged here, by a script queued only when its inventory lists
+// one. A host runs scripts and installs from one queue, so the purge finishes
+// before any install this run queues after it.
 const OWN_PACKAGE = /^(fleet-pw-|fleet-playwright-)|^7z2601-arm64\.exe$/;
 const OWN_FMA_TITLES = new Set(['Itsycal']);
 
@@ -155,4 +164,13 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
       .filter((t) => OWN_PACKAGE.test(t.packageName) || (t.fleetMaintained && OWN_FMA_TITLES.has(t.name)))
       .map((t) => deleteSoftwareTitle(request, vms.id, t.titleId)),
   );
+
+  const linux = await findOnlineHost(request, 'linux', { kind: 'real' });
+  if (linux && (await listHostSoftwareNames(request, linux.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) {
+    await queueAdHocScript(
+      request,
+      linux.id,
+      "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
+    );
+  }
 });

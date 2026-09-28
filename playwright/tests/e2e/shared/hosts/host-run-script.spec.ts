@@ -54,38 +54,20 @@ import {
   createReport,
   deleteReport,
   deleteScript,
-  findOnlineHost,
   getAgentOptions,
-  getHostFleetId,
   getHostReportRows,
   getHostScriptLastExecution,
   queueAdHocScript,
+  requireRealHost,
   setAgentOptions,
   uploadScript,
+  type RealHostRef,
   type ScriptExecutionStatus,
 } from '@helpers/api';
 import type { APIRequestContext } from '@playwright/test';
 import type { HostDetailsPage } from '@pages';
 
 type Platform = 'darwin' | 'windows' | 'linux';
-
-interface RealHost {
-  id: number;
-  displayName: string;
-  /** The host's fleet id, or 0 for Unassigned — every host on free. */
-  fleetId: number;
-}
-
-async function realHost(request: APIRequestContext, platform: Platform): Promise<RealHost> {
-  const host = await findOnlineHost(request, platform, { kind: 'real' });
-  if (!host) {
-    throw new Error(
-      `no online real ${platform} VM on ${process.env.FLEET_URL} — scripts only run on a real ` +
-        `device. Check the ${platform} VM is powered on and enrolled.`,
-    );
-  }
-  return { id: host.id, displayName: host.displayName, fleetId: (await getHostFleetId(request, host.id)) ?? 0 };
-}
 
 /** Short and unique per run, so script and report names never collide with a leftover. */
 const nonce = (): string => `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
@@ -97,7 +79,7 @@ const nonce = (): string => `${Date.now().toString(36)}${crypto.randomBytes(2).t
  */
 async function waitForScriptToFinish(
   request: APIRequestContext,
-  host: RealHost,
+  host: RealHostRef,
   scriptName: string,
   expected: ScriptExecutionStatus,
   timeout = 180_000,
@@ -119,7 +101,7 @@ async function waitForScriptToFinish(
 async function runFromModal(
   hostDetails: HostDetailsPage,
   request: APIRequestContext,
-  host: RealHost,
+  host: RealHostRef,
   scriptName: string,
   expected: ScriptExecutionStatus,
   timeout?: number,
@@ -145,7 +127,7 @@ test.describe('Shared • Hosts • Run script', () => {
     // Upload → run → one scheduled report interval, plus a busy VM's queue.
     test.setTimeout(420_000);
 
-    const host = await realHost(request, 'darwin');
+    const host = await requireRealHost(request, 'darwin');
     const id = nonce();
     // Named per run, so concurrent copies of this test on one VM (as
     // --repeat-each makes) never read each other's file.
@@ -228,7 +210,7 @@ test.describe('Shared • Hosts • Run script', () => {
   }) => {
     test.setTimeout(300_000);
 
-    const host = await realHost(request, 'linux');
+    const host = await requireRealHost(request, 'linux');
     const id = nonce();
     const scriptName = `pw-run-script-fails-${id}.sh`;
     const scriptId = await uploadScript(
@@ -274,7 +256,7 @@ test.describe('Shared • Hosts • Run script', () => {
     test.setTimeout(360_000);
     const timeoutSeconds = 60;
 
-    const host = await realHost(request, 'linux');
+    const host = await requireRealHost(request, 'linux');
     const id = nonce();
     const scriptName = `pw-run-script-timeout-${id}.sh`;
     // The snapshot this test restores. A value equal to its own override can only
@@ -376,7 +358,7 @@ test.describe('Shared • Hosts • Run script', () => {
     }) => {
       test.setTimeout(300_000);
 
-      const host = await realHost(request, interpreter.platform);
+      const host = await requireRealHost(request, interpreter.platform);
       const scriptName = `pw-run-script-${interpreter.label.toLowerCase()}-${nonce()}${interpreter.extension}`;
       const scriptId = await uploadScript(request, host.fleetId, scriptName, interpreter.content);
 

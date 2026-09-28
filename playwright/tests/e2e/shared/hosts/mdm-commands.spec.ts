@@ -27,7 +27,7 @@
 import * as fs from 'fs';
 import { test, expect } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { findOnlineHost, getHostMdmIdentity } from '@helpers/api';
+import { getHostMdmIdentity, requireRealHost } from '@helpers/api';
 import { fleetctl, output } from '@helpers/fleetctl';
 
 const REQUEST_TYPE = 'UserList';
@@ -53,10 +53,9 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
   // The VM acknowledges in seconds, but only on its next MDM check-in.
   test.setTimeout(240_000);
 
-  const host = await findOnlineHost(request, 'darwin', { kind: 'real' });
-  expect(host, 'expected an online real macOS VM').not.toBeNull();
-  const { hostname, enrollmentStatus } = await getHostMdmIdentity(request, host!.id);
-  expect(enrollmentStatus, `${host!.displayName} must be MDM-enrolled to take a command`).toMatch(/^On/);
+  const host = await requireRealHost(request, 'darwin');
+  const { hostname, enrollmentStatus } = await getHostMdmIdentity(request, host.id);
+  expect(enrollmentStatus, `${host.displayName} must be MDM-enrolled to take a command`).toMatch(/^On/);
 
   const payloadPath = testInfo.outputPath('user-list.xml');
   fs.writeFileSync(payloadPath, USER_LIST_PAYLOAD);
@@ -93,7 +92,7 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
 
   // The activity. The newest custom-command activity on this host is this run's:
   // nothing else sends this host a UserList.
-  await hostDetails.goto(host!.id);
+  await hostDetails.goto(host.id);
   await hostDetails.showPastActivities();
   await hostDetails.showMdmCommands(false);
   await hostDetails
@@ -133,6 +132,6 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
 
   await dashboard.goto();
   await dashboard.expectActivity(
-    activityCopy.mdmCommand.ran({ requestType: REQUEST_TYPE, host: host!.displayName }),
+    activityCopy.mdmCommand.ran({ requestType: REQUEST_TYPE, host: host.displayName }),
   );
 });

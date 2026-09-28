@@ -25,10 +25,9 @@
 import { test, expect } from '@fixtures';
 import {
   enableScriptExecution,
-  findOnlineHost,
-  getHostFleetId,
   isScriptExecutionEnabled,
   postAdHocScript,
+  requireRealHost,
 } from '@helpers/api';
 
 const DISABLED_COPY = 'Running scripts is disabled in organization settings.';
@@ -40,9 +39,8 @@ test('turning script execution off disables running scripts everywhere Fleet off
   request,
   page,
 }) => {
-  const host = await findOnlineHost(request, 'darwin', { kind: 'real' });
-  expect(host, 'expected an online real macOS VM').not.toBeNull();
-  const fleetId = (await getHostFleetId(request, host!.id)) ?? 0;
+  const host = await requireRealHost(request, 'darwin');
+  const { fleetId } = host;
 
   expect(
     await isScriptExecutionEnabled(request),
@@ -58,7 +56,7 @@ test('turning script execution off disables running scripts everywhere Fleet off
     expect(await isScriptExecutionEnabled(request)).toBe(false);
 
     // The action stays listed so the reason can be given, but can't be picked.
-    await hostDetails.goto(host!.id);
+    await hostDetails.goto(host.id);
     await hostDetails.openActions();
     const runScript = hostDetails.actionOption('Run script');
     await expect(runScript).toHaveAttribute('aria-disabled', 'true');
@@ -70,7 +68,7 @@ test('turning script execution off disables running scripts everywhere Fleet off
     await expect(scriptsLibrary.addScriptButton).toBeEnabled();
 
     // Enforced by Fleet, not only by the UI.
-    const refused = await postAdHocScript(request, host!.id, '#!/bin/sh\necho unreachable\n');
+    const refused = await postAdHocScript(request, host.id, '#!/bin/sh\necho unreachable\n');
     expect(refused.status()).toBe(403);
     expect(await refused.text()).toContain(DISABLED_COPY);
 
@@ -81,7 +79,7 @@ test('turning script execution off disables running scripts everywhere Fleet off
     await organizationAdvanced.toast.expectSuccess('Successfully updated settings.');
     expect(await isScriptExecutionEnabled(request)).toBe(true);
 
-    await hostDetails.goto(host!.id);
+    await hostDetails.goto(host.id);
     await hostDetails.openActions();
     await expect(hostDetails.actionOption('Run script')).not.toHaveAttribute('aria-disabled', 'true');
   } finally {

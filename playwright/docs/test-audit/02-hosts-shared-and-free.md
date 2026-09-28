@@ -17,7 +17,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-07, HOST-08, HOST-09, HOST-10, HOST-11 | no specific host; whatever tops/fills the list |
 | HOST-12, HOST-13 | real MDM-enrolled macOS / Windows VM (`kind: 'real'`) |
 | HOST-14 | any online Linux host — real Linux VMs are *not* MDM-enrolled, so this can land on either a real VM or a simulation |
-| HOST-19, HOST-23 | real macOS VM (`findOnlineHost(…, { kind: 'real' })` inline) — **mandatory**: a script or MDM command must reach a device that executes/answers it. HOST-23 additionally asserts the VM is MDM-enrolled (`On …`) |
+| HOST-19, HOST-23 | real macOS VM (`requireRealHost`, which wraps `findOnlineHost(…, { kind: 'real' })`) — **mandatory**: a script or MDM command must reach a device that executes/answers it. HOST-23 additionally asserts the VM is MDM-enrolled (`On …`) |
 | HOST-20, HOST-21 | real **Ubuntu** VM (`kind: 'real'`) — mandatory |
 | HOST-22 | one real VM per variant: macOS (zsh), Ubuntu (bash, Python), **Windows** (PowerShell) — mandatory |
 
@@ -762,9 +762,9 @@ other:
 
 - **File:** [`playwright/tests/e2e/shared/hosts/host-run-script.spec.ts`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "a script changes the host, and a report run by that host reads the change back"` (`--project=free` for the free run)
-- **Project:** premium + free (shared) · **Scopes:** n/a — the script and report go to whichever fleet the host is in, read off the host at run time (`getHostFleetId`): the **VMs** fleet on premium, Unassigned on free
+- **Project:** premium + free (shared) · **Scopes:** n/a — the script and report go to whichever fleet the host is in, read off the host at run time (`requireRealHost` returns its `fleetId`): the **VMs** fleet on premium, Unassigned on free
 - **Mode:** UI+API · **Isolation:** standalone; first of four independent tests in the describe (HOST-20…22 are the others). Budget 420s.
-- **Preconditions:** **the real macOS VM is mandatory** — resolved inline with `findOnlineHost(request, 'darwin', { kind: 'real' })`, which throws with a "power it on" message if none is online. osquery-perf simulations never execute a script, so a run against one proves nothing. The VM runs its scripts **one at a time**, so this test can queue behind any other script spec (HOST-20…22, the batch runs in [CTL-24/25](11-controls-profiles-scripts-variables.md)) — the 180s script wait and 420s budget absorb that. Script execution must be on in organization settings (`cleanup-setup` guarantees it).
+- **Preconditions:** **the real macOS VM is mandatory** — resolved with `requireRealHost(request, 'darwin')` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `findOnlineHost(…, { kind: 'real' })` underneath), which throws *"… Check the darwin VM is powered on and enrolled."* if none is online. osquery-perf simulations never execute a script, so a run against one proves nothing. The VM runs its scripts **one at a time**, so this test can queue behind any other script spec (HOST-20…22, the batch runs in [CTL-24/25](11-controls-profiles-scripts-variables.md)) — the 180s script wait and 420s budget absorb that. Script execution must be on in organization settings (`cleanup-setup` guarantees it).
 - **Data created:** per run, all named with a nonce (`<base36 ms><4 hex>`):
   - a report `pw-run-script-effect-<id>` — `SELECT sha256 FROM hash WHERE path = '/tmp/fleet-playwright-run-script-<id>';`, `platform: darwin`, **`interval: 60`**; **team-scoped to the VMs fleet on premium** (so only the VMs run it), **global on free** (where `cleanup-setup`'s `deleteAllQueries` would sweep it if the test died);
   - a library script `pw-run-script-effect-<id>.sh` — `printf '%s' '<id>' > <marker>; echo "wrote <id>"`;
@@ -834,7 +834,7 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a script that exits non-zero reads as an error"`
 - **Project:** premium + free (shared) · **Scopes:** n/a (host's own fleet: VMs on premium, Unassigned on free)
 - **Mode:** UI+API · **Isolation:** standalone; independent of HOST-19/21/22. Budget 300s.
-- **Preconditions:** **the real Ubuntu VM** (`findOnlineHost(request, 'linux', { kind: 'real' })`, throws if none) — mandatory; a simulation never runs the script. Shares that VM's one-at-a-time script queue with HOST-21 and two HOST-22 variants.
+- **Preconditions:** **the real Ubuntu VM** (`requireRealHost(request, 'linux')`, throws if none) — mandatory; a simulation never runs the script. Shares that VM's one-at-a-time script queue with HOST-21 and two HOST-22 variants.
 - **Data created:** library script `pw-run-script-fails-<id>.sh` (`#!/bin/bash`, `echo "failing on purpose <id>"`, `exit 3`) on the host's fleet; deleted in `finally`. The run's activity stays in the feed.
 
 **Flow**
@@ -925,7 +925,7 @@ other:
   | PowerShell | **Windows** | `.ps1` | `Write-Output "powershell $($PSVersionTable.PSVersion)"` | `/^powershell \d+\.\d+/` |
 
 - **Mode:** UI+API · **Isolation:** four independent tests; budget 300s each.
-- **Preconditions:** one **real VM per variant** (`findOnlineHost(…, platform, { kind: 'real' })`), mandatory. **Python runs on Linux on purpose:** the macOS VMs have no Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub and exits non-zero. This is the only test in the area that uses the **Windows** VM for execution.
+- **Preconditions:** one **real VM per variant** (`requireRealHost(request, platform)`), mandatory. **Python runs on Linux on purpose:** the macOS VMs have no Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub and exits non-zero. This is the only test in the area that uses the **Windows** VM for execution.
 - **Data created:** one library script `pw-run-script-<label>-<id><ext>` per variant on the host's fleet; deleted in `finally`.
 
 **Flow** (per variant)
@@ -960,7 +960,7 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a custom MDM command is acknowledged by the host"`
 - **Project:** premium + free (shared) — free and premium send custom commands the same way and render the same Activity card, toggle and details modal with the same copy · **Scopes:** n/a
 - **Mode:** UI+API (+CLI) · **Isolation:** standalone, no describe. Budget 240s.
-- **Preconditions:** **the real macOS VM** (`findOnlineHost(request, 'darwin', { kind: 'real' })`) — ✅ *(API)* found, and ✅ *(API)* its `mdm.enrollment_status` (`GET /hosts/:id`, `getHostMdmIdentity`) starts with **`On`**. An MDM-enrolled *simulation* never acknowledges anything, so the enrollment check alone would not be enough — `kind: 'real'` is what excludes them. The `fleetctl` binary must be on `PATH` (or `FLEETCTL_BIN`); it runs against an isolated per-suite config (`helpers/fleetctl.ts`), not `~/.fleetctl`.
+- **Preconditions:** **the real macOS VM** (`requireRealHost(request, 'darwin')`, which throws if none is online) — ✅ *(API)* found, and ✅ *(API)* its `mdm.enrollment_status` (`GET /hosts/:id`, `getHostMdmIdentity`) starts with **`On`**. An MDM-enrolled *simulation* never acknowledges anything, so the enrollment check alone would not be enough — `kind: 'real'` is what excludes them. The `fleetctl` binary must be on `PATH` (or `FLEETCTL_BIN`); it runs against an isolated per-suite config (`helpers/fleetctl.ts`), not `~/.fleetctl`.
 - **Data created:** a `UserList` MDM command in the VM's command history and its activity (both permanent — commands can't be withdrawn); the payload file under the test's output dir. **`UserList` is read-only** — it asks the Mac to list local users and changes nothing. Anything sent to a real VM must be (see `playwright/CLAUDE.md` → Test hosts).
 
 **Flow**

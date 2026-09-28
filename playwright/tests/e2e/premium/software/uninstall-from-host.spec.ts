@@ -30,13 +30,13 @@ import { activityCopy } from '@helpers/activity-copy';
 import { inertDeb } from '@helpers/deb';
 import {
   deleteSoftwareTitle,
-  findOnlineHost,
   findSoftwareTitleByPackageName,
   getHostInventoryVersions,
   getHostSoftwareState,
   installSoftwareOnHost,
   queueAdHocScript,
   removeTitleFromHost,
+  requireRealHost,
   uploadSoftwarePackageBuffer,
   waitForSoftwareSettled,
   type PackageScripts,
@@ -51,12 +51,6 @@ const fixture = (relative: string) => ({
   name: path.basename(relative),
   buffer: fs.readFileSync(path.join(TEST_DATA, relative)),
 });
-
-async function realHost(request: APIRequestContext, platform: Platform) {
-  const host = await findOnlineHost(request, platform, { kind: 'real' });
-  if (!host) throw new Error(`no online real ${platform} VM on ${process.env.FLEET_URL}`);
-  return host;
-}
 
 /**
  * Uploads and installs a package through the API, and waits until the host's
@@ -78,13 +72,9 @@ async function installedPackage(
   const title = await uploadSoftwarePackageBuffer(request, fleetId, fileName, buffer, scripts);
   await installSoftwareOnHost(request, hostId, title.titleId);
   const state = await waitForSoftwareSettled(request, hostId, title.titleId, 'installed', {
-    inventory: opts.inventoryName ? 'any' : 'present',
+    inventoryName: opts.inventoryName,
   });
   const inventoryName = opts.inventoryName ?? title.name;
-  expect(
-    await getHostInventoryVersions(request, hostId, inventoryName),
-    `${title.name} installed but the host's inventory never listed ${inventoryName}`,
-  ).not.toEqual([]);
   return { titleId: title.titleId, name: title.name, inventoryName, version: state.libraryVersion ?? '' };
 }
 
@@ -145,7 +135,7 @@ test.describe('Premium • Software • Uninstall from host', () => {
       vmsFleetId,
       request,
     }) => {
-      const host = await realHost(request, pkg.platform);
+      const host = await requireRealHost(request, pkg.platform);
       const file = pkg.file();
       const title = await installedPackage(request, vmsFleetId, host.id, file.name, file.buffer, pkg.scripts, {
         inventoryName: pkg.inventoryName,
@@ -164,7 +154,7 @@ test.describe('Premium • Software • Uninstall from host', () => {
 
         // A clean uninstall clears the status, and the next inventory read no
         // longer lists the software.
-        await waitForSoftwareSettled(request, host.id, title.titleId, null, { inventory: linked ? 'absent' : 'any' });
+        await waitForSoftwareSettled(request, host.id, title.titleId, null, { inventoryName: pkg.inventoryName });
         expect(await getHostInventoryVersions(request, host.id, title.inventoryName)).toEqual([]);
 
         await hostDetails.goto(host.id);
@@ -199,7 +189,7 @@ test.describe('Premium • Software • Uninstall from host', () => {
     vmsFleetId,
     request,
   }) => {
-    const host = await realHost(request, 'linux');
+    const host = await requireRealHost(request, 'linux');
     const name = `fleet-pw-uninstall-fails-${Date.now().toString(36)}`;
     const title = await installedPackage(
       request,
@@ -232,7 +222,7 @@ test.describe('Premium • Software • Uninstall from host', () => {
       const details = hostDetails.uninstallDetailsModal;
       await details.expectOpen();
       await expect(details.statusMessage).toContainText(`uninstall ${name} from ${host.displayName}`);
-      await expect((await details.output()).first()).toContainText('refusing to uninstall');
+      await expect((await details.revealOutput()).first()).toContainText('refusing to uninstall');
       await details.close();
     } finally {
       // Fleet's own uninstall is the one that fails, so the package comes off the

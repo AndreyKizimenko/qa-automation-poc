@@ -451,6 +451,31 @@ export async function requestHostRefetch(request: APIRequestContext, hostId: num
 }
 
 /**
+ * Waits until the host has no refetch outstanding (`refetch_requested` false).
+ * Fleet clears the flag when the collection's results land, not when the host
+ * picks the queries up — so while it's set, a collection may already be running
+ * on data from before now, and a refetch asked for meanwhile merges into it
+ * instead of starting a new one. Fleet sets it after every software install and
+ * uninstall.
+ */
+export async function waitForNoPendingRefetch(
+  request: APIRequestContext,
+  hostId: number,
+  timeout = 240_000,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+        await expect(res, `Failed to read host ${hostId}`).toBeOK();
+        return (await res.json()).host?.refetch_requested ?? false;
+      },
+      { message: `host ${hostId} kept a refetch outstanding`, timeout, intervals: [5_000] },
+    )
+    .toBe(false);
+}
+
+/**
  * Waits until the host has re-reported since `since` — the one wait every
  * host-execution spec needs, because what they assert (an installed version, a
  * cleared status) only reaches Fleet on the host's next collection.
@@ -595,6 +620,65 @@ export async function hostExists(
 ): Promise<boolean> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   return res.ok();
+}
+
+/** A host as the hosts list reports it, with the fields a batch run decides on. */
+export interface ListedHost {
+  id: number;
+  platform: string;
+  /** fleetd/Orbit version, or null for a host that can't run scripts. */
+  orbitVersion: string | null;
+  /** False when fleetd runs with scripts disabled; null when the host hasn't said. */
+  scriptsEnabled: boolean | null;
+}
+
+/**
+ * Every host in a fleet (0 for Unassigned), optionally narrowed by status. The
+ * hosts list is the one listing that fills in `orbit_version`.
+ */
+export async function listFleetHosts(
+  request: APIRequestContext,
+  fleetId: number,
+  opts: { status?: 'online' | 'offline' } = {},
+): Promise<ListedHost[]> {
+  const params: Record<string, string> = { fleet_id: String(fleetId), per_page: '1000' };
+  if (opts.status) params.status = opts.status;
+  const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
+  await expect(res, `Failed to list the hosts of fleet ${fleetId}`).toBeOK();
+  const hosts = (await res.json()).hosts as Array<{
+    id: number;
+    platform: string;
+    orbit_version: string | null;
+    scripts_enabled: boolean | null;
+  }>;
+  return hosts.map((h) => ({
+    id: h.id,
+    platform: h.platform,
+    orbitVersion: h.orbit_version ?? null,
+    scriptsEnabled: h.scripts_enabled ?? null,
+  }));
+}
+
+/** A real VM, with the fleet it's on (0 for Unassigned). */
+export type RealHostRef = OnlineHostRef & { fleetId: number };
+
+/**
+ * The online real VM of `platform`, with its fleet (0 for Unassigned — every
+ * host on free). Throws rather than returning null: a spec that needs a real
+ * device has nothing to test without one, and the message says what to check.
+ */
+export async function requireRealHost(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+): Promise<RealHostRef> {
+  const host = await findOnlineHost(request, platform, { kind: 'real' });
+  if (!host) {
+    throw new Error(
+      `no online real ${platform} VM on ${process.env.FLEET_URL} — scripts, installs and MDM commands only ` +
+        `reach a real device. Check the ${platform} VM is powered on and enrolled.`,
+    );
+  }
+  return { ...host, fleetId: (await getHostFleetId(request, host.id)) ?? 0 };
 }
 
 /**
