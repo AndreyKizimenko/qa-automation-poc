@@ -307,6 +307,8 @@ test.describe('Shared • Hosts • Run script', () => {
       // phrase in the script's *output* — never from the configured timeout — so
       // for a script that doesn't print it the line carries no duration. This
       // script's output is kept free of "seconds" so the copy stays fixed.
+      // TODO(fleetdm/fleet#54262): once the modal reads the server's message,
+      // this line reads "…after 60 seconds…" — assert `timeoutSeconds` in it.
       await expect(details.statusMessage).toHaveText(
         'Error: Timeout. Fleet stopped the script to protect host performance.',
       );
