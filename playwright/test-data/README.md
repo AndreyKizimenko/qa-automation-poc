@@ -73,17 +73,30 @@ test-data/
 
 ## Generated fixtures
 
-Three fixtures are built by a script rather than downloaded, because what makes
+Some fixtures are built by a script rather than downloaded, because what makes
 each one useful is a *number or a name that has to be exactly right*: a byte
 count on one side of a validation limit, a pixel dimension, or a package name no
-other spec can collide with. Each sits next to a `make-*.py` that regenerates it
-deterministically, with the standard library only:
+other spec can collide with. Each sits next to the `make-*` script that
+regenerates it:
 
 | what | where | recipe |
 |---|---|---|
 | icon + org-logo PNGs | `shared/images/` | [`shared/images/README.md`](shared/images/README.md) |
 | inert `.deb` package | `linux/software/` | [`linux/software/README.md`](linux/software/README.md) |
 | signed `.mobileconfig` | `apple/macos/profiles/` | [`apple/macos/profiles/README.md`](apple/macos/profiles/README.md) |
+| inert `.pkg` per install spec (one app bundle) | `apple/macos/software/` | `make-pkg.sh <role> [version]` — needs macOS `pkgbuild` |
+| inert `.msi` per install spec (one marker file) | `windows/software/` | `make-msi.sh <role> [version]` — needs msitools' `wixl` |
+
+The `.pkg` and `.msi` builders are shell, not Python, because each wraps the one
+tool that can write the format. Both exist because an install spec needs a package
+that installs *nothing that matters* on a real VM, under a title no other spec
+shares — see the headers of `premium/software/install-on-host.spec.ts` and
+`uninstall-from-host.spec.ts`. The macOS package installs an app bundle because
+Fleet's macOS inventory lists `.app` bundles only.
+
+Packages whose name, version or size is decided at run time — a per-run `.deb`,
+an `amd64` build that the ARM VMs refuse, a ~100 MB upload — aren't files here at
+all: `helpers/deb.ts` builds them in memory.
 
 `shared/software/fleet-playwright-script-package.sh` is written by hand but
 belongs to the same family: Fleet titles a script package after its filename

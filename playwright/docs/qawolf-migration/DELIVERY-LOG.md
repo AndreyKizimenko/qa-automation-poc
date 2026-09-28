@@ -148,6 +148,29 @@ called `uncheck()` twice and left scripts disabled for whatever ran next.
 `helpers/api/hosts.ts`, comparing `detail_updated_at` or `software_updated_at` against a baseline taken
 before the action. `shared/hosts/host-details-smoke.spec.ts` now uses it in place of its own poll.
 
+**Batch runs** — `premium/controls/scripts/batch-run.spec.ts` (new, + `RunScriptBatchModal`,
+`ScriptBatchDetailsPage`). One real VM per platform lands one host in each of Ran / Errored / Incompatible and
+each tab lists exactly that host; ~100 simulations via "Select all matching hosts" are asserted as arithmetic
+(targeted = matched, statuses sum to targeted, incompatible = exactly the orbit-less ones).
+
+**Software on a host** — `premium/software/{install-on-host,uninstall-from-host,inventory-reflects-install,
+update-on-host,large-upload}.spec.ts` (all new, + `HostSoftwareLibrary`, `InstallDetailsModal`,
+`UninstallDetailsModal`, `helpers/deb.ts`). Every fixture is inert and ARM-safe: per-spec `.pkg`s and `.msi`s
+built by `make-pkg.sh` / `make-msi.sh`, `.deb`s built at run time. The update spec is new (§3): the Update
+contract on a per-run package pair and on Claude.
+
+**The FMA fixture set** — `gitops/premium-fleetqa/fleets/vms.yml` brings the VMs fleet under gitops with Claude
+kept installed by presence policies; `cleanup.steps.ts` clears stranded pins on QA and VMs and sweeps the specs'
+own leftovers from VMs. The design and why each state is kept the way it is:
+[D-host-execution.md](round-2/D-host-execution.md#the-fma-fixture-set).
+
+**Verification** (2026-09-28): `npm run check` clean. Full `npm run test:free` — 275 passed, 9 skipped (all
+pre-existing), `free-exclusive` after `free`. Full `WORKERS=2 npm run test:premium --headed`, the CI shape — 513
+passed, 3 skipped, **39.6 min** (the nightly was ~15; the job limit is 60, so watch retries on the VM-bound specs).
+`--repeat-each=5`: host-run-script 35/35 on each tier; the software + batch specs 90/95 with dependencies at 4
+workers — the four failures were one Ubuntu VM carrying ~50 serialized installs, which led to the lighter
+cleanup in `removeTitleFromHost` — then the two affected tests 10/10 at CI's 2 workers; large-upload 6/6.
+
 Findings:
 
 - **The timeout message never names the timeout.** `RunScriptDetailsModal` fills in "after N seconds" by
@@ -161,6 +184,22 @@ Findings:
 - **Every VM is ARM** — Apple M4 macOS, ARM Windows 11, aarch64 Ubuntu. That decides which installers can land.
 - **Free rejects `fleet_id=0` on a script upload** ("The fleet does not exist"); Unassigned is the absence of the
   field.
+- **`software_updated_at` means "inventory last changed", not "last collected".** Fleet skips the write when an
+  ingest finds nothing new, so a wait on it hangs after a failed uninstall and after any change already
+  ingested. "The inventory is current" is `detail_updated_at` advancing after the action, then the inventory
+  agreeing — which is what `waitForSoftwareSettled` does.
+- **A failed install is retried**: `MaxSoftwareInstallAttempts` = 3, reported `pending_install` between attempts,
+  so "failed" only sticks several minutes in. The inventory spec asserts all three attempts.
+- **An automatic-install policy's `created_policy` activity carries no fleet**, so the feed reads "created a
+  policy [Install software] … (deb)." where a hand-made fleet policy reads "… on the VMs fleet." The same
+  activity type, two shapes. On the decision list.
+- **An `.exe` title is never linked to what Windows reports.** Fleet names it from the installer's ProductName
+  ("7-Zip"); Windows lists the DisplayName ("7-Zip 26.01 (arm64)"). The Library never shows it an installed
+  version. On the decision list.
+- **The installer size limit is per instance and checked in the browser.** Premium QA's is 10 GiB, not QA Wolf's
+  1 GiB, and an over-limit file is refused on selection without a byte being sent.
+- **`GET /labels/:id/hosts` leaves `orbit_version` null** for every host; `GET /hosts` fills it in.
+- **A batch reads "finished" 2–4 minutes after its last host reports** — a cron marks it, not the last result.
 
 ## Round 2 · Batch C — live host, read-only
 

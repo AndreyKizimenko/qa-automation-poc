@@ -77,15 +77,14 @@ That is **54 of the 127 flows**, and the whole `gitops-mode` project. The suite 
 
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
-| **[D](D-host-execution.md)** | Execution on hosts — scripts, MDM commands, install/uninstall | host + real runs | 31 | 9 |
+| **[D](D-host-execution.md)** ◐ | Execution on hosts — scripts, MDM commands, install/uninstall | host + real runs | 31 | 9 (+1 new) — built, in review |
 | **[E](E-label-targeting.md)** | Label targeting — profiles, declarations, software, policies | labels + several hosts | 21 | 10 |
 | **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | new instance setup | 13 | 9 |
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
 | | | **remaining** | **73** | **33** |
 
-**Start D next.** It is the biggest remaining block and needs nothing that doesn't already exist — the real VMs
-are up and the durable FMA shelf (§4) is provisioned. E needs an inert profile fixture written first (see the
-warning in §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
+**D is built and in review** — see [D-host-execution.md](D-host-execution.md#what-landed-and-what-changed-from-the-plan).
+**Start E next.** It needs an inert profile fixture written first (see the warning in §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
 the technician and team-admin rows, which the static-user catalog already covers and which could move earlier.
 
 Batch G's retry half is last on purpose: those specs wait through real 30–90 minute intervals and belong on

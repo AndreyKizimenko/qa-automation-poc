@@ -30,8 +30,8 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `controls/controls-macos-custom-settings-upload-and-remove-configuration-profile` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts` | augment |
 | `controls/controls-macos-custom-settings-verify-warning-symbol-upon-deleting-custom-label-from-hosts` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts` | **new** |
 | `controls/controls-macos-updates-ui-validation` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/macos-updates.spec.ts` | **new** |
-| `controls/disable-script-execution-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/controls/scripts/script-execution-disabled.spec.ts` | **new** |
-| `controls/disable-script-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/controls/scripts/script-execution-disabled.spec.ts` | **new** |
+| `controls/disable-script-execution-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
+| `controls/disable-script-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
 | `controls/error-script-fails-in-ui-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `controls/error-script-fails-in-ui-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `controls/script-timeout-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
@@ -66,9 +66,9 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `mac-os-accounts/set-plus-manually-rotate-macos-recovery-lock-passwords` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** |
 | `mdm/manual-mdm-enrollment-mac-enrollment-profile` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/manual-mdm-enrollment.spec.ts` | **new** |
 | `mdm/manual-mdm-enrollment-mac-enrollment-profile [FREE]` | [F](F-provisioning.md) | `tests/e2e/free/hosts/manual-mdm-enrollment.spec.ts` | **new** |
-| `mdm/mdm-command-details-show-on-global-and-host-activity` | [D](D-host-execution.md) | `tests/e2e/premium/hosts/mdm-commands.spec.ts` | **new** |
-| `mdm/past-and-upcoming-host-activities-add-mdm-commands-macos-ios-ipados` | [D](D-host-execution.md) | `tests/e2e/premium/hosts/mdm-commands.spec.ts` | **new** |
-| `mdm/run-mdm-command-macos-premium` | [D](D-host-execution.md) | `tests/e2e/premium/hosts/mdm-commands.spec.ts` | **new** |
+| `mdm/mdm-command-details-show-on-global-and-host-activity` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
+| `mdm/past-and-upcoming-host-activities-add-mdm-commands-macos-ios-ipados` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
+| `mdm/run-mdm-command-macos-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `packages/add-custom-package-that-only-contains-a-script` | [B](B-self-contained.md) | `tests/e2e/premium/software/script-only-package.spec.ts` | **new** |
 | `policies/enabling-continuous-software-and-script-automations-on-a-policy-retries-every-hour` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/automation-retries.spec.ts` | **new** |
 | `policies/global-activity-item-is-shown-when-a-policy-is-automatically-created-during-software-installer-add` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
@@ -124,7 +124,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `uncategorized/global-admin-is-able-to-edit-user-to-use-2fa` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** |
 | `uncategorized/invite-2fa-enabled-user-and-log-in-as-the-user` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** |
 | `uncategorized/other-workflows-modal-saving-disables-form-inputs` | [A](A-no-setup.md) | `tests/e2e/premium/policies/policy-automations.spec.ts` | augment |
-| `uncategorized/run-mdm-command-macos-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/free/hosts/mdm-commands.spec.ts` | **new** |
+| `uncategorized/run-mdm-command-macos-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `uncategorized/succeeded-ran-script-on-host-does-not-show-pending-when-modal-is-closed` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `uncategorized/vulnerability-severity-filter-lists-options-from-critical-down` | [A](A-no-setup.md) | `tests/e2e/premium/software/vulnerabilities.spec.ts` | augment |
 | `user-profiles/team-admin-able-to-edit-a-team-member-premium` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/team-admin-scope.spec.ts` | **new** |
