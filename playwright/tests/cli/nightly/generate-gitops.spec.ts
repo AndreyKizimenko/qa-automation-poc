@@ -14,6 +14,13 @@ import { generate, minConfig, minConfigLabel, names, at } from './_generated';
 const isPremium = process.env.SUITE === 'premium';
 
 test.describe(`generate-gitops · ${minConfigLabel}`, () => {
+  // TODO(fleetdm/fleet#53965): generate-gitops exits 1 on Free whenever Apple MDM
+  // is configured — generateControls calls generateAssets, which 402s on Free —
+  // so it writes nothing to compare. free-fleetqa has Apple MDM on, so every test
+  // here fails on Free. Premium is unaffected. Un-skip when the assets fetch is
+  // skipped on Free.
+  test.skip(!isPremium, 'fleetdm/fleet#53965 — generate-gitops exits 1 on Free with Apple MDM on');
+
   test('reproduces the applied label set', async () => {
     const { global } = await generate();
     const expected = minConfig.labels.map((l) => l.name).sort();

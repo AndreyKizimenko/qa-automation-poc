@@ -79,8 +79,9 @@ skew was silently costing real coverage in three ways.
 3. **It hid a live P1 product bug.** `generate-gitops` exits 1 on Free whenever Apple MDM is
    configured ([fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)). 4.85.1
    predates DDM assets support (4.90.0), so it never took the failing branch — **FCTL-24 and
-   FCTL-25 passed for two months against a command that is broken on this tier.** Upgrading the
-   client is what surfaced it.
+   FCTL-25 passed for two months against a command that is broken on this tier**, and so did the
+   nightly chain's FCTL-26…30 on Free, until CI's own fleetctl install stopped falling back to 4.85.0
+   (2026-09-28). Upgrading the client is what surfaced it; all seven now skip on Free behind #53965.
 
 **The fix when the released client is behind the server.** `npm install -g fleetctl@<version>` only
 works for a version that has shipped; against an RC it will not. Build one from the Fleet checkout
@@ -144,11 +145,11 @@ client is old. That is the mechanism by which two specs passed for the wrong rea
 | FCTL-40 | `cli/shared/gitops-dry-run.spec.ts` | reports a missing config file | CLI | ☐ |
 | FCTL-41 | `cli/premium/gitops-dry-run.spec.ts` | processes fleet configs; `--delete-other-fleets` (2) | CLI | ☐ |
 | FCTL-42 | `cli/free/gitops-skips-teams.spec.ts` | skips every fleet file in the scaffold | CLI | ☐ |
-| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set | CLI | ☐ |
-| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set | CLI | ☐ |
-| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set | CLI | ☐ |
-| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name | CLI | ☐ |
-| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure | CLI | ☐ |
+| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure **(skipped on Free — #53965)** | CLI | ☐ |
 | FCTL-43 | `cli/nightly/gitops-idempotence.spec.ts` | dry-run of the applied config proposes no deletions | CLI | ☐ |
 
 Shared across **FCTL-01..25** unless an entry says otherwise:
