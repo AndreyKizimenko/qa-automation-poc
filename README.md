@@ -80,8 +80,8 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 Nightly ordering is by dependency, not by clock: `qa-nightly.yml` fires both
 Render deploy hooks, waits 30 min for the deploys to finish (a hook only queues
 one, and Render keeps the old instance serving until the new one is live), checks
-both instances' `/healthz`, then runs each tier's gitops chain and, when it's
-green, that tier's suite — the two tiers side by side. It's started at 12 AM
+both instances' `/healthz`, then runs each tier's gitops chain and, once it has
+finished — green or red — that tier's suite, the two tiers side by side. It's started at 12 AM
 Central by an outside scheduler calling its `workflow_dispatch`, because since
 2026-08-27 GitHub has been creating this repo's scheduled runs 4–6.5 h late; its
 own 07:00 UTC `schedule` is a fallback that stands down once a dispatched run has

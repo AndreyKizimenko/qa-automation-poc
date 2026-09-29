@@ -2,12 +2,13 @@ name: QA — Nightly
 # The nightly as one chain: redeploy both Render instances, give the deploys
 # time to finish, then per tier the nightly gitops sequence and that tier's
 # Playwright suite — the tier chains `QA — Branch run` runs, against main. Each
-# step starts when the one before it ends, and a red gitops step stops its
-# tier's suite.
+# step starts when the one before it ends. A tier's suite runs once its gitops
+# chain has finished, green or red: a failed apply or drift check is its own
+# signal, and the night's test results still come in.
 #
 #   Render deploy hooks ─► wait (30 min) + both instances healthy
-#     ├─► gitops premium ─► Playwright premium
-#     └─► gitops free    ─► Playwright free
+#     ├─► gitops premium ─► Playwright premium (whatever gitops did)
+#     └─► gitops free    ─► Playwright free    (whatever gitops did)
 #
 # Started at 12 AM Central by an outside scheduler calling this workflow's
 # workflow_dispatch: GitHub creates this repo's scheduled runs hours late (4–6.5 h
@@ -82,7 +83,7 @@ jobs:
   # about the deploy being done — the wait is what covers it. The health check
   # after it catches an instance that came up broken. It runs even if a hook
   # failed: that instance simply wasn't redeployed, and the night still runs.
-  # Past this point each job checks its own dependency's result, because a
+  # Past this point each job checks render-settle's result itself, because a
   # job's default `success()` also counts a failed hook further up the chain.
   render-settle:
     needs: [gate, render-deploy]
@@ -120,8 +121,8 @@ jobs:
     secrets: inherit
 
   playwright-premium:
-    needs: gitops-premium
-    if: ${{ !cancelled() && needs.gitops-premium.result == 'success' }}
+    needs: [render-settle, gitops-premium]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
     uses: ./.github/workflows/playwright-premium.yml
     secrets: inherit
 
@@ -132,7 +133,7 @@ jobs:
     secrets: inherit
 
   playwright-free:
-    needs: gitops-free
-    if: ${{ !cancelled() && needs.gitops-free.result == 'success' }}
+    needs: [render-settle, gitops-free]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
     uses: ./.github/workflows/playwright-free.yml
     secrets: inherit
