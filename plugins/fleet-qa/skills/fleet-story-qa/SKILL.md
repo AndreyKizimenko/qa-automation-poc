@@ -20,18 +20,18 @@ that skipped half the code path (see **Evidence** below).
 
 ## Tooling
 
-Reuse the bug-QA scripts rather than copies — `.claude/skills/fleet-bug-qa/scripts/`:
+Reuse the bug-QA scripts rather than copies — `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`:
 `fleetapi.sh <ctx> <METHOD> <path> [json | -F k=v]` (`FLEET_TOKEN=` to act as
 another user), `screenshot.mjs`, `pw.mjs` (Playwright with cookie login),
 `stack.py` (combine shots into one image), `cleanup.sh`. Instance
 contexts and tokens are in `~/.fleet/config`; the fixed/RC instance is the one
-`.claude/fleet-qa.local.md` names (usually `default`). There is no pre-fix
+`~/.claude/fleet-qa.local.md` names (usually `default`). There is no pre-fix
 instance to set up.
 
-Read `.claude/fleet-qa.local.md` first: this machine's instances, Fleet checkout,
+Read `~/.claude/fleet-qa.local.md` first: this machine's instances, Fleet checkout,
 QA workspace, databases, logs and role users. If it doesn't exist, create it
-before anything else, per `.claude/skills/fleet-bug-qa/references/local-setup.md`.
-Before building test data, skim `.claude/skills/fleet-bug-qa/references/fleet-gotchas.md`
+before anything else, per `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
+Before building test data, skim `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md`
 and `references/instance-traps.md` (this skill). The second covers the instance
 traps that cost earlier story runs time (which server is which, Free needs a
 restart, API-only users expire).
@@ -51,7 +51,7 @@ These come from real corrections — each one cost a user something once.
 - **Never type a password** or create/delete human accounts. For API role checks
   use API-only users (they return a token). They can't open the UI, so for UI-by-role
   use the real role users with fleetctl contexts listed in
-  `.claude/fleet-qa.local.md`, or ask the human to sign in as that role.
+  `~/.claude/fleet-qa.local.md`, or ask the human to sign in as that role.
 - **Never post, edit or delete on GitHub unless asked in this conversation.** Give
   comments as copiable blocks. Ticking test-plan boxes on the ticket is fine only
   once the user has asked you to keep them updated — and only tick what was

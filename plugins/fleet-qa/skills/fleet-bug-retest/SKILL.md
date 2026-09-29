@@ -11,17 +11,17 @@ holds all of it. This skill turns that into a quick loop — find what's fixed, 
 the checks, confirm nothing nearby broke, and hand back evidence.
 
 It leans on two sibling skills rather than repeating them:
-- **`fleet-bug-file`** — the tracker format: `.claude/skills/fleet-bug-file/references/tracker.md`.
+- **`fleet-bug-file`** — the tracker format: `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-file/references/tracker.md`.
 - **`fleet-bug-qa`** — the before/after method, scripts, ticket-comment format,
-  decision list and cleanup rules: `.claude/skills/fleet-bug-qa/SKILL.md`. Read
+  decision list and cleanup rules: `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/SKILL.md`. Read
   its steps 3–9 before retesting; everything there applies here, at a smaller scale.
 
 ## 1. Sync the tracker
 
 `<QA workspace>/filed-bugs/INDEX.md` is the scope: only bugs listed there get
 triaged and retested. The QA workspace, the Fleet checkout and the instances come
-from `.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
-`.claude/skills/fleet-bug-qa/references/local-setup.md`. Those are the ones filed with `fleet-bug-file`, so
+from `~/.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. Those are the ones filed with `fleet-bug-file`, so
 they come with the setup and checks that make a quick retest possible — a bug
 without a tracker entry has none of that, and sweeping in everything the user ever
 authored buries the few bugs that matter under years of already-closed ones.

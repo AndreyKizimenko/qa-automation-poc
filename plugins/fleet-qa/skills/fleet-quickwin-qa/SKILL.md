@@ -19,16 +19,16 @@ notes should say.)
 
 ## Tooling
 
-Reuse `.claude/skills/fleet-bug-qa/scripts/`: `fleetapi.sh <ctx> <METHOD> <path>
+Reuse `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh <ctx> <METHOD> <path>
 [json | -F k=v]` (`FLEET_TOKEN=` for another user), `screenshot.mjs <ctx> <path>
 <out.png> [--clip sel --click text ...]`, `pw.mjs` (Playwright with cookie login),
 `stack.py <out.png> <a.png> <b.png> ...` (combine shots into one image), `cleanup.sh`.
-Read `.claude/fleet-qa.local.md` first: it names the RC instance (usually context
+Read `~/.claude/fleet-qa.local.md` first: it names the RC instance (usually context
 `default`), the fleetctl binary for the RC (check `fleetctl --version`), the QA
 workspace and the role users. If it doesn't exist, create it before anything else,
-per `.claude/skills/fleet-bug-qa/references/local-setup.md`. Skim
-`.claude/skills/fleet-bug-qa/references/fleet-gotchas.md` and
-`.claude/skills/fleet-story-qa/references/instance-traps.md` before creating test
+per `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. Skim
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md` and
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md` before creating test
 data.
 
 Work in `<QA workspace>/qa-<N>/` with `RESULTS.md`, `created.txt`

@@ -33,16 +33,16 @@ There are two audiences, and they get different documents:
   closedByPullRequestsReferences,timelineItems`, `gh pr list --search "<N>" --state
   all`, and `git log --all --grep '<N>'`. If there is still nothing, see step 1.
 - Two instances, as fleetctl contexts in `~/.fleet/config`: the pre-fix one and the
-  fixed one, as `.claude/fleet-qa.local.md` names them (usually **`previous`** and
+  fixed one, as `~/.claude/fleet-qa.local.md` names them (usually **`previous`** and
   **`default`**). The user may name others. Tokens for every context are in
   `~/.fleet/config`; the scripts read them directly and never print them.
 
 ## Local setup
 
-Read `.claude/fleet-qa.local.md` first: this machine's instances, Fleet checkout, QA
+Read `~/.claude/fleet-qa.local.md` first: this machine's instances, Fleet checkout, QA
 workspace, databases, logs and role users. If it doesn't exist, create it before
-anything else, per `references/local-setup.md`. It's gitignored, and it holds no
-tokens.
+anything else, per `references/local-setup.md`. It lives in your home folder, not in
+any repo, and holds no tokens.
 
 ## Tooling (in this skill's `scripts/`)
 
@@ -193,7 +193,7 @@ the line format), including hosts, background PIDs, worktrees and containers. Fo
 role testing create **API-only users** (`POST /api/v1/fleet/users/api_only`) — they
 return a token directly, so no password is typed. (They can't log into the UI; for
 UI-by-role use the real role users with fleetctl contexts listed in
-`.claude/fleet-qa.local.md`, or ask the user to sign in as that role. Never rewrite `/me` in the browser to fake a role.)
+`~/.claude/fleet-qa.local.md`, or ask the user to sign in as that role. Never rewrite `/me` in the browser to fake a role.)
 
 ### 4. Prove the problem is captured
 

@@ -13,16 +13,16 @@ Icon
 *.swo
 
 # Claude Code. Two things here are shared and MUST stay checked in:
-#   .claude/skills/       — the skills tree (the Playwright skills,
-#     fleet-upgrade-preflight and the fleet-* QA skills). It has to sit at the REPO ROOT:
+#   .claude/skills/       — the skills tree (test-author, test-reviewer,
+#     run-reviewer, fleet-upgrade-preflight). It has to sit at the REPO ROOT:
 #     a nested .claude/skills/ (e.g. under playwright/) is treated as
 #     directory-scoped, which namespaces the commands to `playwright:<name>`
 #     and ties them to files under that directory. Root keeps them as plain
 #     `/playwright-test-author` etc., repo-wide.
 #   .claude/settings.json — the permission allowlist (no secrets).
-# Everything else at the repo root is machine-local harness state, including
-# .claude/fleet-qa.local.md, each engineer's instances and paths for the fleet-* QA
-# skills (see .claude/skills/fleet-bug-qa/references/local-setup.md).
+# Everything else at the repo root is machine-local harness state.
+# (The fleet-qa plugin's skills live in plugins/fleet-qa/ and are installed per user; their
+# per-engineer setup is ~/.claude/fleet-qa.local.md, outside any repo.)
 .claude/settings.local.json
 /.claude/*
 !/.claude/settings.json

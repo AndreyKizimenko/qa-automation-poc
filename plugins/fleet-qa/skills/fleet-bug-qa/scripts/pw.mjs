@@ -3,11 +3,19 @@
 import { createRequire } from 'module';
 import fs from 'fs';
 import os from 'os';
-import { fileURLToPath } from 'url';
-// Playwright comes from this repo's suite (<repo>/playwright), four levels up from
-// .claude/skills/fleet-bug-qa/scripts/. PW_DIR points it at another install.
-const suiteDir = fileURLToPath(new URL('../../../../playwright/', import.meta.url));
-const require = createRequire((process.env.PW_DIR || suiteDir).replace(/\/?$/, '/'));
+import path from 'path';
+
+// Playwright comes from an existing install: PW_DIR (a folder whose node_modules has it, e.g. the QA
+// suite's playwright/ after `npm ci`), else the usual QA-suite checkout, else the current directory.
+const candidates = [process.env.PW_DIR, path.join(os.homedir(), 'repositories/qa-automation/playwright'), process.cwd()];
+let require;
+for (const dir of candidates.filter(Boolean)) {
+  const req = createRequire(path.join(dir, '/'));
+  try { req.resolve('playwright'); require = req; break; } catch {}
+}
+if (!require) {
+  throw new Error(`Playwright not found in ${candidates.filter(Boolean).join(', ')}. Set PW_DIR to a folder with playwright installed (see ~/.claude/fleet-qa.local.md).`);
+}
 export const { chromium } = require('playwright');
 
 export function ctxInfo(ctx) {

@@ -39,27 +39,45 @@ covers the same rule for the hand-run tooling.
 
 ## Claude Code skills
 
-Checked in under `.claude/skills/`, so every Claude Code session started in this repo has them:
+**In this repo** (`.claude/skills/`, loaded in any session started here):
 
 | skill | for |
 |---|---|
 | `playwright-test-author`, `playwright-test-reviewer`, `playwright-run-reviewer` | writing, reviewing and triaging the Playwright suite |
 | `fleet-upgrade-preflight` | predicting which specs a Fleet upgrade will break |
+
+**The `fleet-qa` plugin** (`plugins/fleet-qa/`, installed once per engineer and loaded in every repo):
+
+| skill | for |
+|---|---|
 | `fleet-bug-qa` | QA a bug or security fix: reproduce on a pre-fix instance, verify on the fixed one |
 | `fleet-story-qa` | QA a user story alongside the engineer |
 | `fleet-quickwin-qa` | QA a small change end to end |
 | `fleet-bug-file` | file a bug from a finding, and record how to retest it |
 | `fleet-bug-retest` | retest the bugs you filed once their fix is in a build |
 
-The last five run against your own Fleet instances. On first use they write
-`.claude/fleet-qa.local.md` (gitignored; see `.claude/skills/fleet-bug-qa/references/local-setup.md`):
+Install it once:
+
+```bash
+claude plugin marketplace add AndreyKizimenko/qa-automation-poc
+claude plugin install fleet-qa@qa-automation --scope user
+```
+
+Update it with `claude plugin marketplace update qa-automation && claude plugin update fleet-qa@qa-automation`,
+or turn on auto-update for the marketplace under `/plugin` → Marketplaces. Invoke a skill as
+`/fleet-qa:fleet-bug-qa` (or just `/fleet-bug-qa` when nothing else has that name), or let Claude pick it up
+from the request.
+
+**The plugin runs against your own Fleet instances.** On first use it writes `~/.claude/fleet-qa.local.md`
+(see `plugins/fleet-qa/skills/fleet-bug-qa/references/local-setup.md`):
 - which fleetctl contexts are the fixed and the pre-fix instance;
 - where your Fleet checkout and QA workspace are;
-- which role users you keep.
+- which role users you keep;
+- where Playwright is.
 
-Tokens stay in `~/.fleet/config`. The skills also need an authenticated `gh`, a Fleet checkout, `npm ci`
-in `playwright/` (the screenshot scripts use its Playwright), and Pillow (`pip3 install pillow`) for
-`stack.py`.
+Tokens stay in `~/.fleet/config`. It also needs an authenticated `gh`, a Fleet checkout, a clone of this
+repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwright), and Pillow
+(`pip3 install pillow`) for `stack.py`.
 
 ## Running locally
 

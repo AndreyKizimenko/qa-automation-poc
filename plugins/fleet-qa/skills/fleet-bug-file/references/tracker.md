@@ -2,7 +2,7 @@
 
 Shared by `fleet-bug-file` (writes entries) and `fleet-bug-retest` (reads and
 updates them). Lives in `<QA workspace>/filed-bugs/`; the QA workspace is named in
-`.claude/fleet-qa.local.md`.
+`~/.claude/fleet-qa.local.md`.
 
 The point of the tracker is that whoever retests — usually the reporter, weeks
 later — can verify the fix in minutes without re-deriving the setup. Write the

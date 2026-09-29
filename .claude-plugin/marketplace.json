@@ -1,0 +1,12 @@
+{
+  "name": "qa-automation",
+  "description": "Fleet QA's Claude Code plugins.",
+  "owner": { "name": "Fleet QA" },
+  "plugins": [
+    {
+      "name": "fleet-qa",
+      "source": "./plugins/fleet-qa",
+      "description": "QA a Fleet bug or security fix, a story or a quick win against your own instances; file bugs and retest them."
+    }
+  ]
+}

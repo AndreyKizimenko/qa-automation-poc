@@ -11,8 +11,8 @@ useful to the developer who picks it up, create it, and leave a retest trail so
 the reporter can verify the fix later without rediscovering anything.
 
 The instances and the QA workspace (where the tracker lives) come from
-`.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
-`.claude/skills/fleet-bug-qa/references/local-setup.md`.
+`~/.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
 
 ## 1. Pin the facts
 
@@ -24,7 +24,7 @@ the user's screenshots, a repro they just did). Before writing, make sure you kn
 - **It reproduces** on at least one named build. If the only evidence is old or
   second-hand, reproduce it once now — an issue that doesn't reproduce wastes the
   developer's first hour. Use the `fleet-bug-qa` scripts for this
-  (`.claude/skills/fleet-bug-qa/scripts/`: `fleetapi.sh`, `screenshot.mjs`).
+  (`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh`, `screenshot.mjs`).
 - **The mechanism, if you actually found it** — file:line of the code responsible.
   Only what you confirmed; see "More info" below.
 
@@ -114,12 +114,12 @@ For UI bugs, give the user the images that belong under Actual behavior: the wro
 state, and the contradicting evidence when there is one (e.g. the confirmation that
 names one host + the other host's reset result). Use the user's own screenshots if
 they shared them; otherwise capture with
-`node .claude/skills/fleet-bug-qa/scripts/screenshot.mjs <ctx> <path> <out.png> --clip <sel>`.
+`node ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/screenshot.mjs <ctx> <path> <out.png> --clip <sel>`.
 Read each one before sending: it must show the problem, and — this repo is public —
 no enroll secrets, tokens or real user data. Save them in the tracker entry's folder
 (`<QA workspace>/filed-bugs/<N>-<slug>/`). When more than one image goes under the same
 section, combine them into one in reading order —
-`python3 .claude/skills/fleet-bug-qa/scripts/stack.py <N>-actual-behavior.png a.png b.png ...`
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/stack.py <N>-actual-behavior.png a.png b.png ...`
 (`--side` for narrow clips) — so the section takes a single paste; crop each to the
 region that shows the problem first (fleet name, filter, count) so the stack stays
 legible and carries no unrelated data. Send with `SendUserFile` (display `attach`)
