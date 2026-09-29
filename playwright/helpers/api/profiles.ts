@@ -209,21 +209,32 @@ export async function waitForHostProfileGone(
 /**
  * Runs `sql` on one host now and returns its rows (`POST /hosts/:id/query`). Only
  * a real VM's answer means anything — a simulation ignores the SQL.
+ *
+ * Fleet waits a fixed while for the host to answer and reports "timeout waiting
+ * for results" when it doesn't — which a real VM busy with other specs' refetches
+ * and installs sometimes doesn't. That one error is retried (the server already
+ * waited, so no pause is needed); any other is thrown.
  */
 export async function queryHost(
   request: APIRequestContext,
   hostId: number,
   sql: string,
+  attempts = 3,
 ): Promise<Array<Record<string, string>>> {
-  const res = await request.post(apiUrl(`hosts/${hostId}/query`), {
-    headers: authHeaders(),
-    data: { query: sql },
-    timeout: 120_000,
-  });
-  await expect(res, `Live query on host ${hostId} failed`).toBeOK();
-  const body = await res.json();
-  if (body.error) throw new Error(`Live query on host ${hostId} errored: ${body.error}`);
-  return body.rows ?? [];
+  let lastError = '';
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const res = await request.post(apiUrl(`hosts/${hostId}/query`), {
+      headers: authHeaders(),
+      data: { query: sql },
+      timeout: 120_000,
+    });
+    await expect(res, `Live query on host ${hostId} failed`).toBeOK();
+    const body = await res.json();
+    if (!body.error) return body.rows ?? [];
+    lastError = String(body.error);
+    if (!/timeout waiting for results/i.test(lastError)) break;
+  }
+  throw new Error(`Live query on host ${hostId} errored: ${lastError}`);
 }
 
 /**
@@ -299,7 +310,7 @@ export async function profileListings(
   profiles: ProfileRecord[],
 ): Promise<Record<string, number[]>> {
   const out: Record<string, number[]> = {};
-  for (const p of profiles) out[p.name] = [...(await hostsListingProfile(request, hostIds, p.uuid))].sort();
+  for (const p of profiles) out[p.name] = [...(await hostsListingProfile(request, hostIds, p.uuid))].sort((a, b) => a - b);
   return out;
 }
 
@@ -315,7 +326,7 @@ export async function waitForProfileListings(
   expected: Array<{ profile: ProfileRecord; hosts: number[] }>,
   timeout = 180_000,
 ): Promise<void> {
-  const want = Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()]));
+  const want = Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort((a, b) => a - b)]));
   await expect
     .poll(() => profileListings(request, hostIds, expected.map((e) => e.profile)), {
       message: `each profile should be listed on exactly its hosts of ${hostIds.join(', ')}`,

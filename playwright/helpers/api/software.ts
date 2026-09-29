@@ -269,6 +269,10 @@ export interface SoftwarePackageDetail {
   pinnedVersion: string;
   /** Cached Fleet-maintained versions, newest first as the Versions modal lists them. */
   fleetMaintainedVersions: string[];
+  /** The package's label scope, by label name — at most one of these is non-empty. */
+  labelsIncludeAny: string[];
+  labelsIncludeAll: string[];
+  labelsExcludeAny: string[];
 }
 
 /**
@@ -306,7 +310,27 @@ export async function getSoftwarePackage(
     fleetMaintainedVersions: ((pkg.fleet_maintained_versions ?? []) as { version: string }[]).map(
       (v) => v.version,
     ),
+    labelsIncludeAny: ((pkg.labels_include_any ?? []) as { name: string }[]).map((l) => l.name),
+    labelsIncludeAll: ((pkg.labels_include_all ?? []) as { name: string }[]).map((l) => l.name),
+    labelsExcludeAny: ((pkg.labels_exclude_any ?? []) as { name: string }[]).map((l) => l.name),
   };
+}
+
+/**
+ * Which of `hostIds` Fleet offers a title to — lists in the host's Library as
+ * available to install — sorted. A label scope on the package decides it
+ * server-side, so a simulation answers as well as a VM.
+ */
+export async function hostsOfferedTitle(
+  request: APIRequestContext,
+  hostIds: number[],
+  titleId: number,
+): Promise<number[]> {
+  const offered: number[] = [];
+  for (const hostId of hostIds) {
+    if (await getHostSoftwareState(request, hostId, titleId)) offered.push(hostId);
+  }
+  return offered.sort((a, b) => a - b);
 }
 
 /**

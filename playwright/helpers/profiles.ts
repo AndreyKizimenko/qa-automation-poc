@@ -5,7 +5,8 @@
  * reaches a VM sooner or later, so nothing here may ever carry a payload that
  * gates access to a host. Each generator is a payload Andrey approved for the
  * VMs (batch E): a preference domain nothing reads, Game DVR off, Apple's no-op
- * test declaration, and a profile macOS refuses outright.
+ * test declaration, and one meant to be refused — **except the two at the end**,
+ * which force OS updates and are for fleets without real hosts only.
  *
  * A spec that uploads several profiles at once, or runs beside another that does,
  * needs each one to be its own:
@@ -47,6 +48,11 @@ export interface InertWindowsProfile extends GeneratedProfile {
 }
 
 const OWN_NAME = /^pw-[a-z0-9-]+$/;
+
+/** The acknowledgement the OS update generators demand — checked at run time too, for untyped callers. */
+function assertNoRealHosts(ack: { noRealHostsOnFleet: true }): void {
+  if (ack?.noRealHostsOnFleet !== true) throw new Error('OS update profiles are only for a fleet with no real hosts');
+}
 
 function assertOwnName(name: string): void {
   if (!OWN_NAME.test(name)) {
@@ -161,11 +167,13 @@ export function inertDeclaration(name: string): InertDeclaration {
 }
 
 /**
- * A macOS profile the Mac refuses at install, so Fleet retries it and then
- * reports it Failed — with nothing ever applied. Its one payload has an unknown
- * `com.apple.` type, which macOS rejects; an unknown type *outside* `com.apple.`
- * would be installed as a custom preference domain instead (what
- * {@link inertMobileconfig} relies on).
+ * Meant as a macOS profile the Mac refuses at install, so Fleet retries it and
+ * then reports it Failed. Its one payload has an unknown `com.apple.` type —
+ * the approved payload, from Andrey's `device-rejects` test set — **but macOS
+ * 26.6 accepts it**: the VM acknowledged it and Fleet verified it (2026-09-29),
+ * presumably as a custom preference domain, like {@link inertMobileconfig}.
+ * Still inert either way; it just doesn't fail. The retry test that uses it is
+ * skipped until a payload the Mac really refuses is approved.
  */
 export function rejectedMobileconfig(name: string): GeneratedProfile {
   assertOwnName(name);
@@ -220,4 +228,58 @@ export function writeProfile(profile: GeneratedProfile, dir: string): string {
 /** A short id for this run's names — distinct across workers and reruns. */
 export function runNonce(): string {
   return `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
+}
+
+// ── OS update profiles — never for a fleet with real hosts ────────────────────
+//
+// Everything above is safe on a VM. These two are not: delivered to a real host,
+// each makes it download and install an OS update and restart. They exist for
+// the DDM-conflict spec, which uploads them only to Workstations — a fleet with
+// no hosts — to see Fleet refuse them. The `noRealHostsOnFleet: true` argument is
+// the caller saying so; check it (`listFleetHosts(…).filter((h) => h.real)`)
+// before uploading.
+
+/**
+ * A DDM `softwareupdate.enforcement.specific` declaration: install `version` by
+ * `localDateTime`. Fleet refuses it on a fleet with OS updates configured.
+ */
+export function updateEnforcementDeclaration(
+  name: string,
+  opts: { version: string; localDateTime: string; noRealHostsOnFleet: true },
+): GeneratedProfile {
+  assertOwnName(name);
+  assertNoRealHosts(opts);
+  const content = `${JSON.stringify(
+    {
+      Type: 'com.apple.configuration.softwareupdate.enforcement.specific',
+      Identifier: `com.fleetdm.qa.playwright.${name}`,
+      Payload: { TargetOSVersion: opts.version, TargetLocalDateTime: opts.localDateTime },
+    },
+    null,
+    2,
+  )}\n`;
+  return { name, fileName: `${name}.json`, content };
+}
+
+/**
+ * A Windows profile under the Update CSP (`./Device/Vendor/MSFT/Policy/Config/Update`),
+ * the node Fleet reserves for its own Windows update settings: a quality-update
+ * deadline. Fleet refuses it on a fleet with Windows updates configured.
+ */
+export function windowsUpdateProfile(name: string, opts: { noRealHostsOnFleet: true }): GeneratedProfile {
+  assertOwnName(name);
+  assertNoRealHosts(opts);
+  const content = `<Replace>
+  <Item>
+    <Meta>
+      <Format xmlns="syncml:metinf">int</Format>
+    </Meta>
+    <Target>
+      <LocURI>./Device/Vendor/MSFT/Policy/Config/Update/ConfigureDeadlineForQualityUpdates</LocURI>
+    </Target>
+    <Data>7</Data>
+  </Item>
+</Replace>
+`;
+  return { name, fileName: `${name}.xml`, content };
 }

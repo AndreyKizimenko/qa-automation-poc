@@ -203,7 +203,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
 
       // Nothing drifted while the VM installed: still exactly the same hosts.
       expect(await profileListings(request, ours, uploaded)).toEqual(
-        Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()])),
+        Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort((a, b) => a - b)])),
       );
 
       // Deleting a profile takes it off the VM.

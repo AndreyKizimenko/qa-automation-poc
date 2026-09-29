@@ -2,6 +2,9 @@ import { Locator, expect } from '@playwright/test';
 
 export type LabelMode = 'any' | 'all';
 
+/** The dropdown variant's scopes, by the option text Fleet shows. */
+export type LabelScopeOption = 'Include any' | 'Include all' | 'Exclude any';
+
 /**
  * Fleet's label-targeting control: "All hosts" or "Custom", then which labels.
  * Premium only — free renders no target at all. Named after Fleet's own
@@ -119,5 +122,27 @@ export class TargetLabelSelector {
     await this.openTab('Exclude');
     if (mode) await this.setMode('Exclude', mode);
     await this.tick(labels, 'Exclude');
+  }
+
+  /** Dropdown variant: the scope it's set to. */
+  scopeValue(): Locator {
+    // react-select v1 (Fleet's legacy Dropdown) renders the value as a span
+    // with no name of its own apart from its text; the class is the handle.
+    return this.root.locator('.Select-value-label');
+  }
+
+  /**
+   * Dropdown variant: choose Include any / Include all / Exclude any, then tick
+   * `labels`. The visible value opens the menu — it sits over the combobox and
+   * takes its clicks. Options are `role=option`, named with their help text
+   * appended ("Include anySoftware will only…"); the selected value is a
+   * `role=option` too, so the choice is scoped to the open menu.
+   */
+  async scope(option: LabelScopeOption, labels: string[]): Promise<void> {
+    await this.scopeValue().click();
+    // react-select v1's menu container has no role; its class scopes the options.
+    await this.root.locator('.Select-menu-outer').getByRole('option', { name: new RegExp(`^${option}`) }).click();
+    await expect(this.scopeValue()).toHaveText(option);
+    await this.tick(labels);
   }
 }

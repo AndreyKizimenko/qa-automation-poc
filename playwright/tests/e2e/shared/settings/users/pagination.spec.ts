@@ -41,7 +41,7 @@ test.describe('Users pagination', () => {
     await expect(usersPage.pagination.next).toBeEnabled();
 
     // User rows expose no primary link, so the page change is detected via the
-    // whole first-row text rather than Pagination.nextIfEnabled's link signal.
+    // whole first-row text.
     const firstPageFirstRowText = (await usersPage.table.firstRow.innerText()).trim();
     await usersPage.pagination.next.click();
     await expect.poll(async () => (await usersPage.table.firstRow.innerText()).trim())

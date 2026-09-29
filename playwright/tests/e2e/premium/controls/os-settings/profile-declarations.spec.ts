@@ -49,7 +49,7 @@ import { inertDeclaration, runNonce, writeProfile, type InertDeclaration } from 
 import type { ProfileTarget } from '@pages';
 
 /** Which slice of the MDM-enrolled simulations this spec borrows (see `findMdmSimulations`). */
-const SIM_OFFSET = 4;
+const SIM_OFFSET = 2;
 
 test.describe('Premium • Controls • Configuration profiles — declarations', () => {
   test.describe.configure({ timeout: 900_000 });
@@ -133,7 +133,7 @@ test.describe('Premium • Controls • Configuration profiles — declarations'
 
       // Nothing drifted while the VM took them: still exactly the same hosts.
       expect(await profileListings(request, ours, uploaded)).toEqual(
-        Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()])),
+        Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort((a, b) => a - b)])),
       );
 
       // Deleting one takes it off the VM.

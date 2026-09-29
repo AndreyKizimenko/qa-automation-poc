@@ -58,6 +58,12 @@ regenerate both on every restart.
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
   pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
   assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
+- **A simulation can answer what Fleet decides server-side** — which hosts a profile is listed for, which are
+  offered a software title, which a policy or report targets — so a label-targeting spec moves two onto the VMs
+  fleet as the "outside the label" hosts beside the real VM. Borrow with `findMdmSimulations` (only for
+  profiles: MDM-enrolled simulations are scarce) or `findSimulations` (everything else — a disjoint pool), each
+  spec on its own slice (the registry is in `helpers/api/hosts.ts`), move them back in the `finally`; the VMs
+  sweep returns any a dead run left.
 
 ### Never deploy a passcode profile to a real host
 

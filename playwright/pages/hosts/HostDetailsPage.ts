@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { CertificatesCard } from '../components/CertificatesCard';
+import { clickHoverAction } from '../components/clickHoverAction';
 import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { FilterModal } from '../components/FilterModal';
@@ -271,6 +272,32 @@ export class HostDetailsPage {
     return this.controlsPanel
       .getByRole('row')
       .filter({ has: this.page.getByRole('cell', { name, exact: true }) });
+  }
+
+  /** Opens the Policies tab — its accessible name carries the policy count ("Policies3"). */
+  async openPoliciesTab(): Promise<void> {
+    await this.policiesTab.click();
+    await expect(this.policiesTab).toHaveAttribute('aria-selected', 'true');
+  }
+
+  /** The Policies tab's row for one policy, by its exact name. */
+  policyRow(name: string): Locator {
+    return this.page
+      .getByRole('tabpanel', { name: /^Policies/ })
+      .getByRole('row')
+      .filter({ has: this.page.getByText(name, { exact: true }) });
+  }
+
+  /**
+   * Resends one profile from its Controls row — offered on a Verified or Failed
+   * row, and only rendered while the row is hovered. The button reads
+   * "Resending..." until Fleet has queued it.
+   */
+  async resendControl(name: string): Promise<void> {
+    const row = this.controlRow(name);
+    const resend = row.getByRole('button', { name: 'Resend', exact: true });
+    await clickHoverAction(row, resend);
+    await expect(row.getByRole('button', { name: 'Resending...', exact: true })).toHaveCount(0);
   }
 
   async openSoftwareTab(): Promise<void> {

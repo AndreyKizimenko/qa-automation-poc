@@ -67,7 +67,8 @@ export class ConfigurationProfilesPage {
     this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
 
-    this.heading = page.getByRole('heading', { name: 'Configuration profiles' });
+    // Exact: a fleet with no profiles also shows a "No configuration profiles" heading.
+    this.heading = page.getByRole('heading', { name: 'Configuration profiles', exact: true });
     // The "Add profile" button label is shared between the empty-state card
     // and the populated-list heading; both open the same modal.
     this.addProfileButton = page.getByRole('button', { name: 'Add profile' }).first();

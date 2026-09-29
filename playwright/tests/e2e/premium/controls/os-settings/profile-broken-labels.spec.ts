@@ -21,8 +21,8 @@
  * profile is gone, the same delete goes through.
  *
  * Nothing here is delivered anywhere. The profiles live on **Workstations**,
- * which holds no hosts, and the manual labels hold two Unassigned simulations
- * that never move (their own slice of `findMdmSimulations`).
+ * which holds no hosts, and the manual labels hold two simulations that never
+ * move (their own slice of `findSimulations`).
  */
 import { test, expect } from '@fixtures';
 import {
@@ -30,7 +30,7 @@ import {
   createManualLabel,
   deleteLabelById,
   deleteProfile,
-  findMdmSimulations,
+  findSimulations,
   getProfile,
   listLabelHostIds,
   uploadProfile,
@@ -43,8 +43,8 @@ import {
   type GeneratedProfile,
 } from '@helpers/profiles';
 
-/** Which slice of the MDM-enrolled simulations this spec reads (see `findMdmSimulations`). */
-const SIM_OFFSET = 2;
+/** Which slice of the simulations this spec reads (see `findSimulations`). */
+const SIM_OFFSET = 0;
 
 const REFUSED = "Couldn't delete. A configuration profile targets this label. Please delete the profile and try again.";
 
@@ -76,8 +76,8 @@ test.describe('Premium • Controls • Configuration profiles — a targeted la
       const n = runNonce();
       const labelName = `pw-bl-${n}`;
       const profile = c.make(`pw-bl-${n}-p`);
-      const members = c.label === 'manual' ? await findMdmSimulations(request, 'darwin', 2, SIM_OFFSET) : [];
-      if (c.label === 'manual') expect(members, 'needs two MDM-enrolled macOS simulations').toHaveLength(2);
+      const members = c.label === 'manual' ? await findSimulations(request, 'darwin', 2, SIM_OFFSET) : [];
+      if (c.label === 'manual') expect(members, 'needs two online macOS simulations').toHaveLength(2);
       let labelId: number | undefined;
       let uuid: string | undefined;
 
@@ -99,7 +99,7 @@ test.describe('Premium • Controls • Configuration profiles — a targeted la
         await labelsPage.goto();
         await expect(await labelsPage.locateRow(labelName)).toBeVisible();
         if (c.label === 'manual') {
-          expect([...(await listLabelHostIds(request, labelId))].sort()).toEqual([...members].sort());
+          expect([...(await listLabelHostIds(request, labelId))].sort((a, b) => a - b)).toEqual([...members].sort((a, b) => a - b));
         }
         // …and the profile still targets it, unbroken.
         const record = await getProfile(request, uuid);

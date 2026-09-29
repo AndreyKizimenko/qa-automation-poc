@@ -75,7 +75,7 @@ README §5 forbids. The settings UI can be exercised on Workstations, restored i
 - **Don't run the full suite while you build** — README §9. Your specs, every tier they target, with deps
   once; the full suite once, at the end, via `QA — Branch run`.
 - **Nothing else may be using the instance** when you run: `gh run list --limit 5` first; stay clear of the
-  nightly (05:00–~06:30 UTC).
+  the nightly (scheduled for 05:00 UTC, but GitHub has been starting it 5–6.5 h late — check `gh run list --workflow "Playwright — Premium" --event schedule`).
 - **Role specs multiply.** One spec with the role as a dimension, not a file per role (README §1).
 - **A missing locator's `click()` has no action timeout** — probe it first; the `finally` runs on a closed
   context when it hangs.

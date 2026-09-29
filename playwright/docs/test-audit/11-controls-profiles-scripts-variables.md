@@ -1,6 +1,6 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 8 files · **Test declarations:** 26 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26)
+**Specs covered:** 11 files · **Test declarations:** 34 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
 
 Covers **Controls → OS settings** (custom configuration profiles, global disk-encryption
 enforcement), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
@@ -51,6 +51,14 @@ CTL-26) or the simulation pool (CTL-25).
 | CTL-24 | `premium/controls/scripts/batch-run.spec.ts` | Batch script run › a batch on one VM of each platform puts each host in the status its platform earns | UI+API | ☐ |
 | CTL-25 | `premium/controls/scripts/batch-run.spec.ts` | Batch script run › a batch on every matching simulation targets exactly them, and accounts for each | UI+API | ☐ |
 | CTL-26 | `shared/exclusive/script-execution-disabled.spec.ts` | turning script execution off disables running scripts everywhere Fleet offers it *(premium-exclusive + free-exclusive)* | UI+API | ☐ |
+| CTL-27 | `premium/controls/os-settings/configuration-profiles.spec.ts` | a profile for all hosts, delivered and removed (VMs fleet) › the macOS VM installs and verifies it, and loses it when it is deleted | UI+API | ☐ |
+| CTL-28 | `premium/exclusive/os-updates/macos-updates.spec.ts` | macOS › a custom minimum version and deadline save, persist, and clear again *(premium-exclusive)* | UI+API | ☐ |
+| CTL-29 | `premium/exclusive/os-updates/macos-updates.spec.ts` | macOS › a missing or malformed minimum version or deadline is refused, and nothing saves *(premium-exclusive)* | UI+API | ☐ |
+| CTL-30 | `premium/exclusive/os-updates/macos-updates.spec.ts` | macOS › "View all hosts" on a current version lists exactly the hosts running it *(premium-exclusive)* | UI+API | ☐ |
+| CTL-31 | `premium/exclusive/os-updates/ddm-conflict.spec.ts` | macOS: a software-update declaration and a minimum version refuse each other *(premium-exclusive)* | UI+API | ☐ |
+| CTL-32 | `premium/exclusive/os-updates/ddm-conflict.spec.ts` | Windows: an Update CSP profile and a Windows update deadline refuse each other *(premium-exclusive)* | UI+API | ☐ |
+| CTL-33 | `free/controls/os-settings/profile-delivery.spec.ts` | a profile is installed, resent and removed, and the host names it in each command *(free)* | UI+API | ☐ |
+| CTL-34 | `free/controls/os-settings/profile-delivery.spec.ts` | a declaration is verified by the Mac and removed again *(free)* | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1060,6 +1068,240 @@ other:
 
 ---
 
+---
+
+### CTL-27 · MDM • OS settings — a profile for all hosts, delivered and removed (VMs fleet) › the macOS VM installs and verifies it, and loses it when it is deleted
+
+- **File:** [`playwright/tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts`](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts)
+- **Grep:** `npx playwright test --project=premium configuration-profiles -g "delivered and removed"`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS VM (`requireRealHost`)
+- **Mode:** UI+API · **Isolation:** standalone describe; timeout 600 s; `finally` deletes the profile
+- **Data created:** generated inert profile `pw-cp-<nonce>` (one key in its own preference domain), uploaded with the default target — **All hosts** — so it also reaches any MDM simulation another spec has borrowed onto the fleet; deleted in-test, and by the VMs sweep if the test dies
+
+**Flow**
+
+1. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → fleet **VMs** → **Add profile** → choose the file → **Add profile** (no target chosen).
+   - ✅ *(UI)* *"Successfully uploaded."*; the row reads **macOS, iOS, iPadOS** and has no label count.
+2. ☐ (No user action) Wait for the VM: *verifying*, then a refetch (after any outstanding one), then **verified**.
+   - ✅ *(API)* A filtered `managed_policies` read of the profile's domain shows its marker.
+   - ✅ *(UI)* The VM's **Controls** tab row reads **Verified**.
+3. ☐ Back to the profiles → hover the row → **Delete** → confirm.
+   - ✅ *(API)* The VM stops listing it; the domain reads empty on the device (≤ 2 min).
+
+**Assessment**
+- *Value:* High. QA Wolf's "upload and remove configuration profile": the one path — no target — the label-targeting specs don't take, proven on the device both ways.
+- *Coverage gaps:* the transient Pending/Verifying status on the host isn't asserted in the UI (the VM moves through it in seconds).
+- *Redundancy:* the removal half overlaps LT-01's last step; kept because it's the untargeted profile.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-28 · Premium • Controls • OS updates — macOS › a custom minimum version and deadline save, persist, and clear again  *(premium-exclusive)*
+
+- **File:** [`playwright/tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts`](../../tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts)
+- **Grep:** `npx playwright test --project=premium-exclusive macos-updates --no-deps`
+- **Project:** premium-exclusive (one worker, after the main project — it shares Workstations' OS update settings with CTL-31/32) · **Scope:** **Workstations**, which holds no hosts
+- **Mode:** UI+API · **Isolation:** `finally` clears Workstations' OS updates; so does the Workstations wipe in `setup/cleanup.steps.ts`
+- **Preconditions:** Workstations enforces nothing (asserted); Apple's software lookup feed is reachable (`appleListedMacosVersions` — the version is the oldest it lists, which Fleet accepts)
+
+**Flow**
+
+1. ☐ Dashboard → **Controls** → **OS updates** → **Workstations** → **macOS** tab.
+   - ✅ *(UI)* Target reads **No updates enforced**; no Minimum version field.
+2. ☐ Target → **Custom version** → Minimum version (an Apple-listed version) → Deadline (60 days out, `YYYY-MM-DD`) → **Save**.
+   - ✅ *(UI)* *"Successfully updated."*; the tab reads **macOS** with a check.
+   - ✅ *(API)* `mdm.macos_updates` holds that version and deadline.
+3. ☐ Reload.
+   - ✅ *(UI)* **Custom version**, and both values, read back.
+   - ✅ *(UI)* End user experience: the heading, a **Learn more** link to `https://fleetdm.com/learn-more-about/os-updates` opening in a new tab, and the preview image.
+4. ☐ Target → **No updates enforced** → **Save**.
+   - ✅ *(UI)* *"Successfully updated."*; the check leaves the tab. *(API)* nothing enforced.
+
+**Assessment**
+- *Value:* Medium-high. QA Wolf's flow never chose "Custom version" (it passed on its own leftover); this sets and clears it, and replaces their preview screenshot with the link and image.
+- *Coverage gaps:* "Latest version" / Days after release, and iOS / iPadOS.
+- *Efficiency / smells:* seconds. Reads an external feed (Apple's) for a version Fleet will accept.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-29 · Premium • Controls • OS updates — macOS › a missing or malformed minimum version or deadline is refused, and nothing saves  *(premium-exclusive)*
+
+- **File / project / scope:** as CTL-28
+
+**Flow**
+
+1. ☐ Workstations → **macOS** → **Custom version** → **Save** with both fields empty.
+   - ✅ *(UI)* In place of the labels: *"The minimum version is required."* and *"The deadline is required."*
+2. ☐ Minimum version `not-a-version`, Deadline `2026/01/01` → **Save**.
+   - ✅ *(UI)* *"Minimum version must meet criteria below."* and *"Deadline must meet criteria below."*
+   - ✅ *(API)* Nothing was saved.
+
+**Assessment**
+- *Value:* Medium — the form's own validation, asserted where Fleet shows it (the label).
+- *Coverage gaps:* server-side refusals ("isn't supported by Apple", an invalid date).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-30 · Premium • Controls • OS updates — macOS › "View all hosts" on a current version lists exactly the hosts running it  *(premium-exclusive)*
+
+- **File / project:** as CTL-28 (read-only; it lives in the file, so in the exclusive project) · **Scope:** Unassigned, where the simulations report OS versions
+
+**Flow**
+
+1. ☐ **Controls** → **OS updates** → **Unassigned** → **Current versions** → hover the first **macOS** row → **View all hosts**.
+   - ✅ *(UI)* The hosts list opens with `os_name` and `os_version` in the URL, and lists hosts.
+   - ✅ *(API)* Every host that filter returns reports exactly that OS (`os_version` = `<name> <version>`), and there's at least one.
+
+**Assessment**
+- *Value:* Medium. QA Wolf compared the table's count with the list's — a count on a shared list that drifts hourly; this checks the filter's membership instead.
+- *Redundancy:* the Software → OS versions drill-down in `premium/software/os.spec.ts` is the same idea on another page.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-31 · Premium • Controls • OS updates — custom update profiles vs OS update settings › macOS: a software-update declaration and a minimum version refuse each other  *(premium-exclusive)*
+
+- **File:** [`playwright/tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts`](../../tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts)
+- **Grep:** `npx playwright test --project=premium-exclusive ddm-conflict --no-deps`
+- **Project:** premium-exclusive · **Scope:** **Workstations** — `beforeEach` asserts it holds no real host, because the payload here is a real OS update enforcement
+- **Mode:** UI+API · **Isolation:** `finally` deletes the declaration and clears the OS updates
+- **Data created:** a generated `softwareupdate.enforcement.specific` declaration `pw-ddm-<nonce>` (`updateEnforcementDeclaration`, which demands `noRealHostsOnFleet: true`)
+
+**Flow**
+
+1. ☐ (No user action) Set a macOS minimum version and deadline on Workstations (API).
+2. ☐ **Configuration profiles** → **Workstations** → **Add profile** → the declaration `.json` → **Add profile**.
+   - ✅ *(UI)* *"Couldn't add profile. OS updates are already configured. Remove the OS updates settings first."*
+   - ✅ *(API)* It wasn't added.
+3. ☐ (No user action) Clear the OS updates; add the declaration (API).
+4. ☐ **OS updates** → **macOS** → **Custom version** + values → **Save**.
+   - ✅ *(UI)* *"Couldn't update OS updates settings. A custom OS updates declaration profile already exists. Remove the custom profile first."*
+   - ✅ *(API)* No minimum version was saved.
+
+**Assessment**
+- *Value:* High. QA Wolf tested one direction on their VMs fleet, with a deadline already in the past — on a fleet with real hosts that's an immediate forced update. Both directions here, on a fleet with none.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-32 · Premium • Controls • OS updates — custom update profiles vs OS update settings › Windows: an Update CSP profile and a Windows update deadline refuse each other  *(premium-exclusive)*
+
+- **File / project / scope:** as CTL-31 · **Data created:** a generated Windows profile under `./Device/Vendor/MSFT/Policy/Config/Update` (`windowsUpdateProfile`)
+
+**Flow**
+
+1. ☐ (No user action) Set a Windows deadline and grace period (3 / 3) on Workstations (API).
+2. ☐ **Configuration profiles** → **Workstations** → **Add profile** → the `.xml` → **Add profile**.
+   - ✅ *(UI)* *"Couldn't add profile. OS updates are already configured. Remove the OS updates settings first."* — and it wasn't added *(API)*.
+3. ☐ (No user action) Clear; add the profile (API).
+4. ☐ **OS updates** → **Windows** → Days after release **3**, Grace period **3** → **Save**.
+   - ✅ *(UI)* *"Couldn't update OS updates settings. A custom OS updates profile already exists. Remove the custom profile first."* — and nothing was saved *(API)*.
+
+**Assessment**
+- *Value:* High, as CTL-31, for Windows.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-33 · Free • Controls • Configuration profiles — delivery to the real Mac › a profile is installed, resent and removed, and the host names it in each command  *(free)*
+
+- **File:** [`playwright/tests/e2e/free/controls/os-settings/profile-delivery.spec.ts`](../../tests/e2e/free/controls/os-settings/profile-delivery.spec.ts)
+- **Grep:** `npx playwright test --project=free profile-delivery`
+- **Project:** free · **Host:** the free macOS VM — on free every upload reaches it (Unassigned holds the VMs) and every MDM simulation
+- **Data created:** generated inert profile `pw-fd-<nonce>`, deleted in-test (the Unassigned wipe catches a leftover)
+
+**Flow**
+
+1. ☐ **Controls** → **OS settings** → **Configuration profiles** → **Add profile** → the file → **Add profile**.
+2. ☐ (No user action) *verifying* → refetch → **verified**.
+   - ✅ *(API)* The profile's domain on the device holds its marker.
+3. ☐ The VM's host page → Activity → **Past** → **Show MDM commands**.
+   - ✅ *(UI)* *"The InstallProfile command for pw-fd-<nonce> was acknowledged."*; *(API)* one InstallProfile, Acknowledged.
+4. ☐ **Controls** tab → the row reads **Verified** → hover → **Resend**.
+   - ✅ *(API)* Two InstallProfile commands, both Acknowledged.
+5. ☐ Profiles → hover → **Delete** → confirm.
+   - ✅ *(API)* The domain leaves the device; *(UI)* *"The RemoveProfile command for pw-fd-<nonce> was acknowledged."*
+
+**Assessment**
+- *Value:* High — the free half of LT-05 and CTL-27: free has no targets, but delivery, Resend and removal are free features.
+- *Coverage gaps:* no Windows case on free — the lifecycle spec (CTL-15) puts the one approved inert Windows profile on Unassigned, and two would undo each other.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-34 · Free • Controls • Configuration profiles — delivery to the real Mac › a declaration is verified by the Mac and removed again  *(free)*
+
+- **File / project / host:** as CTL-33 · **Data created:** a generated `management.test` declaration `pw-fd-<nonce>-d`
+
+**Flow**
+
+1. ☐ Configuration profiles → **Add profile** → the `.json` → **Add profile**.
+   - ✅ *(UI)* The row reads **macOS, iOS, iPadOS (declaration)**.
+2. ☐ (No user action) The VM reports it — **verified**; *(UI)* its Controls row reads **Verified**.
+3. ☐ Delete it → *(API)* the VM stops listing it.
+
+**Assessment**
+- *Value:* Medium-high — the free half of LT-04's "no target" case.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ## Area observations
 
 **Coverage map**
@@ -1102,5 +1344,5 @@ Balance is healthy — no test in this area validates purely through the API. Th
 **Bigger bets**
 
 1. ~~**Make one script actually run.**~~ **Done** — HOST-19 (area 02) runs a script on the real macOS VM and reads its effect back through a scheduled report's `hash` row, rather than the marker fixtures; CTL-24/25 cover the **Batch progress** tabs and retire the orphaned `ScriptsBatchProgressPage`. What remains is the batch *schedule* and *cancel* paths.
-2. **Assert profile delivery, not just library presence** — ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
+2. ~~**Assert profile delivery, not just library presence**~~ **Done** (batch E, 2026-09-29) — CTL-27 and CTL-33/34 here, and area 22 for label-targeted delivery; all on generated inert profiles, read back on the device. The original note: ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
 3. **Close the variables loop and trim the tier mirrors.** Make CTL-13 create a variable, reference it as `$FLEET_SECRET_<NAME>` inside an uploaded profile *and* script, assert Fleet accepts the reference and refuses to delete a referenced variable; add variables to the `cleanup.steps.ts` wipe (they are currently the only entity in this area with no project-level cleanup). In the same pass, drop the two free download mirrors (CTL-16, CTL-20) and collapse the per-OS activity-feed sub-tests to one per scope — roughly 12 of the 74 executions for no loss of signal.

@@ -292,21 +292,25 @@ export async function findSimulatedHostIds(
 const BORROW_SKIP = 40;
 
 /**
- * Online, MDM-enrolled simulations on Unassigned — hosts a label-targeting spec
- * can move onto the VMs fleet as the "same platform, outside the label" host
- * beside the real VM. Only an MDM-enrolled host is one Fleet decides profile
- * targeting for, which is what makes it outside the label rather than merely
- * outside MDM; a simulation answers that server-side decision as well as a VM
- * does (it lists every profile that targets it, and none that doesn't).
+ * Online, MDM-enrolled simulations — hosts a label-targeting spec can move onto
+ * the VMs fleet as the "same platform, outside the label" host beside the real
+ * VM. Only an MDM-enrolled host is one Fleet decides profile targeting for,
+ * which is what makes it outside the label rather than merely outside MDM; a
+ * simulation answers that server-side decision as well as a VM does (it lists
+ * every profile that targets it, and none that doesn't).
  *
- * `offset` claims a distinct slice of those hosts, as with
- * {@link findSimulatedHostIds}; specs that borrow at the same time keep theirs
- * apart. Returns fewer than `count` when the pool can't cover it — callers
- * assert on the length they need.
+ * The enrolled simulations are scarce — about a quarter of the pool, and only 8
+ * macOS ones sit past the transfer specs' part of it — so only specs about
+ * profiles draw here. Everything else uses {@link findSimulations}, whose pool is
+ * the rest: the two can't hand out the same host.
  *
- * Slices claimed, per platform: 0–1 `profile-label-targets.spec.ts` (moved onto
- * the VMs fleet); 2–3 `profile-broken-labels.spec.ts` (label members only, never moved);
- * 4–5 `profile-declarations.spec.ts` (moved onto the VMs fleet).
+ * `offset` claims a distinct slice, as with {@link findSimulatedHostIds}. The
+ * ordering covers every fleet, so a host another spec has borrowed keeps its
+ * place and the slices stay apart. Returns fewer than `count` when the pool
+ * can't cover it — callers assert on the length they need.
+ *
+ * Slices claimed: darwin + windows 0–1 `profile-label-targets.spec.ts`;
+ * darwin 2–3 `profile-declarations.spec.ts` (both moved onto the VMs fleet).
  */
 export async function findMdmSimulations(
   request: APIRequestContext,
@@ -314,17 +318,45 @@ export async function findMdmSimulations(
   count: number,
   offset = 0,
 ): Promise<number[]> {
+  return findBorrowableSimulations(request, platform, count, offset, (h) => !!h.mdm?.connected_to_fleet);
+}
+
+/**
+ * Online simulations **not** enrolled in MDM — for what Fleet decides without
+ * MDM: which hosts are offered a software title, which a policy or report
+ * targets, who a label holds. Disjoint from {@link findMdmSimulations}' pool;
+ * same slicing.
+ *
+ * Slices claimed: linux 0–1 `software-label-targets.spec.ts`; darwin 0–1
+ * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
+ * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
+ * onto the VMs fleet).
+ */
+export async function findSimulations(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  count: number,
+  offset = 0,
+): Promise<number[]> {
+  return findBorrowableSimulations(request, platform, count, offset, (h) => !h.mdm?.connected_to_fleet);
+}
+
+async function findBorrowableSimulations(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  count: number,
+  offset: number,
+  keep: (h: OnlineHost) => boolean,
+): Promise<number[]> {
   const perPage = 100;
   const maxPages = 10;
   const simulated: OnlineHost[] = [];
   for (let page = 0; page < maxPages; page++) {
     const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
     simulated.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && matchesKind(h, 'simulated')));
-    const enrolled = simulated
-      .slice(BORROW_SKIP)
-      .filter((h) => h.mdm?.connected_to_fleet && h.team_id == null);
-    if (enrolled.length >= offset + count || batch.length < perPage) {
-      return enrolled.slice(offset, offset + count).map((h) => h.id);
+    const eligible = simulated.slice(BORROW_SKIP).filter(keep);
+    if (eligible.length >= offset + count || batch.length < perPage) {
+      return eligible.slice(offset, offset + count).map((h) => h.id);
     }
   }
   return [];
@@ -899,4 +931,23 @@ export async function transferHostsByFilter(
     data: { team_id: teamId, filters },
   });
   await expect(res, `Failed to transfer hosts to fleet ${fleetId}`).toBeOK();
+}
+
+/**
+ * The hosts of a fleet (0 for Unassigned) that Fleet's OS filter returns —
+ * `os_name` + `os_version`, what "Current versions" → View all hosts links to —
+ * each with the OS it reports ("macOS 15.2").
+ */
+export async function listHostsRunningOs(
+  request: APIRequestContext,
+  fleetId: number,
+  osName: string,
+  osVersion: string,
+): Promise<Array<{ id: number; os: string }>> {
+  const res = await request.get(apiUrl('hosts'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId), os_name: osName, os_version: osVersion, per_page: '1000' },
+  });
+  await expect(res, `Failed to list hosts running ${osName} ${osVersion}`).toBeOK();
+  return ((await res.json()).hosts ?? []).map((h: { id: number; os_version: string }) => ({ id: h.id, os: h.os_version }));
 }

@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { TargetLabelSelector, type LabelMode } from '../components/TargetLabelSelector';
 import { Toast } from '../components/Toast';
 
 /**
@@ -33,6 +34,15 @@ export interface SavePolicyValues {
   name: string;
   description: string;
   resolution: string;
+}
+
+/**
+ * A policy's custom target, as the Save policy modal sets it (premium, on a
+ * fleet). Unlike a profile's, the Exclude tab has its own Any / All.
+ */
+export interface PolicyTarget {
+  include?: { labels: string[]; mode?: LabelMode };
+  exclude?: { labels: string[]; mode?: LabelMode };
 }
 
 export class PolicyEditPage {
@@ -73,6 +83,8 @@ export class PolicyEditPage {
   readonly saveNewDescriptionInput: Locator;
   readonly saveNewResolutionInput: Locator;
   readonly saveNewSubmitButton: Locator;
+  /** The Save policy modal's label target (premium, on a fleet). */
+  readonly saveNewTargets: TargetLabelSelector;
 
   constructor(page: Page) {
     this.page = page;
@@ -117,6 +129,7 @@ export class PolicyEditPage {
     this.saveNewDescriptionInput = this.saveNewModal.locator('textarea[name="description"]');
     this.saveNewResolutionInput = this.saveNewModal.locator('textarea[name="resolution"]');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveNewTargets = new TargetLabelSelector(this.saveNewModal);
   }
 
   /** Platform target checkbox by visible label. */
@@ -258,12 +271,17 @@ export class PolicyEditPage {
    * toast. Fleet redirects to `/policies/:id` (the results page) on
    * success; the parsed id is returned.
    */
-  async saveNew(values: SavePolicyValues): Promise<number> {
+  async saveNew(values: SavePolicyValues, target?: PolicyTarget): Promise<number> {
     await this.saveButton.click();
     await expect(this.saveNewModal).toBeVisible();
     await this.saveNewNameInput.fill(values.name);
     await this.saveNewDescriptionInput.fill(values.description);
     await this.saveNewResolutionInput.fill(values.resolution);
+    if (target) {
+      await this.saveNewTargets.chooseCustom();
+      if (target.include) await this.saveNewTargets.include(target.include.labels, target.include.mode);
+      if (target.exclude) await this.saveNewTargets.exclude(target.exclude.labels, target.exclude.mode ?? 'any');
+    }
     await this.saveNewSubmitButton.click();
     await this.toast.expectSuccess('Policy created.');
     await this.page.waitForURL(/\/policies\/\d+(?:\?|$)/);

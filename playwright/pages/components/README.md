@@ -52,7 +52,7 @@ export class MyWidget {
 | `Navbar` | Every authenticated page | Top nav: Hosts / Controls / Software / Reports / Policies, user menu, sign-out |
 | `DataTable` | Every list page | `<table>` rows, primary-link first row, cell lookup by column, empty state |
 | `ContentList` | Profiles, Certs, Scripts, Variables | `<li>` lists with timestamps (not `<table>`) |
-| `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's text changes |
+| `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's link text changes (the whole row's text on a table with no links, like Labels) |
 | `FilterModal` | Software Titles, Host Details > Software | "Add filters" modal for vulnerable software + severity |
 | `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger) |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
@@ -61,15 +61,15 @@ export class MyWidget {
 | `PlatformDropdown` | `/software/add/app-store` | Apple-vs-Android selector for the App Store add-software form (react-select v5) |
 | `Toast` | Anywhere a CRUD action confirms via a Sonner toast | Anchors on `role="alert"` narrowed by `.toast-notification__card--{success,error}`; has `expectSuccess` / `expectError` |
 | `FileUploader` | Bootstrap, scripts, profiles, custom packages, setup-assistant | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |
-| `SoftwareInstallerCard` | `/software/titles/:id` | The Library section's installer accordion row; exposes the active row, its pin-state badges (Latest / Pinned / Major version), and its Edit / Download / Delete actions |
+| `SoftwareInstallerCard` | `/software/titles/:id` | The Library section's installer accordion row; exposes the active row, its pin-state badges (Latest / Pinned / Major version), and its Edit / Download / Delete actions; `scopeBadge` / `openScopeEditor()` opens Edit from the label-scope badge whether it reads "All hosts" or a label count |
 | `DataSet` | Detail pages + side panels (host vitals, policy details, my-account) | Fleet's `<dt>`/`<dd>` term-value pairs, which carry no role — looks up a value by its term. Construct with a scoped container |
 | `AddHostsModal` | Hosts list | The "Add hosts" modal; its Advanced tab and "Plain osquery" reveal expose the certificate / enroll-secret / flagfile downloads |
 | `TransferHostModal` | Hosts list bulk-select bar, host Actions menu | Fleet picker for moving hosts between fleets (and back to Unassigned) |
-| `EditSoftwareModal` | `/software/titles/:id` Library accordion | The edit-package form. Titled "Edit package" on premium custom packages and "Edit software" otherwise, so the container is scoped by whichever is present. Also owns Advanced options — the four Ace editors, told apart by their wrapper ids, plus `normalizeScript` for comparing what they render against what the API stored |
+| `EditSoftwareModal` | `/software/titles/:id` Library accordion | The edit-package form. Titled "Edit package" on premium custom packages and "Edit software" otherwise, so the container is scoped by whichever is present. Also owns Advanced options — the four Ace editors, told apart by their wrapper ids, plus `normalizeScript` for comparing what they render against what the API stored. `setTarget()` scopes the package through its `TargetLabelSelector`, replacing any scope it had |
 | `EditAppearanceModal` | `/software/titles/:id` summary card | Fleet's `EditIconModal`: custom icon + display name behind one Save. The file control swaps between an empty uploader and a staged-file card, so it targets `input[type="file"]` rather than a fixed id |
 | `VersionsModal` | `/software/titles/:id` summary card + accordion badge | Version pinning for Fleet-maintained apps: latest / exact / major-version radios. `pinTargetLabel` and `pinTargetApiValue` map a target to its radio label and to the `version` value Fleet stores |
 | `SelectReportModal` | Host Actions → Live report | Lists the reports the host's fleet can run; picking one navigates to its edit screen with the host pre-targeted |
-| `TargetLabelSelector` | Add / Edit profile modals (premium); next, the declaration, policy, software and report forms | Fleet's label target: All hosts / Custom, then the tabbed Include (Any / All) and Exclude label lists. Constructed on the modal or form that owns it. Radios are hidden inputs, so a choice clicks the `<label>` wrapping the radio — with a page-rooted `has`, since a `has` locator carrying the container's chain matches nothing |
+| `TargetLabelSelector` | Add / Edit profile modals, Save policy, Save report, Edit software (premium) | Fleet's label target: All hosts / Custom, then either the tabbed Include (Any / All) and Exclude lists (profiles, declarations, policies — Exclude has its own Any / All on a policy) or, via `scope()`, the react-select v1 dropdown of Include any / Include all / Exclude any (software, reports). A tab's name gains " check" once it holds a label. Constructed on the modal or form that owns it. Radios are hidden inputs, so a choice clicks the `<label>` wrapping the radio — with a page-rooted `has`, since a `has` locator carrying the container's chain matches nothing |
 | `clickHoverAction` | Any hover-revealed row/card icon (download, trash, refetch) | Not a class — a helper function. Fleet keeps these icons `display: none` until the parent is hovered, and a plain `hover()` + `click()` can lose the hover mid-click |
 
 ## Promoting a page-local locator to a component

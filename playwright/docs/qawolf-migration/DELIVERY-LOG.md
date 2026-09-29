@@ -151,10 +151,40 @@ management: no target, include all and exclude side by side, each listed on exac
 two that include it active. The declarations are Apple's no-op `management.test` type — QA Wolf's was, by its name, an
 OS-update declaration.
 
+**A profile's commands on one host** — `premium/controls/os-settings/profile-delivery-retry.spec.ts` (new, +
+`listHostMdmCommands`, `activityCopy.mdmCommand.forProfile`, Resend on `HostDetailsPage`). Install, Resend from the
+host's Controls tab and removal, each command tied to the profile by name: the Activity card names it, the API
+counts it. The retry case — three retries, then Failed — is **skipped**: the approved refused payload (an unknown
+`com.apple.` type) is accepted by macOS 26.6, so it needs a payload the Mac really rejects (`TODO.md`).
+
+**Software, policies and reports** — `premium/software/software-label-targets.spec.ts`,
+`premium/policies/policy-label-targets.spec.ts`, `premium/reports/report-label-targets.spec.ts` (new, + the dropdown
+variant of `TargetLabelSelector`, targets on `EditSoftwareModal` / `PolicyEditPage` / `ReportEditPage`,
+`hostsOfferedTitle`, `listHostPolicyIds`, `listHostReportIds`, `findSimulations`). The same set-membership shape for
+the three other things a label can scope: a per-run `.deb` through all three scopes (offered to exactly its hosts,
+installed by the VM inside it); three policies including **Exclude all**, a mode only policies have; two reports,
+with the VM storing the include-all one's row and the simulations outside storing none.
+
+**OS updates** — `premium/exclusive/os-updates/macos-updates.spec.ts` and `ddm-conflict.spec.ts` (new, +
+`OsUpdatesPage`, the fleet OS-update helpers, `appleListedMacosVersions`). Custom version and deadline save, read back
+and clear; the form's refusals; "View all hosts" by membership rather than QA Wolf's drifting count; and both
+directions of the OS-updates-vs-custom-profile refusal for macOS and Windows, which QA Wolf tested one way — on their
+VMs fleet, with a deadline already past. Workstations only, in the exclusive project (they share its settings).
+
+**The delivery augment and the free half** — `premium/controls/os-settings/configuration-profiles.spec.ts` gains an
+untargeted profile delivered to and removed from the Mac; `free/controls/os-settings/profile-delivery.spec.ts` (new)
+covers delivery, Resend, removal and a declaration on the free Mac.
+
 **The refused label delete** — `premium/controls/os-settings/profile-broken-labels.spec.ts` (new). QA Wolf's three
 "broken label" flows can't run since Fleet 4.87 refuses to delete a label a profile or declaration targets; the spec
 guards that refusal for a `.mobileconfig`, a declaration and a Windows `.xml`, manual and dynamic labels, and the
 release once the profile is gone. On Workstations, so nothing is delivered.
+
+**The Labels page past page 1** — `LabelsPage` and `Pagination` (fixed). About 19 visible labels now sort ahead
+of `pw-`, so a spec's second or third label lands on page 2. `Pagination` compared the first row's *link* to
+detect the page change; Labels rows have none, and reading a missing link has no timeout — the lookup hung
+until the test timed out. It now compares the whole row on a link-less table, and `runRowAction` reopens the
+Actions menu until the option shows.
 
 ## Round 2 · Batch D — execution on hosts
 

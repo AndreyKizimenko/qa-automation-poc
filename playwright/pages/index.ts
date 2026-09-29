@@ -16,7 +16,7 @@ export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
 export type { TeamScope } from './components/TeamDropdown';
 export { TargetLabelSelector } from './components/TargetLabelSelector';
-export type { LabelMode } from './components/TargetLabelSelector';
+export type { LabelMode, LabelScopeOption } from './components/TargetLabelSelector';
 export { PlatformDropdown } from './components/PlatformDropdown';
 export type { AppStorePlatformLabel } from './components/PlatformDropdown';
 export { StatusFilter } from './components/StatusFilter';
@@ -112,6 +112,7 @@ export { PolicyEditPage } from './policies/PolicyEditPage';
 export type {
   PolicyFormValues,
   PolicyPlatform,
+  PolicyTarget,
   PolicyTargetType,
   SavePolicyValues,
 } from './policies/PolicyEditPage';

@@ -1,6 +1,6 @@
 # Label targeting — test audit
 
-**Specs covered:** 3 files · **Entries:** 4 · **Runtime tests:** 7 (LT-03's four cases collapsed into one entry) · **Project:** premium
+**Specs covered:** 7 files · **Entries:** 9 · **Runtime tests:** 12, one skipped (LT-03's four cases collapsed into one entry) · **Project:** premium
 
 This area covers Fleet deciding **which hosts** something reaches when it is scoped to labels — configuration
 profiles first (batch E of the QA Wolf round-2 migration; declarations, software, policies and reports follow)
@@ -41,7 +41,13 @@ A macOS profile reads *verified* only after the host's next detail collection, s
 about a minute. Removal: the macOS domain is gone ~20 s after the delete; Windows puts the value back to its
 default (`AllowGameDVR` reads `1`) rather than deleting it.
 
-**6. Cleanup.** Profiles, labels and borrowed simulations are undone in the test's `finally` — which a
+**6. Simulations come from two pools that can't overlap.** Only a profile needs an MDM-enrolled host, and
+the enrolled simulations are scarce (8 macOS ones past the transfer specs' part of the pool), so only the
+profile specs draw on `findMdmSimulations`; software, policies, reports and label membership draw on
+`findSimulations`, the hosts that *aren't* enrolled. Each spec claims its own slice (the registry is in
+`helpers/api/hosts.ts`), and the ordering spans every fleet, so a host another spec has borrowed keeps its place.
+
+**7. Cleanup.** Profiles, labels and borrowed simulations are undone in the test's `finally` — which a
 **timed-out** test never reaches usefully (it runs on a closed request context). The VMs sweep in
 `setup/cleanup.steps.ts` deletes `pw-*` profiles, returns any simulation on the VMs fleet to Unassigned, then
 deletes `pw-*` labels (last: Fleet refuses to delete a label a profile targets). Verified 2026-09-29 against a
@@ -53,8 +59,13 @@ run that timed out with 4 profiles, 4 simulations and 6 labels left behind.
 |---|---|---|---|---|
 | LT-01 | `premium/controls/os-settings/profile-label-targets.spec.ts` | macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick | UI+API | ☐ |
 | LT-02 | `premium/controls/os-settings/profile-label-targets.spec.ts` | Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off | UI+API | ☐ |
-| LT-04 | `premium/controls/os-settings/profile-declarations.spec.ts` | a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick | UI+API | ☐ |
 | LT-03 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | a {manual, dynamic} label that {a macOS profile, a declaration, a Windows profile} targets can't be deleted until the profile is gone | UI+API | ☐ |
+| LT-04 | `premium/controls/os-settings/profile-declarations.spec.ts` | a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick | UI+API | ☐ |
+| LT-05 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | a profile is installed, resent and removed by commands the host names it in | UI+API | ☐ |
+| LT-06 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | a profile the host refuses is retried three times, then reads Failed — **skipped** | UI+API | ☐ |
+| LT-07 | `premium/software/software-label-targets.spec.ts` | a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick | UI+API | ☐ |
+| LT-08 | `premium/policies/policy-label-targets.spec.ts` | include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick | UI+API | ☐ |
+| LT-09 | `premium/reports/report-label-targets.spec.ts` | include all and include any schedule a report on exactly the hosts their labels pick | UI+API | ☐ |
 
 ---
 
@@ -162,9 +173,9 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts)
 - **Grep:** `npx playwright test --project=premium profile-broken-labels` (four runtime tests: manual label × macOS profile, declaration, Windows profile; dynamic label × macOS profile)
-- **Project:** premium · **Scope:** **Workstations** (holds no hosts, so nothing is delivered) · **Hosts:** none targeted; a manual label holds two Unassigned MDM-enrolled macOS simulations, never moved
+- **Project:** premium · **Scope:** **Workstations** (holds no hosts, so nothing is delivered) · **Hosts:** none targeted; a manual label holds two macOS simulations, never moved
 - **Mode:** UI+API · **Isolation:** parallel, one test per case; `pageHealth` disabled (the refused delete is a deliberate 422); `finally` deletes whatever is left
-- **Preconditions:** two online MDM-enrolled macOS simulations on Unassigned (`findMdmSimulations(…, 'darwin', 2, 2)`) for the manual cases
+- **Preconditions:** two online macOS simulations (`findSimulations(…, 'darwin', 2, 0)` — not MDM-enrolled; label membership doesn't need it) for the manual cases
 - **Data created:** a label `pw-bl-<nonce>` (manual with the two simulations, or dynamic with `SELECT 1 FROM osquery_info WHERE 1 = 0;`) and a generated profile `pw-bl-<nonce>-p` on Workstations targeting it (include any) — both deleted by the test itself, through the UI
 
 **Why this replaced three QA Wolf flows.** Those flows deleted a targeted label and asserted the profile then read
@@ -207,7 +218,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts)
 - **Grep:** `npx playwright test --project=premium profile-declarations`
-- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the macOS VM + two MDM-enrolled macOS simulations borrowed onto the fleet (`findMdmSimulations(…, 'darwin', 2, 4)`)
+- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the macOS VM + two MDM-enrolled macOS simulations borrowed onto the fleet (`findMdmSimulations(…, 'darwin', 2, 2)`)
 - **Mode:** UI+API · **Isolation:** standalone; test timeout 900 s; `finally` deletes the declarations, returns the simulations, deletes the labels
 - **Preconditions:** as LT-01
 - **Data created:** manual labels `pw-dc-<nonce>-{a,b}` — a = VM + s1, b = VM + s2 — and three generated declarations `pw-dc-<nonce>-{every,all,exclude}` of Apple's no-op test type (`com.apple.configuration.management.test`, one `Echo` string), all removed in-test
@@ -239,6 +250,189 @@ other:
 - *Coverage gaps:* no on-device read — osquery has no table for a test declaration, so *verified* (the device's report) is the host-side proof. Include **any** isn't exercised for declarations.
 - *Redundancy:* the modal's target controls are LT-01's; here they're the route, not the subject.
 - *Efficiency / smells:* ~1 min.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-05 · Premium • Controls • Configuration profiles — delivery on one host › a profile is installed, resent and removed by commands the host names it in
+
+- **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts)
+- **Grep:** `npx playwright test --project=premium profile-delivery-retry -g "resent"`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the macOS VM only (the profile targets a manual label holding just the VM, so no borrowed simulation gets it)
+- **Mode:** UI+API · **Isolation:** standalone; test timeout 900 s; `finally` deletes the profile and the label
+- **Preconditions:** an online real macOS VM on the VMs fleet
+- **Data created:** manual label `pw-rt-<nonce>` and generated profile `pw-rt-<nonce>-p` (API upload), both removed in-test; the VM's command history gains two InstallProfile and one RemoveProfile for it
+
+**Flow**
+
+1. ☐ (No user action) Create the label and upload the profile targeting it; wait for the VM to install it, request a refetch, wait for **verified**.
+2. ☐ Open the VM's host page → Activity → **Past** → turn on **Show MDM commands**.
+   - ✅ *(UI)* *"The InstallProfile command for pw-rt-<nonce>-p was acknowledged."*
+   - ✅ *(API)* Exactly one InstallProfile for the profile, **Acknowledged**.
+3. ☐ **Controls** tab → the profile's row reads **Verified** → hover it → **Resend**.
+   - ✅ *(API)* A second InstallProfile for it, and both **Acknowledged** (≤ 3 min).
+   - ✅ *(API)* After a refetch, **verified** again; *(UI)* the row reads **Verified**.
+4. ☐ (No user action) Delete the profile (API); wait for the VM to stop listing it.
+   - ✅ *(UI)* Activity (MDM commands): *"The RemoveProfile command for pw-rt-<nonce>-p was acknowledged."*
+
+**Assessment**
+- *Value:* High. QA Wolf's "host activity shows the profile name and status" and "resend configuration profile" in one flow, on a real device: each command is tied to this profile by name and counted from the API, so a resend that silently didn't send fails.
+- *Coverage gaps:* the fleet-wide Resend (the profile's Details modal → "Resend configuration profile" for every failed host) isn't exercised — it needs failed hosts, which LT-06 would give.
+- *Redundancy:* none.
+- *Efficiency / smells:* two refetches, ~5 min. The Activity card is checked for the newest item only (it pages, and other specs command the same Mac).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-06 · Premium • Controls • Configuration profiles — delivery on one host › a profile the host refuses is retried three times, then reads Failed — **skipped**
+
+- **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts)
+- **Status:** `test.skip` — see [`TODO.md`](../../TODO.md). It needs a profile the Mac refuses, and the approved one — an unknown `com.apple.` payload type — is **accepted by macOS 26.6** (the VM acknowledged it and Fleet verified it, 2026-09-29). Unskipped once a payload the Mac really rejects is approved.
+
+**Flow, as written**
+
+1. ☐ Upload the refused profile targeting a label holding only the VM.
+   - ✅ *(API)* The VM lists it **failed** (≤ 8 min).
+   - ✅ *(API)* Exactly **4** InstallProfile commands for it — the first and Fleet's 3 retries (`MaxAppleProfileRetries`) — all **Error**.
+2. ☐ The VM's **Controls** tab.
+   - ✅ *(UI)* The row reads **Failed**.
+3. ☐ Activity → **Past** → **Show MDM commands**.
+   - ✅ *(UI)* *"The InstallProfile command for <name> failed."*
+
+**Assessment**
+- *Value:* would be high — QA Wolf's flow waited for "Failed" and asserted nothing about the retries.
+- *Blocked on:* a payload approval, not a product bug.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-07 · Premium • Software — label-scoped software › a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick
+
+- **File:** [`playwright/tests/e2e/premium/software/software-label-targets.spec.ts`](../../tests/e2e/premium/software/software-label-targets.spec.ts)
+- **Grep:** `npx playwright test --project=premium software-label-targets`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the Ubuntu VM + two Linux simulations borrowed onto the fleet (`findSimulations(…, 'linux', 2, 0)`)
+- **Mode:** UI+API · **Isolation:** standalone; timeout 900 s; `pageHealth` disabled (the refused label delete is a deliberate 422); `finally` deletes the title, returns the simulations, deletes the labels
+- **Data created:** manual labels `pw-sl-<nonce>-{a,b}` — a = VM + s1, b = VM + s2 — and a per-run inert `.deb`, `fleet-pw-label-<nonce>`, uploaded to the VMs fleet (never a durable fixture: scoping changes the title for everyone). Installed on the VM and uninstalled again; the VMs sweep deletes a leftover title and purges the package from the Ubuntu VM
+
+| scope | offered to (of VM, s1, s2) |
+|---|---|
+| none — All hosts | VM, s1, s2 |
+| Include **all** of a, b | VM |
+| Include **any** of a, b | VM, s1, s2 |
+| Exclude **any** of a | s2 |
+
+**Flow**
+
+1. ☐ (No user action) Move the simulations, create the labels, upload the package (API).
+   - ✅ *(API)* Unscoped, all three hosts are offered it.
+2. ☐ The title's page (VMs fleet) → the row's **All hosts** badge → Edit → Target **Custom** → scope dropdown **Include all** → tick a, b → **Save** → **Save changes?** → **Save**.
+   - ✅ *(UI)* *"Successfully edited fleet-pw-label-<nonce>_1.0.0_all.deb."*
+   - ✅ *(API)* The package's `labels_include_all` is a, b; only the VM is offered it.
+3. ☐ The Ubuntu VM's host page → **Software** → **Library** → search the package → **Install**.
+   - ✅ *(API)* It installs, and the host's inventory agrees; then it's uninstalled and the inventory agrees again.
+4. ☐ `/labels/manage` → label a → **Delete** → **Delete**.
+   - ✅ *(UI)* *"Couldn't delete. Software uses this label as a custom target. Remove the label from the software target and try again."*
+5. ☐ The row's label-count badge → Edit → **Include any** of a, b → Save.
+   - ✅ *(API)* All three offered.
+6. ☐ Edit → **Exclude any** of a → Save.
+   - ✅ *(API)* `labels_exclude_any` is a; only s2 offered.
+
+**Assessment**
+- *Value:* High. QA Wolf's two flows, both scopes plus Exclude, with a negative half that can fail (their "any" flow checked the in-scope host twice). The VM inside the scope really installs it.
+- *Coverage gaps:* Linux only — QA Wolf used a macOS Fleet-maintained app; a per-run `.deb` is the only package that can be minted per run, and which hosts are offered a title doesn't depend on the platform. Self-service and automatic install under a scope aren't exercised.
+- *Efficiency / smells:* ~2.5 min, most of it the install and uninstall on the VM.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-08 · Premium • Policies — label targeting › include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-label-targets.spec.ts`](../../tests/e2e/premium/policies/policy-label-targets.spec.ts)
+- **Grep:** `npx playwright test --project=premium policy-label-targets`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the macOS VM + two macOS simulations borrowed onto the fleet (`findSimulations(…, 'darwin', 2, 2)`)
+- **Mode:** UI+API · **Isolation:** standalone; timeout 600 s; `finally` deletes the policies, returns the simulations, deletes the labels (the VMs sweep deletes `pw-*` policies a dead run left)
+- **Data created:** labels `pw-pl-<nonce>-{a,b,c}` — a = VM + s1, b = VM + s2, c = s2 — and three fleet policies (`SELECT 1;`)
+
+| policy | target | runs on |
+|---|---|---|
+| `…-all` | Include **all** of a, b | VM |
+| `…-any` | Include **any** of a, b · Exclude **any** of c | VM, s1 |
+| `…-xall` | Exclude **all** of a, b | s1, s2 |
+
+**Flow**
+
+1. ☐ (No user action) Move the simulations, create the labels.
+2. ☐ For each policy: **Policies** → **VMs** → **Add policy** → SQL `SELECT 1;` → **Save** → name → Target **Custom** → Include tab (**Any** / **All** + labels) and/or Exclude tab (**Any** / **All** + labels) → **Save**.
+   - ✅ *(UI)* *"Policy created."*
+3. ☐ (No user action)
+   - ✅ *(API)* Each policy is in the host policy list of exactly the hosts in the table (≤ 60 s).
+4. ☐ The VM's host page → **Policies** tab.
+   - ✅ *(UI)* `…-all` and `…-any` are listed; `…-xall` isn't.
+
+**Assessment**
+- *Value:* High. QA Wolf's include-all flow, plus include-any + exclude, and **Exclude all** — a mode only policies have. Every one can fail on the matching bug.
+- *Coverage gaps:* the policy's *result* on each host (pass / fail) isn't asserted — targeting is.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-09 · Premium • Reports — label targeting › include all and include any schedule a report on exactly the hosts their labels pick
+
+- **File:** [`playwright/tests/e2e/premium/reports/report-label-targets.spec.ts`](../../tests/e2e/premium/reports/report-label-targets.spec.ts)
+- **Grep:** `npx playwright test --project=premium report-label-targets`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the macOS VM + two macOS simulations borrowed onto the fleet (`findSimulations(…, 'darwin', 2, 4)`)
+- **Mode:** UI+API · **Isolation:** standalone; timeout 600 s; `finally` deletes the reports, returns the simulations, deletes the labels (the VMs sweep deletes `pw-rl-*` reports a dead run left — by that exact prefix, since gitops declares `pw-host-report-results` there)
+- **Data created:** labels `pw-rl-<nonce>-{a,b}` — a = VM + s1, b = VM + s2 — and two fleet reports `pw-rl-<nonce>-{all,any}` (`SELECT '<name>' AS report;`)
+
+**Flow**
+
+1. ☐ For each report: **Reports** → **VMs** → **Add report** → SQL → **Save** → name, **Every 5 minutes** → Target **Custom** → scope dropdown **Include all** / **Include any** → tick a, b → **Save**.
+   - ✅ *(UI)* *"Report created."*
+2. ☐ (No user action)
+   - ✅ *(API)* `…-all` is listed for the VM only; `…-any` for all three (`GET /hosts/:id/reports`, ≤ 60 s).
+3. ☐ The VM's host page → **Reports** tab → search this run's prefix.
+   - ✅ *(UI)* Both reports' cards. On s1's page, only `…-any`.
+4. ☐ (No user action) Set `…-all` to run every 60 s (API — the UI's shortest is 5 minutes).
+   - ✅ *(API)* The VM stores its row `{report: <name>}` (≤ 5 min); neither simulation stores one.
+
+**Assessment**
+- *Value:* High. QA Wolf's report include-all flow, which asserted a substring ("1 result" also matches "11 results") and a link. Here the scheduling decision per host, both modes, and the stored result on the one host in both labels.
+- *Coverage gaps:* reports have no Exclude scope, so none is tested.
 
 **Notes (Andrey)**
 ```

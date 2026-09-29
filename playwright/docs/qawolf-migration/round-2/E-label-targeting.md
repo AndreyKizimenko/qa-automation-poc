@@ -112,7 +112,7 @@ resting-state step assume them plain). So:
 - **Don't run the full suite while you build** — README §9. Your specs, both tiers, with deps once;
   `--workers=2` on VM specs; the full suite once, at the end, via `QA — Branch run`.
 - **Nothing else may be using the VMs** when you run a VM spec: `gh run list --limit 5` first, and stay clear of
-  the nightly (05:00–~06:30 UTC).
+  the nightly (scheduled for 05:00 UTC, but GitHub has been starting it 5–6.5 h late — check `gh run list --workflow "Playwright — Premium" --event schedule`).
 - **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
   4.92.1 against the 4.93 RC is fine; what silently broke gitops `software:` was the 4.85 client CI used to fall
   back to. If a flow needs output only the RC's client prints, build one from `~/repositories/fleet`
@@ -140,6 +140,9 @@ The batch's own **Done when** below, plus:
 - the full suite ran once via `QA — Branch run` on the branch, and anything red is triaged
   (`playwright-run-reviewer`) and fixed, skipped behind a filed bug, or explained in the PR.
 
+> **Status (2026-09-29):** everything above except the last item. Andrey dispatches the branch run himself,
+> clear of the nightly — which GitHub has been starting 5–6.5 h after its 05:00 UTC schedule.
+
 ---
 
 ## What landed
@@ -147,16 +150,17 @@ The batch's own **Done when** below, plus:
 | target | status | notes |
 |---|---|---|
 | inert profile fixtures | ✅ | `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` + READMEs; both lifecycle specs moved onto them; the two lock fixtures deleted |
-| `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ☐ | |
+| `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ◐ | install → Activity names the InstallProfile → **Resend** on the Controls tab (a second InstallProfile, verified again) → delete → the RemoveProfile. The retry case (3 retries, then Failed) is **skipped**: the approved refused payload is accepted by macOS 26.6 — needs a new payload approved (`TODO.md`) |
 | `premium/controls/os-settings/profile-declarations.spec.ts` | ✅ | three declarations of Apple's no-op test type — no target, include all, exclude — over the VM + two borrowed simulations; *verified* is the device's DDM report. QA Wolf's second flow (the refused delete) is `profile-broken-labels`'s declaration case |
 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | ✅ **retargeted** | the refused delete — manual and dynamic labels, targeted by a `.mobileconfig`, a declaration or a Windows `.xml`; the label and target survive it, and the delete goes through once the profile is gone. Workstations, so nothing is delivered |
 | `premium/controls/os-settings/profile-label-targets.spec.ts` | ✅ | macOS: three profiles (include all · include any + exclude · exclude) over the VM + two borrowed simulations; Windows: include all + exclude, then an Edit that excludes the VM and takes the profile back off it. Set membership server-side, the setting read back on the device |
-| `premium/controls/os-settings/configuration-profiles.spec.ts` | ☐ augment | fixture swap landed; the delivery augment hasn't |
-| `premium/controls/os-updates/macos-updates.spec.ts` | ☐ | |
-| `premium/controls/os-updates/ddm-conflict.spec.ts` | ☐ | |
-| `premium/software/software-label-targets.spec.ts` | ☐ | |
-| `premium/policies/policy-label-targets.spec.ts` | ☐ | |
-| `premium/reports/report-label-targets.spec.ts` | ☐ | |
+| `premium/controls/os-settings/configuration-profiles.spec.ts` | ✅ augment | fixture swap, and a delivery case: an untargeted (All hosts) profile on the VMs fleet, verified and read back on the Mac, deleted through the UI and gone from the device |
+| `premium/exclusive/os-updates/macos-updates.spec.ts` | ✅ **moved to `exclusive/`** | Custom version + deadline save, read back and clear; the form's refusals, asserted where Fleet puts them (the label); "View all hosts" lists exactly the hosts on that version; the preview's link and image instead of QA Wolf's screenshot. Workstations only |
+| `premium/exclusive/os-updates/ddm-conflict.spec.ts` | ✅ **moved to `exclusive/`** | both directions, macOS and Windows: an update profile refused while OS updates are set, and OS updates refused while one exists. Workstations only, checked host-free before each test |
+| `premium/software/software-label-targets.spec.ts` | ✅ | a per-run `.deb` through all three scopes over the Ubuntu VM + two Linux simulations, offered to exactly its labels' hosts; installed by the VM inside the scope; the refused label delete's software twin |
+| `premium/policies/policy-label-targets.spec.ts` | ✅ | three policies — include all, include any + exclude any, exclude all (policies only) — each on exactly its hosts; the VM's Policies tab |
+| `premium/reports/report-label-targets.spec.ts` | ✅ | include all and include any, each listed for exactly its hosts; the VM stores the include-all report's row and the simulations outside it don't |
+| `free/controls/os-settings/profile-delivery.spec.ts` | ✅ **new** | the free half: delivery, the Activity's commands, Resend and removal on the free Mac, and a declaration verified and removed — free has no targets, but all of that is free |
 
 ### The free VMs had been receiving both lock profiles (found 2026-09-29)
 
@@ -193,7 +197,9 @@ is: **uploading a profile is delivering it.**
   retry case, a profile macOS refuses at install — an unknown **`com.apple.`** PayloadType, as in
   `~/Desktop/test-data/organized/apple/macos/profiles/invalid/device-rejects/macos-unknown-payload-type.mobileconfig`.
   An unknown type *outside* `com.apple.` is not refused: macOS installs it as a custom preference domain,
-  which is exactly what the inert profile relies on.
+  which is exactly what the inert profile relies on. **On macOS 26.6 the `com.apple.` one isn't refused
+  either** — the VM acknowledged it and Fleet verified it — so the retry case is skipped until a payload the
+  Mac really rejects is approved (`TODO.md`).
 - **`profile-broken-labels` covers the refused delete.** Since Fleet 4.87 (`DeleteLabel` in
   `server/datastore/mysql/labels.go`) a label that a profile or declaration targets can't be deleted — 422,
   *"Couldn't delete. A configuration profile targets this label. Please delete the profile and try again."* —
@@ -215,6 +221,29 @@ is: **uploading a profile is delivering it.**
   `findMdmSimulations` — the borrowable simulations, past the transfer specs' slice of the pool.
 - The VMs sweep in `setup/cleanup.steps.ts` deletes `pw-*` profiles, returns borrowed simulations and deletes
   `pw-*` labels — proven against a run that timed out with all three left behind.
+- **The Labels page pages now.** About 19 visible labels sort ahead of `pw-` and the list pages at 20, so a
+  spec with two or three labels has one on page 2. `LabelsPage.locateRow` pages with `Pagination`, which used
+  to compare the first row's *link* — Labels rows have none, and reading a missing link has no timeout, so the
+  lookup hung until the test's 15 minutes ran out. `Pagination` falls back to the whole row on a link-less
+  table, and `runRowAction` reopens the Actions menu until the option shows (it can close under a re-render).
+  Both were behind `software-label-targets`' two timeouts in a 5× repeat.
+
+### Two OS updates specs run in `exclusive/`
+
+`macos-updates` and `ddm-conflict` both set and clear Workstations' OS update settings. Side by side under
+`fullyParallel`, one test's `finally` would clear what another relies on, so they live under
+`tests/e2e/premium/exclusive/os-updates/` and run in the single-worker `premium-exclusive` project after the
+main one. They can't run "with dependencies" on their own — the exclusive project's dependency is the whole
+premium project — so the branch run is their with-dependencies run. The Workstations wipe in
+`setup/cleanup.steps.ts` now also clears OS updates.
+
+### The simulation pool
+
+Only profiles need MDM-enrolled simulations, and there are few: 8 macOS ones past the transfer specs' part of
+the pool. So `findMdmSimulations` serves the profile specs, `findSimulations` (the hosts *not* enrolled) serves
+software, policies, reports and label membership — disjoint pools — and each spec claims a slice (registry in
+`helpers/api/hosts.ts`). The ordering spans every fleet, so a borrowed host keeps its place and nobody else's
+slice moves.
 
 ### What the source flows turned out to be
 

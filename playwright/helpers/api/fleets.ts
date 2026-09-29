@@ -1,5 +1,6 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders, type FleetRef } from './core';
+import { compareVersions } from './software';
 
 /**
  * A fleet's whole `webhook_settings` subtree. Specs that touch one webhook
@@ -147,4 +148,111 @@ export async function recreateFleet(
   const existing = await findFleetByName(request, name);
   if (existing) await deleteFleet(request, existing.id, { ignoreMissing: true });
   return createFleet(request, name);
+}
+
+/** A fleet's Apple OS update target, as Fleet stores it (`mdm.macos_updates`, …). */
+export interface AppleOsUpdates {
+  minimumVersion: string;
+  deadline: string;
+  deadlineDays: number | null;
+}
+
+/** A fleet's Windows update deadline (`mdm.windows_updates`). */
+export interface WindowsOsUpdates {
+  deadlineDays: number | null;
+  gracePeriodDays: number | null;
+}
+
+/** The OS update settings a fleet enforces. */
+export async function getFleetOsUpdates(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<{ macos: AppleOsUpdates; windows: WindowsOsUpdates }> {
+  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  const mdm = (await res.json()).team?.mdm ?? {};
+  return {
+    macos: {
+      minimumVersion: mdm.macos_updates?.minimum_version ?? '',
+      deadline: mdm.macos_updates?.deadline ?? '',
+      deadlineDays: mdm.macos_updates?.deadline_days ?? null,
+    },
+    windows: {
+      deadlineDays: mdm.windows_updates?.deadline_days ?? null,
+      gracePeriodDays: mdm.windows_updates?.grace_period_days ?? null,
+    },
+  };
+}
+
+/**
+ * Enforces nothing: no Apple minimum version or deadline, no Windows deadline —
+ * what the forms' "No updates enforced" and empty Windows fields save. **Only a
+ * fleet without real hosts should ever be set otherwise** (see `OsUpdatesPage`).
+ */
+export async function clearFleetOsUpdates(request: APIRequestContext, fleetId: number): Promise<void> {
+  const none = { minimum_version: '', deadline: '', deadline_days: null };
+  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+    headers: authHeaders(),
+    data: {
+      mdm: {
+        macos_updates: none,
+        ios_updates: none,
+        ipados_updates: none,
+        windows_updates: { deadline_days: null, grace_period_days: null },
+      },
+    },
+  });
+  await expect(res, `Failed to clear fleet ${fleetId}'s OS updates: ${await res.text()}`).toBeOK();
+}
+
+/**
+ * The macOS versions Apple's software lookup service lists
+ * (`gdmf.apple.com/v2/pmv`, `AssetSets.macOS`), oldest first — the list Fleet
+ * checks a minimum version against, refusing anything not on it ("isn't
+ * supported by Apple"). Apple rotates versions out, so a spec reads it rather
+ * than hardcoding one.
+ */
+export async function appleListedMacosVersions(request: APIRequestContext): Promise<string[]> {
+  const res = await request.get('https://gdmf.apple.com/v2/pmv', { timeout: 30_000 });
+  await expect(res, "Couldn't read Apple's software lookup service").toBeOK();
+  const assets = ((await res.json()).AssetSets?.macOS ?? []) as Array<{ ProductVersion: string }>;
+  return [...new Set(assets.map((a) => a.ProductVersion))].sort(compareVersions);
+}
+
+/**
+ * Enforces a macOS minimum version and deadline on a fleet — what the macOS
+ * form's "Custom version" saves. **Only on a fleet with no real hosts**
+ * (Workstations): the VMs would download and install the update.
+ */
+export async function setFleetMacosUpdates(
+  request: APIRequestContext,
+  fleetId: number,
+  updates: { minimumVersion: string; deadline: string },
+): Promise<void> {
+  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+    headers: authHeaders(),
+    data: {
+      mdm: { macos_updates: { minimum_version: updates.minimumVersion, deadline: updates.deadline, deadline_days: null } },
+    },
+  });
+  await expect(res, `Failed to set fleet ${fleetId}'s macOS updates: ${await res.text()}`).toBeOK();
+}
+
+/**
+ * Enforces a Windows update deadline and grace period on a fleet. **Only on a
+ * fleet with no real hosts** (Workstations): the Windows VM would install
+ * updates and restart.
+ */
+export async function setFleetWindowsUpdates(
+  request: APIRequestContext,
+  fleetId: number,
+  updates: { deadlineDays: number; gracePeriodDays: number },
+): Promise<void> {
+  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+    headers: authHeaders(),
+    data: {
+      mdm: { windows_updates: { deadline_days: updates.deadlineDays, grace_period_days: updates.gracePeriodDays } },
+    },
+  });
+  await expect(res, `Failed to set fleet ${fleetId}'s Windows updates: ${await res.text()}`).toBeOK();
 }

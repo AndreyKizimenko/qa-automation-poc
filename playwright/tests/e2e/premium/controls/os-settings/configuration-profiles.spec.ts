@@ -2,16 +2,34 @@
  * Configuration profiles upload/download/delete on premium — runs the
  * macOS .mobileconfig + Windows .xml cases under both scopes (Unassigned
  * + Workstations). Editing a profile's target belongs to the label-targeting
- * specs; this one is the library lifecycle.
+ * specs; this one is the library lifecycle, plus one delivery.
  *
- * Neither scope holds a real VM on premium, so nothing uploaded here reaches
- * one. The fixtures are the inert pair all the same (test-data/…/profiles
+ * Neither lifecycle scope holds a real VM on premium, so nothing uploaded there
+ * reaches one. The fixtures are the inert pair all the same (test-data/…/profiles
  * READMEs): the free copy of this spec delivers every upload to the VMs.
+ *
+ * The delivery case is QA Wolf's "upload and remove": a profile with the default
+ * target, **All hosts**, uploaded to the VMs fleet, verified on the real Mac and
+ * read back on it, then deleted through the UI and gone from the device. Its
+ * profile is generated inert with a name of its own, so the VMs sweep in
+ * `setup/cleanup.steps.ts` can find it.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { assertActivity } from '@helpers/api';
+import {
+  assertActivity,
+  deleteProfile,
+  findProfileByName,
+  getHostDetailUpdatedAt,
+  readManagedPreferenceDomain,
+  requireRealHost,
+  waitForHostProfileGone,
+  waitForHostProfileStatus,
+  waitForHostRefetch,
+  waitForNoPendingRefetch,
+} from '@helpers/api';
+import { inertMobileconfig, runNonce, writeProfile } from '@helpers/profiles';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope } from '@pages';
@@ -133,5 +151,62 @@ test.describe('MDM • OS settings — configuration profile upload validation',
 
     await configurationProfiles.submitProfileUpload(signedProfile);
     await configurationProfiles.toast.expectError(/Configuration profiles can't be signed/);
+  });
+});
+
+test.describe('MDM • OS settings — a profile for all hosts, delivered and removed (VMs fleet)', () => {
+  test.describe.configure({ timeout: 600_000 });
+
+  test('the macOS VM installs and verifies it, and loses it when it is deleted', async ({
+    dashboard,
+    controls,
+    osSettings,
+    configurationProfiles,
+    hostDetails,
+    vmsFleetId,
+    request,
+  }, testInfo) => {
+    const vm = await requireRealHost(request, 'darwin');
+    expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
+    const profile = inertMobileconfig(`pw-cp-${runNonce()}`);
+    let uuid: string | undefined;
+
+    try {
+      await dashboard.goto();
+      await dashboard.navbar.goToControls();
+      await controls.goToOsSettings();
+      await osSettings.goToConfigurationProfiles();
+      await configurationProfiles.teamDropdown.selectByLabel('VMs');
+      // No target chosen: the modal's default is All hosts.
+      await configurationProfiles.uploadProfile(writeProfile(profile, testInfo.outputDir));
+      await expect(configurationProfiles.itemByName(profile.name)).toContainText('macOS, iOS, iPadOS');
+      await expect(configurationProfiles.labelCount(profile.name)).toHaveCount(0);
+      uuid = (await findProfileByName(request, vmsFleetId, profile.name))?.uuid;
+      expect(uuid, `${profile.name} was not stored on the VMs fleet`).toBeTruthy();
+
+      await waitForHostProfileStatus(request, vm.id, uuid!, ['verifying', 'verified']);
+      await waitForNoPendingRefetch(request, vm.id);
+      await waitForHostRefetch(request, vm.id, { since: await getHostDetailUpdatedAt(request, vm.id), refetch: true });
+      await waitForHostProfileStatus(request, vm.id, uuid!, ['verified'], 180_000);
+      expect(await readManagedPreferenceDomain(request, vm.id, profile.domain)).toEqual({ Marker: profile.marker });
+      await hostDetails.goto(vm.id);
+      await hostDetails.openControlsTab();
+      await expect(hostDetails.controlRow(profile.name)).toContainText('Verified');
+
+      await configurationProfiles.goto({ fleetId: vmsFleetId });
+      await configurationProfiles.teamDropdown.selectByLabel('VMs');
+      await configurationProfiles.deleteProfile(profile.name);
+      await waitForHostProfileGone(request, vm.id, uuid!);
+      uuid = undefined;
+      await expect
+        .poll(() => readManagedPreferenceDomain(request, vm.id, profile.domain), {
+          message: `${profile.name}'s domain stayed on the VM after the profile was deleted`,
+          timeout: 120_000,
+          intervals: [10_000],
+        })
+        .toEqual({});
+    } finally {
+      if (uuid) await deleteProfile(request, uuid);
+    }
   });
 });

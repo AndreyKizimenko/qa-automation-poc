@@ -60,6 +60,14 @@ test.describe('activityCopy', () => {
       .test(`ran UserList as a custom MDM command on this host.`)).toBe(true);
     expect(activityCopy.mdmCommand.acknowledged({ requestType: 'UserList' })
       .test(`The UserList command was acknowledged. less than a minute ago`)).toBe(true);
+    const profile = 'pw-rt-x (1)';
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'InstallProfile', name: profile, status: 'was acknowledged' })
+      .test(`The InstallProfile command for ${profile} was acknowledged. less than a minute ago`)).toBe(true);
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'InstallProfile', name: profile, status: 'failed' })
+      .test(`The InstallProfile command for ${profile} failed. 2 minutes ago`)).toBe(true);
+    // A command for one profile doesn't match another's.
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'RemoveProfile', name: 'pw-rt-x', status: 'is pending' })
+      .test(`The RemoveProfile command for ${profile} is pending.`)).toBe(false);
   });
 
   test('hostSoftware.* — installed / uninstalled, failed and upcoming', () => {

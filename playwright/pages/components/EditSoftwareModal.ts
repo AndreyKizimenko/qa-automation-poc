@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { TargetLabelSelector, type LabelScopeOption } from './TargetLabelSelector';
 
 /**
  * The Edit-software modal opened from a software title's Library accordion row
@@ -48,6 +49,8 @@ export class EditSoftwareModal {
   readonly confirmSaveButton: Locator;
 
   readonly advancedOptionsToggle: Locator;
+  /** The package's label scope — the dropdown variant (Include any / Include all / Exclude any). */
+  readonly targets: TargetLabelSelector;
   readonly preInstallQueryEditor: Locator;
   readonly installScriptEditor: Locator;
   readonly postInstallScriptEditor: Locator;
@@ -72,6 +75,7 @@ export class EditSoftwareModal {
     this.confirmSaveButton = this.confirmModal.getByRole('button', { name: 'Save', exact: true });
 
     this.advancedOptionsToggle = this.modal.getByRole('button', { name: 'Advanced options' });
+    this.targets = new TargetLabelSelector(this.modal);
 
     // The four editors are identical in role, class and accessible name; only
     // the Ace wrapper's id tells them apart. `.ace_content` holds the rendered
@@ -110,6 +114,27 @@ export class EditSoftwareModal {
     const target = !(await this.isSelfServiceOn());
     await this.selfServiceToggle.click();
     await expect(this.selfServiceToggle).toHaveAttribute('aria-checked', String(target));
+  }
+
+  /**
+   * Scopes the package to `labels` under `option` — or back to All hosts —
+   * replacing any scope it had: ticked labels are unticked first, once each.
+   */
+  async setTarget(target: { option: LabelScopeOption; labels: string[] } | 'All hosts'): Promise<void> {
+    if (target === 'All hosts') {
+      await this.targets.chooseAllHosts();
+      return;
+    }
+    await this.targets.chooseCustom();
+    const ticked = await this.targets.root
+      .getByRole('checkbox', { checked: true })
+      .evaluateAll((boxes) => boxes.map((b) => b.getAttribute('aria-label') ?? ''));
+    for (const name of ticked) {
+      const box = this.targets.labelCheckbox(name);
+      await box.click();
+      await expect(box).not.toBeChecked();
+    }
+    await this.targets.scope(target.option, target.labels);
   }
 
   /**

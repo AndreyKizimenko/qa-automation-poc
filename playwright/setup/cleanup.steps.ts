@@ -13,6 +13,7 @@
 import { test } from '@playwright/test';
 import {
   cancelUpcomingActivity,
+  clearFleetOsUpdates,
   deleteAllConfigurationProfiles,
   deleteAllGlobalPolicies,
   deleteAllInstallSoftwareTitles,
@@ -109,6 +110,10 @@ test('wipe Workstations team state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
   ]);
+  // The OS updates specs enforce versions and deadlines here — the one fleet
+  // with no real hosts to update — and clear them in a `finally` a timed-out
+  // test never reaches.
+  await clearFleetOsUpdates(request, workstations.id);
 });
 
 // A narrow exception to "cleanup touches only Unassigned and Workstations": on
@@ -169,10 +174,15 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
     deleteFleetPolicies(
       request,
       vms.id,
-      policies.filter((p) => p.name.startsWith('[Install software] fleet-pw-')).map((p) => p.id),
+      policies
+        .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
+        .map((p) => p.id),
     ),
     deleteAllScripts(request, vms.id, (name) => name.startsWith('pw-')),
-    ...reports.filter((r) => r.name.startsWith('pw-run-script-')).map((r) => deleteReport(request, r.id)),
+    // By exact prefix: gitops declares `pw-host-report-results` on this fleet too.
+    ...reports
+      .filter((r) => r.name.startsWith('pw-run-script-') || r.name.startsWith('pw-rl-'))
+      .map((r) => deleteReport(request, r.id)),
   ]);
   // After the policies: a title an install policy points at can't be deleted.
   await Promise.all(
