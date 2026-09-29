@@ -13,6 +13,9 @@ Skips are tracked in one of two places depending on who owns the fix:
 
 > A skip in the first two categories without a row in the matching file is a bug.
 
+Coverage that has no test yet because the instances lack the infrastructure — host types beyond the three
+VMs, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-term-goals.md), not here.
+
 ---
 
 ## Skipped tests

@@ -86,9 +86,14 @@ delivered it, and never commit a lock profile, even for a spec that "only upload
 If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 
 The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
-version or deadline, a DDM software-update enforcement declaration, or Recovery Lock password enforcement —
-they make the real hosts download an OS update, reboot mid-suite, or take a recovery password. Exercise those
-settings on Workstations and restore them in the same test.
+version or deadline, or a DDM software-update enforcement declaration — they make the real hosts download an
+OS update or reboot mid-suite. Exercise those settings on Workstations and restore them in the same test.
+
+**Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
+2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and
+turning it off makes Fleet clear it from the Mac. That spec turns it on for the VMs fleet and off in an
+`afterEach`, and the resting-state step turns it off after a dead run. Nothing else sets it on the VMs fleet,
+and nothing sets it on free, where the global setting would reach the free Mac.
 
 ## Locators and waits (Fleet-specific gotchas)
 

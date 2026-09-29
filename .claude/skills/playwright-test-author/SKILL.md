@@ -34,7 +34,8 @@ Each has happened, or nearly happened, and none can be undone from a test.
 - **Settings that update, reboot or lock a real host:** an OS-update minimum version or deadline, a DDM
   software-update declaration, Recovery Lock password enforcement. Exercise them only on a fleet with no
   real hosts (Workstations), and restore them in the same test. On **free**, global settings reach the free
-  VMs, because they're in Unassigned.
+  VMs, because they're in Unassigned. The one approved exception is `recovery-lock.spec.ts`, which sets,
+  rotates and clears Recovery Lock on the premium Mac (`playwright/CLAUDE.md` → Test hosts).
 - **Changing what other specs stand on:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`), renaming a fleet gitops declares (VMs, Workstations), gitops
   config, static users (their tokens can't be re-minted).

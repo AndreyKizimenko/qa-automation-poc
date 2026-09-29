@@ -82,14 +82,14 @@ run with E (2026-09-29): premium 532 passed, free 279, no failures.
 
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
-| **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | three decisions; most rows ready | 13 | 9 |
+| **[F](F-provisioning.md)** ◐ | Provisioning-gated — IdP, team admin, technician, recovery lock | built on `playwright/qawolf-round2-batch-f`; `recovery-lock.spec.ts` awaits its first live run | 13 | 4 new + 5 augments |
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | one decision (the hourly flow); the rest nightly | 9 | 5 |
-| | | **remaining** | **22** | **14** |
+| | | **remaining** | **22** | |
 
-**F and G each have a *Start here* block** at the top of their file, refreshed after E: which skills to call,
-what to read, the process in one breath, what free can check, and what to ask Andrey first. **F** is less blocked
-than its title: the technician-transfer and team-admin flows need nothing, the IdP username UI exists, the
-manual enrollment profile is a download, and half of MFA needs no SMTP. **G**'s attempt retries take minutes,
+**F and G each have a *Start here* block** at the top of their file: which skills to call, what to read, and
+what's decided. **F** was reviewed before it was built: the two "manual enrollment" flows turned out to run a
+script (a duplicate of `host-run-script`, cut), and the MFA flows and the Fedora `.rpm` flow moved to the
+suite's [long-term goals](../../long-term-goals.md) with the other host types it lacks. **G**'s attempt retries take minutes,
 not hours (Fleet queues the next attempt as soon as one fails), so they belong in the nightly. Only the
 continuous-automation flow is hourly, and how to build it is Andrey's call. F and G touch different surfaces
 and can run in either order, but never at the same time as another run on the same instance.
@@ -191,8 +191,9 @@ which, on free, means anything uploaded at all:
 - remove the profile in the same test that deployed it;
 - if you are unsure whether a payload is safe, it is not — ask before deploying it.
 
-The same caution governs the recovery-lock specs in batch F, which is why they are scoped to the permission
-surface rather than the act ([F](F-provisioning.md)).
+Recovery Lock is not in that class: it guards only entry to macOS Recovery, Fleet escrows the password, and
+turning enforcement off clears it. `recovery-lock.spec.ts` sets, rotates and clears it on the premium Mac, and
+is the only spec allowed to ([F](F-provisioning.md#recovery-lock-on-the-vms-fleet--why-its-allowed-and-the-rules)).
 
 ## 6. Standing rules
 

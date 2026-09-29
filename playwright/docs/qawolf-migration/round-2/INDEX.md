@@ -61,11 +61,11 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `hosts-details/host-details-software-filter-by-top-level-applications-installed-applications-appear-in-applications-filtered` | [C](C-host-reads.md) | `tests/e2e/shared/hosts/host-software.spec.ts` | augment |
 | `hosts/labels-include-all-install-software-on-hosts-that-include-all-labels-and-hosts-that-do-not-include-all-labels-do-not-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |
 | `hosts/labels-include-any-add-software-to-hosts-that-include-any-labels-and-hosts-that-do-not-include-any-labels-cannot-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |
-| `idp/update-and-remove-host-idp-username-via-ui` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/host-idp-username.spec.ts` | **new** |
-| `mac-os-accounts/automatically-rotate-recovery-lock-password` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** |
-| `mac-os-accounts/set-plus-manually-rotate-macos-recovery-lock-passwords` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** |
-| `mdm/manual-mdm-enrollment-mac-enrollment-profile` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/manual-mdm-enrollment.spec.ts` | **new** |
-| `mdm/manual-mdm-enrollment-mac-enrollment-profile [FREE]` | [F](F-provisioning.md) | `tests/e2e/free/hosts/manual-mdm-enrollment.spec.ts` | **new** |
+| `idp/update-and-remove-host-idp-username-via-ui` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/host-idp-username.spec.ts` | **new** — free sibling `tests/e2e/free/hosts/host-idp-username.spec.ts` |
+| `mac-os-accounts/automatically-rotate-recovery-lock-password` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** — full flow on the Mac VM |
+| `mac-os-accounts/set-plus-manually-rotate-macos-recovery-lock-passwords` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** — same flow as the one above |
+| `mdm/manual-mdm-enrollment-mac-enrollment-profile` | [F](F-provisioning.md) | — | **cut · DUP** of `tests/e2e/shared/hosts/host-run-script.spec.ts` — the flow runs a script on a macOS host; no enrollment profile |
+| `mdm/manual-mdm-enrollment-mac-enrollment-profile [FREE]` | [F](F-provisioning.md) | — | **cut · DUP** of `tests/e2e/shared/hosts/host-run-script.spec.ts` (runs on free too) |
 | `mdm/mdm-command-details-show-on-global-and-host-activity` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `mdm/past-and-upcoming-host-activities-add-mdm-commands-macos-ios-ipados` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `mdm/run-mdm-command-macos-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
@@ -94,7 +94,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `software/exclude-software-when-using-get-hosts-identifier-identifier-api-endpoint` | [A](A-no-setup.md) | `tests/api/host-software-payload.spec.ts` | **new** · **retargeted to tier-agnostic** (not premium-gated) |
 | `software/failing-uninstall-keeps-installed-files-and-statuses` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
 | `software/filter-by-installable-software` | [A](A-no-setup.md) | `tests/e2e/premium/software/titles-table.spec.ts` | **new** (Library tab is premium-only) |
-| `software/install-and-delete-rpm-files-on-rpm-based-linux-hosts-fedora` | [F](F-provisioning.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
+| `software/install-and-delete-rpm-files-on-rpm-based-linux-hosts-fedora` | [F](F-provisioning.md) | — | **long-term goals** — no RPM-based host ([`long-term-goals.md`](../../long-term-goals.md#host-types)) |
 | `software/install-software-through-fleet-maintained-page` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** (the install; the catalog add is `library.spec.ts`'s) |
 | `software/pending-and-failed-software-should-not-show-in-inventory-tab` | [D](D-host-execution.md) | `tests/e2e/premium/software/inventory-reflects-install.spec.ts` | **new** |
 | `software/progress-indicator-appears-without-timeout-during-upload-of-large-software` | [D](D-host-execution.md) | `tests/e2e/premium/software/large-upload.spec.ts` | **new** |
@@ -120,15 +120,15 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `software/view-software-page-as-team-maintainer-premium` | [A](A-no-setup.md) | `tests/e2e/premium/software/role-access.spec.ts` | **new** |
 | `technician-user/technician-role-can-transfer-hosts-between-fleets` | [F](F-provisioning.md) | `tests/e2e/premium/hosts/host-transfer-permissions.spec.ts` | augment |
 | `uncategorized/all-teams-view-switching-tabs` | [A](A-no-setup.md) | `tests/e2e/premium/software/no-teams-views.spec.ts` | augment |
-| `uncategorized/created-2fa-enabled-user-cannot-re-use-sign-in-magic-link` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** |
-| `uncategorized/global-admin-is-able-to-edit-user-to-use-2fa` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** |
-| `uncategorized/invite-2fa-enabled-user-and-log-in-as-the-user` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** |
+| `uncategorized/created-2fa-enabled-user-cannot-re-use-sign-in-magic-link` | [F](F-provisioning.md) | — | **long-term goals** — needs SMTP + a readable mailbox ([`long-term-goals.md`](../../long-term-goals.md#a-readable-mailbox)) — the 2FA checkbox half is in `premium/settings/users/regular-user-create.spec.ts` |
+| `uncategorized/global-admin-is-able-to-edit-user-to-use-2fa` | [F](F-provisioning.md) | — | **long-term goals** — needs SMTP + a readable mailbox — the 2FA checkbox half is in `premium/settings/users/regular-user-create.spec.ts` |
+| `uncategorized/invite-2fa-enabled-user-and-log-in-as-the-user` | [F](F-provisioning.md) | — | **long-term goals** — needs SMTP + a readable mailbox — the 2FA checkbox half is in `premium/settings/users/regular-user-create.spec.ts` |
 | `uncategorized/other-workflows-modal-saving-disables-form-inputs` | [A](A-no-setup.md) | `tests/e2e/premium/policies/policy-automations.spec.ts` | augment |
 | `uncategorized/run-mdm-command-macos-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `uncategorized/succeeded-ran-script-on-host-does-not-show-pending-when-modal-is-closed` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `uncategorized/vulnerability-severity-filter-lists-options-from-critical-down` | [A](A-no-setup.md) | `tests/e2e/premium/software/vulnerabilities.spec.ts` | augment |
 | `user-profiles/team-admin-able-to-edit-a-team-member-premium` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/team-admin-scope.spec.ts` | **new** |
-| `user-profiles/team-admin-able-to-edit-team-name-premium` | [F](F-provisioning.md) | `tests/e2e/premium/settings/team-settings.spec.ts` | **new** |
+| `user-profiles/team-admin-able-to-edit-team-name-premium` | [F](F-provisioning.md) | `tests/e2e/premium/settings/users/team-admin-scope.spec.ts` | **new** — merged; the rename is asserted, never saved |
 | `user-profiles/team-admin-unable-to-click-manage-automations-button-premium` | [A](A-no-setup.md) | `tests/e2e/premium/software/manage-automations-access.spec.ts` | augment |
 | `user-profiles/team-maintainer-unable-to-click-manage-automations-button-premium` | [A](A-no-setup.md) | `tests/e2e/premium/software/manage-automations-access.spec.ts` | augment |
 | `vpp/add-android-software-from-add-app-page` | [B](B-self-contained.md) | `tests/e2e/premium/software/library.spec.ts` | augment · check DUP |
