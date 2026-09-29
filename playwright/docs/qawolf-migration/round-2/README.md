@@ -84,7 +84,7 @@ That is **85 of the 127 flows**, and the whole `gitops-mode` project. The suite 
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
 | | | **remaining** | **43** | **24** |
 
-**E is in progress** on `playwright/qawolf-round2-batch-e` — the handoff is at the top of
+**E is in review** — [PR #65](https://github.com/AndreyKizimenko/qa-automation-poc/pull/65), awaiting its branch run. The handoff is at the top of
 [E-label-targeting.md](E-label-targeting.md), progress in its *What landed*. Its first slice, the inert profile
 fixtures, found the free VMs had been receiving the suite's lock profiles (§5).
 

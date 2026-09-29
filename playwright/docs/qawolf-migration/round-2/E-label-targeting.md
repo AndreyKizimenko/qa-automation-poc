@@ -140,7 +140,8 @@ The batch's own **Done when** below, plus:
 - the full suite ran once via `QA — Branch run` on the branch, and anything red is triaged
   (`playwright-run-reviewer`) and fixed, skipped behind a filed bug, or explained in the PR.
 
-> **Status (2026-09-29):** everything above except the last item. Andrey dispatches the branch run himself,
+> **Status (2026-09-29):** in review as [PR #65](https://github.com/AndreyKizimenko/qa-automation-poc/pull/65) —
+> everything above except the last item. Andrey dispatches the branch run himself,
 > clear of the nightly — which GitHub has been starting 5–6.5 h after its 05:00 UTC schedule.
 
 ---
