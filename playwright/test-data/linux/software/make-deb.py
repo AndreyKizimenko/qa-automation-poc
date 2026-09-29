@@ -27,9 +27,25 @@ Description: Inert fixture package for the Fleet Playwright suite.
 MARKER = "fleet playwright fixture\n"
 
 def tar_gz(entries):
-    """entries: list of (path, text). Returns gzipped tar bytes."""
+    """entries: list of (path, text). Returns gzipped tar bytes.
+
+    Each file's parent directories go in first, as their own entries: dpkg
+    unpacks into them and fails ("unable to create …: No such file or
+    directory") when a package ships a file under a directory it doesn't list.
+    """
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as tf:
+        dirs = []
+        for path, _ in entries:
+            parts = path.split("/")[:-1]
+            for i in range(2, len(parts) + 1):
+                d = "/".join(parts[:i]) + "/"
+                if d not in dirs:
+                    dirs.append(d)
+        for d in dirs:
+            info = tarfile.TarInfo(d)
+            info.type, info.mtime, info.mode = tarfile.DIRTYPE, MTIME, 0o755
+            tf.addfile(info)
         for path, text in entries:
             data = text.encode()
             info = tarfile.TarInfo(path)
