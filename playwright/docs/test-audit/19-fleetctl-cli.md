@@ -55,11 +55,13 @@ FCTL-26..30.
 ## The binary is a test dependency
 
 Unlike every other area, these specs need a program installed. Both Playwright CI workflows now
-resolve the server's version and `npm install -g fleetctl@<that version>` before running. Locally,
+resolve the server's version and `npm install -g` that release's `fleetctl` when it is published — and,
+for an RC server that has no published client of its own, the **latest** release, at most a minor behind
+(2026-09-28; it was a pinned 4.85.0). So against an RC this area runs one minor behind the server. Locally,
 `FLEETCTL_BIN` points at an existing binary; without it the area fails hard rather than skipping,
 per the suite's no-new-skip-gates rule.
 
-### The client must match the server's minor version — read this first
+### The client must stay within a minor of the server — read this first
 
 **A stale client does not fail this area. It makes it pass for the wrong reason.** That is not a
 hypothetical: until 2026-09-27 the suite ran **fleetctl 4.85.1 against a 4.93 server**, and the
@@ -955,7 +957,7 @@ instance state, because on a Free instance with Apple MDM configured there is no
 **This was invisible until the client caught up.** fleetctl 4.85.1 predates DDM assets support
 (added in 4.90.0), so the old client never took the failing branch and this entry passed for two
 months against a broken command. Upgrading to a 4.93-matching client surfaced it. See the
-[version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+[version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 
 **Unblock condition:** `generate-gitops` succeeds on Free with Apple MDM configured — i.e. the
 assets fetch is skipped on Free. Then delete both skips (this entry and FCTL-25) and re-run.
@@ -997,7 +999,7 @@ other:
 **Why it is skipped.** Identical to FCTL-24: `generate-gitops` exits 1 on Free with Apple MDM
 configured (`generateControls` → `generateAssets` → `GET /assets` 402s on Free), so the command
 produces no output for the assertion to inspect. Also masked by fleetctl 4.85.1 until 2026-09-27 —
-see the [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+see the [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 
 **Flow** *(what it asserts when un-skipped)*
 
@@ -1792,7 +1794,7 @@ to spend review time.
    cheapest fix is a guard, not a habit:** one assertion (or a project-setup step) comparing
    `fleetctl --version` against `/api/v1/fleet/version` and failing on a minor-version mismatch
    would have caught all of this on day one. See the
-   [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+   [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 1. **The shared `get` entries are smoke tests wearing data-test names.** FCTL-01/02/04 assert only
    that column headers render. That is a defensible scope (data contracts belong to `tests/api/`
    and `gitops-verify`), but the entry names promise more than they deliver. Either rename them or

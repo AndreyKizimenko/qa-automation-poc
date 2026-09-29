@@ -1,13 +1,20 @@
 # Software on hosts — test audit
 
-**Specs covered:** 5 files · **Entries:** 13 · **Runtime tests:** 20 (three parameterized loops collapsed into four entries — the Claude loop declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
+**Specs covered:** 6 files · **Entries:** 11 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 18 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
-This area covers Fleet **delivering software to a real device**: an installer added through Add software,
-installed from the host's Library, followed until the host reports it back, then uninstalled; plus the
-failure paths (a refused install, a failing uninstall), the Library's **Update** button, the "Deploy"
-automatic-install policy, and the Add-software form at the size end. Everything except SWH-11/12 happens on
-a real VM, and the host itself is the oracle — an installed version only counts once the host's own
-inventory says so.
+This area covers Fleet **delivering software to a real device**: a package the VMs fleet keeps for the purpose,
+installed from the host's Library, followed until the host reports it back, then uninstalled and followed
+until the host stops reporting it; plus the failure paths (a refused install, a failing uninstall), the
+Library's **Update** button, the "Deploy" automatic-install policy, and the Add-software form at the size end.
+Everything except SWH-11/12 happens on a real VM, and the host itself is the oracle — an installed version only
+counts once the host's own inventory says so. **Adding** software through the UI without a host is area 06's
+(`library.spec.ts`, SWL-01); here only SWH-03 (Deploy) adds through the form.
+
+> **Restructured 2026-09-28** (branch `playwright/vms-durable-fixtures`). The install and uninstall loops
+> (SWH-01, SWH-04) and the catalog-add FMA install (SWH-02) became one test per **durable fixture**,
+> SWH-14 in `software-lifecycle-on-host.spec.ts`: each installs, checks, uninstalls and checks again, on a
+> title gitops keeps on the VMs fleet and the test never deletes. `install-on-host.spec.ts` keeps only Deploy
+> (SWH-03); `uninstall-from-host.spec.ts` keeps only the failing uninstall (SWH-05).
 
 **This area is unlike every other one in the audit, in eight ways.** Read them before running anything.
 
@@ -22,38 +29,62 @@ anything, so a green assertion against one proves nothing. ARM decides which ins
 that is why the Windows `.exe` is `7z2601-arm64.exe` and why an `amd64` `.deb` is a *deterministic* failed
 install on the Ubuntu VM.
 
-**2. The VMs fleet is under gitops since this batch.** `gitops/premium-fleetqa/fleets/vms.yml` declares the
-`pw-host-report-results` report and keeps **Claude** installed on the macOS and Windows VMs via two
-**"Claude is installed"** *presence* policies (reinstall when missing, never update). It is **applied by
-hand**, not by the nightly. Claude tracks latest (no `version:` pin), so Fleet's hourly
-`maintained_apps_auto_update` cron downloads each new build and keeps the previous one — the ingredient the
-update spec (SWH-09/10/13) needs. Design and rationale:
-[D-host-execution.md → The FMA fixture set](../qawolf-migration/round-2/D-host-execution.md#the-fma-fixture-set).
-Everything else on the fleet is per-run, and a gitops apply deletes whatever the file does not declare.
+**2. The VMs fleet is under gitops, and holds the software these specs install.**
+`gitops/premium-fleetqa/fleets/vms.yml` declares the `pw-host-report-results` report, keeps **Claude**
+installed on the macOS and Windows VMs via two **"Claude is installed"** *presence* policies (reinstall when
+missing, never update), and declares the six **install/uninstall fixtures** below. It is applied **before
+every nightly premium run**, in both the baseline and the min pass (`.github/workflows/gitops-premium.yml`,
+`gitops-premium-min.yml`), and the Playwright premium workflow shares the `premium-fleetqa-instance`
+concurrency group with the nightly apply, so an apply and a test run never overlap. Claude tracks latest (no
+`version:` pin), so Fleet's hourly `maintained_apps_auto_update` cron downloads each new build and keeps the
+previous one — the ingredient the update spec (SWH-09/10/13) needs. Design and rationale:
+[D-host-execution.md → The FMA fixture set](../qawolf-migration/round-2/D-host-execution.md#the-fma-fixture-set)
+and [→ Durable install/uninstall fixtures](../qawolf-migration/round-2/D-host-execution.md#durable-installuninstall-fixtures-2026-09-28-follow-up).
+Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`), and a gitops apply deletes whatever the file
+does not declare.
 
-**3. Every fixture is inert.** Nothing a spec installs changes the machine beyond one marker:
+**3. Every fixture is inert, and most are durable.** Nothing a spec installs changes the machine beyond one
+marker or one small app. Two kinds:
 
-| fixture | built by | installs |
-|---|---|---|
-| `fleet-playwright-install-1.0.0.pkg` / `fleet-playwright-uninstall-1.0.0.pkg` | [`test-data/apple/macos/software/make-pkg.sh`](../../test-data/apple/macos/software/make-pkg.sh) (committed output) | one empty app bundle, `/Applications/Fleet Playwright <Role>.app` — an app bundle because macOS inventory lists `.app` bundles only; a files-only `.pkg` installs but never shows up |
-| `fleet-playwright-install-1.0.0.msi` / `fleet-playwright-uninstall-1.0.0.msi` | [`test-data/windows/software/make-msi.sh`](../../test-data/windows/software/make-msi.sh) (committed output) | one marker file under `C:\Program Files\Fleet Playwright <Role>\` |
-| `7z2601-arm64.exe` | committed vendor binary | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
-| `fleet-pw-<purpose>-<base36>_<ver>_<arch>.deb` | [`helpers/deb.ts`](../../helpers/deb.ts) **at run time** (`inertDeb`, `buildDeb`) | one marker at `/usr/share/<name>/marker.txt`, no maintainer scripts; per-run name so no other run can share the title |
+*Durable — declared in `vms.yml`, listed for the specs in
+[`helpers/vm-fixtures.ts`](../../helpers/vm-fixtures.ts) (`VM_SOFTWARE_FIXTURES`; the two change together),
+never deleted by any test.* **Their resting state is uninstalled.** Because the titles never leave the fleet,
+Fleet always knows whether each is on its VM, and the `cleanup-setup` preflight uninstalls any a dead run left
+installed (see *Cleaning up* below). The custom packages live under `gitops/lib/platforms/*/software/`, each a
+`*.package.yml` pointing at a **commit-pinned `raw.githubusercontent.com` URL with a `hash_sha256`**, so the URL
+never changes and Fleet skips the download once it holds the file. Consumed by SWH-14.
 
-One package **per spec** (the `install` / `uninstall` roles): a premium title can hold several packages, so
-two specs uploading the same file to the VMs fleet would share one Library row. The one non-inert thing
-installed is the Fleet-maintained **Itsycal** (a menu-bar calendar, never launched) in SWH-02.
+| fixture | title Fleet shows | built by | installs |
+|---|---|---|---|
+| `fleet-playwright-install-1.0.0.pkg` | from the package | [`test-data/apple/macos/software/make-pkg.sh`](../../test-data/apple/macos/software/make-pkg.sh) (committed output) | one empty app bundle, `/Applications/Fleet Playwright Install.app` — an app bundle because macOS inventory lists `.app` bundles only; a files-only `.pkg` installs but never shows up |
+| `fleet-playwright-install-1.0.0.msi` | from the package | [`test-data/windows/software/make-msi.sh`](../../test-data/windows/software/make-msi.sh) (committed output) | one marker file under `C:\Program Files\Fleet Playwright Install\` |
+| `7z2601-arm64.exe` | **7-Zip** (ProductName) — Windows lists it as **7-Zip 26.01 (arm64)** | committed vendor binary; install/uninstall scripts `gitops/lib/platforms/windows/software/7-zip-{install,uninstall}.ps1` (`/S`) | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
+| `fleet-playwright-install_1.0.0_all.deb` | from the package | [`test-data/linux/software/make-deb.py`](../../test-data/linux/software/make-deb.py) `fleet-playwright-install 1.0.0 all` (committed output) | one marker under `/usr/share/fleet-playwright-install/`, no maintainer scripts, `Architecture: all` |
+| **Itsycal** (`itsycal/darwin`) | Itsycal | Fleet-maintained | a menu-bar calendar, never launched |
+| **DB Browser for SQLite** (`db-browser-for-sqlite/windows`) | DB Browser for SQLite | Fleet-maintained | an MSI, no service, never launched |
+
+*Per-run — for a test that changes the title itself* (a version swap, its own failing uninstall script, an
+install policy), so it can't share a durable one: `fleet-pw-<purpose>-<base36>_<ver>_<arch>.deb`, built by
+[`helpers/deb.ts`](../../helpers/deb.ts) **at run time** (`inertDeb`, `buildDeb`) — one marker at
+`/usr/share/<name>/marker.txt`, no maintainer scripts, a per-run name so no other run can share the title.
+Uploaded and deleted in the same test (SWH-03, SWH-05, SWH-06, SWH-07, SWH-08); the cleanup sweep removes a
+dead run's.
+
+A premium title can hold several packages, so two specs uploading the same file to the VMs fleet would share
+one Library row — which is why each durable fixture belongs to one test, and a test that alters its title builds its own.
 
 **4. The waits are the substance, and they are slow.** `waitForSoftwareSettled`
 ([`helpers/api/software.ts`](../../helpers/api/software.ts)) is the wait every flow here leans on, in three
 steps: **(a)** the install/uninstall status settles (≤ 5 min — a VM works one queue, shared with every other
 spec's scripts and installs); **(b)** a collection runs *after* that: wait until the host has no
-refetch outstanding — Fleet queues one after every install and uninstall, and one left by the previous
-action can still be running on pre-install data, which a new request would merge into — then baseline the
-host's `detail_updated_at`, ask for a refetch, wait for it to move (≤ 4 min) — `detail_updated_at`, **not**
-`software_updated_at`, because the latter only moves when the inventory *changes* and so never moves after a
-failed uninstall; **(c)** the inventory agrees with the status (≤ 1 min — a refetch's detail results can be
-stored seconds before its software results); if it still disagrees, (b)–(c) run once more. **A refetch
+refetch outstanding (≤ 4 min) — Fleet queues one after every install and uninstall, and one left by the
+previous action can still be running on pre-install data, which a new request would merge into — then
+baseline the host's `detail_updated_at`, ask for a refetch, wait for it to move (≤ 4 min) —
+`detail_updated_at`, **not** `software_updated_at`, because the latter only moves when the inventory
+*changes* and so never moves after a failed uninstall; **(c)** the inventory agrees with the status (≤ 1 min —
+a refetch's detail results can be stored seconds before its software results); if it still disagrees, the
+baseline-refetch-poll round runs once more. For a title Fleet can't link to what the host reports (the
+`.exe`), `inventoryName` makes (c) read the host's own inventory by the program's name. **A refetch
 takes 60–120 s on a VM.** On a manual run, the equivalent is: wait for the Library Status to settle, wait
 for "Last fetched" to move once on its own (Fleet's own refetch), then click **Refetch**, wait for it to
 move again, and look.
@@ -78,9 +109,10 @@ usually see **Upcoming** flash "told Fleet to install …" and empty again; that
   "created a policy [Install software] … (deb)." with no "on the VMs fleet" suffix, where a hand-made fleet
   policy's does. Same activity type, two shapes — on the decision list, encoded in SWH-03.
 
-**8. Runtime.** These five specs are the bulk of the premium nightly's **~40 min** (39.6 min at CI's two
-workers on 2026-09-28, against a ~15 min nightly before batch D and a 60 min job limit); each test takes
-**3–10 min**. CI retries twice, so a real failure here can cost half an hour.
+**8. Runtime.** These six specs are the bulk of the premium nightly's **~40 min** (39.6 min at CI's two
+workers on 2026-09-28, measured *before* the SWH-14 restructure, against a ~15 min nightly before batch D and
+a 60 min job limit); each test takes **3–10 min**, SWH-14's two round-trips at the top of that. CI retries
+twice, so a real failure here can cost half an hour.
 
 The two **large-upload** tests (SWH-11/12) are the exception to all of the above: they never touch a host,
 upload to **Workstations** (which `cleanup.steps.ts` wipes), and take seconds to a couple of minutes. The
@@ -96,39 +128,60 @@ it costs no disk and no time.
   premium suite, and there are only three. The suite-wide rule applies with extra force: **never deploy a
   passcode, screen-lock or anything else gating entry to a real host** (`../../CLAUDE.md` → Test hosts) —
   nothing in this area does, and a manual run must not either.
+- **Leave every durable fixture uninstalled, and never delete its title.** The six install/uninstall fixtures
+  (Fleet Playwright Install `.pkg` / `.msi` / `.deb`, 7-Zip, Itsycal, DB Browser for SQLite) belong to the VMs
+  fleet, not to your run: install one to walk SWH-14, then uninstall it before you stop. A deleted fixture title
+  fails SWH-14 with *"… fixture is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"*
+  until the next nightly apply puts it back.
 - **Leave Claude alone.** Do not uninstall it from either VM, do not delete its titles, do not edit or delete
   the two **"Claude is installed"** policies, and **do not leave it pinned** — an exact pin freezes the
   auto-update cron for the title and stops the version history SWH-10 needs from growing. If you pin during
   SWH-10, unpin before you walk away (title → **Versions** → latest). `cleanup-setup` clears stranded pins on
   the QA and VMs fleets at the start of every premium run, but not between your clicks.
-- **Don't run a manual flow at 05:30–06:15 UTC** — the premium Playwright nightly runs these same flows on
-  the same VMs then, with the same fixed-name `.pkg` / `.msi` fixtures, and two installs of one title on one
-  host will confuse both.
+- **Don't run a manual flow at 05:00–06:15 UTC.** The nightly gitops apply runs at 05:00 and re-applies
+  `vms.yml`, deleting anything on the VMs fleet it doesn't declare — a `fleet-pw-*` title you uploaded
+  included; the premium Playwright nightly follows at 05:30 and runs these same flows on the same VMs, with the
+  same durable fixtures, and two installs of one title on one host will confuse both.
 
 ### Cleaning up by hand after an interrupted flow
 
-Each test removes its title in a `finally`, and `setup/cleanup.steps.ts` sweeps what these specs name as their
-own from the VMs fleet at the start and end of every premium run: titles whose package matches
-`fleet-pw-*` / `fleet-playwright-*` / `7z2601-arm64.exe`, the Fleet-maintained **Itsycal**, and policies named
-`[Install software] fleet-pw-*`; plus it clears version pins on **QA** and **VMs**. **Deleting a title never
-uninstalls it**, so after the deletes the sweep checks the online Ubuntu VM's inventory for `fleet-pw-*`
-names and, if it finds any, queues one ad-hoc script on that VM —
-`dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge`. A host runs scripts and installs from
-one queue, so the purge finishes before any install the run queues after it. **The macOS and Windows VMs are
-never uninstalled from by the sweep:** the fixed-name `.pkg` / `.msi` / `.exe` come back with the next run,
-whose pre-clean (`ensureNotInstalled`) or own uninstall takes them off. So if you stop a manual flow midway on
-macOS or Windows — or want the Ubuntu VM clean before the next run — clean up in this order:
+`setup/cleanup.steps.ts` runs at the start and end of every run (`cleanup-setup` / `cleanup-teardown`) and does
+two things for this area, in this order (both after the step that clears stranded version pins on
+**QA** and **VMs**):
 
-1. **Uninstall from the host.** Host details → **Software** → **Library** → search the title → **Uninstall**.
-   Wait for the Status to clear (a refetch lands 60–120 s later and the Installed version goes back to `---`).
-   Deleting the title first leaves the software on the machine, and the next run's Library then shows it as
-   already installed.
-2. **If a "Deploy" policy exists**, delete it first: **Policies** → fleet **VMs** →
-   `[Install software] <name> (deb)` → delete. A title an install policy points at cannot be deleted.
-3. **Delete the title.** **Software** → fleet **VMs** → the title → its installer card → **Delete this
-   version** → **Delete**.
+- **"sweep host-execution leftovers from the VMs fleet"** — premium. Deletes titles whose package matches
+  **`^fleet-pw-`** only (never a durable fixture), `pw-` scripts, `pw-run-script-` reports and policies named
+  `[Install software] fleet-pw-*`. **Deleting a title never uninstalls it**, and a per-run `.deb` never comes
+  back to be uninstalled by a later run, so after the deletes the sweep checks the online Ubuntu VM's inventory for `fleet-pw-*` names and, if it finds any, queues one
+  ad-hoc script on that VM — `dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge`. A host
+  runs scripts and installs from one queue, so the purge finishes before any install the run queues after it.
+- **"bring the real VMs to their resting state"** — both tiers. Turns script execution on (uninstalls run as
+  scripts), removes a `script_execution_timeout` override from the agent options (the VMs fleet's on premium,
+  the global ones on free — the host-run-script timeout case lowers it to 60 s), and on each online real VM
+  **cancels the suite's own queued upcoming activities**: `pw-` scripts, `fleet-pw-` packages and the durable
+  fixtures' installs and uninstalls. On premium it then **uninstalls any durable fixture it finds installed**
+  (`ensureVmFixtureUninstalled`, which waits for the inventory to agree). A VM that's offline is only logged; its
+  specs then fail on it with their own message.
 
-For SWH-05's package, whose uninstall script fails **by design**, step 1 will fail again: either edit the
+So by hand:
+
+1. **A durable fixture left installed** (you stopped SWH-14 midway): host details → **Software** →
+   **Library** → search the title → **Uninstall**, and wait for the Status to clear (a refetch lands 60–120 s
+   later and the Installed version goes back to `---`; for 7-Zip, check the **Inventory** tab for
+   `7-Zip 26.01 (arm64)` instead). Or leave it: the next run's preflight uninstalls it. **Never delete the
+   title** to clean up.
+2. **A per-run `fleet-pw-*` item** (you walked SWH-03/05/06/07/08 by hand): it needs deleting, in this order —
+   - **If a "Deploy" policy exists**, delete it first: **Policies** → fleet **VMs** →
+     `[Install software] <name> (deb)` → delete. A title an install policy points at cannot be deleted.
+   - **Uninstall from the host** (Library → **Uninstall**, as above). Deleting the title first leaves the
+     package on the machine.
+   - **Delete the title.** **Software** → fleet **VMs** → the title → its installer card → **Delete this
+     version** → **Delete**.
+
+   If you forget, the next premium run's sweep deletes the title and purges the package from the Ubuntu VM —
+   keep the `fleet-pw-` prefix so it can.
+
+For SWH-05's package, whose uninstall script fails **by design**, the uninstall will fail again: either edit the
 title's uninstall script first (title → **Edit software** → Advanced options) to
 `apt-get remove --purge --assume-yes <name>`, or run that as an ad-hoc script on the Ubuntu VM
 (`POST /api/v1/fleet/scripts/run` with `host_id` + `script_contents` — what the spec's `finally` does). Its
@@ -138,10 +191,15 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 
 - **Find the VMs:** **Hosts** → fleet **VMs** → the one macOS, one Windows and one Ubuntu host. Identify them
   by platform (and "Virtual Machine" / QEMU hardware model on Details), not by a remembered name.
-- **Fixtures:** the `.pkg`, `.msi` and `.exe` are committed under `test-data/`. There is **no committed
-  installable `.deb`** — the specs build theirs in memory. `test-data/linux/software/make-deb.py` writes the
-  fixed `fleet-playwright-pkg_1.0.0_amd64.deb`, which is the right file for SWH-07 (wrong arch) and the wrong
-  one for everything else. For an installable one, from `playwright/`:
+- **SWH-14 needs no files.** Its six fixtures are already titles on the VMs fleet, put there by gitops —
+  check **Software** → fleet **VMs** lists them, and re-apply `vms.yml` (see `gitops/premium-fleetqa/README.md`)
+  if one is missing rather than uploading it by hand.
+- **The per-run tests need a `.deb` you build.** The committed `.deb`s are the wrong ones for them:
+  `fleet-playwright-install_1.0.0_all.deb` *is* the durable Linux fixture (uploading it again would share its
+  title), and `fleet-playwright-pkg_1.0.0_amd64.deb` is `amd64` — the right file for SWH-07 (wrong arch) and
+  the wrong one for everything else. `test-data/linux/software/make-deb.py` takes `name version arch` and
+  writes an installable one (`python3 test-data/linux/software/make-deb.py fleet-pw-manual 1.0.0 all`); or,
+  from `playwright/`:
 
   ```bash
   npx --yes tsx -e "require('fs').writeFileSync('fleet-pw-manual_1.0.0_all.deb', require('./helpers/deb').inertDeb('fleet-pw-manual', '1.0.0'))"
@@ -156,10 +214,11 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 
 | ID | Spec | Test | Mode | Manual? |
 |---|---|---|---|---|
-| SWH-01 | `premium/software/install-on-host.spec.ts` | a {macOS .pkg, Windows .msi, Linux .deb} added in the UI installs on the VM and lands in its inventory — **3 variants** | UI+API | ☐ |
-| SWH-02 | `premium/software/install-on-host.spec.ts` | a Fleet-maintained app added from its catalog page installs on the macOS VM | UI+API | ☐ |
+| SWH-14 | `premium/software/software-lifecycle-on-host.spec.ts` | a {macOS .pkg, Windows .msi, Windows .exe, Linux .deb, macOS Fleet-maintained app, Windows Fleet-maintained app} installs on the VM and uninstalls again — **6 variants** (listed first: the area's backbone) | UI+API | ☐ |
+| ~~SWH-01~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the custom-package install loop; now SWH-14 | — | — |
+| ~~SWH-02~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the FMA added from its catalog page and installed; now SWH-14 + SWL-01 | — | — |
 | SWH-03 | `premium/software/install-on-host.spec.ts` | "Deploy" creates an install policy, and Fleet installs through it on the Linux VM | UI+API | ☐ |
-| SWH-04 | `premium/software/uninstall-from-host.spec.ts` | a {macOS .pkg, Windows .msi, Windows .exe, Linux .deb} uninstalls from the VM and leaves its inventory — **4 variants** | UI+API | ☐ |
+| ~~SWH-04~~ | ~~`premium/software/uninstall-from-host.spec.ts`~~ | **Retired 2026-09-28** — the uninstall loop; now SWH-14 | — | — |
 | SWH-05 | `premium/software/uninstall-from-host.spec.ts` | an uninstall that fails leaves the software installed, and the Library offers a retry | UI+API | ☐ |
 | SWH-06 | `premium/software/inventory-reflects-install.spec.ts` | a package that installs appears in the Inventory once the host re-reports | UI+API | ☐ |
 | SWH-07 | `premium/software/inventory-reflects-install.spec.ts` | a pending or failed install never appears in the Inventory, through every retry | UI+API | ☐ |
@@ -176,134 +235,145 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 ### Running these
 
 ```bash
-npm run test:premium -- -g "<title fragment>"            # with deps: premium-setup + cleanup-setup (runs the VMs sweep)
+npm run test:premium -- -g "<title fragment>"            # with deps: premium-setup + cleanup-setup (the VMs sweep + resting-state preflight)
 npm run test:premium:headed -- -g "<title fragment>"     # watch it
 ```
 
 `-g` is a regex, and several titles contain `.` or `"` — quote the fragment with single quotes where it holds
-double quotes. All five files run **fully parallel** (the suite default) except the `Claude` describe, which is
-`mode: 'serial'` (its five tests — SWH-09 and SWH-13 per platform, then SWH-10 — one after another); with more than one worker, the Linux tests of all four VM specs queue on the **same Ubuntu
-VM** — seven of them.
+double quotes. All six files run **fully parallel** (the suite default) except the `Claude` describe, which is
+`mode: 'serial'` (its five tests — SWH-09 and SWH-13 per platform, then SWH-10 — one after another); with more
+than one worker, the VM-bound tests queue on the VM of their platform: **six on the Ubuntu VM** (SWH-14's
+`.deb`, SWH-03, SWH-05, SWH-06, SWH-07, SWH-08), **four on Windows** (SWH-14's `.msi`, `.exe` and DB Browser,
+SWH-09) and **four on macOS** (SWH-14's `.pkg` and Itsycal, SWH-09, SWH-10), plus SWH-13 on each of the last
+two on a day it runs. The CI workflows share a concurrency group with their tier's nightly gitops apply
+(`premium-fleetqa-instance` / `free-fleetqa-instance`), so one test run also waits for another.
+
+---
+
+### SWH-14 · Premium • Software • Install and uninstall on host › a {macOS .pkg, Windows .msi, Windows .exe, Linux .deb, macOS Fleet-maintained app, Windows Fleet-maintained app} installs on the {darwin, windows, linux} VM and uninstalls again
+
+- **File:** [`playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts) · the fixture list and its helpers: [`helpers/vm-fixtures.ts`](../../helpers/vm-fixtures.ts)
+- **Grep:** `npm run test:premium -- -g "VM and uninstalls again"` (six runtime tests: `a macOS .pkg installs on the darwin VM and uninstalls again`, `a Windows .msi installs on the windows VM and uninstalls again`, `a Windows .exe installs on the windows VM and uninstalls again`, `a Linux .deb installs on the linux VM and uninstalls again`, `a macOS Fleet-maintained app installs on the darwin VM and uninstalls again`, `a Windows Fleet-maintained app installs on the windows VM and uninstalls again`)
+- **Project:** premium · **Scope:** the **VMs** fleet (no fleet dropdown — the flow starts on host details, by URL) · **Host:** the real VM of the row's platform
+- **Mode:** UI+API · **Isolation:** parallel, one test per fixture; describe timeout **900 s**; two `test.step`s, **`install`** then **`uninstall`**, so a report names the half that failed. `finally` → `ensureVmFixtureUninstalled` (uninstalls, and waits for the inventory to agree, only if the fixture is still installed). **Never deletes the title** — it's the fleet's, not the test's.
+- **Preconditions:** an online real VM of the platform (`requireRealHost`); the fixture's title on the VMs fleet, found by installer file name for a custom package and by name + platform among the fleet's Fleet-maintained titles for an FMA (`findVmFixtureTitle` — *"<label> fixture is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise, and for an FMA *"<label> has no installer on the VMs fleet"*); the title offered to the VM with a library version (*"<title> isn't offered to <host>"*); the fixture **uninstalled** — the preflight's job, and the test calls `ensureVmFixtureUninstalled` once more before it starts (normally a no-op).
+- **Data created:** nothing durable. The fixture is installed and uninstalled on one VM and left at rest; the host's Past activity gains one "installed" and one "uninstalled" item per run, with the same wording every run. A run that dies mid-flow leaves the fixture installed until `cleanup-teardown` (the same run's end) or the next `cleanup-setup` uninstalls it.
+
+| variant | title | installer | uninstall script | inventory read by |
+|---|---|---|---|---|
+| macOS `.pkg` | from the package | `fleet-playwright-install-1.0.0.pkg` | Fleet's, from the package IDs | the title (linked) |
+| Windows `.msi` | from the package | `fleet-playwright-install-1.0.0.msi` | Fleet's, from the product code | the title (linked) |
+| Windows `.exe` | **`7-Zip`** (ProductName) | `7z2601-arm64.exe` | **ours**, declared in gitops — `7-zip-uninstall.ps1` runs `C:\Program Files\7-Zip\Uninstall.exe /S` (Fleet requires both scripts for an `.exe`) | **`7-Zip 26.01 (arm64)`**, the host's own name for it (unlinked, `linked = false`) |
+| Linux `.deb` | from the package | `fleet-playwright-install_1.0.0_all.deb` | Fleet's `apt-get remove` | the title (linked) |
+| macOS Fleet-maintained | **Itsycal** | the build Fleet cached — its file name read at run time | Fleet's, for the app | the title (linked) |
+| Windows Fleet-maintained | **DB Browser for SQLite** | the build Fleet cached | Fleet's, for the app | the title (linked) |
+
+**The `.exe` row is different by design.** Fleet names a custom `.exe` title from the installer's
+ProductName (`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (arm64)`), and Fleet
+never links the two — custom `.exe` titles are not matched to inventory, by design since
+[fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). So the Library never shows it an
+installed version, and whether it's installed is read from the host's inventory by DisplayName instead — in
+the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Inventory tab.
+
+**Flow**
+
+1. ☐ (No user action) Resolve the VM; find the fixture's title; read the title's state for this host (`GET /hosts/:id/software?available_for_install=true`).
+   - ✅ *(API)* The title is on the VMs fleet (and, for an FMA, has an installer).
+   - ✅ *(API)* It is offered to the VM with a library version.
+2. ☐ (No user action) `ensureVmFixtureUninstalled` — if the VM still has the fixture (a linked title: status `installed` or any installed version; the `.exe`: the host's inventory lists `7-Zip 26.01 (arm64)`), uninstall it by API and wait for the inventory to agree.
+
+   **`install` step**
+3. ☐ Open the host's details page (via URL `/hosts/<id>`; anchored on **Disk space available**) → **Software** tab → **Library** tab → type the title in **Search by name**.
+   - ✅ *(UI)* URL contains `/software/library`; the title's row is visible — `HostDetailsPage.openLibrary()`.
+   - ✅ *(UI)* **Installed version** reads `---`.
+   - ✅ *(UI)* **Library version** equals the version the API reported in step 1.
+4. ☐ Click **Install** on the row.
+   - ✅ *(UI)* Success toast **"Software is installing. To see details, go to Details > Activity."** — `HostSoftwareLibrary.install()`.
+   - ✅ *(API)* The host's status for the title is `pending_install` immediately after the click.
+5. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, wait for "Last fetched" to move once on its own, then click **Refetch** and wait for it to move again — `waitForSoftwareSettled(…, 'installed', { inventoryName })` (`inventoryName` set only for the `.exe`).
+   - ✅ *(API)* Status reaches `installed` (≤ 5 min).
+   - ✅ *(API)* No refetch outstanding (≤ 4 min), then `detail_updated_at` moves past a baseline taken after that (≤ 4 min, refetch requested).
+   - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for the `.exe` the host's inventory by `7-Zip 26.01 (arm64)`.
+6. ☐ Reload the host page → **Software** → **Library** → search the title.
+   - ✅ *(UI)* **Installed version** equals the library version — **for the `.exe`, still `---`** (unlinked).
+   - ✅ *(UI)* The row's install-side button reads **Reinstall**.
+7. ☐ Click the row's **Installed** status button.
+   - ✅ *(UI)* The **Install details** modal (`.software-install-details-modal`) opens with a status line containing **"installed <title> (<package file>) on <host display name>"**.
+   - ☐ Click **Close**. ✅ *(UI)* The modal is hidden.
+8. ☐ (No user action) ✅ *(API)* The host's newest `installed_software` activity for the title is newer than the one baselined before the click — this install recorded its own.
+   ☐ Reload the host page → in the **Activity** card, click the **Past** tab → click the **first** (newest) item matching "… installed <title> on this host." (word boundary, so not "uninstalled").
+   - ✅ *(UI)* **Past** is selected; the Install details modal opens with **"installed <title> (<package file>)"**.
+   - ☐ Click **Close**. ✅ *(UI)* hidden.
+9. ☐ Reload the host page → **Software** → **Inventory** tab → type the **inventory name** in **Search by name or vulnerability (CVE)** (the title's; for the `.exe`, `7-Zip 26.01 (arm64)`).
+   - ✅ *(UI)* A Name-column link reading exactly the inventory name is visible — `HostDetailsPage.softwareNameLink()`.
+
+   **`uninstall` step**
+10. ☐ Reload the host page → **Software** → **Library** → search the title → click **Uninstall**.
+    - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
+    - ✅ *(API)* The host's status for the title is `pending_uninstall`.
+11. ☐ Wait for the status to clear, then as step 5 — `waitForSoftwareSettled(…, null, { inventoryName })`.
+    - ✅ *(API)* Status clears to `null` (≤ 5 min); a post-status refetch lands; the inventory no longer lists it (the title's installed versions, or the host's inventory by `7-Zip 26.01 (arm64)`).
+12. ☐ Reload the host → **Software** → **Library** → search the title.
+    - ✅ *(UI)* **Installed version** reads `---`.
+    - ✅ *(UI)* The install-side button reads **Install**.
+    - ✅ *(UI)* No **Uninstall** button on the row (`toHaveCount(0)`).
+13. ☐ Reload the host → **Software** → **Inventory** → search the inventory name.
+    - ✅ *(UI)* The table's **empty state** is visible — under a search it only appears once the filtered result came back empty, since a real host always reports some software.
+    - ✅ *(UI)* No Name-column link reading exactly the inventory name (`toHaveCount(0)`).
+14. ☐ (No user action) ✅ *(API)* The host's newest `uninstalled_software` activity for the title is newer than the one baselined before the click.
+    ☐ Reload the host → **Activity** → **Past** → click the first (newest) item matching "uninstalled <title> on this host."
+    - ✅ *(UI)* The **Uninstall details** modal (`.software-uninstall-details-modal`) opens with **"uninstalled <title> from <host display name>"**.
+    - ☐ **Close**. ✅ *(UI)* hidden.
+15. ☐ (No user action) `finally` — `ensureVmFixtureUninstalled` (a no-op after a pass). The title stays.
+
+**Assessment**
+- *Value:* the area's backbone, and a better one than the three tests it replaced. Every package type the suite installs — four custom (including the `.exe` Fleet can't link) and a Fleet-maintained app on **both** macOS and Windows — goes install → verify → uninstall → verify on a real device, each half checked on the same four surfaces: the Library row's state machine (`---` / Install → Reinstall + installed version → `---` / Install, no Uninstall), the details modal, the host's Past activity, and the **Inventory tab**.
+  - **The Inventory tab is checked both ways, for all six.** This closes the old SWH-01 gap, where the Inventory tab was never opened after a `.pkg`, `.msi` or FMA install and "lands in its inventory" was proved only by API and the Library's derived column.
+  - **FMA uninstall and Windows FMA install are new coverage.** SWH-02 only ever installed Itsycal and removed it silently in a `finally`; nothing installed a Windows FMA.
+  - **Durable titles make cleanup deterministic.** Fleet always knows whether each fixture is on its VM, so the preflight can put a dead run's install right by uninstalling it, instead of hoping the next run's pre-clean catches it before the title is deleted — and it runs again at `cleanup-teardown`, so a timed-out test (whose `finally` Playwright skips) is healed in the same run.
+  - **Half the host round-trips.** SWH-01 + SWH-04 did two installs and two uninstalls per platform (one of each silently, in cleanup or setup); this does one of each, all asserted.
+- *Coverage gaps:*
+  - **Adding and installing are no longer one flow.** A package uploaded through **Add software** reaching a device is now proved only by SWH-03 (`.deb`, via the Deploy policy); the fixtures here are added by gitops, and the UI add is SWL-01 on fleets with no real hosts. They share Fleet's installer store, so the risk is small, but the catalog **Add** → install path on one title (old SWH-02's `expectNotAddedFor` precondition) is gone.
+  - **The library version is checked against the API's own reading**, not against the version the fixture is known to carry (`1.0.0` for the three inert packages). A Fleet parse that got the version wrong would be reported identically by the API and the UI and pass here.
+  - The **Details** toggles in both modals (the scripts' output) are never opened. The dashboard-wide activity feed is not checked (only the host's). The Upcoming item is deliberately unasserted (intro §6).
+- *Redundancy:* the Linux row and SWH-06 both install a `.deb` on the Ubuntu VM, wait for the same settle and look at the Inventory tab; SWH-06's unique content is now the pre-install absence, the exact one-row count, and the version and type columns (see Duplication).
+- *Efficiency / smells:*
+  - ~~⚠️ **The Past-activity checks couldn't tell this run's item from last night's.**~~ **Fixed 2026-09-28:** each half baselines the host's newest matching activity through the API before acting and requires a newer one after (server timestamps, so no clock skew), before the UI clicks the newest item. Original finding: The titles are durable, so every run — and every preflight uninstall — writes an item with the same wording and the same modal text. `.first()` takes the newest, which after a settled install *is* this run's in practice, but if Fleet stopped recording the activity the previous run's item would satisfy both steps 8 and 14. The fix is cheap: assert the item's relative time reads "less than a minute ago" / "… minutes ago", or read `GET /hosts/:id/activities` for an entry newer than the click.
+  - ~~⚠️ **The Inventory absence check (step 13) could pass before the search landed.**~~ **Fixed 2026-09-28:** it now waits for the table's empty state (`HostDetailsPage.softwareEmptyState`), which a real host's unfiltered table never shows, so it can only pass on the filtered, empty result. Original finding: `openInventory` fills the search box and returns; `softwareRowOrEmpty()` then resolves on the *unfiltered* table's first row, and `toHaveCount(0)` passes at once unless the fixture happens to be on that page. The API wait in step 11 is what really proves absence. Waiting for the search's response (or for the "N items" count to change) before the negative assertion would make it bite. Inherited from the old SWH-04, which had the same code.
+  - **The `.exe` row's Library expectations are mostly non-discriminating.** Its Installed version reads `---` before the install, after it and after the uninstall; the **Reinstall** / **Installed** status button after the install and **Install** / no **Uninstall** after the uninstall come from Fleet's install record, not from the host. The host-side proof for this row is the Inventory tab by DisplayName (steps 9 and 13) — so the step-13 race above matters most here.
+  - **The 900 s budget is a typical-case budget.** `waitForSoftwareSettled`'s worst case is 300 + 240 + 2 × (240 + 60) s ≈ 19 min per half, twice, against 15 min; a normal half takes 3–5 min. A slow VM ends as a test timeout, which skips the `finally` — harmless now that the preflight/teardown uninstalls the fixture, but it reads as a timeout rather than naming the wait that hung.
+  - **Six tests contend for three VMs.** The Windows VM carries three of them (`.msi`, `.exe`, DB Browser — six queued round-trips) plus SWH-09/13, and every test's `waitForNoPendingRefetch` waits out the refetches its neighbours triggered. At CI's two workers it's bounded; at `--repeat-each` or four workers it's the queue-depth failure mode of 2026-09-28 again (Bigger bets 1).
+  - The `pending_install` / `pending_uninstall` reads are one-shot right after the toast — deterministic in practice (orbit polls, so there are seconds before pickup), but an idle VM finishing a tiny `.deb` before the GET lands would fail them.
+  - `VM_SOFTWARE_FIXTURES` and `vms.yml` must name the same packages; nothing checks they agree except this test failing with the "re-apply vms.yml" message when one is missing. A fixture added to `vms.yml` but not to the list is simply never tested.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
 
 ---
 
 ### SWH-01 · Premium • Software • Install on host › a {macOS .pkg, Windows .msi, Linux .deb} added in the UI installs on the VM and lands in its inventory
 
-- **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "added in the UI installs on the"` (three runtime tests: `a macOS .pkg added in the UI installs on the darwin VM and lands in its inventory`, `a Windows .msi added in the UI installs on the windows VM and lands in its inventory`, `a Linux .deb added in the UI installs on the linux VM and lands in its inventory`)
-- **Project:** premium · **Scope:** the **VMs** fleet (selected by label in the Software page's fleet dropdown) · **Host:** the real VM of the row's platform
-- **Mode:** UI+API · **Isolation:** parallel, self-contained; describe timeout 600 s. `finally` → `removeTitleFromHost` (uninstall if the host has it, wait for the status to clear — **not** for the refetch — then delete the title).
-- **Preconditions:** an online real VM of the platform (`requireRealHost` throws `no online real <platform> VM on <url> …` otherwise); the VMs fleet exists; the macOS/Windows rows' fixed-name fixture is not already a title on the fleet (pre-cleaned if it is).
-- **Data created:** one title on the VMs fleet + the fixture installed on one VM — both removed in `finally`. The `.deb` row's file is written under the test's output dir.
-
-| variant | file | package name the details modal quotes |
-|---|---|---|
-| macOS `.pkg` | `test-data/apple/macos/software/fleet-playwright-install-1.0.0.pkg` | `fleet-playwright-install-1.0.0.pkg` |
-| Windows `.msi` | `test-data/windows/software/fleet-playwright-install-1.0.0.msi` | `fleet-playwright-install-1.0.0.msi` |
-| Linux `.deb` | built per run: `fleet-pw-install-<base36>_1.0.0_all.deb` | the same |
-
-**Flow**
-
-1. ☐ (No user action) Resolve the VM for the row's platform; for the `.deb` row, build the package.
-2. ☐ (No user action) Pre-clean: if a title whose package file name matches already exists on the VMs fleet (a dead run's leftover), uninstall it from the VM and delete it.
-3. ☐ Open the dashboard → click **Software** in the navbar → pick **VMs** in the fleet dropdown → click **Add software**.
-   - ✅ *(UI)* URL is `/software/add/fleet-maintained` — Add software opens on the Fleet-maintained tab — `SoftwareTitlesPage.clickAddSoftware()`.
-   - ✅ *(UI)* The fleet dropdown reads exactly **VMs** after the pick — `TeamDropdown.selectByLabel('VMs')`.
-4. ☐ Click the **Custom package** tab.
-   - ✅ *(UI)* URL is `/software/add/package`; the **Add software** heading and the selected tab are visible — `SoftwareCustomPackagePage.openTab()`.
-5. ☐ Choose the file (Deploy left **off**) and click **Add software** — `uploadPackage(file)`.
-   - ✅ *(UI)* **Add software** is enabled once a file is chosen.
-   - ✅ *(UI)* If the upload progress modal appears, it clears (≤ 45 s).
-   - ✅ *(UI)* Fleet redirects to `/software/titles/<id>`; a success toast matching `/successfully added/` shows.
-6. ☐ Read the title's name off the summary card (the element labelled `software display name`). **On a manual run, note it** — Fleet derives it from the package; the spec never assumes it.
-   - ✅ *(API)* The title is offered to the VM: `GET /hosts/:id/software?available_for_install=true` has a row for it with a library version (*"<name> isn't offered to <host>"* otherwise).
-7. ☐ (No user action) `ensureNotInstalled` — if the VM still reports this title from a dead run (the title's return makes an old install visible again), uninstall it and wait for the inventory to agree.
-8. ☐ Open the host's details page (via URL `/hosts/<id>`; anchored on **Disk space available**) → **Software** tab → **Library** tab → type the title name in **Search by name**.
-   - ✅ *(UI)* URL contains `/software/library`; the title's row is visible — `HostDetailsPage.openLibrary()`.
-   - ✅ *(UI)* **Installed version** reads `---`.
-   - ✅ *(UI)* **Library version** equals the version the API reported in step 6.
-9. ☐ Click **Install** on the row.
-   - ✅ *(UI)* Success toast **"Software is installing. To see details, go to Details > Activity."** — `HostSoftwareLibrary.install()`.
-   - ✅ *(API)* The host's status for the title is `pending_install` immediately after the click.
-10. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, then click **Refetch** on the host and wait for "Last fetched" to update — `waitForSoftwareSettled(…, 'installed')`.
-    - ✅ *(API)* Status reaches `installed` (≤ 5 min).
-    - ✅ *(API)* `detail_updated_at` moves past a baseline taken *after* the status settled (≤ 4 min, refetch requested).
-    - ✅ *(API)* The host's inventory lists an installed version for the title (≤ 2 min).
-11. ☐ Reload the host page → **Software** → **Library** → search the title.
-    - ✅ *(UI)* **Installed version** equals the library version.
-    - ✅ *(UI)* The row's install-side button now reads **Reinstall**.
-12. ☐ Click the row's **Installed** status button.
-    - ✅ *(UI)* The **Install details** modal (`.software-install-details-modal`) opens with a status line containing **"installed <title> (<package file>) on <host display name>"**.
-    - ☐ Click **Close**. ✅ *(UI)* The modal is hidden.
-13. ☐ Reload the host page → in the **Activity** card, click the **Past** tab → click the newest item matching "… installed <title> on this host." (the regex has a word boundary, so it does not match "uninstalled").
-    - ✅ *(UI)* **Past** is selected; the Install details modal opens again with **"installed <title> (<package file>)"**.
-    - ☐ Click **Close**. ✅ *(UI)* hidden.
-14. ☐ (No user action) `finally` — uninstall from the VM, delete the title.
-
-**Assessment**
-- *Value:* the area's backbone and the only path that drives a custom package **through the Add software UI and onto a device** on all three platforms. The Library row's state machine (`---` → Install → Reinstall + installed version), the details modal and the host activity are all read off one real install, and the pre-clean (`ensureNotInstalled`) is genuinely careful: it handles the case where a dead run's install becomes visible again only once the title returns.
-- *Coverage gaps:*
-  - **The Inventory tab is never opened.** The title promises "lands in its inventory", and the inventory is checked — but only by API (step 10) and through the Library's *Installed version* column, which is derived from it. The Inventory tab itself is asserted only for the Linux `.deb`, in SWH-06. For `.pkg`, `.msi` and the FMA, no test ever looks at Host → Software → Inventory after an install.
-  - **The library version is checked against the API's own reading**, not against the version the fixture is known to carry (`1.0.0` is in every file name). A Fleet parse that got the version wrong would be reported identically by the API and the UI and pass here.
-  - The **Details** toggle in the Install details modal (the install script's output) is never opened. The dashboard-wide activity feed is not checked (only the host's). The Upcoming item is deliberately unasserted (see intro §6).
-- *Redundancy:* the Linux row and SWH-06 both install a per-run `.deb` on the Ubuntu VM and wait for it to reach inventory; SWH-06's only addition is the Inventory-tab view this entry lacks. The shared `installFromLibrary` helper is also run by SWH-02.
-- *Efficiency / smells:*
-  - **Worst-case budgets exceed the test timeout.** `waitForSoftwareSettled` alone may take 300 + 240 + 120 s = 11 min against a 10 min describe timeout, before `ensureNotInstalled` and the upload. A slow VM therefore ends as a *test timeout*, which aborts before the `finally` — cleanup then falls to the sweep, which deletes the title and purges a leftover `.deb` from the Ubuntu VM; a `.pkg` / `.msi` stays installed until the next run's pre-clean.
-  - The `pending_install` read (step 9) is one-shot right after the toast. The header calls it deterministic; it is in practice (orbit polls, so there are seconds before pickup), but an idle VM completing and reporting a tiny `.deb` before the GET lands would fail it.
-  - The macOS/Windows rows use **fixed file names**. Two concurrent copies of the same row (`--repeat-each` across workers) would share one title and step on each other's install; the per-run `.deb` naming exists precisely to avoid this and the committed fixtures cannot.
-  - The pre-clean in step 2 is dead code for the `.deb` row (a per-run name can never have a leftover).
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
+> **Retired 2026-09-28** — the test no longer exists. Installing each package type from the host's Library,
+> with the Library / details-modal / Past-activity checks it made, is **SWH-14** — now with the Inventory tab
+> opened after the install and the `.exe` included, on durable titles instead of per-run uploads. Adding a
+> custom package through **Add software** is area 06's **SWL-01** (no host); SWH-03 still adds one through the
+> form before its policy installs it. The open points of this entry's assessment that still apply (library
+> version from the API, modal **Details** unopened, one-shot `pending_install`) moved to SWH-14.
 
 ---
 
 ### SWH-02 · Premium • Software • Install on host › a Fleet-maintained app added from its catalog page installs on the macOS VM
 
-- **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a Fleet-maintained app added from its catalog page installs on the macOS VM"`
-- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS VM
-- **Mode:** UI+API · **Isolation:** parallel; describe timeout 600 s; `finally` → `removeTitleFromHost`
-- **Preconditions:** online real macOS VM; **Itsycal** is *not* already added to the VMs fleet for macOS (a leftover is pre-cleaned by API, then the catalog is asserted to show **Add**); Fleet can fetch Itsycal from its catalog source (an external download).
-- **Data created:** the Itsycal title on the VMs fleet + Itsycal installed on the macOS VM — both removed in `finally`. **Not Claude on purpose**: the fleet keeps Claude installed (intro §2).
-
-**Flow**
-
-1. ☐ (No user action) Resolve the macOS VM. If an Itsycal (darwin) Fleet-maintained title is already on the VMs fleet, uninstall it from the VM and delete it.
-2. ☐ Dashboard → **Software** → fleet **VMs** → **Add software** (lands on the **Fleet-maintained** tab).
-   - ✅ *(UI)* URL `/software/add/fleet-maintained`; heading and selected tab visible (≤ 15 s — the Add software bundle is slow under load) — `FleetMaintainedAppsPage.openTab()`.
-3. ☐ Search the catalog for **Itsycal** and look at its **macOS** column.
-   - ✅ *(UI)* The macOS cell shows an **Add** button and no success (✓) icon — `expectNotAddedFor('Itsycal', 'macOS')`.
-4. ☐ Click that **Add** → on the app's page click **Add software**; wait for "Uploading software…" to clear if it shows (≤ 45 s; absent when Fleet has it cached).
-   - ✅ *(UI)* URL becomes `/software/titles/<id>` (≤ 60 s).
-   - ✅ *(UI)* The title heading reads **Itsycal**; the header pills include **Fleet-maintained**.
-5. ☐ (No user action) Read the title's state and installer.
-   - ✅ *(API)* The title is offered to the macOS VM with a library version.
-   - ✅ *(API)* The title has an installer package on the VMs fleet (its file name — the one Fleet fetched — is what the details modal quotes).
-6. ☐ Steps 7–13 of **SWH-01**, with title **Itsycal**: host → Library shows `---` / the library version → **Install** (toast; ✅ *(API)* `pending_install`) → wait for installed + refetch + inventory → Library shows the version and **Reinstall** → **Installed** status → Install details "installed Itsycal (<package>) on <host>" → Past activity item → same modal.
-7. ☐ (No user action) `finally` — uninstall Itsycal from the VM, delete the title.
-
-**Assessment**
-- *Value:* the only test that takes a Fleet-maintained app from the **catalog page** to a device — a different add path (Fleet fetches the installer server-side) and a different uninstall script (Fleet's own, for a third-party app) from SWH-01. The explicit "not added yet" precondition is good: without it, a leftover would make step 4 a silent no-op.
-- *Coverage gaps:* no toast is asserted after the FMA add, and the catalog is not re-checked for the ✓ afterwards (`expectAddedFor` exists and is unused here). The version and installer name come from the API because they are genuinely unknowable in advance (the cached build moves with the vendor) — fine, but it means the Library-version assertion is the API agreeing with itself. Same Inventory-tab gap as SWH-01.
-- *Redundancy:* SWH-01's post-add half verbatim, via the shared helper. That is the right shape.
-- *Efficiency / smells:*
-  - **External dependency.** Itsycal's download is fetched from the vendor/CDN on add; an outage there reads as a Fleet failure. Itsycal is also the one non-inert install in the area — a real third-party app on the macOS VM, albeit never launched.
-  - The title id is parsed from the URL inline (`page.waitForURL` + `split('/').pop()`); `SoftwareCustomPackagePage.uploadPackage` returns the id, and `FleetMaintainedAppDetailPage.confirmAdd` could too.
-  - `OWN_FMA_TITLES` in the cleanup sweep hard-codes `Itsycal`: change the app here and the sweep silently stops covering it.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
+> **Retired 2026-09-28** — the test no longer exists. Installing a Fleet-maintained app on a VM is **SWH-14**'s
+> two FMA rows (Itsycal on macOS, now durable on the VMs fleet via `vms.yml`, and DB Browser for SQLite on
+> Windows), which also uninstall it and check the Inventory tab. Adding one from the catalog is area 06's
+> **SWL-01** (Airtame, 7-Zip; no host). What went with it: the catalog's "not added yet" precondition
+> (`expectNotAddedFor`) and the add → install on one title; `OWN_FMA_TITLES` left the cleanup sweep with it.
 
 ---
 
@@ -312,9 +382,9 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
 - **Grep:** `npm run test:premium -- -g 'creates an install policy, and Fleet installs through it'`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
-- **Mode:** UI+API · **Isolation:** parallel; **timeout 900 s** (the longest in the file); `finally` deletes the policy first, then `removeTitleFromHost`
+- **Mode:** UI+API · **Isolation:** parallel; **timeout 900 s** (`test.setTimeout`) — the file's only test since 2026-09-28; `finally` deletes the policy first, then `removeTitleFromHost` (uninstall if the host has it, wait for the status to clear — **not** for the refetch — then delete the title)
 - **Preconditions:** online real Ubuntu VM
-- **Data created:** a per-run `fleet-pw-deploy-<base36>` `.deb` title, the policy **`[Install software] fleet-pw-deploy-<base36> (deb)`** on the VMs fleet, and the package on the VM — all removed in `finally` (the sweep also matches both names).
+- **Data created:** a per-run `fleet-pw-deploy-<base36>` `.deb` title, the policy **`[Install software] fleet-pw-deploy-<base36> (deb)`** on the VMs fleet, and the package on the VM — all removed in `finally` (the sweep also matches both names, and purges the package from the VM). It can't be one of the durable fixtures: the test adds the title and a policy that points at it. The `.deb` is written under the test's output dir.
 
 **Flow**
 
@@ -338,7 +408,7 @@ other:
 **Assessment**
 - *Value:* the only coverage of **Deploy** and of the policy-driven install path anywhere in the suite, and step 7's "Fleet installed" is exactly the right discriminator — it proves the install came through the automation rather than through something a test clicked. Step 5 also pins a real product inconsistency (the fleet-less `created_policy`) rather than papering over it.
 - *Coverage gaps:* the policy is found by API, never looked at in the **Policies** UI (its install-software automation, its query, its fleet). Nothing checks the policy **passes** after the install — the other half of "the automation closed the loop". The Library row and the Inventory are not checked (status only, by API). Deploy on a `.pkg` / `.msi` is not covered.
-- *Redundancy:* none.
+- *Redundancy:* none. Since 2026-09-28 it is also the only test that takes a package **added through the Add software form** onto a device (SWH-14's fixtures come from gitops).
 - *Efficiency / smells:*
   - The activity assertion encodes a behaviour that is **on the decision list** as a possible defect. If Fleet adds the suffix, this fails and the fix is to the regex; worth a comment pointing at the decision if it becomes an issue.
   - The Deploy switch is a class-scoped locator (`.software-deploy-slider__container`) — justified in the POM (Fleet's `Slider` names nothing), but a candidate for the preflight watch list.
@@ -356,68 +426,12 @@ other:
 
 ### SWH-04 · Premium • Software • Uninstall from host › a {macOS .pkg, Windows .msi, Windows .exe, Linux .deb} uninstalls from the VM and leaves its inventory
 
-- **File:** [`playwright/tests/e2e/premium/software/uninstall-from-host.spec.ts`](../../tests/e2e/premium/software/uninstall-from-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "uninstalls from the .* VM and leaves its inventory"` (four runtime tests: `a macOS .pkg uninstalls from the darwin VM and leaves its inventory`, `a Windows .msi uninstalls from the windows VM and leaves its inventory`, `a Windows .exe uninstalls from the windows VM and leaves its inventory`, `a Linux .deb uninstalls from the linux VM and leaves its inventory`)
-- **Project:** premium · **Scope:** the **VMs** fleet (no fleet dropdown — the flow starts on host details) · **Host:** the real VM of the row's platform
-- **Mode:** UI+API · **Isolation:** parallel; describe timeout 600 s; `finally` → `removeTitleFromHost`. **The install is a precondition done through the API**, so a failure here is about uninstalling.
-- **Preconditions:** online real VM of the platform
-- **Data created:** one title on the VMs fleet + one install on the VM, uninstalled by the test itself and deleted in `finally`.
-
-| variant | file | uninstall script | name the host's inventory uses |
-|---|---|---|---|
-| macOS `.pkg` | `fleet-playwright-uninstall-1.0.0.pkg` | Fleet's, from the package IDs | the title's |
-| Windows `.msi` | `fleet-playwright-uninstall-1.0.0.msi` | Fleet's, from the product code | the title's |
-| Windows `.exe` | `7z2601-arm64.exe` | **ours** — Fleet requires both scripts for `.exe`: `Start-Process $env:INSTALLER_PATH /S` and `C:\Program Files\7-Zip\Uninstall.exe /S` | **`7-Zip 26.01 (arm64)`** (the title is named `7-Zip`, from ProductName) |
-| Linux `.deb` | per run: `fleet-pw-uninstall-<base36>_1.0.0_all.deb` | Fleet's `apt-get remove` | the title's |
-
-**The `.exe` row is different by design.** Fleet names a custom `.exe` title from the installer's
-ProductName (`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (arm64)`), and Fleet
-never links the two — custom `.exe` titles are not matched to inventory, by design since
-[fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). So the Library never shows it an
-installed version, and the row is checked against the host inventory **by DisplayName** instead
-(`inventoryName` in the spec; `linked = false`).
-
-**Flow**
-
-1. ☐ *(API setup)* Pre-clean a leftover title with the same package file name. Upload the package to the VMs fleet (with the row's scripts), queue the install, and wait for it to settle — status `installed`, a post-status refetch, then a poll (≤ 2 min) until the inventory shows it **present**: for linked rows, the title's installed versions; for the `.exe` row, the host's own inventory searched by `7-Zip 26.01 (arm64)` (`waitForSoftwareSettled(…, { inventoryName })`).
-   - ✅ *(API)* The host's inventory lists it (*"host <id>'s inventory never showed <inventory name or title id> present after installed"* otherwise).
-   - **By hand:** add the package through Add software on the VMs fleet (for the `.exe`, paste both scripts from the table into the form), install it from the VM's Library, wait for **Installed** and a refetch.
-2. ☐ Open the host's details page → **Software** → **Library** → search the title.
-   - ✅ *(UI)* *(linked rows only)* **Installed version** is not `---`.
-3. ☐ Click **Uninstall** on the row.
-   - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
-   - ✅ *(API)* The host's status for the title is `pending_uninstall`.
-4. ☐ Wait for the status to clear, then **Refetch** and wait for "Last fetched" to move — `waitForSoftwareSettled(…, null, { inventoryName })` (`inventoryName` set only for the `.exe` row).
-   - ✅ *(API)* Status clears to `null` (≤ 5 min); `detail_updated_at` moves (≤ 4 min); the inventory no longer lists it (polled ≤ 2 min — the title's installed versions for linked rows, the host inventory by `7-Zip 26.01 (arm64)` for the `.exe`).
-   - ✅ *(API)* The host inventory, searched by the inventory name, returns no versions.
-5. ☐ Reload the host → **Software** → **Library** → search the title.
-   - ✅ *(UI)* **Installed version** reads `---`.
-   - ✅ *(UI)* The install-side button reads **Install**.
-   - ✅ *(UI)* No **Uninstall** button on the row (`toHaveCount(0)`).
-6. ☐ Reload the host → **Software** → **Inventory** → search the **inventory name** (for the `.exe`: `7-Zip 26.01 (arm64)`).
-   - ✅ *(UI)* The table has settled (a first row or the empty state is visible).
-   - ✅ *(UI)* No name link matching the inventory name exactly (`toHaveCount(0)`).
-7. ☐ Reload the host → **Activity** → **Past** → click the newest item matching "uninstalled <title> on this host."
-   - ✅ *(UI)* The **Uninstall details** modal (`.software-uninstall-details-modal`) opens with **"uninstalled <title> from <host display name>"**.
-   - ☐ **Close**. ✅ *(UI)* hidden.
-8. ☐ (No user action) `finally` — `removeTitleFromHost` (already uninstalled, so this only deletes the title).
-
-**Assessment**
-- *Value:* the strongest multi-surface check in the area — the uninstall is observed in the API, the Library, the **Inventory tab** and the activity/modal, across all four package types including the `.exe` Fleet can't link. The Library-and-Inventory pair is exactly the Library/Inventory distinction this batch was built to keep straight.
-- *Coverage gaps:* the Uninstall details modal's **Details** (the uninstall script's output) is not opened. For linked rows the "before" state is asserted as `not '---'` rather than `1.0.0`. The uninstall is only ever started from the host's Library — not from the title page or the host's Inventory.
-- *Redundancy:* SWH-05 reuses the same precondition helper; SWH-01's cleanup performs the same uninstall silently by API every run.
-- *Efficiency / smells:*
-  - ~~⚠️ **The `.exe` row's inventory checks are one-shot reads that can race.**~~ **Fixed 2026-09-28:** `waitForSoftwareSettled` takes an `inventoryName` option, and when it is set step 3 polls `getHostInventoryVersions` by the host's own program name (≤ 2 min) until it is present or absent; `inventory: 'any'` no longer exists. `installedPackage` passes the row's `inventoryName` for the install wait and the uninstall wait passes it too, so the `.exe` row's step-1 read is the poll itself and its step-4 one-shot read sits behind one. Original finding: with `inventory: 'any'`, the wait returned as soon as the refetch landed, though a refetch's software results can land seconds after its detail results; the `.exe` row then read the inventory once in step 1 (`.not.toEqual([])`) and step 4 (`.toEqual([])`), and either could fail on a refetch whose software half was a beat late.
-  - For the `.exe` row, step 5's **Installed version `---`** is non-discriminating — it read `---` before the uninstall too, since the title is never linked. The **Install** button and the absent **Uninstall** carry that row.
-  - Two Windows rows (plus SWH-01's `.msi` and SWH-09/13's Windows Claude) share the one Windows VM's queue in a parallel run.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
+> **Retired 2026-09-28** — the test no longer exists. A clean uninstall of every package type, checked in the
+> API, the Library, the Inventory tab and the Uninstall details modal, is **SWH-14**'s `uninstall` step — for
+> the same four types plus both FMAs, on durable fixtures installed by the test's own `install` step rather
+> than by an API precondition. Its uninstall-role fixtures (`fleet-playwright-uninstall-1.0.0.{pkg,msi}`) were
+> deleted; the `.exe` scripts moved into gitops (`gitops/lib/platforms/windows/software/7-zip-*.ps1`). The
+> failing uninstall stayed in `uninstall-from-host.spec.ts` as SWH-05.
 
 ---
 
@@ -432,9 +446,13 @@ other:
 
 **Flow**
 
-1. ☐ *(API setup)* Upload `fleet-pw-uninstall-fails-<base36>_1.0.0_all.deb` with the uninstall script
-   `#!/bin/sh` / `echo "refusing to uninstall"` / `exit 1`; install it; wait for `installed` + refetch + inventory present.
-   - ✅ *(API)* The host's inventory lists it.
+1. ☐ *(API setup, inline in the test)* Upload `fleet-pw-uninstall-fails-<base36>_1.0.0_all.deb` with the
+   uninstall script `#!/bin/sh` / `echo "refusing to uninstall"` / `exit 1` (`uploadSoftwarePackageBuffer`,
+   before the `try`); inside the `try`, queue the install (`installSoftwareOnHost`) and wait for it to settle —
+   `waitForSoftwareSettled(…, 'installed')`: status `installed`, no refetch outstanding, a post-status refetch,
+   inventory present.
+   - ✅ *(API)* The host's inventory lists it (*"host <id>'s inventory never showed title <id> present after installed"* otherwise).
+   - **By hand:** add the package through Add software on the VMs fleet with that uninstall script (Advanced options), install it from the VM's Library, wait for **Installed** and a refetch.
 2. ☐ Host details → **Software** → **Library** → search the name → click **Uninstall**.
    - ✅ *(UI)* Toast "Software is uninstalling. To see details, go to Details > Activity."
 3. ☐ Wait for the uninstall to fail, then **Refetch** and wait for "Last fetched" to move.
@@ -453,8 +471,8 @@ other:
 
 **Assessment**
 - *Value:* the failure contract, asserted on every surface that could lie about it: status, inventory after a *fresh* read, the Library's version and both retry affordances, and the script's own output in the modal. It is also the flow that exposed `software_updated_at`'s semantics (it never moves after a failed uninstall), which is why the whole area waits on `detail_updated_at`.
-- *Coverage gaps:* the **Inventory tab** is not opened — "still installed" is proved by API and the Library only (SWH-04 does open it for the success case). **Retry uninstall** is asserted visible, never clicked. Only Linux.
-- *Redundancy:* none.
+- *Coverage gaps:* the **Inventory tab** is not opened — "still installed" is proved by API and the Library only (SWH-14 opens it for the success case). **Retry uninstall** is asserted visible, never clicked. Only Linux.
+- *Redundancy:* none. It needs its own per-run package because it gives the title a failing uninstall script — a durable fixture's would carry that into every other run.
 - *Efficiency / smells:*
   - **The cleanup is unverified.** The ad-hoc purge is queued and not awaited, and the title is deleted in the same breath; if the script fails (or the VM's queue drops it), the package stays on the Ubuntu VM with no title to show for it and nothing in this test reports it. ~~The sweep would never catch it either — it deletes titles, it doesn't uninstall.~~ **Partly fixed 2026-09-28:** the next premium run's sweep now purges any `fleet-pw-*` package the Ubuntu VM's inventory still lists, so a dropped purge is healed by the next run — though still never reported.
   - The modal's status assertion is the loose substring "uninstall <name> from <host>" — it matches "uninstalled …" as well as "failed to uninstall …", so the *failure* wording is carried by the activity matcher in step 5, not by the modal.
@@ -494,8 +512,8 @@ other:
 
 **Assessment**
 - *Value:* the positive half of the Library-vs-Inventory contract and the one place the **Inventory tab** is looked at after an install, with the row's version *and* type column checked. The non-default version (2.4.0) is a nice touch — it can't be confused with any other fixture's 1.0.0.
-- *Coverage gaps:* the Library is not looked at; the install is by API (SWH-01 covers the UI install). Only `.deb` — nothing asserts a `.pkg`, `.msi` or FMA lands in the Inventory tab (see SWH-01).
-- *Redundancy:* **largely SWH-01's Linux row.** Both upload a per-run `.deb`, install it on the Ubuntu VM and wait for the same settle; this test's unique content is step 4. Adding an Inventory-tab check to `installFromLibrary` would cover all three platforms and the FMA in SWH-01/02, and make this test a candidate to drop — saving one install + refetch cycle (≈ 3–5 min) on the busiest VM.
+- *Coverage gaps:* the Library is not looked at; the install is by API (SWH-14 covers the Library install). Only `.deb` — SWH-14 now covers the Inventory tab after a `.pkg`, `.msi`, `.exe` and both FMAs.
+- *Redundancy:* **largely SWH-14's Linux row.** Both install a `.deb` on the Ubuntu VM, wait for the same settle and look at the Inventory tab. What this test still adds: the pre-install absence (step 2), the **exact one-row** count, and the row's **version and type** columns — all of which would fit into SWH-14's step 9 (the durable fixture's `1.0.0` is fixed and known), making this test a candidate to drop and saving one install + refetch cycle (≈ 3–5 min) on the busiest VM.
 - *Efficiency / smells:*
   - The row locator is built inline in the spec (`softwareRows.filter({ has: page.getByRole('link', …) })`, with a comment on why `has` must not be rooted at the table). `HostDetailsPage` has `softwareNameLink(name)` but no `softwareRow(name)`; the inline comment is the sign it belongs in the POM.
   - Step 2 is close to unfalsifiable — a brand-new name has never been installed anywhere. It guards the specific regression of Fleet listing Library titles in Inventory, which is legitimate, but it is the cheap half.
@@ -545,7 +563,7 @@ other:
 - *Redundancy:* none.
 - *Efficiency / smells:*
   - **The exact count of three pins a Fleet constant.** Deliberate — but if `MaxSoftwareInstallAttempts` changes this fails on the count with a message about activities, not about retries. Worth a comment naming the constant at the assertion.
-  - `listHostActivities` reads the newest **50**. The Ubuntu VM carries seven parallel tests from this area plus the script specs; a busy window could push an attempt past 50 within the ~6 minutes.
+  - `listHostActivities` reads the newest **50**. The Ubuntu VM carries six parallel tests from this area plus the script specs; a busy window could push an attempt past 50 within the ~6 minutes.
   - **Budget:** 600 + 240 + 120 s of waits inside a 900 s timeout, after an upload and an Inventory round-trip. A slow day ends in a timeout, and a timeout skips the `finally`.
   - The `finally` itself can add 5 min to a failing run (it waits for the retries to finish before deleting).
 
@@ -675,7 +693,7 @@ other:
 - *Redundancy:* SWH-10's last step is this update made deterministic on macOS, once SWH-10 runs.
 - *Efficiency / smells:*
   - The oracle is `isBehind` over the suite's copy of Fleet's `compareVersions` — see SWH-09.
-  - A real app update (~100 MB) on the shared Windows / macOS VM queue on the day it runs, inside the describe's 600 s timeout with `waitForSoftwareSettled`'s 5 + 4 + 2 min budget — the same over-budget shape as SWH-01.
+  - A real app update (~100 MB) on the shared Windows / macOS VM queue on the day it runs, inside the describe's 600 s timeout with `waitForSoftwareSettled`'s 5 + 4 + 2 min budget — the same over-budget shape as SWH-14.
 
 **Notes (Andrey)**
 ```
@@ -822,13 +840,14 @@ other:
 
 | Feature / user flow | Covered by | Gap |
 |---|---|---|
-| Custom package → UI add → install from Library | SWH-01 (`.pkg` / `.msi` / `.deb`) | `.exe`, `.rpm`, `.tar.gz`, script packages; installs started anywhere but the host's Library |
-| Fleet-maintained app → catalog add → install | SWH-02 (Itsycal, macOS) | Windows FMA install; self-service |
+| Custom package → install from the host's Library | SWH-14 (`.pkg` / `.msi` / `.exe` / `.deb`, durable, gitops-added) | `.rpm`, `.tar.gz`, script packages; installs started anywhere but the host's Library |
+| Custom package → **UI add** → onto a device | SWH-03 only (`.deb`, through the Deploy policy); the UI add alone is SWL-01 (area 06, no host) | A UI-added `.pkg` / `.msi` / `.exe` installed from the Library |
+| Fleet-maintained app → install / uninstall | SWH-14 (Itsycal on macOS, DB Browser for SQLite on Windows) | Self-service; the catalog **Add** → install on one title (catalog add is SWL-01, no host) |
 | Deploy / automatic-install policy | SWH-03 (`.deb`) | The policy in the Policies UI; the policy passing afterwards; Deploy for `.pkg` / `.msi` |
-| Uninstall | SWH-04 (four types, incl. the unlinked `.exe`) | Uninstall details **Details** output; uninstall started from the title page |
+| Uninstall | SWH-14 (six types, incl. the unlinked `.exe` and both FMAs) | Uninstall details **Details** output; uninstall started from the title page |
 | Failed uninstall | SWH-05 | **Retry uninstall** clicked; the Inventory tab after a failure |
 | Failed install + Fleet's 3 attempts | SWH-07 | The failure reason in the details modal; **Retry** clicked |
-| Library vs Inventory distinction | SWH-04 (Inventory after uninstall), SWH-06 (after install), SWH-07 (pending/failed) | The Inventory tab after a `.pkg`, `.msi` or FMA install |
+| Library vs Inventory distinction | SWH-14 (Inventory after install **and** uninstall, all six), SWH-06 (after install, row columns), SWH-07 (pending/failed) | The Inventory tab after a failed uninstall |
 | Update / Reinstall contract | SWH-08 (fixed oracle, Linux), SWH-09 (Claude, both, state-dependent), SWH-13 (Claude's Update, both — **skips** on a level day), SWH-10 (Claude walk — **skipping**) | Deterministic Windows zero-padding case; library moved via **Edit software**; clicking Reinstall when the host is ahead |
 | Version pinning on a host | SWH-10 only — **never executed yet** | Pin via the Versions modal |
 | Upload size limit | SWH-11 (browser-side) | Server-side enforcement; the boundary |
@@ -837,16 +856,16 @@ other:
 
 **Duplication**
 
-1. **SWH-01 (Linux) vs SWH-06.** Same package type, same VM, same install-and-settle; SWH-06's unique content is one Inventory-tab look. Moving that look into `installFromLibrary` covers four install types and frees ~5 min on the busiest VM.
+1. **SWH-14 (Linux) vs SWH-06.** Same package type, same VM, same install-and-settle, and since 2026-09-28 both open the Inventory tab. SWH-06's unique content is the pre-install absence, the one-row count and the version/type columns; moving those into SWH-14's step 9 covers six install types and frees ~5 min on the busiest VM.
 2. **SWH-08 vs SWH-09/13/10.** Intentional — a fixed oracle and a real app — but four Update tests share one describe's worth of meaning; SWH-10 is SWH-13 made deterministic, once it runs.
-3. **Every `finally` is a silent uninstall.** SWH-01/02/03/06/08 each end with the uninstall SWH-04 tests explicitly — correct hygiene, and the reason a Fleet uninstall regression would first surface as a cleanup error in an install test.
+3. **Every per-run `finally` is a silent uninstall.** SWH-03/06/08 each end with `removeTitleFromHost` — correct hygiene, and the reason a Fleet uninstall regression could first surface as a cleanup error in an install test. ~~SWH-01/02 did too, doubling the uninstalls SWH-04 tested explicitly.~~ **Resolved 2026-09-28:** SWH-14 asserts its own uninstall, and its `finally` is a no-op after a pass.
 
 **UI-vs-API balance**
 
-- **Preconditions through the API are deliberate and right**: SWH-04/05 install by API so their failures are about uninstalling; SWH-06/07/08 upload by API so the add form isn't under test four more times. SWH-01/02/03 carry the UI add path.
+- **Preconditions through the API are deliberate and right**: SWH-05 installs by API so its failure is about uninstalling; SWH-06/07/08 upload by API so the add form isn't under test four more times. SWH-03 carries the UI add path onto a host; SWH-14's titles come from gitops, so neither half of it is an add-form test.
 - **Status waits are API by necessity.** The host is the oracle and it reports on its own schedule; the UI then asserts the outcome on a fresh render. The `(API)` checks inside the waits (`pending_*`, `detail_updated_at` moving, inventory agreeing) are contract checks, not shortcuts.
-- **Where the API stands in for a UI check that should exist:** the Inventory tab after `.pkg` / `.msi` / FMA installs (SWH-01/02), the Deploy policy in the Policies UI (SWH-03), the Inventory tab after a failed uninstall (SWH-05), and the Library-version expectation taken from the API rather than the fixture (SWH-01).
-- **Weak-assertion watch list:** ~~SWH-11's request listener (cannot fail — nothing submits)~~ (**fixed 2026-09-28:** replaced by the form's own state); SWH-04's `.exe` `---` after uninstall (it was `---` before); SWH-06 step 2 (a brand-new name is trivially absent); SWH-05's modal substring (matches success wording too); ~~SWH-09's pass on whichever branch the calendar picked~~ (**partly fixed 2026-09-28:** the Update path is SWH-13, which skips visibly on a level day).
+- **Where the API stands in for a UI check that should exist:** the Deploy policy in the Policies UI (SWH-03), the Inventory tab after a failed uninstall (SWH-05), and the Library-version expectation taken from the API rather than the fixture (SWH-14). ~~The Inventory tab after `.pkg` / `.msi` / FMA installs (SWH-01/02).~~ **Resolved 2026-09-28** by SWH-14's step 9.
+- **Weak-assertion watch list:** ~~SWH-11's request listener (cannot fail — nothing submits)~~ (**fixed 2026-09-28:** replaced by the form's own state); SWH-14's `.exe` Installed version (`---` in every state); SWH-14's post-uninstall Inventory absence (can pass on the unfiltered table before the search lands); SWH-14's Past-activity items (the same wording every run, so `.first()` can't tell this run's from the last); SWH-06 step 2 (a brand-new name is trivially absent); SWH-05's modal substring (matches success wording too); ~~SWH-09's pass on whichever branch the calendar picked~~ (**partly fixed 2026-09-28:** the Update path is SWH-13, which skips visibly on a level day).
 
 **Product and fixture context a re-runner should carry**
 
@@ -854,21 +873,24 @@ other:
   [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). The Library will never show 7-Zip an installed version; that is not a regression.
 - **The automatic-install `created_policy` activity has no fleet suffix** — on the decision list, encoded in SWH-03.
 - **`software_updated_at` means "inventory last changed", not "last collected"** — don't wait on it by hand either; watch "Last fetched" (detail) instead.
-- ~~**`vms.yml`'s header is partly stale.**~~ **Fixed 2026-09-28:** the header describes the sweep — the specs' named titles, scripts, reports and install policies deleted every run, and `fleet-pw-*` packages purged from the Ubuntu VM. Original finding: it said `cleanup.steps.ts` did not touch the fleet and a dead spec's leftovers stayed "until the next apply", and later that the sweep never uninstalls from a VM.
+- **The install/uninstall fixtures are the VMs fleet's, not a test's.** Declared in `vms.yml`, listed in `helpers/vm-fixtures.ts`, resting state uninstalled, re-applied every night. A missing one is a gitops problem (re-apply), never something to upload by hand; one found installed is a dead run's, and the next preflight uninstalls it.
+- ~~**`vms.yml`'s header is partly stale.**~~ **Fixed 2026-09-28:** the header describes the durable fixtures, the per-run items and the sweep, and says the nightly applies it. Original finding: it said `cleanup.steps.ts` did not touch the fleet and a dead spec's leftovers stayed "until the next apply", and later that the sweep never uninstalls from a VM.
 
 **Quick wins**
 
-1. ~~**Poll the `.exe` row's inventory reads**~~ **Done 2026-09-28** — `waitForSoftwareSettled`'s `inventoryName` option. Originally: poll SWH-04's `installedPackage` `.not.toEqual([])` and post-uninstall `.toEqual([])` the way `waitForSoftwareSettled` polls the linked path — they were single reads straight after a refetch whose software half can land seconds late — [uninstall-from-host.spec.ts:84](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L84), [:168](../../tests/e2e/premium/software/uninstall-from-host.spec.ts#L168).
-2. **Assert the fixtures' known version** (`1.0.0`) as the Library version in SWH-01's custom-package rows instead of the API's reading, so a version-parse bug can't pass on the API agreeing with itself — [install-on-host.spec.ts:180](../../tests/e2e/premium/software/install-on-host.spec.ts#L180).
-3. **Open the Inventory tab in `installFromLibrary`** (SWH-01/02). Covers `.pkg`, `.msi` and the FMA, and makes SWH-06 a merge candidate.
+1. ~~**Poll the `.exe` row's inventory reads**~~ **Done 2026-09-28** — `waitForSoftwareSettled`'s `inventoryName` option, now used by SWH-14 and `ensureVmFixtureUninstalled`. Originally: poll the old SWH-04's `installedPackage` `.not.toEqual([])` and post-uninstall `.toEqual([])` the way `waitForSoftwareSettled` polls the linked path — they were single reads straight after a refetch whose software half can land seconds late.
+2. **Assert the fixtures' known version** (`1.0.0`) as the Library version in SWH-14's three inert-package rows instead of the API's reading, so a version-parse bug can't pass on the API agreeing with itself — the version is read at [software-lifecycle-on-host.spec.ts:66](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts#L66) and asserted at [:77](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts#L77); a `version` field on the custom entries of `VM_SOFTWARE_FIXTURES` would carry it.
+3. ~~**Open the Inventory tab in `installFromLibrary`** (SWH-01/02).~~ **Done 2026-09-28** — SWH-14 opens it after the install and after the uninstall, for all six fixtures. SWH-06 is now a merge candidate (Duplication 1).
 4. **Read the failure reason in SWH-07**: click **Failed** → Install details → **Details**, assert dpkg's architecture error. One click, and it is the only assertion that proves *why* the install failed.
 5. ~~**Make SWH-11's "nothing sent" claim bite or drop it**~~ **Done 2026-09-28** — dropped, for the form's own state (Choose file, no file name, Add software disabled). Was: [large-upload.spec.ts:89](../../tests/e2e/premium/software/large-upload.spec.ts#L89).
 6. ~~**Stop SWH-12 failing on a fast upload**~~ **Done 2026-09-28** — a vanished modal reads as 100 %, and the readout is found by text. Was: treat a vanished modal + the success toast as completed progress, or read the bar's value rather than `innerText` of a node that disappears.
 7. ~~**Fix the `vms.yml` header** to describe the sweep~~ (**done 2026-09-28**), and name `MaxSoftwareInstallAttempts` at SWH-07's `toEqual([… × 3])`.
+8. ~~**Make SWH-14's negative Inventory check wait for the search**~~ **Done 2026-09-28** (empty state) — before `toHaveCount(0)` — for the search response, or for the item count to change — [software-lifecycle-on-host.spec.ts:122-124](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts#L122-L124). It is the `.exe` row's only UI proof of the uninstall.
+9. ~~**Tie SWH-14's Past-activity items to this run**~~ **Done 2026-09-28** (API baseline) — the relative time on the item, or an activity newer than the click by API — [:98](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts#L98), [:128-131](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts#L128-L131).
 
 **Bigger bets**
 
-1. **Budget the VMs, not just the tests.** With `fullyParallel`, seven tests queue on the one Ubuntu VM, four on Windows and five on macOS (one more each on a day SWH-13 runs); each test's internal waits already sum past its own timeout, CI retries twice, and the job limit is 60 min against a ~40 min run. The 2026-09-28 `--repeat-each` failures were exactly this (one Ubuntu VM carrying ~50 serialized installs). A per-VM concurrency cap — one worker-scoped lock per platform, or grouping each platform's tests into one serial describe — trades a little wall time for runs that fail for product reasons rather than queue depth.
-2. ~~**Uninstall what the sweep deletes.**~~ **Done 2026-09-28** for the Ubuntu VM: after deleting titles, the sweep checks the VM's inventory for `fleet-pw-*` names and, if any, queues `dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge` — a host runs scripts and installs from one queue, so the purge finishes before any install the run queues after it. The fixed-name `.pkg` / `.msi` / `.exe` are still only deleted as titles and left to the next run's pre-clean; SWH-05's own purge is still unverified in-test. Original bet: the sweep removed titles but never touched the machine, so every timed-out run leaves its per-run `fleet-pw-*` `.deb` installed on the Ubuntu VM for good (the fixed-name `.pkg`/`.msi` are rescued by `ensureNotInstalled` on the next run; per-run names never are), and SWH-05's fire-and-forget purge is unverified. One ad-hoc script in `cleanup.steps.ts` — `dpkg-query -W -f '${Package}\n' 'fleet-pw-*' | xargs -r apt-get remove --purge -y` on the Ubuntu VM — would keep the VM's inventory from accumulating fixtures across months.
+1. **Budget the VMs, not just the tests.** With `fullyParallel`, six tests queue on the one Ubuntu VM, four on Windows and four on macOS (one more each on a day SWH-13 runs); each test's internal waits already sum past its own timeout, CI retries twice, and the job limit is 60 min against a ~40 min run. The 2026-09-28 `--repeat-each` failures were exactly this (one Ubuntu VM carrying ~50 serialized installs). **Partly addressed 2026-09-28:** SWH-14 does one install and one uninstall per fixture where SWH-01 + SWH-04 did two of each, and the CI workflows' shared concurrency group stops two runs (or a run and a gitops apply) overlapping on the VMs. Still open: a per-VM concurrency cap within a run — one worker-scoped lock per platform, or grouping each platform's tests into one serial describe — trades a little wall time for runs that fail for product reasons rather than queue depth.
+2. ~~**Uninstall what the sweep deletes.**~~ **Done 2026-09-28**, in two parts. *Per-run packages:* after deleting `fleet-pw-*` titles, the sweep checks the Ubuntu VM's inventory for `fleet-pw-*` names and, if any, queues `dpkg-query -W -f='${Package}\n' 'fleet-pw-*' | xargs -r dpkg --purge` — a host runs scripts and installs from one queue, so the purge finishes before any install the run queues after it. *Fixed-name fixtures:* they are durable titles now, never deleted, so the sweep no longer touches them; the "bring the real VMs to their resting state" step uninstalls any found installed, at the start **and** end of every run. SWH-05's own purge is still unverified in-test. Original bet: the sweep removed titles but never touched the machine, so every timed-out run left its per-run `fleet-pw-*` `.deb` installed on the Ubuntu VM for good (the fixed-name `.pkg`/`.msi` were rescued by the next run's pre-clean; per-run names never were), and SWH-05's fire-and-forget purge was unverified.
 3. **Watch SWH-10's first real run.** The whole pin-back walk is authored and reviewed but has only ever skipped. When Claude next ships, the first nightly after the cron fetches the build is the walk's real verification — worth a manual headed run that day rather than trusting the green.
-4. **Cover the Update contract on Windows deterministically.** `make-msi.sh` already derives the UpgradeCode from the role so a newer build upgrades an older one; a 1.0.0 / 1.1.0 `.msi` pair (and a `1.0.0.0` vs `1.0.0` variant for the padding rule) would give Windows what SWH-08 gives Linux, and take SWH-09/13's calendar-dependence off the critical path.
+4. **Cover the Update contract on Windows deterministically.** `make-msi.sh` already derives the UpgradeCode from the role so a newer build upgrades an older one; a 1.0.0 / 1.1.0 `.msi` pair (and a `1.0.0.0` vs `1.0.0` variant for the padding rule) would give Windows what SWH-08 gives Linux, and take SWH-09/13's calendar-dependence off the critical path. It would be per-run, like SWH-08's pair: a version swap changes the title.

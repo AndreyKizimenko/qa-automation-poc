@@ -17,8 +17,10 @@ on:
     - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
   workflow_dispatch:
 
+# Shared with playwright-free.yml: an apply deletes whatever its config doesn't
+# declare, test-run state included, so an apply and a test run never overlap.
 concurrency:
-  group: nightly-qa-gitops-free
+  group: free-fleetqa-instance
   cancel-in-progress: false
 
 defaults:

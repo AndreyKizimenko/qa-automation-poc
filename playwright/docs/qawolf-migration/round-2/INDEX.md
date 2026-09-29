@@ -95,23 +95,23 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `software/failing-uninstall-keeps-installed-files-and-statuses` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
 | `software/filter-by-installable-software` | [A](A-no-setup.md) | `tests/e2e/premium/software/titles-table.spec.ts` | **new** (Library tab is premium-only) |
 | `software/install-and-delete-rpm-files-on-rpm-based-linux-hosts-fedora` | [F](F-provisioning.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
-| `software/install-software-through-fleet-maintained-page` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
+| `software/install-software-through-fleet-maintained-page` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** (the install; the catalog add is `library.spec.ts`'s) |
 | `software/pending-and-failed-software-should-not-show-in-inventory-tab` | [D](D-host-execution.md) | `tests/e2e/premium/software/inventory-reflects-install.spec.ts` | **new** |
 | `software/progress-indicator-appears-without-timeout-during-upload-of-large-software` | [D](D-host-execution.md) | `tests/e2e/premium/software/large-upload.spec.ts` | **new** |
 | `software/run-zsh-scripts` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `software/set-custom-display-names-for-software` | [B](B-self-contained.md) | `tests/e2e/premium/software/display-name.spec.ts` | **new** |
 | `software/software-installer-file-over-1gb` | [D](D-host-execution.md) | `tests/e2e/premium/software/large-upload.spec.ts` | **new** |
 | `software/software-installer-selecting-no-team-prompts-user-to-choose-team` | [A](A-no-setup.md) | — | **DUP, skipped** — `library.spec.ts` already asserts Add-software disabled under All fleets |
-| `software/software-installers-add-software-installers-linux` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
-| `software/software-installers-add-software-installers-macos` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
-| `software/software-installers-add-software-installers-windows` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
+| `software/software-installers-add-software-installers-linux` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** (the install; the add is `library.spec.ts`'s) |
+| `software/software-installers-add-software-installers-macos` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** (the install; the add is `library.spec.ts`'s) |
+| `software/software-installers-add-software-installers-windows` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** (the install; the add is `library.spec.ts`'s) |
 | `software/software-installers-non-allowed-file-types` | [A](A-no-setup.md) | `tests/e2e/premium/software/add-software-validation.spec.ts` | **new** |
 | `software/software-newly-installed-software-is-available-on-the-inventory-tab` | [D](D-host-execution.md) | `tests/e2e/premium/software/inventory-reflects-install.spec.ts` | **new** |
 | `software/sort-software-on-columns` | [A](A-no-setup.md) | `tests/e2e/shared/software/titles-table.spec.ts` | **new** · **split shared + premium** |
-| `software/uninstall-software-packages-debs` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
-| `software/uninstall-software-packages-exe` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
-| `software/uninstall-software-packages-msi` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
-| `software/uninstall-software-packages-pkgs` | [D](D-host-execution.md) | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** |
+| `software/uninstall-software-packages-debs` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** |
+| `software/uninstall-software-packages-exe` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** |
+| `software/uninstall-software-packages-msi` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** |
+| `software/uninstall-software-packages-pkgs` | [D](D-host-execution.md) | `tests/e2e/premium/software/software-lifecycle-on-host.spec.ts` | **new** |
 | `software/view-installed-script-advanced-options` | [B](B-self-contained.md) | `tests/e2e/premium/software/package-scripts.spec.ts` | **new** |
 | `software/view-software-os-tab-premium` | [C](C-host-reads.md) | `tests/e2e/premium/software/os.spec.ts` | augment |
 | `software/view-software-page-as-global-maintainer` | [A](A-no-setup.md) | `tests/e2e/premium/software/role-access.spec.ts` | **new** |

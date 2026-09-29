@@ -5,6 +5,8 @@
 > **Status, 2026-09-28: built — every planned spec (the MDM pair merged into one shared spec) plus `update-on-host`, green live.** What landed and what
 > changed from the plan is in [What landed](#what-landed-and-what-changed-from-the-plan); the FMA design is in
 > [The FMA fixture set](#the-fma-fixture-set). The handoff below is kept as the brief the work answered.
+> **Follow-up, same day:** install/uninstall moved onto durable VMs-fleet fixtures —
+> [Durable install/uninstall fixtures](#durable-installuninstall-fixtures-2026-09-28-follow-up).
 >
 > ## ▶ Start here — handoff, 2026-09-28
 >
@@ -99,8 +101,9 @@ start there rather than polling UI copy.
 - **Free coverage is a standing goal.** Ask per flow whether free has the same surface; `shared/` when
   identical, an explicit `free/` sibling when not, never `if (isPremium)`.
 - **The nightly runs at 05:00 (gitops) and 05:30 UTC (Playwright).** Don't let a long verification run overlap.
-- **`fleetctl` must match the server's minor version.** The suite ran 4.85.1 against 4.93 for two months and it
-  silently no-op'd a whole gitops `software:` section.
+- **`fleetctl` must stay within a minor of the server.** The suite ran 4.85.1 against 4.93 for two months and it
+  silently no-op'd a whole gitops `software:` section. One minor behind (4.92.1 against the 4.93 RC) applies
+  correctly.
 
 ### Done when
 
@@ -120,6 +123,7 @@ Two fleets hold durable Fleet-maintained apps, for opposite reasons:
 |---|---|---|---|---|
 | **QA** (102) | `gitops/premium-fleetqa/fleets/qa.yml` | 10 apps × macOS/Windows, tracking latest | never — no hosts, nothing self-service | `premium/software/version-pinning.spec.ts` |
 | **VMs** (103) | `gitops/premium-fleetqa/fleets/vms.yml` | Claude × macOS/Windows, tracking latest | **yes**, on the macOS and Windows VMs | `premium/software/update-on-host.spec.ts` |
+| **VMs** (103) | same file | Itsycal (macOS) and DB Browser for SQLite (Windows), tracking latest — plus four custom packages, see [below](#durable-installuninstall-fixtures-2026-09-28-follow-up) | **no** at rest; installed and uninstalled once per run | `premium/software/software-lifecycle-on-host.spec.ts` |
 
 VMs had to come under gitops: it is the only fleet with real hosts, so it is the only place an FMA can be
 *installed* on one. That was a decision, not a default — the README had said VMs must stay out, because gitops
@@ -166,6 +170,49 @@ once more; its other Claude cases (the contract holds for the state the fleet is
 platforms, and the case that takes Claude's Update skips on a level day like this one, saying so. The Windows VM never takes the walk: Claude for Windows is an MSIX, and Windows won't provision an
 older MSIX over a newer one.
 
+### Durable install/uninstall fixtures (2026-09-28, follow-up)
+
+*Andrey's decision, after the batch landed: keep a known set of apps **always on the VMs fleet** for install
+and uninstall, and test adding and removing software separately.* The first cut uploaded each installer per
+test and deleted it in a `finally`. A timed-out test skipped that, and the sweep that caught the leftover
+deleted the title without uninstalling it — so the software stayed on the VM, invisible to Fleet until a later
+run re-added the same title and found it already installed. A title that never leaves the fleet lets Fleet say
+at any moment whether it's installed.
+
+| fixture | platform | kind | package definition |
+|---|---|---|---|
+| `fleet-playwright-install-1.0.0.pkg` | macOS | custom, inert (one empty `.app`) | `gitops/lib/platforms/macos/software/fleet-playwright-install.package.yml` |
+| `fleet-playwright-install-1.0.0.msi` | Windows | custom, inert (one marker file) | `gitops/lib/platforms/windows/software/fleet-playwright-install.package.yml` |
+| `7z2601-arm64.exe` | Windows | custom, 7-Zip — the one package Fleet can't link to what the host reports (fleetdm/fleet#20440); its own install/uninstall scripts | `gitops/lib/platforms/windows/software/7-zip.package.yml` (+ `7-zip-{install,uninstall}.ps1`) |
+| `fleet-playwright-install_1.0.0_all.deb` | Ubuntu | custom, inert (one marker file), built by `make-deb.py fleet-playwright-install 1.0.0 all` | `gitops/lib/platforms/linux/software/fleet-playwright-install.package.yml` |
+| Itsycal (`itsycal/darwin`) | macOS | Fleet-maintained, never launched | `fleet_maintained_apps` in `vms.yml` |
+| DB Browser for SQLite (`db-browser-for-sqlite/windows`) | Windows | Fleet-maintained, an MSI with no service, never launched | `fleet_maintained_apps` in `vms.yml` |
+
+- **Declared in `vms.yml`, listed for the specs in `playwright/helpers/vm-fixtures.ts`** — the two change
+  together. The custom packages download from **commit-pinned `raw.githubusercontent.com` URLs with a
+  `hash_sha256`**, so the URL never changes and Fleet skips the download once it holds the file; rebuilding one
+  changes its hash, so it is committed first and its `*.package.yml` re-pointed.
+- **Resting state: uninstalled** — the opposite of Claude's. `software-lifecycle-on-host.spec.ts` installs each
+  from the host Library, checks the Library, details modal, Past activity and Inventory tab, uninstalls it and
+  checks them again, and never deletes the title. The **"bring the real VMs to their resting state"** step in
+  `setup/cleanup.steps.ts` uninstalls any it finds installed, at the start and end of every run, and also
+  cancels the suite's own queued items on each VM and removes a leftover `script_execution_timeout` override.
+- **Adding and removing a title are tested separately**, where no host is needed: `library.spec.ts` (custom
+  packages and Fleet-maintained apps, on Unassigned and Workstations). A test that changes the title itself —
+  Deploy's install policy, a failing uninstall script, a version swap — still uploads a per-run `fleet-pw-*`
+  package and deletes it; the sweep now matches only `^fleet-pw-`.
+- **The nightly applies `vms.yml`** (and `qa.yml`) before every premium run, in both the baseline
+  (`gitops-premium.yml`) and the min pass (`gitops-premium-min.yml`), so a deleted fixture comes back overnight.
+  The Playwright workflows share a concurrency group with their tier's nightly apply (`premium-fleetqa-instance`
+  / `free-fleetqa-instance`), so an apply never deletes a running test's per-run items.
+- **A client one minor behind the server is fine; the 4.85 fallback was the problem.** Both fleet files had
+  been applied by hand because CI fell back to a pinned `fleetctl` 4.85.0 whenever the server reported an RC,
+  and a client that far behind silently no-ops a `software:` section. The released 4.92.1 applied both files
+  against the 4.93 RC correctly. CI now installs the server's own release when it is published, else the latest.
+
+Replaced: the uninstall-role fixtures `fleet-playwright-uninstall-1.0.0.{pkg,msi}` (deleted), the per-test
+Itsycal add from its catalog page, and the per-run install/uninstall `.deb`s.
+
 ## What landed, and what changed from the plan
 
 | target | status | notes |
@@ -174,8 +221,9 @@ older MSIX over a newer one.
 | `shared/exclusive/script-execution-disabled.spec.ts` | ✅ both tiers | **moved** from `shared/controls/scripts/`: it runs in the new single-worker `*-exclusive` projects, since `scripts_disabled` is global and stops every other script spec |
 | `shared/hosts/mdm-commands.spec.ts` | ✅ both tiers | **one shared spec** instead of the planned premium + free pair — free renders the same toggle, activity and modal with the same copy |
 | `premium/controls/scripts/batch-run.spec.ts` | ✅ | three real VMs (Ran / Errored / Incompatible, one host each) + ~100 simulations via "Select all matching hosts" |
-| `premium/software/install-on-host.spec.ts` | ✅ | .pkg / .msi / .deb, a Fleet-maintained app (Itsycal), and "Deploy" through its policy |
-| `premium/software/uninstall-from-host.spec.ts` | ✅ | .pkg / .msi / .exe / .deb, and an uninstall that fails |
+| `premium/software/install-on-host.spec.ts` | ✅ | "Deploy" through its policy (per-run `fleet-pw-deploy-*`). Its .pkg / .msi / .deb loop and the Itsycal catalog-add install moved to `software-lifecycle-on-host` in the [follow-up](#durable-installuninstall-fixtures-2026-09-28-follow-up) |
+| `premium/software/uninstall-from-host.spec.ts` | ✅ | an uninstall that fails (per-run `fleet-pw-uninstall-fails-*`). Its .pkg / .msi / .exe / .deb loop moved to `software-lifecycle-on-host` |
+| `premium/software/software-lifecycle-on-host.spec.ts` | ✅ **follow-up** | one test per durable fixture — .pkg, .msi, .exe, .deb, Itsycal, DB Browser for SQLite: install → Library, details, Past activity, Inventory → uninstall → the same again |
 | `premium/software/inventory-reflects-install.spec.ts` | ✅ | pending and failed installs never reach Inventory, across Fleet's three attempts |
 | `premium/software/large-upload.spec.ts` | ✅ | sparse over-limit file refused in the browser; ~100 MB generated `.deb` shows progress and succeeds |
 | `premium/software/update-on-host.spec.ts` | ✅ **new** | §3's Update contract — a per-run package pair, and Claude |
@@ -284,6 +332,11 @@ smaller file and cover the true size limit via API, or park it. **Raise this in 
 | `tests/e2e/premium/software/uninstall-from-host.spec.ts` | **new** | `software/failing-uninstall-keeps-installed-files-and-statuses`<br>`software/uninstall-software-packages-debs`<br>`software/uninstall-software-packages-exe`<br>`software/uninstall-software-packages-msi`<br>`software/uninstall-software-packages-pkgs` |
 | `tests/e2e/premium/software/inventory-reflects-install.spec.ts` | **new** | `software/pending-and-failed-software-should-not-show-in-inventory-tab`<br>`software/software-newly-installed-software-is-available-on-the-inventory-tab` |
 | `tests/e2e/premium/software/large-upload.spec.ts` | **new** | `software/progress-indicator-appears-without-timeout-during-upload-of-large-software`<br>`software/software-installer-file-over-1gb` |
+
+*As built (follow-up, 2026-09-28):* the install flows for macOS / Windows / Linux, the Fleet-maintained-page
+install and the four uninstall flows landed in `software-lifecycle-on-host.spec.ts`, on durable fixtures;
+their add-software halves are `library.spec.ts`'s. `install-on-host` keeps the Deploy policy flow and
+`uninstall-from-host` the failing uninstall.
 
 ---
 

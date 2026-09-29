@@ -450,6 +450,55 @@ export async function requestHostRefetch(request: APIRequestContext, hostId: num
   await expect(res, `Failed to request a refetch of host ${hostId}`).toBeOK();
 }
 
+/** One queued item on a host — an install, uninstall, script run or MDM command. */
+export interface UpcomingActivity {
+  /** What {@link cancelUpcomingActivity} takes. */
+  uuid: string;
+  type: string;
+  softwareTitle: string | null;
+  /** The installer's file name, for software. */
+  softwarePackage: string | null;
+  scriptName: string | null;
+}
+
+/** What's queued on a host, oldest first — what it works through, one at a time. */
+export async function listUpcomingActivities(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<UpcomingActivity[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/activities/upcoming`), {
+    headers: authHeaders(),
+    params: { per_page: '100' },
+  });
+  await expect(res, `Failed to list host ${hostId}'s upcoming activities`).toBeOK();
+  const activities = ((await res.json()).activities ?? []) as Array<{
+    uuid: string;
+    type: string;
+    details?: { software_title?: string; software_package?: string; script_name?: string } | null;
+  }>;
+  return activities.map((a) => ({
+    uuid: a.uuid,
+    type: a.type,
+    softwareTitle: a.details?.software_title ?? null,
+    softwarePackage: a.details?.software_package ?? null,
+    scriptName: a.details?.script_name ?? null,
+  }));
+}
+
+/** Removes a queued item before the host picks it up. Already-started or gone is fine. */
+export async function cancelUpcomingActivity(
+  request: APIRequestContext,
+  hostId: number,
+  uuid: string,
+): Promise<void> {
+  const res = await request.delete(apiUrl(`hosts/${hostId}/activities/upcoming/${uuid}`), {
+    headers: authHeaders(),
+  });
+  if (!res.ok() && res.status() !== 404) {
+    console.warn(`[cancelUpcomingActivity] host ${hostId} ${uuid}: HTTP ${res.status()} — ${await res.text()}`);
+  }
+}
+
 /**
  * Waits until the host has no refetch outstanding (`refetch_requested` false).
  * Fleet clears the flag when the collection's results land, not when the host

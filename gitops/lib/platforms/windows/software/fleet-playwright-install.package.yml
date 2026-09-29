@@ -1,0 +1,5 @@
+# Inert fixture: one marker file under C:\Program Files\Fleet Playwright Install\.
+# Built by playwright/test-data/windows/software/make-msi.sh. URL pinned to a
+# commit; the hash lets Fleet skip the download when it already holds it.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/950d61bec3d24200be6a968397a9013aab6e13a2/playwright/test-data/windows/software/fleet-playwright-install-1.0.0.msi
+  hash_sha256: 18993c1e4fbdfb926896902d994dd8e2315e20ac728cca0e466b3ad1f63fbb2b

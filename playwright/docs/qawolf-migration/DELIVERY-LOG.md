@@ -203,6 +203,15 @@ Findings:
 
 **Post-review fixes** (2026-09-28, from the [test audit](../test-audit/21-software-on-hosts.md)): the scale batch's incompatible count is now the hosts that can't run a `.sh` (no orbit, scripts disabled, or not macOS / Linux), not just the orbit-less ones; the Claude update is its own test that skips on a level day; the `.exe` inventory reads poll; the cleanup sweep purges leftover `fleet-pw-*` packages from the Ubuntu VM; and the real-host lookup is one helper, `requireRealHost`.
 
+**Follow-up (2026-09-28): durable VM fixtures** (`playwright/vms-durable-fixtures`). Install/uninstall now runs
+on six titles `vms.yml` keeps on the VMs fleet (inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB
+Browser for SQLite; resting state uninstalled) in one new `software-lifecycle-on-host.spec.ts`, which also opens
+the Inventory tab after each half; `install-on-host` keeps Deploy, `uninstall-from-host` the failing uninstall,
+and adding software is `library.spec.ts`'s. A resting-state preflight in `cleanup.steps.ts` uninstalls any
+fixture a dead run left installed; the nightly now applies `vms.yml` and `qa.yml`, and CI's fleetctl for an RC
+is its release if published, else latest, instead of the pinned 4.85.0. Audit:
+[21-software-on-hosts.md](../test-audit/21-software-on-hosts.md) SWH-14.
+
 ## Round 2 · Batch C — live host, read-only
 
 Host-details cards, inventory filters, report-card results, OS drill-downs, affected-host counts. All reads,

@@ -112,6 +112,12 @@ export class HostDetailsPage {
    */
   readonly softwareTable: Locator;
   readonly softwareRows: Locator;
+  /**
+   * The inventory table's empty state. A real host always reports some
+   * software, so under a search it only appears once the filtered result has
+   * come back with nothing — which is what makes it the proof a title is gone.
+   */
+  readonly softwareEmptyState: Locator;
   /** Name-column links in the inventory table, in row order. */
   readonly softwareNameLinks: Locator;
   /** "N items" above the inventory table, scoped to the host software card. */
@@ -210,6 +216,8 @@ export class HostDetailsPage {
     this.softwareSearch = page.getByPlaceholder('Search by name or vulnerability (CVE)');
     this.softwareTable = page.locator('.host-software-table');
     this.softwareRows = this.softwareTable.locator('tbody').getByRole('row');
+    // Fleet's EmptyTable renders a role-less div (see the reviewer's fallback list).
+    this.softwareEmptyState = this.softwareTable.locator('.empty-state');
     this.softwareNameLinks = this.softwareRows.locator('td:first-child a');
     this.softwareCount = this.softwareTable.locator('.table-container__results-count');
     this.softwareViewValue = page.locator(
@@ -271,7 +279,7 @@ export class HostDetailsPage {
 
   /** First inventory row, or the table's empty state — the tab has settled either way. */
   softwareRowOrEmpty(): Locator {
-    return this.softwareRows.first().or(this.softwareTable.locator('.empty-state'));
+    return this.softwareRows.first().or(this.softwareEmptyState);
   }
 
   /**

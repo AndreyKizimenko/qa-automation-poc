@@ -1,0 +1,5 @@
+# Inert fixture: one marker file at /usr/share/fleet-playwright-install/, no
+# maintainer scripts, Architecture: all. Built by playwright/test-data/linux/
+# software/make-deb.py. URL pinned to a commit; the hash skips the download.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/eb85e929cda2aaf2902ea8e3449d427f6e7ab774/playwright/test-data/linux/software/fleet-playwright-install_1.0.0_all.deb
+  hash_sha256: 6fcc33be969fa089a58ab69e4a3749c96f2b642704c6ec176c92105582c9dcc3

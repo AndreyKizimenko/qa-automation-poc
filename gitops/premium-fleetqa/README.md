@@ -24,10 +24,11 @@ fleetctl gitops --context qa-premium \
   -f gitops/premium-fleetqa/fleets/vms.yml
 ```
 
-The nightly (`.github/workflows/gitops-premium.yml`) applies only `default.yml` and `workstations.yml`. `qa.yml`
-and `vms.yml` are applied by hand: both carry Fleet-maintained apps, and the nightly's client falls back to a
-pinned `fleetctl` whenever the server reports an RC version, which is exactly the mismatch that silently
-no-ops a `software:` section (see below) — and for `vms.yml` would then fail the policies that install it.
+The nightly applies all four: `.github/workflows/gitops-premium.yml` exactly as above, and
+`gitops-premium-min.yml` with the min variant's `default.yml` and `workstations.yml` plus this directory's
+`qa.yml` and `vms.yml` — the QA and VMs fleets hold the suite's durable fixtures, which are the same in both
+passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
+overlap: an apply deletes whatever its files don't declare, including a running test's per-run items.
 
 Either fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
 
@@ -37,13 +38,20 @@ Either fleet file can be applied on its own — `fleetctl gitops` accepts at mos
 
 Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa (the RC build timestamps differ between instances), and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs and Mobile.
 
-### Keep the client on the server's version
+### Keep the client within a minor of the server
 
-`fleetctl` and the Fleet server must be on the same minor version. An older client **silently no-ops the `software:` section**: a 4.85.1 client against a 4.93 server printed `applying 20 software packages` and `gitops succeeded` while writing nothing, because it never printed the matching `applied N software packages` line the current client emits. Build a matching client from the Fleet checkout when the released one is behind:
+A client **far** behind the server silently no-ops the `software:` section: a 4.85.1 client against a 4.93
+server printed `applying 20 software packages` and `gitops succeeded` while writing nothing, and never printed
+the `applied N software packages` line a current client emits. That is what CI used to install for an RC server,
+which has no published client of its own. A client **one** minor behind is fine: the released 4.92.1 applied
+`vms.yml` and `qa.yml` against the 4.93 RC correctly, `applied N software packages` included (2026-09-28). CI
+now installs the server's own release when it is published, else the latest release. Check for that `applied`
+line after any apply that carries software.
 
-```bash
-cd ~/repositories/fleet && go build -o /tmp/fleetctl ./cmd/fleetctl
-```
+**A known false report:** an apply can print `[-] deleted software - <name>` for a title it kept — seen for
+`Fleet Playwright Install` on VMs and `zoom` on QA, both declared, both with the same installer id and upload
+time afterwards. The deletion *report* matches titles on a different key from the deletion itself. Confirm by
+the title's installer id before treating one as real.
 
 ### Do not pass `--delete-other-fleets`
 
@@ -104,7 +112,7 @@ Consumed by `playwright/tests/e2e/premium/software/version-pinning.spec.ts`, whi
 ## The VMs fleet's durable fixtures
 
 `fleets/vms.yml` brings the **VMs** fleet — the three real QA VMs (macOS, Windows, Ubuntu) — under gitops, for
-two fixtures that have to exist before a test starts:
+the fixtures that have to exist before a test starts:
 
 - **`pw-host-report-results`**, a 5-minute report on the macOS VM, so it always holds a stored result for
   `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`.
@@ -113,10 +121,19 @@ two fixtures that have to exist before a test starts:
   so the hourly auto-update cron caches each new build and keeps the previous one; two "Claude is installed"
   **presence** policies (not patch policies — those would erase the "behind" state the spec creates)
   reinstall it on any VM that loses it at that VM's next policy run.
+- **The install/uninstall subjects** of `playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`:
+  an inert "Fleet Playwright Install" `.pkg`, `.msi` and `.deb`, 7-Zip's ARM64 `.exe` (with its own install and
+  uninstall scripts), and the Fleet-maintained Itsycal (macOS) and DB Browser for SQLite (Windows). The custom
+  packages download from commit-pinned `raw.githubusercontent.com` URLs with a `hash_sha256`, so the URL never
+  changes and Fleet skips the download once it holds the file. Their resting state is **uninstalled** — the
+  opposite of Claude's — and because the titles never leave the fleet, Fleet always knows whether each is on
+  its VM. `playwright/helpers/vm-fixtures.ts` lists the same entries for the specs; the two change together.
 
-Everything else on the fleet is per-run: specs add scripts, installers and reports there and delete them.
-`playwright/setup/cleanup.steps.ts` sweeps the ones a timed-out test left behind — by name, only the suite's
-own — and clears any version pin on this fleet and on QA; it never deletes what this file declares.
+Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`): specs whose test changes the title itself add
+it and delete it. `playwright/setup/cleanup.steps.ts`, at the start and end of every run, sweeps the ones a
+timed-out test left behind, purges leftover `fleet-pw-*` packages from the Ubuntu VM, clears any version pin
+here and on QA, and brings the VMs to their resting state: nothing of the suite's queued, the script timeout
+at Fleet's default, every install/uninstall fixture uninstalled. It never deletes what this file declares.
 
 **Bringing VMs under gitops deleted what it didn't declare** on the first apply (2026-09-28): a `Fail` policy
 that ran `HelloWorld.sh` as its automation, and `HelloWorld.sh` itself. Neither was used by any spec. The enroll

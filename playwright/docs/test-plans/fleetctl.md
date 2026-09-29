@@ -375,7 +375,8 @@ for every host in one call, which the per-host detail endpoint otherwise require
    MDM-connected pool below it.
 2. **The fleetctl install step is now duplicated in three places** —
    `.github/gitops-action/action.yml`, `playwright-{premium,free}.yml`, and
-   `gitops-nightly-cli.yml` all resolve the server version and `npm install -g` the match.
+   `gitops-nightly-cli.yml` all resolve the server version and `npm install -g` the match (for an RC,
+   the server's release once published, else the latest).
    Worth extracting to a `.github/fleetctl-install/` composite action, but that touches the four
    existing gitops workflows, so it was left alone for now.
 3. **`fleetctl run-script` — build it.** An earlier draft of this plan said a simulation accepts

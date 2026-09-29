@@ -49,6 +49,12 @@ regenerate both on every restart.
   profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
   versions must use them. `kind: 'real'` keys on `hardware_model` matching `/virtual|qemu/i`, not on MDM
   enrollment.
+- **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
+  7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
+  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`. A spec that installs or
+  uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
+  changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
+  `fleet-pw-*` package, and deletes it in the same test.
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
   pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
   assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
@@ -150,6 +156,11 @@ stuck flag disables the *next* run's entire suite. Run it with `npm run test:git
 
 `cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
 and a run killed mid-spec would otherwise leave every script spec of the next run failing.
+
+It also brings the real VMs to their resting state before the first test and after the last: it cancels the
+suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
+uninstalls any durable fixture a dead run left installed. A VM that's offline is only logged — its specs fail
+on it with their own message.
 
 The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is otherwise independent — no cross-project sharing.
 

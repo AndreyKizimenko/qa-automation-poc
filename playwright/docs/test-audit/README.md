@@ -21,6 +21,10 @@ files · ~350 test declarations · 4 projects**.
 > declarations · 7 projects · 90 page objects**. Execution on the real VMs — scripts, MDM commands,
 > software install / uninstall / update, batch runs — is audited in areas **02**, **11**, **14** and the new
 > area **21**.
+>
+> **Area 21 restructured 2026-09-28** (`playwright/vms-durable-fixtures`): the install and uninstall loops
+> and the catalog-add FMA install (SWH-01/02/04, now retired stubs) became one test per durable VMs-fleet
+> fixture, SWH-14 in `software-lifecycle-on-host.spec.ts` — 6 spec files, 18 runtime tests in the area.
 
 ## The area files
 
@@ -46,9 +50,9 @@ files · ~350 test declarations · 4 projects**.
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
-| 21 | [Software on hosts](21-software-on-hosts.md) | 13 | premium |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
 
-**440 entries** covering every test in the suite. An entry can expand into several
+**438 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
@@ -110,9 +114,13 @@ what you actually see on screen.
   QEMU), not MDM enrollment; `liveMacosHost` is the macOS one. Entries say which kind
   they need. Don't delete these, and install nothing on them but the suite's inert
   fixtures (area 21 lists them).
-- **The VMs fleet is under gitops** (`gitops/premium-fleetqa/fleets/vms.yml`, applied by
-  hand): it keeps Claude installed on the macOS and Windows VMs and holds the
-  `pw-host-report-results` report. Leave both alone.
+- **The VMs fleet is under gitops** (`gitops/premium-fleetqa/fleets/vms.yml`, applied by the
+  nightly before every premium run, in both the baseline and the min pass): it keeps Claude
+  installed on the macOS and Windows VMs, holds the `pw-host-report-results` report, and
+  declares the **durable install/uninstall fixtures** — an inert `.pkg`, `.msi` and `.deb`,
+  7-Zip's `.exe`, and the Fleet-maintained Itsycal and DB Browser for SQLite. Leave Claude
+  installed and every fixture **uninstalled**, and never delete any of their titles; a
+  fixture left installed is uninstalled by the next run's preflight.
 - **Destructive entries** — host delete (03), enroll secrets and team webhooks
   (10) — mutate shared state with real blast radius. Each such entry documents
   what it changes and whether it restores. Read that before clicking.
@@ -174,9 +182,13 @@ Findings from round 2 that change how existing entries should be judged, not jus
   `premium-exclusive` / `free-exclusive` projects, on one worker after the main project — turning script
   execution off makes Fleet refuse and hold every script. `npm run test:<tier>` includes them.
 - **`cleanup-setup` now reaches past Unassigned and Workstations**, narrowly: it clears stranded version pins on
-  the QA and VMs fleets and deletes the host-execution specs' named leftovers from VMs. Deleting a title never
-  uninstalls it, so the sweep also purges any `fleet-pw-*` package the Ubuntu VM still lists (one ad-hoc
-  `dpkg --purge` script, queued only when there is one); on the macOS and Windows VMs it deletes titles only,
-  and the fixed-name fixtures are uninstalled by the next run's pre-clean.
+  the QA and VMs fleets and deletes the host-execution specs' per-run `fleet-pw-*` / `pw-*` leftovers from VMs.
+  Deleting a title never uninstalls it, so the sweep also purges any `fleet-pw-*` package the Ubuntu VM still
+  lists (one ad-hoc `dpkg --purge` script, queued only when there is one). The install/uninstall fixtures are
+  **durable** — declared in `vms.yml`, re-applied every night, never deleted by a test — and a separate
+  **resting-state preflight** (both tiers, start and end of every run) puts the real VMs back: script execution
+  on, no `script_execution_timeout` override, the suite's own queued items cancelled, and on premium every
+  durable fixture uninstalled. An entry that assumes a dead run leaves a fixture installed for the next run is
+  judging a hazard the preflight now removes.
 - **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 60-min job limit.
   An entry whose verdict is "expand" on a VM-bound spec should price the minutes.

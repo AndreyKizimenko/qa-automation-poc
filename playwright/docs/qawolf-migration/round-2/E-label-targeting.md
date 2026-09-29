@@ -84,9 +84,11 @@ that on its Library, not only on the one inside.
 - **Runtime.** The premium nightly is ~40 min of a 60-min job limit after D, and Andrey chose to keep the
   VM-bound specs in the main suite for now. This batch adds more. Measure `WORKERS=2 npm run test:premium` at
   the end and report it; if it passes ~50 min, raise it rather than trimming coverage.
-- **`fleetctl` must match the server's minor version.** Several of these flows shell out to it. The npm/released
-  client is 4.92.1 against a 4.93 RC server; build one from `~/repositories/fleet`
-  (`go build -o <scratchpad>/fleetctl ./cmd/fleetctl`) and point `FLEETCTL_BIN` at it.
+- **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
+  4.92.1 against the 4.93 RC is fine — it applied `vms.yml` and `qa.yml` correctly on 2026-09-28; what silently
+  broke gitops `software:` was the 4.85 client CI used to fall back to. If a flow needs output only the RC's
+  client prints, build one from `~/repositories/fleet` (`go build -o <scratchpad>/fleetctl ./cmd/fleetctl`) and
+  point `FLEETCTL_BIN` at it.
 - **A missing locator's `click()` has no action timeout** — it waits out the whole test, and the `finally` then
   runs on a closed request context, so its cleanup silently doesn't happen. Probe a locator before relying on
   it; rely on the cleanup sweep for anything left on the VMs fleet.

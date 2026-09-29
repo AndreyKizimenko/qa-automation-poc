@@ -1,0 +1,6 @@
+# Inert fixture: installs an empty "Fleet Playwright Install.app" into
+# /Applications and nothing else. Built by playwright/test-data/apple/macos/
+# software/make-pkg.sh. The URL is pinned to a commit so it never changes; the
+# hash lets Fleet skip the download when it already holds the package.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/950d61bec3d24200be6a968397a9013aab6e13a2/playwright/test-data/apple/macos/software/fleet-playwright-install-1.0.0.pkg
+  hash_sha256: 74f809bcab4fd4ae72c48f09501f15db7a601e00532036e34a47baec9c179ee1

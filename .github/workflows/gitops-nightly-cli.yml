@@ -68,10 +68,14 @@ jobs:
               --header "Authorization: Bearer $FLEET_API_TOKEN" \
               | jq -r '.version' || true
           )"
-          if [[ "$SERVER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            INSTALL_VERSION="$SERVER_VERSION"
+          # An RC server ("4.93.0-rc.…") has no published client of its own: take its
+          # release's client once that is published, else the latest release, which is
+          # at most a minor behind — a pairing Fleet supports.
+          BASE="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' <<< "$SERVER_VERSION" || true)"
+          if [ -n "$BASE" ] && npm view "fleetctl@$BASE" version >/dev/null 2>&1; then
+            INSTALL_VERSION="$BASE"
           else
-            INSTALL_VERSION="4.85.0"
+            INSTALL_VERSION="latest"
           fi
           echo "Installing fleetctl@$INSTALL_VERSION (server reported: ${SERVER_VERSION:-unknown})"
           npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest

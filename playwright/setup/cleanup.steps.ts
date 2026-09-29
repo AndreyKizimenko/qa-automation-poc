@@ -12,6 +12,7 @@
  */
 import { test } from '@playwright/test';
 import {
+  cancelUpcomingActivity,
   deleteAllConfigurationProfiles,
   deleteAllGlobalPolicies,
   deleteAllInstallSoftwareTitles,
@@ -27,16 +28,21 @@ import {
   enableScriptExecution,
   findFleetByName,
   findOnlineHost,
+  getAgentOptions,
   getSoftwarePackage,
   listFleetMaintainedTitles,
   listFleetPolicies,
   listHostSoftwareNames,
   listInstallableTitles,
   listReports,
+  listUpcomingActivities,
   queueAdHocScript,
   resetSetupExperience,
+  setAgentOptions,
   setPinnedVersion,
+  type UpcomingActivity,
 } from '@helpers/api';
+import { VM_SOFTWARE_FIXTURES, ensureVmFixtureUninstalled, findVmFixtureTitle, type VmPlatform } from '@helpers/vm-fixtures';
 
 const WORKSTATIONS_FLEET = 'Workstations';
 
@@ -125,20 +131,19 @@ test('clear stranded version pins on the durable app fleets', async ({ request }
   }
 });
 
-// The host-execution specs add scripts, installers, reports and install
+// The host-execution specs add per-run scripts, installers, reports and install
 // policies to the VMs fleet — the only fleet with real hosts — and delete them in
-// a `finally`, which a timed-out test never reaches. This sweeps only what those
-// specs name as their own; everything gitops declares for the fleet (Claude, its
-// "Claude is installed" policies, pw-host-report-results) is left alone.
+// a `finally`, which a timed-out test never reaches. This sweeps only those,
+// all named `fleet-pw-*` / `pw-*`; everything gitops declares for the fleet —
+// Claude and its policies, the durable install/uninstall fixtures
+// (helpers/vm-fixtures.ts), pw-host-report-results — is left alone.
 //
-// Deleting a title never uninstalls it. The fixed-name .pkg / .msi / .exe come
-// back with the next run, whose pre-clean uninstalls them, but every .deb is
-// named per run and never returns — so the Ubuntu VM's own `fleet-pw-*`
-// packages are purged here, by a script queued only when its inventory lists
-// one. A host runs scripts and installs from one queue, so the purge finishes
-// before any install this run queues after it.
-const OWN_PACKAGE = /^(fleet-pw-|fleet-playwright-)|^7z2601-arm64\.exe$/;
-const OWN_FMA_TITLES = new Set(['Itsycal']);
+// Deleting a title never uninstalls it, and a per-run .deb never comes back to
+// be uninstalled by a later run — so the Ubuntu VM's own `fleet-pw-*` packages
+// are purged here, by a script queued only when its inventory lists one. A host
+// runs scripts and installs from one queue, so the purge finishes before any
+// install this run queues after it.
+const OWN_PACKAGE = /^fleet-pw-/;
 
 test('sweep host-execution leftovers from the VMs fleet', async ({ request }) => {
   test.skip(process.env.SUITE === 'free', 'fleets are premium-only');
@@ -161,7 +166,7 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
   // After the policies: a title an install policy points at can't be deleted.
   await Promise.all(
     titles
-      .filter((t) => OWN_PACKAGE.test(t.packageName) || (t.fleetMaintained && OWN_FMA_TITLES.has(t.name)))
+      .filter((t) => OWN_PACKAGE.test(t.packageName))
       .map((t) => deleteSoftwareTitle(request, vms.id, t.titleId)),
   );
 
@@ -173,4 +178,60 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
       "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
     );
   }
+});
+
+// Every run starts the real VMs in the same state, and ends them there too
+// (the teardown project runs this file again):
+//
+//  - nothing of the suite's is still queued on a VM — a dead run's installs
+//    and scripts would otherwise hold each VM's one queue ahead of this run's;
+//  - the script timeout is Fleet's default — the timeout case lowers it to 60 s
+//    and restores it in a `finally` a timed-out test never reaches;
+//  - on premium, every durable install/uninstall fixture is uninstalled — its
+//    resting state, which a dead run can leave the other way.
+//
+// It repairs what the suite itself leaves behind and nothing else. A VM that's
+// offline is only logged: its specs fail on it with a message of their own.
+const OWN_QUEUED = (a: UpcomingActivity): boolean =>
+  !!a.scriptName?.startsWith('pw-') ||
+  !!a.softwarePackage?.startsWith('fleet-pw-') ||
+  VM_SOFTWARE_FIXTURES.some(
+    (f) => (f.packageName && f.packageName === a.softwarePackage) || f.fleetMaintainedName === a.softwareTitle,
+  );
+
+test('bring the real VMs to their resting state', async ({ request }) => {
+  // Only as long as a dead run left work for it to do: each uninstall is a
+  // queued action and an inventory refetch.
+  test.setTimeout(900_000);
+  const premium = process.env.SUITE !== 'free';
+  const vms = premium ? await findFleetByName(request, 'VMs') : null;
+  if (premium && !vms) throw new Error('VMs fleet not found on premium instance — gitops apply likely missing');
+  const fleetId = vms?.id ?? 0;
+
+  // Uninstalls run as scripts, so they need script execution on.
+  await enableScriptExecution(request);
+
+  const { script_execution_timeout: timeout, ...options } = await getAgentOptions(request, fleetId);
+  if (timeout !== undefined) await setAgentOptions(request, options, fleetId);
+
+  const hosts = new Map<VmPlatform, number>();
+  for (const platform of ['darwin', 'windows', 'linux'] as const) {
+    const host = await findOnlineHost(request, platform, { kind: 'real' });
+    if (!host) {
+      console.warn(`[vm preflight] no online real ${platform} VM`);
+      continue;
+    }
+    hosts.set(platform, host.id);
+    for (const activity of (await listUpcomingActivities(request, host.id)).filter(OWN_QUEUED)) {
+      await cancelUpcomingActivity(request, host.id, activity.uuid);
+    }
+  }
+
+  if (!vms) return;
+  await Promise.all(
+    VM_SOFTWARE_FIXTURES.filter((f) => hosts.has(f.platform)).map(async (fixture) => {
+      const title = await findVmFixtureTitle(request, vms.id, fixture);
+      await ensureVmFixtureUninstalled(request, hosts.get(fixture.platform)!, title);
+    }),
+  );
 });

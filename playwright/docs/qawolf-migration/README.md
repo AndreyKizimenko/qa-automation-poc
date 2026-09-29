@@ -33,6 +33,7 @@ they're invisible to anyone re-provisioning an instance, so they're recorded her
 | `team-admin@fleetdm.com` — admin on **Workstations + VMs**, shared `FLEET_STATIC_USER_PASSWORD`, `force_password_reset: false` | premium | every team-admin case (C1 #16/#26/#27, labels role-access) | recreate via `POST /users/admin`, then clear the reset flag — `PATCH` won't do it, see [PLAYBOOK §6](PLAYBOOK.md#6-instance-level-gotchas-worth-knowing-up-front) |
 | Report **`pw-host-report-results`** on the **VMs** fleet — interval 300, `SELECT 'bar' AS foo` | premium | `premium/hosts/host-report-details.spec.ts` | re-apply `gitops/premium-fleetqa/fleets/vms.yml` with `--context qa-premium`, then allow ~3.5 min for one scheduled run |
 | **Claude installed on the macOS + Windows VMs**, tracking latest, from the **VMs** fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
+| **Install/uninstall fixtures on the VMs fleet** — inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` preflight |
 | Real VMs online (macOS/Windows MDM-enrolled) + the osquery-perf load fleet | both | every host-dependent spec | see "Keeping the host population online" below |
 | **Fleet-maintained app shelf on the QA fleet** — 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `gitops/premium-fleetqa/fleets/qa.yml` with `--context qa-premium`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
 
@@ -43,8 +44,10 @@ The same reasoning puts the software shelf on **QA**: `cleanup.steps.ts` wipes i
 Unassigned and Workstations only. **VMs** is under gitops too since batch D (`fleets/vms.yml`) — the only fleet
 with real hosts, so the only place a Fleet-maintained app can be kept *installed*. Gitops deletes whatever a
 declared fleet doesn't list, so `vms.yml` declares the report above as well. `cleanup.steps.ts` touches both
-fleets in two narrow ways: it clears version pins, and it sweeps the host-execution specs' own named leftovers
-from VMs. See [round-2/D-host-execution.md](round-2/D-host-execution.md#the-fma-fixture-set).
+fleets in narrow ways: it clears version pins, it sweeps the host-execution specs' own per-run `fleet-pw-*` /
+`pw-*` leftovers from VMs, and it brings the real VMs to their resting state (nothing of the suite's queued,
+Fleet's default script timeout, every install/uninstall fixture uninstalled). It never deletes what gitops
+declares. See [round-2/D-host-execution.md](round-2/D-host-execution.md#the-fma-fixture-set).
 
 ## Two host populations
 

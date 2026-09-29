@@ -264,5 +264,6 @@ second build.
   context on a Fleet developer's machine is usually their own dev instance. Sourcing `.env.premium` does not
   aim it anywhere. Pass `--context qa-premium`, and check the `Server Version:` line against
   `GET /api/v1/fleet/version` on premium-fleetqa — the RC build timestamps differ per instance.
-- **The client must match the server's minor version.** A 4.85.1 client against a 4.93 server printed
-  `gitops succeeded` while silently writing no software at all.
+- **The client must be within a minor of the server.** One minor behind is fine (the released 4.92.1 applied
+  `qa.yml` and `vms.yml` against the 4.93 RC correctly, 2026-09-28); far behind is not — a 4.85.1 client
+  against a 4.93 server printed `gitops succeeded` while silently writing no software at all.
