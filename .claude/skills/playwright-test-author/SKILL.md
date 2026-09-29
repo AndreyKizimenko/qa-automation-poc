@@ -1,202 +1,189 @@
 ---
 name: playwright-test-author
-description: Use when writing, scaffolding, rewriting, or refactoring Playwright tests, page objects, component objects, or fixtures in this Fleet QA suite. Triggers on "write a test", "rewrite a test", "refactor a test", "add a Playwright test", "create a page object", "scaffold a fixture", "new spec".
+description: Write, extend or fix tests in Fleet's Playwright QA suite (`playwright/` in qa-automation) — new specs, augments to existing ones, page objects, component objects, API helpers, fixtures and test data, and QA Wolf migration batches. Use it before adding or changing anything under `playwright/tests`, `pages`, `helpers`, `setup` or `test-data`, including "write a test for…", "port this QA Wolf flow", "work batch F", "add free coverage for…", "augment the policies spec", "create a page object", "fix this test-bug from the run review" — even when the request doesn't say "Playwright". It carries the suite's safety rules for the real VMs, how to verify without disrupting the shared instances, and which docs move with the code.
 ---
 
-You are a senior Playwright automation engineer writing tests for a large enterprise web app.
+# Writing tests for Fleet's QA suite
 
-Use Playwright Test with TypeScript and treat the official Playwright docs as the source of truth:
+The suite drives Fleet through its UI and API against two shared QA instances (free and premium). Each
+has ~300 osquery-perf simulated hosts and three real VMs (macOS, Windows, Ubuntu). Writing a Playwright test
+is the easy part. The mistakes that cost the most here are: locking a real VM, asserting against a simulated
+host that can't answer, leaving state behind for the next run, and running far more than you changed. Most
+of this skill is about not doing those.
 
-- https://playwright.dev/docs/intro
-- https://playwright.dev/docs/best-practices
-- https://playwright.dev/docs/pom
-- https://playwright.dev/docs/locators
-- https://playwright.dev/docs/test-assertions
-- https://playwright.dev/docs/actionability
-- https://playwright.dev/docs/test-fixtures
-- https://playwright.dev/docs/auth
-- https://playwright.dev/docs/test-configuration
+`playwright/CLAUDE.md` is the suite contract: layout, projects, host populations, the cleanup pipeline,
+imports, skips, and a **CI and the shared instances** table with the facts that change (the nightly, workers,
+timeouts, runtimes). Read it before you start; this skill doesn't repeat it.
 
-## Core expectations
+## Stop and ask before any of these
 
-1. Use Page Object Model by default.
-2. Build reusable page objects, component objects, and flow helpers for repeated Fleet interactions such as:
-   - app navigation
-   - team switching
-   - table filtering/sorting/search
-   - modal interactions
-   - policy/software/query/report actions
-   - host details navigation
-   - settings pages
-3. Keep assertions in test files whenever possible. Page objects should primarily expose actions, state accessors, and meaningful locators, not hide all validation logic.
-4. Prefer composition over giant page objects. If a section is reused across many pages, create a component object for it.
-5. Use Playwright-native locators inside page objects. Prefer:
-   - getByRole
-   - getByLabel
-   - getByPlaceholder
-   - getByText
-6. Avoid brittle selectors such as long CSS chains, xpath, nth-child, or selectors tied to implementation details unless there is no better option.
-7. Use web-first assertions and Playwright auto-waiting. Do not use waitForTimeout unless explicitly requested.
-8. Keep tests isolated. No test should depend on another test having run first.
-9. Use fixtures for shared setup and reusable authenticated states.
-10. If authentication is required for many tests, prefer storage state or a dedicated auth setup.
-11. Write maintainable, readable TypeScript with clear naming.
-12. Keep tests focused on user-visible behavior, not internal implementation details.
-13. For tables, filters, and admin workflows, favor stable helper methods and explicit contracts over duplicated inline selectors.
-14. If a proposed abstraction is too heavy, choose the lightest maintainable version.
+Each has happened, or nearly happened, and none can be undone from a test.
 
-## Locator priority
+- **Delivering a configuration profile to a real host that could lock it.** No passcode payload
+  (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`, `maxInactivity`, `allowSimple`), no
+  screen lock, inactivity timeout, FileVault or login-window restriction, nothing that disables SSH, remote
+  management or MDM. There are three VMs per tier and no way to rebuild one from here. **Uploading a
+  profile is delivering it:** on free, Unassigned is where the real VMs are, and Fleet's reconciler sends
+  whatever it finds within 30 s. The suite's old "library-only" passcode and DeviceLock fixtures reached the
+  free VMs 7 and 32 times before anyone noticed.
+- **Any new payload type, even one you believe is inert.** Get Andrey's approval first. macOS 26.6 happily
+  installed a "must be refused" payload everyone expected it to reject, so "inert" is a claim to check on
+  the device, not a property of the XML. The approved fixtures are the inert pair
+  `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` (see their READMEs), plus generators on the
+  same pattern in `helpers/profiles.ts`.
+- **Settings that update, reboot or lock a real host:** an OS-update minimum version or deadline, a DDM
+  software-update declaration, Recovery Lock password enforcement. Exercise them only on a fleet with no
+  real hosts (Workstations), and restore them in the same test. On **free**, global settings reach the free
+  VMs, because they're in Unassigned.
+- **Changing what other specs stand on:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
+  `gitops/premium-fleetqa/fleets/vms.yml`), renaming a fleet gitops declares (VMs, Workstations), gitops
+  config, static users (their tokens can't be re-minted).
+- **Starting a full suite run.** Andrey dispatches `QA — Branch run`. Your runs are scoped (below), and
+  never while something else is using the instances (`gh run list --limit 5`).
 
-Follow [Playwright's locator priority](https://playwright.dev/docs/locators), adapted to Fleet (no `data-testid` in React source):
+When in doubt, the answer is to ask. A blocked afternoon costs less than a VM rebuilt by hand.
 
-1. `getByRole('role', { name })`
-2. `getByLabel(text)`
-3. `getByPlaceholder(text)`
-4. `getByText(text)`
-5. `page.locator('.css-class')` — last resort, requires an inline comment explaining why no role/text alternative exists.
+## How the work goes
 
-## Project layout and Fleet conventions
+1. **Know what exists.** Open every spec you're augmenting before writing anything; titles lie. Check
+   `pages/README.md` and `helpers/README.md` before writing a helper that already exists. On a migration
+   batch, the batch file's *Start here* block and `docs/qawolf-migration/round-2/README.md` §9 come first.
+2. **Ground it in the product, not in the screen.** Probe the live page with the Playwright MCP
+   (`browser_snapshot` shows the accessibility tree `getByRole` will target). Read the React component in
+   `~/repositories/fleet/frontend/` for roles, names and conditional rendering. Read `docs/REST API/rest-api.md`
+   before writing an API helper; the UI says reports and fleets where the API still says queries and teams.
+   For claims about behaviour (tier gating, retries, what a setting does), read the server code in
+   `~/repositories/fleet/server/` and `ee/`. An hour of reading has repeatedly replaced a day of guessing.
+3. **Decide the tiers: free coverage is a standing goal.** QA Wolf's suite was almost all premium, so
+   free coverage has to be found. Check the component (`isPremiumTier`) and the server (`premium:"true"`
+   struct tags, license checks) for what free has. Use `tests/e2e/shared/` when the behaviour is identical,
+   an explicit `free/` sibling when it differs, and never one spec with `if (isPremium)`. A premium-only
+   surface often gives free a check anyway: the paywall (`tests/e2e/free/paywalls.spec.ts`), an absent
+   control, or the API's 402.
+4. **Decide the hosts.** What Fleet decides **server-side** (which hosts a profile, title, policy or report
+   reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
+   (installs, runs, verifies, reports inventory) only a real VM can answer: `findOnlineHost(request,
+   platform, { kind: 'real' })`, `vmsFleetId`, `liveMacosHost`. To put simulations on a fleet beside a VM,
+   borrow them with `findMdmSimulations` (profiles; a scarce pool) or `findSimulations` (everything else),
+   claim your own slice in the registry in `helpers/api/hosts.ts`, and return them in the `finally`.
+5. **Build the page objects first, then the spec.** Page objects expose intent (`openControlsTab()`,
+   `runRowAction(name, 'Delete')`) and locators; assertions live in the spec. Grow an existing page object
+   before creating a new one, and turn a widget two pages share into a component object in
+   `pages/components/`.
+6. **Assert what can fail.** Set membership over hosts you control, never a count on a shared list
+   (QA Wolf's `toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a
+   UI write happened. Scope every assertion to records you created.
+7. **Give everything you create a home.** Remove it in the test's `finally`. Playwright skips the `finally`
+   when a test times out, so anything that could survive on the VMs fleet also needs a home in
+   `setup/cleanup.steps.ts`: the VMs sweep for things Fleet stores by name, the resting-state step for state
+   on a host. Name per-run things `pw-*` (packages `fleet-pw-*`) so the sweep recognises them, and never
+   give a durable thing those prefixes.
+8. **Verify, scoped** (next section).
+9. **Update the docs in the same commit** (the table below).
+10. **Review your own work** with `playwright-test-reviewer` on the branch's diff, fix what it finds or
+    write down why not, then open the PR and tell Andrey it's ready for its branch run.
 
-Read `playwright/CLAUDE.md` before authoring — it is the canonical reference for the folder layout, the project pipeline, the `workstationsFleetId` worker fixture, the API helpers (`apiUrl`, `authHeaders`, `sessionAuthHeaders`), e2e vs. performance navigation rules, the CRUD lifecycle serial-describe convention, and the always-on Fleet locator/wait policies.
+## Verifying without disrupting anyone
 
-## Research before authoring
+`npm run check` (tsc + eslint) is the floor, not proof. A green local run is easy to get for the wrong
+reason, so:
 
-Tests should be grounded in the underlying code, not just what the UI looks like:
+- **Run only what you changed, on every tier it targets:** `npx playwright test --project=premium
+  <spec-file-names>`, and `--project=free` for anything in `shared/` or `free/`. That runs the setup and
+  cleanup projects, including the VM resting-state step, and then only your tests. **Never
+  `npm run test:<tier> -- <spec>`:** it also names the exclusive project, whose dependency (the whole main
+  project) always runs in full. For an `exclusive/` spec: `--project=premium-exclusive <file-name> --no-deps`,
+  by file name.
+- **Run once with dependencies** (no `--no-deps`). `cleanup-setup` drains global reports and policies
+  before the first test, so a spec leaning on pre-existing data passes with `--no-deps` and fails every
+  nightly.
+- **Run once headed.** Headless on an idle machine hides render-order races that show up under load.
+- **`--repeat-each=5`** for anything timing-sensitive; **`--workers=2`** on anything touching the real VMs,
+  since each VM works one queue and more workers stack it into timeouts; **`--output=<scratchpad>/<run>`**
+  so artifacts stay out of the repo.
+- **`gh run list --limit 5` right before any run that touches the instances.** Two runs on one VM corrupt
+  each other, and the nightly starts hours after its cron time.
+- On free, run what touches Unassigned knowing the real VMs are there.
 
-1. **Probe the live page with the Playwright MCP first.** Use `mcp__playwright__browser_navigate`, `browser_snapshot`, and `browser_evaluate` to see the actual accessibility tree — what assistive tech sees is what `getByRole` / `getByLabel` will target.
-2. **Read the React component for ambiguous locators.** Fleet's frontend is at `frontend/` (or `~/repositories/fleet/frontend/` when working from this repo). Check for existing `data-testid` / `role` / accessible-name props and the component's `baseClass` before reaching for a class fallback.
-3. **Reference the API docs for any helper.** `docs/REST API/rest-api.md` (or `~/repositories/fleet/docs/REST API/rest-api.md`) is authoritative. Never guess request/response shape — Fleet's renames (queries → reports, teams → fleets) make stale assumptions costly.
-4. **Cross-reference activity types** against `server/service/activities/` when asserting on the activity log.
+## Docs move with the code
 
-## Page object rules
+A change isn't done until the docs describing it are current, in the same commit:
 
-- Each page object should have a clear responsibility.
-- Expose intent-based methods like `open()`, `searchHost(name)`, `openSoftwareTab()`, `addPolicy()`.
-- Do not expose low-level click chains unless necessary.
-- Avoid putting unrelated areas of the app into one page object.
-- Keep locators centralized in the page object or component object.
-- Reusable elements like sidebar, header, breadcrumbs, tables, pagination, and confirmation modals should become component objects when shared.
+| you changed | update |
+|---|---|
+| a `test()` | its `docs/test-audit/` area entry (steps a person would perform, validations tagged *(UI)* / *(API)*, an honest assessment) and the audit README's index and counts |
+| a migration batch's spec | the batch file's *What landed*, and a `docs/qawolf-migration/DELIVERY-LOG.md` line |
+| a helper or page object | `helpers/README.md` / `pages/README.md` |
+| a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
+| gitops | the fleet file's header and `gitops/premium-fleetqa/README.md`; apply it, and say so in the PR |
+| a rule every spec should follow | `playwright/CLAUDE.md`, and this skill or the reviewer's |
+| a skip owed to a Fleet bug | a row in `docs/blocked-by-product-bugs.md` and `TODO(fleetdm/fleet#N)` on the skip (file the bug first; only when Andrey agrees it's one) |
+| an env-gated or deferred skip | a `TODO.md` row |
 
-## When writing or refactoring
+## Fleet traps the suite has already paid for
 
-1. First identify any issues with the current test design.
-2. Then provide improved code.
-3. Then provide a short rationale tied to Playwright best practices.
-4. If useful, suggest extracting a new page object, component object, or fixture.
+**Locators and UI state**
+- **Locator order:** `getByRole` with a name, then `getByLabel`, `getByPlaceholder`, `getByText`. A class
+  selector is a last resort and needs an inline comment saying why nothing else works. Fleet emits no
+  `data-testid`, except `dropdown-option` on react-select v5 options.
+- **Names change under state.** A tab's accessible name gains a count (*Controls 1* once a profile fails,
+  *Policies 3*, *Upcoming 1*). A `FormField`'s label is replaced by its error text. Row actions are
+  hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.
+- **Lists page at 20, and searches hit the server.** Act on a row after a search that narrows to exactly
+  it; never scan page 1. A name that is a prefix of a sibling's breaks strict mode.
+- **`Pagination.nextIfEnabled`** compares the first row's link text, or the whole row on a table without
+  links. Use it rather than clicking Next.
 
-## Verify before you're done
+**Waiting**
+- **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
+  timeout of their own, so the test hangs to its timeout and its `finally` runs on a closed context: the
+  cleanup silently doesn't happen. Assert the element is visible first, or use a `count()` check for
+  optional ones.
+- **Web-first assertions and auto-waiting, never `waitForTimeout`.** `toPass` around an action that can
+  fail to take (a menu that closes on re-render) is fine.
+- A table keeps its old rows under a loading overlay: `table.waitForSettled()` before reading after a
+  filter, tab or page change.
+- **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
+  moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
+  before requesting your own, because Fleet queues one after every install and a new request merges into
+  it. A refetch also re-runs a host's policies immediately.
+- **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
+  timeout, and keep every wait inside it.
 
-`npm run check` (tsc + eslint) is the floor, not proof. A green local run is easy to get for
-the wrong reason, so:
+**Data and state**
+- **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
+  policies at run start. Team-scoped reports survive; global ones never do.
+- **Snapshot and restore global config inside the test** (`getAppConfig` / `patchAppConfig` in
+  `helpers/api/config.ts`), not in a hook. A spec that flips a switch other specs depend on goes in
+  `tests/e2e/<tier>/exclusive/`.
+- **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
+  `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
 
-1. **Run the spec on every tier it targets.** A spec in `shared/` runs on free *and* premium —
-   verify both. Premium enters at the "All fleets" scope, where fleet-scoped rows (Controls,
-   software-add, library) don't render at all.
-2. **Run it headed at least once.** Headless on an idle machine hides render-order and
-   dismissal-layer races that surface the moment CI or UI mode adds load.
-3. **Run it at least once *with* dependencies** — no `--no-deps`. `cleanup-setup` drains every
-   global report, every global policy and Workstations' policies *before* the first test. A
-   spec that reads pre-existing data passes with `--no-deps` and fails every nightly.
-4. **Repeat anything timing-sensitive** (`--repeat-each=5`) rather than trusting one pass.
-5. **Review your own work before the PR** with `playwright-test-reviewer`, and fix what it finds or
-   write down why not.
+**API helpers**
+- Build URLs with `apiUrl()` and send `authHeaders()`, through the `request` fixture.
+- **Throw on a non-OK response.** A discovery helper that turns a 500 into `null` turns an infra failure
+  into a silent skip; that hid MySQL "table is full" errors for weeks.
+- **Playwright drops an empty-string field from a `multipart` request** (from `FormData` too), and Fleet
+  reads a missing field as "no change" and answers 200. A helper that must send `''` writes the multipart
+  body by hand (`setPinnedVersion`), and reads the result back.
 
-### Run what you changed — the full suite once, at the end
-
-The full suite is long, and most of premium's time is real-VM work that more workers don't speed up
-(current runtimes, worker counts and the nightly's schedule are in `playwright/CLAUDE.md` → **CI and the
-shared instances**). While building, every run above is **scoped to the specs you changed**:
-
-- `npx playwright test --project=premium <spec-file-names>` — and `--project=free` for anything in
-  `shared/`. That runs the setup and cleanup projects (including the VM resting-state step), then
-  only your tests. **Not** `npm run test:premium -- <spec>`: it also names the exclusive project,
-  whose dependency is the entire main project.
-- An `exclusive/` spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` —
-  by file name, not path.
-- `--workers=2` for anything on the real VMs: more stacks a VM's queue into timeouts.
-- `--output=<scratchpad>/<run-name>`, so run artifacts stay out of the repo.
-- **Before a run that touches the real VMs, check nothing else is using the instance:**
-  `gh run list --limit 5`, and stay clear of the nightly (`QA — Nightly`; it starts hours after its cron
-  time). Two runs on one VM corrupt each other: each VM works one queue, and each run's cleanup removes
-  the other's installs.
-- **The full suite runs once, at the end, on CI**, as `QA — Branch run`. **Andrey dispatches it**: at the
-  end of the work, open the PR and tell him it's ready. Only start one when he asks
-  (`gh workflow run "QA — Branch run" -f branch=<branch>`, after checking `gh run list`). Triage red with
-  `playwright-run-reviewer`.
-
-### Docs move with the code
-
-A spec isn't done until the docs that describe it are current, in the same commit: the batch or
-test-plan file that owns it, a `docs/test-audit/` entry per `test()` (steps a person performs,
-validations tagged *(UI)* / *(API)*, an honest assessment) with the audit README's counts,
-`helpers/README.md` / `pages/README.md` for new helpers and page objects, the `test-data/` README
-for a new fixture, `playwright/CLAUDE.md` for a new suite-wide rule, and
-`docs/blocked-by-product-bugs.md` for a skip owed to a Fleet bug. When you learn a rule every spec
-should follow, add it here too.
-
-## Fleet-specific traps
-
-- **Seed your own preconditions.** Don't reach for gitops-provisioned reports or policies:
-  the cleanup projects delete them at run start. Team-scoped reports survive (the wipe lists
-  the global scope only); global ones never do. Create what you need and remove it in the same
-  test.
-- **`browser.newContext()` inherits the project's `use` options**, `storageState` and
-  `baseURL` included — an argument-less call is still authenticated as the admin, and Fleet
-  will redirect it off `/login`. Use `withCleanContext` from `@helpers/auth` when a test needs
-  a genuinely session-less context.
-- **Picker/table searches hit the server**, so a name that is a prefix of a sibling's breaks
-  strict-mode row lookups. Resolve a value the API narrows to exactly one row.
-- **Never hard-code host names** — the QA pools are osquery-perf simulations with random
-  names. Resolve by platform + status through the API via
-  `findOnlineHost(request, platform, { kind })`.
-- **Pick the right host population.** `kind: 'real'` is a handful of genuine VMs per tier (the
-  **VMs** fleet on premium; `liveMacosHost` for macOS) that run real osquery, install real
-  packages and receive real profiles — anything asserting software inventory, script output,
-  profile delivery, certificates or agent versions needs one. `kind: 'simulated'` is ~300
-  osquery-perf hosts for volume work only: they ignore live-query SQL, return no rows ~20% of
-  runs and never install anything, so a green assertion against one proves nothing. **What Fleet
-  decides server-side** — which hosts a profile is listed for, which are offered software — a
-  simulation shows as well as a VM, so it can be the "outside the label" host; what the host *does*
-  (delivered, verified, installed) needs a VM.
-- **Borrowing simulations for a targeting test:** `findMdmSimulations` for profiles (the enrolled
-  pool is small — 8 macOS hosts), `findSimulations` for software, policies, reports and label
-  membership; claim your own slice in the registry in `helpers/api/hosts.ts`. Assert **set
-  membership over your own hosts**, never over the fleet — other specs' borrowed hosts are there too.
-- **The real VMs' software is durable.** `gitops/premium-fleetqa/fleets/vms.yml` keeps one inert
-  package per platform (plus 7-Zip's `.exe`) and a Fleet-maintained app each for macOS and Windows,
-  listed in `helpers/vm-fixtures.ts`, resting **uninstalled**. Use them for install/uninstall and
-  leave them uninstalled; never delete their titles or change their scripts, labels or versions. A
-  test that changes a title uses a per-run `fleet-pw-*` package (`helpers/deb.ts`), which the cleanup
-  sweep recognises by that prefix.
-- **Waiting for a host:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on
-  `software_updated_at` — it moves only when the inventory *changes* — and wait out an outstanding
-  refetch (`waitForNoPendingRefetch`) before requesting your own: Fleet queues one after every
-  install and uninstall, and a new request merges into it.
-- **Anything a timed-out test would leave on a VM needs a cleanup home.** Playwright aborts a
-  timed-out test before its `finally`. Things Fleet stores by name go in the VMs sweep in
-  `setup/cleanup.steps.ts`; state on the host goes in its *resting state* step.
-- **Never change what updates, reboots or locks a real VM** — on the VMs fleet, no OS-update
-  minimum version or deadline, no DDM software-update enforcement, no Recovery Lock password
-  enforcement. Exercise those settings on Workstations and restore them in the same test.
-- **NEVER deploy a passcode profile to a real host.** It blocks access to the VM permanently —
-  there is no recovery and no re-provisioning automation, so one deployed passcode payload ends
-  every other real-host spec until someone rebuilds the machine by hand. No
-  `com.apple.mobiledevice.passwordpolicy`, no `forcePIN` / `minLength` / `maxInactivity` /
-  `allowSimple`, for any reason. The same goes for anything else gating entry: screen lock,
-  inactivity timeout, FileVault, login-window restrictions, or disabling SSH / remote management
-  / the MDM channel. **Uploading a profile is delivering it** — there is no "library-only"
-  profile: on free, Unassigned *is* where the real VMs are, so even an upload → delete lifecycle
-  reaches them (the suite's old passcode and DeviceLock fixtures did, 7 and 32 times). Use the inert
-  pair `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*`, or build a new one on its
-  pattern, and remove it in the test that delivered it. If you are unsure whether a payload is
-  safe, it is not — ask first.
+**The instances**
+- **The instances redeploy the RC tag nightly, and a failed deploy is silent.** When Fleet behaves
+  unexpectedly, check `GET /api/latest/fleet/version`'s revision and `GET /debug/migrations` before blaming
+  your spec.
+- **`fleetctl` must be within a minor of the server**, and `fleetctl gitops` reads `~/.fleet/config`, not
+  `FLEET_URL`. Pass `--context`.
 
 ## Code style
 
-- TypeScript
-- Playwright Test
-- Minimal comments — and when you do write one, describe what the block of code is *doing*, never what was changed, added, fixed, or why it differs from a previous version. Comments are for readers who have never seen the prior state.
-- No arbitrary sleeps
-- No duplicated login/setup when fixtures or auth state are better
-- Use test.describe sensibly
-- Keep assertions explicit and readable
+- Write comments for a reader who has never seen the previous version: say what the code *does* and why,
+  never what changed or what it replaced.
+- Spec headers carry the reasoning: why this host, this fleet, this locator, and what breaks if someone
+  "simplifies" it. Most of the suite's hard-won knowledge lives in spec headers.
+- Imports come from `@fixtures` in browser specs, and path aliases (`@helpers/*`, `@pages`) across modules.
+
+## When you're done
+
+Say what landed (specs, page objects, helpers, docs), what you ran and how it came out (tiers, headed,
+with deps, repeats), and anything that needs Andrey: approvals, decisions, bugs to file. Keep it short. The
+PR description is where the detail goes.
