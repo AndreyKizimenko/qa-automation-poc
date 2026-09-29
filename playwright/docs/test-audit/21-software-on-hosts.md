@@ -138,10 +138,11 @@ it costs no disk and no time.
   auto-update cron for the title and stops the version history SWH-10 needs from growing. If you pin during
   SWH-10, unpin before you walk away (title → **Versions** → latest). `cleanup-setup` clears stranded pins on
   the QA and VMs fleets at the start of every premium run, but not between your clicks.
-- **Don't run a manual flow at 05:00–06:15 UTC.** The nightly gitops apply runs at 05:00 and re-applies
-  `vms.yml`, deleting anything on the VMs fleet it doesn't declare — a `fleet-pw-*` title you uploaded
-  included; the premium Playwright nightly follows at 05:30 and runs these same flows on the same VMs, with the
-  same durable fixtures, and two installs of one title on one host will confuse both.
+- **Don't run a manual flow while the nightly runs.** `QA — Nightly` starts at 12 AM Central (05:00 UTC in
+  CDT, 06:00 in CST) and takes about 1.5 h: a Render redeploy, a 30-min wait, then the gitops apply, which
+  re-applies `vms.yml` and deletes anything on the VMs fleet it doesn't declare — a `fleet-pw-*` title you
+  uploaded included — and then the premium suite, which runs these same flows on the same VMs with the same
+  durable fixtures; two installs of one title on one host will confuse both. `gh run list` shows it.
 
 ### Cleaning up by hand after an interrupted flow
 

@@ -10,11 +10,10 @@ name: Nightly QA GitOps — Premium
 # (cleanup-setup runs before tests, cleanup-teardown after — see
 # `playwright/playwright.config.ts`). No separate gitops reset step.
 #
-# Render redeploy runs separately on its own schedule 1 hour earlier.
+# Runs nightly as a step of `QA — Nightly` (qa-nightly.yml), after the Render
+# redeploy; `QA — Branch run` runs it against a branch.
 
 on:
-  schedule:
-    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
   workflow_dispatch:
   workflow_call:
     inputs:
