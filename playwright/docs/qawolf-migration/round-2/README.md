@@ -60,7 +60,8 @@ Ordered by **how much setup each needs** — nothing first, new infrastructure a
 ### Shipped
 
 A–C and gitops-mode V1 merged in [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61)
-(2026-09-28), D in [PR #63](https://github.com/AndreyKizimenko/qa-automation-poc/pull/63) (2026-09-29). Per-batch
+(2026-09-28), D in [PR #63](https://github.com/AndreyKizimenko/qa-automation-poc/pull/63) and E in
+[PR #65](https://github.com/AndreyKizimenko/qa-automation-poc/pull/65) (both 2026-09-29). Per-batch
 detail — what landed, what was retargeted, what was found — is in
 [DELIVERY-LOG.md](../DELIVERY-LOG.md).
 
@@ -70,35 +71,30 @@ detail — what landed, what was retargeted, what was found — is in
 | **[B](B-self-contained.md)** ✅ | Self-contained mutation — library CRUD, global config | 13 | 8 | 1 DUP dropped; took the historical-data row from A |
 | **[C](C-host-reads.md)** ✅ | Live host, read-only | 8 | 8 | 3 retargets; the vitals-refetch row moved to D |
 | **[D](D-host-execution.md)** ✅ | Execution on hosts — scripts, MDM commands, install/uninstall/update, batch runs | 31 | 10 | durable VM software in `vms.yml`; resting-state preflight; `QA — Branch run` workflow |
+| **[E](E-label-targeting.md)** ✅ | Label targeting — profiles, declarations, software, policies, reports | 21 | 10 | inert profile fixtures (the free VMs had been getting lock profiles); set membership over simulations borrowed onto VMs; `QA — Nightly` chain |
 | **[G](G-out-of-band.md)** ◐ | gitops mode **V1** — its own project, runs last | 5 | 5 | retries half not started; gitops V2 parked |
 
-That is **85 of the 127 flows**, and the whole `gitops-mode` project. The suite went from 113 spec files to
-**168**; D added the `premium-exclusive` / `free-exclusive` projects for specs that flip a global switch.
+That is **106 flows**, and the whole `gitops-mode` project. The suite went from 113 spec files to **178**; D
+added the `premium-exclusive` / `free-exclusive` projects for specs that flip a global switch. The first full
+run with E (2026-09-29): premium 532 passed, free 279, no failures.
 
 ### Remaining
 
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
-| **[E](E-label-targeting.md)** | Label targeting — profiles, declarations, software, policies | labels + several hosts | 21 | 10 |
-| **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | new instance setup | 13 | 9 |
-| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
-| | | **remaining** | **43** | **24** |
+| **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | three decisions; most rows ready | 13 | 9 |
+| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | one decision (the hourly flow); the rest nightly | 9 | 5 |
+| | | **remaining** | **22** | **14** |
 
-**E is in review** — [PR #65](https://github.com/AndreyKizimenko/qa-automation-poc/pull/65), awaiting its branch run. The handoff is at the top of
-[E-label-targeting.md](E-label-targeting.md), progress in its *What landed*. Its first slice, the inert profile
-fixtures, found the free VMs had been receiving the suite's lock profiles (§5).
+**F and G each have a *Start here* block** at the top of their file, refreshed after E: which skills to call,
+what to read, the process in one breath, what free can check, and what to ask Andrey first. **F** is less blocked
+than its title: the technician-transfer and team-admin flows need nothing, the IdP username UI exists, the
+manual enrollment profile is a download, and half of MFA needs no SMTP. **G**'s attempt retries take minutes,
+not hours (Fleet queues the next attempt as soon as one fails), so they belong in the nightly. Only the
+continuous-automation flow is hourly, and how to build it is Andrey's call. F and G touch different surfaces
+and can run in either order, but never at the same time as another run on the same instance.
 
-**F is less blocked than its title** — checked live on 2026-09-29, see the top of
-[F-provisioning.md](F-provisioning.md). The technician-transfer and both team-admin flows need nothing, the IdP
-username UI exists, and the manual enrollment profile is a download. Still blocked: the three MFA flows (no
-SMTP on either tier), the RPM case (no Fedora host online) and the recovery-lock *act* (a decision, not a
-setup). F's ready rows can run before or beside E.
-
-**Before either, read §9** — how batches run since D: which skills, how much to run, and which docs move with
-the code.
-
-Batch G's retry half is last on purpose: those specs wait through real 30–90 minute intervals and belong on
-their own schedule, not in the nightly.
+**Before either, read §9**: how batches run since D, which docs move with the code, and the patterns E added.
 
 ## 4. Page objects and helpers to build
 
@@ -283,8 +279,9 @@ second build.
 
 ## 9. Working a batch since D
 
-Batch D's lessons, as rules for E, F and G. The suite now takes **~43 min on premium and ~10 on free** in CI, and
-most of it is real-VM work that doesn't get faster with more workers — so *how much you run* matters as much as
+Batch D's and E's lessons, as rules for F and G. The suite now takes **~56 min on premium (3 workers) and ~10 on
+free (2)** in CI, and three quarters of premium's test time (83 of 110 min on 2026-09-29) is real-VM work that
+doesn't get faster with more workers — so *how much you run* matters as much as
 what you write, and the docs have to move with the code or the next audit pays for it.
 
 ### Skills — call them, don't wait for them
@@ -308,10 +305,10 @@ what you write, and the docs have to move with the code or the next audit pays f
 - `--repeat-each=5` for anything timing-sensitive, scoped the same way. Keep **`--workers=2`** for anything on
   the real VMs: close to CI's shape (free 2, premium 3), and 4 workers stack a VM's queue deep enough to time tests out.
 - Write artifacts outside the repo: `--output=<scratchpad>/<run-name>`.
-- **The full suite runs once, at the end of the batch, on CI**:
-  `gh workflow run "QA — Branch run" -f branch=<branch>` — each tier's nightly gitops chain, then its suite,
-  both tiers side by side. Triage it with `playwright-run-reviewer`. Run the full suite locally only if CI
-  can't, and say so.
+- **The full suite runs once, at the end of the batch, on CI**, as `QA — Branch run`: each tier's nightly
+  gitops chain, then its suite, both tiers side by side. **Andrey dispatches it himself**: at the end of a
+  batch, open the PR and tell him it's ready. Don't start one yourself unless he asks, and then check
+  `gh run list` first; never overlap the nightly. Triage what comes back with `playwright-run-reviewer`.
 - **Before any run that touches the real VMs, check nothing else is:** `gh run list --limit 5`. The nightly
   is `QA — Nightly` (`qa-nightly.yml`): a Render redeploy, a 30-min wait, then each tier's gitops chain and suite,
   about 1.5 h in all. It's scheduled for 03:00 UTC, but GitHub has been starting this repo's scheduled runs
@@ -352,12 +349,40 @@ what you write, and the docs have to move with the code or the next audit pays f
 - **Budget VM time:** a round trip is 1–5 min; a retried VM test costs 5–15. The CI job's limit is 120 min and
   Playwright stops itself at 100 in CI, report included.
 
+### Patterns E added
+
+- **Simulations borrowed onto a fleet** answer what Fleet decides server-side: which hosts a profile, title,
+  policy or report reaches. `findMdmSimulations` (profiles: the enrolled pool is scarce) and `findSimulations`
+  (everything else) are disjoint pools; each spec takes its own slice (the registry is in
+  `helpers/api/hosts.ts`), moves them in, and moves them back in its `finally`. The VMs sweep returns any a dead
+  run left.
+- **Assert set membership**, never a count: exactly these hosts, none of the others.
+- **Uploading a profile is delivering it** (§5). Any new payload type delivered to a VM needs Andrey's approval
+  first, even an "inert" one. macOS 26.6 *accepted* a payload everyone expected it to refuse.
+- **A timed-out test skips its `finally`.** Whatever it leaves on the VMs fleet needs a cleanup home: the VMs
+  sweep in `setup/cleanup.steps.ts` for things Fleet stores by name (`pw-*` profiles, policies, reports,
+  labels; `fleet-pw-*` titles), the resting-state step for state on a host.
+- **A missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no timeout of their
+  own. `Pagination` used to read the first row's link, which Labels rows don't have, and hung two software
+  specs to their 15-minute timeout that way.
+- **Names change under state.** A tab gains a count (*Controls 1* once a profile fails, *Policies 3*,
+  *Upcoming 1*), a field's label is replaced by its error, row actions are hover-revealed (`clickHoverAction`),
+  and lists page at 20 (Labels already spills onto page 2).
+- **Playwright drops an empty-string field from a `multipart` request** (and from `FormData`). Fleet reads a
+  missing field as "no change" and answers 200. A helper that must send `''` writes the body by hand
+  (`setPinnedVersion`).
+- **The instances redeploy the 4.93 RC tag nightly, and a failed deploy is silent**: Render keeps the old
+  instance serving. Before blaming a spec for odd behaviour, check `GET /api/latest/fleet/version`'s revision
+  against the RC branch, and `/debug/migrations` (admin token): an RC that renumbers a migration strands the
+  deploy (2026-09-29, #54246).
+
 ### Fleet behaviour the suite already accounts for
 
 - [fleetdm/fleet#54262](https://github.com/fleetdm/fleet/issues/54262) — the script details modal takes "after N
   seconds" from the output, not the timeout (asserted as today's copy, `TODO`).
 - [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965) — `fleetctl generate-gitops` fails on Free
-  with Apple MDM on; every Free `generate-gitops` test skips behind it.
+  with Apple MDM on; every Free `generate-gitops` test skips behind it. A fix is on the 4.93 RC (#54302), in the
+  build both instances run since 2026-09-29: re-check those skips.
 - [fleetdm/fleet#53186](https://github.com/fleetdm/fleet/issues/53186) — a gitops apply reports
   `[-] deleted software - …` for packages it keeps. Check the installer id before believing it.
 - [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440) — a new `.exe` title isn't linked to what
