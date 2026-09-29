@@ -134,8 +134,8 @@ matrix in `playwright.config.ts` is the source of truth:
 | `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`) | n/a | `.auth/premium-admin.json` |
-| `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, after `premium`, one worker | n/a | `.auth/premium-admin.json` |
-| `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, after `free`, one worker | n/a | `.auth/free-admin.json` |
+| `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
+| `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, one worker, its own invocation after `free` | n/a | `.auth/free-admin.json` |
 
 Folder conventions:
 
@@ -149,11 +149,14 @@ Folder conventions:
   which throws at config load for a name it doesn't know.
 - A spec that flips a global setting which breaks specs running beside it — turning off script execution,
   say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). The
-  `premium-exclusive` / `free-exclusive` projects run those on one worker once the main project has finished;
-  `npm run test:premium` / `test:free` include them. Filter by file name, not path, when running one
-  (`playwright test --project=free-exclusive script-execution-disabled`): the exclusive projects' `testDir` is
-  `tests/e2e`, so a `tests/e2e/…` path filter never matches. A dependency always runs in full, so running an
-  exclusive project with deps runs its whole main project first; `test:<tier>:exclusive` is the `--no-deps` form.
+  `premium-exclusive` / `free-exclusive` projects run those on one worker, **in their own `playwright test`
+  invocation after the main project has finished** — whether or not it passed. CI runs them as a second step
+  (`if: !cancelled()`) and merges both into one report; `npm run test:premium` / `test:free` run the two in
+  sequence. They depend only on the tier's login setup and share `cleanup-teardown`, so **never name a main
+  project and its exclusive one in the same invocation**: they'd run side by side, and the config refuses to.
+  Filter by file name, not path, when running one (`playwright test --project=free-exclusive
+  script-execution-disabled`): the exclusive projects' `testDir` is `tests/e2e`, so a `tests/e2e/…` path filter
+  never matches.
 
 ## Project pipeline (premium)
 
@@ -224,7 +227,8 @@ changes, change it here.
 | **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
 | **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the run at 100 min (`globalTimeout`), report included; the job's limit is 120 |
 | **runtime** | premium ~56 min, free ~10 (2026-09-29). 83 of premium's 110 test-minutes are on the real VMs, which is why more workers stop helping |
-| **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
+| **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project and its exclusive specs run as two steps and merge into this one report), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
+| **a failure in the main project** | doesn't skip the exclusive specs: they run as their own step afterwards, pass or fail |
 | **the instances' build** | both redeploy the 4.93 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
 
 ## Pre-PR check

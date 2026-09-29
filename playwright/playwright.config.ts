@@ -38,6 +38,17 @@ function parseProjectArg(argv: readonly string[]): string | undefined {
   return undefined;
 }
 
+/** Every `--project` named on the command line. */
+function parseProjectArgs(argv: readonly string[]): string[] {
+  const names: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--project' && argv[i + 1]) names.push(argv[i + 1]);
+    else if (a.startsWith('--project=')) names.push(a.slice('--project='.length));
+  }
+  return names;
+}
+
 function isSuite(s: string | undefined): s is Suite {
   return s !== undefined && (VALID_SUITES as readonly string[]).includes(s);
 }
@@ -82,6 +93,21 @@ function resolveSuite(): Suite {
   fail(
     `No SUITE env var or --project=<name> given. Use \`npm run test:premium|test:free|test:loadtest\`, or pass both SUITE=<tier> and --project=<name> when running playwright directly.`,
   );
+}
+
+// A main project and its exclusive one must never share an invocation: the
+// exclusive project depends only on login setup, so in one invocation the two
+// would run side by side — the one thing the exclusive specs exist to avoid.
+// Worker processes get no `--project` flags, so this only ever acts in the runner.
+{
+  const named = parseProjectArgs(process.argv);
+  for (const tier of ['premium', 'free']) {
+    if (named.includes(tier) && named.includes(`${tier}-exclusive`)) {
+      fail(
+        `--project=${tier} and --project=${tier}-exclusive can't run in one invocation — the exclusive specs would run beside the main ones. Run them one after the other (npm run test:${tier} does).`,
+      );
+    }
+  }
 }
 
 const suite = resolveSuite();
@@ -188,16 +214,18 @@ export default defineConfig({
       teardown: 'cleanup-teardown',
     },
 
-    // ── Exclusive (runs after the main project, single worker) ─────────────────
+    // ── Exclusive (its own invocation after the main project, single worker) ───
     // For specs that flip a global setting which breaks whatever runs beside
     // them — turning off script execution makes Fleet refuse every new script
     // run and hold every queued one. They live under an `exclusive/` folder in
     // their tier's tree, and run only once every parallel spec has finished.
     //
-    // The main project's teardown (cleanup-teardown) waits for this one too,
-    // since Playwright runs a project's teardown after all of its dependents.
-    // A dependency that fails skips its dependents, so on a red night these are
-    // reported as not run rather than run against a half-finished suite.
+    // "After the main project" is ordered by running them as a separate
+    // `playwright test` invocation (a second CI step; `npm run test:premium`
+    // chains the two), not by a dependency on the main project: a dependency
+    // that fails skips its dependents, so one unrelated red test would take
+    // every exclusive spec with it. They depend only on login setup, and share
+    // cleanup-teardown so a dead exclusive spec's switch is put back.
     {
       name: 'premium-exclusive',
       testDir: './tests/e2e',
@@ -208,7 +236,8 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
       },
-      dependencies: ['premium'],
+      dependencies: ['premium-setup'],
+      teardown: 'cleanup-teardown',
     },
 
     // ── GitOps mode (runs last, single worker) ────────────────────────────────
@@ -275,7 +304,8 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',
       },
-      dependencies: ['free'],
+      dependencies: ['free-setup'],
+      teardown: 'cleanup-teardown',
     },
 
     // ── GitOps Verify (post-gitops state checks) ──────────────────────────────
