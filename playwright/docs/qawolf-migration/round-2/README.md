@@ -299,10 +299,11 @@ what you write, and the docs have to move with the code or the next audit pays f
 - **While building, run only what you changed**, on every tier it targets:
   `npx playwright test --project=premium <spec-file-names>` (and `--project=free` for anything in `shared/`).
   That runs `premium-setup` and `cleanup-setup` — including the VM resting-state step — and then only your
-  tests. **Don't use `npm run test:premium -- <spec>`**: it also names the exclusive project, whose dependency
-  is the *whole* main project. `--no-deps` for fast iteration; with deps at least once before you call it done.
-- An exclusive spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` — by file name,
-  not path.
+  tests. **Don't use `npm run test:premium -- <spec>`**: it runs the whole main project, then the exclusive one,
+  and your arguments reach only the second. `--no-deps` for fast iteration; with deps at least once before you
+  call it done.
+- An exclusive spec: `npx playwright test --project=premium-exclusive <file-name>` — by file name, not path. It
+  runs in its own invocation, with only the login setup and `cleanup-teardown` around it.
 - `--repeat-each=5` for anything timing-sensitive, scoped the same way. Keep **`--workers=2`** for anything on
   the real VMs: close to CI's shape (free 2, premium 3), and 4 workers stack a VM's queue deep enough to time tests out.
 - Write artifacts outside the repo: `--output=<scratchpad>/<run-name>`.

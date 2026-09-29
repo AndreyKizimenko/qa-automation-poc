@@ -154,7 +154,9 @@ export class SoftwareTitleDetailPage {
   }
 
   async clickVersion(version: string): Promise<void> {
-    await this.table.rowWith(version).getByRole('link', { name: version }).first().click();
+    const link = this.table.rowWith(version).getByRole('link', { name: version, exact: true }).first();
+    await expect(link, `version ${version} on this title`).toBeVisible();
+    await link.click();
   }
 
   /** Throws if no version has vulnerabilities (`---` in the column). */

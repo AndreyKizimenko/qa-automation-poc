@@ -100,7 +100,35 @@ jobs:
           npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
           fleetctl --version
 
-      - run: npm run test:free
+      # The main project and the exclusive one run as two steps. The exclusive
+      # specs flip global switches, so they must run after every parallel spec
+      # has finished — but not only when those specs passed: as a Playwright
+      # dependency, one unrelated failure would skip them all. Each step writes a
+      # blob report to its own directory (the blob reporter clears its directory
+      # first), and the last step merges them into the one HTML report. The
+      # suite stops itself at 100 min (globalTimeout) and the exclusive step at
+      # 15, so even a run that uses all of it merges and uploads its report
+      # inside the job's 120.
+      - name: Run the suite
+        id: suite
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/suite
+        run: SUITE=free npx playwright test --project=free --reporter=github,blob
+
+      # Runs whether the suite passed or failed, but not when it never ran (a
+      # setup step above failed, or the run was cancelled).
+      - name: Run the exclusive specs
+        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
+        run: SUITE=free npx playwright test --project=free-exclusive --reporter=github,blob --global-timeout=900000
+
+      - name: Merge the reports
+        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        run: |
+          mkdir -p blob-report/all
+          find blob-report/suite blob-report/exclusive -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          npx playwright merge-reports --reporter html blob-report/all
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose
       # report matters most.

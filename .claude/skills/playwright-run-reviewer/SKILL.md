@@ -105,9 +105,10 @@ README's run table for the exact scripts):
   ```
   Mixed pass/fail → `flaky`. Uniform failure → real; triage further. Use
   `--project=free` for a free or `shared/` spec, and
-  `--project=premium-exclusive <file-name> --no-deps` for an `exclusive/` one.
-  **Never `npm run test:<tier> -- <spec>`:** it also names the exclusive project,
-  whose dependency — the whole main project — always runs in full, so a
+  `--project=premium-exclusive <file-name>` for an `exclusive/` one (its own
+  invocation; only the login setup and `cleanup-teardown` run around it).
+  **Never `npm run test:<tier> -- <spec>`:** it runs the whole main project and
+  then the exclusive one, with your arguments reaching only the second, so a
   one-test check becomes a full suite run on the shared instance.
 - **CI-red vs live-real.** If the *current* local suite **passes** a spec that CI
   failed, the CI failure was a stale snapshot or a transient — not a live product

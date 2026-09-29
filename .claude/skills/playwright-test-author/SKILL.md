@@ -92,9 +92,10 @@ reason, so:
 - **Run only what you changed, on every tier it targets:** `npx playwright test --project=premium
   <spec-file-names>`, and `--project=free` for anything in `shared/` or `free/`. That runs the setup and
   cleanup projects, including the VM resting-state step, and then only your tests. **Never
-  `npm run test:<tier> -- <spec>`:** it also names the exclusive project, whose dependency (the whole main
-  project) always runs in full. For an `exclusive/` spec: `--project=premium-exclusive <file-name> --no-deps`,
-  by file name.
+  `npm run test:<tier> -- <spec>`:** it runs the whole main project, then the exclusive one, and your
+  arguments reach only the second. For an `exclusive/` spec: `--project=premium-exclusive <file-name>`, by
+  file name (it runs only the login setup and `cleanup-teardown` around it). Never name a main project and
+  its exclusive one in one invocation: they'd run side by side, and the config refuses to.
 - **Run once with dependencies** (no `--no-deps`). `cleanup-setup` drains global reports and policies
   before the first test, so a spec leaning on pre-existing data passes with `--no-deps` and fails every
   nightly.
