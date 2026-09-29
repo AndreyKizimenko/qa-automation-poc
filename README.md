@@ -37,6 +37,30 @@ never belong in it — they come from GitHub secrets in CI, and from gitignored
 `.env` files locally. [`tools/README.md`](tools/README.md#before-you-run-anything)
 covers the same rule for the hand-run tooling.
 
+## Claude Code skills
+
+Checked in under `.claude/skills/`, so every Claude Code session started in this repo has them:
+
+| skill | for |
+|---|---|
+| `playwright-test-author`, `playwright-test-reviewer`, `playwright-run-reviewer` | writing, reviewing and triaging the Playwright suite |
+| `fleet-upgrade-preflight` | predicting which specs a Fleet upgrade will break |
+| `fleet-bug-qa` | QA a bug or security fix: reproduce on a pre-fix instance, verify on the fixed one |
+| `fleet-story-qa` | QA a user story alongside the engineer |
+| `fleet-quickwin-qa` | QA a small change end to end |
+| `fleet-bug-file` | file a bug from a finding, and record how to retest it |
+| `fleet-bug-retest` | retest the bugs you filed once their fix is in a build |
+
+The last five run against your own Fleet instances. On first use they write
+`.claude/fleet-qa.local.md` (gitignored; see `.claude/skills/fleet-bug-qa/references/local-setup.md`):
+- which fleetctl contexts are the fixed and the pre-fix instance;
+- where your Fleet checkout and QA workspace are;
+- which role users you keep.
+
+Tokens stay in `~/.fleet/config`. The skills also need an authenticated `gh`, a Fleet checkout, `npm ci`
+in `playwright/` (the screenshot scripts use its Playwright), and Pillow (`pip3 install pillow`) for
+`stack.py`.
+
 ## Running locally
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
