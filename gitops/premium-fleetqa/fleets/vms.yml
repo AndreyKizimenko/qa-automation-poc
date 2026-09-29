@@ -32,8 +32,9 @@
 #    each of which installs one of these on its VM and uninstalls it again:
 #
 #      - a custom package per platform — the inert "Fleet Playwright Install"
-#        .pkg, .msi and .deb, plus 7-Zip's ARM64 .exe on Windows, the one custom
-#        package Fleet can't link to what the host reports;
+#        .pkg, .msi and .deb, plus 7-Zip's ARM64 .exe on Windows, which Fleet
+#        links to what the host reports only once its hourly Windows-title
+#        reconcile has run (see its package file);
 #      - a Fleet-maintained app per platform — Itsycal (macOS) and DB Browser
 #        for SQLite (Windows), both small, inert and never launched.
 #

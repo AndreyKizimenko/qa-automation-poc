@@ -183,7 +183,7 @@ at any moment whether it's installed.
 |---|---|---|---|
 | `fleet-playwright-install-1.0.0.pkg` | macOS | custom, inert (one empty `.app`) | `gitops/lib/platforms/macos/software/fleet-playwright-install.package.yml` |
 | `fleet-playwright-install-1.0.0.msi` | Windows | custom, inert (one marker file) | `gitops/lib/platforms/windows/software/fleet-playwright-install.package.yml` |
-| `7z2601-arm64.exe` | Windows | custom, 7-Zip — the one package Fleet can't link to what the host reports (fleetdm/fleet#20440); its own install/uninstall scripts | `gitops/lib/platforms/windows/software/7-zip.package.yml` (+ `7-zip-{install,uninstall}.ps1`) |
+| `7z2601-arm64.exe` | Windows | custom, 7-Zip — unlinked when new (fleetdm/fleet#20440), linked once Fleet's hourly Windows-title reconcile merges it with 7-Zip's catalog entry; its own install/uninstall scripts | `gitops/lib/platforms/windows/software/7-zip.package.yml` (+ `7-zip-{install,uninstall}.ps1`) |
 | `fleet-playwright-install_1.0.0_all.deb` | Ubuntu | custom, inert (one marker file), built by `make-deb.py fleet-playwright-install 1.0.0 all` | `gitops/lib/platforms/linux/software/fleet-playwright-install.package.yml` |
 | Itsycal (`itsycal/darwin`) | macOS | Fleet-maintained, never launched | `fleet_maintained_apps` in `vms.yml` |
 | DB Browser for SQLite (`db-browser-for-sqlite/windows`) | Windows | Fleet-maintained, an MSI with no service, never launched | `fleet_maintained_apps` in `vms.yml` |
@@ -240,9 +240,11 @@ Behaviours dropped or reshaped, each deliberately:
 - **Python runs on Linux, not macOS.** The macOS VMs have no Xcode Command Line Tools, so `/usr/bin/python3` is
   Apple's install-prompt stub.
 - **Nothing in this batch uses `toHaveScreenshot`.** The five snapshot flows assert status text and output.
-- **The `.exe` row can't show an installed version** in the Library: Fleet names an `.exe` title from the
-  installer's ProductName ("7-Zip") and Windows lists it by DisplayName ("7-Zip 26.01 (arm64)"), so the two
-  are never linked. The row checks the host's inventory by the program's own name instead.
+- **The `.exe` row may or may not show an installed version** in the Library: Fleet names a new `.exe` title
+  from the installer's ProductName ("7-Zip") and Windows lists it by DisplayName ("7-Zip 26.01 (arm64)"), so
+  they start unlinked; the hourly `reconcile_windows_maintained_app_titles` cron later merges them, because
+  7-Zip is in the Fleet-maintained catalog. The test reads which state Fleet reports after the install and
+  checks the Library and inventory for that one.
 
 ---
 

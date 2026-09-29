@@ -193,9 +193,12 @@ Findings:
 - **An automatic-install policy's `created_policy` activity carries no fleet**, so the feed reads "created a
   policy [Install software] … (deb)." where a hand-made fleet policy reads "… on the VMs fleet." The same
   activity type, two shapes. On the decision list.
-- **An `.exe` title is never linked to what Windows reports.** Fleet names it from the installer's ProductName
-  ("7-Zip"); Windows lists the DisplayName ("7-Zip 26.01 (arm64)"). The Library never shows it an installed
-  version. On the decision list.
+- **A new `.exe` title isn't linked to what Windows reports.** Fleet names it from the installer's ProductName
+  ("7-Zip"); Windows lists the DisplayName ("7-Zip 26.01 (arm64)"), and the Library shows it no installed
+  version. On the decision list. *Later the same day:* once the title was durable, Fleet's hourly
+  `reconcile_windows_maintained_app_titles` cron merged the DisplayName title into it (renamed "7-zip", with
+  7-Zip's upgrade code), because 7-Zip is a Fleet-maintained app — after which it is linked. Software outside
+  the catalog would stay unlinked.
 - **The installer size limit is per instance and checked in the browser.** Premium QA's is 10 GiB, not QA Wolf's
   1 GiB, and an over-limit file is refused on selection without a byte being sent.
 - **`GET /labels/:id/hosts` leaves `orbit_version` null** for every host; `GET /hosts` fills it in.

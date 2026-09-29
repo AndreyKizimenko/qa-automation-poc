@@ -58,7 +58,7 @@ never changes and Fleet skips the download once it holds the file. Consumed by S
 |---|---|---|---|
 | `fleet-playwright-install-1.0.0.pkg` | from the package | [`test-data/apple/macos/software/make-pkg.sh`](../../test-data/apple/macos/software/make-pkg.sh) (committed output) | one empty app bundle, `/Applications/Fleet Playwright Install.app` — an app bundle because macOS inventory lists `.app` bundles only; a files-only `.pkg` installs but never shows up |
 | `fleet-playwright-install-1.0.0.msi` | from the package | [`test-data/windows/software/make-msi.sh`](../../test-data/windows/software/make-msi.sh) (committed output) | one marker file under `C:\Program Files\Fleet Playwright Install\` |
-| `7z2601-arm64.exe` | **7-Zip** (ProductName) — Windows lists it as **7-Zip 26.01 (arm64)** | committed vendor binary; install/uninstall scripts `gitops/lib/platforms/windows/software/7-zip-{install,uninstall}.ps1` (`/S`) | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
+| `7z2601-arm64.exe` | **7-Zip** (ProductName) when new, **7-zip** once Fleet's Windows-title reconcile links it — Windows lists it as **7-Zip 26.01 (arm64)** | committed vendor binary; install/uninstall scripts `gitops/lib/platforms/windows/software/7-zip-{install,uninstall}.ps1` (`/S`) | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
 | `fleet-playwright-install_1.0.0_all.deb` | from the package | [`test-data/linux/software/make-deb.py`](../../test-data/linux/software/make-deb.py) `fleet-playwright-install 1.0.0 all` (committed output) | one marker under `/usr/share/fleet-playwright-install/`, no maintainer scripts, `Architecture: all` |
 | **Itsycal** (`itsycal/darwin`) | Itsycal | Fleet-maintained | a menu-bar calendar, never launched |
 | **DB Browser for SQLite** (`db-browser-for-sqlite/windows`) | DB Browser for SQLite | Fleet-maintained | an MSI, no service, never launched |
@@ -83,8 +83,8 @@ baseline the host's `detail_updated_at`, ask for a refetch, wait for it to move 
 `detail_updated_at`, **not** `software_updated_at`, because the latter only moves when the inventory
 *changes* and so never moves after a failed uninstall; **(c)** the inventory agrees with the status (≤ 1 min —
 a refetch's detail results can be stored seconds before its software results); if it still disagrees, the
-baseline-refetch-poll round runs once more. For a title Fleet can't link to what the host reports (the
-`.exe`), `inventoryName` makes (c) read the host's own inventory by the program's name. **A refetch
+baseline-refetch-poll round runs once more. For a title Fleet may not have linked to what the host
+reports (the `.exe`), `inventoryName` makes (c) also read the host's own inventory by the program's name. **A refetch
 takes 60–120 s on a VM.** On a manual run, the equivalent is: wait for the Library Status to settle, wait
 for "Last fetched" to move once on its own (Fleet's own refetch), then click **Refetch**, wait for it to
 move again, and look.
@@ -263,24 +263,27 @@ two on a day it runs. The CI workflows share a concurrency group with their tier
 |---|---|---|---|---|
 | macOS `.pkg` | from the package | `fleet-playwright-install-1.0.0.pkg` | Fleet's, from the package IDs | the title (linked) |
 | Windows `.msi` | from the package | `fleet-playwright-install-1.0.0.msi` | Fleet's, from the product code | the title (linked) |
-| Windows `.exe` | **`7-Zip`** (ProductName) | `7z2601-arm64.exe` | **ours**, declared in gitops — `7-zip-uninstall.ps1` runs `C:\Program Files\7-Zip\Uninstall.exe /S` (Fleet requires both scripts for an `.exe`) | **`7-Zip 26.01 (arm64)`**, the host's own name for it (unlinked, `linked = false`) |
+| Windows `.exe` | **`7-zip`** (reconciled; **`7-Zip`**, the ProductName, when new) | `7z2601-arm64.exe` | **ours**, declared in gitops — `7-zip-uninstall.ps1` runs `C:\Program Files\7-Zip\Uninstall.exe /S` (Fleet requires both scripts for an `.exe`) | **`7-Zip 26.01 (arm64)`**, the host's own name for it (unlinked, `linked = false`) |
 | Linux `.deb` | from the package | `fleet-playwright-install_1.0.0_all.deb` | Fleet's `apt-get remove` | the title (linked) |
 | macOS Fleet-maintained | **Itsycal** | the build Fleet cached — its file name read at run time | Fleet's, for the app | the title (linked) |
 | Windows Fleet-maintained | **DB Browser for SQLite** | the build Fleet cached | Fleet's, for the app | the title (linked) |
 
-**The `.exe` row is different by design.** Fleet names a custom `.exe` title from the installer's
-ProductName (`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (arm64)`), and Fleet
-never links the two — custom `.exe` titles are not matched to inventory, by design since
-[fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). So the Library never shows it an
-installed version, and whether it's installed is read from the host's inventory by DisplayName instead — in
-the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Inventory tab.
+**The `.exe` row has two states.** Fleet names a new custom `.exe` title from the installer's ProductName
+(`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (arm64)`), so it starts
+**unlinked** ([fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440)): no installed version in the
+Library, and the inventory lists it under the DisplayName. Because 7-Zip is in the Fleet-maintained catalog,
+Fleet's hourly `reconcile_windows_maintained_app_titles` cron then merges the DisplayName title into ours —
+renamed **`7-zip`**, with 7-Zip's upgrade code — and it is **linked** from then on (observed 2026-09-28, within
+an hour of the title's creation). The waits and `ensureVmFixtureUninstalled` count it installed if either
+reading shows it; the test reads which state Fleet reports after the install and checks the Library's
+installed version and the Inventory row for that state.
 
 **Flow**
 
 1. ☐ (No user action) Resolve the VM; find the fixture's title; read the title's state for this host (`GET /hosts/:id/software?available_for_install=true`).
    - ✅ *(API)* The title is on the VMs fleet (and, for an FMA, has an installer).
    - ✅ *(API)* It is offered to the VM with a library version.
-2. ☐ (No user action) `ensureVmFixtureUninstalled` — if the VM still has the fixture (a linked title: status `installed` or any installed version; the `.exe`: the host's inventory lists `7-Zip 26.01 (arm64)`), uninstall it by API and wait for the inventory to agree.
+2. ☐ (No user action) `ensureVmFixtureUninstalled` — if the VM still has the fixture (a linked title: status `installed` or any installed version; or, for the `.exe` while unlinked, the host's inventory lists `7-Zip 26.01 (arm64)`), uninstall it by API and wait for the inventory to agree.
 
    **`install` step**
 3. ☐ Open the host's details page (via URL `/hosts/<id>`; anchored on **Disk space available**) → **Software** tab → **Library** tab → type the title in **Search by name**.
@@ -293,9 +296,9 @@ the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Invento
 5. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, wait for "Last fetched" to move once on its own, then click **Refetch** and wait for it to move again — `waitForSoftwareSettled(…, 'installed', { inventoryName })` (`inventoryName` set only for the `.exe`).
    - ✅ *(API)* Status reaches `installed` (≤ 5 min).
    - ✅ *(API)* No refetch outstanding (≤ 4 min), then `detail_updated_at` moves past a baseline taken after that (≤ 4 min, refetch requested).
-   - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for the `.exe` the host's inventory by `7-Zip 26.01 (arm64)`.
+   - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for an unlinked `.exe` the host's inventory by `7-Zip 26.01 (arm64)`. The test records which: **linked** iff the title now shows an installed version (only the `.exe` may lack one).
 6. ☐ Reload the host page → **Software** → **Library** → search the title.
-   - ✅ *(UI)* **Installed version** equals the library version — **for the `.exe`, still `---`** (unlinked).
+   - ✅ *(UI)* **Installed version** equals the library version — or `---` for the `.exe` while unlinked.
    - ✅ *(UI)* The row's install-side button reads **Reinstall**.
 7. ☐ Click the row's **Installed** status button.
    - ✅ *(UI)* The **Install details** modal (`.software-install-details-modal`) opens with a status line containing **"installed <title> (<package file>) on <host display name>"**.
@@ -304,7 +307,7 @@ the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Invento
    ☐ Reload the host page → in the **Activity** card, click the **Past** tab → click the **first** (newest) item matching "… installed <title> on this host." (word boundary, so not "uninstalled").
    - ✅ *(UI)* **Past** is selected; the Install details modal opens with **"installed <title> (<package file>)"**.
    - ☐ Click **Close**. ✅ *(UI)* hidden.
-9. ☐ Reload the host page → **Software** → **Inventory** tab → type the **inventory name** in **Search by name or vulnerability (CVE)** (the title's; for the `.exe`, `7-Zip 26.01 (arm64)`).
+9. ☐ Reload the host page → **Software** → **Inventory** tab → type the **inventory name** in **Search by name or vulnerability (CVE)** (the title's name — `7-zip` for the linked `.exe`; `7-Zip 26.01 (arm64)` while it's unlinked).
    - ✅ *(UI)* A Name-column link reading exactly the inventory name is visible — `HostDetailsPage.softwareNameLink()`.
 
    **`uninstall` step**
@@ -327,7 +330,7 @@ the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Invento
 15. ☐ (No user action) `finally` — `ensureVmFixtureUninstalled` (a no-op after a pass). The title stays.
 
 **Assessment**
-- *Value:* the area's backbone, and a better one than the three tests it replaced. Every package type the suite installs — four custom (including the `.exe` Fleet can't link) and a Fleet-maintained app on **both** macOS and Windows — goes install → verify → uninstall → verify on a real device, each half checked on the same four surfaces: the Library row's state machine (`---` / Install → Reinstall + installed version → `---` / Install, no Uninstall), the details modal, the host's Past activity, and the **Inventory tab**.
+- *Value:* the area's backbone, and a better one than the three tests it replaced. Every package type the suite installs — four custom (including the `.exe`, in whichever linkage state Fleet reports) and a Fleet-maintained app on **both** macOS and Windows — goes install → verify → uninstall → verify on a real device, each half checked on the same four surfaces: the Library row's state machine (`---` / Install → Reinstall + installed version → `---` / Install, no Uninstall), the details modal, the host's Past activity, and the **Inventory tab**.
   - **The Inventory tab is checked both ways, for all six.** This closes the old SWH-01 gap, where the Inventory tab was never opened after a `.pkg`, `.msi` or FMA install and "lands in its inventory" was proved only by API and the Library's derived column.
   - **FMA uninstall and Windows FMA install are new coverage.** SWH-02 only ever installed Itsycal and removed it silently in a `finally`; nothing installed a Windows FMA.
   - **Durable titles make cleanup deterministic.** Fleet always knows whether each fixture is on its VM, so the preflight can put a dead run's install right by uninstalling it, instead of hoping the next run's pre-clean catches it before the title is deleted — and it runs again at `cleanup-teardown`, so a timed-out test (whose `finally` Playwright skips) is healed in the same run.
@@ -340,7 +343,7 @@ the waits (`inventoryName`), in `ensureVmFixtureUninstalled`, and on the Invento
 - *Efficiency / smells:*
   - ~~⚠️ **The Past-activity checks couldn't tell this run's item from last night's.**~~ **Fixed 2026-09-28:** each half baselines the host's newest matching activity through the API before acting and requires a newer one after (server timestamps, so no clock skew), before the UI clicks the newest item. Original finding: The titles are durable, so every run — and every preflight uninstall — writes an item with the same wording and the same modal text. `.first()` takes the newest, which after a settled install *is* this run's in practice, but if Fleet stopped recording the activity the previous run's item would satisfy both steps 8 and 14. The fix is cheap: assert the item's relative time reads "less than a minute ago" / "… minutes ago", or read `GET /hosts/:id/activities` for an entry newer than the click.
   - ~~⚠️ **The Inventory absence check (step 13) could pass before the search landed.**~~ **Fixed 2026-09-28:** it now waits for the table's empty state (`HostDetailsPage.softwareEmptyState`), which a real host's unfiltered table never shows, so it can only pass on the filtered, empty result. Original finding: `openInventory` fills the search box and returns; `softwareRowOrEmpty()` then resolves on the *unfiltered* table's first row, and `toHaveCount(0)` passes at once unless the fixture happens to be on that page. The API wait in step 11 is what really proves absence. Waiting for the search's response (or for the "N items" count to change) before the negative assertion would make it bite. Inherited from the old SWH-04, which had the same code.
-  - **The `.exe` row's Library expectations are mostly non-discriminating.** Its Installed version reads `---` before the install, after it and after the uninstall; the **Reinstall** / **Installed** status button after the install and **Install** / no **Uninstall** after the uninstall come from Fleet's install record, not from the host. The host-side proof for this row is the Inventory tab by DisplayName (steps 9 and 13) — so the step-13 race above matters most here.
+  - ~~**The `.exe` row's Library expectations are mostly non-discriminating.**~~ **Partly resolved 2026-09-28:** since Fleet's Windows-title reconcile linked the durable 7-Zip title, its Installed version shows `26.01` after the install and `---` after the uninstall like every other row; only a freshly created (unlinked) title falls back to the DisplayName reading. Original finding: Its Installed version reads `---` before the install, after it and after the uninstall; the **Reinstall** / **Installed** status button after the install and **Install** / no **Uninstall** after the uninstall come from Fleet's install record, not from the host. The host-side proof for this row is the Inventory tab by DisplayName (steps 9 and 13) — so the step-13 race above matters most here.
   - **The 900 s budget is a typical-case budget.** `waitForSoftwareSettled`'s worst case is 300 + 240 + 2 × (240 + 60) s ≈ 19 min per half, twice, against 15 min; a normal half takes 3–5 min. A slow VM ends as a test timeout, which skips the `finally` — harmless now that the preflight/teardown uninstalls the fixture, but it reads as a timeout rather than naming the wait that hung.
   - **Six tests contend for three VMs.** The Windows VM carries three of them (`.msi`, `.exe`, DB Browser — six queued round-trips) plus SWH-09/13, and every test's `waitForNoPendingRefetch` waits out the refetches its neighbours triggered. At CI's two workers it's bounded; at `--repeat-each` or four workers it's the queue-depth failure mode of 2026-09-28 again (Bigger bets 1).
   - The `pending_install` / `pending_uninstall` reads are one-shot right after the toast — deterministic in practice (orbit polls, so there are seconds before pickup), but an idle VM finishing a tiny `.deb` before the GET lands would fail them.
@@ -869,8 +872,9 @@ other:
 
 **Product and fixture context a re-runner should carry**
 
-- **Custom `.exe` titles are never linked to inventory** — by design since
-  [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440). The Library will never show 7-Zip an installed version; that is not a regression.
+- **A new custom `.exe` title isn't linked to inventory** ([fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440)),
+  but 7-Zip's is linked once Fleet's hourly Windows-title reconcile merges it with 7-Zip's catalog entry (renamed
+  `7-zip`). Either state is correct; the Library showing `---` for a freshly created 7-Zip title is not a regression.
 - **The automatic-install `created_policy` activity has no fleet suffix** — on the decision list, encoded in SWH-03.
 - **`software_updated_at` means "inventory last changed", not "last collected"** — don't wait on it by hand either; watch "Last fetched" (detail) instead.
 - **The install/uninstall fixtures are the VMs fleet's, not a test's.** Declared in `vms.yml`, listed in `helpers/vm-fixtures.ts`, resting state uninstalled, re-applied every night. A missing one is a gitops problem (re-apply), never something to upload by hand; one found installed is a dead run's, and the next preflight uninstalls it.

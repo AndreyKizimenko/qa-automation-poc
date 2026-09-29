@@ -25,11 +25,15 @@
  *   | macOS Fleet-maintained | Itsycal | a menu-bar calendar, never launched |
  *   | Windows Fleet-maintained | DB Browser for SQLite | an MSI, no service, never launched |
  *
- * **The `.exe` is never linked to what Windows reports.** Fleet names the title
- * from the installer's ProductName ("7-Zip") and Windows lists the program by its
- * DisplayName ("7-Zip 26.01 (arm64)"), by design (fleetdm/fleet#20440). Its
- * Library row never shows an installed version, so the host's inventory is read
- * by the Windows name instead.
+ * **The `.exe` may or may not be linked to what Windows reports.** A new title is
+ * named from the installer's ProductName ("7-Zip") while Windows lists the
+ * program by its DisplayName ("7-Zip 26.01 (arm64)"), so it starts unlinked
+ * (fleetdm/fleet#20440): no installed version in the Library, and the host's
+ * inventory lists it under the DisplayName. Because 7-Zip is in the
+ * Fleet-maintained catalog, Fleet's hourly `reconcile_windows_maintained_app_titles`
+ * cron later merges that DisplayName title into this one — renamed "7-zip" —
+ * and from then on it is linked. The test reads which state Fleet reports after
+ * the install and checks the Library and inventory for that state.
  *
  * Adding software to a fleet — upload, Fleet-maintained catalog — is covered
  * where it involves no host, by `library.spec.ts`.
@@ -80,7 +84,9 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
     }) => {
       const host = await requireRealHost(request, fixture.platform);
       const title = await findVmFixtureTitle(request, vmsFleetId, fixture);
-      const inventoryName = title.linked ? undefined : title.inventoryName;
+      const unlinkedName = title.unlinkedInventoryName;
+      // The name the host's inventory lists the software under — settled below.
+      let inventoryName = title.name;
       const library = hostDetails.library;
       const version = (await getHostSoftwareState(request, host.id, title.titleId))?.libraryVersion;
       expect(version, `${title.name} isn't offered to ${host.displayName}`).toBeTruthy();
@@ -98,11 +104,18 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
 
           await library.install(title.name);
           expect((await getHostSoftwareState(request, host.id, title.titleId))?.status).toBe('pending_install');
-          await waitForSoftwareSettled(request, host.id, title.titleId, 'installed', { inventoryName });
+          const installed = await waitForSoftwareSettled(request, host.id, title.titleId, 'installed', {
+            inventoryName: unlinkedName,
+          });
+          // Fleet shows an installed version exactly when it has linked the title
+          // to what the host reports; only an unlinked-capable fixture may lack one.
+          const linked = installed.installedVersions.length > 0;
+          expect(linked || !!unlinkedName, `${title.name} installed, but Fleet shows no installed version`).toBe(true);
+          if (!linked) inventoryName = unlinkedName!;
 
           await hostDetails.goto(host.id);
           await hostDetails.openLibrary(title.name);
-          await expect(await library.installedVersion(title.name)).toHaveText(title.linked ? version! : '---');
+          await expect(await library.installedVersion(title.name)).toHaveText(linked ? version! : '---');
           await expect(library.installAction(title.name, 'Reinstall')).toBeVisible();
 
           await library.statusButton(title.name, 'Installed').click();
@@ -125,8 +138,8 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
           await details.close();
 
           await hostDetails.goto(host.id);
-          await hostDetails.openInventory(title.inventoryName);
-          await expect(hostDetails.softwareNameLink(title.inventoryName)).toBeVisible();
+          await hostDetails.openInventory(inventoryName);
+          await expect(hostDetails.softwareNameLink(inventoryName)).toBeVisible();
         });
 
         await test.step('uninstall', async () => {
@@ -135,7 +148,7 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
           await hostDetails.openLibrary(title.name);
           await library.uninstall(title.name);
           expect((await getHostSoftwareState(request, host.id, title.titleId))?.status).toBe('pending_uninstall');
-          await waitForSoftwareSettled(request, host.id, title.titleId, null, { inventoryName });
+          await waitForSoftwareSettled(request, host.id, title.titleId, null, { inventoryName: unlinkedName });
 
           await hostDetails.goto(host.id);
           await hostDetails.openLibrary(title.name);
@@ -144,9 +157,9 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
           await expect(library.uninstallAction(title.name)).toHaveCount(0);
 
           await hostDetails.goto(host.id);
-          await hostDetails.openInventory(title.inventoryName);
+          await hostDetails.openInventory(inventoryName);
           await expect(hostDetails.softwareEmptyState).toBeVisible();
-          await expect(hostDetails.softwareNameLink(title.inventoryName)).toHaveCount(0);
+          await expect(hostDetails.softwareNameLink(inventoryName)).toHaveCount(0);
 
           expect(
             await newestActivityAt(request, host.id, 'uninstalled_software', title.name),

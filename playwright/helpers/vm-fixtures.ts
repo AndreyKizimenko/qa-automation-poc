@@ -23,11 +23,11 @@ export interface VmSoftwareFixture {
   /** A Fleet-maintained app, by its title name. */
   fleetMaintainedName?: string;
   /**
-   * What the host's inventory calls it, when Fleet can't link the title to what
-   * the host reports: its installed versions then stay empty, so whether it's
-   * installed is read from the inventory by this name.
+   * What the host's inventory calls it while Fleet hasn't linked the title to it.
+   * An unlinked title's installed versions stay empty, so whether the software
+   * is on the host is also read from the inventory by this name.
    */
-  inventoryName?: string;
+  unlinkedInventoryName?: string;
 }
 
 export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
@@ -37,9 +37,14 @@ export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
     label: 'Windows .exe',
     platform: 'windows',
     packageName: '7z2601-arm64.exe',
-    // The title takes the installer's ProductName; Windows lists the program by
-    // its DisplayName (by design, fleetdm/fleet#20440).
-    inventoryName: '7-Zip 26.01 (arm64)',
+    // A new .exe title takes the installer's ProductName while Windows lists the
+    // program by its DisplayName, so it starts unlinked (fleetdm/fleet#20440).
+    // 7-Zip is also in the Fleet-maintained catalog, and Fleet's hourly
+    // `reconcile_windows_maintained_app_titles` cron then merges the DisplayName
+    // title into this one (renaming it "7-zip", with 7-Zip's upgrade code), after
+    // which it is linked. Which state the durable title is in depends on whether
+    // the cron has run since the title was created, so both are read.
+    unlinkedInventoryName: '7-Zip 26.01 (arm64)',
   },
   { label: 'Linux .deb', platform: 'linux', packageName: 'fleet-playwright-install_1.0.0_all.deb' },
   { label: 'macOS Fleet-maintained app', platform: 'darwin', fleetMaintainedName: 'Itsycal' },
@@ -51,10 +56,8 @@ export interface VmFixtureTitle {
   name: string;
   /** The installer's file name, as the install details name it. */
   packageName: string;
-  /** Whether Fleet can show this title's installed version. */
-  linked: boolean;
-  /** The name to look for in the host's inventory. */
-  inventoryName: string;
+  /** See {@link VmSoftwareFixture.unlinkedInventoryName}. */
+  unlinkedInventoryName?: string;
 }
 
 /** The fixture's title on the VMs fleet, or a failure saying how to restore it. */
@@ -71,8 +74,7 @@ export async function findVmFixtureTitle(
       titleId: title!.titleId,
       name: title!.name,
       packageName: title!.packageName,
-      linked: !fixture.inventoryName,
-      inventoryName: fixture.inventoryName ?? title!.name,
+      unlinkedInventoryName: fixture.unlinkedInventoryName,
     };
   }
   const title = (await listFleetMaintainedTitles(request, fleetId)).find(
@@ -81,7 +83,7 @@ export async function findVmFixtureTitle(
   expect(title, missing).toBeDefined();
   const packageName = (await getSoftwarePackage(request, fleetId, title!.titleId))?.name;
   expect(packageName, `${fixture.label} has no installer on the VMs fleet`).toBeTruthy();
-  return { titleId: title!.titleId, name: title!.name, packageName: packageName!, linked: true, inventoryName: title!.name };
+  return { titleId: title!.titleId, name: title!.name, packageName: packageName! };
 }
 
 /** Whether the fixture is on the host, by whichever reading Fleet can give for it. */
@@ -90,9 +92,10 @@ export async function isVmFixtureInstalled(
   hostId: number,
   title: VmFixtureTitle,
 ): Promise<boolean> {
-  if (!title.linked) return (await getHostInventoryVersions(request, hostId, title.inventoryName)).length > 0;
   const state = await getHostSoftwareState(request, hostId, title.titleId);
-  return state?.status === 'installed' || (state?.installedVersions.length ?? 0) > 0;
+  if (state?.status === 'installed' || (state?.installedVersions.length ?? 0) > 0) return true;
+  return !!title.unlinkedInventoryName &&
+    (await getHostInventoryVersions(request, hostId, title.unlinkedInventoryName)).length > 0;
 }
 
 /**
@@ -107,6 +110,6 @@ export async function ensureVmFixtureUninstalled(
   if (!(await isVmFixtureInstalled(request, hostId, title))) return;
   await uninstallSoftwareOnHost(request, hostId, title.titleId);
   await waitForSoftwareSettled(request, hostId, title.titleId, null, {
-    inventoryName: title.linked ? undefined : title.inventoryName,
+    inventoryName: title.unlinkedInventoryName,
   });
 }

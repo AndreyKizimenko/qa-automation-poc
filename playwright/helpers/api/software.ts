@@ -597,9 +597,10 @@ const sameVersion = (a: string, b: string): boolean => compareVersions(a, b) ===
  *
  * Pass `version` when the host already had the title — an update — so the
  * wait is for that version, not for any. Pass `inventoryName` for a title Fleet
- * can't tie to what the host reports (see {@link getHostInventoryVersions}): its
- * installed versions stay empty, so step 3 reads the host's inventory by the
- * name the host uses instead.
+ * may not have tied to what the host reports (see {@link getHostInventoryVersions}):
+ * an unlinked title's installed versions stay empty, so step 3 also reads the
+ * host's inventory by the name the host uses, and counts the software as listed
+ * if either reading shows it.
  */
 export async function waitForSoftwareSettled(
   request: APIRequestContext,
@@ -616,9 +617,9 @@ export async function waitForSoftwareSettled(
   const agrees = async (): Promise<boolean> => {
     state = await getHostSoftwareState(request, hostId, titleId);
     if (opts.version) return state?.installedVersions.some((v) => sameVersion(v, opts.version!)) ?? false;
-    const listed = opts.inventoryName
-      ? (await getHostInventoryVersions(request, hostId, opts.inventoryName)).length > 0
-      : (state?.installedVersions.length ?? 0) > 0;
+    const listed =
+      (state?.installedVersions.length ?? 0) > 0 ||
+      (!!opts.inventoryName && (await getHostInventoryVersions(request, hostId, opts.inventoryName)).length > 0);
     return listed === (inventory === 'present');
   };
 
@@ -644,10 +645,11 @@ export async function waitForSoftwareSettled(
 
 /**
  * Versions of `name` in the host's own software inventory, by the name the host
- * reports — independent of any library title. Needed where Fleet can't tie a
- * title to what the host reports: an `.exe` title is named from the installer's
- * ProductName ("7-Zip") while Windows lists the program by its DisplayName
- * ("7-Zip 26.01 (arm64)"), so the title never shows an installed version.
+ * reports — independent of any library title. Needed where Fleet hasn't tied a
+ * title to what the host reports: a new `.exe` title is named from the
+ * installer's ProductName ("7-Zip") while Windows lists the program by its
+ * DisplayName ("7-Zip 26.01 (arm64)"), so the title shows no installed version
+ * until something links them.
  */
 export async function getHostInventoryVersions(
   request: APIRequestContext,
