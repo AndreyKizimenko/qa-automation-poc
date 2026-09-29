@@ -132,7 +132,8 @@ lacks. The team-admin rename is asserted but never saved: renaming a gitops-decl
 | free refusals | `api/free/license.spec.ts`: an IdP username and `mfa_enabled` are refused with 402 |
 | 2FA checkbox | premium: unchecked by default, enabled only when Fleet can send email, hidden under SSO; free: absent from the create and edit forms |
 | paywalls | the OS-settings rows now require their own card's heading (the Passwords and Certificates rows could pass with the card gone); a *Host names* row |
-| recovery lock | new `premium/hosts/recovery-lock.spec.ts` — enforce, verify, view, rotate, clear on the Mac, with all five activities; `PasswordsPage`, `RecoveryLockPasswordModal`; the resting-state step turns enforcement off after a dead run. **Built, not yet run live** |
+| leftover API users | `deleteLeftoverApiTestUsers` in the unassigned wipe: the `QA API <label> <stamp>` API-only users a dead run leaves (their emails are Fleet-generated, so the `qa-test-*` sweep missed them — 28 on premium) |
+| recovery lock | new `premium/hosts/recovery-lock.spec.ts` — enforce, verify, view, rotate, clear on the Mac, with all five activities; `PasswordsPage`, `RecoveryLockPasswordModal`; an `afterEach` and the resting-state step turn enforcement off. Green on the real Mac (the virtual Mac accepts `SetRecoveryLock`; ~1 min a run), with dependencies, headed and 5× |
 
 **Filed:** [fleetdm/fleet#54381](https://github.com/fleetdm/fleet/issues/54381) — the SSO + MFA conflict error
 reads *"Fleet MFA is is not applicable to SSO users"* (API-only; released).

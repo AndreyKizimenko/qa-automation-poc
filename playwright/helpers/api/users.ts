@@ -83,6 +83,15 @@ export function qaTestPassword(): string {
   return pw;
 }
 
+/**
+ * Names the user-management specs give the API-only users they create:
+ * `QA API <label> <13-digit ms stamp>`, optionally `-<slug>` (`QA API 1Fleet
+ * 1781640859568`, `QA API Observer+ 1781640859568-observerplus`). Anchored on
+ * both ends, so the static API users (`QA Static API …`, in
+ * `static-users.ts`) can never match.
+ */
+export const QA_TEST_API_USER_NAME_RE = /^QA API \S+ \d{13}(-[a-z0-9]+)?$/;
+
 /** Bulk-delete safety cap. A normal run creates a few dozen at most. */
 const QA_TEST_DELETE_CAP = 200;
 
@@ -250,6 +259,33 @@ export async function deleteAllQaTestUsers(
   for (const u of targets) {
     // Individual deletes (no bulk endpoint); ignoreMissing covers a parallel
     // worker racing us to the same address.
+    await deleteUser(request, u.id, { ignoreMissing: true });
+  }
+  return { deleted: targets.length };
+}
+
+/**
+ * Deletes the API-only users a dead run left behind. Fleet generates their
+ * emails (`admin+…@fleetdm.com`), so {@link deleteAllQaTestUsers} can't see
+ * them; they're matched by name ({@link QA_TEST_API_USER_NAME_RE}) and
+ * `api_only` instead. Each one is used only inside the serial block that
+ * creates it, which deletes it in `afterAll`, so whatever this finds before or
+ * after a run is a leftover nothing will use.
+ */
+export async function deleteLeftoverApiTestUsers(
+  request: APIRequestContext,
+): Promise<{ deleted: number }> {
+  const all = await listUsers(request, { query: 'QA API' });
+  const targets = all.filter((u) => u.api_only && QA_TEST_API_USER_NAME_RE.test(u.name));
+
+  if (targets.length === 0) return { deleted: 0 };
+  if (targets.length > QA_TEST_DELETE_CAP) {
+    throw new Error(
+      `[deleteLeftoverApiTestUsers] Refusing to delete ${targets.length} matching users — cap is ${QA_TEST_DELETE_CAP}. Investigate before clearing.`,
+    );
+  }
+
+  for (const u of targets) {
     await deleteUser(request, u.id, { ignoreMissing: true });
   }
   return { deleted: targets.length };

@@ -6,7 +6,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 
 > **Destructive-area warning.** [`host-delete.spec.ts`](../../tests/e2e/premium/hosts/host-delete.spec.ts) permanently deletes **4 online simulated hosts per full-file run** (2 macOS + 1 macOS + 1 Windows). Nothing in the suite restores them. See [HOSTP-06](#hostp-06--premium--hosts--bulk-delete--deletes-the-selected-hosts) for the exact restore procedure and cost.
 
-> **Real-VM warning.** [`recovery-lock.spec.ts`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts) turns on Recovery Lock enforcement for the **VMs** fleet, so Fleet **sets, rotates and clears a Recovery Lock password on the real macOS VM**. It is the one sanctioned exception to `playwright/CLAUDE.md`'s rule against Recovery Lock on the VMs fleet (approved 2026-09-29), and it has **not yet been run live as of 2026-09-29**. See [HOSTP-16](#hostp-16--premium--hosts--recovery-lock-password--enforce-on-the-vms-fleet-verify-view-rotate-and-clear-on-the-mac) before running it by hand.
+> **Real-VM warning.** [`recovery-lock.spec.ts`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts) turns on Recovery Lock enforcement for the **VMs** fleet, so Fleet **sets, rotates and clears a Recovery Lock password on the real macOS VM**. It is the one sanctioned exception to `playwright/CLAUDE.md`'s rule against Recovery Lock on the VMs fleet (approved 2026-09-29), first run live 2026-09-29 (green with dependencies, headed and 5× repeated on one worker). See [HOSTP-16](#hostp-16--premium--hosts--recovery-lock-password--enforce-on-the-vms-fleet-verify-view-rotate-and-clear-on-the-mac) before running it by hand.
 
 ## Contents
 
@@ -27,7 +27,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-13 | `premium/hosts/host-idp-username.spec.ts` | IdP username › an admin adds an IdP username on the User card, then removes it | UI+API | ☐ |
 | HOSTP-14 | `premium/hosts/host-idp-username.spec.ts` | IdP username › the device_mapping API sets and removes the IdP username | UI+API | ☐ |
 | HOSTP-15 | `premium/hosts/host-idp-username.spec.ts` | IdP username › a global observer is not offered Add user | UI | ☐ |
-| HOSTP-16 | `premium/hosts/recovery-lock.spec.ts` | Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac **(real macOS VM; not yet run live)** | UI+API | ☐ |
+| HOSTP-16 | `premium/hosts/recovery-lock.spec.ts` | Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac **(real macOS VM)** | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API**, **PERF**.
 
@@ -664,7 +664,7 @@ other:
 
 ### HOSTP-16 · Premium • Hosts • Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac
 
-> **REAL macOS VM — Fleet sets, rotates and clears a Recovery Lock password on the VMs fleet's Mac.** Not yet run live as of 2026-09-29: it is awaiting Andrey's go-ahead to run on the VM. Recovery Lock guards only entry to macOS Recovery (not login, SSH or the MDM channel), and the password stays escrowed in Fleet, readable from the host's **Actions**, until the clear lands. If the Mac is offline when enforcement goes off, the password stays on it until it checks in — don't delete the Mac's host record in that window.
+> **REAL macOS VM — Fleet sets, rotates and clears a Recovery Lock password on the VMs fleet's Mac.** First run live 2026-09-29, with Andrey's go-ahead. Run it on one worker: two copies would toggle the same fleet. Recovery Lock guards only entry to macOS Recovery (not login, SSH or the MDM channel), and the password stays escrowed in Fleet, readable from the host's **Actions**, until the clear lands. If the Mac is offline when enforcement goes off, the password stays on it until it checks in — don't delete the Mac's host record in that window.
 
 - **File:** [`playwright/tests/e2e/premium/hosts/recovery-lock.spec.ts`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts)
 - **Grep:** `npx playwright test --project=premium --workers=2 -g "enforce on the VMs fleet, verify, view, rotate and clear on the Mac"`
@@ -731,7 +731,7 @@ other:
 
 **Assessment**
 - *Value:* high, and the only Recovery Lock coverage in the suite: the fleet setting, Fleet's cron putting a password on a real Mac, the escrow being readable, a manual rotation producing a new password, and the clear — each read through both the UI and the host record. Step 14's "different password" check is what proves the rotation reached the Mac rather than just logging an activity, and the actor-less `set_host_recovery_lock_password` pins who Fleet says set it. Activity freshness is done properly — each activity must be newer than the log's last id before its step (`latestActivityId` → `assertActivityAfter`) — better than most activity checks in the suite.
-- *Not yet run live as of 2026-09-29.* Everything above is read from code, not from a green run. Two things only a live run will answer: whether a **virtual** Mac (`VirtualMac2,1`) accepts `SetRecoveryLock` at all — Apple documents Recovery Lock for Apple silicon Macs, and ⚠️ nothing here has confirmed it on a VM — and how long each round trip takes against the 4-minute waits.
+- *Live (2026-09-29):* the **virtual** Mac (`VirtualMac2,1`) accepts `SetRecoveryLock` and verifies it; the whole test takes 45–60 s, each Mac round trip well inside the 4-minute waits. Green with dependencies, headed and `--repeat-each=5` (one worker). Fleet's own `set_host_recovery_lock_password` carries `actor_email: ""`, which `assertActivityAfter` treats as no actor.
 - *Coverage gaps:* only the admin — who else may open the modal or **Rotate password** (maintainer, technician, observer, a VMs team admin) is untested; Unassigned and Workstations are never used (by design: only VMs has a Mac); the automatic rotation a view schedules (an hour out) is never seen, nor that clearing drops it, as the header says it does; the modal's copy button is unused; the `failed` status only shows up as a timeout message; on free the Passwords card is paywall-only ([MISC-20](13-labels-packs-dashboard-paywalls.md)).
 - *Redundancy:* none — nothing else touches Recovery Lock. The Actions-menu "positive control, then absence" in step 18 is HOSTP-05's pattern.
 - *Efficiency / smells:*
@@ -766,7 +766,7 @@ other:
 | Hosts-list header CTAs by role | HOSTP-10, HOSTP-11 (+ free mirror) | fleet-scoped roles (`team-admin`, `ws-*`); observer-plus; technician |
 | Per-host stored report results | HOSTP-09 | negative case (no stored result → no **Show details**); row count and "last fetched" line; the card-vs-report cell comparison covers the **first row** and, in practice, the furniture's **single** column |
 | Host end user (IdP username) — add, edit, remove, role gate | HOSTP-13 (UI), HOSTP-14 (API contract), HOSTP-15 (observer not offered it); free: [HOST-24](02-hosts-shared-and-free.md) (Premium message), [API-31](14-api-contracts.md) (402) | SCIM-backed fields (the instance has no SCIM data); maintainer / fleet-scoped roles; replacing one username with another; no API role probe |
-| Recovery Lock password — enforce, set, view, rotate, clear on a real Mac | HOSTP-16 (**not yet run live** as of 2026-09-29) | non-admin roles; the automatic rotation a view schedules; the `failed` path; whether a virtual Mac accepts `SetRecoveryLock` at all; a timeout leaves enforcement on until `cleanup-teardown` |
+| Recovery Lock password — enforce, set, view, rotate, clear on a real Mac | HOSTP-16 | non-admin roles; the automatic rotation a view schedules; the `failed` path |
 | Lock / Wipe / Unlock / Turn off MDM **execution** | — | intentionally uncovered (unrecoverable on QA VMs) |
 | Hosts-list filters (status, label, OS, policy), pagination, sorting, columns, CSV export, host details vitals/software/policies | not this area — `shared/hosts/*` and other audit files | `LabelFilter`, `StatusFilter`, `Pagination`, `clickHoverAction` are unused by these eight specs |
 

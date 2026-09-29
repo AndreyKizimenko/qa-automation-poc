@@ -6,9 +6,9 @@
 > ## ▶ Start here — refreshed 2026-09-29, after the review
 >
 > The batch was reviewed against the 13 source flows, the suite and Fleet's 4.93 RC source before anything was
-> built, and Andrey decided the open questions (below). Everything in *What landed* is built.
-> **`recovery-lock.spec.ts` has not run live yet**: it's the one spec that sets something on the real Mac, and
-> its first run waits for Andrey's go-ahead.
+> built, and Andrey decided the open questions (below). Everything in *What landed* is built and green on
+> each tier it targets, `recovery-lock.spec.ts` included (it sets, rotates and clears Recovery Lock on the real
+> Mac; first run 2026-09-29, with Andrey's go-ahead).
 >
 > If you pick this up: invoke **`playwright-test-author`** before changing anything,
 > **`playwright-test-reviewer`** before the PR, **`playwright-run-reviewer`** on a red run. Read
@@ -94,7 +94,7 @@ Source flows live in `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>
 | `premium/settings/users/regular-user-create.spec.ts` | ✅ augment | the 2FA checkbox starts unchecked; enabled only if Fleet can send email (`smtp_settings.configured` or SES — read from the config, so it holds either way); hidden while *Single sign-on* is chosen. Its own non-serial describe, so a failure can't skip the create cases |
 | `free/settings/users/{regular-user-create,edit}.spec.ts` | ✅ augment | the 2FA checkbox is absent from the create and edit forms on free |
 | `free/paywalls.spec.ts` | ✅ augment | the OS-settings rows now require their own card's heading: OS settings sends an unknown section to Disk encryption, whose identical paywall let the Passwords and Certificates rows pass with their card gone. Plus the missing *Host names* row |
-| `premium/hosts/recovery-lock.spec.ts` | ◐ **built, not yet run live** | Controls → OS settings → Passwords on for the VMs fleet → the Mac's *Recovery Lock password* verified (API, Controls tab) → *Show Recovery Lock password* reveals it, with the auto-rotation banner → *Rotate password* → verified again with a different password → the host's Activity card shows set / viewed / rotated → enforcement off → cleared from the Mac, the Controls row and the action gone. All five activities matched by type, subject and time. The resting-state step turns enforcement off after a dead run |
+| `premium/hosts/recovery-lock.spec.ts` | ✅ | Controls → OS settings → Passwords on for the VMs fleet → the Mac's *Recovery Lock password* verified (API, Controls tab) → *Show Recovery Lock password* reveals it, with the auto-rotation banner → *Rotate password* → verified again with a different password → the host's Activity card shows set / viewed / rotated → enforcement off → cleared from the Mac, the Controls row and the action gone. All five activities matched by id. An `afterEach` turns enforcement off, and the resting-state step does after a dead run. **Live:** the virtual Mac (`VirtualMac2,1`) accepts `SetRecoveryLock`; the whole test takes 45–60 s, each Mac round trip well under the 4-minute waits; green with dependencies, headed and 5× repeated (one worker — two copies would toggle the same fleet). Fleet records its own `set_host_recovery_lock_password` with `actor_email: ""`, not null |
 
 ### Built for the batch
 
@@ -115,9 +115,11 @@ Source flows live in `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>
   a click on the input waits out the test. The control's class is the click target.
 - **A signed-in page's cookie doesn't authenticate the API on its own.** Fleet's UI reads the session cookie
   and sends it as a bearer token; `sessionBearerHeaders` does the same.
-- **The users list carries leftover API-only users** (`QA API 1Fleet 1781640859568`, … with generated
-  `admin+…@fleetdm.com` emails) on Workstations. The cleanup sweep only matches `qa-test-*` addresses, so API
-  users created by `api-user-create.spec.ts` survive a dead run. Not fixed here.
+- **Leftover API-only users.** `api-user-create` and `edit` name their API users `QA API <label> <stamp>`, and
+  Fleet generates their emails (`admin+…@fleetdm.com`), so the `qa-test-*` sweep never saw them: premium had
+  **28** by 2026-09-29, half its users, the oldest from May. `deleteLeftoverApiTestUsers` in the unassigned wipe
+  now removes them — API-only and named exactly that way, so the static `QA Static API …` users can't match.
+  Each is used only inside the block that creates it, so anything the sweep finds is a leftover.
 
 ---
 
@@ -137,8 +139,7 @@ Source flows live in `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>
 
 ## Done when
 
-- every target spec above exists and is green on each tier it targets — **`recovery-lock.spec.ts` still owes its
-  first live run**;
+- every target spec above exists and is green on each tier it targets;
 - `npm run check` is clean;
 - each spec ran at least once headed and at least once **with** dependencies (no `--no-deps`);
 - anything timing-sensitive survived `--repeat-each=5`;

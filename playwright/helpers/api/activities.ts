@@ -76,7 +76,7 @@ export async function latestActivityId(request: APIRequestContext): Promise<numb
  * returns it. For activities an earlier run — or this test's own setup — could
  * have left identical (the same host, the same empty value), where finding *a*
  * match proves nothing. `actor` checks `actor_email`; pass `null` for an
- * activity Fleet records on its own.
+ * activity Fleet records on its own (Fleet reports its `actor_email` as `""`).
  */
 export async function assertActivityAfter(
   request: APIRequestContext,
@@ -96,7 +96,7 @@ export async function assertActivityAfter(
     )
     .toBeGreaterThan(afterId);
   if (actor !== undefined) {
-    expect(found!.actor_email ?? null, `"${type}" activity's actor`).toBe(actor);
+    expect(found!.actor_email || null, `"${type}" activity's actor`).toBe(actor);
   }
   return found!;
 }

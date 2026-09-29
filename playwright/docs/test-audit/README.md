@@ -32,8 +32,7 @@ files · ~350 test declarations · 4 projects**.
 > entries (CTL-01…05, 15…18) moved onto inert fixtures: on free, those uploads reach the real VMs.
 
 > **Batch F added 2026-09-29** (`playwright/qawolf-round2-batch-f`): a host's IdP username (area **03** HOSTP-13…15,
-> free **02** HOST-24, free API refusal **14** API-31); Recovery Lock on the real Mac (**03** HOSTP-16 — not yet run
-> live); a team admin's own-fleet scope and the Fleet MFA form rules (**08** USRP-32…34, free API refusal **14** API-32).
+> free **02** HOST-24, free API refusal **14** API-31); Recovery Lock on the real Mac (**03** HOSTP-16); a team admin's own-fleet scope and the Fleet MFA form rules (**08** USRP-32…34, free API refusal **14** API-32).
 > Updated: HOSTP-04 (technician), USRF-05/09 (no MFA checkbox on free), MISC-20 (card headings, Host names row).
 
 ## The area files

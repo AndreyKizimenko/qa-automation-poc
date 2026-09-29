@@ -19,6 +19,7 @@ import {
   deleteAllInstallSoftwareTitles,
   deleteAllPacks,
   deleteAllQaTestUsers,
+  deleteLeftoverApiTestUsers,
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
@@ -64,7 +65,9 @@ test('wipe unassigned state', async ({ request }) => {
   // absorb the 402 "Requires Premium" response on free, so they noop
   // instead of failing the Promise.all batch. deleteAllQaTestUsers only
   // touches addresses matching the QA_TEST_EMAIL_RE prefix in
-  // helpers/api/users.ts, so admin/SSO accounts are untouchable.
+  // helpers/api/users.ts, so admin/SSO accounts are untouchable, and
+  // deleteLeftoverApiTestUsers only API-only users named like the specs'
+  // per-run ones (QA_TEST_API_USER_NAME_RE), never the static API users.
   // Setup Experience references install-software titles, and a referenced
   // title can't be deleted (Fleet returns 409). Clear Setup Experience first
   // so the software-title wipe below isn't racing the reference removal.
@@ -86,6 +89,7 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
     deleteAllQaTestUsers(request),
+    deleteLeftoverApiTestUsers(request),
   ]);
 });
 

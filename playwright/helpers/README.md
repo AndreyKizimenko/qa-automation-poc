@@ -58,7 +58,7 @@ that's a page-object responsibility.
 | `labels.ts` | `deleteLabelsMatching`, `deleteLabelsWithPrefix` (the cleanup sweep's), `getLabelId`, `listLabelHostIds`, `createManualLabel` / `setManualLabelHosts` (a label holding exactly the hosts a targeting spec chose), `deleteLabelById` (returns the status — Fleet refuses to delete a targeted label) |
 | `variables.ts` | `listVariables`, `deleteVariablesMatching` |
 | `enroll-secrets.ts` | Global + per-team enroll-secret getters and setters |
-| `users.ts` | `createUser` / `createApiUser`, `updateUser`, `deleteUser`, `findUserByEmail`, `requirePasswordReset`, `deleteUserSessions`, plus `qaTestEmail()` / `deleteAllQaTestUsers()` for disposable test users |
+| `users.ts` | `createUser` / `createApiUser`, `updateUser`, `deleteUser`, `findUserByEmail`, `requirePasswordReset`, `deleteUserSessions`, plus `qaTestEmail()` / `deleteAllQaTestUsers()` for disposable test users, and `deleteLeftoverApiTestUsers()` for the API-only ones (Fleet-generated emails, so matched by the specs' `QA API <label> <stamp>` naming — `QA_TEST_API_USER_NAME_RE` — never the static `QA Static API …` users) |
 | `static-users.ts` | The `STATIC_USERS` registry of pre-provisioned accounts (never created by the suite) and the accessors that resolve one to its password, bearer token, or expected role display |
 | `role-access.ts` | `expectAllow` / `expectDeny` plus the per-role `PROBES_*` endpoint sets the role-access specs iterate |
 | `cleanup.ts` | Bulk wipes for queries, packs, and global/team policies — used by `setup/cleanup.steps.ts` |

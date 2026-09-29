@@ -36,11 +36,13 @@
  * for them too, which they never answer. Nothing here reads them, and the clear
  * drops what was queued once enforcement is off.
  *
- * Budget: each step waits on the Mac, typically well under a minute after the
- * cron tick. The waits allow 4 minutes each; the first (a dead run's clear)
+ * Budget: the whole test takes 45–60 s on the premium Mac (2026-09-29), each
+ * step well under a minute after the cron tick. The waits allow 4 minutes each; the first (a dead run's clear)
  * normally returns at once, so the other four fit the 25-minute timeout with
  * room for the UI. Enforcement is turned off in an `afterEach`, which runs even
- * after a timeout (a `finally` inside the test wouldn't).
+ * after a timeout (a `finally` inside the test wouldn't). Repeat it on one
+ * worker (`--workers=1`): two copies at once would toggle the same fleet's
+ * setting under each other.
  */
 import { test, expect } from '@fixtures';
 import {
