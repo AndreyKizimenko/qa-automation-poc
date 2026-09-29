@@ -43,7 +43,7 @@ Label/report counts exceed the file count because three referenced files hold mu
 `lib/labels/macs-with-fleet-maintained-apps-installed.yml` (9 labels),
 `lib/labels/windows-with-fleet-maintained-apps-installed.yml` (6 labels).
 
-Nightly chain (`.github/workflows/nightly-qa-gitops-{premium,free}.yml`, 05:00 UTC):
+Nightly chain (`.github/workflows/nightly-qa-gitops-{premium,free}.yml`, run by `QA — Nightly` after the Render redeploy):
 apply baseline → verify baseline → apply **min** → verify min. Because baseline and min differ in
 every count, the pair proves gitops both **creates and deletes**; it also means the instance is
 left in the *min* shape overnight.
@@ -946,3 +946,5 @@ is indistinguishable.
    `cleanup-setup` deletes all queries, global + team policies, profiles and scripts — i.e. exactly what
    GV-08..22 compare. Either gate the Playwright suites on the gitops chain completing (`workflow_run`) or
    fold verification into a single orchestrator, so a "drift" failure always means drift and never a race.
+   **Resolved 2026-09-29:** the single orchestrator is `QA — Nightly` (`qa-nightly.yml`) — a tier's suite
+   starts only after its gitops chain has finished.

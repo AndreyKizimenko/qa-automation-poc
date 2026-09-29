@@ -4,7 +4,12 @@
  * points at the broken action; a final test confirms the dashboard
  * activity feed surfaces both lifecycle entries.
  *
- * Profiles have no in-UI edit step — the lifecycle is upload + delete only.
+ * **Any upload here can reach the real VMs.** Free has no fleets, so Unassigned
+ * is where the MDM-enrolled macOS and Windows VMs are, and Fleet's profile
+ * reconciler sends them whatever it finds every 30 s — the upload → delete window
+ * races that tick rather than avoiding it. Only the inert pair (test-data/…/profiles
+ * READMEs) may ever be uploaded by this spec: a custom preference domain nothing
+ * reads, and Game DVR off.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,36 +31,29 @@ interface ProfileCase {
 const PROFILE_CASES: ProfileCase[] = [
   {
     os: 'macOS',
-    fileName: 'fleet-test-passcode.mobileconfig',
+    fileName: 'fleet-pw-inert.mobileconfig',
     filePath: path.resolve(
       __dirname,
-      '../../../../../test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig',
+      '../../../../../test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig',
     ),
-    displayName: 'Fleet Test Passcode',
+    displayName: 'Fleet Playwright Inert',
     createActivity: 'created_macos_profile',
     deleteActivity: 'deleted_macos_profile',
     hostsPhrase: 'macOS, iOS, and iPadOS hosts',
   },
   {
     os: 'Windows',
-    fileName: 'fleet-test-screenlock.xml',
+    fileName: 'fleet-pw-inert.xml',
     filePath: path.resolve(
       __dirname,
-      '../../../../../test-data/windows/profiles/fleet-test-screenlock.xml',
+      '../../../../../test-data/windows/profiles/fleet-pw-inert.xml',
     ),
-    displayName: 'fleet-test-screenlock',
+    displayName: 'fleet-pw-inert',
     createActivity: 'created_windows_profile',
     deleteActivity: 'deleted_windows_profile',
     hostsPhrase: 'Windows hosts',
   },
 ];
-
-// Both fixtures gate access to a host — a passcode policy and a DeviceLock
-// password + inactivity lock — and free has no fleets: Unassigned holds the real
-// VMs, so Fleet delivers an upload here to them before the delete step runs.
-// Unblocked by the inert profile fixtures in batch E
-// (docs/qawolf-migration/round-2/E-label-targeting.md §1), which replace both.
-test.skip(true, 'fixtures lock a real VM, and free delivers every upload to the VMs — see TODO.md');
 
 for (const profile of PROFILE_CASES) {
   test.describe(`MDM • OS settings — configuration profiles — ${profile.os}`, () => {

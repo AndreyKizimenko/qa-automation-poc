@@ -202,9 +202,17 @@ export class LabelsPage {
     return option.or(this.actionsRow.getByRole('button', { name: action, exact: true }));
   }
 
-  /** Open a label row's Actions dropdown and pick an option. */
+  /**
+   * Open a label row's Actions dropdown and pick an option. The dropdown can
+   * fail to open — or close again — when the row re-renders under the click, and
+   * a click on an option that never renders has no timeout of its own, so the
+   * menu is reopened until the option shows.
+   */
   async runRowAction(name: string, action: LabelRowAction): Promise<void> {
-    await this.openRowActions(name);
+    await expect(async () => {
+      if (!(await this.rowActionOption(action).isVisible())) await this.openRowActions(name);
+      await expect(this.rowActionOption(action)).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await this.rowActionOption(action).click();
   }
 }

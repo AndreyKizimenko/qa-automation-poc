@@ -1,17 +1,11 @@
 name: Render — Nightly deploy
 
-# Triggers a redeploy of the Render-hosted Fleet instances so each morning's
-# GitOps runs and smoke tests hit the latest Fleet release.
-#
-# Order on a typical day:
-#   1. This workflow (23:00 UTC) — Render redeploys both instances
-#   2. gitops-free (06:00 UTC) — applies free config
-#   3. gitops-premium (06:15 UTC) — applies premium config
-#   4. Smoke tests (manual or scheduled)
+# Triggers a redeploy of the Render-hosted Fleet instances so each night's
+# gitops runs and suites hit the latest Fleet release. The first step of
+# `QA — Nightly` (qa-nightly.yml), which then waits for the deploys to finish;
+# a hook only queues its deploy.
 
 on:
-  schedule:
-    - cron: '0 4 * * *' # 04:00 UTC = 11 PM CDT (10 PM CST). 60 min before nightly orchestrators.
   workflow_dispatch:
   workflow_call:
 

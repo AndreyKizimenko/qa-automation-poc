@@ -1,0 +1,110 @@
+name: QA — Nightly
+# The nightly as one chain: redeploy both Render instances, give the deploys
+# time to finish, then per tier the nightly gitops sequence and that tier's
+# Playwright suite — the tier chains `QA — Branch run` runs, against main. Each
+# step starts when the one before it ends. A tier's suite runs once its gitops
+# chain has finished, green or red: a failed apply or drift check is its own
+# signal, and the night's test results still come in.
+#
+#   Render deploy hooks ─► wait (30 min) + both instances healthy
+#     ├─► gitops premium ─► Playwright premium (whatever gitops did)
+#     └─► gitops free    ─► Playwright free    (whatever gitops did)
+#
+# Scheduled for 05:00 UTC (12 AM CDT). GitHub starts scheduled runs late — since
+# 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — and
+# the chain doesn't mind: every step waits on the one before it, not on a clock.
+# For a start at an exact time, an outside scheduler can call workflow_dispatch.
+#
+#   gh workflow run "QA — Nightly"
+#
+# The tier jobs take no concurrency group of their own: the called workflows
+# hold their instance's group (`<tier>-fleetqa-instance`), and a job in the same
+# group would wait on its own callees. The chain's own group keeps a second
+# chain — a manual run beside the scheduled one — from redeploying the
+# instances under a running suite.
+
+on:
+  workflow_dispatch:
+    inputs:
+      render-wait-minutes:
+        description: Minutes to let the Render deploys finish before gitops starts
+        type: number
+        default: 30
+  schedule:
+    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (11 PM CST); GitHub starts it hours late
+
+concurrency:
+  group: qa-nightly-chain
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  render-deploy:
+    uses: ./.github/workflows/render-deploy.yml
+    secrets: inherit
+
+  # A deploy hook only queues the deploy, and Render keeps the old instance
+  # serving until the new one is live, so the instance answering says nothing
+  # about the deploy being done — the wait is what covers it. The health check
+  # after it catches an instance that came up broken. It runs even if a hook
+  # failed: that instance simply wasn't redeployed, and the night still runs.
+  # Past this point each job checks render-settle's result itself, because a
+  # job's default `success()` also counts a failed hook further up the chain.
+  render-settle:
+    needs: render-deploy
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Let the deploys finish
+        env:
+          WAIT_MINUTES: ${{ inputs.render-wait-minutes || 30 }}
+        run: sleep $(( WAIT_MINUTES * 60 ))
+
+      - name: Both instances are healthy
+        env:
+          PREMIUM_URL: ${{ secrets.FLEET_PREMIUM_URL }}
+          FREE_URL: ${{ secrets.FLEET_FREE_URL }}
+        run: |
+          for tier in premium free; do
+            url=$([[ $tier == premium ]] && echo "$PREMIUM_URL" || echo "$FREE_URL")
+            for attempt in $(seq 1 30); do
+              if curl -fsS -o /dev/null --max-time 10 "$url/healthz"; then
+                echo "$tier is healthy"
+                continue 2
+              fi
+              sleep 30
+            done
+            echo "::error::The $tier instance isn't healthy 15 min after the deploy wait"
+            exit 1
+          done
+
+  gitops-premium:
+    needs: render-settle
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/nightly-qa-gitops-premium.yml
+    secrets: inherit
+
+  playwright-premium:
+    needs: [render-settle, gitops-premium]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/playwright-premium.yml
+    secrets: inherit
+
+  gitops-free:
+    needs: render-settle
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/nightly-qa-gitops-free.yml
+    secrets: inherit
+
+  playwright-free:
+    needs: [render-settle, gitops-free]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/playwright-free.yml
+    secrets: inherit

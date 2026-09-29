@@ -5,6 +5,7 @@ import { Navbar } from '../components/Navbar';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
 import { EditSoftwareModal } from '../components/EditSoftwareModal';
 import { EditAppearanceModal } from '../components/EditAppearanceModal';
+import { Toast } from '../components/Toast';
 import { VersionsModal } from '../components/VersionsModal';
 
 /** Items Fleet offers in the summary card's Actions menu. */
@@ -37,6 +38,7 @@ export class SoftwareTitleDetailPage {
   readonly editSoftwareModal: EditSoftwareModal;
   readonly editAppearanceModal: EditAppearanceModal;
   readonly versionsModal: VersionsModal;
+  readonly toast: Toast;
   /**
    * The page's main software-name heading. The visible text is the title's
    * display name, but the accessible name is the static `software display
@@ -77,6 +79,7 @@ export class SoftwareTitleDetailPage {
     this.editSoftwareModal = new EditSoftwareModal(page);
     this.editAppearanceModal = new EditAppearanceModal(page);
     this.versionsModal = new VersionsModal(page);
+    this.toast = new Toast(page);
     this.hostCountLink = page.locator('a[href*="software_title_id"]').first();
 
     // Scoped to the summary card: the Edit-appearance modal renders its own

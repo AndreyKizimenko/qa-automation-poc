@@ -58,6 +58,12 @@ regenerate both on every restart.
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
   pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
   assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
+- **A simulation can answer what Fleet decides server-side** — which hosts a profile is listed for, which are
+  offered a software title, which a policy or report targets — so a label-targeting spec moves two onto the VMs
+  fleet as the "outside the label" hosts beside the real VM. Borrow with `findMdmSimulations` (only for
+  profiles: MDM-enrolled simulations are scarce) or `findSimulations` (everything else — a disjoint pool), each
+  spec on its own slice (the registry is in `helpers/api/hosts.ts`), move them back in the `finally`; the VMs
+  sweep returns any a dead run left.
 
 ### Never deploy a passcode profile to a real host
 
@@ -69,14 +75,20 @@ by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, n
 The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel.
 
-`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile, and so is its Windows
-counterpart `test-data/windows/profiles/fleet-test-screenlock.xml` (a DeviceLock policy: password enforcement,
-inactivity lock, PIN length). Both are safe only where they are used today — library upload → download →
-delete, which never reaches a host. Do not extend it to a
-delivery test; write an inert fixture instead (a harmless preference domain that changes nothing about access,
-removed in the same test that deployed it).
+**Uploading a profile is delivering it.** There is no "library-only" profile: on **free** there are no fleets,
+so Unassigned is where the real VMs are, and Fleet's profile reconciler — every 30 s — sends them whatever it
+finds. A lifecycle spec's upload → delete window is a race against that tick, not a guarantee. The suite once kept a passcode profile and a Windows DeviceLock profile for
+"upload → download → delete only"; the free VMs received them 7 and 32 times before anyone noticed. The only
+profiles in `test-data/` are the inert pair `fleet-pw-inert.{mobileconfig,xml}` (a preference domain nothing
+reads; Game DVR off) — see their READMEs. Build any new one on the same pattern, remove it in the test that
+delivered it, and never commit a lock profile, even for a spec that "only uploads" it.
 
 If you are unsure whether a payload is safe to deploy, it is not. Ask first.
+
+The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
+version or deadline, a DDM software-update enforcement declaration, or Recovery Lock password enforcement —
+they make the real hosts download an OS update, reboot mid-suite, or take a recovery password. Exercise those
+settings on Workstations and restore them in the same test.
 
 ## Locators and waits (Fleet-specific gotchas)
 
@@ -201,3 +213,5 @@ npm run check          # tsc --noEmit + eslint
 ```
 
 This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`.github/workflows/playwright-{premium,free}.yml`), but don't rely on that to catch what `npm run check` would.
+
+While building, run only the specs you changed — `npx playwright test --project=<tier> <spec-file-names>` on every tier they target, with dependencies at least once, `--workers=2` for anything on the real VMs, and nothing else running against the instance (`gh run list`). The full suite (~43 min on premium) runs once, at the end, on CI: `gh workflow run "QA — Branch run" -f branch=<branch>` runs each tier's nightly gitops chain and then its suite. The `playwright-test-author` skill has the detail.

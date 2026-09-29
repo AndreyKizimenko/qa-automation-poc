@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadDescription</key>
+			<string>Writes one marker key to a preference domain no software reads</string>
+			<key>PayloadDisplayName</key>
+			<string>Fleet Playwright inert setting</string>
+			<key>PayloadIdentifier</key>
+			<string>com.fleetdm.qa.playwright.inert.setting</string>
+			<key>PayloadOrganization</key>
+			<string>FleetDM</string>
+			<key>PayloadType</key>
+			<string>com.fleetdm.qa.playwright.inert</string>
+			<key>PayloadUUID</key>
+			<string>CBB96A1D-BCFC-4415-A326-686EB10BF511</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>Marker</key>
+			<string>fleet-playwright-inert</string>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>Fleet Playwright inert profile — safe to deliver to a real host</string>
+	<key>PayloadDisplayName</key>
+	<string>Fleet Playwright Inert</string>
+	<key>PayloadIdentifier</key>
+	<string>com.fleetdm.qa.playwright.inert</string>
+	<key>PayloadOrganization</key>
+	<string>FleetDM</string>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>4AC5409E-EFAA-444A-8E78-770E907AFEA1</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>

@@ -1,5 +1,7 @@
 import { APIRequestContext, expect } from '@playwright/test';
+import * as crypto from 'crypto';
 import { apiUrl, authHeaders } from './core';
+import { getSoftwarePackage } from './software';
 
 interface FmaListEntry {
   id: number;
@@ -160,6 +162,11 @@ export async function listFleetMaintainedTitles(
  * the UI left pinned — an exact pin freezes Fleet's hourly auto-update cron for
  * that title, so a spec that walks away from one stops the fleet accumulating
  * new versions.
+ *
+ * The body is written by hand: Playwright leaves an empty-string field out of a
+ * `multipart` request (a `FormData` one too), and Fleet reads a missing
+ * `version` as "no change" — a 200 that unpins nothing. The pin is read back so
+ * a request Fleet ignored fails here rather than in whatever runs next.
  */
 export async function setPinnedVersion(
   request: APIRequestContext,
@@ -167,10 +174,20 @@ export async function setPinnedVersion(
   titleId: number,
   version: string,
 ): Promise<void> {
+  const boundary = `----fleet-pw-${crypto.randomUUID()}`;
+  const fields = { fleet_id: String(fleetId), version };
+  const body =
+    Object.entries(fields)
+      .map(([name, value]) => `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`)
+      .join('') + `--${boundary}--\r\n`;
   const res = await request.patch(apiUrl(`software/titles/${titleId}/package`), {
-    headers: authHeaders(),
-    multipart: { fleet_id: String(fleetId), version },
+    headers: { ...authHeaders(), 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+    data: Buffer.from(body),
     timeout: 60_000,
   });
   await expect(res, `Failed to set version pin on title ${titleId}`).toBeOK();
+  expect(
+    (await getSoftwarePackage(request, fleetId, titleId))?.pinnedVersion,
+    `title ${titleId}'s pin on fleet ${fleetId} after setting it to "${version}"`,
+  ).toBe(version);
 }

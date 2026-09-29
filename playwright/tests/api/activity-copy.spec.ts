@@ -60,6 +60,14 @@ test.describe('activityCopy', () => {
       .test(`ran UserList as a custom MDM command on this host.`)).toBe(true);
     expect(activityCopy.mdmCommand.acknowledged({ requestType: 'UserList' })
       .test(`The UserList command was acknowledged. less than a minute ago`)).toBe(true);
+    const profile = 'pw-rt-x (1)';
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'InstallProfile', name: profile, status: 'was acknowledged' })
+      .test(`The InstallProfile command for ${profile} was acknowledged. less than a minute ago`)).toBe(true);
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'InstallProfile', name: profile, status: 'failed' })
+      .test(`The InstallProfile command for ${profile} failed. 2 minutes ago`)).toBe(true);
+    // A command for one profile doesn't match another's.
+    expect(activityCopy.mdmCommand.forProfile({ requestType: 'RemoveProfile', name: 'pw-rt-x', status: 'is pending' })
+      .test(`The RemoveProfile command for ${profile} is pending.`)).toBe(false);
   });
 
   test('hostSoftware.* — installed / uninstalled, failed and upcoming', () => {
@@ -143,18 +151,18 @@ test.describe('activityCopy', () => {
       const WINDOWS = 'Windows hosts';
 
       process.env.SUITE = 'free';
-      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE })
-        .test('added configuration profile Fleet Test Passcode to all macOS, iOS, and iPadOS hosts.')).toBe(true);
-      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS })
-        .test('deleted configuration profile fleet-test-screenlock from all Windows hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Playwright Inert', hostsPhrase: APPLE })
+        .test('added configuration profile Fleet Playwright Inert to all macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS })
+        .test('deleted configuration profile fleet-pw-inert from all Windows hosts.')).toBe(true);
 
       process.env.SUITE = 'premium';
-      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE, scope: 'Unassigned' })
-        .test('added configuration profile Fleet Test Passcode to unassigned macOS, iOS, and iPadOS hosts.')).toBe(true);
-      expect(activityCopy.configurationProfile.added({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
-        .test('added configuration profile fleet-test-screenlock to Windows hosts assigned to the Workstations fleet.')).toBe(true);
-      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
-        .test('deleted configuration profile fleet-test-screenlock from Windows hosts assigned to the Workstations fleet.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Playwright Inert', hostsPhrase: APPLE, scope: 'Unassigned' })
+        .test('added configuration profile Fleet Playwright Inert to unassigned macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('added configuration profile fleet-pw-inert to Windows hosts assigned to the Workstations fleet.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('deleted configuration profile fleet-pw-inert from Windows hosts assigned to the Workstations fleet.')).toBe(true);
     } finally {
       process.env.SUITE = original;
     }

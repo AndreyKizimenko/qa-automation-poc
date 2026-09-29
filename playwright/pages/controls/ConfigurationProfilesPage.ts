@@ -2,8 +2,18 @@ import { Page, Locator, expect, Download } from '@playwright/test';
 import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
+import { TargetLabelSelector, type LabelMode } from '../components/TargetLabelSelector';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
+
+/**
+ * A profile's custom target, as the Add / Edit profile modal sets it. Omit it for
+ * "All hosts". Profiles exclude "any" of their Exclude labels; there is no mode.
+ */
+export interface ProfileTarget {
+  include?: { labels: string[]; mode?: LabelMode };
+  exclude?: string[];
+}
 
 /**
  * `/controls/os-settings/configuration-profiles` — the list of custom MDM
@@ -16,9 +26,14 @@ import { Toast } from '../components/Toast';
  * not auto-submit; the modal stages the file and a separate "Add profile"
  * button submits.
  *
- * Each profile row is a `.profile-list-item` with download and trash icon
- * buttons; the trash opens a confirmation modal titled "Delete
- * configuration profile".
+ * Each profile row is a `.profile-list-item` with details, edit, download
+ * and trash buttons, each named for the profile ("Edit <name>"); the trash
+ * opens a confirmation modal titled "Delete configuration profile". On
+ * premium a targeted row also shows "N labels", with a warning icon when one
+ * of them is broken.
+ *
+ * On premium both modals carry the label target — see
+ * {@link TargetLabelSelector}. Free renders neither.
  */
 export class ConfigurationProfilesPage {
   readonly page: Page;
@@ -35,6 +50,13 @@ export class ConfigurationProfilesPage {
   readonly uploadInput: Locator;
   readonly uploadConfirmButton: Locator;
 
+  readonly uploadTargets: TargetLabelSelector;
+
+  readonly editModal: Locator;
+  readonly editTargets: TargetLabelSelector;
+  readonly editUpdateButton: Locator;
+  readonly editCancelButton: Locator;
+
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
 
@@ -45,7 +67,8 @@ export class ConfigurationProfilesPage {
     this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
 
-    this.heading = page.getByRole('heading', { name: 'Configuration profiles' });
+    // Exact: a fleet with no profiles also shows a "No configuration profiles" heading.
+    this.heading = page.getByRole('heading', { name: 'Configuration profiles', exact: true });
     // The "Add profile" button label is shared between the empty-state card
     // and the populated-list heading; both open the same modal.
     this.addProfileButton = page.getByRole('button', { name: 'Add profile' }).first();
@@ -59,6 +82,12 @@ export class ConfigurationProfilesPage {
     // The modal's submit button shares its label with the page-level
     // "Add profile" button — scope the locator inside the modal.
     this.uploadConfirmButton = this.uploadModal.getByRole('button', { name: 'Add profile' });
+    this.uploadTargets = new TargetLabelSelector(this.uploadModal);
+
+    this.editModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit profile' });
+    this.editTargets = new TargetLabelSelector(this.editModal);
+    this.editUpdateButton = this.editModal.getByRole('button', { name: 'Update profile', exact: true });
+    this.editCancelButton = this.editModal.getByRole('button', { name: 'Cancel', exact: true });
 
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete configuration profile' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
@@ -79,13 +108,79 @@ export class ConfigurationProfilesPage {
     return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
-  async uploadProfile(filePath: string): Promise<void> {
+  /**
+   * Uploads a profile through the Add profile modal, custom-targeted when
+   * `target` is given (premium only).
+   */
+  async uploadProfile(filePath: string, target?: ProfileTarget): Promise<void> {
     await this.addProfileButton.click();
     await expect(this.uploadModal).toBeVisible();
     await this.uploadInput.setInputFiles(filePath);
+    if (target) await this.setTarget(this.uploadTargets, target);
     await this.uploadConfirmButton.click();
     await this.toast.expectSuccess('Successfully uploaded.');
     await expect(this.uploadModal).toBeHidden();
+  }
+
+  private async setTarget(selector: TargetLabelSelector, target: ProfileTarget): Promise<void> {
+    await selector.chooseCustom();
+    if (target.include) await selector.include(target.include.labels, target.include.mode);
+    if (target.exclude) await selector.exclude(target.exclude);
+  }
+
+  /** The row's "N labels" count — premium, targeted profiles only. */
+  labelCount(name: string): Locator {
+    return this.itemByName(name).getByText(/^\d+ labels?$/);
+  }
+
+  /** The warning icon a row shows beside its label count when a label is broken. */
+  brokenLabelWarning(name: string): Locator {
+    // Icon renders an unnamed <svg>; its test id is the only handle.
+    return this.itemByName(name).getByTestId('warning-icon');
+  }
+
+  /**
+   * Opens a profile's Edit profile modal, where its target is read and changed.
+   * Like download and delete, the button only renders while the row is hovered.
+   */
+  async openEdit(name: string): Promise<void> {
+    const row = this.itemByName(name);
+    await clickHoverAction(row, row.getByRole('button', { name: `Edit ${name}`, exact: true }));
+    await expect(this.editModal).toBeVisible();
+  }
+
+  /** Replaces the open Edit modal's target with `target` and saves it. */
+  async updateTarget(target: ProfileTarget | 'All hosts'): Promise<void> {
+    if (target === 'All hosts') {
+      await this.editTargets.chooseAllHosts();
+    } else {
+      await this.clearTicked(this.editTargets);
+      await this.setTarget(this.editTargets, target);
+    }
+    await this.editUpdateButton.click();
+    await this.toast.expectSuccess('Successfully updated profile.');
+    await expect(this.editModal).toBeHidden();
+  }
+
+  /**
+   * Unticks every label on both tabs, so a new target isn't merged with the old
+   * one. Reads the ticked names first and unticks each once, so a checkbox that
+   * refuses the click fails its assertion instead of looping.
+   */
+  private async clearTicked(selector: TargetLabelSelector): Promise<void> {
+    await selector.chooseCustom();
+    for (const tab of ['Include', 'Exclude'] as const) {
+      await (tab === 'Include' ? selector.includeTab : selector.excludeTab).click();
+      const names = await selector
+        .panel(tab)
+        .getByRole('checkbox', { checked: true })
+        .evaluateAll((boxes) => boxes.map((b) => b.getAttribute('aria-label') ?? ''));
+      for (const name of names) {
+        const box = selector.labelCheckbox(name, tab);
+        await box.click();
+        await expect(box).not.toBeChecked();
+      }
+    }
   }
 
   /**

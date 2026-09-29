@@ -1,10 +1,10 @@
 name: Playwright — Free
 
 # Runs the Playwright free project (tests/e2e/free + tests/e2e/shared + tests/api outside premium-only trees) against the free Fleet instance.
+# Nightly as the last step of its tier in `QA — Nightly` (qa-nightly.yml), after
+# the free gitops chain.
 
 on:
-  schedule:
-    - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -104,7 +104,7 @@ jobs:
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose
       # report matters most.
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: ${{ always() }}
         with:
           name: playwright-report-free

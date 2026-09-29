@@ -15,6 +15,8 @@ export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
 export type { TeamScope } from './components/TeamDropdown';
+export { TargetLabelSelector } from './components/TargetLabelSelector';
+export type { LabelMode, LabelScopeOption } from './components/TargetLabelSelector';
 export { PlatformDropdown } from './components/PlatformDropdown';
 export type { AppStorePlatformLabel } from './components/PlatformDropdown';
 export { StatusFilter } from './components/StatusFilter';
@@ -76,6 +78,7 @@ export { OsSettingsPage } from './controls/OsSettingsPage';
 export { DiskEncryptionPage } from './controls/DiskEncryptionPage';
 export type { DiskEncryptionPlatform } from './controls/DiskEncryptionPage';
 export { ConfigurationProfilesPage } from './controls/ConfigurationProfilesPage';
+export type { ProfileTarget } from './controls/ConfigurationProfilesPage';
 export { CertificatesPage } from './controls/CertificatesPage';
 export { InstallSoftwarePage } from './controls/InstallSoftwarePage';
 export type { InstallSoftwarePlatform } from './controls/InstallSoftwarePage';
@@ -109,6 +112,7 @@ export { PolicyEditPage } from './policies/PolicyEditPage';
 export type {
   PolicyFormValues,
   PolicyPlatform,
+  PolicyTarget,
   PolicyTargetType,
   SavePolicyValues,
 } from './policies/PolicyEditPage';

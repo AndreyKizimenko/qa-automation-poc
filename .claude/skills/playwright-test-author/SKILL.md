@@ -98,6 +98,37 @@ the wrong reason, so:
    global report, every global policy and Workstations' policies *before* the first test. A
    spec that reads pre-existing data passes with `--no-deps` and fails every nightly.
 4. **Repeat anything timing-sensitive** (`--repeat-each=5`) rather than trusting one pass.
+5. **Review your own work before the PR** with `playwright-test-reviewer`, and fix what it finds or
+   write down why not.
+
+### Run what you changed — the full suite once, at the end
+
+The full suite is long (~43 min on premium in CI, most of it real-VM work that more workers don't
+speed up). While building, every run above is **scoped to the specs you changed**:
+
+- `npx playwright test --project=premium <spec-file-names>` — and `--project=free` for anything in
+  `shared/`. That runs the setup and cleanup projects (including the VM resting-state step), then
+  only your tests. **Not** `npm run test:premium -- <spec>`: it also names the exclusive project,
+  whose dependency is the entire main project.
+- An `exclusive/` spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` —
+  by file name, not path.
+- `--workers=2` for anything on the real VMs (CI's shape; more stacks a VM's queue into timeouts).
+- `--output=<scratchpad>/<run-name>`, so run artifacts stay out of the repo.
+- **Before a run that touches the real VMs, check nothing else is using the instance:**
+  `gh run list --limit 5`, and stay clear of the nightly — `QA — Nightly`, about 1.5 h (Render redeploy, a 30-min wait, then each tier's gitops chain and suite), scheduled for 05:00 UTC but started 4–6.5 h late by GitHub; `gh run list` shows whether it's running. Two runs on one VM
+  corrupt each other: each VM works one queue, and each run's cleanup removes the other's installs.
+- **The full suite runs once, at the end, on CI:** `gh workflow run "QA — Branch run" -f branch=<branch>`
+  — each tier's nightly gitops chain, then its suite. Triage red with `playwright-run-reviewer`.
+
+### Docs move with the code
+
+A spec isn't done until the docs that describe it are current, in the same commit: the batch or
+test-plan file that owns it, a `docs/test-audit/` entry per `test()` (steps a person performs,
+validations tagged *(UI)* / *(API)*, an honest assessment) with the audit README's counts,
+`helpers/README.md` / `pages/README.md` for new helpers and page objects, the `test-data/` README
+for a new fixture, `playwright/CLAUDE.md` for a new suite-wide rule, and
+`docs/blocked-by-product-bugs.md` for a skip owed to a Fleet bug. When you learn a rule every spec
+should follow, add it here too.
 
 ## Fleet-specific traps
 
@@ -119,18 +150,41 @@ the wrong reason, so:
   packages and receive real profiles — anything asserting software inventory, script output,
   profile delivery, certificates or agent versions needs one. `kind: 'simulated'` is ~300
   osquery-perf hosts for volume work only: they ignore live-query SQL, return no rows ~20% of
-  runs and never install anything, so a green assertion against one proves nothing.
+  runs and never install anything, so a green assertion against one proves nothing. **What Fleet
+  decides server-side** — which hosts a profile is listed for, which are offered software — a
+  simulation shows as well as a VM, so it can be the "outside the label" host; what the host *does*
+  (delivered, verified, installed) needs a VM.
+- **Borrowing simulations for a targeting test:** `findMdmSimulations` for profiles (the enrolled
+  pool is small — 8 macOS hosts), `findSimulations` for software, policies, reports and label
+  membership; claim your own slice in the registry in `helpers/api/hosts.ts`. Assert **set
+  membership over your own hosts**, never over the fleet — other specs' borrowed hosts are there too.
+- **The real VMs' software is durable.** `gitops/premium-fleetqa/fleets/vms.yml` keeps one inert
+  package per platform (plus 7-Zip's `.exe`) and a Fleet-maintained app each for macOS and Windows,
+  listed in `helpers/vm-fixtures.ts`, resting **uninstalled**. Use them for install/uninstall and
+  leave them uninstalled; never delete their titles or change their scripts, labels or versions. A
+  test that changes a title uses a per-run `fleet-pw-*` package (`helpers/deb.ts`), which the cleanup
+  sweep recognises by that prefix.
+- **Waiting for a host:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on
+  `software_updated_at` — it moves only when the inventory *changes* — and wait out an outstanding
+  refetch (`waitForNoPendingRefetch`) before requesting your own: Fleet queues one after every
+  install and uninstall, and a new request merges into it.
+- **Anything a timed-out test would leave on a VM needs a cleanup home.** Playwright aborts a
+  timed-out test before its `finally`. Things Fleet stores by name go in the VMs sweep in
+  `setup/cleanup.steps.ts`; state on the host goes in its *resting state* step.
+- **Never change what updates, reboots or locks a real VM** — on the VMs fleet, no OS-update
+  minimum version or deadline, no DDM software-update enforcement, no Recovery Lock password
+  enforcement. Exercise those settings on Workstations and restore them in the same test.
 - **NEVER deploy a passcode profile to a real host.** It blocks access to the VM permanently —
   there is no recovery and no re-provisioning automation, so one deployed passcode payload ends
   every other real-host spec until someone rebuilds the machine by hand. No
   `com.apple.mobiledevice.passwordpolicy`, no `forcePIN` / `minLength` / `maxInactivity` /
   `allowSimple`, for any reason. The same goes for anything else gating entry: screen lock,
   inactivity timeout, FileVault, login-window restrictions, or disabling SSH / remote management
-  / the MDM channel. `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** one
-  of these, and so is `test-data/windows/profiles/fleet-test-screenlock.xml` (a Windows DeviceLock
-  policy) — both are safe only in the library upload/download/delete lifecycle, which never
-  reaches a host. For a delivery test, write an inert fixture (a harmless preference domain that changes
-  nothing about access) and remove it in the same test. If you are unsure whether a payload is
+  / the MDM channel. **Uploading a profile is delivering it** — there is no "library-only"
+  profile: on free, Unassigned *is* where the real VMs are, so even an upload → delete lifecycle
+  reaches them (the suite's old passcode and DeviceLock fixtures did, 7 and 32 times). Use the inert
+  pair `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*`, or build a new one on its
+  pattern, and remove it in the test that delivered it. If you are unsure whether a payload is
   safe, it is not — ask first.
 
 ## Code style

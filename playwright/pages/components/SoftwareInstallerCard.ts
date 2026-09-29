@@ -24,6 +24,11 @@ export class SoftwareInstallerCard {
   readonly card: Locator;
   readonly header: Locator;
   readonly editBadge: Locator;
+  /**
+   * The label-scope badge in either state — "All hosts", or the count of labels
+   * once the package is scoped — both open the Edit-software modal.
+   */
+  readonly scopeBadge: Locator;
   readonly latestBadge: Locator;
   readonly pinnedBadge: Locator;
   readonly majorVersionBadge: Locator;
@@ -57,6 +62,9 @@ export class SoftwareInstallerCard {
     // match: the accordion header is itself a role="button" whose accessible
     // name nests this badge's text, so a substring match resolves to both.
     this.editBadge = this.card.getByRole('button', { name: 'All hosts', exact: true });
+    // The count badge's name is the number alone (its tag icon has none);
+    // anchored, like the exact match above, so the header's nested name can't match.
+    this.scopeBadge = this.card.getByRole('button', { name: /^(All hosts|\d+)$/ });
 
     // Pin-state badges. Only Fleet-maintained rows render one, and only one at
     // a time; each opens the Versions modal. Exact match for the same reason as
@@ -81,6 +89,11 @@ export class SoftwareInstallerCard {
   /** Opens the Edit-software modal via the collapsed header's label badge. */
   async openEdit(): Promise<void> {
     await this.editBadge.click();
+  }
+
+  /** Opens the Edit-software modal from the scope badge, scoped or not. */
+  async openScopeEditor(): Promise<void> {
+    await this.scopeBadge.click();
   }
 
   /**

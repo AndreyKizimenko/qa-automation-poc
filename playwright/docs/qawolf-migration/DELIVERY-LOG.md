@@ -111,6 +111,94 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch E — label targeting
+
+Profiles, declarations, software, policies and reports scoped to labels, asserted as set membership: the real
+VM inside the label is delivered to, a simulation outside it isn't listed. Detail in
+[round-2/E-label-targeting.md → What landed](round-2/E-label-targeting.md#what-landed).
+
+**Inert profile fixtures — and the lock profiles the free VMs had been getting.** Batch E's blocker was a pair
+of profiles safe to deliver to a real VM. Writing them turned up that the suite already *was* delivering
+profiles to real VMs: free has no fleets, so the free lifecycle spec's uploads went to Unassigned, where the
+free VMs are, and Fleet's 30-second profile reconciler sent them whenever it ticked before the delete step. The
+Windows VM had received the DeviceLock fixture 32 times, the macOS VM the passcode fixture 7 — removed ~90 s
+later each time, which is why neither locked. Skipped on `main` the same night (PR #64); then:
+
+- `test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig` — one key in a preference domain nothing reads;
+  `test-data/windows/profiles/fleet-pw-inert.xml` — Game DVR off. Each with a README: why it's safe, how to
+  prove it arrived (a *filtered* `managed_policies` read; the `PolicyManager` registry key), and what removal
+  does. Both proven on the premium VMs: listed 21 s after upload, verified by Fleet about a minute later, read
+  back on the device, deleted — the Mac's domain gone in 21 s, the Windows value back to its default in 8 s.
+- Both library lifecycle specs moved onto them (both tiers green, with dependencies);
+  `fleet-test-passcode.mobileconfig` and `fleet-test-screenlock.xml` deleted; the signed-upload rejection
+  fixture re-signed from the inert profile.
+- `CLAUDE.md`, the author and reviewer skills and the round-2 README now say **uploading a profile is
+  delivering it**.
+
+**Who a targeted profile reaches** — `premium/controls/os-settings/profile-label-targets.spec.ts` (new, +
+`TargetLabelSelector`, `helpers/profiles.ts`, `helpers/api/profiles.ts`, `findMdmSimulations`, the Controls tab on
+`HostDetailsPage`, the Edit modal on `ConfigurationProfilesPage`). Five macOS flows and the Windows trio in two
+tests. The real VM sits inside the labels and two MDM-enrolled simulations borrowed onto the VMs fleet sit
+outside them — the server-side decision a simulation answers as well as a VM, the delivery only the VM can — and
+each profile must be listed on exactly the hosts its labels pick. macOS: include all, include any + exclude, and
+exclude-only side by side, each verified on the VM and read back on the device, the excluded one absent;
+Windows: include all + exclude, then an Edit that excludes the VM, which Fleet answers by removing it. QA Wolf's
+`verifiedHostsCount >= 2` could not fail; each of these fails on the matching targeting bug.
+
+**Declarations** — `premium/controls/os-settings/profile-declarations.spec.ts` (new, + `inertDeclaration`). The same
+shape for DDM declarations, which keep their targeting in a table of their own and reach the Mac over declarative
+management: no target, include all and exclude side by side, each listed on exactly its hosts, the VM reporting the
+two that include it active. The declarations are Apple's no-op `management.test` type — QA Wolf's was, by its name, an
+OS-update declaration.
+
+**A profile's commands on one host** — `premium/controls/os-settings/profile-delivery-retry.spec.ts` (new, +
+`listHostMdmCommands`, `activityCopy.mdmCommand.forProfile`, Resend on `HostDetailsPage`). Install, Resend from the
+host's Controls tab and removal, each command tied to the profile by name: the Activity card names it, the API
+counts it. Then a profile the Mac refuses — a Wi-Fi payload with no SSID, approved for the VMs (an unknown
+`com.apple.` type, the first candidate, is accepted by macOS 26.6): four InstallProfile commands, all Error, the
+first and Fleet's three retries, then **Failed** on the Controls tab — whose name gains the failed count,
+"Controls 1".
+
+**Software, policies and reports** — `premium/software/software-label-targets.spec.ts`,
+`premium/policies/policy-label-targets.spec.ts`, `premium/reports/report-label-targets.spec.ts` (new, + the dropdown
+variant of `TargetLabelSelector`, targets on `EditSoftwareModal` / `PolicyEditPage` / `ReportEditPage`,
+`hostsOfferedTitle`, `listHostPolicyIds`, `listHostReportIds`, `findSimulations`). The same set-membership shape for
+the three other things a label can scope: a per-run `.deb` through all three scopes (offered to exactly its hosts,
+installed by the VM inside it); three policies including **Exclude all**, a mode only policies have; two reports,
+with the VM storing the include-all one's row and the simulations outside storing none.
+
+**OS updates** — `premium/exclusive/os-updates/macos-updates.spec.ts` and `ddm-conflict.spec.ts` (new, +
+`OsUpdatesPage`, the fleet OS-update helpers, `appleListedMacosVersions`). Custom version and deadline save, read back
+and clear; the form's refusals; "View all hosts" by membership rather than QA Wolf's drifting count; and both
+directions of the OS-updates-vs-custom-profile refusal for macOS and Windows, which QA Wolf tested one way — on their
+VMs fleet, with a deadline already past. Workstations only, in the exclusive project (they share its settings).
+
+**The delivery augment and the free half** — `premium/controls/os-settings/configuration-profiles.spec.ts` gains an
+untargeted profile delivered to and removed from the Mac; `free/controls/os-settings/profile-delivery.spec.ts` (new)
+covers delivery, Resend, removal and a declaration on the free Mac.
+
+**The refused label delete** — `premium/controls/os-settings/profile-broken-labels.spec.ts` (new). QA Wolf's three
+"broken label" flows can't run since Fleet 4.87 refuses to delete a label a profile or declaration targets; the spec
+guards that refusal for a `.mobileconfig`, a declaration and a Windows `.xml`, manual and dynamic labels, and the
+release once the profile is gone. On Workstations, so nothing is delivered.
+
+**The nightly as one chain** — `.github/workflows/qa-nightly.yml` (new). The nightly was three clock-spaced
+schedules (Render 04:00 UTC, gitops 05:00, Playwright 05:30), and since 2026-08-27 GitHub has started this repo's
+scheduled runs 4–6.5 h late, all together — the order held by luck. `QA — Nightly` runs Render's deploy hooks, a
+30-min wait, both instances' `/healthz`, then per tier the gitops chain and, whatever it did, the suite; one
+05:00 UTC schedule, still started late, but in order. Also bumps `upload-artifact` to v7 (Node 24).
+
+**Version pins that never cleared** — `helpers/api/fma.ts` (fixed). `setPinnedVersion(…, '')` sent no `version`
+field at all — Playwright drops an empty-string multipart field — so Fleet changed nothing and D's Claude walk,
+`version-pinning` and the stranded-pin cleanup all left their pins in place. It failed the 09-29 nightly, the
+first with two Claude builds cached. The body is now written by hand and the pin read back.
+
+**The Labels page past page 1** — `LabelsPage` and `Pagination` (fixed). About 19 visible labels now sort ahead
+of `pw-`, so a spec's second or third label lands on page 2. `Pagination` compared the first row's *link* to
+detect the page change; Labels rows have none, and reading a missing link has no timeout — the lookup hung
+until the test timed out. It now compares the whole row on a link-less table, and `runRowAction` reopens the
+Actions menu until the option shows.
+
 ## Round 2 · Batch D — execution on hosts
 
 Real round-trips to the real VMs: run a script and read what it did, send an MDM command and read the answer,

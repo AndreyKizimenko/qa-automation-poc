@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { TargetLabelSelector } from '../components/TargetLabelSelector';
 import { Toast } from '../components/Toast';
 
 /**
@@ -86,6 +87,8 @@ export class ReportEditPage {
   readonly saveNewIntervalControl: Locator;
   readonly saveNewIntervalValueLabel: Locator;
   readonly saveNewSubmitButton: Locator;
+  /** The Save report modal's label target — the dropdown variant (Include any / Include all; premium). */
+  readonly saveNewTargets: TargetLabelSelector;
 
   // Modal that pops on Save for an existing report.
   readonly confirmSaveModal: Locator;
@@ -147,6 +150,7 @@ export class ReportEditPage {
     this.saveNewIntervalControl = this.saveNewModal.locator('.form-field--frequency .Select-control');
     this.saveNewIntervalValueLabel = this.saveNewModal.locator('.form-field--frequency .Select-value-label');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveNewTargets = new TargetLabelSelector(this.saveNewModal);
 
     this.confirmSaveModal = page.locator('.modal__modal_container').filter({ hasText: 'Save changes' });
     this.confirmSaveButton = this.confirmSaveModal.getByRole('button', { name: 'Save', exact: true });
@@ -209,7 +213,10 @@ export class ReportEditPage {
    * for the success toast. Fleet redirects to `/reports/:id` on success;
    * the parsed id is returned.
    */
-  async saveNew(values: SaveReportValues): Promise<number> {
+  async saveNew(
+    values: SaveReportValues,
+    target?: { option: 'Include any' | 'Include all'; labels: string[] },
+  ): Promise<number> {
     await this.saveButton.click();
     await expect(this.saveNewModal).toBeVisible();
     await this.saveNewNameInput.fill(values.name);
@@ -225,6 +232,10 @@ export class ReportEditPage {
     }
     if (values.observersCanRun) await this.saveNewObserversCheckbox.check();
     else await this.saveNewObserversCheckbox.uncheck();
+    if (target) {
+      await this.saveNewTargets.chooseCustom();
+      await this.saveNewTargets.scope(target.option, target.labels);
+    }
     await this.saveNewSubmitButton.click();
     await this.toast.expectSuccess('Report created.');
     await this.page.waitForURL(/\/reports\/\d+(?:\?|$)/);

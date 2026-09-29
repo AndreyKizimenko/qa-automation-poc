@@ -248,3 +248,53 @@ export async function deleteAllScripts(
     ),
   );
 }
+
+// ── MDM commands ─────────────────────────────────────────────────────────────
+
+export interface HostMdmCommand {
+  uuid: string;
+  requestType: string;
+  /** The profile a profile command is for; empty for other commands. */
+  name: string;
+  /** Acknowledged, Error, NotNow, Pending, … — as the device answered. */
+  status: string;
+  updatedAt: string;
+}
+
+/**
+ * The MDM commands Fleet has sent one host, newest first, optionally of one
+ * request type (`InstallProfile`, `RemoveProfile`, …). The endpoint takes the
+ * host's UUID, not its id.
+ */
+export async function listHostMdmCommands(
+  request: APIRequestContext,
+  hostId: number,
+  requestType?: string,
+): Promise<HostMdmCommand[]> {
+  const host = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(host, `Failed to read host ${hostId}`).toBeOK();
+  const uuid = (await host.json()).host.uuid as string;
+  const params: Record<string, string> = {
+    host_identifier: uuid,
+    per_page: '100',
+    order_key: 'updated_at',
+    order_direction: 'desc',
+  };
+  if (requestType) params.request_type = requestType;
+  const res = await request.get(apiUrl('commands'), { headers: authHeaders(), params });
+  await expect(res, `Failed to list host ${hostId}'s MDM commands`).toBeOK();
+  const results = ((await res.json()).results ?? []) as Array<{
+    command_uuid: string;
+    request_type: string;
+    name?: string | null;
+    status: string;
+    updated_at: string;
+  }>;
+  return results.map((c) => ({
+    uuid: c.command_uuid,
+    requestType: c.request_type,
+    name: c.name ?? '',
+    status: c.status,
+    updatedAt: c.updated_at,
+  }));
+}

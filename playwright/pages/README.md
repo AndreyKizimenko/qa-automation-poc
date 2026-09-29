@@ -20,7 +20,7 @@ pages/
 ├── auth/               # LoginPage, ForgotPasswordPage
 ├── account/            # MyAccountPage
 ├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage
-│                       #   (HostDetailsPage has Software/Reports/Policies tabs,
+│                       #   (HostDetailsPage has Controls/Software/Reports/Policies tabs,
 │                       #   but hosts is its primary nav context)
 ├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
 │                       #   detail pages, CVE detail, FMA, and the add-software forms

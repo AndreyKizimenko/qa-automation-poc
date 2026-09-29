@@ -395,8 +395,8 @@ other:
 **Flow**
 
 1. ☐ Set `SUITE=free`, build `configurationProfile.added/deleted`.
-   - ✅ *(UNIT)* `added configuration profile Fleet Test Passcode to all macOS, iOS, and iPadOS hosts.`
-   - ✅ *(UNIT)* `deleted configuration profile fleet-test-screenlock from all Windows hosts.` (free ignores scope → `all <hostsPhrase>`)
+   - ✅ *(UNIT)* `added configuration profile Fleet Playwright Inert to all macOS, iOS, and iPadOS hosts.`
+   - ✅ *(UNIT)* `deleted configuration profile fleet-pw-inert from all Windows hosts.` (free ignores scope → `all <hostsPhrase>`)
 2. ☐ Set `SUITE=premium`, rebuild with scopes.
    - ✅ *(UNIT)* Unassigned → `… to unassigned macOS, iOS, and iPadOS hosts.`
    - ✅ *(UNIT)* Workstations → `… to Windows hosts assigned to the Workstations fleet.`

@@ -13,6 +13,7 @@
 import { test } from '@playwright/test';
 import {
   cancelUpcomingActivity,
+  clearFleetOsUpdates,
   deleteAllConfigurationProfiles,
   deleteAllGlobalPolicies,
   deleteAllInstallSoftwareTitles,
@@ -21,6 +22,7 @@ import {
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
+  deleteLabelsWithPrefix,
   deleteFleetPolicies,
   deleteReport,
   deleteSoftwareTitle,
@@ -30,6 +32,7 @@ import {
   findOnlineHost,
   getAgentOptions,
   getSoftwarePackage,
+  listFleetHosts,
   listFleetMaintainedTitles,
   listFleetPolicies,
   listHostSoftwareNames,
@@ -40,6 +43,7 @@ import {
   resetSetupExperience,
   setAgentOptions,
   setPinnedVersion,
+  transferHosts,
   type UpcomingActivity,
 } from '@helpers/api';
 import { VM_SOFTWARE_FIXTURES, ensureVmFixtureUninstalled, findVmFixtureTitle, type VmPlatform } from '@helpers/vm-fixtures';
@@ -106,6 +110,10 @@ test('wipe Workstations team state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
   ]);
+  // The OS updates specs enforce versions and deadlines here — the one fleet
+  // with no real hosts to update — and clear them in a `finally` a timed-out
+  // test never reaches.
+  await clearFleetOsUpdates(request, workstations.id);
 });
 
 // A narrow exception to "cleanup touches only Unassigned and Workstations": on
@@ -131,12 +139,17 @@ test('clear stranded version pins on the durable app fleets', async ({ request }
   }
 });
 
-// The host-execution specs add per-run scripts, installers, reports and install
-// policies to the VMs fleet — the only fleet with real hosts — and delete them in
-// a `finally`, which a timed-out test never reaches. This sweeps only those,
-// all named `fleet-pw-*` / `pw-*`; everything gitops declares for the fleet —
-// Claude and its policies, the durable install/uninstall fixtures
+// The host-execution and label-targeting specs add per-run scripts, installers,
+// reports, install policies, profiles and labels to the VMs fleet — the only
+// fleet with real hosts — and move simulations onto it as the "outside the label"
+// host, undoing all of it in a `finally` a timed-out test never reaches. This
+// sweeps only those, all named `fleet-pw-*` / `pw-*`; everything gitops declares
+// for the fleet — Claude and its policies, the durable install/uninstall fixtures
 // (helpers/vm-fixtures.ts), pw-host-report-results — is left alone.
+//
+// Deleting a profile is what takes it off the VMs: Fleet sends the removal on its
+// next reconciler tick. Labels go last, because Fleet refuses to delete one a
+// profile still targets.
 //
 // Deleting a title never uninstalls it, and a per-run .deb never comes back to
 // be uninstalled by a later run — so the Ubuntu VM's own `fleet-pw-*` packages
@@ -154,14 +167,22 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
   const titles = await listInstallableTitles(request, vms.id);
   const policies = await listFleetPolicies(request, vms.id);
   const reports = await listReports(request, vms.id);
+  const borrowed = (await listFleetHosts(request, vms.id)).filter((h) => !h.real).map((h) => h.id);
   await Promise.all([
+    deleteAllConfigurationProfiles(request, vms.id, (name) => name.startsWith('pw-')),
+    transferHosts(request, 0, borrowed),
     deleteFleetPolicies(
       request,
       vms.id,
-      policies.filter((p) => p.name.startsWith('[Install software] fleet-pw-')).map((p) => p.id),
+      policies
+        .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
+        .map((p) => p.id),
     ),
     deleteAllScripts(request, vms.id, (name) => name.startsWith('pw-')),
-    ...reports.filter((r) => r.name.startsWith('pw-run-script-')).map((r) => deleteReport(request, r.id)),
+    // By exact prefix: gitops declares `pw-host-report-results` on this fleet too.
+    ...reports
+      .filter((r) => r.name.startsWith('pw-run-script-') || r.name.startsWith('pw-rl-'))
+      .map((r) => deleteReport(request, r.id)),
   ]);
   // After the policies: a title an install policy points at can't be deleted.
   await Promise.all(
@@ -169,6 +190,8 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
       .filter((t) => OWN_PACKAGE.test(t.packageName))
       .map((t) => deleteSoftwareTitle(request, vms.id, t.titleId)),
   );
+  // After the profiles and titles: Fleet refuses to delete a label either targets.
+  await deleteLabelsWithPrefix(request, 'pw-');
 
   const linux = await findOnlineHost(request, 'linux', { kind: 'real' });
   if (linux && (await listHostSoftwareNames(request, linux.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) {

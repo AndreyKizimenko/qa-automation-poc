@@ -1,7 +1,7 @@
 // Report (a.k.a. saved query) API helpers for seeding and tearing down
 // preconditions. Fleet's UI calls these "reports"; the REST API keeps the
 // legacy `queries` path.
-import { APIRequestContext } from '@playwright/test';
+import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
 export interface ReportRef {
@@ -152,4 +152,33 @@ export async function deleteReportsMatching(
   await Promise.all(
     reports.filter((r) => r.name.includes(marker)).map((r) => deleteReport(request, r.id)),
   );
+}
+
+/**
+ * The ids of the reports Fleet lists for a host — its Reports tab, as data,
+ * sorted. A report's label target decides it server-side
+ * (`ListHostReports` applies the scope), so a simulation answers as well as a VM.
+ */
+export async function listHostReportIds(request: APIRequestContext, hostId: number): Promise<number[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/reports`), {
+    headers: authHeaders(),
+    params: { per_page: '200' },
+  });
+  await expect(res, `Failed to list host ${hostId}'s reports`).toBeOK();
+  // Each item names its report by `report_id`; there is no `id`.
+  return (((await res.json()).reports ?? []) as Array<{ report_id: number }>)
+    .map((r) => r.report_id)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * Sets how often a report runs, in seconds. The UI's shortest is 5 minutes; 60
+ * lands a real VM's first stored row in about a minute.
+ */
+export async function setReportInterval(request: APIRequestContext, reportId: number, seconds: number): Promise<void> {
+  const res = await request.patch(apiUrl(`queries/${reportId}`), {
+    headers: authHeaders(),
+    data: { interval: seconds },
+  });
+  await expect(res, `Failed to set report ${reportId}'s interval`).toBeOK();
 }

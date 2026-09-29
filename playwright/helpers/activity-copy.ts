@@ -193,6 +193,21 @@ export const activityCopy = {
      */
     acknowledged: ({ requestType }: { requestType: string }) =>
       new RegExp(`^The ${esc(requestType)} command was acknowledged\\.`),
+    /**
+     * A command Fleet sent for a configuration profile, which names it — an
+     * InstallProfile or RemoveProfile — in the Activity card with "Show MDM
+     * commands" on.
+     * @see frontend/.../CommandItem.tsx — `The <b>TYPE</b> command for <b>NAME</b> STATUS.`
+     */
+    forProfile: ({
+      requestType,
+      name,
+      status,
+    }: {
+      requestType: 'InstallProfile' | 'RemoveProfile';
+      name: string;
+      status: 'is pending' | 'was acknowledged' | 'failed';
+    }) => new RegExp(`^The ${esc(requestType)} command for ${esc(name)} ${esc(status)}\\.`),
   },
 
   // A software install or uninstall on one host, as the host's own Activity card

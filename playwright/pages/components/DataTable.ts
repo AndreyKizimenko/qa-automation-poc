@@ -38,7 +38,7 @@ export async function waitForTableSettled(page: Page, timeout = 90_000): Promise
  *
  * For waiting after pagination, use `Pagination.nextIfEnabled(table)` /
  * `previousIfEnabled(table)` — they settle the table, then assert the first
- * row's text changed. After a tab switch or filter change, call
+ * row's link text (or, on a link-less table, the row's text) changed. After a tab switch or filter change, call
  * `waitForSettled()` before any read: Fleet leaves the previous result on
  * screen under a translucent overlay for the whole request, so a read taken
  * mid-fetch reports stale rows rather than an empty table.

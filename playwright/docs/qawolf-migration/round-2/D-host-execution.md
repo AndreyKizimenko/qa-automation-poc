@@ -100,7 +100,7 @@ start there rather than polling UI copy.
   [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
 - **Free coverage is a standing goal.** Ask per flow whether free has the same surface; `shared/` when
   identical, an explicit `free/` sibling when not, never `if (isPremium)`.
-- **The nightly runs at 05:00 (gitops) and 05:30 UTC (Playwright).** Don't let a long verification run overlap.
+- **The nightly (`QA — Nightly`) is scheduled for 05:00 UTC** but GitHub starts it hours late, and it runs about 1.5 h. `gh run list` before a long verification run.
 - **`fleetctl` must stay within a minor of the server.** The suite ran 4.85.1 against 4.93 for two months and it
   silently no-op'd a whole gitops `software:` section. One minor behind (4.92.1 against the 4.93 RC) applies
   correctly.
@@ -272,8 +272,8 @@ feature.
 > **⚠️ Never deploy a passcode profile to a real host.** It blocks access permanently, there is no recovery,
 > and there are only a few VMs per tier. No `com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`,
 > `maxInactivity` or `allowSimple` — nor screen lock, inactivity timeout, FileVault, login-window restrictions,
-> or anything disabling SSH / remote management / the MDM channel. `fleet-test-passcode.mobileconfig` is one of
-> these: safe in the library lifecycle where round 1 uses it, never safe to deliver. See
+> or anything disabling SSH / remote management / the MDM channel. Uploading is delivering: on free, even an
+> upload → delete lifecycle reaches the VMs. Only the inert `fleet-pw-inert.*` fixtures may be uploaded. See
 > [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
 
 ## Script execution and MDM commands

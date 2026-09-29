@@ -1,5 +1,5 @@
 // Policy API helpers for seeding/tearing down preconditions.
-import { APIRequestContext } from '@playwright/test';
+import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
 export interface PolicyRef {
@@ -65,4 +65,15 @@ export async function deleteFleetPolicies(
     data: { ids },
   });
   if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()}: ${await res.text()}`);
+}
+
+/**
+ * The ids of the policies Fleet runs on a host — its Policies tab, as data. A
+ * policy's label target decides it server-side, so a simulation answers as well
+ * as a VM.
+ */
+export async function listHostPolicyIds(request: APIRequestContext, hostId: number): Promise<number[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (((await res.json()).host?.policies ?? []) as Array<{ id: number }>).map((p) => p.id).sort((a, b) => a - b);
 }

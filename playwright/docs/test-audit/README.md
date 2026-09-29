@@ -26,6 +26,11 @@ files · ~350 test declarations · 4 projects**.
 > and the catalog-add FMA install (SWH-01/02/04, now retired stubs) became one test per durable VMs-fleet
 > fixture, SWH-14 in `software-lifecycle-on-host.spec.ts` — 6 spec files, 18 runtime tests in the area.
 
+> **Batch E added 2026-09-29** (`playwright/qawolf-round2-batch-e`): label targeting — which hosts a profile,
+> declaration, software title, policy or report reaches — is audited in the new area **22** (LT-01…09), and
+> profile delivery, OS updates and the free delivery spec in area **11** (CTL-27…34). The profile lifecycle
+> entries (CTL-01…05, 15…18) moved onto inert fixtures: on free, those uploads reach the real VMs.
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
@@ -40,7 +45,7 @@ files · ~350 test declarations · 4 projects**.
 | 08 | [Settings › Users — premium](08-users-premium.md) | 31 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
-| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 26 | premium, free |
+| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 34 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
 | 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 30 | premium, free |
@@ -51,8 +56,9 @@ files · ~350 test declarations · 4 projects**.
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
 | 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
+| 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**438 entries** covering every test in the suite. An entry can expand into several
+**455 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
@@ -169,9 +175,9 @@ Findings from round 2 that change how existing entries should be judged, not jus
   that dataset must wait on the response first.
 - **Playwright aborts a timed-out test before its `finally` runs.** Cleanup that must survive a timeout needs
   an `afterEach` as well as the in-test `finally`.
-- **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. The
-  `fleet-test-passcode.mobileconfig` fixture and its Windows counterpart `fleet-test-screenlock.xml` are safe
-  only in the library lifecycle that never reaches a host.
+- **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. **Uploading a
+  profile is delivering it**: on free, Unassigned holds the real VMs, so even the library lifecycle reaches
+  them. The suite's only profile fixtures are the inert `fleet-pw-inert.{mobileconfig,xml}`.
 - **`software_updated_at` only moves when a host's inventory *changes*.** It is not "last collected": after a
   failed uninstall, or any collection that finds nothing new, it stays put. A wait for a fresh inventory has to
   baseline `detail_updated_at` and refetch — what `waitForHostRefetch` / `waitForSoftwareSettled` do. Any entry
