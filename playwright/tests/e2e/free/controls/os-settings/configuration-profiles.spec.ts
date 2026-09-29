@@ -50,6 +50,13 @@ const PROFILE_CASES: ProfileCase[] = [
   },
 ];
 
+// Both fixtures gate access to a host — a passcode policy and a DeviceLock
+// password + inactivity lock — and free has no fleets: Unassigned holds the real
+// VMs, so Fleet delivers an upload here to them before the delete step runs.
+// Unblocked by the inert profile fixtures in batch E
+// (docs/qawolf-migration/round-2/E-label-targeting.md §1), which replace both.
+test.skip(true, 'fixtures lock a real VM, and free delivers every upload to the VMs — see TODO.md');
+
 for (const profile of PROFILE_CASES) {
   test.describe(`MDM • OS settings — configuration profiles — ${profile.os}`, () => {
     test.describe.configure({ mode: 'serial' });
