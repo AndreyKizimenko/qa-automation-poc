@@ -1,0 +1,56 @@
+name: QA — Branch run
+# What the nightly does, against a branch's code and config. Per tier, the
+# nightly gitops sequence (baseline → verify → min → verify → fleetctl checks)
+# and then that tier's Playwright suite — so, like the nightly, the suite runs
+# against the min config. The tiers are separate instances, so the two chains
+# run side by side; each chain runs in order, and a red gitops step stops its
+# tier's suite.
+#
+#   gh workflow run "QA — Branch run" -f branch=<branch>
+#
+# The branch's gitops config stays applied to the QA instances until the next
+# nightly re-applies main's. A branch that changes gitops leaves that change in
+# place overnight — say so on its PR.
+#
+# No concurrency group here: the called workflows hold their instance's group
+# (`<tier>-fleetqa-instance`), and a caller in the same group would wait on its
+# own callees.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch, tag or SHA whose code and config to run
+        required: true
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  gitops-premium:
+    uses: ./.github/workflows/nightly-qa-gitops-premium.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets: inherit
+
+  playwright-premium:
+    needs: gitops-premium
+    uses: ./.github/workflows/playwright-premium.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets: inherit
+
+  gitops-free:
+    uses: ./.github/workflows/nightly-qa-gitops-free.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets: inherit
+
+  playwright-free:
+    needs: gitops-free
+    uses: ./.github/workflows/playwright-free.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets: inherit

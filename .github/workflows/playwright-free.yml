@@ -6,6 +6,13 @@ on:
   schedule:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
 
 # Shared with nightly-qa-gitops-free.yml, so a gitops apply and a test run
 # never overlap, and one test run waits for another: the real VMs work one
@@ -35,6 +42,8 @@ jobs:
         working-directory: playwright
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v5
         with:

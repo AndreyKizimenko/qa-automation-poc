@@ -16,6 +16,13 @@ on:
   schedule:
     - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
 
 # Shared with playwright-premium.yml: an apply deletes whatever its config doesn't
 # declare, test-run state included, so an apply and a test run never overlap.
@@ -33,12 +40,15 @@ permissions:
 jobs:
   apply-baseline:
     uses: ./.github/workflows/gitops-premium.yml
+    with:
+      ref: ${{ inputs.ref }}
     secrets: inherit
 
   verify-baseline-no-team:
     needs: apply-baseline
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: premium
       gitops-target: gitops/premium-fleetqa
     secrets: inherit
@@ -47,6 +57,7 @@ jobs:
     needs: apply-baseline
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: premium
       gitops-target: gitops/premium-fleetqa/fleets/workstations.yml
     secrets: inherit
@@ -56,12 +67,15 @@ jobs:
       - verify-baseline-no-team
       - verify-baseline-workstations
     uses: ./.github/workflows/gitops-premium-min.yml
+    with:
+      ref: ${{ inputs.ref }}
     secrets: inherit
 
   verify-min-no-team:
     needs: apply-min
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: premium
       gitops-target: gitops/premium-fleetqa-min
     secrets: inherit
@@ -70,6 +84,7 @@ jobs:
     needs: apply-min
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: premium
       gitops-target: gitops/premium-fleetqa-min/fleets/workstations.yml
     secrets: inherit
@@ -84,5 +99,6 @@ jobs:
       - verify-min-workstations
     uses: ./.github/workflows/gitops-nightly-cli.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: premium
     secrets: inherit

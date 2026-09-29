@@ -294,7 +294,9 @@ Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
 `.github/workflows/playwright-premium.yml`) — scheduled at 05:30 UTC, and
 runnable on demand via `workflow_dispatch` (no inputs; each runs its whole
-project).
+project). To run a branch the way the nightly does — its gitops chain first,
+then the suite, on both tiers — use `qa-branch-run.yml`:
+`gh workflow run "QA — Branch run" -f branch=<branch>`.
 
 `playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint)
 on any PR touching `playwright/**`, and on push to `main` so the check registers

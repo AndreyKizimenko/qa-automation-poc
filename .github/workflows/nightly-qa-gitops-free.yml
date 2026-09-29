@@ -16,6 +16,13 @@ on:
   schedule:
     - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (1 AM CST). Render runs at 04:00 UTC, gives 60 min lead.
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
 
 # Shared with playwright-free.yml: an apply deletes whatever its config doesn't
 # declare, test-run state included, so an apply and a test run never overlap.
@@ -33,12 +40,15 @@ permissions:
 jobs:
   apply-baseline:
     uses: ./.github/workflows/gitops-free.yml
+    with:
+      ref: ${{ inputs.ref }}
     secrets: inherit
 
   verify-baseline:
     needs: apply-baseline
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: free
       gitops-target: gitops/free-fleetqa
     secrets: inherit
@@ -46,12 +56,15 @@ jobs:
   apply-min:
     needs: verify-baseline
     uses: ./.github/workflows/gitops-free-min.yml
+    with:
+      ref: ${{ inputs.ref }}
     secrets: inherit
 
   verify-min:
     needs: apply-min
     uses: ./.github/workflows/gitops-verify.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: free
       gitops-target: gitops/free-fleetqa-min
     secrets: inherit
@@ -64,5 +77,6 @@ jobs:
     needs: verify-min
     uses: ./.github/workflows/gitops-nightly-cli.yml
     with:
+      ref: ${{ inputs.ref }}
       suite: free
     secrets: inherit
