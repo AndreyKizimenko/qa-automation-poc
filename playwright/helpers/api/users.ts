@@ -32,6 +32,8 @@ export interface UserRef {
   email: string;
   global_role: UserRole | null;
   api_only: boolean;
+  /** Fleet MFA — the emailed magic-link sign-in (premium). */
+  mfa_enabled?: boolean;
   teams?: FleetRoleAssignment[];
   fleets?: FleetRoleAssignment[];
 }

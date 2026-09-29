@@ -56,6 +56,51 @@ export async function findActivity(
   return undefined;
 }
 
+/**
+ * The id of the newest activity in the log (0 when it's empty). Activity ids
+ * only grow, so an id taken before an action marks everything the action
+ * records: see {@link assertActivityAfter}.
+ */
+export async function latestActivityId(request: APIRequestContext): Promise<number> {
+  const res = await request.get(apiUrl('activities'), {
+    headers: authHeaders(),
+    params: { order_key: 'id', order_direction: 'desc', per_page: '1', page: '0' },
+  });
+  await expect(res, 'Failed to read the activity log').toBeOK();
+  return Number(((await res.json()).activities ?? [])[0]?.id ?? 0);
+}
+
+/**
+ * Waits for an activity of `type` newer than `afterId` (from
+ * {@link latestActivityId}, taken before the action) whose details match, and
+ * returns it. For activities an earlier run — or this test's own setup — could
+ * have left identical (the same host, the same empty value), where finding *a*
+ * match proves nothing. `actor` checks `actor_email`; pass `null` for an
+ * activity Fleet records on its own.
+ */
+export async function assertActivityAfter(
+  request: APIRequestContext,
+  type: string,
+  afterId: number,
+  matches: (details: Record<string, unknown>) => boolean,
+  { actor }: { actor?: string | null } = {},
+): Promise<Record<string, unknown>> {
+  let found: Record<string, unknown> | undefined;
+  await expect
+    .poll(
+      async () => {
+        found = await findActivity(request, type, matches);
+        return Number(found?.id ?? 0);
+      },
+      { timeout: 30_000, message: `a "${type}" activity newer than #${afterId}` },
+    )
+    .toBeGreaterThan(afterId);
+  if (actor !== undefined) {
+    expect(found!.actor_email ?? null, `"${type}" activity's actor`).toBe(actor);
+  }
+  return found!;
+}
+
 export interface HostActivity {
   type: string;
   createdAt: string;

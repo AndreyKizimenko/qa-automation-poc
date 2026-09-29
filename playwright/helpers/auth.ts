@@ -154,3 +154,17 @@ export async function withStaticUser<T>(
     return fn(page);
   });
 }
+
+/**
+ * Bearer headers for whoever is signed in on `page`, so a spec can call the API
+ * *as that user* — a static user under `withStaticUser`, say, which has no token
+ * of its own. Fleet's UI keeps its session token in a cookie (`__Host-token`
+ * over HTTPS, `token` over plain HTTP) and sends it as a bearer token; the
+ * cookie alone doesn't authenticate an API request.
+ */
+export async function sessionBearerHeaders(page: Page): Promise<Record<string, string>> {
+  const cookies = await page.context().cookies();
+  const token = cookies.find((c) => c.name === '__Host-token' || c.name === 'token')?.value;
+  expect(token, 'expected a signed-in Fleet session on this page').toBeTruthy();
+  return { Authorization: `Bearer ${token}` };
+}

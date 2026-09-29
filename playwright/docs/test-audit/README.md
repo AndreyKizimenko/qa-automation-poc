@@ -31,24 +31,29 @@ files · ~350 test declarations · 4 projects**.
 > profile delivery, OS updates and the free delivery spec in area **11** (CTL-27…34). The profile lifecycle
 > entries (CTL-01…05, 15…18) moved onto inert fixtures: on free, those uploads reach the real VMs.
 
+> **Batch F added 2026-09-29** (`playwright/qawolf-round2-batch-f`): a host's IdP username (area **03** HOSTP-13…15,
+> free **02** HOST-24, free API refusal **14** API-31); Recovery Lock on the real Mac (**03** HOSTP-16 — not yet run
+> live); a team admin's own-fleet scope and the Fleet MFA form rules (**08** USRP-32…34, free API refusal **14** API-32).
+> Updated: HOSTP-04 (technician), USRF-05/09 (no MFA checkbox on free), MISC-20 (card headings, Host names row).
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 23 | premium, free |
-| 03 | [Hosts — premium](03-hosts-premium.md) | 12 | premium |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
+| 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
 | 04 | [Policies](04-policies.md) | 24 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 32 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
-| 08 | [Settings › Users — premium](08-users-premium.md) | 31 | premium |
+| 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
 | 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 34 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
 | 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
-| 14 | [API contract specs](14-api-contracts.md) | 30 | premium, free |
+| 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 11 (per spec file) | loadtest (local only) |
@@ -58,10 +63,10 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**455 entries** covering every test in the suite. An entry can expand into several
+**465 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
-17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
+17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 
 Plus **[FINDINGS.md](FINDINGS.md)** — the cross-cutting analysis: quick wins,

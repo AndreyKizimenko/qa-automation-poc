@@ -1,9 +1,10 @@
 # API contract specs — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 30 entries (37 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 32 entries (39 `test()` calls — the 8 table-driven cases in `free/endpoints.spec.ts` are one entry) · **Projects:** premium / free
 
 This area holds the suite's non-browser contract checks: the shape of `GET /config`, the free-tier
-license value, the 402 premium paywall on the API, Fleet's request/file-size limits, one query
+license value, the 402 premium paywall on the API (plus two premium-only writes free must refuse and
+not store — a host's IdP username and Fleet MFA), Fleet's request/file-size limits, one query
 parameter's payload contract (`exclude_software`), and a pure-unit snapshot of the activity-feed
 copy helper. Folder routing decides the tier — `tests/api/*.spec.ts`
 runs in **both** premium and free, `tests/api/free/` only in free, `tests/api/premium/` only in
@@ -53,6 +54,8 @@ all — pure in-process assertion; a fifth mode this area needs, all 17 activity
 | API-28 | `api/activity-copy.spec.ts` | activityCopy › script runs — one host, this host, a batch | UNIT | ☐ |
 | API-29 | `api/activity-copy.spec.ts` | activityCopy › mdmCommand.* — feed, this host, and the command item | UNIT | ☐ |
 | API-30 | `api/activity-copy.spec.ts` | activityCopy › hostSoftware.* — installed / uninstalled, failed and upcoming | UNIT | ☐ |
+| API-31 | `api/free/license.spec.ts` | Free • license › setting or removing a host IdP username is refused with 402 | API | ☐ |
+| API-32 | `api/free/license.spec.ts` | Free • license › turning on Fleet MFA for a user is refused with 402 | API | ☐ |
 
 ---
 
@@ -688,7 +691,7 @@ other:
 **Assessment**
 - *Value:* **meaningful, not trivial.** Three real regressions are in scope: a premium endpoint becoming reachable on free (a licensing defect), the status drifting from 402 to 401/403/404 (breaks every client's paywall handling), and the license-specific error degrading to a generic one (the UI paywall copy is driven off it). Asserting the exact status *and* the error body — including the `errors[]` shape — is the right depth, and using an admin token is what makes it a license test rather than a permissions test.
 - *Coverage gaps:* four read + four write endpoints out of a much larger premium surface — nothing for `/mdm/profiles`, `/scripts` (team-scoped), `/software/titles` premium filters, `/calendar`, `/conditional_access`, `/integrations/*`, `/vulnerabilities`, `/hosts/:id/lock|wipe`. No unauthenticated case (does an anonymous call 401 or 402? — ordering of middleware is unasserted). No positive control that the *same* endpoints answer 2xx on premium, so a global 402 would look like success here.
-- *Redundancy:* partial with [`tests/e2e/free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts) (17 UI paywall pages) — different layer, same feature gate; that spec would not catch a 402→403 status drift, and this one would not catch a missing banner. Keep both. No overlap with `tests/api/role-access/free/` (that asserts role, never license — `402` appears nowhere in it).
+- *Redundancy:* partial with [`tests/e2e/free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts) (18 UI paywall pages) — different layer, same feature gate; that spec would not catch a 402→403 status drift, and this one would not catch a missing banner. Keep both. No overlap with `tests/api/role-access/free/` (that asserts role, never license — `402` appears nowhere in it).
 - *Efficiency / smells:* `@fixtures` import → 8 needless Chromium launches (see API-15). `PATCH/DELETE fleets/1` assume the license check precedes existence checks; that holds today but the test would silently start asserting a 402-shaped 404 story if middleware order changed — a comment would help.
 
 **Manual repro**
@@ -712,7 +715,7 @@ other:
 ### API-19 · Free • license › license tier is free
 
 - **File:** [`playwright/tests/api/free/license.spec.ts`](../../tests/api/free/license.spec.ts)
-- **Grep:** `npx playwright test tests/api/free/license.spec.ts --project=free`
+- **Grep:** `npx playwright test tests/api/free/license.spec.ts --project=free -g "license tier is free"` (the file also holds API-31 and API-32)
 - **Project:** free only · **Mode:** API · **Isolation:** read-only
 - **Preconditions:** free instance + token · **Data created:** none
 
@@ -1183,6 +1186,99 @@ other:
 
 ---
 
+### API-31 · Free • license › setting or removing a host IdP username is refused with 402
+
+- **File:** [`playwright/tests/api/free/license.spec.ts`](../../tests/api/free/license.spec.ts)
+- **Grep:** `npx playwright test tests/api/free/license.spec.ts --project=free -g "host IdP username"`
+- **Project:** free only · **Mode:** API · **Isolation:** independent; both writes are expected to be refused
+- **Preconditions:** free instance + admin token; an online **non-MDM simulated** Windows host (`findSimulations(request, 'windows', 1, 0)`) — a simulation, so that if the license check ever regressed, no real VM's end user would be written
+- **Data created:** none while the gate holds. If it regressed, the `PUT` would leave a `pw-idp-free-<ts>@example.com` IdP username on the host — nothing removes it, and [HOST-24](02-hosts-shared-and-free.md), on the same host, would then fail its `---` check as well.
+
+**Flow**
+
+1. ☐ Resolve the host.
+   - ✅ *(API)* a host was resolved (`toBeDefined`).
+2. ☐ `PUT /hosts/:id/device_mapping` with `{ "email": "pw-idp-free-<ts>@example.com", "source": "idp" }`.
+   - ✅ *(API)* status is exactly **402**, and the body's `message` is `Requires Fleet Premium license`.
+   - ✅ *(API)* `GET /hosts/:id` reports no IdP username — the write didn't land.
+3. ☐ `DELETE /hosts/:id/device_mapping/idp`.
+   - ✅ *(API)* status is exactly **402** with the same license `message` — the license check runs before the "nothing to remove" check (premium answers 422 to the same call on a host with none, [HOSTP-14](03-hosts-premium.md)).
+
+**Assessment**
+- *Value:* the API half of HOST-24's paywall — hiding the field in the modal means nothing if the endpoint takes the write. The read-back makes it more than a status check, and the DELETE's 402-not-422 pins that the license check comes first.
+- *Coverage gaps:* the body's `message` is checked, `errors[]` isn't (API-18 checks both); only `source: "idp"`; no premium positive control in this file (HOSTP-13/14 are the premium side, in the e2e tree).
+- *Redundancy:* these are two more rows of API-18's table in all but form — `PUT /hosts/:id/device_mapping` and `DELETE /hosts/:id/device_mapping/idp` — kept separate because they need a host id and a read-back.
+- *Efficiency / smells:* no `finally`, so a regressed gate leaves state behind (see Data created) — though on free the cleanup `DELETE` would be gated too, so there'd be little to do. Draws Windows slice 0 on free, the same host as HOST-24 (recorded in `findSimulations`' slice list, `helpers/api/hosts.ts`, as a read by both — true only while the gate holds). `@fixtures` import → an unused Chromium launch (see API-15).
+
+**Manual repro**
+```bash
+# a simulated Windows host — not the free Windows VM (hardware model QEMU)
+H=$(curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/hosts?status=online&platform=windows&per_page=100" \
+  | jq -r '[.hosts[] | select(.platform == "windows" and (.hardware_model | test("virtual|qemu"; "i") | not))][0].id')
+curl -sk -o /dev/null -w "PUT -> %{http_code}\n" -X PUT -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"email":"pw-idp-free@example.com","source":"idp"}' \
+  "$FLEET_URL/api/v1/fleet/hosts/$H/device_mapping"
+curl -sk -o /dev/null -w "DELETE -> %{http_code}\n" -X DELETE -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  "$FLEET_URL/api/v1/fleet/hosts/$H/device_mapping/idp"
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/hosts/$H" | jq '.host.end_users'
+# expect: PUT -> 402, DELETE -> 402, and no idp_username
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### API-32 · Free • license › turning on Fleet MFA for a user is refused with 402
+
+- **File:** [`playwright/tests/api/free/license.spec.ts`](../../tests/api/free/license.spec.ts)
+- **Grep:** `npx playwright test tests/api/free/license.spec.ts --project=free -g "Fleet MFA"`
+- **Project:** free only · **Mode:** API · **Isolation:** independent; creates and deletes its own user
+- **Preconditions:** free instance + admin token; `FLEET_TEST_USER_PASSWORD` set (`createUser` gives the user the QA password)
+- **Data created:** a global observer `qa-test-<ts>-mfa@fleetdm.com` ("QA free MFA refusal"), deleted in `finally`; the `cleanup-setup` qa-test sweep reaps it after a dead run
+
+**Flow**
+
+1. ☐ `POST /users/admin` — a global observer, no forced password reset (the helper asserts 2xx).
+2. ☐ `PATCH /users/:id` with `{ "mfa_enabled": true }`.
+   - ✅ *(API)* status is exactly **402**, and the body's `message` is `Requires Fleet Premium license`.
+   - ✅ *(API)* `GET /users/:id` → `mfa_enabled` is `false` — nothing was saved.
+3. ☐ *(`finally`)* `DELETE /users/:id` (a 404 is fine).
+
+**Assessment**
+- *Value:* the server-side gate behind the free user forms' missing checkbox ([USRF-05 / USRF-09](09-users-free-and-shared.md)) — hiding the checkbox is cosmetic unless the endpoint refuses too — and the read-back proves the refusal stored nothing. A throwaway user is the right target: patching a static user would change a shared account if the gate ever regressed.
+- *Coverage gaps:* `message` checked, `errors[]` not (as API-31); only `PATCH` — `mfa_enabled: true` on **create** (`POST /users/admin`) is the other way in and isn't probed; no premium positive control anywhere — no spec saves `mfa_enabled: true` on premium ([USRP-34](08-users-premium.md) never ticks the box), so a 402 that spread to premium would go unnoticed at the API layer.
+- *Redundancy:* pairs with USRP-34 (premium form rules) and USRF-05/09 (free form absence) — three layers of one gate, none redundant.
+- *Efficiency / smells:* a user create + delete to probe one refusal — cheap, and safer than the alternative. `@fixtures` import → an unused Chromium launch (see API-15).
+
+**Manual repro**
+```bash
+U=$(curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"QA free MFA refusal","email":"qa-test-1-mfa@fleetdm.com","password":"'"$FLEET_TEST_USER_PASSWORD"'","global_role":"observer","admin_forced_password_reset":false}' \
+  "$FLEET_URL/api/v1/fleet/users/admin" | jq -r '.user.id')
+curl -sk -o /dev/null -w "PATCH -> %{http_code}\n" -X PATCH -H "Authorization: Bearer $FLEET_API_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"mfa_enabled":true}' "$FLEET_URL/api/v1/fleet/users/$U"
+curl -sk -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/users/$U" | jq '.user.mfa_enabled'
+curl -sk -o /dev/null -X DELETE -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/users/$U"
+# expect: PATCH -> 402, then false
+```
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1191,7 +1287,7 @@ other:
 |---|---|---|
 | App config shape (`GET /config`) | API-15, API-16, API-17 | truthiness/presence only; no comparison to `FLEET_URL`; no `mdm.*_enabled_and_configured` flags; no `PATCH /config` round-trip at this layer |
 | License tier | API-19 (free) | **no premium mirror** — nothing asserts `tier === 'premium'` or a future `license.expiration` |
-| Premium API gating (402) | API-18 (8 endpoints) | MDM profiles, team scripts, calendars, conditional access, integrations, vulnerabilities, host lock/wipe; no unauthenticated variant; no premium positive control |
+| Premium API gating (402) | API-18 (8 endpoints), API-31 (host IdP username, set + remove), API-32 (Fleet MFA on a user) | MDM profiles, team scripts, calendars, conditional access, integrations, vulnerabilities, host lock/wipe; no unauthenticated variant; no premium positive control; API-31/32 check the status and the read-back but not the error body API-18 checks |
 | Request/file-size limits | API-20…API-26 (4 caps across 6 routes) | **one** positive control (API-24, `commands/run` only) — the other five are rejection-only; no boundary case at any exact cap; no "nothing persisted" check on the two destructive batch routes; software-installer and bootstrap-package caps untested; not run on free although the middleware is tier-agnostic |
 | Host payload query parameters | API-27 (`exclude_software` on `/hosts/identifier/:id`) | not tested on `GET /hosts/:id`, which takes the same parameter; no `exclude_software=false`; nothing measures that the payload is actually smaller, which is the parameter's whole purpose; one host per run |
 | Activity-feed copy contract | API-01…API-14, API-28…API-30 | self-consistency only — cannot detect upstream Fleet copy change (the file's stated purpose); scope matrix incomplete where consumers rely on it (`script` add/Workstations, edit/Unassigned, delete/Unassigned; profile delete premium-Unassigned) |
@@ -1210,19 +1306,20 @@ other:
 
 **UI-vs-API balance**
 
-Everything here is API by design, and that is right for tier gating, config shape, size limits and payload-shape parameters — none has a UI surface worth clicking. Two caveats. (a) The activity-copy tests are not even API: they are unit tests wearing a Playwright costume, sitting in the browser projects, consuming worker slots on a shared QA instance for pure in-process work. (b) Five of the six specs import from `@fixtures`, which activates the auto `pageHealth` fixture ([`fixtures.ts:270`](../../fixtures.ts)); it depends on `page`, so **20 API tests launch a Chromium context they never use** — `playwright/CLAUDE.md` explicitly permits `@playwright/test` here. The genuine API-instead-of-UI shortcut risk in this area is low; the genuine problem is the reverse — browser cost on browser-free tests.
+Everything here is API by design, and that is right for tier gating, config shape, size limits and payload-shape parameters — none has a UI surface worth clicking. Two caveats. (a) The activity-copy tests are not even API: they are unit tests wearing a Playwright costume, sitting in the browser projects, consuming worker slots on a shared QA instance for pure in-process work. (b) Five of the six specs import from `@fixtures`, which activates the auto `pageHealth` fixture ([`fixtures.ts:270`](../../fixtures.ts)); it depends on `page`, so **22 API tests launch a Chromium context they never use** — `playwright/CLAUDE.md` explicitly permits `@playwright/test` here. The genuine API-instead-of-UI shortcut risk in this area is low; the genuine problem is the reverse — browser cost on browser-free tests.
 
 **On rejection-only coverage.** Six of the seven size-limit entries assert only that Fleet refuses something, which is a deliberate design constraint rather than laziness: a rejected upload persists nothing, so the spec needs no cleanup and can run unsynchronised against a shared instance. The cost is that the set is only falsifiable in one direction — API-24 alone stands between this group and a build where every cap is zero. That single positive control is load-bearing, and the pattern it uses (an under-limit body aimed at a target that cannot exist) is the template for extending the idea to the other routes.
 
 **Quick wins**
 
-1. Swap `@fixtures` → `@playwright/test` in [`config.spec.ts`](../../tests/api/config.spec.ts), [`free/endpoints.spec.ts`](../../tests/api/free/endpoints.spec.ts), [`free/license.spec.ts`](../../tests/api/free/license.spec.ts), [`premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts), [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts) — drops 20 needless Chromium launches per run.
+1. Swap `@fixtures` → `@playwright/test` in [`config.spec.ts`](../../tests/api/config.spec.ts), [`free/endpoints.spec.ts`](../../tests/api/free/endpoints.spec.ts), [`free/license.spec.ts`](../../tests/api/free/license.spec.ts), [`premium/max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts), [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts) — drops 22 needless Chromium launches per run.
 2. Fix the false claim in the [`activity-copy.spec.ts`](../../tests/api/activity-copy.spec.ts) header ("fails before the CRUD specs do" when Fleet changes copy) — it detects *helper* edits only, and the wrong comment will mislead the next agent into trusting it.
 3. Add negative assertions to the policy / script / software / profile / role families, copying API-14's pattern — today a suffix that loosened to `.*` passes every one of the 15 other tests.
 4. Add a premium mirror of API-19 asserting `license.tier === 'premium'` and `license.expiration` in the future, so an expired QA license fails once and clearly instead of cascading.
 5. Tighten `toBeGreaterThanOrEqual(400)` to the exact status at [`max-request-file-sizes.spec.ts`](../../tests/api/premium/max-request-file-sizes.spec.ts) lines 55, 76, 100, 114, 152 and 173 — API-24 already pins `toBe(404)` ten lines away, so the file disagrees with itself about how precise a status assertion should be.
 6. Add the two "nothing was replaced" follow-ups that cost one GET each and guard the area's two **destructive** routes: `GET /mdm/profiles?team_id=0` after API-25 and `GET /scripts?team_id=0` after API-26. Today "the rejected batch wiped nothing" is inferred from the 4xx, on routes whose success path replaces an entire fleet's set.
 7. Move [`host-software-payload.spec.ts`](../../tests/api/host-software-payload.spec.ts)'s pattern to `max-request-file-sizes.spec.ts` — the former is correctly tier-agnostic at the root of `tests/api/`, the latter is tier-agnostic middleware filed under `premium/` and so never runs on free.
+8. Check the error body in API-31 and API-32 (`message` + `errors[]`, as API-18 does) — or move their three refusals into API-18's table with the host and user resolved in a `beforeAll`, so every 402 in the area meets one standard ([`free/license.spec.ts`](../../tests/api/free/license.spec.ts)).
 
 **Bigger bets**
 

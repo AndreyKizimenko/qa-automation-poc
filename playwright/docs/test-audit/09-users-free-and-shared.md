@@ -16,9 +16,9 @@ Free ↔ premium delta, in full (nothing else differs):
 
 | Free spec | Premium counterpart | Only difference |
 |---|---|---|
-| `regular-user-create.spec.ts` | `premium/…/regular-user-create.spec.ts` | Free role list is `Observer, Maintainer, Admin` (premium adds `Observer+`, `Technician`); free skips `useGlobalUser()` (no Permissions radio) and the `'Global'` fleets-cell assert; premium adds 3 fleet-assignment tests |
+| `regular-user-create.spec.ts` | `premium/…/regular-user-create.spec.ts` | Free role list is `Observer, Maintainer, Admin` (premium adds `Observer+`, `Technician`); free skips `useGlobalUser()` (no Permissions radio) and the `'Global'` fleets-cell assert; free's landing test also asserts the two-factor checkbox is **absent**; premium adds 3 fleet-assignment tests and a separate two-factor describe (USRP-34) |
 | `api-user-create.spec.ts` | `premium/…/api-user-create.spec.ts` | Same role-list delta (+`GitOps`); free skips the `globalUserRadio` / `allEndpointsRadio` default asserts; premium adds 3 fleet-scoped + 3 specific-endpoint tests; free reveal test expects default role `Observer` vs premium `GitOps` |
-| `edit.spec.ts` | `premium/…/edit.spec.ts` | Identical bodies; premium adds a second describe (`Edit API-only user`) |
+| `edit.spec.ts` | `premium/…/edit.spec.ts` | Identical bodies except that free's row-Actions edit also asserts the two-factor checkbox is **absent**; premium adds a second describe (`Edit API-only user`) |
 | `delete.spec.ts` | `premium/…/delete.spec.ts` | **Identical apart from one comment** |
 | `form-validation.spec.ts` | `premium/…/form-validation.spec.ts` | Identical; premium adds `submit with Assign-to-fleets but no fleet checked` |
 | `navigation-and-layout.spec.ts` | `premium/…/navigation-and-layout.spec.ts` | Free omits the `Fleets` column cell check (and the title word "fleets") |
@@ -228,7 +228,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/free/settings/users/regular-user-create.spec.ts`](../../tests/e2e/free/settings/users/regular-user-create.spec.ts)
 - **Grep:** `npx playwright test -g "Add user → Regular user lands on the create sub-page"`
-- **Project:** free · **Premium twin:** same title in `premium/…/regular-user-create.spec.ts` (identical body)
+- **Project:** free · **Premium twin:** same title in `premium/…/regular-user-create.spec.ts` (same body minus the two-factor absence check)
 - **Mode:** UI · **Isolation:** serial describe, step 1 of 5
 - **Preconditions:** admin session
 - **Data created:** none
@@ -239,10 +239,11 @@ other:
 2. ☐ Click **Add user** → click **Regular user**.
    - ✅ *(UI)* URL is `/settings/users/new/human`.
    - ✅ *(UI)* **Full name** input visible.
+   - ✅ *(UI)* no **Enable two-factor authentication (email)** checkbox (count 0) — Fleet MFA is premium.
 
 **Assessment**
-- *Value:* dropdown → human-create route smoke.
-- *Coverage gaps:* doesn't assert free's form shape (no Permissions radio, role dropdown rendered, no fleets section).
+- *Value:* dropdown → human-create route smoke, plus the free half of the Fleet MFA gate: premium's [USRP-34](08-users-premium.md) asserts the checkbox is there, this asserts it isn't. The **Full name** check just above keeps the absence from passing on an unrendered form.
+- *Coverage gaps:* doesn't assert the rest of free's form shape (no Permissions radio, role dropdown rendered, no fleets section). The absence is UI-only here — [API-32](14-api-contracts.md) is the server-side refusal. The checkbox is located by its `mfa_enabled` name, so a free form that rendered it under a different field name would slip past.
 - *Redundancy:* mirrors USRF-01; the option's presence is also asserted by USRF-19.
 - *Efficiency / smells:* none.
 
@@ -357,7 +358,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/free/settings/users/edit.spec.ts`](../../tests/e2e/free/settings/users/edit.spec.ts)
 - **Grep:** `npx playwright test -g "admin edits via row Actions → Edit; users row reflects the change"`
-- **Project:** free · **Premium twin:** same title in `premium/…/edit.spec.ts` (**byte-identical body**)
+- **Project:** free · **Premium twin:** same title in `premium/…/edit.spec.ts` (identical body apart from free's two-factor absence check)
 - **Mode:** UI · **Isolation:** serial describe, step 2 of 3 (mutates the user USRF-08 used; USRF-10 asserts its activity)
 - **Preconditions:** the `beforeAll` user exists with role Observer
 - **Data created:** none (renames the existing user to `QA Edit Updated`, role → Maintainer)
@@ -368,15 +369,16 @@ other:
    - ✅ *(UI)* The row for that email is visible.
 2. ☐ Open the row's **Actions** dropdown → click **Edit**.
    - ✅ *(UI)* URL matches `/settings/users/<id>/edit`; **Edit user** `<h1>` visible.
+   - ✅ *(UI)* no **Enable two-factor authentication (email)** checkbox (count 0) — Fleet MFA is premium.
 3. ☐ Set **Full name** = `QA Edit Updated`; pick role **Maintainer**; click **Save**.
    - ✅ *(UI)* URL back on `/settings/users`; success toast `"Successfully edited QA Edit Updated"`.
 4. ☐ Re-search the email (the save redirect lands unfiltered).
    - ✅ *(UI)* Row visible and contains `QA Edit Updated` and `Maintainer`.
 
 **Assessment**
-- *Value:* the full edit journey incl. the row-Actions entry point and list refresh.
-- *Coverage gaps:* email change (and its "confirmation email sent" toast variant) untested; **Cancel** / **Back to users** untested; no API re-read to confirm `global_role` actually changed (only the rendered cell); password-change and SSO/MFA toggles on the edit form untested.
-- *Redundancy:* duplicated verbatim on premium (USRP); role-cell rendering also asserted by USRF-06.
+- *Value:* the full edit journey incl. the row-Actions entry point and list refresh, plus the free edit form's half of the Fleet MFA gate (the heading check before it keeps the absence honest).
+- *Coverage gaps:* email change (and its "confirmation email sent" toast variant) untested; **Cancel** / **Back to users** untested; no API re-read to confirm `global_role` actually changed (only the rendered cell); password change and the SSO toggle on the edit form untested. The MFA absence has no premium counterpart on the **edit** form — [USRP-34](08-users-premium.md) covers the create form only — so the pair is one-sided here.
+- *Redundancy:* duplicated almost verbatim on premium (USRP-18); role-cell rendering also asserted by USRF-06.
 - *Efficiency / smells:* step 4 asserts with `toContainText('Maintainer')` rather than the exact `.role__cell` match used elsewhere — weaker than the file's own convention.
 
 **Notes (Andrey)**
@@ -966,19 +968,19 @@ other:
 | Create human user (role matrix) | USRF-06 (3 roles) | Free role-list gating (Observer+/Technician/GitOps must be absent); duplicate-email rejection; created user never logs in; Status cell |
 | Create API-only user | USRF-01/02/03 | Generated token never used against the API; free's absent Permissions / API-access radios unasserted |
 | Create-form validation | USRF-13/14/15/16 | Password-policy errors; clearing Password; error-clears-on-fix |
-| Edit user | USRF-08/09 | Email change (+ its toast variant), password change, SSO/MFA toggles, Cancel/Back |
+| Edit user | USRF-08/09 | Email change (+ its toast variant), password change, SSO toggle, Cancel/Back; the MFA checkbox is only asserted *absent* (USRF-09) |
 | Delete user | USRF-11, USRF-20 (self-delete blocked) | API confirmation of deletion; modal Cancel; deleting an API-only user |
 | Require password reset | USRF-24 | Effect unverified (flag / login redirect) |
 | Reset sessions | USRF-25, USRF-26 | Admin's own session unaffected; browser-session bounce |
 | Search | USRF-21/22/23 | Partial/case-insensitive match; no-results empty state; search + pagination |
 | Pagination | USRF-27 | Previous, last-page disabling, per-page control |
 | Activity feed for user CRUD | USRF-04/07/10/12 | Actor never asserted |
-| Free-tier gating overall | — | **No test asserts anything is hidden on free** — every free spec only exercises the reduced surface, so a regression that leaked premium controls (fleets radio, Observer+ role) onto free would pass |
+| Free-tier gating overall | USRF-05, USRF-09 (the Fleet MFA checkbox only) | **Apart from the MFA checkbox, no test asserts anything is hidden on free** — every other free spec only exercises the reduced surface, so a regression that leaked other premium controls (fleets radio, Observer+ role) onto free would pass |
 | Non-admin access to Settings › Users | — | Untested (Observer/Maintainer should not reach the page) |
 
 **Duplication**
 
-1. **Free ≈ premium, wholesale.** `delete.spec.ts` is identical apart from a comment; `edit.spec.ts` (first describe), `form-validation.spec.ts` (3 of 4 tests) and `navigation-and-layout.spec.ts` (3 of 4 tests, the 4th differing by one cell) are identical bodies. `regular-user-create` / `api-user-create` differ only in the role list, the `useGlobalUser()` click, and premium's `'Global'` / fleet-assignment extras. Roughly **17 of the 20 free declarations are near-copies of USRP entries**.
+1. **Free ≈ premium, wholesale.** `delete.spec.ts` is identical apart from a comment; `edit.spec.ts` (first describe, bar free's MFA-absence line), `form-validation.spec.ts` (3 of 4 tests) and `navigation-and-layout.spec.ts` (3 of 4 tests, the 4th differing by one cell) are identical bodies. `regular-user-create` / `api-user-create` differ only in the role list, the `useGlobalUser()` click, and premium's `'Global'` / fleet-assignment extras. Roughly **17 of the 20 free declarations are near-copies of USRP entries**.
 2. **Activity-feed quartet** — USRF-04/07/10/12 share one body shape (goto dashboard, one regex), each also duplicated on premium: 8 declarations for one contract.
 3. **USRF-25 ⊂ USRF-26** — same UI flow, weaker assertion.
 4. **USRF-13 ≡ USRF-14** and **USRF-21 ≡ USRF-22** — same body, one field swapped.

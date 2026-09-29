@@ -31,6 +31,7 @@ import {
   findFleetByName,
   findOnlineHost,
   getAgentOptions,
+  getFleetRecoveryLock,
   getSoftwarePackage,
   listFleetHosts,
   listFleetMaintainedTitles,
@@ -42,6 +43,7 @@ import {
   queueAdHocScript,
   resetSetupExperience,
   setAgentOptions,
+  setFleetRecoveryLock,
   setPinnedVersion,
   transferHosts,
   type UpcomingActivity,
@@ -211,7 +213,10 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
 //  - the script timeout is Fleet's default — the timeout case lowers it to 60 s
 //    and restores it in a `finally` a timed-out test never reaches;
 //  - on premium, every durable install/uninstall fixture is uninstalled — its
-//    resting state, which a dead run can leave the other way.
+//    resting state, which a dead run can leave the other way;
+//  - on premium, Recovery Lock enforcement is off on the VMs fleet —
+//    `recovery-lock.spec.ts` turns it on and off, and Fleet clears the Mac's
+//    password on its next cron tick once it's off.
 //
 // It repairs what the suite itself leaves behind and nothing else. A VM that's
 // offline is only logged: its specs fail on it with a message of their own.
@@ -251,6 +256,10 @@ test('bring the real VMs to their resting state', async ({ request }) => {
   }
 
   if (!vms) return;
+  if (await getFleetRecoveryLock(request, vms.id)) {
+    console.warn('[vm preflight] Recovery Lock was on for the VMs fleet — turning it off');
+    await setFleetRecoveryLock(request, vms.id, false);
+  }
   await Promise.all(
     VM_SOFTWARE_FIXTURES.filter((f) => hosts.has(f.platform)).map(async (fixture) => {
       const title = await findVmFixtureTitle(request, vms.id, fixture);

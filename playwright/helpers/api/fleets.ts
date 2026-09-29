@@ -256,3 +256,29 @@ export async function setFleetWindowsUpdates(
   });
   await expect(res, `Failed to set fleet ${fleetId}'s Windows updates: ${await res.text()}`).toBeOK();
 }
+
+/** Whether the fleet enforces Recovery Lock passwords (`mdm.enable_recovery_lock_password`). */
+export async function getFleetRecoveryLock(request: APIRequestContext, fleetId: number): Promise<boolean> {
+  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  return !!(await res.json()).team?.mdm?.enable_recovery_lock_password;
+}
+
+/**
+ * Turns the fleet's Recovery Lock password enforcement on or off — what the
+ * Passwords card saves. On, Fleet sets an escrowed password on the fleet's
+ * Apple silicon Macs within its 30-second cron; off, it clears them the same way.
+ * **Only `recovery-lock.spec.ts` turns it on for the VMs fleet**, and the
+ * resting-state step in `setup/cleanup.steps.ts` turns it off after a dead run.
+ */
+export async function setFleetRecoveryLock(
+  request: APIRequestContext,
+  fleetId: number,
+  enabled: boolean,
+): Promise<void> {
+  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+    headers: authHeaders(),
+    data: { mdm: { enable_recovery_lock_password: enabled } },
+  });
+  await expect(res, `Failed to set fleet ${fleetId}'s Recovery Lock enforcement: ${await res.text()}`).toBeOK();
+}

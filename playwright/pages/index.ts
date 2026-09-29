@@ -8,6 +8,8 @@ export { RunScriptBatchModal } from './components/RunScriptBatchModal';
 export type { RunScriptStatus } from './components/RunScriptModal';
 export { ScriptDetailsModal } from './components/ScriptDetailsModal';
 export { MdmCommandDetailsModal } from './components/MdmCommandDetailsModal';
+export { UpdateEndUserModal } from './components/UpdateEndUserModal';
+export { RecoveryLockPasswordModal } from './components/RecoveryLockPasswordModal';
 export { HostSoftwareLibrary } from './components/HostSoftwareLibrary';
 export type { LibraryInstallAction, LibraryUninstallAction } from './components/HostSoftwareLibrary';
 export { InstallDetailsModal, UninstallDetailsModal } from './components/SoftwareActionDetailsModal';
@@ -77,6 +79,7 @@ export { OsUpdatesPage } from './controls/OsUpdatesPage';
 export { OsSettingsPage } from './controls/OsSettingsPage';
 export { DiskEncryptionPage } from './controls/DiskEncryptionPage';
 export type { DiskEncryptionPlatform } from './controls/DiskEncryptionPage';
+export { PasswordsPage } from './controls/PasswordsPage';
 export { ConfigurationProfilesPage } from './controls/ConfigurationProfilesPage';
 export type { ProfileTarget } from './controls/ConfigurationProfilesPage';
 export { CertificatesPage } from './controls/CertificatesPage';
@@ -132,6 +135,8 @@ export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
 export { ChangeManagementPage } from './settings/ChangeManagementPage';
 export { TeamSettingsPage } from './settings/TeamSettingsPage';
+export { FleetUsersPage } from './settings/FleetUsersPage';
+export type { FleetRole } from './settings/FleetUsersPage';
 export {
   UsersPage,
   CreateUserPage,

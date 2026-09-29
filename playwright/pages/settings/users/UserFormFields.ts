@@ -43,9 +43,19 @@ export class UserFormFields {
   // Authentication radio group (rendered when SSO is configured org-wide).
   readonly authPasswordRadio: Locator;
   readonly authSsoRadio: Locator;
+  readonly authPasswordLabel: Locator;
+  readonly authSsoLabel: Locator;
 
   // Role dropdown trigger (only present in Global user mode).
   readonly roleDropdownTrigger: Locator;
+
+  /**
+   * "Enable two-factor authentication (email)" — Fleet MFA. Rendered on premium
+   * only (or when a free user already has it on), hidden while Single sign-on is
+   * the chosen authentication, and disabled until Fleet can send email. Fleet's
+   * `Checkbox` takes its accessible name from the `name` prop, not the label.
+   */
+  readonly mfaCheckbox: Locator;
 
   // Per-fleet assignment rows shown when "Assign to fleet(s)" is selected.
   readonly fleetRows: Locator;
@@ -67,11 +77,15 @@ export class UserFormFields {
 
     this.authPasswordRadio = page.getByRole('radio', { name: 'Password' });
     this.authSsoRadio = page.getByRole('radio', { name: 'Single sign-on' });
+    this.authPasswordLabel = page.locator('label[for="password-authentication"]');
+    this.authSsoLabel = page.locator('label[for="single-sign-on-authentication"]');
 
     // Class fallback: DropdownWrapper renders the react-select control with
     // no usable role on the trigger. Fleet stamps a stable class suffix on
     // the FormField wrapper that the user-form passes through.
     this.roleDropdownTrigger = page.locator('.user-form__global-role-dropdown');
+
+    this.mfaCheckbox = page.getByRole('checkbox', { name: 'mfa_enabled' });
 
     // Each selected-fleet entry is a list item with a row-scoped role dropdown.
     this.fleetRows = page.locator('.selected-teams-form__team-item');

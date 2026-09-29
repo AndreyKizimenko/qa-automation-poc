@@ -6,12 +6,17 @@ const PAYWALL_TEXT = /This feature is included in Fleet Premium/i;
 // Every URL below is reachable on free but the page body renders the
 // "Fleet Premium" paywall. Failing here means a feature gate regressed
 // (either the paywall disappeared or the page itself stopped rendering).
-const PAYWALLED_PAGES: Array<{ name: string; url: string }> = [
+//
+// `heading` pins the page to the card it's named for. OS settings sends a
+// section it doesn't know to Disk encryption, which shows the same paywall, so
+// without the card's own heading a row would pass with its card gone.
+const PAYWALLED_PAGES: Array<{ name: string; url: string; heading?: string }> = [
   { name: 'Controls — OS updates', url: '/controls/os-updates' },
-  { name: 'Controls — OS settings (root → disk encryption)', url: '/controls/os-settings' },
-  { name: 'Controls — OS settings / Disk encryption', url: '/controls/os-settings/disk-encryption' },
-  { name: 'Controls — OS settings / Certificates', url: '/controls/os-settings/certificates' },
-  { name: 'Controls — OS settings / Passwords', url: '/controls/os-settings/passwords' },
+  { name: 'Controls — OS settings (root → disk encryption)', url: '/controls/os-settings', heading: 'Disk encryption' },
+  { name: 'Controls — OS settings / Disk encryption', url: '/controls/os-settings/disk-encryption', heading: 'Disk encryption' },
+  { name: 'Controls — OS settings / Certificates', url: '/controls/os-settings/certificates', heading: 'Certificates' },
+  { name: 'Controls — OS settings / Passwords', url: '/controls/os-settings/passwords', heading: 'Passwords' },
+  { name: 'Controls — OS settings / Host names', url: '/controls/os-settings/host-name-template', heading: 'Host names' },
   { name: 'Controls — Setup experience (root)', url: '/controls/setup-experience' },
   { name: 'Controls — Setup experience / Bootstrap package', url: '/controls/setup-experience/bootstrap-package' },
   { name: 'Controls — Setup experience / Install software', url: '/controls/setup-experience/install-software' },
@@ -33,6 +38,7 @@ test.describe('Free • paywall presence', () => {
   for (const page of PAYWALLED_PAGES) {
     test(page.name, async ({ page: pw }) => {
       await pw.goto(page.url);
+      if (page.heading) await expect(pw.getByRole('heading', { name: page.heading, exact: true })).toBeVisible();
       const banners = pw.getByText(PAYWALL_TEXT);
       await expect(banners.first()).toBeVisible();
       await expect(banners).toHaveCount(1);

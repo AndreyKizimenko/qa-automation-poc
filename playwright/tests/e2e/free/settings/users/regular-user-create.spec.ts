@@ -28,6 +28,8 @@ test.describe('Create regular user (free)', () => {
     await usersPage.openAddUser('Regular user');
     await expect(page).toHaveURL(/\/settings\/users\/new\/human\b/);
     await expect(createUserPage.form.fullName).toBeVisible();
+    // Fleet MFA is premium: the form offers no two-factor checkbox on free.
+    await expect(createUserPage.form.mfaCheckbox).toHaveCount(0);
   });
 
   for (const role of FREE_GLOBAL_ROLES) {

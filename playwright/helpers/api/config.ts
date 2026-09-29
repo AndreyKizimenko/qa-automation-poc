@@ -104,7 +104,19 @@ export interface AppConfig {
   org_info?: OrgInfo;
   webhook_settings?: WebhookSettings;
   mdm?: MdmConfig;
+  smtp_settings?: { configured?: boolean; [key: string]: unknown };
+  /** Set by the server's own config, not the API: `backend` is `"ses"` when Fleet sends email through SES. */
+  email?: { backend?: string; [key: string]: unknown };
   [key: string]: unknown;
+}
+
+/**
+ * Whether Fleet can send email: SMTP configured in settings, or SES configured on
+ * the server. The user form reads the same two facts to decide whether its
+ * two-factor checkbox is enabled (`CreateUserPage.tsx` / `EditUserPage.tsx`).
+ */
+export function canSendEmail(config: AppConfig): boolean {
+  return !!config.smtp_settings?.configured || config.email?.backend === 'ses';
 }
 
 /** Read global (no-fleet) disk-encryption state from the app config. */

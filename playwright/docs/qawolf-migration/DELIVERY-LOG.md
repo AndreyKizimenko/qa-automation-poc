@@ -111,6 +111,32 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch F — provisioning-gated
+
+Reviewed against the 13 source flows, the suite and Fleet's 4.93 RC source before anything was built, then
+built on `playwright/qawolf-round2-batch-f`. Detail in
+[round-2/F-provisioning.md](round-2/F-provisioning.md#what-landed).
+
+**What the review changed.** The two "manual MDM enrollment" flows run a script on a macOS host and never touch
+an enrollment profile: cut as duplicates of `shared/hosts/host-run-script.spec.ts`. The planned "permission
+surface only" recovery-lock spec could not have failed (the action only renders once enforcement is on), so
+Andrey chose full coverage on the premium Mac instead. The MFA flows (all mailbox-driven) and the Fedora `.rpm`
+flow moved to a new [`docs/long-term-goals.md`](../long-term-goals.md) with the other host types the suite
+lacks. The team-admin rename is asserted but never saved: renaming a gitops-declared fleet orphans it.
+
+| slice | what |
+|---|---|
+| technician transfer | `host-transfer-permissions.spec.ts` gains a `global-technician` row |
+| team admin | new `premium/settings/users/team-admin-scope.spec.ts`: create → edit (name, fleet role → Admin) → remove a member from the fleet's Users tab, each read back through the API; *Rename fleet* offered, *Delete fleet* not; an empty-name `PATCH /fleets/:id` as the team admin — 422 on Workstations, 403 on QA. `FleetUsersPage` |
+| IdP username | new `premium/hosts/host-idp-username.spec.ts` (UI add/remove with activities, the `device_mapping` API, the observer negative) and `free/hosts/host-idp-username.spec.ts` (the modal's Premium message); `UpdateEndUserModal` |
+| free refusals | `api/free/license.spec.ts`: an IdP username and `mfa_enabled` are refused with 402 |
+| 2FA checkbox | premium: unchecked by default, enabled only when Fleet can send email, hidden under SSO; free: absent from the create and edit forms |
+| paywalls | the OS-settings rows now require their own card's heading (the Passwords and Certificates rows could pass with the card gone); a *Host names* row |
+| recovery lock | new `premium/hosts/recovery-lock.spec.ts` — enforce, verify, view, rotate, clear on the Mac, with all five activities; `PasswordsPage`, `RecoveryLockPasswordModal`; the resting-state step turns enforcement off after a dead run. **Built, not yet run live** |
+
+**Filed:** [fleetdm/fleet#54381](https://github.com/fleetdm/fleet/issues/54381) — the SSO + MFA conflict error
+reads *"Fleet MFA is is not applicable to SSO users"* (API-only; released).
+
 ## Round 2 · Batch E — label targeting
 
 Profiles, declarations, software, policies and reports scoped to labels, asserted as set membership: the real

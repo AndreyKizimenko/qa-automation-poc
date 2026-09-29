@@ -1,15 +1,17 @@
 /**
  * Premium • Hosts • Single-host transfer, by role. C1 #20/#22.
  *
- * From a host's details page: Actions → Transfer → pick a fleet. Global admins
- * and global maintainers may both do this, so the same flow runs per role via
+ * From a host's details page: Actions → Transfer → pick a fleet. Global admins,
+ * global maintainers and global technicians may all do this
+ * (`HostActionsDropdown/helpers.tsx` — `canTransferTeam` admits
+ * `isGlobalTechnician` beside the other two), so the same flow runs per role via
  * `withStaticUser`.
  *
  * Uses **simulated Windows** hosts: this is host-shuffling rather than device
  * behaviour, and claiming a different platform from `bulk-transfer.spec.ts`
  * (which takes macOS simulations) keeps the two disposable pools from
  * overlapping under `fullyParallel`. Each role also claims its own host by
- * index, so the two role cases can't contend either.
+ * index (Windows slice 0–2), so the role cases can't contend either.
  *
  * Every case restores the host to Unassigned via the API — `cleanup.steps.ts`
  * does not move hosts, so a leaked transfer would persist on the instance.
@@ -28,6 +30,7 @@ import { findSimulatedHostIds, getHostFleetId, transferHosts } from '@helpers/ap
 const ROLES = [
   { key: 'global-admin', label: 'global admin', hostIndex: 0 },
   { key: 'global-maintainer', label: 'global maintainer', hostIndex: 1 },
+  { key: 'global-technician', label: 'global technician', hostIndex: 2 },
 ] as const;
 
 test.describe('Premium • Hosts • single-host transfer by role', () => {
