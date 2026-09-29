@@ -313,9 +313,9 @@ what you write, and the docs have to move with the code or the next audit pays f
   both tiers side by side. Triage it with `playwright-run-reviewer`. Run the full suite locally only if CI
   can't, and say so.
 - **Before any run that touches the real VMs, check nothing else is:** `gh run list --limit 5`. The nightly
-  is scheduled for 05:00 UTC (gitops) and 05:30 (Playwright), but since 2026-08-27 GitHub has been creating
-  this repo's scheduled runs 4–6.5 h late — the event itself, all crons shifted together — so check `gh run list --workflow "Playwright — Premium" --event schedule`
-  for today's, and `gh run list` right before you run. Two runs on the same VMs corrupt each other — one queue per VM, and
+  is `QA — Nightly` (`qa-nightly.yml`, #66): started at 12 AM Central by an outside trigger — GitHub has been
+  creating this repo's scheduled runs 4–6.5 h late since 2026-08-27 — then a Render redeploy, a 30-min wait, and
+  each tier's gitops chain and suite, about 1.5 h in all. `gh run list` right before you run shows whether it's going. Two runs on the same VMs corrupt each other — one queue per VM, and
   shared fixtures each run's cleanup removes. CI's concurrency groups only keep CI from colliding with itself.
 
 ### Which docs move with the code — in the same commit
