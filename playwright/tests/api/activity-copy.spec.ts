@@ -143,18 +143,18 @@ test.describe('activityCopy', () => {
       const WINDOWS = 'Windows hosts';
 
       process.env.SUITE = 'free';
-      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE })
-        .test('added configuration profile Fleet Test Passcode to all macOS, iOS, and iPadOS hosts.')).toBe(true);
-      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS })
-        .test('deleted configuration profile fleet-test-screenlock from all Windows hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Playwright Inert', hostsPhrase: APPLE })
+        .test('added configuration profile Fleet Playwright Inert to all macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS })
+        .test('deleted configuration profile fleet-pw-inert from all Windows hosts.')).toBe(true);
 
       process.env.SUITE = 'premium';
-      expect(activityCopy.configurationProfile.added({ name: 'Fleet Test Passcode', hostsPhrase: APPLE, scope: 'Unassigned' })
-        .test('added configuration profile Fleet Test Passcode to unassigned macOS, iOS, and iPadOS hosts.')).toBe(true);
-      expect(activityCopy.configurationProfile.added({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
-        .test('added configuration profile fleet-test-screenlock to Windows hosts assigned to the Workstations fleet.')).toBe(true);
-      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-test-screenlock', hostsPhrase: WINDOWS, scope: 'Workstations' })
-        .test('deleted configuration profile fleet-test-screenlock from Windows hosts assigned to the Workstations fleet.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'Fleet Playwright Inert', hostsPhrase: APPLE, scope: 'Unassigned' })
+        .test('added configuration profile Fleet Playwright Inert to unassigned macOS, iOS, and iPadOS hosts.')).toBe(true);
+      expect(activityCopy.configurationProfile.added({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('added configuration profile fleet-pw-inert to Windows hosts assigned to the Workstations fleet.')).toBe(true);
+      expect(activityCopy.configurationProfile.deleted({ name: 'fleet-pw-inert', hostsPhrase: WINDOWS, scope: 'Workstations' })
+        .test('deleted configuration profile fleet-pw-inert from Windows hosts assigned to the Workstations fleet.')).toBe(true);
     } finally {
       process.env.SUITE = original;
     }

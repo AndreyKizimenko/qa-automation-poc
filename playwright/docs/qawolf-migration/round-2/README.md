@@ -84,8 +84,9 @@ That is **85 of the 127 flows**, and the whole `gitops-mode` project. The suite 
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
 | | | **remaining** | **43** | **24** |
 
-**Start E next** — the handoff is at the top of [E-label-targeting.md](E-label-targeting.md). It needs inert
-profile fixtures written first: *two* committed fixtures lock a real VM, not one (see there and §5).
+**E is in progress** on `playwright/qawolf-round2-batch-e` — the handoff is at the top of
+[E-label-targeting.md](E-label-targeting.md), progress in its *What landed*. Its first slice, the inert profile
+fixtures, found the free VMs had been receiving the suite's lock profiles (§5).
 
 **F is less blocked than its title** — checked live on 2026-09-29, see the top of
 [F-provisioning.md](F-provisioning.md). The technician-transfer and both team-admin flows need nothing, the IdP
@@ -173,15 +174,18 @@ real-host spec until somebody rebuilds the VM by hand.
 The same is true of anything else that gates getting into the machine: screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel itself.
 
-This is not hypothetical — **two fixtures we already ship are unsafe for host delivery.**
-`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` sets `forcePIN`, `minLength`,
-`maxInactivity` and `allowSimple`; `test-data/windows/profiles/fleet-test-screenlock.xml` is a Windows DeviceLock
-policy (password enforcement, a 15-minute inactivity lock, PIN length). It is fine where round 1 uses it (library upload → download → delete, which
-never reaches a host), but batch E is specifically about profiles *applying to hosts*, and pushing that one at
-a real VM would lock it.
+This was not hypothetical. The suite shipped a passcode profile (`fleet-test-passcode.mobileconfig`) and a
+Windows DeviceLock profile (`fleet-test-screenlock.xml`) for a lifecycle spec that "never reaches a host" — but
+**on free, Unassigned is where the real VMs are**, and Fleet's profile reconciler delivers whatever it finds on its 30-second tick. By 2026-09-29
+the free Windows VM had received the DeviceLock profile 32 times and the free macOS VM had acknowledged the
+passcode profile 7 times; each was removed about 90 s later, which is the only reason neither was locked.
+Batch E replaced both with an inert pair and deleted them (see
+[E-label-targeting.md → What landed](E-label-targeting.md#what-landed)). **Uploading a profile is delivering
+it.**
 
-**Batch E needs a new inert profile fixture before it starts** — one that sets a harmless preference domain
-and changes nothing about access. Rules for anything deployed to a real VM:
+The suite's profile fixtures are the inert pair `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*`,
+each with a README saying why it is safe and how to prove it arrived. Rules for anything deployed to a real VM —
+which, on free, means anything uploaded at all:
 
 - **never a passcode payload** (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`,
   `maxInactivity`, `allowSimple`) — this one is absolute;

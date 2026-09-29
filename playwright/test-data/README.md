@@ -48,10 +48,11 @@ test-data/
   `sublime-text_build-4200_amd64.deb`. Pick the closest fit for what a
   test needs (display-name, source, multi-arch, etc.).
 
-- **Profiles**: `fleet-test-passcode.mobileconfig` (macOS),
-  `fleet-test-screenlock.xml` (Windows) — minimal, deterministic, no
-  `$FLEET_SECRET_*` placeholders so they upload cleanly without prior
-  setup.
+- **Profiles**: `fleet-pw-inert.mobileconfig` (macOS),
+  `fleet-pw-inert.xml` (Windows) — inert, because **every profile upload
+  can reach a real VM** (on free, Unassigned holds them). No lock, passcode
+  or access-gating payload ever goes in `test-data/`; each profiles folder's
+  README says why its fixtures are safe and how to prove they arrived.
 
 - **Scripts**: platform-prefixed `<platform>-{create,delete}-marker`
   pairs (`macos-create-marker.sh`, `linux-create-marker.sh`,

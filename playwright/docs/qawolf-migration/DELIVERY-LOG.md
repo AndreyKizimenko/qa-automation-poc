@@ -111,6 +111,30 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch E — label targeting
+
+Profiles, declarations, software, policies and reports scoped to labels, asserted as set membership: the real
+VM inside the label is delivered to, a simulation outside it isn't listed. Detail in
+[round-2/E-label-targeting.md → What landed](round-2/E-label-targeting.md#what-landed).
+
+**Inert profile fixtures — and the lock profiles the free VMs had been getting.** Batch E's blocker was a pair
+of profiles safe to deliver to a real VM. Writing them turned up that the suite already *was* delivering
+profiles to real VMs: free has no fleets, so the free lifecycle spec's uploads went to Unassigned, where the
+free VMs are, and Fleet's 30-second profile reconciler sent them whenever it ticked before the delete step. The
+Windows VM had received the DeviceLock fixture 32 times, the macOS VM the passcode fixture 7 — removed ~90 s
+later each time, which is why neither locked. Skipped on `main` the same night (PR #64); then:
+
+- `test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig` — one key in a preference domain nothing reads;
+  `test-data/windows/profiles/fleet-pw-inert.xml` — Game DVR off. Each with a README: why it's safe, how to
+  prove it arrived (a *filtered* `managed_policies` read; the `PolicyManager` registry key), and what removal
+  does. Both proven on the premium VMs: listed 21 s after upload, verified by Fleet about a minute later, read
+  back on the device, deleted — the Mac's domain gone in 21 s, the Windows value back to its default in 8 s.
+- Both library lifecycle specs moved onto them (both tiers green, with dependencies);
+  `fleet-test-passcode.mobileconfig` and `fleet-test-screenlock.xml` deleted; the signed-upload rejection
+  fixture re-signed from the inert profile.
+- `CLAUDE.md`, the author and reviewer skills and the round-2 README now say **uploading a profile is
+  delivering it**.
+
 ## Round 2 · Batch D — execution on hosts
 
 Real round-trips to the real VMs: run a script and read what it did, send an MDM command and read the answer,

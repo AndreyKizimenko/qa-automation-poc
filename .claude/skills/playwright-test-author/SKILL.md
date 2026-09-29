@@ -176,11 +176,11 @@ should follow, add it here too.
   `com.apple.mobiledevice.passwordpolicy`, no `forcePIN` / `minLength` / `maxInactivity` /
   `allowSimple`, for any reason. The same goes for anything else gating entry: screen lock,
   inactivity timeout, FileVault, login-window restrictions, or disabling SSH / remote management
-  / the MDM channel. `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** one
-  of these, and so is `test-data/windows/profiles/fleet-test-screenlock.xml` (a Windows DeviceLock
-  policy) — both are safe only in the library upload/download/delete lifecycle, which never
-  reaches a host. For a delivery test, write an inert fixture (a harmless preference domain that changes
-  nothing about access) and remove it in the same test. If you are unsure whether a payload is
+  / the MDM channel. **Uploading a profile is delivering it** — there is no "library-only"
+  profile: on free, Unassigned *is* where the real VMs are, so even an upload → delete lifecycle
+  reaches them (the suite's old passcode and DeviceLock fixtures did, 7 and 32 times). Use the inert
+  pair `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*`, or build a new one on its
+  pattern, and remove it in the test that delivered it. If you are unsure whether a payload is
   safe, it is not — ask first.
 
 ## Code style

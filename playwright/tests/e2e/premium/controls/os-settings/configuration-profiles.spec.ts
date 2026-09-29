@@ -1,8 +1,12 @@
 /**
  * Configuration profiles upload/download/delete on premium — runs the
  * macOS .mobileconfig + Windows .xml cases under both scopes (Unassigned
- * + Workstations). Profiles have no in-UI edit step — the lifecycle is
- * upload + delete only.
+ * + Workstations). Editing a profile's target belongs to the label-targeting
+ * specs; this one is the library lifecycle.
+ *
+ * Neither scope holds a real VM on premium, so nothing uploaded here reaches
+ * one. The fixtures are the inert pair all the same (test-data/…/profiles
+ * READMEs): the free copy of this spec delivers every upload to the VMs.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,24 +30,24 @@ interface ProfileCase {
 const PROFILE_CASES: ProfileCase[] = [
   {
     os: 'macOS',
-    fileName: 'fleet-test-passcode.mobileconfig',
+    fileName: 'fleet-pw-inert.mobileconfig',
     filePath: path.resolve(
       __dirname,
-      '../../../../../test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig',
+      '../../../../../test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig',
     ),
-    displayName: 'Fleet Test Passcode',
+    displayName: 'Fleet Playwright Inert',
     createActivity: 'created_macos_profile',
     deleteActivity: 'deleted_macos_profile',
     hostsPhrase: 'macOS, iOS, and iPadOS hosts',
   },
   {
     os: 'Windows',
-    fileName: 'fleet-test-screenlock.xml',
+    fileName: 'fleet-pw-inert.xml',
     filePath: path.resolve(
       __dirname,
-      '../../../../../test-data/windows/profiles/fleet-test-screenlock.xml',
+      '../../../../../test-data/windows/profiles/fleet-pw-inert.xml',
     ),
-    displayName: 'fleet-test-screenlock',
+    displayName: 'fleet-pw-inert',
     createActivity: 'created_windows_profile',
     deleteActivity: 'deleted_windows_profile',
     hostsPhrase: 'Windows hosts',
@@ -108,7 +112,7 @@ for (const scope of SCOPES) {
 test.describe('MDM • OS settings — configuration profile upload validation', () => {
   const signedProfile = path.resolve(
     __dirname,
-    '../../../../../test-data/apple/macos/profiles/fleet-test-signed.mobileconfig',
+    '../../../../../test-data/apple/macos/profiles/fleet-pw-inert-signed.mobileconfig',
   );
 
   test('rejects a signed .mobileconfig with a "can\'t be signed" error', async ({

@@ -69,12 +69,13 @@ by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, n
 The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel.
 
-`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile, and so is its Windows
-counterpart `test-data/windows/profiles/fleet-test-screenlock.xml` (a DeviceLock policy: password enforcement,
-inactivity lock, PIN length). Both are safe only where they are used today — library upload → download →
-delete, which never reaches a host. Do not extend it to a
-delivery test; write an inert fixture instead (a harmless preference domain that changes nothing about access,
-removed in the same test that deployed it).
+**Uploading a profile is delivering it.** There is no "library-only" profile: on **free** there are no fleets,
+so Unassigned is where the real VMs are, and Fleet's profile reconciler — every 30 s — sends them whatever it
+finds. A lifecycle spec's upload → delete window is a race against that tick, not a guarantee. The suite once kept a passcode profile and a Windows DeviceLock profile for
+"upload → download → delete only"; the free VMs received them 7 and 32 times before anyone noticed. The only
+profiles in `test-data/` are the inert pair `fleet-pw-inert.{mobileconfig,xml}` (a preference domain nothing
+reads; Game DVR off) — see their READMEs. Build any new one on the same pattern, remove it in the test that
+delivered it, and never commit a lock profile, even for a spec that "only uploads" it.
 
 If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 

@@ -79,7 +79,7 @@ host-execution specs build their script content at run time with a per-run nonce
 - **Project:** premium · **Scopes:** Unassigned, Workstations · **OS cases:** macOS, Windows
 - **Mode:** UI+API · **Isolation:** serial describe, step 1 of 4 (later sub-tests depend on the profile this one uploads)
 - **Preconditions:** `cleanup-setup` has run `deleteAllConfigurationProfiles` on `fleet_id=0` and on Workstations ([`setup/cleanup.steps.ts:51,77`](../../setup/cleanup.steps.ts)); the spec additionally self-heals with `deleteIfExists`
-- **Data created:** one configuration profile per case, deleted by CTL-03. Files: [`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig`](../../test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig) (renders as **Fleet Test Passcode**, from its `PayloadDisplayName`) and [`test-data/windows/profiles/fleet-test-screenlock.xml`](../../test-data/windows/profiles/fleet-test-screenlock.xml) (renders as **fleet-test-screenlock**, the filename stem)
+- **Data created:** one configuration profile per case, deleted by CTL-03. Files: the inert pair — [`test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig`](../../test-data/apple/macos/profiles/fleet-pw-inert.mobileconfig) (renders as **Fleet Playwright Inert**, from its `PayloadDisplayName`) and [`test-data/windows/profiles/fleet-pw-inert.xml`](../../test-data/windows/profiles/fleet-pw-inert.xml) (renders as **fleet-pw-inert**, the filename stem). Neither premium scope holds a real VM, but the fixtures are inert anyway: the free copy of this spec delivers every upload to the VMs
 
 **Flow**
 
@@ -227,7 +227,7 @@ other:
 - **Project:** premium · **Scopes:** Unassigned only
 - **Mode:** UI · **Isolation:** standalone describe (negative path, outside the serial lifecycle)
 - **Preconditions:** none. `pageHealth.disable()` — the deliberate 4xx may be logged to console
-- **Data created:** none (upload is rejected). File: [`test-data/apple/macos/profiles/fleet-test-signed.mobileconfig`](../../test-data/apple/macos/profiles/fleet-test-signed.mobileconfig) — the passcode profile wrapped in a DER CMS/PKCS7 signature (regeneration recipe in the fixture [README](../../test-data/apple/macos/profiles/README.md))
+- **Data created:** none (upload is rejected). File: [`test-data/apple/macos/profiles/fleet-pw-inert-signed.mobileconfig`](../../test-data/apple/macos/profiles/fleet-pw-inert-signed.mobileconfig) — the inert profile wrapped in a DER CMS/PKCS7 signature (regeneration recipe in the fixture [README](../../test-data/apple/macos/profiles/README.md))
 
 **Flow**
 
@@ -601,7 +601,7 @@ other:
 - **Project:** free · **Scopes:** none (no team dropdown on free) · **OS cases:** macOS, Windows
 - **Mode:** UI+API · **Isolation:** serial describe, step 1 of 4
 - **Preconditions:** `cleanup-setup` ran `deleteAllConfigurationProfiles` on `fleet_id=0`; plus in-test `deleteIfExists`
-- **Data created:** same two fixtures as CTL-01, deleted by CTL-17
+- **Data created:** same two fixtures as CTL-01, deleted by CTL-17. **Both can be delivered to the free VMs**: free has no fleets, so Unassigned holds the MDM-enrolled macOS and Windows VMs, and whenever Fleet's 30-second profile reconciler ticks between this upload and CTL-17's delete, it sends them the profile. That is why only the inert pair may ever be used here (fixture READMEs). Until 2026-09-29 this entry used a passcode profile and a DeviceLock profile, and the free VMs received them 7 and 32 times
 
 **Flow**
 

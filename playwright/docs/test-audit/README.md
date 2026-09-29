@@ -169,9 +169,9 @@ Findings from round 2 that change how existing entries should be judged, not jus
   that dataset must wait on the response first.
 - **Playwright aborts a timed-out test before its `finally` runs.** Cleanup that must survive a timeout needs
   an `afterEach` as well as the in-test `finally`.
-- **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. The
-  `fleet-test-passcode.mobileconfig` fixture and its Windows counterpart `fleet-test-screenlock.xml` are safe
-  only in the library lifecycle that never reaches a host.
+- **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. **Uploading a
+  profile is delivering it**: on free, Unassigned holds the real VMs, so even the library lifecycle reaches
+  them. The suite's only profile fixtures are the inert `fleet-pw-inert.{mobileconfig,xml}`.
 - **`software_updated_at` only moves when a host's inventory *changes*.** It is not "last collected": after a
   failed uninstall, or any collection that finds nothing new, it stays put. A wait for a fresh inventory has to
   baseline `detail_updated_at` and refetch — what `waitForHostRefetch` / `waitForSoftwareSettled` do. Any entry

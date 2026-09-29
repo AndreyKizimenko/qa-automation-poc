@@ -26,8 +26,8 @@ feature.
 > **⚠️ Never deploy a passcode profile to a real host.** It blocks access permanently, there is no recovery,
 > and there are only a few VMs per tier. No `com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`,
 > `maxInactivity` or `allowSimple` — nor screen lock, inactivity timeout, FileVault, login-window restrictions,
-> or anything disabling SSH / remote management / the MDM channel. `fleet-test-passcode.mobileconfig` is one of
-> these: safe in the library lifecycle where round 1 uses it, never safe to deliver. See
+> or anything disabling SSH / remote management / the MDM channel. Uploading is delivering: on free, even an
+> upload → delete lifecycle reaches the VMs. Only the inert `fleet-pw-inert.*` fixtures may be uploaded. See
 > [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
 
 ## Host detail reads

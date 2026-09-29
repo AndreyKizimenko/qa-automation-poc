@@ -23,13 +23,18 @@
 
 ### 1. Write the inert profile fixtures before anything else
 
+> **Done, 2026-09-29 — and it was worse than this section said.** The "library upload/download/delete only"
+> exemption below was wrong on free: free has no fleets, so the lifecycle spec's uploads went to the free VMs.
+> The free Windows VM had received the DeviceLock profile 32 times, the free macOS VM the passcode profile 7
+> times. See [What landed](#what-landed). The table is kept as the record of what the two fixtures were.
+
 README §5 makes this the batch's blocker, and it is bigger than it says. **Two** committed fixtures lock a
 real VM, not one:
 
 | fixture | what it does | safe where |
 |---|---|---|
-| `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` | passcode policy (`forcePIN`, `minLength`, `maxInactivity`, `allowSimple`) | library upload/download/delete only |
-| `test-data/windows/profiles/fleet-test-screenlock.xml` | Windows **DeviceLock**: password enforcement, 15-min inactivity lock, PIN length | library upload/download/delete only |
+| `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` | passcode policy (`forcePIN`, `minLength`, `maxInactivity`, `allowSimple`) | ~~library upload/download/delete only~~ nowhere on free |
+| `test-data/windows/profiles/fleet-test-screenlock.xml` | Windows **DeviceLock**: password enforcement, 15-min inactivity lock, PIN length | ~~library upload/download/delete only~~ nowhere on free |
 
 Neither may ever be delivered to a VM. Write an inert pair — one `.mobileconfig`, one Windows `.xml` — whose
 only job is to be observable: a custom preference domain on macOS; on Windows, a CSP that changes nothing about
@@ -137,6 +142,76 @@ The batch's own **Done when** below, plus:
 
 ---
 
+## What landed
+
+| target | status | notes |
+|---|---|---|
+| inert profile fixtures | ✅ | `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` + READMEs; both lifecycle specs moved onto them; the two lock fixtures deleted |
+| `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ☐ | |
+| `premium/controls/os-settings/profile-declarations.spec.ts` | ☐ | |
+| `premium/controls/os-settings/profile-broken-labels.spec.ts` | ☐ | **retargeted** — see below |
+| `premium/controls/os-settings/profile-label-targets.spec.ts` | ☐ | |
+| `premium/controls/os-settings/configuration-profiles.spec.ts` | ☐ augment | fixture swap landed; the delivery augment hasn't |
+| `premium/controls/os-updates/macos-updates.spec.ts` | ☐ | |
+| `premium/controls/os-updates/ddm-conflict.spec.ts` | ☐ | |
+| `premium/software/software-label-targets.spec.ts` | ☐ | |
+| `premium/policies/policy-label-targets.spec.ts` | ☐ | |
+| `premium/reports/report-label-targets.spec.ts` | ☐ | |
+
+### The free VMs had been receiving both lock profiles (found 2026-09-29)
+
+§1 said the passcode and DeviceLock fixtures were safe in the library lifecycle. **On free they weren't.** Free
+has no fleets, so `free/controls/os-settings/configuration-profiles.spec.ts` uploaded them to Unassigned, where
+the free macOS and Windows VMs are, and whenever Fleet's 30-second profile reconciler ticked between the upload
+and the delete step it sent them. The VMs' MDM command history:
+
+| free VM | received | most recent |
+|---|---|---|
+| Windows | `fleet-test-screenlock.xml` (password required, 15-min inactivity lock, 10-char minimum) — **32 times, 23 days** | 2026-09-28 03:41 UTC, the nightly |
+| macOS | `Fleet Test Passcode`, acknowledged 7 times | 2026-08-30 |
+
+Fleet removed each about 90 s later — the delete step — and that is the only reason neither VM locked. Read on
+the devices afterwards (filtered to the lock keys only): no `passwordpolicy` on the Mac; the DeviceLock values
+back at Windows' defaults. Premium was never exposed: its Unassigned and Workstations fleets hold no real host,
+and the premium VMs' histories show no delivery.
+
+What was done: the free spec was skipped on `main` the same night
+([PR #64](https://github.com/AndreyKizimenko/qa-automation-poc/pull/64)); this batch's first slice moved both
+lifecycle specs onto the inert pair and deleted the two lock fixtures, re-signing the inert profile for the
+signed-upload rejection test. `CLAUDE.md`, both authoring skills and the fixture READMEs now say it the way it
+is: **uploading a profile is delivering it.**
+
+### Decisions taken (2026-09-29)
+
+- **The inert pair** — macOS: a custom preference domain nothing reads (`com.fleetdm.qa.playwright.inert`);
+  Windows: `ApplicationManagement/AllowGameDVR = 0`. Approved by Andrey for delivery to the real VMs.
+- **The "outside the label" host is a simulation moved onto the VMs fleet** for the test (from a distinct
+  slice, as the transfer specs do) and moved back, with a cleanup sweep for any left there. One profile then
+  shows both halves: delivered on the VM inside the label, not listed on the simulation outside it.
+- **`profile-broken-labels` covers the refused delete.** Since Fleet 4.87 (`DeleteLabel` in
+  `server/datastore/mysql/labels.go`) a label that a profile or declaration targets can't be deleted — 422,
+  *"Couldn't delete. A configuration profile targets this label. Please delete the profile and try again."* —
+  and 4.91 removed the "broken" modal the three QA Wolf flows asserted. The broken state is no longer reachable
+  through the product, so the spec asserts the refusal across `.mobileconfig`, declaration and Windows `.xml`,
+  and that the label and the profile's targeting both survive it.
+
+### What the source flows turned out to be
+
+- **Two targeting widgets, not one.** Profiles, declarations and policies use Fleet's tabbed
+  `TargetLabelSelector` (All hosts / Custom → Include with Any/All, Exclude); software and reports use
+  `DropdownTargetLabelSelector` (Include any / Include all / Exclude any). They share the root class and the
+  All hosts / Custom radios.
+- **Profiles have an Edit modal** since 4.91, with the target editable — the lifecycle specs' headers said
+  otherwise.
+- **None of QA Wolf's payload files are in the export.** Two of the ones they uploaded were likely unsafe:
+  `macos-softwareupdate.json` (by name, an OS-update enforcement) and `Windows_Password.xml` (a DeviceLock).
+- Fleet retries a failed Apple or Windows profile **3 times** (`MaxAppleProfileRetries` /
+  `MaxWindowsProfileRetries` in `server/mdm/mdm.go`) before reporting Failed.
+- The macOS updates flow never picks "Custom version", which the minimum-version fields now require; it
+  passed on QA Wolf's instance only because its own leftover setting kept the team in custom mode.
+
+---
+
 Read [README.md](README.md) first for the standing rules and how a batch runs. Source flows live in
 `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/<path>` — the paths below are relative to that.
 
@@ -162,8 +237,8 @@ feature.
 > **⚠️ Never deploy a passcode profile to a real host.** It blocks access permanently, there is no recovery,
 > and there are only a few VMs per tier. No `com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`,
 > `maxInactivity` or `allowSimple` — nor screen lock, inactivity timeout, FileVault, login-window restrictions,
-> or anything disabling SSH / remote management / the MDM channel. `fleet-test-passcode.mobileconfig` is one of
-> these: safe in the library lifecycle where round 1 uses it, never safe to deliver. See
+> or anything disabling SSH / remote management / the MDM channel. Uploading is delivering: on free, even an
+> upload → delete lifecycle reaches the VMs. Only the inert `fleet-pw-inert.*` fixtures may be uploaded. See
 > [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
 
 ## Label targeting
