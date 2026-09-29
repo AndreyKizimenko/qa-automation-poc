@@ -112,7 +112,7 @@ resting-state step assume them plain). So:
 - **Don't run the full suite while you build** — README §9. Your specs, both tiers, with deps once;
   `--workers=2` on VM specs; the full suite once, at the end, via `QA — Branch run`.
 - **Nothing else may be using the VMs** when you run a VM spec: `gh run list --limit 5` first, and stay clear of
-  the nightly — `QA — Nightly`, scheduled for 05:00 UTC but started hours late by GitHub, about 1.5 h long.
+  the nightly — `QA — Nightly`, scheduled for 03:00 UTC but started hours late by GitHub, about 1.5 h long.
 - **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
   4.92.1 against the 4.93 RC is fine; what silently broke gitops `software:` was the 4.85 client CI used to fall
   back to. If a flow needs output only the RC's client prints, build one from `~/repositories/fleet`

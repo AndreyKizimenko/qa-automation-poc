@@ -186,7 +186,8 @@ release once the profile is gone. On Workstations, so nothing is delivered.
 schedules (Render 04:00 UTC, gitops 05:00, Playwright 05:30), and since 2026-08-27 GitHub has started this repo's
 scheduled runs 4–6.5 h late, all together — the order held by luck. `QA — Nightly` runs Render's deploy hooks, a
 30-min wait, both instances' `/healthz`, then per tier the gitops chain and, whatever it did, the suite; one
-05:00 UTC schedule, still started late, but in order. Also bumps `upload-artifact` to v7 (Node 24).
+schedule, at 03:00 UTC — two hours ahead of the old 05:00, so a late start still finishes before morning — and
+in order. Also bumps `upload-artifact` to v7 (Node 24).
 
 **Version pins that never cleared** — `helpers/api/fma.ts` (fixed). `setPinnedVersion(…, '')` sent no `version`
 field at all — Playwright drops an empty-string multipart field — so Fleet changed nothing and D's Claude walk,
