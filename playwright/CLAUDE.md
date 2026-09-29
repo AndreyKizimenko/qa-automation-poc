@@ -78,6 +78,11 @@ removed in the same test that deployed it).
 
 If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 
+The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
+version or deadline, a DDM software-update enforcement declaration, or Recovery Lock password enforcement —
+they make the real hosts download an OS update, reboot mid-suite, or take a recovery password. Exercise those
+settings on Workstations and restore them in the same test.
+
 ## Locators and waits (Fleet-specific gotchas)
 
 General locator priority and wait rules — see the `playwright-test-author` skill. The Fleet-specific rules that always apply:
@@ -201,3 +206,5 @@ npm run check          # tsc --noEmit + eslint
 ```
 
 This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`.github/workflows/playwright-{premium,free}.yml`), but don't rely on that to catch what `npm run check` would.
+
+While building, run only the specs you changed — `npx playwright test --project=<tier> <spec-file-names>` on every tier they target, with dependencies at least once, `--workers=2` for anything on the real VMs, and nothing else running against the instance (`gh run list`). The full suite (~43 min on premium) runs once, at the end, on CI: `gh workflow run "QA — Branch run" -f branch=<branch>` runs each tier's nightly gitops chain and then its suite. The `playwright-test-author` skill has the detail.

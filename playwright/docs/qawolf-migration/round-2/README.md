@@ -59,7 +59,8 @@ Ordered by **how much setup each needs** — nothing first, new infrastructure a
 
 ### Shipped
 
-Merged in [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61) (2026-09-28). Per-batch
+A–C and gitops-mode V1 merged in [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61)
+(2026-09-28), D in [PR #63](https://github.com/AndreyKizimenko/qa-automation-poc/pull/63) (2026-09-29). Per-batch
 detail — what landed, what was retargeted, what was found — is in
 [DELIVERY-LOG.md](../DELIVERY-LOG.md).
 
@@ -68,25 +69,32 @@ detail — what landed, what was retargeted, what was found — is in
 | **[A](A-no-setup.md)** ✅ | No setup — read-only surfaces, validation, API size limits | 28 | 14 | 2 DUPs dropped; `titles-table` split shared + premium |
 | **[B](B-self-contained.md)** ✅ | Self-contained mutation — library CRUD, global config | 13 | 8 | 1 DUP dropped; took the historical-data row from A |
 | **[C](C-host-reads.md)** ✅ | Live host, read-only | 8 | 8 | 3 retargets; the vitals-refetch row moved to D |
+| **[D](D-host-execution.md)** ✅ | Execution on hosts — scripts, MDM commands, install/uninstall/update, batch runs | 31 | 10 | durable VM software in `vms.yml`; resting-state preflight; `QA — Branch run` workflow |
 | **[G](G-out-of-band.md)** ◐ | gitops mode **V1** — its own project, runs last | 5 | 5 | retries half not started; gitops V2 parked |
 
-That is **54 of the 127 flows**, and the whole `gitops-mode` project. The suite went from 113 spec files to
-**158**, and from 4 projects to **5** (`gitops-mode` plus its teardown).
+That is **85 of the 127 flows**, and the whole `gitops-mode` project. The suite went from 113 spec files to
+**168**; D added the `premium-exclusive` / `free-exclusive` projects for specs that flip a global switch.
 
 ### Remaining
 
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
-| **[D](D-host-execution.md)** ◐ | Execution on hosts — scripts, MDM commands, install/uninstall | host + real runs | 31 | 9 (+1 new) — built, in review |
 | **[E](E-label-targeting.md)** | Label targeting — profiles, declarations, software, policies | labels + several hosts | 21 | 10 |
 | **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | new instance setup | 13 | 9 |
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
-| | | **remaining** | **73** | **33** |
+| | | **remaining** | **43** | **24** |
 
-**D is built and in review** — see [D-host-execution.md](D-host-execution.md#what-landed-and-what-changed-from-the-plan).
 **Start E next** — the handoff is at the top of [E-label-targeting.md](E-label-targeting.md). It needs inert
-profile fixtures written first: *two* committed fixtures lock a real VM, not one (see there and §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
-the technician and team-admin rows, which the static-user catalog already covers and which could move earlier.
+profile fixtures written first: *two* committed fixtures lock a real VM, not one (see there and §5).
+
+**F is less blocked than its title** — checked live on 2026-09-29, see the top of
+[F-provisioning.md](F-provisioning.md). The technician-transfer and both team-admin flows need nothing, the IdP
+username UI exists, and the manual enrollment profile is a download. Still blocked: the three MFA flows (no
+SMTP on either tier), the RPM case (no Fedora host online) and the recovery-lock *act* (a decision, not a
+setup). F's ready rows can run before or beside E.
+
+**Before either, read §9** — how batches run since D: which skills, how much to run, and which docs move with
+the code.
 
 Batch G's retry half is last on purpose: those specs wait through real 30–90 minute intervals and belong on
 their own schedule, not in the nightly.
@@ -195,7 +203,7 @@ Not new — the round-1 lessons that cost the most, restated where builders will
    the React component for the role and accessible name, then confirm against the live DOM for anything
    conditional — a field's label is swapped for an error message when invalid, so `getByLabel` stops resolving
    exactly when the test needs it.
-7. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
+2. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
    ids change on every daemon restart. `kind: 'real'` for behaviour, `'simulated'` for volume.
 3. **Scope every assertion to your own records.** Never an absolute count on a shared list.
 4. **Snapshot and restore global config inside the test, not in a hook.**
@@ -205,7 +213,8 @@ Not new — the round-1 lessons that cost the most, restated where builders will
 7. **Write the header comment for the next reader** — why this host, why this fleet, why this locator, what
    breaks if someone "simplifies" it. Most of round 1's hard-won knowledge lives in spec headers.
 8. **Verify before calling it done:** `npm run check`, then run on every tier the spec targets, once headed,
-   at least once *with* dependencies (no `--no-deps`), and `--repeat-each=5` for anything timing-sensitive.
+   at least once *with* dependencies (no `--no-deps`), and `--repeat-each=5` for anything timing-sensitive —
+   **scoped to the specs you changed**. The full suite runs once, at the end of the batch, on CI (§9).
 
 ## 7. How a batch runs
 
@@ -267,3 +276,86 @@ second build.
 - **The client must be within a minor of the server.** One minor behind is fine (the released 4.92.1 applied
   `qa.yml` and `vms.yml` against the 4.93 RC correctly, 2026-09-28); far behind is not — a 4.85.1 client
   against a 4.93 server printed `gitops succeeded` while silently writing no software at all.
+
+## 9. Working a batch since D
+
+Batch D's lessons, as rules for E, F and G. The suite now takes **~43 min on premium and ~10 on free** in CI, and
+most of it is real-VM work that doesn't get faster with more workers — so *how much you run* matters as much as
+what you write, and the docs have to move with the code or the next audit pays for it.
+
+### Skills — call them, don't wait for them
+
+| when | skill |
+|---|---|
+| before writing anything | **`playwright-test-author`** (Skill tool) — the rules, the traps, the verification bar |
+| before opening the PR, on your own specs and page objects | **`playwright-test-reviewer`** — fix what it finds, or write down why not |
+| a run went red and you need a verdict (flake, test bug, product bug, infra) | **`playwright-run-reviewer`** |
+| Andrey has decided a finding is a Fleet bug | **`/fleet-bug-file`** — only when he says so. Search first: both of D's "new" bugs (#53186, #53965) were already filed |
+
+### How much to run
+
+- **While building, run only what you changed**, on every tier it targets:
+  `npx playwright test --project=premium <spec-file-names>` (and `--project=free` for anything in `shared/`).
+  That runs `premium-setup` and `cleanup-setup` — including the VM resting-state step — and then only your
+  tests. **Don't use `npm run test:premium -- <spec>`**: it also names the exclusive project, whose dependency
+  is the *whole* main project. `--no-deps` for fast iteration; with deps at least once before you call it done.
+- An exclusive spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` — by file name,
+  not path.
+- `--repeat-each=5` for anything timing-sensitive, scoped the same way. Keep **`--workers=2`** for anything on
+  the real VMs: it's CI's shape, and 4 workers stack a VM's queue deep enough to time tests out.
+- Write artifacts outside the repo: `--output=<scratchpad>/<run-name>`.
+- **The full suite runs once, at the end of the batch, on CI**:
+  `gh workflow run "QA — Branch run" -f branch=<branch>` — each tier's nightly gitops chain, then its suite,
+  both tiers side by side. Triage it with `playwright-run-reviewer`. Run the full suite locally only if CI
+  can't, and say so.
+- **Before any run that touches the real VMs, check nothing else is:** `gh run list --limit 5`. The nightly
+  holds the instances 05:00–~06:30 UTC. Two runs on the same VMs corrupt each other — one queue per VM, and
+  shared fixtures each run's cleanup removes. CI's concurrency groups only keep CI from colliding with itself.
+
+### Which docs move with the code — in the same commit
+
+| you changed | update |
+|---|---|
+| a spec | the batch file's *What landed* table; a [DELIVERY-LOG](../DELIVERY-LOG.md) line; the [test-audit](../../test-audit/README.md) area file — one entry per `test()`, steps as a person would do them, validations tagged *(UI)* / *(API)*, an honest Assessment — and the audit README's index and counts |
+| a helper or page object | `helpers/README.md` / `pages/README.md` |
+| a fixture | the `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it, and its hash if gitops pins one |
+| gitops | the fleet file's header and `gitops/premium-fleetqa/README.md`; apply it, and say so in the PR |
+| a rule every spec should follow | `playwright/CLAUDE.md`, and the author / reviewer skill when it's about writing or reviewing |
+| a skip owed to a Fleet bug | a row in [`blocked-by-product-bugs.md`](../../blocked-by-product-bugs.md) + `TODO(fleetdm/fleet#N)` on the skip |
+| something the next batch will trip on | that batch file's *Start here* block |
+
+### The real VMs, as they are now
+
+- **Their software is durable.** `gitops/premium-fleetqa/fleets/vms.yml` keeps an inert `.pkg` / `.msi` / `.deb`,
+  7-Zip's `.exe`, Itsycal and DB Browser for SQLite on the VMs fleet, listed for specs in
+  `helpers/vm-fixtures.ts`; their resting state is **uninstalled**. Never delete those titles or change their
+  scripts, labels or versions. A test that changes a title — a label scope, its own scripts, a version swap —
+  uses a **per-run** package named `fleet-pw-*` (`helpers/deb.ts`; for a `.pkg` / `.msi`, a committed fixture
+  whose *file name* starts `fleet-pw-`, so the cleanup sweep recognises it).
+- **Every run starts and ends the VMs at rest** — `cleanup.steps.ts` → *bring the real VMs to their resting
+  state*: the suite's queued work cancelled, the script timeout at Fleet's default, the fixtures uninstalled.
+  A batch that leaves a new kind of state on a VM — a profile, a label membership, an OS setting — extends it
+  there: the sweep for things Fleet stores by name, the resting-state step for what's on the host.
+- **Server-side vs host-side.** Which hosts Fleet *targets* — a profile listed for a host, software offered in
+  its Library — is Fleet's decision, and a simulation shows it as well as a VM. What the host *does* —
+  delivered, verified, installed — needs a real VM. There is one real VM per platform, so "a host of the same
+  platform outside the label" has to be a simulation.
+- **Waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at` (it moves only
+  when the inventory *changes*), and wait out a refetch already outstanding (`waitForNoPendingRefetch`) before
+  requesting your own — Fleet queues one after every install and uninstall, and a new request merges into it.
+- **Budget VM time:** a round trip is 1–5 min; a retried VM test costs 5–15. The CI job's limit is 120 min and
+  Playwright stops itself at 100 in CI, report included.
+
+### Fleet behaviour the suite already accounts for
+
+- [fleetdm/fleet#54262](https://github.com/fleetdm/fleet/issues/54262) — the script details modal takes "after N
+  seconds" from the output, not the timeout (asserted as today's copy, `TODO`).
+- [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965) — `fleetctl generate-gitops` fails on Free
+  with Apple MDM on; every Free `generate-gitops` test skips behind it.
+- [fleetdm/fleet#53186](https://github.com/fleetdm/fleet/issues/53186) — a gitops apply reports
+  `[-] deleted software - …` for packages it keeps. Check the installer id before believing it.
+- [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440) — a new `.exe` title isn't linked to what
+  Windows reports; one in the Fleet-maintained catalog (7-Zip) is linked once the hourly
+  `reconcile_windows_maintained_app_titles` cron merges it.
+- `fleetctl`: CI installs the server's release when published, else the latest — at most a minor behind, which
+  Fleet supports.

@@ -2,18 +2,22 @@
 
 **21 source flows → 10 specs.** `Label targeting`
 
-> ## ▶ Start here — handoff, 2026-09-28
+> ## ▶ Start here — handoff, 2026-09-29
 >
-> Batches A–C and gitops-mode V1 are merged (#61, #62). **Batch D is in PR #63** — if it hasn't merged when you
-> start, branch from `playwright/qawolf-round2-batch-d`, not `main`: this batch reuses D's helpers, fixtures,
-> cleanup sweep and the VMs-fleet gitops file.
+> A–D and gitops-mode V1 are all on `main` (#61, #62, #63). **Branch from `main`.**
 >
 > **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
-> [README.md](README.md) (standing rules; §5 is about exactly this batch), `playwright/CLAUDE.md` (**Test
-> hosts**, the exclusive projects), [D-host-execution.md → What landed](D-host-execution.md#what-landed-and-what-changed-from-the-plan)
-> for what D built, then this file.
+> [README.md §9](README.md#9-working-a-batch-since-d) — **how batches run since D: which skills, how much to
+> run, which docs move with the code** — then README §5 (never lock a VM), `playwright/CLAUDE.md` (**Test
+> hosts**, the cleanup pipeline, the exclusive projects),
+> [D-host-execution.md → What landed](D-host-execution.md#what-landed-and-what-changed-from-the-plan), then this
+> file.
 >
-> Every fact below was checked against the live instances on 2026-09-28.
+> **The three rules this handoff adds most to:** run only the specs you changed until the end (§9); keep the
+> batch file, DELIVERY-LOG and the test-audit entries current in the same commits; run
+> `playwright-test-reviewer` on your own work before the PR, and the full suite once, on CI, at the end.
+>
+> Facts below were checked against the live instances on 2026-09-28/29.
 
 ---
 
@@ -38,30 +42,39 @@ itself; the same works here. osquery's `managed_policies` table (macOS) lists ev
 `managed_policies` read returns fleetd's own config, *including the enroll secret*, which would then sit in
 stored report results and failure screenshots.
 
+**Check what removal does, per platform, before relying on it.** Deleting a profile from a fleet makes Fleet
+remove it from macOS hosts; confirm what it does on Windows before a test counts on "deleted, so gone from the
+VM". Whatever the answer, a profile a test delivers must be removed in that test *and* by the cleanup (§2).
+
 ### 2. Labels — only manual ones are assertable
 
 - **Dynamic labels are unusable as targets.** The osquery-perf pool answers every label query, so the
   gitops-provisioned "Apple Silicon macOS hosts" holds 172 hosts and "Debian-based Linux hosts" 563. The
   built-in platform labels are the same (see the audit README).
-- **Manual labels** with the real VMs as explicit members give a host set you control. Resolve membership
-  through the API and assert **set membership** — the profile is on exactly these hosts and none outside —
-  never a count.
-- **Nothing cleans up labels.** `cleanup.steps.ts` doesn't touch them. Name yours with a prefix and extend D's
-  VMs sweep (`sweep host-execution leftovers from the VMs fleet`) to cover labels, profiles and declarations by
-  that prefix — a timed-out test never reaches its `finally`.
+- **Manual labels** with explicit members give a host set you control. Resolve membership through the API
+  (`getLabelId` / `listLabelHostIds` in `helpers/api/labels.ts`, from D) and assert **set membership** — the
+  profile is on exactly these hosts and none outside — never a count.
+- **There is one real VM per platform.** "A host of the same platform outside the label" has to be a
+  simulation. That's sound for what Fleet decides server-side — which hosts a profile is *listed* for, which are
+  *offered* software — and meaningless for what the host does (delivered, verified, installed): that needs the
+  VM. Put the real VM inside the label and a simulation outside it (README §9 → *Server-side vs host-side*).
+- **Nothing cleans up labels, profiles or declarations yet.** Name yours with a `pw-` prefix and extend
+  `setup/cleanup.steps.ts`: the VMs sweep (*sweep host-execution leftovers from the VMs fleet*) for what Fleet
+  stores by name, and the resting-state step (*bring the real VMs to their resting state*) for anything left on
+  a VM. A timed-out test never reaches its `finally`.
 - **Custom targets are premium-only.** The profile modals only load labels when `isPremiumTier`. Free still
   delivers profiles to all hosts — ask per flow whether there is a free half.
 
 ### 3. Hosts and where profiles go
 
 - The real VMs: macOS and Windows are MDM-enrolled ("On (manual)"); **Ubuntu has no MDM**, so it can't take a
-  profile. All three are ARM. On premium they are on the **VMs** fleet, which is under gitops since D
-  (`gitops/premium-fleetqa/fleets/vms.yml`) — a profile you add there is yours to remove, and a re-apply of that
-  file deletes anything undeclared.
+  profile. All three are ARM. On premium they are on the **VMs** fleet, under gitops
+  (`gitops/premium-fleetqa/fleets/vms.yml`) and **re-applied before every nightly** — a profile you add there
+  is yours to remove, and the nightly deletes anything undeclared.
 - **macOS takes an MDM command in seconds** (D's `UserList` acknowledged within one poll). A profile's status
   still goes through *verifying → verified*, which needs the host's next detail collection — use
-  `waitForHostRefetch` from D rather than polling copy. Windows delivery rides SyncML check-ins; measure it
-  before budgeting.
+  `waitForHostRefetch` rather than polling copy. Windows delivery rides SyncML check-ins; measure it before
+  budgeting.
 
 ### 4. Never touch OS updates on the VMs fleet
 
@@ -71,39 +84,56 @@ declaration on the VMs fleet makes the real VMs download and install an OS updat
 possibly a version the suite doesn't expect. The DDM flows are about Fleet *refusing* the combination; run them
 on a fleet with no real hosts (Workstations), and restore whatever you set in the same test.
 
-### 5. Software targeting reuses D
+### 5. Software targeting changes a title, so it can't use D's durable fixtures
 
-`software-label-targets` is D's install path plus a label scope. Reuse `uploadSoftwarePackageBuffer`,
-`installSoftwareOnHost`, `waitForSoftwareSettled`, `helpers/deb.ts`, and add a third role to
-`make-pkg.sh` / `make-msi.sh` rather than sharing D's packages — a premium title holds several packages, so two
-specs on one title share a Library row. A host outside the label must not be offered the title at all; assert
-that on its Library, not only on the one inside.
+`software-label-targets` is D's install path plus a **label scope on the installer** — which changes the title
+for everyone. The durable fixtures in `helpers/vm-fixtures.ts` must never carry one (the lifecycle spec and the
+resting-state step assume them plain). So:
+
+- Linux: a per-run `fleet-pw-label-*` `.deb` from `helpers/deb.ts` — the sweep already covers `^fleet-pw-`.
+- macOS / Windows: a committed inert `.pkg` / `.msi` of its own (a new role for `make-pkg.sh` / `make-msi.sh`),
+  so it doesn't share a Library row with D's. Their output names start `fleet-playwright-`, which the sweep
+  deliberately **doesn't** match (those are durable) — either name the new file `fleet-pw-…` or add its exact
+  name to the sweep's `OWN_PACKAGE`.
+- Reuse `uploadSoftwarePackageBuffer`, `installSoftwareOnHost`, `waitForSoftwareSettled`, and leave the VM with
+  it uninstalled. A host outside the label must not be **offered** the title at all — assert that on its
+  Library (a simulation, per §2), not only on the VM inside.
 
 ### Traps this batch will hit
 
-- **Runtime.** The premium nightly is ~40 min after D, and Andrey chose to keep the VM-bound specs in the main
-  suite for now. The job limit is 120 min, and in CI Playwright stops the run at 100 min (`globalTimeout`) so a
-  run that grows too long still ends with its report. This batch adds more. Measure `WORKERS=2 npm run
-  test:premium` at the end and report it; if it passes ~80 min, raise it rather than trimming coverage.
+- **Runtime.** Premium is ~43 min in CI after D, and the VM-bound specs stay in the main suite. The job limit is
+  120 min and Playwright stops the run at 100 in CI, report included. This batch adds more VM time: price it,
+  and report the end-of-batch CI runtime. If it passes ~80 min, raise it rather than trimming coverage.
+- **Don't run the full suite while you build** — README §9. Your specs, both tiers, with deps once;
+  `--workers=2` on VM specs; the full suite once, at the end, via `QA — Branch run`.
+- **Nothing else may be using the VMs** when you run a VM spec: `gh run list --limit 5` first, and stay clear of
+  the nightly (05:00–~06:30 UTC).
 - **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
-  4.92.1 against the 4.93 RC is fine — it applied `vms.yml` and `qa.yml` correctly on 2026-09-28; what silently
-  broke gitops `software:` was the 4.85 client CI used to fall back to. If a flow needs output only the RC's
-  client prints, build one from `~/repositories/fleet` (`go build -o <scratchpad>/fleetctl ./cmd/fleetctl`) and
-  point `FLEETCTL_BIN` at it.
+  4.92.1 against the 4.93 RC is fine; what silently broke gitops `software:` was the 4.85 client CI used to fall
+  back to. If a flow needs output only the RC's client prints, build one from `~/repositories/fleet`
+  (`go build -o <scratchpad>/fleetctl ./cmd/fleetctl`) and point `FLEETCTL_BIN` at it. `generate-gitops` on
+  Free fails with any current client (#53965).
 - **A missing locator's `click()` has no action timeout** — it waits out the whole test, and the `finally` then
   runs on a closed request context, so its cleanup silently doesn't happen. Probe a locator before relying on
-  it; rely on the cleanup sweep for anything left on the VMs fleet.
-- **Global switches go in `exclusive/`.** If a flow has to flip something global (a label that every profile
-  depends on, an org-wide MDM setting), put it under `tests/e2e/<tier>/exclusive/` — the single-worker
-  project that runs after the main one.
+  it; rely on the cleanup for anything left on the VMs fleet.
+- **Global switches go in `exclusive/`.** If a flow has to flip something global (a label every profile depends
+  on, an org-wide MDM setting), put it under `tests/e2e/<tier>/exclusive/` — the single-worker project that runs
+  after the main one.
 - **Never assert a count on a shared list**, and never an absolute host count behind a label.
-- **The nightly runs at 05:00 (gitops) and 05:30 UTC (Playwright).** Don't let a long verification run overlap.
 
 ### Done when
 
-The batch's own **Done when** below, plus: the inert fixtures are committed with their safety reasoning written
-down; every profile a test delivers is removed in the same test *and* covered by the cleanup sweep; and every
-targeting assertion is set membership.
+The batch's own **Done when** below, plus:
+
+- the inert fixtures are committed with their safety reasoning written down;
+- every profile, declaration and label a test creates is removed in the same test *and* covered by the cleanup;
+- every targeting assertion is set membership;
+- `playwright-test-reviewer` has been run on the batch's specs and page objects, and its findings fixed or
+  answered;
+- the docs in README §9's table are current — this file's *What landed*, DELIVERY-LOG, and a test-audit entry
+  for every new test (the audit README's counts too);
+- the full suite ran once via `QA — Branch run` on the branch, and anything red is triaged
+  (`playwright-run-reviewer`) and fixed, skipped behind a filed bug, or explained in the PR.
 
 ---
 
