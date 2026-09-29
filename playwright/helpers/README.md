@@ -34,6 +34,7 @@ that's a page-object responsibility.
 | [`perf.ts`](./perf.ts) | `measureNav()`, `measureSearch()` — time user-perceived loads |
 | [`perf-teardown.ts`](./perf-teardown.ts) | Performance summary table + historical comparison |
 | [`team-scope.ts`](./team-scope.ts) | `fleetIdFor(scope, workstationsFleetId)` — maps `'All fleets'` / `'Unassigned'` / `'Workstations'` to the `fleet_id` URL value (`undefined` / `0` / wsId) for scope-aware page-object `goto({ fleetId })` calls |
+| [`vm-fixtures.ts`](./vm-fixtures.ts) | `VM_SOFTWARE_FIXTURES` — the VMs fleet's durable install/uninstall software (declared in `gitops/premium-fleetqa/fleets/vms.yml`), `findVmFixtureTitle`, `isVmFixtureInstalled`, `ensureVmFixtureUninstalled`. Shared by `software-lifecycle-on-host.spec.ts` and the cleanup preflight |
 | [`vuln.ts`](./vuln.ts) | Vulnerability column assertions (`expectRowHasVulnData`, `expectSingleCve`, `assertVulnTooltip`) for specs that drill into the "Vulnerabilities" column of the DataTable |
 | [`catalogs/`](./catalogs/) | Typed app-store reference catalogs: `fmaApps`, `vppApps`, `vppUiSearchNames`, `androidApps`. Pick (id + platform) for API/GitOps tests; pick a name for UI search tests |
 
@@ -43,7 +44,7 @@ that's a page-object responsibility.
 |--------|---------------|
 | `core.ts` | `apiUrl`, `apiLatestUrl`, `authHeaders`, `getApiToken`, `withApiRequest`, shared `HostRef` / `FleetRef` types |
 | `activities.ts` | `assertActivity` (test-side check; fails the test if missing), `findActivity` (lower-level lookup) |
-| `hosts.ts` | `findOnlineHost` (resolve by platform + `kind: 'real' \| 'simulated'`), `findHostByPlatform`, `findHostWithSoftware`, `findSimulatedHostIds`, `hostExists`, `getHostFleetId`, `getHostDetailUpdatedAt`, `transferHosts`, `transferHostsByFilter` |
+| `hosts.ts` | `findOnlineHost` (resolve by platform + `kind: 'real' \| 'simulated'`), `findHostByPlatform`, `findHostWithSoftware`, `findSimulatedHostIds`, `hostExists`, `getHostFleetId`, `getHostDetailUpdatedAt`, `requireRealHost` (the online real VM of a platform, or a failure), `listFleetHosts`, `waitForHostRefetch` / `waitForNoPendingRefetch`, `listUpcomingActivities` / `cancelUpcomingActivity` (a host's queue), `transferHosts`, `transferHostsByFilter` |
 | `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet`, plus the per-fleet webhook / host-expiry getters and setters |
 | `software.ts` | `uploadSoftwarePackage`, `findSoftwareTitleByPackageName`, `deleteSoftwareTitle*`, `getSoftwareTitle`, `getSoftwarePackage`, `findVulnerableSoftwareBySources`, `SoftwareTitleRef` / `SoftwarePackageRef` |
 | `fma.ts` | `findFmaIdBySlug`, `addFmaToFleet` |

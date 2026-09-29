@@ -42,6 +42,38 @@ test.describe('activityCopy', () => {
       .test(`deleted the report ${NAME}.`)).toBe(true);
   });
 
+  test('script runs — one host, this host, a batch', () => {
+    expect(activityCopy.script.ran({ name: 'x.sh', host: 'mac (1)' })
+      .test(`ran the x.sh script on mac (1).`)).toBe(true);
+    expect(activityCopy.script.ranOnThisHost({ name: 'x.sh' })
+      .test(`ran the x.sh script on this host.`)).toBe(true);
+    expect(activityCopy.script.ranBatch({ name: 'x.sh', hostCount: 3 })
+      .test(`ran the x.sh script on 3 hosts.`)).toBe(true);
+    expect(activityCopy.script.ranBatch({ name: 'x.sh', hostCount: 1 })
+      .test(`ran the x.sh script on 1 host.`)).toBe(true);
+  });
+
+  test('mdmCommand.* — feed, this host, and the command item', () => {
+    expect(activityCopy.mdmCommand.ran({ requestType: 'UserList', host: 'mac (1)' })
+      .test(`ran UserList as a custom MDM command on mac (1).`)).toBe(true);
+    expect(activityCopy.mdmCommand.ranOnThisHost({ requestType: 'UserList' })
+      .test(`ran UserList as a custom MDM command on this host.`)).toBe(true);
+    expect(activityCopy.mdmCommand.acknowledged({ requestType: 'UserList' })
+      .test(`The UserList command was acknowledged. less than a minute ago`)).toBe(true);
+  });
+
+  test('hostSoftware.* — installed / uninstalled, failed and upcoming', () => {
+    const title = 'fleet-pw (x64)';
+    expect(activityCopy.hostSoftware.installed({ title }).test(`admin installed ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.uninstalled({ title }).test(`admin uninstalled ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.failedToUninstall({ title })
+      .test(`admin failed to uninstall ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.toldToInstall({ title })
+      .test(`admin told Fleet to install ${title} on this host.`)).toBe(true);
+    // An uninstall's sentence contains "installed"; the install matcher must not take it.
+    expect(activityCopy.hostSoftware.installed({ title }).test(`admin uninstalled ${title} on this host.`)).toBe(false);
+  });
+
   test('label.* — "a label" on create, "the label" on edit/delete', () => {
     expect(activityCopy.label.created({ name: NAME })
       .test(`created a label ${NAME}.`)).toBe(true);

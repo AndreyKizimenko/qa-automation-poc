@@ -5,9 +5,9 @@
 # anything parked there is destroyed. QA is wiped by neither, holds no hosts of
 # its own, and held no policies, scripts, profiles or reports before this file
 # existed — so bringing it under gitops (which deletes whatever it does not
-# declare) costs nothing. The VMs fleet is deliberately NOT under gitops: it
-# owns the `pw-host-report-results` report that
-# `tests/e2e/premium/hosts/host-report-details.spec.ts` reads.
+# declare) costs nothing. The shelf lives here rather than on the VMs fleet
+# because nothing on it is meant to be installed: VMs holds real hosts, and
+# fleets/vms.yml keeps only what a spec installs on them.
 #
 # Why these apps: version-dependent specs — chiefly
 # `tests/e2e/premium/software/version-pinning.spec.ts` — need a Fleet-maintained

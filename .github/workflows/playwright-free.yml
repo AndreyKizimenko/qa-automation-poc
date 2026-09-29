@@ -6,6 +6,20 @@ on:
   schedule:
     - cron: '30 5 * * *' # 05:30 UTC — 30 min after nightly gitops kicks off at 05:00
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
+
+# Shared with nightly-qa-gitops-free.yml, so a gitops apply and a test run
+# never overlap, and one test run waits for another: the real VMs work one
+# queue each and the suite's fixtures on them are shared.
+concurrency:
+  group: free-fleetqa-instance
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -16,7 +30,10 @@ permissions:
 
 jobs:
   test:
-    timeout-minutes: 60
+    # A guard against a hung run, with room for growth: Playwright's own
+    # globalTimeout stops the suite at 100 min in CI, so a long run still
+    # finishes with its report before this limit is reached.
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -25,9 +42,14 @@ jobs:
       options: --user 1001
     defaults:
       run:
+        # A job-level `defaults` replaces the workflow's, so the shell is set
+        # again here — the container would otherwise run steps under `sh`.
+        shell: bash
         working-directory: playwright
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v5
         with:
@@ -54,6 +76,7 @@ jobs:
       # tests/cli/ drives the real fleetctl binary. Match the server version:
       # an older client still runs but prints a version-mismatch banner on every
       # command and can lag behind new output keys.
+      # The Playwright image has no jq, so the version is read with sed.
       - name: Install fleetctl matching the server
         env:
           FLEET_URL: ${{ secrets.FLEET_FREE_URL }}
@@ -63,20 +86,26 @@ jobs:
           SERVER_VERSION="$(
             curl -fsSL "$FLEET_URL/api/v1/fleet/version" \
               --header "Authorization: Bearer $FLEET_API_TOKEN" \
-              | jq -r '.version' || true
+              | sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' | head -1 || true
           )"
-          if [[ "$SERVER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            INSTALL_VERSION="$SERVER_VERSION"
+          # An RC server ("4.93.0-rc.…") has no published client of its own: take its
+          # release's client once that is published, else the latest release, which is
+          # at most a minor behind — a pairing Fleet supports.
+          BASE="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' <<< "$SERVER_VERSION" || true)"
+          if [ -n "$BASE" ] && npm view "fleetctl@$BASE" version >/dev/null 2>&1; then
+            INSTALL_VERSION="$BASE"
           else
-            INSTALL_VERSION="4.85.0"
+            INSTALL_VERSION="latest"
           fi
           npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
           fleetctl --version
 
       - run: npm run test:free
 
+      # Uploaded on every outcome: a failed or interrupted run is the one whose
+      # report matters most.
       - uses: actions/upload-artifact@v5
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         with:
           name: playwright-report-free
           path: playwright/playwright-report/

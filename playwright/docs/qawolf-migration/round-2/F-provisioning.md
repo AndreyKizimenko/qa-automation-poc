@@ -56,7 +56,7 @@ reach the action across roles and platforms, and write down why the act itself i
 | `tests/e2e/premium/hosts/recovery-lock.spec.ts` | **new** | `mac-os-accounts/automatically-rotate-recovery-lock-password`<br>`mac-os-accounts/set-plus-manually-rotate-macos-recovery-lock-passwords` |
 | `tests/e2e/premium/hosts/manual-mdm-enrollment.spec.ts` | **new** | `mdm/manual-mdm-enrollment-mac-enrollment-profile` |
 | `tests/e2e/free/hosts/manual-mdm-enrollment.spec.ts` | **new** | `mdm/manual-mdm-enrollment-mac-enrollment-profile [FREE]` |
-| `tests/e2e/premium/software/install-on-host.spec.ts` | **new** | `software/install-and-delete-rpm-files-on-rpm-based-linux-hosts-fedora` |
+| `tests/e2e/premium/software/install-on-host.spec.ts` | **new** | `software/install-and-delete-rpm-files-on-rpm-based-linux-hosts-fedora` — *since D's follow-up (2026-09-28) install/uninstall on a VM lives in `software-lifecycle-on-host.spec.ts`, on durable `vms.yml` fixtures; an `.rpm` would be a new fixture there, with a Fedora VM* |
 | `tests/e2e/premium/hosts/host-transfer-permissions.spec.ts` | augment | `technician-user/technician-role-can-transfer-hosts-between-fleets` |
 | `tests/e2e/premium/settings/users/mfa.spec.ts` | **new** | `uncategorized/created-2fa-enabled-user-cannot-re-use-sign-in-magic-link`<br>`uncategorized/global-admin-is-able-to-edit-user-to-use-2fa`<br>`uncategorized/invite-2fa-enabled-user-and-log-in-as-the-user` |
 | `tests/e2e/premium/settings/users/team-admin-scope.spec.ts` | **new** | `user-profiles/team-admin-able-to-edit-a-team-member-premium` |

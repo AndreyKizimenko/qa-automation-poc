@@ -70,13 +70,24 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `gitops-free.yml` / `gitops-premium.yml` | Manual, `workflow_call` | Apply the baseline gitops config to the matching instance via the `gitops-action` composite. |
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
-| `nightly-qa-gitops-free.yml` | 05:00 UTC daily, manual | Free chain: apply baseline → verify → apply min → verify. |
-| `nightly-qa-gitops-premium.yml` | 05:00 UTC daily, manual | Premium chain: same as free, plus parallel verify of the Workstations team. |
-| `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual | Runs the Playwright suite against the matching instance — project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. |
+| `nightly-qa-gitops-free.yml` | 05:00 UTC daily, manual, `workflow_call` | Free chain: apply baseline → verify → apply min → verify → fleetctl checks. |
+| `nightly-qa-gitops-premium.yml` | 05:00 UTC daily, manual, `workflow_call` | Premium chain: same as free, plus parallel verify of the Workstations team. Both passes also apply the QA and VMs fleets (`qa.yml`, `vms.yml`). |
+| `playwright-free.yml` / `playwright-premium.yml` | 05:30 UTC daily, manual, `workflow_call` | Runs the Playwright suite against the matching instance — project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. |
+| `qa-branch-run.yml` | Manual (`branch` input) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`. |
 | `playwright-check.yml` | PR + push to `main` touching `playwright/**`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
 
 Nightly ordering: Render redeploy at 04:00 UTC → gitops orchestrators at
-05:00 UTC → Playwright at 05:30 UTC.
+05:00 UTC → Playwright at 05:30 UTC. Each tier's gitops chain and Playwright
+suite share a concurrency group (`<tier>-fleetqa-instance`), so an apply and a
+test run — or two test runs — queue rather than overlap: an apply deletes what
+its config doesn't declare, and the real VMs work one queue each. GitHub keeps
+one pending run per group, so a newer queued run replaces an older queued one.
+
+Every workflow in the gitops and Playwright chains takes an optional `ref`
+input on `workflow_call` and checks it out, which is how `qa-branch-run.yml`
+runs a branch's code under the default branch's workflow definitions. A branch
+run leaves the branch's gitops config applied until the next nightly re-applies
+`main`'s.
 
 ### Required secrets
 

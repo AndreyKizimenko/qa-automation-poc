@@ -262,3 +262,22 @@ export async function patchAppConfig(
     throw new Error(`[patchAppConfig] ${res.status()}: ${await res.text()}`);
   }
 }
+
+/**
+ * Turns script execution back on (`server_settings.scripts_disabled: false`).
+ * While it is off Fleet refuses every new script run and holds every queued one,
+ * so a run that died while an exclusive spec had it off would break every
+ * script spec in the next run. `cleanup-setup` calls this for the same reason
+ * it clears gitops mode. A no-op when it is already on, which gitops declares.
+ */
+export async function enableScriptExecution(request: APIRequestContext): Promise<void> {
+  await patchAppConfig(request, { server_settings: { scripts_disabled: false } });
+}
+
+/** Whether scripts may run — the inverse of `server_settings.scripts_disabled`. */
+export async function isScriptExecutionEnabled(request: APIRequestContext): Promise<boolean> {
+  const settings = (await getAppConfig(request)).server_settings as
+    | { scripts_disabled?: boolean }
+    | undefined;
+  return !settings?.scripts_disabled;
+}

@@ -55,6 +55,7 @@ import {
   InstallSoftwarePage,
   ScriptsLibraryPage,
   ScriptsBatchProgressPage,
+  ScriptBatchDetailsPage,
   VariablesPage,
   BootstrapPackagePage,
   SetupExperiencePage,
@@ -190,6 +191,7 @@ type FleetFixtures = {
   installSoftware: InstallSoftwarePage;
   scriptsLibrary: ScriptsLibraryPage;
   scriptsBatchProgress: ScriptsBatchProgressPage;
+  scriptBatchDetails: ScriptBatchDetailsPage;
   variables: VariablesPage;
   bootstrapPackage: BootstrapPackagePage;
   setupExperience: SetupExperiencePage;
@@ -425,6 +427,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   scriptsBatchProgress: [async ({ page }, use) => {
     await use(new ScriptsBatchProgressPage(page));
+  }, { box: true }],
+  scriptBatchDetails: [async ({ page }, use) => {
+    await use(new ScriptBatchDetailsPage(page));
   }, { box: true }],
   variables: [async ({ page }, use) => {
     await use(new VariablesPage(page));

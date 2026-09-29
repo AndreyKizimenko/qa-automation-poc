@@ -10,10 +10,9 @@ import os
 import sys
 import tarfile
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "fleet-playwright-pkg_1.0.0_amd64.deb"
-)
-NAME, VERSION, ARCH = "fleet-playwright-pkg", "1.0.0", "amd64"
+# make-deb.py [name version arch] — defaults build fleet-playwright-pkg_1.0.0_amd64.deb.
+NAME, VERSION, ARCH = sys.argv[1:4] if len(sys.argv) > 3 else ("fleet-playwright-pkg", "1.0.0", "amd64")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{NAME}_{VERSION}_{ARCH}.deb")
 MTIME = 0  # fixed epoch keeps the build byte-for-byte reproducible
 
 CONTROL = f"""Package: {NAME}
@@ -28,9 +27,25 @@ Description: Inert fixture package for the Fleet Playwright suite.
 MARKER = "fleet playwright fixture\n"
 
 def tar_gz(entries):
-    """entries: list of (path, text). Returns gzipped tar bytes."""
+    """entries: list of (path, text). Returns gzipped tar bytes.
+
+    Each file's parent directories go in first, as their own entries: dpkg
+    unpacks into them and fails ("unable to create …: No such file or
+    directory") when a package ships a file under a directory it doesn't list.
+    """
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as tf:
+        dirs = []
+        for path, _ in entries:
+            parts = path.split("/")[:-1]
+            for i in range(2, len(parts) + 1):
+                d = "/".join(parts[:i]) + "/"
+                if d not in dirs:
+                    dirs.append(d)
+        for d in dirs:
+            info = tarfile.TarInfo(d)
+            info.type, info.mtime, info.mode = tarfile.DIRTYPE, MTIME, 0o755
+            tf.addfile(info)
         for path, text in entries:
             data = text.encode()
             info = tarfile.TarInfo(path)

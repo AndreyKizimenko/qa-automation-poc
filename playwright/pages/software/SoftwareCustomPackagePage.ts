@@ -24,6 +24,16 @@ export class SoftwareCustomPackagePage {
   readonly addSoftwareButton: Locator;
   readonly cancelButton: Locator;
   readonly progressModal: Locator;
+  /** The upload's "N%" readout under the progress bar, shown while the file is sent. */
+  readonly progressPercent: Locator;
+  /**
+   * "Deploy" — installs the package automatically on every host missing it, by
+   * creating an `[Install software] <title> (<ext>)` policy with an install
+   * automation. Fleet's `Slider` gives the switch no accessible name (its label
+   * is a sibling span), so it's scoped by the slider's own wrapper class.
+   * Only rendered once a file is chosen.
+   */
+  readonly deploySwitch: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -36,6 +46,8 @@ export class SoftwareCustomPackagePage {
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software', exact: true });
     this.cancelButton = page.getByRole('button', { name: 'Cancel' });
     this.progressModal = page.locator('.file-progress-modal');
+    this.progressPercent = this.progressModal.getByText(/^\d{1,3}%$/);
+    this.deploySwitch = page.locator('.software-deploy-slider__container').getByRole('switch');
   }
 
   /**
@@ -72,8 +84,12 @@ export class SoftwareCustomPackagePage {
    * modal to clear, and confirms Fleet redirected to the new title's
    * detail page. Returns the new title's id (parsed from the URL).
    */
-  async uploadPackage(filePath: string): Promise<number> {
+  async uploadPackage(filePath: string, opts: { deploy?: boolean } = {}): Promise<number> {
     await this.uploader.setFile(filePath);
+    if (opts.deploy) {
+      await this.deploySwitch.click();
+      await expect(this.deploySwitch).toHaveAttribute('aria-checked', 'true');
+    }
     await expect(this.addSoftwareButton).toBeEnabled();
     await this.addSoftwareButton.click();
 

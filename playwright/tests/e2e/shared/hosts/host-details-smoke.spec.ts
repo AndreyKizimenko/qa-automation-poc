@@ -13,7 +13,7 @@
  * C2 #7/#10/#17/#19/#22.
  */
 import { test, expect } from '@fixtures';
-import { getHostDetailUpdatedAt } from '@helpers/api';
+import { getHostDetailUpdatedAt, waitForHostRefetch } from '@helpers/api';
 
 /**
  * A username no other username on the host contains, so filtering by it leaves
@@ -41,9 +41,7 @@ test('Host details — refetch re-collects the host vitals', async ({
 
   // Fleet stored a newer set of vitals — proves the refresh came from the
   // refetch and not from a background detail cycle that was already recent.
-  await expect
-    .poll(() => getHostDetailUpdatedAt(request, liveMacosHost.id), { timeout: 180_000 })
-    .not.toBe(before);
+  await waitForHostRefetch(request, liveMacosHost.id, { since: before, timeout: 180_000 });
 
   // `HostDetailsPage` polls for the result for 60s, then gives up with "You'll
   // see an update when the host responds" and leaves the open page on the old

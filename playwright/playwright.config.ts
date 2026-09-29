@@ -14,7 +14,9 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'premium-setup': 'premium',
   'gitops-mode': 'premium',
   'gitops-mode-teardown': 'premium',
+  'premium-exclusive': 'premium',
   free: 'free',
+  'free-exclusive': 'free',
   'free-setup': 'free',
   loadtest: 'loadtest',
   'loadtest-setup': 'loadtest',
@@ -95,6 +97,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // In CI the whole run stops at 100 min — under the job's 120-min limit — so a
+  // run that grows too long ends with its remaining tests marked not run and the
+  // HTML report written, instead of being killed by the job timeout with no
+  // report at all. The real-VM specs are what make a run long: each VM works one
+  // queue, and a retried VM test can cost 5–15 min.
+  globalTimeout: process.env.CI ? 100 * 60_000 : 0,
   // CI runs at 2 — the shared Fleet QA instance has limited concurrency
   // headroom, and higher worker counts there surface as flaky navigation
   // timeouts under load even when the test logic is correct. Local dev defaults
@@ -163,6 +171,8 @@ export default defineConfig({
         // controls every other mutating spec depends on. It gets its own
         // single-worker project, which runs after this one finishes.
         '**/gitops-mode/**',
+        // Specs that hold a global lock of their own; see premium-exclusive.
+        '**/exclusive/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -170,6 +180,29 @@ export default defineConfig({
       },
       dependencies: ['premium-setup', 'cleanup-setup'],
       teardown: 'cleanup-teardown',
+    },
+
+    // ── Exclusive (runs after the main project, single worker) ─────────────────
+    // For specs that flip a global setting which breaks whatever runs beside
+    // them — turning off script execution makes Fleet refuse every new script
+    // run and hold every queued one. They live under an `exclusive/` folder in
+    // their tier's tree, and run only once every parallel spec has finished.
+    //
+    // The main project's teardown (cleanup-teardown) waits for this one too,
+    // since Playwright runs a project's teardown after all of its dependents.
+    // A dependency that fails skips its dependents, so on a red night these are
+    // reported as not run rather than run against a half-finished suite.
+    {
+      name: 'premium-exclusive',
+      testDir: './tests/e2e',
+      testMatch: ['**/shared/exclusive/**/*.spec.ts', '**/premium/exclusive/**/*.spec.ts'],
+      workers: 1,
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/premium-admin.json',
+      },
+      dependencies: ['premium'],
     },
 
     // ── GitOps mode (runs last, single worker) ────────────────────────────────
@@ -216,6 +249,8 @@ export default defineConfig({
         '**/cli/nightly/**',
         '**/premium/**',
         '**/loadtest/**',
+        // Specs that hold a global lock of their own; see premium-exclusive.
+        '**/exclusive/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -223,6 +258,18 @@ export default defineConfig({
       },
       dependencies: ['free-setup', 'cleanup-setup'],
       teardown: 'cleanup-teardown',
+    },
+    {
+      name: 'free-exclusive',
+      testDir: './tests/e2e',
+      testMatch: ['**/shared/exclusive/**/*.spec.ts', '**/free/exclusive/**/*.spec.ts'],
+      workers: 1,
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/free-admin.json',
+      },
+      dependencies: ['free'],
     },
 
     // ── GitOps Verify (post-gitops state checks) ──────────────────────────────

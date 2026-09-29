@@ -55,3 +55,29 @@ export async function findActivity(
   }
   return undefined;
 }
+
+export interface HostActivity {
+  type: string;
+  createdAt: string;
+  details: Record<string, unknown>;
+}
+
+/** A host's past activities, newest first — what its Activity card's Past tab lists. */
+export async function listHostActivities(
+  request: APIRequestContext,
+  hostId: number,
+  perPage = 50,
+): Promise<HostActivity[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/activities`), {
+    headers: authHeaders(),
+    params: { per_page: String(perPage) },
+  });
+  await expect(res, `Failed to list activities for host ${hostId}`).toBeOK();
+  return ((await res.json()).activities ?? []).map(
+    (a: { type: string; created_at: string; details: Record<string, unknown> }) => ({
+      type: a.type,
+      createdAt: a.created_at,
+      details: a.details ?? {},
+    }),
+  );
+}

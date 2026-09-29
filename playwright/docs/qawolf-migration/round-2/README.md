@@ -77,15 +77,15 @@ That is **54 of the 127 flows**, and the whole `gitops-mode` project. The suite 
 
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
-| **[D](D-host-execution.md)** | Execution on hosts — scripts, MDM commands, install/uninstall | host + real runs | 31 | 9 |
+| **[D](D-host-execution.md)** ◐ | Execution on hosts — scripts, MDM commands, install/uninstall | host + real runs | 31 | 9 (+1 new) — built, in review |
 | **[E](E-label-targeting.md)** | Label targeting — profiles, declarations, software, policies | labels + several hosts | 21 | 10 |
 | **[F](F-provisioning.md)** | Provisioning-gated — MFA mailbox, IdP, Fedora, recovery lock | new instance setup | 13 | 9 |
 | **[G](G-out-of-band.md)** (rest) | Policy automations and retries | its own project and schedule | 9 | 5 |
 | | | **remaining** | **73** | **33** |
 
-**Start D next.** It is the biggest remaining block and needs nothing that doesn't already exist — the real VMs
-are up and the durable FMA shelf (§4) is provisioned. E needs an inert profile fixture written first (see the
-warning in §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
+**D is built and in review** — see [D-host-execution.md](D-host-execution.md#what-landed-and-what-changed-from-the-plan).
+**Start E next** — the handoff is at the top of [E-label-targeting.md](E-label-targeting.md). It needs inert
+profile fixtures written first: *two* committed fixtures lock a real VM, not one (see there and §5). F is genuinely blocked until someone provisions a mailbox, an IdP and a Fedora host — except
 the technician and team-admin rows, which the static-user catalog already covers and which could move earlier.
 
 Batch G's retry half is last on purpose: those specs wait through real 30–90 minute intervals and belong on
@@ -165,9 +165,10 @@ real-host spec until somebody rebuilds the VM by hand.
 The same is true of anything else that gates getting into the machine: screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel itself.
 
-This is not hypothetical — **the fixture we already ship is unsafe for host delivery.**
+This is not hypothetical — **two fixtures we already ship are unsafe for host delivery.**
 `test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` sets `forcePIN`, `minLength`,
-`maxInactivity` and `allowSimple`. It is fine where round 1 uses it (library upload → download → delete, which
+`maxInactivity` and `allowSimple`; `test-data/windows/profiles/fleet-test-screenlock.xml` is a Windows DeviceLock
+policy (password enforcement, a 15-minute inactivity lock, PIN length). It is fine where round 1 uses it (library upload → download → delete, which
 never reaches a host), but batch E is specifically about profiles *applying to hosts*, and pushing that one at
 a real VM would lock it.
 
@@ -194,7 +195,7 @@ Not new — the round-1 lessons that cost the most, restated where builders will
    the React component for the role and accessible name, then confirm against the live DOM for anything
    conditional — a field's label is swapped for an error message when invalid, so `getByLabel` stops resolving
    exactly when the test needs it.
-2. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
+7. **Resolve hosts through the API, never by name.** The pools are osquery-perf simulations whose names and
    ids change on every daemon restart. `kind: 'real'` for behaviour, `'simulated'` for volume.
 3. **Scope every assertion to your own records.** Never an absolute count on a shared list.
 4. **Snapshot and restore global config inside the test, not in a hook.**
@@ -208,17 +209,22 @@ Not new — the round-1 lessons that cost the most, restated where builders will
 
 ## 7. How a batch runs
 
-1. **Read the sources.** Paths in each batch file are relative to
+1. **Invoke the `playwright-test-author` skill first**, via the Skill tool, and follow it. `CLAUDE.md`
+   describes it as auto-invoked; do not rely on that — call it explicitly before writing anything. It carries
+   the locator priority, the POM rules, the Fleet-specific traps and the verification bar this suite is held
+   to. `playwright-test-reviewer` is the explicit counterpart when auditing existing specs rather than
+   writing new ones.
+2. **Read the sources.** Paths in each batch file are relative to
    `qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/`. Mine `node-20-helpers-premium.js` for toast copy
    and nav paths; port none of it.
-2. **Open the existing spec for every augment row before writing anything.** Titles lie. Round 1's most common
+3. **Open the existing spec for every augment row before writing anything.** Titles lie. Round 1's most common
    rework was rebuilding something we already had.
-3. **Build the page objects first.** The POM table is the batch's real dependency graph.
-4. **Ship in slices** — one concern per commit: POM + spec + doc update, `npm run check` clean, live-run green.
+4. **Build the page objects first.** The POM table is the batch's real dependency graph.
+5. **Ship in slices** — one concern per commit: POM + spec + doc update, `npm run check` clean, live-run green.
    Don't batch five specs and run them at the end; you lose failure attribution.
-5. **Append to [../DELIVERY-LOG.md](../DELIVERY-LOG.md)** when a slice lands. Claims are verified by `grep`ing
+6. **Append to [../DELIVERY-LOG.md](../DELIVERY-LOG.md)** when a slice lands. Claims are verified by `grep`ing
    the spec path, not by ticking a box — round 1's per-batch checkbox trackers drifted and were deleted.
-6. **When a flow won't go green,** decide which of the three it is — test bug, infrastructure gap, or real
+7. **When a flow won't go green,** decide which of the three it is — test bug, infrastructure gap, or real
    product defect — and act accordingly. "Make it green" is the wrong instinct; see
    [../PLAYBOOK.md §8](../PLAYBOOK.md#8-when-a-flow-wont-go-green) and
    [`../blocked-by-product-bugs.md`](../../blocked-by-product-bugs.md).
@@ -244,8 +250,9 @@ version history by itself. Provisioning beats seeding for anything whose value i
 **Why the QA fleet specifically.** `setup/cleanup.steps.ts` wipes installable software on Unassigned
 (`fleet_id=0`) and Workstations before and after every run and touches no other fleet — so those two are out.
 QA held nothing at all, which is what made it safe to bring under gitops: **a fleet named in a gitops run has
-everything not declared deleted.** The VMs fleet is the counterexample and must stay out of gitops — it owns
-`pw-host-report-results`, which `premium/hosts/host-report-details.spec.ts` reads.
+everything not declared deleted.** The shelf is kept off the VMs fleet because nothing on it is meant to be
+installed; VMs is under gitops too since batch D (`fleets/vms.yml`), for the fixtures that *are* installed —
+see [D-host-execution.md](D-host-execution.md#the-fma-fixture-set).
 
 **Consumed by** `tests/e2e/premium/software/version-pinning.spec.ts`, which throws with the re-apply path when
 an app is missing, and skips its older-version case (only that case) until some app on the shelf has cached a
@@ -257,5 +264,6 @@ second build.
   context on a Fleet developer's machine is usually their own dev instance. Sourcing `.env.premium` does not
   aim it anywhere. Pass `--context qa-premium`, and check the `Server Version:` line against
   `GET /api/v1/fleet/version` on premium-fleetqa — the RC build timestamps differ per instance.
-- **The client must match the server's minor version.** A 4.85.1 client against a 4.93 server printed
-  `gitops succeeded` while silently writing no software at all.
+- **The client must be within a minor of the server.** One minor behind is fine (the released 4.92.1 applied
+  `qa.yml` and `vms.yml` against the 4.93 RC correctly, 2026-09-28); far behind is not — a 4.85.1 client
+  against a 4.93 server printed `gitops succeeded` while silently writing no software at all.

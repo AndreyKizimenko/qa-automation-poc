@@ -1,10 +1,11 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 23 · **Projects:** premium / free
+**Specs covered:** 8 files · **Test declarations:** 26 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26)
 
 Covers **Controls → OS settings** (custom configuration profiles, global disk-encryption
-enforcement), **Controls → Scripts → Library**, and **Controls → Variables → Global
-variables**. Every lifecycle spec follows the suite's serial-CRUD convention: one
+enforcement), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
+Controls → Scripts → Batch progress), the organization-wide **Script execution** switch, and
+**Controls → Variables → Global variables**. Every lifecycle spec follows the suite's serial-CRUD convention: one
 `test.describe.configure({ mode: 'serial' })` per (scope × OS) case, one sub-test per
 lifecycle step, and a final sub-test that re-asserts the same lifecycle through the
 dashboard activity feed. Premium specs wrap the describe in a `for (const scope of
@@ -14,7 +15,11 @@ loop and the team dropdown removed.
 **Entry ↔ execution count.** Each entry below collapses the `scope` **and** OS-case loops,
 so one entry can be several actual test runs: premium profiles ×4 (2 scopes × macOS/Windows),
 premium scripts ×6 (2 scopes × macOS/Linux/Windows), free profiles ×2, free scripts ×3.
-The 23 entries expand to **74 test executions** per full premium+free run.
+The 23 lifecycle-era entries expand to **74 test executions** per full premium+free run; CTL-24/25
+add 2 (premium only) and CTL-26 adds 2 (once per exclusive project) — **78** in all.
+
+CTL-24…26 are **not** serial-CRUD specs: each is a single standalone flow against real hosts (CTL-24,
+CTL-26) or the simulation pool (CTL-25).
 
 ## Contents
 
@@ -43,19 +48,27 @@ The 23 entries expand to **74 test executions** per full premium+free run.
 | CTL-21 | `free/controls/scripts/library.spec.ts` | Scripts library lifecycle — OS › edit | UI+API | ☐ |
 | CTL-22 | `free/controls/scripts/library.spec.ts` | Scripts library lifecycle — OS › delete | UI+API | ☐ |
 | CTL-23 | `free/controls/scripts/library.spec.ts` | Scripts library lifecycle — OS › activity feed shows upload → edit → delete | UI | ☐ |
+| CTL-24 | `premium/controls/scripts/batch-run.spec.ts` | Batch script run › a batch on one VM of each platform puts each host in the status its platform earns | UI+API | ☐ |
+| CTL-25 | `premium/controls/scripts/batch-run.spec.ts` | Batch script run › a batch on every matching simulation targets exactly them, and accounts for each | UI+API | ☐ |
+| CTL-26 | `shared/exclusive/script-execution-disabled.spec.ts` | turning script execution off disables running scripts everywhere Fleet offers it *(premium-exclusive + free-exclusive)* | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 `Manual?` is always an empty `☐` — Andrey ticks it as he works through the suite.
 
-**Standing fact for this whole area:** nothing here ever *applies* a profile to a host or
-*runs* a script on a host. The premium/free hosts are osquery-perf simulations and are not
-MDM-enrolled, so profile delivery and script execution can't be exercised on them; the two
-real MDM-enrolled macOS VMs (`liveMacosHost` worker fixture) are **not** used by any spec in
-this area — only by hosts specs (`shared/hosts/*`, `premium/hosts/*`). The
-`*-create-marker.sh` / `.ps1` fixtures exist precisely so an osquery `file`-table check could
-confirm execution, but no spec does that, and the paired `*-delete-marker.*` fixtures are
-unreferenced anywhere in the repo.
+**Standing fact for this area:** the lifecycle specs (CTL-01…23) never *apply* a profile to a host
+or *run* a script on one — they exercise the library only. Script **execution** is now covered, but
+elsewhere and in CTL-24/25: single-host runs are [HOST-19…22](02-hosts-shared-and-free.md) (Host
+details → Actions → Run script, on both tiers), batch runs are CTL-24 (the three real VMs) and CTL-25
+(the simulation pool). There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM** — on
+the **VMs** fleet (id 103) on premium and in Unassigned on free, resolved with
+`findOnlineHost(…, { kind: 'real' })`, which keys on hardware model (`VirtualMac` / `QEMU`), **not** MDM
+enrollment (~30% of the osquery-perf simulations are MDM-enrolled too). Simulations never run a script;
+osquery-perf answers a *batch* with a random exit code, which CTL-25 turns into arithmetic rather than
+per-host assertions. **Profile delivery to a host is still untested — and must never be tested with
+the passcode / screen-lock fixtures:** a passcode profile deployed to a real VM locks it permanently
+(`playwright/CLAUDE.md` → Test hosts). The `*-create-marker.sh` / `.ps1` fixtures remain unused: the
+host-execution specs build their script content at run time with a per-run nonce instead.
 
 ---
 
@@ -889,6 +902,164 @@ other:
 
 ---
 
+### CTL-24 · Premium • Controls • Batch script run › a batch on one VM of each platform puts each host in the status its platform earns
+
+- **File:** [`playwright/tests/e2e/premium/controls/scripts/batch-run.spec.ts`](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts)
+- **Grep:** `npx playwright test --project=premium premium/controls/scripts/batch-run.spec.ts -g "a batch on one VM of each platform"`
+- **Project:** premium only — batch runs are scoped to one fleet, and free has none · **Scopes:** the **VMs** fleet (`vmsFleetId` worker fixture)
+- **Mode:** UI+API · **Isolation:** standalone; first of two independent tests in the describe. Budget **720s** (describe-level).
+- **Preconditions:** **all three real VMs online** — macOS, Ubuntu and Windows, resolved in parallel with `requireRealHost(request, platform)` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `findOnlineHost(…, { kind: 'real' })` underneath — hardware model, not MDM), all on the VMs fleet (id 103). ✅ *(API)* one of each exists, else it throws *"no online real <platform> VM … Check the <platform> VM is powered on and enrolled."* Each VM runs scripts one at a time and shares its queue with the host-execution specs ([HOST-19…22](02-hosts-shared-and-free.md)). Script execution on.
+- **Data created:** library script `pw-batch-run-<id>.sh` on the VMs fleet — `if [ "$(uname)" = Linux ]; then echo "fails on Linux"; exit 1; fi; echo "ran on $(uname)"` — deleted in `finally` (and by `cleanup-setup`'s `pw-` sweep of the VMs fleet if the test dies). The **batch record** (Batch progress → Finished) and the batch activity are permanent — nothing deletes a batch.
+
+**Flow**
+
+1. ☐ *(API setup)* upload the script to the VMs fleet.
+2. ☐ Dashboard → navbar **Hosts** → fleet dropdown **VMs**.
+3. ☐ Tick the row checkbox of the macOS, Ubuntu and Windows VM (rows matched by the exact display-name link).
+4. ☐ In the selection bar, click **Run script**.
+   - ✅ *(UI)* the batch modal reads **"Run a script on 3 hosts…"**.
+5. ☐ Hover the script's list item, click its **Run script** button.
+   - ✅ *(UI)* the modal reads **"`<script>` will run on compatible hosts (macOS and Linux)."**
+   - ✅ *(UI)* the **Run now** radio is checked (the default).
+6. ☐ Click **Run**.
+   - ✅ *(UI)* success toast matching `/^Successfully ran script\./`; the modal closes.
+7. ☐ Click the success toast's **Show script activity** link (`RunScriptBatchModal.showScriptActivity()`).
+   - ✅ *(UI)* Controls → Scripts → **Batch progress**, with the **Started** tab `aria-selected`.
+   - ✅ *(UI)* the batch's list item contains **`/ 3 hosts`** — the denominator; the numerator is still moving.
+8. ☐ *(wait — no user action)* ✅ *(API)* `GET /scripts/batch?fleet_id=<VMs>` finds this script's newest batch; `GET /scripts/batch/:id` polls `status` to **`finished`** (10s interval, **480s** budget). Fleet marks a batch finished from a **cron**, which lands **2–4 minutes after the last host reports** — the page doesn't live-update, so the spec waits on the API rather than watching it.
+   - ✅ *(API)* summary **`{ targeted: 3, ran: 1, errored: 1, incompatible: 1, pending: 0, canceled: 0 }`**.
+9. ☐ Reload the page, click the **Finished** tab.
+   - ✅ *(UI)* the batch's item contains **Completed**.
+10. ☐ Click the batch.
+    - ✅ *(UI)* the details page's `h2` equals the script name.
+    - ✅ *(UI)* summary reads exactly **`3 hosts targeted (67% responded)`** — incompatible hosts never respond, so two of three is the whole answer.
+11. ☐ For each of **Ran** (macOS), **Errored** (Ubuntu), **Incompatible** (Windows — a `.sh` can't run there):
+    - ✅ *(UI)* the tab's accessible name is **`<Status> 1`**.
+    - ☐ Click the tab → ✅ *(UI)* it is `aria-selected`.
+    - ✅ *(UI)* the tab lists **exactly** `[<that VM's display name>]`.
+    - ✅ *(UI)* Ran's row contains **`ran on Darwin`**; Errored's row contains **`fails on Linux`** (Incompatible has no output).
+12. ☐ Click **Pending**, then **Canceled** → ✅ *(UI)* each shows **"No hosts with this status"**.
+13. ☐ Open the **Dashboard** → ✅ *(UI)* feed has **"… ran the `<script>` script on 3 hosts."** (`activityCopy.script.ranBatch`).
+
+**Assessment**
+- *Value:* high. One batch, three platforms, three different outcomes, each asserted as *the right host in the right tab with its own output* — that is the behaviour of a batch run, not just "a batch exists". The script's `uname` branch is a neat way to get a deterministic Errored row without a second script. Closes the "Batch script execution — untested" gap and retires the orphaned `ScriptsBatchProgressPage` noted in the original audit.
+- *Coverage gaps:* **Schedule for later** and the **Scheduled** tab are untested; **cancel** a batch untested (the Canceled tab is only asserted empty); the Started-tab numerator never observed moving; the Errored row's Orbit-appended `script execution error: exit status 1` unasserted (HOST-20 does pin that line for a single run); no host-side view of the batch run (each host's Activity card should list it); the batch details page's host links are not followed.
+- *Redundancy:* the per-status counts are asserted twice — once from the API summary, once from the UI tab names — which is fine: the API assertion is the wait's by-product, the UI one is the rendering.
+- *Efficiency / smells:*
+  - Most of the budget is Fleet's cron, not the test. At 2–4 min per batch plus a possibly busy VM queue, this is one of the slowest tests in the suite; the 720s budget is honest.
+  - Resolves the three VMs *before* checking they're on the VMs fleet — if one were ever moved, `hostCheckbox` would fail on a missing row rather than with a clear precondition message.
+  - ~~**`page.getByRole('link', { name: 'Show script activity' })` is raw in the spec rather than on a page object.**~~ **Fixed 2026-09-28:** it is `RunScriptBatchModal.showScriptActivity()`, scoped to the success toast. Original finding: the raw page-wide link locator sat in the spec.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-25 · Premium • Controls • Batch script run › a batch on every matching simulation targets exactly them, and accounts for each
+
+- **File:** [`playwright/tests/e2e/premium/controls/scripts/batch-run.spec.ts`](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts)
+- **Grep:** `npx playwright test --project=premium premium/controls/scripts/batch-run.spec.ts -g "a batch on every matching simulation"`
+- **Project:** premium only · **Scopes:** **Unassigned** (fleet 0), where the osquery-perf pool lives
+- **Mode:** UI+API · **Isolation:** standalone; independent of CTL-24. Budget 720s.
+- **Preconditions:** **> 50 online hosts in the built-in `macOS` label in Unassigned** — "Select all matching hosts" is only offered once the matches run past one page. A thin pool means the load fleet is due its daily refresh (`tools/perf-hosts/`). Real VMs are on the VMs fleet, so none can be caught by this batch. Note the README's standing warning: **built-in platform labels are not assertable on these instances** — osquery-perf answers every built-in label query, so the "macOS" label holds mostly-*Ubuntu* simulations. The spec is honest about that in its arithmetic (it reads the label's own member list) even though its header says "every online macOS simulation".
+- **Data created:** library script `pw-batch-scale-<id>.sh` (`echo scale`) in Unassigned, deleted in `finally` (and by `cleanup-setup`'s Unassigned wipe). A permanent batch record and activity, and **~100 script-execution results** on the simulations.
+
+**Flow**
+
+1. ☐ *(API precondition)* `getLabelId(request, 'macOS')` ([`helpers/api/labels.ts`](../../helpers/api/labels.ts); `GET /labels`) → the built-in **macOS** label id. ✅ *(API)* it exists (the helper throws `no label named "macOS"` otherwise).
+2. ☐ *(API precondition)* the matching set, from two lists because neither holds all the facts:
+   - `listLabelHostIds(request, labelId, { fleetId: 0, status: 'online' })` (`GET /labels/:id/hosts?fleet_id=0&status=online&per_page=1000`) → **which** hosts the filter matches (but that endpoint returns **`orbit_version: null`** for every host);
+   - `listFleetHosts(request, 0, { status: 'online' })` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `GET /hosts?fleet_id=0&status=online&per_page=1000`) → each host's `platform`, real `orbit_version` and `scripts_enabled`, filtered to the label's ids.
+   - ✅ *(API)* the two lists agree on the count; ✅ *(API)* more than 50 match.
+3. ☐ *(API setup)* upload the script to Unassigned.
+4. ☐ Dashboard → navbar **Hosts** → fleet dropdown **Unassigned** → label filter **macOS** (the Platforms group's entry) → status filter **Online**.
+5. ☐ Tick the header checkbox (select all on page) → ✅ *(UI)* the selection bar appears → click **Select all matching hosts** → click **Run script**.
+   - ✅ *(UI)* the modal reads **"Run a script on `<N>` hosts"**, `N` = the API's matching count, `toLocaleString()`-formatted.
+6. ☐ Hover the script → its **Run script** → ✅ *(UI)* "will run on compatible hosts (macOS and Linux)." → **Run now** checked → **Run** → ✅ *(UI)* toast `/^Successfully ran script\./`.
+7. ☐ *(wait)* ✅ *(API)* newest batch for the script on fleet 0 found; polls to **`finished`** (480s; the cron again) — `findBatchId` / `waitForBatchFinished` in [`helpers/api/scripts.ts`](../../helpers/api/scripts.ts).
+   - ✅ *(API)* `targeted` = the matching count — the batch hit exactly what the filter selected.
+   - ✅ *(API)* `ran + errored + pending + incompatible + canceled` = `targeted` — every host lands in exactly one status.
+   - ✅ *(API)* `incompatible` = the matching hosts that can't run a `.sh` — `incompatibleWithShell(h)`: **no `orbit_version`**, **`scripts_enabled === false`**, or a **non-Unix platform** (`windows`, `chrome`, `ios`, `ipados`, `android`). This mirrors the checks Fleet makes before queueing each host of a batch: `BatchExecuteIncompatibleFleetd` (no orbit, or scripts disabled) and `BatchExecuteIncompatiblePlatform` (`ValidateScriptPlatform`: a `.sh` runs only on darwin and Linux) — `server/datastore/mysql/scripts.go`.
+   - ✅ *(API)* `ran > 0` and `errored > 0` — osquery-perf answers a script with a **random exit code**, so which host lands where is noise; that both buckets are non-empty is what holds.
+8. ☐ Open `/controls/scripts/progress/<batchId>` **by URL**.
+   - ✅ *(UI)* `h2` = the script name; summary contains **`<targeted> hosts targeted`**.
+   - ✅ *(UI)* tab names read **`Ran <ran>`**, **`Errored <errored>`**, **`Incompatible <incompatible>`** — the API's numbers.
+
+**Assessment**
+- *Value:* genuinely different from CTL-24: it exercises **Select all matching hosts** (a filter-based, not id-based, batch target) at a scale no hand-picked selection reaches, and the invariants chosen — targeted = matched, partition sums, incompatible = can't run a `.sh` — are the right ones for a noisy population. The two-list precondition dance around `orbit_version` is a real API quirk handled correctly.
+- *Coverage gaps:* the UI half only **mirrors** the API summary — the details page renders the same counts from the same endpoint, so steps 8's tab counts can't disagree with step 7 unless rendering breaks; no tab is opened and no host row read; no pagination through a large tab; the modal's filter-summary copy (it should name the filters, not just the count) unasserted; the "Select all matching" batch's server-side filter (label + status + fleet) is only checked through the count.
+- *Redundancy:* modal + run steps repeat CTL-24's.
+- *Efficiency / smells:*
+  - ~~⚠️ **`incompatible == withoutOrbit` assumes no Windows simulation sits in the macOS label.**~~ **Fixed 2026-09-28:** `incompatible` is derived per host by `incompatibleWithShell` — no orbit, scripts disabled in fleetd, or a platform a `.sh` can't run on — the same three reasons Fleet's batch records (`BatchExecuteIncompatibleFleetd` / `BatchExecuteIncompatiblePlatform`). One difference remains: the spec lists the non-Unix platforms it knows, where Fleet's `IsUnixLike` allows darwin and its Linux list, so a host on some other platform would be counted differently — none is in the pool today. Original finding: a Windows sim with orbit would be incompatible with a `.sh` yet counted as orbit-capable, and the test would fail on correct product behaviour, given the label's known mix.
+  - `ran > 0 && errored > 0` is probabilistic; at ~100 hosts it is effectively certain, below ~10 it would flake.
+  - Step 8 navigates by URL where CTL-24 clicks through — inconsistent within one file.
+  - Each run adds ~100 execution rows to premium's 2 GB MySQL that nothing ever deletes.
+  - ~~**Uses raw `apiUrl`/`authHeaders` calls in the spec body for labels/hosts rather than helpers.**~~ **Fixed 2026-09-28:** the lookups are `getLabelId` / `listLabelHostIds` (`helpers/api/labels.ts`) and `listFleetHosts` (`helpers/api/hosts.ts`), and the batch reads `getBatchSummary` / `findBatchId` / `waitForBatchFinished` moved from the spec to `helpers/api/scripts.ts`.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-26 · Shared • Controls • turning script execution off disables running scripts everywhere Fleet offers it  *(exclusive project)*
+
+- **File:** [`playwright/tests/e2e/shared/exclusive/script-execution-disabled.spec.ts`](../../tests/e2e/shared/exclusive/script-execution-disabled.spec.ts)
+- **Grep:** `npm run test:premium:exclusive -- -g "turning script execution off disables running scripts everywhere Fleet offers it"` (free: `npm run test:free:exclusive -- -g "…"`). Filter by **title or file name, never by `tests/e2e/…` path** — the exclusive projects' `testDir` is `tests/e2e`, so a path filter never matches. The `:exclusive` scripts are the `--no-deps` form; with deps the whole main project runs first.
+- **Project:** **`premium-exclusive` + `free-exclusive`** (shared) — **not** `premium`/`free`, which `testIgnore` every `**/exclusive/**` path · **Scopes:** n/a (global setting); the Scripts library is opened on the host's own fleet — VMs on premium, Unassigned on free
+- **Mode:** UI+API · **Isolation:** **single worker, after the main project has finished** (`workers: 1`, `fullyParallel: false`, `dependencies: ['premium' | 'free']` in [`playwright.config.ts`](../../playwright.config.ts)). Why: `server_settings.scripts_disabled` is **global** — while it is on, Fleet rejects every new script run and stops handing queued ones to hosts, so running beside HOST-19…22 or CTL-24/25 would fail them. A dependency that fails skips this project, so on a red night it is reported as not run.
+- **Preconditions:** the real macOS VM (`requireRealHost(request, 'darwin')`, which also returns the fleet it is on) — used for its Actions menu and as the ad-hoc run target. ✅ *(API)* script execution **arrives on** (`isScriptExecutionEnabled`) — `cleanup-setup` turns it back on at the start of every run (`enableScriptExecution`), so arriving off means an earlier step of *this* run left it off.
+- **Data created:** none persistent. The setting is flipped off and back on in the UI, and `enableScriptExecution` (`PATCH /config { server_settings: { scripts_disabled: false } }`) runs again in `finally`. A run killed while it is off is healed by the next run's `cleanup-setup`.
+
+**Flow**
+
+1. ☐ Open **Settings → Organization settings → Advanced options** (`/settings/organization/advanced`, anchored on the **Host lifecycle** heading).
+   - ✅ *(UI)* the **Script execution** checkbox (Features section; accessible name is Fleet's `name` prop, `disableScripts`, not the label) is **checked**.
+2. ☐ Untick **Script execution**, click **Save**.
+   - ✅ *(UI)* toast **"Successfully updated settings."**
+   - ✅ *(API)* `GET /config` → `server_settings.scripts_disabled` is now `true`.
+3. ☐ Open the VM at `/hosts/:id` → click **Actions**.
+   - ✅ *(UI)* **Run script** is still listed but `aria-disabled="true"` — Fleet keeps the option so it can say why.
+4. ☐ Hover **Run script**.
+   - ✅ *(UI)* tooltip reads exactly **"Running scripts is disabled in organization settings."**
+5. ☐ Open **Controls → Scripts → Library** for the host's fleet (`/controls/scripts/library?fleet_id=<VMs>` on premium, no param on free).
+   - ✅ *(UI)* banner **"Running scripts is disabled in organization settings. You can still manage your library…"** is visible.
+   - ✅ *(UI)* **Add script** is still **enabled** — the library stays usable.
+6. ☐ *(API — enforcement)* `POST /scripts/run { host_id, script_contents: 'echo unreachable' }` (`postAdHocScript`).
+   - ✅ *(API)* status **403**; body contains the same disabled copy — Fleet refuses, not just the UI.
+7. ☐ Back to **Advanced options** → ✅ *(UI)* checkbox **unchecked** (persisted) → tick it → **Save** → ✅ *(UI)* toast "Successfully updated settings." → ✅ *(API)* `scripts_disabled` is `false`.
+8. ☐ Open the VM's **Actions** menu again.
+   - ✅ *(UI)* **Run script** is **not** `aria-disabled="true"`.
+9. ☐ *(API teardown)* `enableScriptExecution` regardless of outcome.
+
+**Assessment**
+- *Value:* good — one flow checks every surface the switch touches (host Actions menu + its reason, library banner, server enforcement) and both directions of the toggle, with persistence read back after reload. The 403 check is exactly the right API assertion: the UI can only *show* a disabled state, not prove the server enforces it.
+- *Coverage gaps:* the other run paths are not checked while disabled — the hosts-list **selection bar → Run script** (batch, CTL-24's entry point), policy **script automations**, and setup-experience scripts; the "stops handing *queued* scripts to hosts" half of the behaviour (the reason the spec is exclusive) is never observed — queue a run, disable, assert it stays pending, re-enable, assert it runs; the re-enabled state is proven only by the *absence* of `aria-disabled`, never by running a script; no activity-feed assertion for the settings change; no non-admin role.
+- *Redundancy:* none — the only spec that touches `scripts_disabled`.
+- *Efficiency / smells:*
+  - Navigates every surface by direct URL (`goto()`), not dashboard → navbar click-through as `playwright/CLAUDE.md` asks of e2e specs.
+  - The real VM is not actually needed for steps 3–4 (any fleetd host shows the Actions → Run script option) or step 6 (the 403 is decided before any host is contacted); it costs nothing here since no script reaches the device, but it couples the test to VM uptime.
+  - Being in an exclusive project means it runs **last and only if the main project passed its dependency gate** — on a red night this coverage silently disappears from the report as "not run".
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -901,8 +1072,9 @@ other:
 | Disk encryption — global toggle + persistence | CTL-06 | Team-scoped toggle, status aggregate table, key escrow / **View key**, activity feed, host-level enforcement |
 | Scripts library — upload / list / preview / download / edit / delete | CTL-07…11, CTL-19…23 | Platform tag unasserted; no duplicate-name, empty-file, or unusual-extension cases |
 | Script upload rejection (>500,000 chars) | CTL-12 | Exact-limit boundary (should pass) untested; no free mirror |
-| **Running a script on a host** + output / exit code / re-run | — | **Entirely untested.** `ScriptsBatchProgressPage` is exported but referenced by zero specs; `RunScriptPage` covers only the *Setup experience* singleton (upload/list/delete, no execution). The `*-create-marker` fixtures were built for an osquery `file`-table verification that was never written, and `*-delete-marker.*` is dead weight |
-| Batch script execution (Started / Scheduled / Finished tabs) | — | Untested |
+| **Running a script on a host** + output / exit code | [HOST-19…22](02-hosts-shared-and-free.md) (area 02 — effect read back by a report, non-zero exit, timeout, four interpreters) | re-run untested; Pending/Upcoming never observed; the `*-create-marker` / `*-delete-marker` fixtures are still unreferenced (the specs build content at run time) |
+| Batch script execution (Started / Scheduled / Finished tabs, details page) | CTL-24 (3 real VMs → Ran / Errored / Incompatible), CTL-25 (~100 simulations via Select all matching) | **Schedule for later** + Scheduled tab, **cancel**, host-side view of a batch run, and every tab's row list at scale |
+| Organization-wide **Script execution** switch | CTL-26 (exclusive project) | queued scripts held while disabled (the reason it's exclusive) never observed; batch / policy-automation / setup-experience run paths not checked while disabled |
 | Custom variables — add / list / delete + name validation | CTL-13, CTL-14 | Variable never **referenced** from a profile or script; no value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables, no free-tier/paywall coverage |
 | OS updates (minimum version enforcement) | — | No functional e2e at all — `OsUpdatesPage` is used only by the loadtest spec and the free paywall list |
 | Certificates / Passwords (OS settings sub-pages) | — | No functional e2e — `CertificatesPage` only in the loadtest spec |
@@ -929,6 +1101,6 @@ Balance is healthy — no test in this area validates purely through the API. Th
 
 **Bigger bets**
 
-1. **Make one script actually run.** Add a `liveMacosHost`-based spec: upload `macos-create-marker.sh`, run it from Host details → **Actions → Run script**, assert the script output/exit code in the run-details modal, then confirm the marker exists via a live query on the `file` table, and clean up with the unused `macos-delete-marker.sh`. This is the single largest hole in the area and the fixtures were designed for it. Extending it to the Scripts → **Batch progress** tabs would retire the orphaned `ScriptsBatchProgressPage`.
-2. **Assert profile delivery, not just library presence.** Using `liveMacosHost`, upload the passcode profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
+1. ~~**Make one script actually run.**~~ **Done** — HOST-19 (area 02) runs a script on the real macOS VM and reads its effect back through a scheduled report's `hash` row, rather than the marker fixtures; CTL-24/25 cover the **Batch progress** tabs and retire the orphaned `ScriptsBatchProgressPage`. What remains is the batch *schedule* and *cancel* paths.
+2. **Assert profile delivery, not just library presence** — ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
 3. **Close the variables loop and trim the tier mirrors.** Make CTL-13 create a variable, reference it as `$FLEET_SECRET_<NAME>` inside an uploaded profile *and* script, assert Fleet accepts the reference and refuses to delete a referenced variable; add variables to the `cleanup.steps.ts` wipe (they are currently the only entity in this area with no project-level cleanup). In the same pass, drop the two free download mirrors (CTL-16, CTL-20) and collapse the per-OS activity-feed sub-tests to one per scope — roughly 12 of the 74 executions for no loss of signal.

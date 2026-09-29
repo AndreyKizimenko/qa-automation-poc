@@ -27,6 +27,11 @@ on:
         type: string
   workflow_call:
     inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
       suite:
         description: 'Which Fleet instance / env to load (free | premium)'
         required: true
@@ -52,6 +57,8 @@ jobs:
         working-directory: playwright
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v5
         with:

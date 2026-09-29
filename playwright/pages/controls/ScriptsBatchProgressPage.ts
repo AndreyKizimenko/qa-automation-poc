@@ -35,4 +35,12 @@ export class ScriptsBatchProgressPage {
   async openFinishedTab(): Promise<void> {
     await this.finishedTab.click();
   }
+
+  /**
+   * One batch in the open tab, by its script name. Each renders as a list item
+   * reading "<script> Started|Completed <when> <done> / <targeted> hosts".
+   */
+  batch(scriptName: string): Locator {
+    return this.page.getByRole('tabpanel').getByRole('listitem').filter({ hasText: scriptName });
+  }
 }

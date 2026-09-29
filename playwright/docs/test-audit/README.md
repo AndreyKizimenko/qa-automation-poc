@@ -16,13 +16,22 @@ files · ~350 test declarations · 4 projects**.
 > declarations · 5 projects · 83 page objects**. The QA Wolf round-2 specs (batches A–C and the
 > new `gitops-mode` project) are audited — see area **20** and the round-2 additions throughout.
 > The migration record is in [../qawolf-migration/round-2/](../qawolf-migration/round-2/).
+>
+> **Batch D added 2026-09-28** (`playwright/qawolf-round2-batch-d`): **167 spec files · ~573 test
+> declarations · 7 projects · 90 page objects**. Execution on the real VMs — scripts, MDM commands,
+> software install / uninstall / update, batch runs — is audited in areas **02**, **11**, **14** and the new
+> area **21**.
+>
+> **Area 21 restructured 2026-09-28** (`playwright/vms-durable-fixtures`): the install and uninstall loops
+> and the catalog-add FMA install (SWH-01/02/04, now retired stubs) became one test per durable VMs-fleet
+> fixture, SWH-14 in `software-lifecycle-on-host.spec.ts` — 6 spec files, 18 runtime tests in the area.
 
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 18 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 23 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 12 | premium |
 | 04 | [Policies](04-policies.md) | 24 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
@@ -31,20 +40,21 @@ files · ~350 test declarations · 4 projects**.
 | 08 | [Settings › Users — premium](08-users-premium.md) | 31 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
-| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 23 | premium, free |
+| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 26 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
 | 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
-| 14 | [API contract specs](14-api-contracts.md) | 27 | premium, free |
+| 14 | [API contract specs](14-api-contracts.md) | 30 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 11 (per spec file) | loadtest (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
 
-**416 entries** covering every test in the suite. An entry can expand into several
+**438 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (23 → 74), area
+the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 
@@ -95,12 +105,22 @@ what you actually see on screen.
 
 ### Before you run anything
 
-- **Hosts on the QA instances are osquery-perf simulations** (~300 online, random
-  names, not MDM-enrolled). Tests resolve them by platform + status, never by name.
+- **Most hosts on the QA instances are osquery-perf simulations** (~300 online, random
+  names, ~30% of them MDM-enrolled). Tests resolve them by platform + status, never by name.
   Simulated hosts can't install software, run scripts, or take MDM commands.
-- **A couple of real MDM-enrolled macOS VMs** exist per tier, reached via the
-  `liveMacosHost` worker fixture. Entries say which kind they need. Don't delete
-  these.
+- **Three real VMs per tier — macOS, Windows 11 and Ubuntu, all ARM** — on the **VMs**
+  fleet on premium and in Unassigned on free. Tests reach them with
+  `findOnlineHost(…, { kind: 'real' })`, which keys on hardware model (`VirtualMac` /
+  QEMU), not MDM enrollment; `liveMacosHost` is the macOS one. Entries say which kind
+  they need. Don't delete these, and install nothing on them but the suite's inert
+  fixtures (area 21 lists them).
+- **The VMs fleet is under gitops** (`gitops/premium-fleetqa/fleets/vms.yml`, applied by the
+  nightly before every premium run, in both the baseline and the min pass): it keeps Claude
+  installed on the macOS and Windows VMs, holds the `pw-host-report-results` report, and
+  declares the **durable install/uninstall fixtures** — an inert `.pkg`, `.msi` and `.deb`,
+  7-Zip's `.exe`, and the Fleet-maintained Itsycal and DB Browser for SQLite. Leave Claude
+  installed and every fixture **uninstalled**, and never delete any of their titles; a
+  fixture left installed is uninstalled by the next run's preflight.
 - **Destructive entries** — host delete (03), enroll secrets and team webhooks
   (10) — mutate shared state with real blast radius. Each such entry documents
   what it changes and whether it restores. Read that before clicking.
@@ -150,4 +170,25 @@ Findings from round 2 that change how existing entries should be judged, not jus
 - **Playwright aborts a timed-out test before its `finally` runs.** Cleanup that must survive a timeout needs
   an `afterEach` as well as the in-test `finally`.
 - **Never deploy a passcode profile to a real host** — see `../../CLAUDE.md` → Test hosts. The
-  `fleet-test-passcode.mobileconfig` fixture is safe only in the library lifecycle that never reaches a host.
+  `fleet-test-passcode.mobileconfig` fixture and its Windows counterpart `fleet-test-screenlock.xml` are safe
+  only in the library lifecycle that never reaches a host.
+- **`software_updated_at` only moves when a host's inventory *changes*.** It is not "last collected": after a
+  failed uninstall, or any collection that finds nothing new, it stays put. A wait for a fresh inventory has to
+  baseline `detail_updated_at` and refetch — what `waitForHostRefetch` / `waitForSoftwareSettled` do. Any entry
+  that judges freshness by the software timestamp is judging the wrong clock.
+- **A failed install is retried three times** (`MaxSoftwareInstallAttempts`), reporting `pending_install` between
+  attempts, so "Failed" sticks only ~6 minutes after the click.
+- **Global switches that break neighbours run alone.** Specs under `tests/e2e/*/exclusive/` run in the
+  `premium-exclusive` / `free-exclusive` projects, on one worker after the main project — turning script
+  execution off makes Fleet refuse and hold every script. `npm run test:<tier>` includes them.
+- **`cleanup-setup` now reaches past Unassigned and Workstations**, narrowly: it clears stranded version pins on
+  the QA and VMs fleets and deletes the host-execution specs' per-run `fleet-pw-*` / `pw-*` leftovers from VMs.
+  Deleting a title never uninstalls it, so the sweep also purges any `fleet-pw-*` package the Ubuntu VM still
+  lists (one ad-hoc `dpkg --purge` script, queued only when there is one). The install/uninstall fixtures are
+  **durable** — declared in `vms.yml`, re-applied every night, never deleted by a test — and a separate
+  **resting-state preflight** (both tiers, start and end of every run) puts the real VMs back: script execution
+  on, no `script_execution_timeout` override, the suite's own queued items cancelled, and on premium every
+  durable fixture uninstalled. An entry that assumes a dead run leaves a fixture installed for the next run is
+  judging a hazard the preflight now removes.
+- **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 120-min job limit.
+  In CI Playwright stops the run at 100 min (`globalTimeout`) and still writes the report. An entry whose verdict is "expand" on a VM-bound spec should price the minutes.

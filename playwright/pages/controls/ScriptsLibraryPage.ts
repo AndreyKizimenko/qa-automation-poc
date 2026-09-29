@@ -27,6 +27,8 @@ export class ScriptsLibraryPage {
   readonly heading: Locator;
   readonly container: Locator;
   readonly addScriptButton: Locator;
+  /** Shown while script execution is off in organization settings. */
+  readonly disabledBanner: Locator;
 
   readonly listItem: Locator;
 
@@ -65,6 +67,10 @@ export class ScriptsLibraryPage {
     this.addScriptButton = page
       .locator('.script-library__tab-header')
       .getByRole('button', { name: 'Add script' });
+
+    this.disabledBanner = page.getByText(
+      'Running scripts is disabled in organization settings. You can still manage your library',
+    );
 
     this.listItem = page.locator('.script-list-item');
 

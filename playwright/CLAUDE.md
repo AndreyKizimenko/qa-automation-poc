@@ -49,6 +49,12 @@ regenerate both on every restart.
   profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
   versions must use them. `kind: 'real'` keys on `hardware_model` matching `/virtual|qemu/i`, not on MDM
   enrollment.
+- **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
+  7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
+  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`. A spec that installs or
+  uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
+  changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
+  `fleet-pw-*` package, and deletes it in the same test.
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
   pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
   assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
@@ -63,8 +69,10 @@ by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, n
 The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
 FileVault, login-window restrictions, or disabling SSH / remote management / the MDM channel.
 
-`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile. It is safe only where
-it is used today — library upload → download → delete, which never reaches a host. Do not extend it to a
+`test-data/apple/macos/profiles/fleet-test-passcode.mobileconfig` **is** such a profile, and so is its Windows
+counterpart `test-data/windows/profiles/fleet-test-screenlock.xml` (a DeviceLock policy: password enforcement,
+inactivity lock, PIN length). Both are safe only where they are used today — library upload → download →
+delete, which never reaches a host. Do not extend it to a
 delivery test; write an inert fixture instead (a harmless preference domain that changes nothing about access,
 removed in the same test that deployed it).
 
@@ -97,18 +105,20 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Five browser/API projects target three Fleet environments. Each has its own env file
+Seven browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder — no tags. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**` | `.auth/premium-admin.json` |
-| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | `.auth/free-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**`, `**/exclusive/**` | `.auth/premium-admin.json` |
+| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`) | n/a | `.auth/premium-admin.json` |
+| `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, after `premium`, one worker | n/a | `.auth/premium-admin.json` |
+| `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, after `free`, one worker | n/a | `.auth/free-admin.json` |
 
 Folder conventions:
 
@@ -120,6 +130,13 @@ Folder conventions:
   write that makes every mutating control in the UI read-only, so it cannot share a window with any other
   project. Adding a `--project` name also means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`,
   which throws at config load for a name it doesn't know.
+- A spec that flips a global setting which breaks specs running beside it — turning off script execution,
+  say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). The
+  `premium-exclusive` / `free-exclusive` projects run those on one worker once the main project has finished;
+  `npm run test:premium` / `test:free` include them. Filter by file name, not path, when running one
+  (`playwright test --project=free-exclusive script-execution-disabled`): the exclusive projects' `testDir` is
+  `tests/e2e`, so a `tests/e2e/…` path filter never matches. A dependency always runs in full, so running an
+  exclusive project with deps runs its whole main project first; `test:<tier>:exclusive` is the `--no-deps` form.
 
 ## Project pipeline (premium)
 
@@ -136,6 +153,14 @@ The `gitops-mode` project runs **after** premium (`dependencies: ['premium']`), 
 `cleanup-setup` calls `disableGitOpsMode` as well, because a teardown project doesn't run on a `SIGKILL` and a
 stuck flag disables the *next* run's entire suite. Run it with `npm run test:gitops-mode` (full chain) or
 `npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
+
+`cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
+and a run killed mid-spec would otherwise leave every script spec of the next run failing.
+
+It also brings the real VMs to their resting state before the first test and after the last: it cancels the
+suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
+uninstalls any durable fixture a dead run left installed. A VM that's offline is only logged — its specs fail
+on it with their own message.
 
 The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is otherwise independent — no cross-project sharing.
 

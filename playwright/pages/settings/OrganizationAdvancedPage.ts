@@ -36,6 +36,14 @@ export class OrganizationAdvancedPage {
    * Turning either off deletes the data already collected for **every** fleet,
    * so specs read these and never write them.
    */
+  /**
+   * Features → "Script execution". Ticked means scripts **may** run: Fleet binds
+   * the checkbox to the inverse of `server_settings.scripts_disabled`. Like the
+   * retention switches, its accessible name is Fleet's `name` prop
+   * (`disableScripts`), not the visible label.
+   */
+  readonly scriptExecutionCheckbox: Locator;
+
   readonly retentionSectionHeading: Locator;
   readonly hostsOnlineHistoricalCheckbox: Locator;
   /** Premium-only: free's Advanced options never renders this checkbox. */
@@ -51,6 +59,8 @@ export class OrganizationAdvancedPage {
 
     this.domainInput = page.getByLabel('Domain', { exact: true });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
+
+    this.scriptExecutionCheckbox = page.getByRole('checkbox', { name: 'disableScripts' });
 
     this.retentionSectionHeading = page.getByRole('heading', {
       name: 'Activity & data retention',

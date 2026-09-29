@@ -1,0 +1,110 @@
+# "VMs" fleet — home of the real (non-simulated) QA VMs: one macOS, one Windows
+# and one Ubuntu. Every Playwright spec that needs a genuine device runs here.
+#
+# This file owns the fleet's durable fixtures: state that has to exist before a
+# test starts, so it is declared here rather than seeded by a test.
+#
+# 1. `pw-host-report-results` — a report with a short interval, so the macOS VM
+#    always holds a fresh stored result. Read by
+#    `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`; waiting
+#    out a first scheduled run inside that test would cost minutes per run.
+#
+# 2. Claude, kept installed on the macOS and Windows VMs and tracking latest —
+#    the subject of `playwright/tests/e2e/premium/software/update-on-host.spec.ts`,
+#    which exercises the host Library's Update button against an app that is
+#    already there. Three things keep it in that state over weeks:
+#
+#      - The Fleet-maintained entries below carry no `version:` pin, so Fleet's
+#        hourly `maintained_apps_auto_update` cron downloads each new Claude
+#        build and keeps the previous one. That n-1 build is what lets the spec
+#        put the host deliberately behind. An exact pin here would freeze the
+#        cron for the title (`ee/server/service/maintained_apps_auto_update.go`)
+#        and the history would stop growing.
+#      - The two "Claude is installed" policies reinstall Claude on any VM that
+#        loses it — a re-imaged VM, a stray uninstall — at the VM's next policy
+#        run. They are presence checks, not patch policies: a patch policy would
+#        auto-update the host and erase the "behind" state the spec creates.
+#      - `playwright/setup/cleanup.steps.ts` clears a version pin the update spec
+#        left behind if it died mid-run.
+#
+# 3. The install/uninstall subjects of
+#    `playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`,
+#    each of which installs one of these on its VM and uninstalls it again:
+#
+#      - a custom package per platform — the inert "Fleet Playwright Install"
+#        .pkg, .msi and .deb, plus 7-Zip's ARM64 .exe on Windows, which Fleet
+#        links to what the host reports only once its hourly Windows-title
+#        reconcile has run (see its package file);
+#      - a Fleet-maintained app per platform — Itsycal (macOS) and DB Browser
+#        for SQLite (Windows), both small, inert and never launched.
+#
+#    Their resting state is *uninstalled*, the opposite of Claude's. Because the
+#    titles never leave the fleet, Fleet always knows whether each is installed,
+#    and the preflight in `cleanup.steps.ts` uninstalls any a dead run left
+#    behind before the next run starts.
+#
+# Everything else on this fleet is per-run: specs whose test changes the title
+# itself (a version swap, a failing uninstall script, an install policy) upload
+# their own `fleet-pw-*` package and delete it in the same test, and the cleanup
+# sweep removes any a dead run left — the title, and on the Ubuntu VM the
+# package itself. An apply of this file deletes whatever it does not declare.
+#
+# Applied before every nightly premium run, in both the baseline and the min
+# pass, by `.github/workflows/gitops-premium{,-min}.yml`.
+#
+# Installer size rule from qa.yml applies: premium-fleetqa is a 2 GB Render box.
+name: VMs
+
+agent_options:
+  path: ../../lib/agent-options.yml
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  host_expiry_settings:
+    host_expiry_enabled: false
+    host_expiry_window: 0
+
+reports:
+  - name: pw-host-report-results
+    description: >-
+      Durable report with a stored result on the macOS VM. Read by
+      playwright/tests/e2e/premium/hosts/host-report-details.spec.ts.
+    query: SELECT 'bar' AS foo;
+    interval: 300
+    platform: darwin
+    logging: snapshot
+    discard_data: false
+
+policies:
+  - name: Claude is installed (macOS)
+    description: >-
+      Keeps Claude on the macOS VM for the host Library update spec. Installs it
+      when missing; never updates it.
+    resolution: Fleet installs Claude automatically.
+    query: SELECT 1 FROM apps WHERE bundle_identifier = 'com.anthropic.claudefordesktop';
+    platform: darwin
+    install_software:
+      fleet_maintained_app_slug: claude/darwin
+  - name: Claude is installed (Windows)
+    description: >-
+      Keeps Claude on the Windows VM for the host Library update spec. Installs
+      it when missing; never updates it.
+    resolution: Fleet installs Claude automatically.
+    query: SELECT 1 FROM programs WHERE name = 'Claude' AND publisher = 'Anthropic, PBC';
+    platform: windows
+    install_software:
+      fleet_maintained_app_slug: claude/windows
+
+software:
+  packages:
+    - path: ../../lib/platforms/macos/software/fleet-playwright-install.package.yml
+    - path: ../../lib/platforms/windows/software/fleet-playwright-install.package.yml
+    - path: ../../lib/platforms/windows/software/7-zip.package.yml
+    - path: ../../lib/platforms/linux/software/fleet-playwright-install.package.yml
+  fleet_maintained_apps:
+    - slug: claude/darwin # Claude
+    - slug: claude/windows # Claude
+    - slug: itsycal/darwin # Itsycal
+    - slug: db-browser-for-sqlite/windows # DB Browser for SQLite

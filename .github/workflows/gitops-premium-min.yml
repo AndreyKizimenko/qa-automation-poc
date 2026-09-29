@@ -9,6 +9,12 @@ name: GitOps — Premium (min variant)
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
   # No push/pull_request triggers — gitops only runs from the nightly
   # orchestrator (workflow_call) or manual dispatch.
 
@@ -29,13 +35,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Apply latest configuration to Fleet
         uses: ./.github/gitops-action
         with:
+          # The QA and VMs fleets hold the suite's durable fixtures, which are the
+          # same in both passes, so both apply the baseline's own files.
           config-files: |
             gitops/premium-fleetqa-min/default.yml
             gitops/premium-fleetqa-min/fleets/workstations.yml
+            gitops/premium-fleetqa/fleets/qa.yml
+            gitops/premium-fleetqa/fleets/vms.yml
           dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         env:
           FLEET_URL:              ${{ secrets.FLEET_PREMIUM_URL }}

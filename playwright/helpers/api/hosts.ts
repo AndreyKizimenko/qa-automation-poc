@@ -415,9 +415,180 @@ export async function getHostDetailUpdatedAt(
   request: APIRequestContext,
   hostId: number,
 ): Promise<string> {
+  return getHostCollectedAt(request, hostId, 'detail_updated_at');
+}
+
+/**
+ * Two timestamps Fleet keeps per host, which mean different things:
+ *
+ *  - `detail_updated_at` — when the host last reported a full collection. Every
+ *    refetch advances it, so it's the proof that a collection ran after a point
+ *    in time.
+ *  - `software_updated_at` — when the host's software inventory last *changed*.
+ *    Fleet skips the write when an ingest finds nothing new (`nothingChanged` in
+ *    `server/datastore/mysql/software.go`), so it only advances if the software
+ *    list differs. Wait on it only for "until the inventory changes", and only
+ *    with a baseline taken before the change could have been ingested; to know
+ *    the inventory is current, wait on `detail_updated_at` instead.
+ */
+export type HostCollectedAtField = 'detail_updated_at' | 'software_updated_at';
+
+/** When Fleet last stored `field` for the host (empty string if never). */
+export async function getHostCollectedAt(
+  request: APIRequestContext,
+  hostId: number,
+  field: HostCollectedAtField,
+): Promise<string> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
-  return (await res.json()).host?.detail_updated_at ?? '';
+  return (await res.json()).host?.[field] ?? '';
+}
+
+/** Asks Fleet to re-collect a host's vitals and software on its next check-in. */
+export async function requestHostRefetch(request: APIRequestContext, hostId: number): Promise<void> {
+  const res = await request.post(apiUrl(`hosts/${hostId}/refetch`), { headers: authHeaders() });
+  await expect(res, `Failed to request a refetch of host ${hostId}`).toBeOK();
+}
+
+/** One queued item on a host — an install, uninstall, script run or MDM command. */
+export interface UpcomingActivity {
+  /** What {@link cancelUpcomingActivity} takes. */
+  uuid: string;
+  type: string;
+  softwareTitle: string | null;
+  /** The installer's file name, for software. */
+  softwarePackage: string | null;
+  scriptName: string | null;
+}
+
+/** What's queued on a host, oldest first — what it works through, one at a time. */
+export async function listUpcomingActivities(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<UpcomingActivity[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/activities/upcoming`), {
+    headers: authHeaders(),
+    params: { per_page: '100' },
+  });
+  await expect(res, `Failed to list host ${hostId}'s upcoming activities`).toBeOK();
+  const activities = ((await res.json()).activities ?? []) as Array<{
+    uuid: string;
+    type: string;
+    details?: { software_title?: string; software_package?: string; script_name?: string } | null;
+  }>;
+  return activities.map((a) => ({
+    uuid: a.uuid,
+    type: a.type,
+    softwareTitle: a.details?.software_title ?? null,
+    softwarePackage: a.details?.software_package ?? null,
+    scriptName: a.details?.script_name ?? null,
+  }));
+}
+
+/** Removes a queued item before the host picks it up. Already-started or gone is fine. */
+export async function cancelUpcomingActivity(
+  request: APIRequestContext,
+  hostId: number,
+  uuid: string,
+): Promise<void> {
+  const res = await request.delete(apiUrl(`hosts/${hostId}/activities/upcoming/${uuid}`), {
+    headers: authHeaders(),
+  });
+  if (!res.ok() && res.status() !== 404) {
+    console.warn(`[cancelUpcomingActivity] host ${hostId} ${uuid}: HTTP ${res.status()} — ${await res.text()}`);
+  }
+}
+
+/**
+ * Waits until the host has no refetch outstanding (`refetch_requested` false).
+ * Fleet clears the flag when the collection's results land, not when the host
+ * picks the queries up — so while it's set, a collection may already be running
+ * on data from before now, and a refetch asked for meanwhile merges into it
+ * instead of starting a new one. Fleet sets it after every software install and
+ * uninstall.
+ */
+export async function waitForNoPendingRefetch(
+  request: APIRequestContext,
+  hostId: number,
+  timeout = 240_000,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+        await expect(res, `Failed to read host ${hostId}`).toBeOK();
+        return (await res.json()).host?.refetch_requested ?? false;
+      },
+      { message: `host ${hostId} kept a refetch outstanding`, timeout, intervals: [5_000] },
+    )
+    .toBe(false);
+}
+
+/**
+ * Waits until the host has re-reported since `since` — the one wait every
+ * host-execution spec needs, because what they assert (an installed version, a
+ * cleared status) only reaches Fleet on the host's next collection.
+ *
+ * Take `since` from {@link getHostCollectedAt} *before* the action under test.
+ * Comparing against a baseline, rather than polling UI copy like "Last fetched
+ * less than a minute ago", proves the collection happened after the action and
+ * wasn't a background cycle that landed just before it.
+ *
+ * `refetch` also queues a refetch first. Leave it off where Fleet queues one
+ * itself: a completed software install or uninstall already does, so asking again
+ * only adds load on the shared instance.
+ *
+ * The default budget covers what the real VMs measure — a refetch lands in
+ * 70–120s — plus a refetch another spec may already have in flight on the same
+ * host. Returns the new timestamp so a caller can chain a second wait off it.
+ */
+export async function waitForHostRefetch(
+  request: APIRequestContext,
+  hostId: number,
+  opts: {
+    since: string;
+    field?: HostCollectedAtField;
+    refetch?: boolean;
+    timeout?: number;
+  },
+): Promise<string> {
+  const { since, field = 'detail_updated_at', refetch = false, timeout = 240_000 } = opts;
+  if (refetch) await requestHostRefetch(request, hostId);
+
+  const baseline = since ? Date.parse(since) : 0;
+  let latest = since;
+  await expect
+    .poll(
+      async () => {
+        latest = await getHostCollectedAt(request, hostId, field);
+        return latest ? Date.parse(latest) : 0;
+      },
+      {
+        message: `host ${hostId} never re-reported ${field} after ${since || '(never)'}`,
+        timeout,
+        intervals: [5_000],
+      },
+    )
+    .toBeGreaterThan(baseline);
+  return latest;
+}
+
+/** What a `fleetctl mdm` command needs to address a host, and whether it can reach it. */
+export interface HostMdmIdentity {
+  /** The host's own hostname — what `fleetctl mdm … --hosts` resolves against. */
+  hostname: string;
+  /** Fleet's MDM enrollment status ("On (manual)", "On (automatic)", "Off", …). */
+  enrollmentStatus: string | null;
+}
+
+export async function getHostMdmIdentity(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostMdmIdentity> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const { host } = await res.json();
+  return { hostname: host?.hostname ?? '', enrollmentStatus: host?.mdm?.enrollment_status ?? null };
 }
 
 /** One row of a host's Certificates card, as Fleet reports it. */
@@ -498,6 +669,65 @@ export async function hostExists(
 ): Promise<boolean> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   return res.ok();
+}
+
+/** A host as the hosts list reports it, with the fields a batch run decides on. */
+export interface ListedHost {
+  id: number;
+  platform: string;
+  /** fleetd/Orbit version, or null for a host that can't run scripts. */
+  orbitVersion: string | null;
+  /** False when fleetd runs with scripts disabled; null when the host hasn't said. */
+  scriptsEnabled: boolean | null;
+}
+
+/**
+ * Every host in a fleet (0 for Unassigned), optionally narrowed by status. The
+ * hosts list is the one listing that fills in `orbit_version`.
+ */
+export async function listFleetHosts(
+  request: APIRequestContext,
+  fleetId: number,
+  opts: { status?: 'online' | 'offline' } = {},
+): Promise<ListedHost[]> {
+  const params: Record<string, string> = { fleet_id: String(fleetId), per_page: '1000' };
+  if (opts.status) params.status = opts.status;
+  const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
+  await expect(res, `Failed to list the hosts of fleet ${fleetId}`).toBeOK();
+  const hosts = (await res.json()).hosts as Array<{
+    id: number;
+    platform: string;
+    orbit_version: string | null;
+    scripts_enabled: boolean | null;
+  }>;
+  return hosts.map((h) => ({
+    id: h.id,
+    platform: h.platform,
+    orbitVersion: h.orbit_version ?? null,
+    scriptsEnabled: h.scripts_enabled ?? null,
+  }));
+}
+
+/** A real VM, with the fleet it's on (0 for Unassigned). */
+export type RealHostRef = OnlineHostRef & { fleetId: number };
+
+/**
+ * The online real VM of `platform`, with its fleet (0 for Unassigned — every
+ * host on free). Throws rather than returning null: a spec that needs a real
+ * device has nothing to test without one, and the message says what to check.
+ */
+export async function requireRealHost(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+): Promise<RealHostRef> {
+  const host = await findOnlineHost(request, platform, { kind: 'real' });
+  if (!host) {
+    throw new Error(
+      `no online real ${platform} VM on ${process.env.FLEET_URL} — scripts, installs and MDM commands only ` +
+        `reach a real device. Check the ${platform} VM is powered on and enrolled.`,
+    );
+  }
+  return { ...host, fleetId: (await getHostFleetId(request, host.id)) ?? 0 };
 }
 
 /**

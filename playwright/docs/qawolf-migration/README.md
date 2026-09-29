@@ -31,7 +31,9 @@ they're invisible to anyone re-provisioning an instance, so they're recorded her
 | what | where | needed by | if missing |
 |---|---|---|---|
 | `team-admin@fleetdm.com` — admin on **Workstations + VMs**, shared `FLEET_STATIC_USER_PASSWORD`, `force_password_reset: false` | premium | every team-admin case (C1 #16/#26/#27, labels role-access) | recreate via `POST /users/admin`, then clear the reset flag — `PATCH` won't do it, see [PLAYBOOK §6](PLAYBOOK.md#6-instance-level-gotchas-worth-knowing-up-front) |
-| Report **`pw-host-report-results`** on the **VMs** fleet — interval 300, `SELECT 'bar' AS foo` | premium | `premium/hosts/host-report-details.spec.ts` | recreate per that spec's header, then allow ~3.5 min for one scheduled run |
+| Report **`pw-host-report-results`** on the **VMs** fleet — interval 300, `SELECT 'bar' AS foo` | premium | `premium/hosts/host-report-details.spec.ts` | re-apply `gitops/premium-fleetqa/fleets/vms.yml` with `--context qa-premium`, then allow ~3.5 min for one scheduled run |
+| **Claude installed on the macOS + Windows VMs**, tracking latest, from the **VMs** fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
+| **Install/uninstall fixtures on the VMs fleet** — inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` preflight |
 | Real VMs online (macOS/Windows MDM-enrolled) + the osquery-perf load fleet | both | every host-dependent spec | see "Keeping the host population online" below |
 | **Fleet-maintained app shelf on the QA fleet** — 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `gitops/premium-fleetqa/fleets/qa.yml` with `--context qa-premium`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
 
@@ -39,9 +41,13 @@ The report has to live on a **fleet**: `cleanup.steps.ts` wipes global reports a
 never touches other fleets. Verified to survive overnight plus repeated cleanup cycles.
 
 The same reasoning puts the software shelf on **QA**: `cleanup.steps.ts` wipes installable software on
-Unassigned and Workstations only. QA is also the only fleet it was safe to bring under gitops — gitops deletes
-whatever a declared fleet doesn't list, and QA started empty. **VMs must stay out of gitops** for exactly that
-reason. See [round-2/README §8](round-2/README.md#8-standing-preconditions-this-round-adds).
+Unassigned and Workstations only. **VMs** is under gitops too since batch D (`fleets/vms.yml`) — the only fleet
+with real hosts, so the only place a Fleet-maintained app can be kept *installed*. Gitops deletes whatever a
+declared fleet doesn't list, so `vms.yml` declares the report above as well. `cleanup.steps.ts` touches both
+fleets in narrow ways: it clears version pins, it sweeps the host-execution specs' own per-run `fleet-pw-*` /
+`pw-*` leftovers from VMs, and it brings the real VMs to their resting state (nothing of the suite's queued,
+Fleet's default script timeout, every install/uninstall fixture uninstalled). It never deletes what gitops
+declares. See [round-2/D-host-execution.md](round-2/D-host-execution.md#the-fma-fixture-set).
 
 ## Two host populations
 
@@ -53,9 +59,10 @@ Both share each instance and are good at opposite jobs — pick per spec via
 - **`'simulated'`** — volume for bulk work. Ignores live-query SQL, returns no rows ~20% of runs, and matches
   contradictory labels. Disposable, but a deleted simulation **never comes back on its own**.
 
-Split via Fleet's `mdm_enrollment_status` filter — the only signal that works on free too, since free has no
-fleets to scope by. Caveat: the real **Linux** VMs aren't MDM-enrolled, so they fall inside `'simulated'` —
-destructive specs must target `darwin` or `windows`.
+Split by **hardware model**: the QA VMs report `VirtualMac2,1` or `QEMU Virtual Machine`, osquery-perf reports
+fixed consumer models. It holds on both tiers and across re-enrollment — MDM enrollment stopped being a usable
+signal once the perf-hosts tooling began enrolling a share of the simulations. Every VM is **ARM** (Apple M4
+macOS, ARM Windows 11, aarch64 Ubuntu), which decides which installers can land on them.
 
 Full comparison: [PLAYBOOK §7](PLAYBOOK.md#7-test-hosts-fidelity-vs-volume).
 

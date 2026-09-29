@@ -55,11 +55,13 @@ FCTL-26..30.
 ## The binary is a test dependency
 
 Unlike every other area, these specs need a program installed. Both Playwright CI workflows now
-resolve the server's version and `npm install -g fleetctl@<that version>` before running. Locally,
+resolve the server's version and `npm install -g` that release's `fleetctl` when it is published — and,
+for an RC server that has no published client of its own, the **latest** release, at most a minor behind
+(2026-09-28; it was a pinned 4.85.0). So against an RC this area runs one minor behind the server. Locally,
 `FLEETCTL_BIN` points at an existing binary; without it the area fails hard rather than skipping,
 per the suite's no-new-skip-gates rule.
 
-### The client must match the server's minor version — read this first
+### The client must stay within a minor of the server — read this first
 
 **A stale client does not fail this area. It makes it pass for the wrong reason.** That is not a
 hypothetical: until 2026-09-27 the suite ran **fleetctl 4.85.1 against a 4.93 server**, and the
@@ -77,8 +79,9 @@ skew was silently costing real coverage in three ways.
 3. **It hid a live P1 product bug.** `generate-gitops` exits 1 on Free whenever Apple MDM is
    configured ([fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)). 4.85.1
    predates DDM assets support (4.90.0), so it never took the failing branch — **FCTL-24 and
-   FCTL-25 passed for two months against a command that is broken on this tier.** Upgrading the
-   client is what surfaced it.
+   FCTL-25 passed for two months against a command that is broken on this tier**, and so did the
+   nightly chain's FCTL-26…30 on Free, until CI's own fleetctl install stopped falling back to 4.85.0
+   (2026-09-28). Upgrading the client is what surfaced it; all seven now skip on Free behind #53965.
 
 **The fix when the released client is behind the server.** `npm install -g fleetctl@<version>` only
 works for a version that has shipped; against an RC it will not. Build one from the Fleet checkout
@@ -142,11 +145,11 @@ client is old. That is the mechanism by which two specs passed for the wrong rea
 | FCTL-40 | `cli/shared/gitops-dry-run.spec.ts` | reports a missing config file | CLI | ☐ |
 | FCTL-41 | `cli/premium/gitops-dry-run.spec.ts` | processes fleet configs; `--delete-other-fleets` (2) | CLI | ☐ |
 | FCTL-42 | `cli/free/gitops-skips-teams.spec.ts` | skips every fleet file in the scaffold | CLI | ☐ |
-| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set | CLI | ☐ |
-| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set | CLI | ☐ |
-| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set | CLI | ☐ |
-| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name | CLI | ☐ |
-| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure | CLI | ☐ |
+| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure **(skipped on Free — #53965)** | CLI | ☐ |
 | FCTL-43 | `cli/nightly/gitops-idempotence.spec.ts` | dry-run of the applied config proposes no deletions | CLI | ☐ |
 
 Shared across **FCTL-01..25** unless an entry says otherwise:
@@ -955,7 +958,7 @@ instance state, because on a Free instance with Apple MDM configured there is no
 **This was invisible until the client caught up.** fleetctl 4.85.1 predates DDM assets support
 (added in 4.90.0), so the old client never took the failing branch and this entry passed for two
 months against a broken command. Upgrading to a 4.93-matching client surfaced it. See the
-[version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+[version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 
 **Unblock condition:** `generate-gitops` succeeds on Free with Apple MDM configured — i.e. the
 assets fetch is skipped on Free. Then delete both skips (this entry and FCTL-25) and re-run.
@@ -997,7 +1000,7 @@ other:
 **Why it is skipped.** Identical to FCTL-24: `generate-gitops` exits 1 on Free with Apple MDM
 configured (`generateControls` → `generateAssets` → `GET /assets` 402s on Free), so the command
 produces no output for the assertion to inspect. Also masked by fleetctl 4.85.1 until 2026-09-27 —
-see the [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+see the [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 
 **Flow** *(what it asserts when un-skipped)*
 
@@ -1792,7 +1795,7 @@ to spend review time.
    cheapest fix is a guard, not a habit:** one assertion (or a project-setup step) comparing
    `fleetctl --version` against `/api/v1/fleet/version` and failing on a minor-version mismatch
    would have caught all of this on day one. See the
-   [version-skew warning](#the-client-must-match-the-servers-minor-version--read-this-first).
+   [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 1. **The shared `get` entries are smoke tests wearing data-test names.** FCTL-01/02/04 assert only
    that column headers render. That is a defensible scope (data contracts belong to `tests/api/`
    and `gitops-verify`), but the entry names promise more than they deliver. Either rename them or
