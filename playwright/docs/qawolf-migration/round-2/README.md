@@ -381,8 +381,9 @@ what you write, and the docs have to move with the code or the next audit pays f
 - [fleetdm/fleet#54262](https://github.com/fleetdm/fleet/issues/54262) — the script details modal takes "after N
   seconds" from the output, not the timeout (asserted as today's copy, `TODO`).
 - [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965) — `fleetctl generate-gitops` fails on Free
-  with Apple MDM on; every Free `generate-gitops` test skips behind it. A fix is on the 4.93 RC (#54302), in the
-  build both instances run since 2026-09-29: re-check those skips.
+  with Apple MDM on; every Free `generate-gitops` test skips behind it. The fix (#54302 on the 4.93 RC) is in
+  `fleetctl` itself, and CI installs the server's release only once it's published (4.92.1 until then), so the
+  skips stay until `fleetctl` 4.93.0 is on npm.
 - [fleetdm/fleet#53186](https://github.com/fleetdm/fleet/issues/53186) — a gitops apply reports
   `[-] deleted software - …` for packages it keeps. Check the installer id before believing it.
 - [fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440) — a new `.exe` title isn't linked to what

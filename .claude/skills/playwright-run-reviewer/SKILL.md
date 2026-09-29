@@ -1,6 +1,6 @@
 ---
 name: playwright-run-reviewer
-description: Use to triage a Playwright test run for this Fleet QA suite — decide, per failing or flaky test, whether it's flakiness, a buggy test, or a real Fleet product defect. Triggers on "review this run", "triage the run", "why did the suite fail", "was this a flake or a real bug", "check the nightly", "review the CI run", pasting a GitHub Actions run URL for the Playwright workflow, or pointing at a local playwright-report. Also use on a PASSED run to surface hidden flakiness (passed-on-retry), skips, and perf drift. This is a daily driver — reach for it whenever a run finishes and someone needs to know what's real.
+description: Use to triage a Playwright test run for this Fleet QA suite — decide, per failing or flaky test, whether it's flakiness, a buggy test, or a real Fleet product defect. Triggers on "review this run", "triage the run", "why did the suite fail", "was this a flake or a real bug", "check the nightly", "review the CI run", pasting a GitHub Actions run URL (`QA — Nightly`, `QA — Branch run`, or a Playwright suite workflow), or pointing at a local playwright-report. Also use on a PASSED run to surface hidden flakiness (passed-on-retry), skips, and perf drift. This is a daily driver — reach for it whenever a run finishes and someone needs to know what's real.
 ---
 
 You are triaging a Playwright run for Fleet's QA suite. The job is not to
@@ -10,32 +10,45 @@ or **infra-env**, backed by evidence, so a human knows what to fix and what to
 file. Speed and correctness both matter; you'll run this most days.
 
 Work from `qa-automation/playwright/`. The suite conventions, projects, and
-Fleet-specific locator/data gotchas live in `playwright/CLAUDE.md` — the two
+Fleet-specific locator/data gotchas live in `playwright/CLAUDE.md`, and its
+**CI and the shared instances** table holds the facts that change (the nightly's
+shape and schedule, workers, retries, which reports a run uploads). The two
 sibling skills `playwright-test-author` and `playwright-test-reviewer` own test
 *writing* and *code review*; this skill owns *run triage* and hands off to them
 when the fix is a test change.
 
 ## 1. Locate and load the run
 
-**CI run** (a GitHub Actions URL or run id — the usual case, since the nightly
-`Playwright — Premium/Free` workflows run with `retries: 2`):
+**CI run** (a GitHub Actions URL or run id — the usual case; CI runs with
+`retries: 2`). Look at the run's shape first — it's cheap and it tells you where
+to spend the triage:
 
 ```bash
-DIR=$(bash <skill>/scripts/fetch_ci_run.sh "<run-url-or-id>")
+gh run view <id> --repo <owner/repo> --json name,conclusion,jobs \
+  --jq '.name, .conclusion, (.jobs[] | [.name, .conclusion] | @tsv)'
 ```
 
-The script downloads the report artifact via `gh run download` and prints the
-directory holding `index.html`. For extra context on the job (trigger, timing,
-which step failed) `gh run view <id> --repo <owner/repo>` is cheap.
+A chained run (`QA — Nightly`, `QA — Branch run`) is several Playwright jobs:
+per tier, a gitops chain (applies plus `gitops-verify` checks and fleetctl CLI
+checks, each its own Playwright report) and then the suite. In the nightly the
+suite runs whatever gitops did; in a branch run a red gitops step skips that
+tier's suite. **Triage a red gitops job first** — an apply that failed or a
+config that drifted can explain suite failures downstream.
 
-**Local run**: point straight at `playwright/playwright-report/` (the default
-output dir). Locally `retries: 0`, so there's no automatic flake signal — see
-the re-run guidance below.
+```bash
+bash <skill>/scripts/fetch_ci_run.sh "<run-url-or-id>" > <scratchpad>/reports.txt
+```
+
+The script downloads every report artifact via `gh run download` and prints one
+report directory per line, the suites' (`playwright-report-premium` / `-free`)
+first. **Never triage just the first line of a chained run as "the run"** — parse
+each suite, plus the report of any job that went red. For extra context on a job
+(trigger, timing, which step failed), `gh run view <id> --log-failed` is cheap.
 
 Then extract a compact, triage-ready summary:
 
 ```bash
-python3 <skill>/scripts/parse_report.py "$DIR" --slow 8
+python3 <skill>/scripts/parse_report.py "<report-dir>" --slow 8
 ```
 
 This reads the structured result blob embedded in `index.html` (far more
@@ -86,9 +99,16 @@ README's run table for the exact scripts):
 - **Flake vs real.** Locally `retries: 0`, so repeat the one test and watch the
   spread:
   ```bash
-  cd playwright && npm run test:premium -- <spec> -g "<title>" --repeat-each=5 --workers=1
+  gh run list --limit 5   # nothing else on the instances, and not the nightly
+  cd playwright && npx playwright test --project=premium <spec-file> -g "<title>" \
+    --repeat-each=5 --workers=1 --output=<scratchpad>/rerun
   ```
-  Mixed pass/fail → `flaky`. Uniform failure → real; triage further.
+  Mixed pass/fail → `flaky`. Uniform failure → real; triage further. Use
+  `--project=free` for a free or `shared/` spec, and
+  `--project=premium-exclusive <file-name> --no-deps` for an `exclusive/` one.
+  **Never `npm run test:<tier> -- <spec>`:** it also names the exclusive project,
+  whose dependency — the whole main project — always runs in full, so a
+  one-test check becomes a full suite run on the shared instance.
 - **CI-red vs live-real.** If the *current* local suite **passes** a spec that CI
   failed, the CI failure was a stale snapshot or a transient — not a live product
   or test problem. This is often the fastest way to resolve a mass red run (e.g.
@@ -97,10 +117,12 @@ README's run table for the exact scripts):
 
 Know what a local run costs before you fire it:
 - It targets the **same shared QA instance** as CI (`FLEET_URL` in `.env.<suite>`),
-  and the premium/free projects run `cleanup-setup` + `cleanup-teardown` around
-  every run — so even a `-g`-scoped run **wipes and repopulates** the unassigned +
-  Workstations state. Scope to the one failing spec; don't loop the whole suite to
+  and without `--no-deps` it runs `cleanup-setup` + `cleanup-teardown` around your
+  test — the unassigned and Workstations wipe, the VMs sweep, the real VMs brought
+  to their resting state. Scope to the one failing spec; don't loop the suite to
   chase a single test.
+- **Check `gh run list` first.** Two runs on the same VMs corrupt each other, and
+  the nightly starts hours after its cron time (CLAUDE.md's facts table).
 - It needs the local `.env.premium` / `.env.free` present (gitignored secrets).
 - A scoped single-spec/single-test re-run is fair game to just run. A broad or
   full-suite re-run is disruptive to anyone else on the instance — say so first.
@@ -139,8 +161,9 @@ headline findings in chat regardless.
   "Looks like a flake" without evidence is not triage.
 - Start from the embedded report blob and the accessibility snapshot, not the raw
   log. Re-running locally is a normal next step to confirm flake-vs-real or
-  CI-vs-live — scope it to the failing spec, and remember it wipes shared-instance
-  state (flag a broad re-run before running it).
+  CI-vs-live — scope it to the failing spec with `npx playwright test --project=…`,
+  check `gh run list` first, and remember it wipes shared-instance state (flag a
+  broad re-run before running it).
 - Don't inflate the report. Intentional skips, setup-cascade collateral, and
   slow-but-passing tests are notes, not findings. The signal is the real defects.
 - When you write or edit a comment in any file here, describe what the code is

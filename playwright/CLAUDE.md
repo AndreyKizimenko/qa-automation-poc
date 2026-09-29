@@ -206,12 +206,28 @@ Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment nami
 - **Env-gated, or deliberately deferred** → a row in `TODO.md`.
 - **Data-availability guard** (`test.skip(!host, 'no macOS host')`, `gitopsConfig.scope !== 'no-team'`) → inline reason only. These are preconditions, not debt, and don't get tracked.
 
+## CI and the shared instances — current facts
+
+The one place for facts that change. Skills and docs point here rather than restating them, so when one
+changes, change it here.
+
+| | |
+|---|---|
+| **the nightly** | `QA — Nightly` (`.github/workflows/qa-nightly.yml`): both Render deploy hooks → a 30-min wait → both instances' `/healthz` → per tier, the nightly gitops chain, then that tier's suite (whatever gitops did). Cron `0 3 * * *`, but GitHub has been starting this repo's scheduled runs 4–6.5 h late since 2026-08-27, so expect it around 07:00–09:30 UTC. About 1.5 h |
+| **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; a red gitops step stops that tier's suite. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready |
+| **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
+| **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
+| **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the run at 100 min (`globalTimeout`), report included; the job's limit is 120 |
+| **runtime** | premium ~56 min, free ~10 (2026-09-29). 83 of premium's 110 test-minutes are on the real VMs, which is why more workers stop helping |
+| **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
+| **the instances' build** | both redeploy the 4.93 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
+
 ## Pre-PR check
 
 ```bash
 npm run check          # tsc --noEmit + eslint
 ```
 
-This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`.github/workflows/playwright-{premium,free}.yml`), but don't rely on that to catch what `npm run check` would.
+This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`QA — Nightly`, above), but don't rely on that to catch what `npm run check` would.
 
-While building, run only the specs you changed — `npx playwright test --project=<tier> <spec-file-names>` on every tier they target, with dependencies at least once, `--workers=2` for anything on the real VMs, and nothing else running against the instance (`gh run list`). The full suite (~56 min on premium) runs once, at the end, on CI as `QA — Branch run` (each tier's nightly gitops chain, then its suite); Andrey dispatches it, so at the end open the PR and tell him it's ready. The `playwright-test-author` skill has the detail.
+While building, run only the specs you changed — `npx playwright test --project=<tier> <spec-file-names>` on every tier they target, with dependencies at least once, `--workers=2` for anything on the real VMs, and nothing else running against the instance (`gh run list`). The full suite runs once, at the end, as `QA — Branch run`, which Andrey dispatches (facts above). The `playwright-test-author` skill has the detail.

@@ -48,7 +48,7 @@ The batch's premise is "waiting on something to exist". Most of it isn't:
 |---|---|---|
 | technician transfer (augment `host-transfer-permissions.spec.ts`) | **ready** | static user `global-technician@fleetdm.com`, global role technician (premium only: free has no technician user and no fleets) |
 | team-admin edits a member · edits the team name | **ready, one decision (§2)** | static user `team-admin@fleetdm.com` is admin on **Workstations** and **VMs** |
-| host IdP username, UI + API (`host-idp-username.spec.ts`) | **ready** | the host's User card has *Update end user* (`UpdateEndUserModal`), shown to admins and maintainers on either tier; the API is `PUT /api/v1/fleet/hosts/:id/device_mapping`, and `DELETE …/device_mapping/idp` removes it |
+| host IdP username, UI + API (`host-idp-username.spec.ts`) | **ready** | the host's User card has an **Add user** / **Edit user** button (`User.tsx`; it opens `UpdateEndUserModal`), shown to admins and maintainers on either tier. On free the modal shows the premium message instead of the field. The API is `PUT /api/v1/fleet/hosts/:id/device_mapping`, and `DELETE …/device_mapping/idp` removes it (422 when there's nothing to remove) |
 | manual MDM enrollment profile, premium + free | **ready; confirm the path** | the download lives in the Add hosts modal (`AddHostsModal/PlatformWrapper`). A download only: never install it anywhere |
 | MFA ×3 (`mfa.spec.ts`) | **the magic-link half is blocked; the rest is buildable (§5)** | `smtp_settings.configured` is **false** on both tiers; the magic link needs SMTP *and* a mailbox the suite can read (Mailpit or a catch-all) |
 | `.rpm` install on Fedora | **blocked** | no RPM-based host is online on either tier (303 online each; the real VMs are Ubuntu 26.04, Windows 11, macOS 26.6) |
@@ -85,8 +85,11 @@ decides otherwise.
   Recovery Lock password on the real macOS VM, the class of thing README §5 forbids. Exercise the settings UI
   on Workstations (no hosts) and restore it in the same test.
 - **free:** not at all. `mdm.enable_recovery_lock_password` is in free's **global** config too, and free's
-  real VMs sit in Unassigned, so the global setting reaches the free Mac. On free the *Passwords* card shows
-  the premium message instead (`Passwords.tsx` → `PremiumFeatureMessage`); assert that, and nothing else.
+  real VMs sit in Unassigned. Fleet's server doesn't license-check that key (`ModifyAppConfig`, 4.93 RC); what
+  keeps it off the free Mac today is only that the job sending Recovery Lock commands runs on premium. Don't
+  lean on that. On free the *Passwords* card shows the premium message instead (`Passwords.tsx` →
+  `PremiumFeatureMessage`): assert that, and nothing else. Whether free *should* refuse the key is a question
+  for Andrey (a possible Fleet bug); confirming it takes a write, so don't probe it.
 
 ### 4. Hosts for the ready rows
 
@@ -108,9 +111,9 @@ QA Wolf ran this batch on premium only, except the enrollment profile. Grounded 
 
 | row | free has | free check |
 |---|---|---|
-| IdP username | the *Update end user* control on the User card (role-gated, not tier-gated); server-side, a `custom` device mapping works on free, but `source: "idp"` is **premium-only** (`SetHostDeviceMapping` → license check) | a `free/` sibling: set and clear a custom end-user email in the UI; and a free API check that an `idp` mapping is refused with the license error |
+| IdP username | the **Add user** / **Edit user** button on the User card (role-gated, not tier-gated), but `UpdateEndUserModal` renders `PremiumFeatureMessage` on free instead of the field; server-side, `source: "idp"` is **premium-only** (`SetHostDeviceMapping` → license check) | a `free/` sibling: the button opens the modal and it shows the premium message; and a free API check that an `idp` mapping is refused with the license error |
 | MFA | no *Enable two-factor authentication (email)* checkbox (`UserForm.tsx` shows it on premium, or if already set); `PATCH /users/:id` with `mfa_enabled: true` returns **402** (`ErrMissingLicense`) | the checkbox is absent on create and edit; the API refuses |
-| recovery lock | the *Passwords* card renders `PremiumFeatureMessage` | a row in `tests/e2e/free/paywalls.spec.ts` |
+| recovery lock | the *Passwords* card renders `PremiumFeatureMessage` | in `tests/e2e/free/paywalls.spec.ts`. **Its existing Passwords row can't fail:** OS settings sends an unknown section to Disk encryption, which shows the same premium message, so the row passes even with the card gone. Anchor on the card's *Passwords* heading and assert the *Turn on Recovery Lock password* checkbox is absent. The Certificates row has the same blind spot, and Host names (`/controls/os-settings/host-name-template`) has no row at all |
 | manual enrollment | the same download | already a `free/` row in the table below |
 | technician, team-admin | nothing: no technician role user, no fleets | none; say so in the audit entry |
 
@@ -191,7 +194,7 @@ Split by what unblocks each one:
 |---|---|
 | a readable mailbox (Mailpit or a catch-all domain) | the 3 MFA flows |
 | a Fedora host online | the RPM install case |
-| nothing (the *Update end user* control exists) | the 2 IdP specs |
+| nothing (the *Add user* / *Edit user* control exists) | the 2 IdP specs |
 | a decision on destructive rotation | the 2 recovery-lock specs |
 | **nothing — the static user already exists** | technician transfer, the 2 team-admin flows |
 
