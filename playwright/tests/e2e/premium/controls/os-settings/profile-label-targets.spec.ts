@@ -38,7 +38,6 @@
  * one generated Windows profile at a time — they all set the same LocURI — which
  * is why the Windows case is one profile edited, not several.
  */
-import * as fs from 'fs';
 import { test, expect } from '@fixtures';
 import {
   createManualLabel,
@@ -47,24 +46,26 @@ import {
   findMdmSimulations,
   findProfileByName,
   getHostDetailUpdatedAt,
-  hostsListingProfile,
   listProfiles,
+  profileListings,
   readManagedPreferenceDomain,
   readWindowsPolicyValue,
   requireRealHost,
+  targetsFor,
+  targetsOf,
   transferHosts,
   waitForHostProfileGone,
   waitForHostProfileStatus,
   waitForHostRefetch,
   waitForNoPendingRefetch,
+  waitForProfileListings,
   type ProfileRecord,
 } from '@helpers/api';
-import type { APIRequestContext } from '@playwright/test';
 import {
   inertMobileconfig,
   inertWindowsProfile,
   runNonce,
-  type GeneratedProfile,
+  writeProfile,
   type InertAppleProfile,
 } from '@helpers/profiles';
 import type { ConfigurationProfilesPage, ControlsPage, DashboardPage, OsSettingsPage, ProfileTarget } from '@pages';
@@ -83,55 +84,6 @@ async function openProfilesOnVmsFleet({ dashboard, controls, osSettings, configu
   await controls.goToOsSettings();
   await osSettings.goToConfigurationProfiles();
   await configurationProfiles.teamDropdown.selectByLabel('VMs');
-}
-
-/** Writes a generated profile where the upload modal's file input can take it. */
-function onDisk(profile: GeneratedProfile, outputPath: (name: string) => string): string {
-  const file = outputPath(profile.fileName);
-  fs.writeFileSync(file, profile.content);
-  return file;
-}
-
-/** The label scopes a target should be stored as, sorted — Fleet doesn't keep the order. */
-function storedScopes(target: ProfileTarget): Pick<ProfileRecord, 'includeAll' | 'includeAny' | 'excludeAny'> {
-  const labels = target.include?.labels ?? [];
-  const all = target.include?.mode === 'all';
-  return {
-    includeAll: all ? [...labels].sort() : [],
-    includeAny: all ? [] : [...labels].sort(),
-    excludeAny: [...(target.exclude ?? [])].sort(),
-  };
-}
-
-function scopesOf(p: ProfileRecord): Pick<ProfileRecord, 'includeAll' | 'includeAny' | 'excludeAny'> {
-  return { includeAll: [...p.includeAll].sort(), includeAny: [...p.includeAny].sort(), excludeAny: [...p.excludeAny].sort() };
-}
-
-/** Which of `ours` Fleet lists each profile for, by profile name. */
-async function listings(
-  request: APIRequestContext,
-  ours: number[],
-  profiles: ProfileRecord[],
-): Promise<Record<string, number[]>> {
-  const out: Record<string, number[]> = {};
-  for (const p of profiles) out[p.name] = [...(await hostsListingProfile(request, ours, p.uuid))].sort();
-  return out;
-}
-
-/** Waits until Fleet lists each profile on exactly its expected hosts of `ours`. */
-async function expectListedOn(
-  request: APIRequestContext,
-  ours: number[],
-  expected: Array<{ profile: ProfileRecord; hosts: number[] }>,
-): Promise<void> {
-  const want = Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()]));
-  await expect
-    .poll(() => listings(request, ours, expected.map((e) => e.profile)), {
-      message: `each profile should be listed on exactly its hosts of ${ours.join(', ')}`,
-      timeout: 180_000,
-      intervals: [5_000],
-    })
-    .toEqual(want);
 }
 
 test.describe('Premium • Controls • Configuration profiles — label targeting', () => {
@@ -191,13 +143,13 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
 
       await openProfilesOnVmsFleet({ dashboard, controls, osSettings, configurationProfiles });
       for (const c of cases) {
-        await configurationProfiles.uploadProfile(onDisk(c.profile, (f) => testInfo.outputPath(f)), c.target);
+        await configurationProfiles.uploadProfile(writeProfile(c.profile, testInfo.outputDir), c.target);
         await expect(configurationProfiles.itemByName(c.profile.name)).toBeVisible();
         await expect(configurationProfiles.labelCount(c.profile.name)).toHaveText(c.labels);
         // What the modal wrote is what Fleet stored.
         const stored = await findProfileByName(request, vmsFleetId, c.profile.name);
         expect(stored, `${c.profile.name} was not stored on the VMs fleet`).not.toBeNull();
-        expect(scopesOf(stored!), c.profile.name).toEqual(storedScopes(c.target));
+        expect(targetsOf(stored!), c.profile.name).toEqual(targetsFor(c.target));
         uploaded.push(stored!);
       }
 
@@ -220,7 +172,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
 
       // Server-side: each profile is listed on exactly the hosts its labels pick.
       const expected = cases.map((c, i) => ({ profile: uploaded[i], hosts: c.expected }));
-      await expectListedOn(request, ours, expected);
+      await waitForProfileListings(request, ours, expected);
 
       // Host-side: the VM installs the two that include it; its next collection
       // verifies them.
@@ -250,7 +202,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
       await expect(hostDetails.controlRow(excludeOnly.profile.name)).toHaveCount(0);
 
       // Nothing drifted while the VM installed: still exactly the same hosts.
-      expect(await listings(request, ours, uploaded)).toEqual(
+      expect(await profileListings(request, ours, uploaded)).toEqual(
         Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()])),
       );
 
@@ -307,14 +259,14 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
 
       const target: ProfileTarget = { include: { mode: 'all', labels: [label.a, label.b] }, exclude: [label.c] };
       await openProfilesOnVmsFleet({ dashboard, controls, osSettings, configurationProfiles });
-      await configurationProfiles.uploadProfile(onDisk(profile, (f) => testInfo.outputPath(f)), target);
+      await configurationProfiles.uploadProfile(writeProfile(profile, testInfo.outputDir), target);
       await expect(configurationProfiles.labelCount(profile.name)).toHaveText('3 labels');
       record = await findProfileByName(request, vmsFleetId, profile.name);
       expect(record, `${profile.name} was not stored on the VMs fleet`).not.toBeNull();
-      expect(scopesOf(record!)).toEqual(storedScopes(target));
+      expect(targetsOf(record!)).toEqual(targetsFor(target));
 
       // s1 is only in a; s2 is in both, but c excludes it — which leaves the VM.
-      await expectListedOn(request, ours, [{ profile: record!, hosts: [vm.id] }]);
+      await waitForProfileListings(request, ours, [{ profile: record!, hosts: [vm.id] }]);
       await waitForHostProfileStatus(request, vm.id, record!.uuid, ['verified']);
       expect(await readWindowsPolicyValue(request, vm.id, profile.policyArea, profile.policyName)).toBe(
         profile.appliedValue,
@@ -328,8 +280,8 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
       await openProfilesOnVmsFleet({ dashboard, controls, osSettings, configurationProfiles });
       await configurationProfiles.openEdit(profile.name);
       await configurationProfiles.updateTarget(edit);
-      expect(scopesOf((await findProfileByName(request, vmsFleetId, profile.name))!)).toEqual(storedScopes(edit));
-      await expectListedOn(request, ours, [{ profile: record!, hosts: [s1] }]);
+      expect(targetsOf((await findProfileByName(request, vmsFleetId, profile.name))!)).toEqual(targetsFor(edit));
+      await waitForProfileListings(request, ours, [{ profile: record!, hosts: [s1] }]);
 
       // Off the VM: Fleet removes it, and Windows puts the setting back to its default.
       await waitForHostProfileGone(request, vm.id, record!.uuid);

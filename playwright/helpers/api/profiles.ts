@@ -264,3 +264,63 @@ export async function readWindowsPolicyValue(
   );
   return rows[0]?.data ?? null;
 }
+
+/**
+ * A target as the Add / Edit profile modal sets it (`ProfileTarget` in
+ * `ConfigurationProfilesPage`) in the API's terms, sorted — so what the modal
+ * sent and what Fleet stored compare with `toEqual`.
+ */
+export function targetsFor(target: {
+  include?: { labels: string[]; mode?: 'any' | 'all' };
+  exclude?: string[];
+}): Required<ProfileTargets> {
+  const labels = [...(target.include?.labels ?? [])].sort();
+  const all = target.include?.mode === 'all';
+  return {
+    includeAll: all ? labels : [],
+    includeAny: all ? [] : labels,
+    excludeAny: [...(target.exclude ?? [])].sort(),
+  };
+}
+
+/** What a profile record targets, sorted — the other side of {@link targetsFor}. */
+export function targetsOf(p: ProfileRecord): Required<ProfileTargets> {
+  return {
+    includeAll: [...p.includeAll].sort(),
+    includeAny: [...p.includeAny].sort(),
+    excludeAny: [...p.excludeAny].sort(),
+  };
+}
+
+/** Which of `hostIds` Fleet lists each profile for, keyed by profile name. */
+export async function profileListings(
+  request: APIRequestContext,
+  hostIds: number[],
+  profiles: ProfileRecord[],
+): Promise<Record<string, number[]>> {
+  const out: Record<string, number[]> = {};
+  for (const p of profiles) out[p.name] = [...(await hostsListingProfile(request, hostIds, p.uuid))].sort();
+  return out;
+}
+
+/**
+ * Waits until Fleet lists each profile on exactly its expected hosts of
+ * `hostIds` — set membership, over hosts the caller controls. One reconciler
+ * tick decides every host for a profile, so once the expected hosts list it the
+ * others have been decided too.
+ */
+export async function waitForProfileListings(
+  request: APIRequestContext,
+  hostIds: number[],
+  expected: Array<{ profile: ProfileRecord; hosts: number[] }>,
+  timeout = 180_000,
+): Promise<void> {
+  const want = Object.fromEntries(expected.map((e) => [e.profile.name, [...e.hosts].sort()]));
+  await expect
+    .poll(() => profileListings(request, hostIds, expected.map((e) => e.profile)), {
+      message: `each profile should be listed on exactly its hosts of ${hostIds.join(', ')}`,
+      timeout,
+      intervals: [5_000],
+    })
+    .toEqual(want);
+}

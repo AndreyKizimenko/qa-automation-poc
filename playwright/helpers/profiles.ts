@@ -22,6 +22,8 @@
  * Every name starts `pw-`, which is what the cleanup sweep removes.
  */
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface GeneratedProfile {
   /** What Fleet lists the profile as. */
@@ -205,6 +207,14 @@ export function rejectedMobileconfig(name: string): GeneratedProfile {
 </plist>
 `;
   return { name, fileName: `${name}.mobileconfig`, content };
+}
+
+/** Writes a generated profile into `dir` (a test's output dir) for the upload modal's file input. */
+export function writeProfile(profile: GeneratedProfile, dir: string): string {
+  const file = path.join(dir, profile.fileName);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, profile.content);
+  return file;
 }
 
 /** A short id for this run's names — distinct across workers and reruns. */

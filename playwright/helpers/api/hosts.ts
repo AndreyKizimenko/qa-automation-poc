@@ -305,7 +305,8 @@ const BORROW_SKIP = 40;
  * assert on the length they need.
  *
  * Slices claimed, per platform: 0–1 `profile-label-targets.spec.ts` (moved onto
- * the VMs fleet); 2–3 `profile-broken-labels.spec.ts` (label members only, never moved).
+ * the VMs fleet); 2–3 `profile-broken-labels.spec.ts` (label members only, never moved);
+ * 4–5 `profile-declarations.spec.ts` (moved onto the VMs fleet).
  */
 export async function findMdmSimulations(
   request: APIRequestContext,

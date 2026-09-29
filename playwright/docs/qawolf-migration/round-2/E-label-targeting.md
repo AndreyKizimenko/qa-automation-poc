@@ -148,7 +148,7 @@ The batch's own **Done when** below, plus:
 |---|---|---|
 | inert profile fixtures | ✅ | `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` + READMEs; both lifecycle specs moved onto them; the two lock fixtures deleted |
 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ☐ | |
-| `premium/controls/os-settings/profile-declarations.spec.ts` | ☐ | |
+| `premium/controls/os-settings/profile-declarations.spec.ts` | ✅ | three declarations of Apple's no-op test type — no target, include all, exclude — over the VM + two borrowed simulations; *verified* is the device's DDM report. QA Wolf's second flow (the refused delete) is `profile-broken-labels`'s declaration case |
 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | ✅ **retargeted** | the refused delete — manual and dynamic labels, targeted by a `.mobileconfig`, a declaration or a Windows `.xml`; the label and target survive it, and the delete goes through once the profile is gone. Workstations, so nothing is delivered |
 | `premium/controls/os-settings/profile-label-targets.spec.ts` | ✅ | macOS: three profiles (include all · include any + exclude · exclude) over the VM + two borrowed simulations; Windows: include all + exclude, then an Edit that excludes the VM and takes the profile back off it. Set membership server-side, the setting read back on the device |
 | `premium/controls/os-settings/configuration-profiles.spec.ts` | ☐ augment | fixture swap landed; the delivery augment hasn't |

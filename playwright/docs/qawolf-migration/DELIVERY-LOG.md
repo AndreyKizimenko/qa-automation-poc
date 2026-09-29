@@ -145,6 +145,17 @@ exclude-only side by side, each verified on the VM and read back on the device, 
 Windows: include all + exclude, then an Edit that excludes the VM, which Fleet answers by removing it. QA Wolf's
 `verifiedHostsCount >= 2` could not fail; each of these fails on the matching targeting bug.
 
+**Declarations** — `premium/controls/os-settings/profile-declarations.spec.ts` (new, + `inertDeclaration`). The same
+shape for DDM declarations, which keep their targeting in a table of their own and reach the Mac over declarative
+management: no target, include all and exclude side by side, each listed on exactly its hosts, the VM reporting the
+two that include it active. The declarations are Apple's no-op `management.test` type — QA Wolf's was, by its name, an
+OS-update declaration.
+
+**The refused label delete** — `premium/controls/os-settings/profile-broken-labels.spec.ts` (new). QA Wolf's three
+"broken label" flows can't run since Fleet 4.87 refuses to delete a label a profile or declaration targets; the spec
+guards that refusal for a `.mobileconfig`, a declaration and a Windows `.xml`, manual and dynamic labels, and the
+release once the profile is gone. On Workstations, so nothing is delivered.
+
 ## Round 2 · Batch D — execution on hosts
 
 Real round-trips to the real VMs: run a script and read what it did, send an MDM command and read the answer,

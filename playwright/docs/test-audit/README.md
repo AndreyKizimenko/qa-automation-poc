@@ -56,9 +56,9 @@ files · ~350 test declarations · 4 projects**.
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
 | 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
-| 22 | [Label targeting](22-label-targeting.md) | 3 | premium |
+| 22 | [Label targeting](22-label-targeting.md) | 4 | premium |
 
-**441 entries** covering every test in the suite. An entry can expand into several
+**442 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (31 → 40), area 13 (29 → 47). Specs under

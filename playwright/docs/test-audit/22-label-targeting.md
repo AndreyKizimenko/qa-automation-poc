@@ -1,6 +1,6 @@
 # Label targeting — test audit
 
-**Specs covered:** 2 files · **Entries:** 3 · **Runtime tests:** 6 (LT-03's four cases collapsed into one entry) · **Project:** premium
+**Specs covered:** 3 files · **Entries:** 4 · **Runtime tests:** 7 (LT-03's four cases collapsed into one entry) · **Project:** premium
 
 This area covers Fleet deciding **which hosts** something reaches when it is scoped to labels — configuration
 profiles first (batch E of the QA Wolf round-2 migration; declarations, software, policies and reports follow)
@@ -53,6 +53,7 @@ run that timed out with 4 profiles, 4 simulations and 6 labels left behind.
 |---|---|---|---|---|
 | LT-01 | `premium/controls/os-settings/profile-label-targets.spec.ts` | macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick | UI+API | ☐ |
 | LT-02 | `premium/controls/os-settings/profile-label-targets.spec.ts` | Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off | UI+API | ☐ |
+| LT-04 | `premium/controls/os-settings/profile-declarations.spec.ts` | a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick | UI+API | ☐ |
 | LT-03 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | a {manual, dynamic} label that {a macOS profile, a declaration, a Windows profile} targets can't be deleted until the profile is gone | UI+API | ☐ |
 
 ---
@@ -191,6 +192,53 @@ refusal is what's left to guard.
 - *Coverage gaps:* the **software** version of the refusal ("Software uses this label as a custom target…") belongs with the software targeting spec. The warning icon for a broken label can't be provoked, so it's asserted absent only.
 - *Redundancy:* the upload is API-only on purpose — LT-01/02 cover targeting through the modal.
 - *Efficiency / smells:* ~12 s for all four. The Labels page lists by name, 20 a page; `locateRow` pages to the label.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### LT-04 · Premium • Controls • Configuration profiles — declarations › a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick
+
+- **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts)
+- **Grep:** `npx playwright test --project=premium profile-declarations`
+- **Project:** premium · **Scope:** the **VMs** fleet · **Hosts:** the macOS VM + two MDM-enrolled macOS simulations borrowed onto the fleet (`findMdmSimulations(…, 'darwin', 2, 4)`)
+- **Mode:** UI+API · **Isolation:** standalone; test timeout 900 s; `finally` deletes the declarations, returns the simulations, deletes the labels
+- **Preconditions:** as LT-01
+- **Data created:** manual labels `pw-dc-<nonce>-{a,b}` — a = VM + s1, b = VM + s2 — and three generated declarations `pw-dc-<nonce>-{every,all,exclude}` of Apple's no-op test type (`com.apple.configuration.management.test`, one `Echo` string), all removed in-test
+
+| declaration | target | listed on (of VM, s1, s2) |
+|---|---|---|
+| `…-every` | none — All hosts | VM, s1, s2 |
+| `…-all` | Include **all** of a, b | VM |
+| `…-exclude` | Exclude a | s2 |
+
+**Flow**
+
+1. ☐ (No user action) Resolve the hosts, move the simulations to the VMs fleet, create the labels.
+2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → **VMs**; for each row of the table: **Add profile** → choose the `.json` → (for a target) **Custom** + the Include / Exclude labels → **Add profile**.
+   - ✅ *(UI)* *"Successfully uploaded."*; the row reads **macOS, iOS, iPadOS (declaration)**; **2 labels** / **1 label**, and no label count for `…-every`.
+   - ✅ *(API)* The stored targets are exactly the ones set.
+3. ☐ (No user action) Wait for the reconciler.
+   - ✅ *(API)* Each declaration is listed on exactly the hosts in the table — polled together, ≤ 3 min.
+4. ☐ (No user action) Wait for the VM to report the two that include it.
+   - ✅ *(API)* `…-every` and `…-all` read **verified** on the VM — the device's own DDM status report (≤ 5 min; about a minute in practice).
+5. ☐ The VM's host page → **Controls** tab.
+   - ✅ *(UI)* `…-every` and `…-all` read **Verified**; no `…-exclude` row.
+   - ✅ *(API)* The listings are unchanged.
+6. ☐ Back to the profiles → hover `…-all` → **Delete** → confirm.
+   - ✅ *(API)* The VM stops listing it (≤ 3 min).
+
+**Assessment**
+- *Value:* High. Declarations keep their targeting in their own table and reach the Mac over DDM, not InstallProfile — a separate path from LT-01's. Covers QA Wolf's declarations include/exclude flow, including its "All hosts" step, with a negative half that can fail.
+- *Coverage gaps:* no on-device read — osquery has no table for a test declaration, so *verified* (the device's report) is the host-side proof. Include **any** isn't exercised for declarations.
+- *Redundancy:* the modal's target controls are LT-01's; here they're the route, not the subject.
+- *Efficiency / smells:* ~1 min.
 
 **Notes (Andrey)**
 ```
