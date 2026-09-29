@@ -41,8 +41,13 @@ single-test run is fine to just do; see the SKILL's "Re-running locally" section
 for what it costs on the shared instance):
 
 ```bash
-cd playwright && npm run test:premium -- <spec> -g "<test title>" --repeat-each=5 --workers=1
+gh run list --limit 5
+cd playwright && npx playwright test --project=premium <spec-file> -g "<test title>" \
+  --repeat-each=5 --workers=1 --output=<scratchpad>/rerun
 ```
+
+(Not `npm run test:premium -- <spec>`: that also runs the exclusive project, and its
+dependency — the whole premium project — runs in full.)
 
 Mixed pass/fail across repeats → `flaky`. Uniform failure → real; triage further.
 
@@ -126,6 +131,38 @@ element was *on its way* to appearing. When the snapshot shows a settled page in
 a different state, the timeout is just how the test noticed a real disagreement
 about state — triage the disagreement, not the timeout.
 
+## Signatures the suite has already met
+
+Each of these looked like something else at first.
+
+- **Retries fail on what the first attempt left behind.** The retries' error differs
+  from the first attempt's, and names leftover state — *"Claude arrived pinned"*,
+  *"already exists"*, a label or title that shouldn't be there. The first attempt's
+  error is the real failure; the rest is its residue. Then ask why its cleanup didn't
+  undo it: on 2026-09-29 the un-pin in the `finally` returned 200 and changed nothing.
+- **A 200 that did nothing.** A helper's write "succeeded" but the state didn't move.
+  Check the write against Fleet's activity feed (`GET /api/latest/fleet/activities`,
+  newest first by id): a real write records an activity. Playwright drops an
+  empty-string field from a `multipart` request, and Fleet reads a missing field as
+  "no change" — that was the un-pin above.
+- **A timeout whose last error is `…Target page, context or browser has been closed`.**
+  The test hung earlier, on an action against a locator that never appeared
+  (`click`, `fill`, `innerText`, `getAttribute` have no timeout of their own), and its
+  `finally` then ran on a closed context — so **its cleanup didn't happen**: look for
+  leftovers on the instance. The error-context snapshot shows where it stopped. Seen
+  as a tab whose name gained a count (*Controls 1*) and as paging a table by a link
+  its rows don't have (Labels). That's a `test-bug`, whatever the timeout suggests.
+- **The instance isn't on the build you think.** The instances redeploy the RC tag
+  nightly and a failed deploy is silent. Compare `GET /api/latest/fleet/version`'s
+  `revision` with the RC branch, and check `GET /debug/migrations` (status 2 = all
+  applied). A renumbered migration stranded both instances on 2026-09-29 → `infra-env`.
+- **`Error 1114 … The table '/tmp/#sql…' is full`** — MySQL's TempTable ceiling,
+  under concurrent `vulnerable=true` software-titles queries → `infra-env`. A
+  discovery helper that turns that 500 into `null` turns it into a silent skip.
+- **VM-spec timeouts that grow with concurrency** — installs or scripts waiting in a
+  real VM's single queue behind other specs' work → `flaky` or `infra-env`, not a
+  product defect. Check what else the VM was running in the host's Activity.
+
 ## Known-legitimate noise (don't over-report)
 
 - **Skipped tests** are usually intentional: `test.skip(!hostByOS[osKey], ...)`
@@ -137,5 +174,7 @@ about state — triage the disagreement, not the timeout.
   cascades into many downstream failures — triage the setup failure first; the
   downstream ones are usually collateral.
 - **Slow-but-passing** tests belong in the perf note, not the defect list —
-  unless one is trending toward the 60s timeout, which is a flake waiting to
-  happen and worth flagging.
+  unless one is trending toward its timeout (60 s by default; VM specs set their
+  own), which is a flake waiting to happen and worth flagging. The VM specs are
+  slow by design — minutes each, up to ~19 min for a whole file — and Playwright's
+  "Slow test file" warnings on them are expected.

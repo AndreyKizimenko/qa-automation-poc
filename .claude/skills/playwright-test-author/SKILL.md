@@ -103,8 +103,9 @@ the wrong reason, so:
 
 ### Run what you changed — the full suite once, at the end
 
-The full suite is long (~56 min on premium in CI, three quarters of it real-VM work that more workers
-don't speed up). While building, every run above is **scoped to the specs you changed**:
+The full suite is long, and most of premium's time is real-VM work that more workers don't speed up
+(current runtimes, worker counts and the nightly's schedule are in `playwright/CLAUDE.md` → **CI and the
+shared instances**). While building, every run above is **scoped to the specs you changed**:
 
 - `npx playwright test --project=premium <spec-file-names>` — and `--project=free` for anything in
   `shared/`. That runs the setup and cleanup projects (including the VM resting-state step), then
@@ -112,15 +113,16 @@ don't speed up). While building, every run above is **scoped to the specs you ch
   whose dependency is the entire main project.
 - An `exclusive/` spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` —
   by file name, not path.
-- `--workers=2` for anything on the real VMs (more stacks a VM's queue into timeouts; CI runs free at 2 and premium at 3).
+- `--workers=2` for anything on the real VMs: more stacks a VM's queue into timeouts.
 - `--output=<scratchpad>/<run-name>`, so run artifacts stay out of the repo.
 - **Before a run that touches the real VMs, check nothing else is using the instance:**
-  `gh run list --limit 5`, and stay clear of the nightly — `QA — Nightly`, about 1.5 h (Render redeploy, a 30-min wait, then each tier's gitops chain and suite), scheduled for 03:00 UTC but started 4–6.5 h late by GitHub; `gh run list` shows whether it's running. Two runs on one VM
-  corrupt each other: each VM works one queue, and each run's cleanup removes the other's installs.
-- **The full suite runs once, at the end, on CI**, as `QA — Branch run` (each tier's nightly gitops chain,
-  then its suite). **Andrey dispatches it himself**: at the end of the work, open the PR and tell him it's
-  ready. Only start one when he asks (`gh workflow run "QA — Branch run" -f branch=<branch>`, after checking
-  `gh run list`). Triage red with `playwright-run-reviewer`.
+  `gh run list --limit 5`, and stay clear of the nightly (`QA — Nightly`; it starts hours after its cron
+  time). Two runs on one VM corrupt each other: each VM works one queue, and each run's cleanup removes
+  the other's installs.
+- **The full suite runs once, at the end, on CI**, as `QA — Branch run`. **Andrey dispatches it**: at the
+  end of the work, open the PR and tell him it's ready. Only start one when he asks
+  (`gh workflow run "QA — Branch run" -f branch=<branch>`, after checking `gh run list`). Triage red with
+  `playwright-run-reviewer`.
 
 ### Docs move with the code
 

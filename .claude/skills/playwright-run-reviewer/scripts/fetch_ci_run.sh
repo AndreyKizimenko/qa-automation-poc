@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Download and extract the Playwright HTML-report artifact from a GitHub
-# Actions run, so the report parser can point at it. Prints the directory that
-# contains index.html on the last line (everything else goes to stderr).
+# Download and extract the Playwright HTML-report artifacts from a GitHub
+# Actions run, so the report parser can point at them. Prints every directory
+# that contains an index.html on stdout, one per line, the suites'
+# (`playwright-report-*`) first; everything else goes to stderr.
+#
+# A single-suite run has one report. A chained run (`QA — Nightly`,
+# `QA — Branch run`) has one per Playwright job: the two suites, six
+# gitops-verify reports and two fleetctl-CLI reports.
 #
 # Usage:
 #   fetch_ci_run.sh <run-url-or-id> [repo] [dest-dir]
@@ -43,18 +48,28 @@ if [[ -z "$DEST" ]]; then
 fi
 mkdir -p "$DEST"
 
-# Grab report-shaped artifacts (there is usually exactly one). --dir puts each
-# artifact in its own subdir named after the artifact.
-gh run download "$RUN_ID" --repo "$REPO" --pattern '*report*' --dir "$DEST" >&2 \
-  || gh run download "$RUN_ID" --repo "$REPO" --dir "$DEST" >&2
+# Grab report-shaped artifacts. --dir puts each artifact in its own subdir
+# named after the artifact. gh refuses to overwrite, so reports already in
+# DEST (an earlier triage of the same run) are reused as they are.
+if find "$DEST" -maxdepth 2 -name index.html | grep -q .; then
+  log "Reusing the reports already in $DEST"
+else
+  gh run download "$RUN_ID" --repo "$REPO" --pattern '*report*' --dir "$DEST" >&2 \
+    || gh run download "$RUN_ID" --repo "$REPO" --dir "$DEST" >&2
+fi
 
-# Find the directory holding index.html (one level down in the artifact subdir).
-INDEX_DIR="$(find "$DEST" -maxdepth 2 -name index.html -print -quit | xargs -I{} dirname {})"
-if [[ -z "$INDEX_DIR" ]]; then
+# Every directory holding an index.html, one level down in its artifact
+# subdir — or at the top, when only one artifact was downloaded and gh put it
+# there directly.
+REPORTS="$(find "$DEST" -maxdepth 2 -name index.html -exec dirname {} \; | sort)"
+if [[ -z "$REPORTS" ]]; then
   log "No index.html found under $DEST. Contents:"
   find "$DEST" -maxdepth 2 >&2
   exit 1
 fi
 
-log "Report dir:"
-echo "$INDEX_DIR"
+log "Report dirs (suites first):"
+{
+  echo "$REPORTS" | grep '/playwright-report-' || true
+  echo "$REPORTS" | grep -v '/playwright-report-' || true
+}
