@@ -111,7 +111,7 @@ usually see **Upcoming** flash "told Fleet to install …" and empty again; that
 
 **8. Runtime.** These six specs are the bulk of the premium nightly's **~40 min** (39.6 min at CI's two
 workers on 2026-09-28, measured *before* the SWH-14 restructure, against a ~15 min nightly before batch D and
-a 60 min job limit); each test takes **3–10 min**, SWH-14's two round-trips at the top of that. CI retries
+a 120-min job limit — Playwright's CI `globalTimeout` stops the run at 100 min with its report); each test takes **3–10 min**, SWH-14's two round-trips at the top of that. CI retries
 twice, so a real failure here can cost half an hour.
 
 The two **large-upload** tests (SWH-11/12) are the exception to all of the above: they never touch a host,

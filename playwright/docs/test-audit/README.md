@@ -190,5 +190,5 @@ Findings from round 2 that change how existing entries should be judged, not jus
   on, no `script_execution_timeout` override, the suite's own queued items cancelled, and on premium every
   durable fixture uninstalled. An entry that assumes a dead run leaves a fixture installed for the next run is
   judging a hazard the preflight now removes.
-- **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 60-min job limit.
-  An entry whose verdict is "expand" on a VM-bound spec should price the minutes.
+- **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 120-min job limit.
+  In CI Playwright stops the run at 100 min (`globalTimeout`) and still writes the report. An entry whose verdict is "expand" on a VM-bound spec should price the minutes.

@@ -97,6 +97,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // In CI the whole run stops at 100 min — under the job's 120-min limit — so a
+  // run that grows too long ends with its remaining tests marked not run and the
+  // HTML report written, instead of being killed by the job timeout with no
+  // report at all. The real-VM specs are what make a run long: each VM works one
+  // queue, and a retried VM test can cost 5–15 min.
+  globalTimeout: process.env.CI ? 100 * 60_000 : 0,
   // CI runs at 2 — the shared Fleet QA instance has limited concurrency
   // headroom, and higher worker counts there surface as flaky navigation
   // timeouts under load even when the test logic is correct. Local dev defaults

@@ -81,9 +81,10 @@ that on its Library, not only on the one inside.
 
 ### Traps this batch will hit
 
-- **Runtime.** The premium nightly is ~40 min of a 60-min job limit after D, and Andrey chose to keep the
-  VM-bound specs in the main suite for now. This batch adds more. Measure `WORKERS=2 npm run test:premium` at
-  the end and report it; if it passes ~50 min, raise it rather than trimming coverage.
+- **Runtime.** The premium nightly is ~40 min after D, and Andrey chose to keep the VM-bound specs in the main
+  suite for now. The job limit is 120 min, and in CI Playwright stops the run at 100 min (`globalTimeout`) so a
+  run that grows too long still ends with its report. This batch adds more. Measure `WORKERS=2 npm run
+  test:premium` at the end and report it; if it passes ~80 min, raise it rather than trimming coverage.
 - **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
   4.92.1 against the 4.93 RC is fine — it applied `vms.yml` and `qa.yml` correctly on 2026-09-28; what silently
   broke gitops `software:` was the 4.85 client CI used to fall back to. If a flow needs output only the RC's
