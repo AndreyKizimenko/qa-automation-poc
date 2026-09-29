@@ -314,7 +314,7 @@ what you write, and the docs have to move with the code or the next audit pays f
   can't, and say so.
 - **Before any run that touches the real VMs, check nothing else is:** `gh run list --limit 5`. The nightly
   is `QA — Nightly` (`qa-nightly.yml`): a Render redeploy, a 30-min wait, then each tier's gitops chain and suite,
-  about 1.5 h in all. It's scheduled for 05:00 UTC, but GitHub has been starting this repo's scheduled runs
+  about 1.5 h in all. It's scheduled for 03:00 UTC, but GitHub has been starting this repo's scheduled runs
   4–6.5 h late since 2026-08-27, so `gh run list` right before you run is the only way to know. Two runs on the same VMs corrupt each other — one queue per VM, and
   shared fixtures each run's cleanup removes. CI's concurrency groups only keep CI from colliding with itself.
 

@@ -138,7 +138,7 @@ it costs no disk and no time.
   auto-update cron for the title and stops the version history SWH-10 needs from growing. If you pin during
   SWH-10, unpin before you walk away (title → **Versions** → latest). `cleanup-setup` clears stranded pins on
   the QA and VMs fleets at the start of every premium run, but not between your clicks.
-- **Don't run a manual flow while the nightly runs.** `QA — Nightly` is scheduled for 05:00 UTC, but GitHub has
+- **Don't run a manual flow while the nightly runs.** `QA — Nightly` is scheduled for 03:00 UTC, but GitHub has
   been starting it 4–6.5 h late since 2026-08-27, so check `gh run list`. It takes about 1.5 h: a Render redeploy, a 30-min wait, then the gitops apply, which
   re-applies `vms.yml` and deletes anything on the VMs fleet it doesn't declare — a `fleet-pw-*` title you
   uploaded included — and then the premium suite, which runs these same flows on the same VMs with the same

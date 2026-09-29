@@ -10,9 +10,11 @@ name: QA — Nightly
 #     ├─► gitops premium ─► Playwright premium (whatever gitops did)
 #     └─► gitops free    ─► Playwright free    (whatever gitops did)
 #
-# Scheduled for 05:00 UTC (12 AM CDT). GitHub starts scheduled runs late — since
-# 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — and
-# the chain doesn't mind: every step waits on the one before it, not on a clock.
+# Scheduled for 03:00 UTC (10 PM CDT). GitHub starts scheduled runs late — since
+# 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — so it
+# lands around 1–4:30 AM Central and is done before morning. The chain doesn't
+# mind the lag: every step waits on the one before it, not on a clock. If GitHub
+# catches up, it runs at 10 PM Central.
 # For a start at an exact time, an outside scheduler can call workflow_dispatch.
 #
 #   gh workflow run "QA — Nightly"
@@ -31,7 +33,7 @@ on:
         type: number
         default: 30
   schedule:
-    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (11 PM CST); GitHub starts it hours late
+    - cron: '0 3 * * *' # 03:00 UTC = 10 PM CDT (9 PM CST); GitHub starts it hours late
 
 concurrency:
   group: qa-nightly-chain

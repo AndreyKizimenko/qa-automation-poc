@@ -115,7 +115,7 @@ speed up). While building, every run above is **scoped to the specs you changed*
 - `--workers=2` for anything on the real VMs (CI's shape; more stacks a VM's queue into timeouts).
 - `--output=<scratchpad>/<run-name>`, so run artifacts stay out of the repo.
 - **Before a run that touches the real VMs, check nothing else is using the instance:**
-  `gh run list --limit 5`, and stay clear of the nightly — `QA — Nightly`, about 1.5 h (Render redeploy, a 30-min wait, then each tier's gitops chain and suite), scheduled for 05:00 UTC but started 4–6.5 h late by GitHub; `gh run list` shows whether it's running. Two runs on one VM
+  `gh run list --limit 5`, and stay clear of the nightly — `QA — Nightly`, about 1.5 h (Render redeploy, a 30-min wait, then each tier's gitops chain and suite), scheduled for 03:00 UTC but started 4–6.5 h late by GitHub; `gh run list` shows whether it's running. Two runs on one VM
   corrupt each other: each VM works one queue, and each run's cleanup removes the other's installs.
 - **The full suite runs once, at the end, on CI:** `gh workflow run "QA — Branch run" -f branch=<branch>`
   — each tier's nightly gitops chain, then its suite. Triage red with `playwright-run-reviewer`.

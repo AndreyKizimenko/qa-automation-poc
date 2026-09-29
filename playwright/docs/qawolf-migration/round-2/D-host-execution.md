@@ -100,7 +100,7 @@ start there rather than polling UI copy.
   [README §5](README.md#5-test-hosts--use-the-real-vms-and-never-lock-yourself-out).
 - **Free coverage is a standing goal.** Ask per flow whether free has the same surface; `shared/` when
   identical, an explicit `free/` sibling when not, never `if (isPremium)`.
-- **The nightly (`QA — Nightly`) is scheduled for 05:00 UTC** but GitHub starts it hours late, and it runs about 1.5 h. `gh run list` before a long verification run.
+- **The nightly (`QA — Nightly`) is scheduled for 03:00 UTC** but GitHub starts it hours late, and it runs about 1.5 h. `gh run list` before a long verification run.
 - **`fleetctl` must stay within a minor of the server.** The suite ran 4.85.1 against 4.93 for two months and it
   silently no-op'd a whole gitops `software:` section. One minor behind (4.92.1 against the 4.93 RC) applies
   correctly.
