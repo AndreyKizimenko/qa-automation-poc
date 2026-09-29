@@ -219,7 +219,7 @@ loadtest project touches them, or nothing does) ✅:
    exactly the entities GV-08…22 verify, while the 05:00 gitops chain is still mid-flight.
    Worth confirming against recent run timings — if real, gitops-verify results are partly
    noise. **Resolved 2026-09-29:** `QA — Nightly` (`qa-nightly.yml`) starts each tier's suite
-   only once its gitops chain has finished green, so `cleanup-setup` can't run mid-verify.
+   only once its gitops chain has finished, so `cleanup-setup` can't run mid-verify.
 
 7. **Write down which flows are permanently manual.** Setup experience / DEP, real MDM
    commands, install/uninstall on a device. Right now their absence looks like a gap in the

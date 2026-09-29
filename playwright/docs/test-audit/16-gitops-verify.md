@@ -947,4 +947,4 @@ is indistinguishable.
    GV-08..22 compare. Either gate the Playwright suites on the gitops chain completing (`workflow_run`) or
    fold verification into a single orchestrator, so a "drift" failure always means drift and never a race.
    **Resolved 2026-09-29:** the single orchestrator is `QA — Nightly` (`qa-nightly.yml`) — a tier's suite
-   starts only after its gitops chain finishes green.
+   starts only after its gitops chain has finished.
