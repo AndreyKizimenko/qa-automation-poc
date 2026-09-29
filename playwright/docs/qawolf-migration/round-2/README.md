@@ -306,7 +306,7 @@ what you write, and the docs have to move with the code or the next audit pays f
 - An exclusive spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` — by file name,
   not path.
 - `--repeat-each=5` for anything timing-sensitive, scoped the same way. Keep **`--workers=2`** for anything on
-  the real VMs: it's CI's shape, and 4 workers stack a VM's queue deep enough to time tests out.
+  the real VMs: close to CI's shape (free 2, premium 3), and 4 workers stack a VM's queue deep enough to time tests out.
 - Write artifacts outside the repo: `--output=<scratchpad>/<run-name>`.
 - **The full suite runs once, at the end of the batch, on CI**:
   `gh workflow run "QA — Branch run" -f branch=<branch>` — each tier's nightly gitops chain, then its suite,

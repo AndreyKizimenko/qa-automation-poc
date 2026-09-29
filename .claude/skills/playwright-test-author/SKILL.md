@@ -112,7 +112,7 @@ speed up). While building, every run above is **scoped to the specs you changed*
   whose dependency is the entire main project.
 - An `exclusive/` spec: `npx playwright test --project=premium-exclusive <file-name> --no-deps` —
   by file name, not path.
-- `--workers=2` for anything on the real VMs (CI's shape; more stacks a VM's queue into timeouts).
+- `--workers=2` for anything on the real VMs (more stacks a VM's queue into timeouts; CI runs free at 2 and premium at 3).
 - `--output=<scratchpad>/<run-name>`, so run artifacts stay out of the repo.
 - **Before a run that touches the real VMs, check nothing else is using the instance:**
   `gh run list --limit 5`, and stay clear of the nightly — `QA — Nightly`, about 1.5 h (Render redeploy, a 30-min wait, then each tier's gitops chain and suite), scheduled for 03:00 UTC but started 4–6.5 h late by GitHub; `gh run list` shows whether it's running. Two runs on one VM
