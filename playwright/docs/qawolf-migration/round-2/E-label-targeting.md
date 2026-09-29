@@ -234,6 +234,16 @@ is: **uploading a profile is delivering it.**
   table, and `runRowAction` reopens the Actions menu until the option shows (it can close under a re-render).
   Both were behind `software-label-targets`' two timeouts in a 5× repeat.
 
+### Fixed on the way: an un-pin that never un-pinned (found 2026-09-29)
+
+The 09-29 premium nightly failed D's `update-on-host` Claude walk. `setPinnedVersion(…, '')` — the walk's own
+un-pin, its `finally`, `version-pinning`'s restore and the cleanup step that clears stranded pins — had never
+changed anything: Playwright 1.61 leaves an empty-string field out of a `multipart` request (a `FormData` one
+too), and Fleet reads a missing `version` as "no change", answering 200. The walk only reaches that path once
+Fleet has cached two Claude builds, which first happened that morning. The helper now writes the multipart
+body by hand and reads the pin back; the two pins the run stranded (VMs and QA) were cleared by hand. Verified:
+`version-pinning` 2/2, and the Claude group with every un-pin in the activity feed.
+
 ### Two OS updates specs run in `exclusive/`
 
 `macos-updates` and `ddm-conflict` both set and clear Workstations' OS update settings. Side by side under

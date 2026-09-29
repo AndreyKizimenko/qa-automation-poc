@@ -182,6 +182,11 @@ covers delivery, Resend, removal and a declaration on the free Mac.
 guards that refusal for a `.mobileconfig`, a declaration and a Windows `.xml`, manual and dynamic labels, and the
 release once the profile is gone. On Workstations, so nothing is delivered.
 
+**Version pins that never cleared** — `helpers/api/fma.ts` (fixed). `setPinnedVersion(…, '')` sent no `version`
+field at all — Playwright drops an empty-string multipart field — so Fleet changed nothing and D's Claude walk,
+`version-pinning` and the stranded-pin cleanup all left their pins in place. It failed the 09-29 nightly, the
+first with two Claude builds cached. The body is now written by hand and the pin read back.
+
 **The Labels page past page 1** — `LabelsPage` and `Pagination` (fixed). About 19 visible labels now sort ahead
 of `pw-`, so a spec's second or third label lands on page 2. `Pagination` compared the first row's *link* to
 detect the page change; Labels rows have none, and reading a missing link has no timeout — the lookup hung
