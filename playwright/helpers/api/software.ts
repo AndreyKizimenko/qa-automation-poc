@@ -351,6 +351,16 @@ export async function hostsOfferedTitle(
  * likely to be unrenderable, which is why callers pass the CVEs in the order
  * the page renders them and click the one this returns instead of the first.
  *
+ * **Probe the page's scope.** The detail page asks for the CVE within the fleet
+ * it's scoped to (`?fleet_id=`), and Fleet answers **204** when the CVE is known
+ * but no host *in that fleet* is affected — which the page renders as the same
+ * empty state. That happens when a fleet-scoped software page lists a version
+ * whose hosts were only passing through the fleet (a simulation borrowed onto
+ * VMs by a label-targeting spec): Fleet's per-fleet software list keeps it until
+ * its hourly refresh, while the per-fleet vulnerability counts already don't. So
+ * callers pass the page's `fleetId` (`fleetIdFromUrl(page.url())`), and only a
+ * 200 counts — `res.ok()` would take the 204.
+ *
  * Probes sequentially and stops at the first hit — the renderable CVE is
  * usually the first or second row, and these run against a shared QA instance.
  *
@@ -361,14 +371,46 @@ export async function hostsOfferedTitle(
 export async function findRenderableCve(
   request: APIRequestContext,
   cves: string[],
+  fleetId: number | undefined,
 ): Promise<string | null> {
   for (const cve of cves) {
     const res = await request.get(apiUrl(`vulnerabilities/${cve}`), {
       headers: authHeaders(),
+      params: fleetId === undefined ? undefined : { fleet_id: String(fleetId) },
     });
-    if (res.ok()) return cve;
+    if (res.status() === 200) return cve;
   }
   return null;
+}
+
+/**
+ * The vulnerable versions of one software title a host has installed, as Fleet
+ * reports them for the host (`GET /hosts/:id/software?vulnerable=true`). A host
+ * flow that means to follow *this host's* software clicks one of these on the
+ * title page, rather than the title's first vulnerable version, which in a
+ * fleet-scoped view can belong to other hosts.
+ */
+export async function hostVulnerableVersions(
+  request: APIRequestContext,
+  hostId: number,
+  softwareName: string,
+): Promise<string[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { vulnerable: 'true', query: softwareName, per_page: '100' },
+  });
+  await expect(res, `Failed to read host ${hostId}'s vulnerable software`).toBeOK();
+  const software = ((await res.json()).software ?? []) as Array<{
+    name: string;
+    display_name?: string;
+    installed_versions?: Array<{ version: string; vulnerabilities?: unknown[] | null }>;
+  }>;
+  // The host's table links a title by its display name when it has one.
+  return software
+    .filter((s) => s.name === softwareName || s.display_name === softwareName)
+    .flatMap((s) => s.installed_versions ?? [])
+    .filter((v) => (v.vulnerabilities ?? []).length > 0)
+    .map((v) => v.version);
 }
 
 /** Scripts an upload can carry. `.exe` and `.tar.gz` require both install and uninstall. */

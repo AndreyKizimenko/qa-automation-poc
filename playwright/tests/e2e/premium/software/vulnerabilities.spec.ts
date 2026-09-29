@@ -22,9 +22,11 @@ import {
   findHostByPlatform,
   findVulnerableSoftwareBySources,
   findRenderableCve,
+  hostVulnerableVersions,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
+import { fleetIdFromUrl } from '@helpers/team-scope';
 import { expectRowHasVulnData, expectSingleCve, assertVulnTooltip } from '@helpers/vuln';
 
 test.describe.configure({ mode: 'default' });
@@ -172,6 +174,7 @@ for (const osKey of OS_KEYS) {
     const cveText = await findRenderableCve(
       request,
       await softwareVersionDetail.cveNames(),
+      fleetIdFromUrl(page.url()),
     );
     test.skip(
       !cveText,
@@ -271,10 +274,16 @@ for (const osKey of OS_KEYS) {
     await hostDetails.applyVulnerableFilter();
     await expect(hostDetails.table.firstRow).toBeVisible();
 
-    await hostDetails.clickFirstSoftware();
+    const softwareName = await hostDetails.clickFirstSoftware();
 
     await softwareTitleDetail.waitForReady();
-    await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
+    // Follow the version this host has. The title page lists every version in
+    // the fleet's scope, and a fleet-scoped list can still carry a version whose
+    // hosts only passed through (a simulation a label-targeting spec borrowed
+    // onto the fleet): its first vulnerable row isn't necessarily this host's.
+    const [version] = await hostVulnerableVersions(request, host.id, softwareName);
+    expect(version, `${host.displayName} should report a vulnerable version of ${softwareName}`).toBeDefined();
+    await softwareTitleDetail.clickVersion(version);
 
     await softwareVersionDetail.waitForReady();
     // Fleet links every CVE it has matched to this version, but 404s the
@@ -285,6 +294,7 @@ for (const osKey of OS_KEYS) {
     const cveText = await findRenderableCve(
       request,
       await softwareVersionDetail.cveNames(),
+      fleetIdFromUrl(page.url()),
     );
     test.skip(
       !cveText,
@@ -326,7 +336,7 @@ test('Vulnerabilities — a CVE hands off to the hosts running each affected ver
   await softwareTitles.gotoVulnerabilitiesTab();
 
   const listed = await vulnerabilitiesList.cveNames();
-  const cve = await findRenderableCve(request, listed);
+  const cve = await findRenderableCve(request, listed, fleetIdFromUrl(page.url()));
   test.skip(!cve, 'No listed CVE has a renderable detail page — fleetdm/fleet#49913');
 
   await cveDetail.goto(cve!);

@@ -445,8 +445,13 @@ export class HostDetailsPage {
     return Number(match[1].replace(/,/g, ''));
   }
 
-  async clickFirstSoftware(): Promise<void> {
-    await this.table.firstRowWithLink.locator('td').first().getByRole('link').first().click();
+  /** Clicks the first software row's title link and returns its name, as the table shows it. */
+  async clickFirstSoftware(): Promise<string> {
+    const link = this.table.firstRowWithLink.locator('td').first().getByRole('link').first();
+    await expect(link).toBeVisible();
+    const name = (await link.innerText()).trim();
+    await link.click();
+    return name;
   }
 
   /**

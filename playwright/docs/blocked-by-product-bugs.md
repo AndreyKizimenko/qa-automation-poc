@@ -108,6 +108,15 @@ in page order and returns the first whose detail endpoint answers; the flow skip
 only in the genuine dead end where *every* CVE on the version 404s. The two
 `osKey === 'deb'` skips are gone.
 
+**Probed in the page's scope (2026-09-29).** The CVE page asks
+`GET /vulnerabilities/<cve>?fleet_id=<scope>`, and Fleet answers 204 — the same empty
+state, and not this bug — when no host in that fleet is affected. A fleet-scoped title
+page can still list a version whose hosts only passed through the fleet (simulations
+a label-targeting spec borrowed onto VMs; Fleet refreshes the per-fleet software list
+hourly). The probe now passes the page's `fleet_id` and accepts only a 200, and the
+host flows follow the host's own version. Not a Fleet bug: two aggregates refreshing
+on their own schedules.
+
 Verified 2026-09-22 against both live instances: free's whole
 `software/vulnerabilities` spec passes 11/11 with CVE-2026-88097 still 404ing (so
 the probe is doing real work), and the two premium deb variants pass unskipped.

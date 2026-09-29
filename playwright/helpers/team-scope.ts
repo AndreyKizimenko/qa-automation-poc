@@ -42,3 +42,14 @@ export function fleetIdFor(scope: TeamScope, workstationsFleetId: number): numbe
   if (scope === 'Unassigned') return 0;
   return undefined;
 }
+
+/**
+ * The fleet a page is scoped to, read off its `fleet_id` query param: a number
+ * (`0` for Unassigned), or `undefined` when the URL carries none (free, and the
+ * premium "All fleets" views). For asking the API the same scoped question the
+ * page asked.
+ */
+export function fleetIdFromUrl(url: string): number | undefined {
+  const raw = new URL(url).searchParams.get('fleet_id');
+  return raw === null || raw === '' ? undefined : Number(raw);
+}

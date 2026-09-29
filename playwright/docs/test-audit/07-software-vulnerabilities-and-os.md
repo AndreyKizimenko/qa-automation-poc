@@ -125,6 +125,18 @@ What this means when auditing these entries:
 - **Unblock condition:** the detail endpoint renders matched-but-unenriched CVEs.
   Then drop `findRenderableCve` and click the first row.
 
+**The probe asks the page's scope (2026-09-29).** The CVE page requests
+`GET /vulnerabilities/<cve>?fleet_id=<scope>`, and Fleet answers **204** when the CVE is
+known but no host in that fleet is affected — the same *"Vulnerability not detected"*
+screen. A fleet-scoped title page can list a version whose hosts were only passing
+through: batch E's label-targeting specs borrow simulations onto VMs, and Fleet's
+per-fleet software list keeps their version until its hourly refresh while the
+per-fleet vulnerability counts already don't. That failed the premium Linux host flow
+in PR #72's branch run on CVE-2026-61898 (enriched, 200 unscoped, 204 on VMs). So the
+probe passes the page's `fleet_id` (`fleetIdFromUrl(page.url())`) and accepts only a
+200, and the host flows (SWV-07, SWV-14) click the version **this host** has
+(`hostVulnerableVersions`) rather than the title's first vulnerable version.
+
 Separately, SWV-01 remains a hard `test.skip` for
 [fleetdm/fleet#50059](https://github.com/fleetdm/fleet/issues/50059) (`vulnerable=true`
 is not fleet-scoped). That one is a real skip, not a workaround — see its entry.
@@ -228,7 +240,7 @@ other:
    - ✅ *(UI)* Throws `No version with vulnerabilities found on this software title` if every version reads `---` — `clickFirstVersionWithVulnerabilities` ([`SoftwareTitleDetailPage.ts:56`](../../pages/software/SoftwareTitleDetailPage.ts)).
 5. ☐ On the version page, read **every** CVE link, then click one whose detail page actually answers.
    - ✅ *(UI)* CVE table has a row and each link text matches `^CVE-\d{4}-\d+$` — `SoftwareVersionDetailPage.cveNames`.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>` in page order and returns the first OK one — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order and returns the first that answers 200 — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
    - ☐ Click that CVE — `SoftwareVersionDetailPage.clickCve(cveText)`.
 6. ☐ Land on the CVE detail page.
    - ✅ *(UI)* URL matches `/software/vulnerabilities/CVE-`.
@@ -386,9 +398,10 @@ other:
    - ✅ *(UI)* Trigger enabled; URL contains `vulnerable=true`.
    - ✅ *(UI)* A first row is visible after filtering.
 5. ☐ Click the first software title in the Name column.
-6. ☐ On the title page, click the first version whose **Vulnerabilities** cell isn't `---`; on the version page read every CVE link and click one whose detail page answers.
-   - ✅ *(UI)* Versions table rendered; every CVE link matches the CVE pattern — `cveNames()`; throws if no vulnerable version exists.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>` in page order — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+6. ☐ On the title page, click the version **this host** has installed (the vulnerable one); on the version page read every CVE link and click one whose detail page answers.
+   - ✅ *(API)* `hostVulnerableVersions` reads the host's vulnerable versions of the title it clicked (`GET /hosts/:id/software?vulnerable=true`); the test fails if the host reports none. The title page lists every version in the fleet's scope, which can include hosts only passing through the fleet.
+   - ✅ *(UI)* That version's link is on the title page; versions and CVE tables rendered; every CVE link matches the CVE pattern — `cveNames()`.
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
 7. ☐ Land on the CVE detail page.
    - ✅ *(UI)* URL `/software/vulnerabilities/CVE-`; `<h1>` = CVE; **Detected** + **Affected hosts**; **Visit NVD page** href exact; vulnerable-software table has a row (no NVD click).
 
@@ -574,7 +587,7 @@ Identical to SWV-03 with the team-dropdown step removed:
    - ✅ *(UI)* A row is visible after typing (⚠️ not asserted to be the searched title).
 3. ☐ Click the first version whose **Vulnerabilities** cell isn't `---`; read every CVE link and click one whose detail page answers.
    - ✅ *(UI)* Versions table rendered; every CVE link matches the CVE pattern; throws if no vulnerable version.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>` in page order — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
 4. ☐ CVE detail page.
    - ✅ *(UI)* URL `/software/vulnerabilities/CVE-`; `<h1>` = CVE; **Detected** + **Affected hosts** labels; **Visit NVD page** href exact; **macOS variant** clicks it and asserts the new tab's URL; CVE-page software table has a row.
 
@@ -648,8 +661,9 @@ Identical to SWV-07:
 2. ☐ Click **Software** — ✅ *(UI)* rows-or-empty settled.
 3. ☐ macOS: switch to **Full inventory** — ✅ *(UI)* search box visible first; URL `macos_applications=false`; ✅ *(UI)* first row visible.
 4. ☐ **Add filters** → **Vulnerable software** → **Apply** — ✅ *(UI)* URL `vulnerable=true`; first row visible.
-5. ☐ Click the first software title → first vulnerable version → a CVE whose detail page answers.
-   - ✅ *(UI)* Tables rendered at each hop; every CVE link matches the pattern; throws if no vulnerable version.
+5. ☐ Click the first software title → the version this host has installed (`hostVulnerableVersions`) → a CVE whose detail page answers.
+   - ✅ *(API)* the host reports a vulnerable version of that title (else the test fails).
+   - ✅ *(UI)* Tables rendered at each hop; the host's version is linked on the title page; every CVE link matches the pattern.
    - ☐ *(no user action)* `findRenderableCve` probe — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
 6. ☐ CVE detail — ✅ *(UI)* URL, heading, **Detected**, **Affected hosts**, NVD href, software-table row.
 
@@ -816,7 +830,7 @@ other:
 2. ☐ Read every CVE identifier on page 1 — `VulnerabilitiesListPage.cveNames()`.
    - ✅ *(UI)* The first CVE link is visible before the read.
 3. ☐ (No user action) pick one whose detail page answers.
-   - ✅ *(API)* `findRenderableCve` issues `GET /vulnerabilities/<cve>` per listed id, in page order, and keeps the first OK one. **Skips the test** if none answers.
+   - ✅ *(API)* `findRenderableCve` issues `GET /vulnerabilities/<cve>?fleet_id=<the list's scope>` per listed id, in page order, and keeps the first that answers 200. **Skips the test** if none answers.
 4. ☐ Open that CVE's detail page — `CveDetailPage.goto(cve)` (direct URL, *not* a click from the list).
    - ✅ *(UI)* `<h1>` equals the CVE id (10 s budget — the page hydrates from a slow enrichment API).
    - ✅ *(UI)* A level-2 **Vulnerable software** heading is visible.
@@ -916,7 +930,7 @@ other:
 Identical to SWV-18 with the team-dropdown step removed:
 
 1. ☐ Open **Software → Inventory** (via URL) → click the **Vulnerabilities** tab — ✅ *(UI)* URL `/software/vulnerabilities`, table has a row.
-2. ☐ Read every listed CVE; ✅ *(API)* `findRenderableCve` picks the first whose detail page answers (**skip** if none does).
+2. ☐ Read every listed CVE; ✅ *(API)* `findRenderableCve` picks the first whose detail page answers 200 in the list's scope (**skip** if none does).
 3. ☐ Open that CVE's detail page by URL — ✅ *(UI)* `<h1>` = CVE; **Vulnerable software** heading; table has a row.
 4. ☐ ✅ *(UI)* **Affected hosts** parses to > 0; the first software row's **Hosts** is > 0.
 5. ☐ Hover the row, click **View all hosts** — ✅ *(UI)* URL `/hosts/manage?…software_version_id=\d+`.
