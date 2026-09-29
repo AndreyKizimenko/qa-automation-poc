@@ -1,10 +1,12 @@
 # Hosts — premium — test audit
 
-**Specs covered:** 6 files · **Entries:** 12 (16 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
+**Specs covered:** 8 files · **Entries:** 16 (21 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
 
-Premium-only host flows: moving hosts between fleets (bulk and single-host, per role), deleting hosts (bulk, from host details, and as a team admin), drilling a report card into one host's stored results, and the role/platform gating of the hosts-list CTAs and the host Actions menu. All six specs resolve their hosts through the API at runtime — never by name — because the premium QA instance is ~300 osquery-perf **simulations** plus one or two real MDM-enrolled VMs. Mutating specs draw disjoint slices of the simulated pool via `findSimulatedHostIds(platform, count, offset)`; read-only device-fidelity specs take the real VM via the `liveMacosHost` worker fixture.
+Premium-only host flows: moving hosts between fleets (bulk and single-host, per role), deleting hosts (bulk, from host details, and as a team admin), drilling a report card into one host's stored results, the role/platform gating of the hosts-list CTAs and the host Actions menu, a host's **IdP username** (the host details **User** card, by UI and API, and its role gate), and the **Recovery Lock password** on the real Mac. All eight specs resolve their hosts through the API at runtime — never by name — because the premium QA instance is ~300 osquery-perf **simulations** plus three real VMs. Mutating specs draw disjoint slices of the simulated pool via `findSimulatedHostIds(platform, count, offset)` (transfer, delete) or `findSimulations(platform, count, offset)` (the IdP-username spec, which starts 40 hosts further in); read-only device-fidelity specs take the real VM via the `liveMacosHost` worker fixture. The Recovery Lock spec takes the same VM and **changes its state**.
 
 > **Destructive-area warning.** [`host-delete.spec.ts`](../../tests/e2e/premium/hosts/host-delete.spec.ts) permanently deletes **4 online simulated hosts per full-file run** (2 macOS + 1 macOS + 1 Windows). Nothing in the suite restores them. See [HOSTP-06](#hostp-06--premium--hosts--bulk-delete--deletes-the-selected-hosts) for the exact restore procedure and cost.
+
+> **Real-VM warning.** [`recovery-lock.spec.ts`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts) turns on Recovery Lock enforcement for the **VMs** fleet, so Fleet **sets, rotates and clears a Recovery Lock password on the real macOS VM**. It is the one sanctioned exception to `playwright/CLAUDE.md`'s rule against Recovery Lock on the VMs fleet (approved 2026-09-29), first run live 2026-09-29 (green with dependencies, headed and 5× repeated on one worker). See [HOSTP-16](#hostp-16--premium--hosts--recovery-lock-password--enforce-on-the-vms-fleet-verify-view-rotate-and-clear-on-the-mac) before running it by hand.
 
 ## Contents
 
@@ -13,7 +15,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-01 | `premium/hosts/bulk-transfer.spec.ts` | bulk transfer › transfers the selected hosts to another fleet | UI+API | ☐ |
 | HOSTP-02 | `premium/hosts/bulk-transfer.spec.ts` | bulk transfer › fleet dropdown filters to a single match as you type | UI | ☐ |
 | HOSTP-03 | `premium/hosts/bulk-transfer.spec.ts` | bulk transfer › a full page of selections offers to widen past the page | UI | ☐ |
-| HOSTP-04 | `premium/hosts/host-transfer-permissions.spec.ts` | single-host transfer by role › global admin / global maintainer | UI+API | ☐ |
+| HOSTP-04 | `premium/hosts/host-transfer-permissions.spec.ts` | single-host transfer by role › global admin / global maintainer / global technician | UI+API | ☐ |
 | HOSTP-05 | `premium/hosts/host-transfer-permissions.spec.ts` | single-host transfer by role › team admin is not offered Transfer | UI | ☐ |
 | HOSTP-06 | `premium/hosts/host-delete.spec.ts` | bulk delete › deletes the selected hosts **(destructive)** | UI+API | ☐ |
 | HOSTP-07 | `premium/hosts/host-delete.spec.ts` | delete by role › team admin can delete on a fleet they administer **(destructive)** | UI+API | ☐ |
@@ -22,6 +24,10 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-10 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › global-admin / global-maintainer see all three CTAs | UI | ☐ |
 | HOSTP-11 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › global observer sees only Export hosts | UI | ☐ |
 | HOSTP-12 | `premium/hosts/mdm-actions-availability.spec.ts` | MDM action availability › macOS / Windows / Ubuntu matrix | UI | ☐ |
+| HOSTP-13 | `premium/hosts/host-idp-username.spec.ts` | IdP username › an admin adds an IdP username on the User card, then removes it | UI+API | ☐ |
+| HOSTP-14 | `premium/hosts/host-idp-username.spec.ts` | IdP username › the device_mapping API sets and removes the IdP username | UI+API | ☐ |
+| HOSTP-15 | `premium/hosts/host-idp-username.spec.ts` | IdP username › a global observer is not offered Add user | UI | ☐ |
+| HOSTP-16 | `premium/hosts/recovery-lock.spec.ts` | Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac **(real macOS VM)** | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API**, **PERF**.
 
@@ -149,19 +155,19 @@ other:
 
 ---
 
-### HOSTP-04 · Premium • Hosts • single-host transfer by role › a global admin / global maintainer can transfer a host to another fleet
+### HOSTP-04 · Premium • Hosts • single-host transfer by role › a global admin / global maintainer / global technician can transfer a host to another fleet
 
 - **File:** [`playwright/tests/e2e/premium/hosts/host-transfer-permissions.spec.ts`](../../tests/e2e/premium/hosts/host-transfer-permissions.spec.ts)
-- **Grep:** `npx playwright test -g "can transfer a host to another fleet"` (two runtime tests: `a global admin can transfer a host to another fleet`, `a global maintainer can transfer a host to another fleet`)
-- **Project:** premium · **Roles:** `global-admin` (host index 0), `global-maintainer` (host index 1) · **Destination:** the **QA** fleet
+- **Grep:** `npx playwright test -g "can transfer a host to another fleet"` (three runtime tests: `a global admin can transfer a host to another fleet`, `a global maintainer can transfer a host to another fleet`, `a global technician can transfer a host to another fleet`)
+- **Project:** premium · **Roles:** `global-admin` (host index 0), `global-maintainer` (host index 1), `global-technician` (host index 2; QA Wolf's `technician-role-can-transfer-hosts-between-fleets`, round 2 batch F) · **Destination:** the **QA** fleet
 - **Mode:** UI+API · **Isolation:** parallel; each role claims its own host by index; `finally` restores
-- **Preconditions:** static users `global-admin@fleetdm.com` / `global-maintainer@fleetdm.com` provisioned with `FLEET_STATIC_USER_PASSWORD`; ≥2 online simulated **Windows** hosts; QA fleet exists
+- **Preconditions:** static users `global-admin@fleetdm.com` / `global-maintainer@fleetdm.com` / `global-technician@fleetdm.com` provisioned with `FLEET_STATIC_USER_PASSWORD`; ≥3 online simulated **Windows** hosts; QA fleet exists
 - **Data created:** none permanent — one simulated Windows host moves to QA and back to Unassigned per role
 
 **Flow**
 
-1. ☐ *(API setup)* `findSimulatedHostIds(request, 'windows', 2)` — same paged, `desc`-ordered, unenrolled-only walk as HOSTP-01; each role then indexes into the slice.
-   - ✅ *(API)* 2 simulated Windows hosts resolved.
+1. ☐ *(API setup)* `findSimulatedHostIds(request, 'windows', 3)` — same paged, `desc`-ordered, unenrolled-only walk as HOSTP-01; each role then indexes into the slice.
+   - ✅ *(API)* 3 simulated Windows hosts resolved.
 2. ☐ Log in as the role in a fresh browser context (`withStaticUser` restores a cached `.auth/static-premium-<role>.json` session, re-logging in through the **/login** form only if the session bounced — Fleet rate-limits `POST /login` to 10/min suite-wide).
 3. ☐ Open the host at `/hosts/:id` **via URL**.
    - ✅ *(UI)* the vitals label **Disk space available** is visible (`HostDetailsPage.goto` anchor).
@@ -176,10 +182,10 @@ other:
 6. ☐ *(API teardown, `finally`)* transfer the host back to `team_id: null`.
 
 **Assessment**
-- *Value:* Fleet's `canTransferTeam` gate for both global write roles, plus the single-host transfer path end to end (menu → modal → toast → vitals → server).
-- *Coverage gaps:* no `transferred_hosts` activity-feed assertion; no negative case for `global-observer` / `global-observer-plus` / `global-technician`; transferring *between two named fleets* (rather than Unassigned → QA) is untested; nothing checks the host disappears from the Unassigned list.
+- *Value:* Fleet's `canTransferTeam` gate for the three global roles it admits (admin, maintainer, technician), plus the single-host transfer path end to end (menu → modal → toast → vitals → server).
+- *Coverage gaps:* no `transferred_hosts` activity-feed assertion; no negative case for `global-observer` / `global-observer-plus`; transferring *between two named fleets* (rather than Unassigned → QA) is untested; nothing checks the host disappears from the Unassigned list.
 - *Redundancy:* the modal-gating assertion (`Transfer` disabled) duplicates HOSTP-01 step 6; the destination-pick + toast overlaps HOSTP-01's transfer, and the QA fleet is shared with it — see the race noted in HOSTP-01.
-- *Efficiency / smells:* both role cases run the full pool walk (`findSimulatedHostIds(..., 2)`) to use one host — two identical multi-page API walks. Tests running under `withStaticUser` operate on a **second** browser context, which the auto `pageHealth` fixture does not monitor (it watches the `page` fixture), so console/5xx errors in these flows go unobserved — true of HOSTP-05/07/10/11 as well.
+- *Efficiency / smells:* every role case runs the full pool walk (`findSimulatedHostIds(..., 3)`) to use one host — three identical multi-page API walks. Tests running under `withStaticUser` operate on a **second** browser context, which the auto `pageHealth` fixture does not monitor (it watches the `page` fixture), so console/5xx errors in these flows go unobserved — true of HOSTP-05/07/10/11 as well.
 
 **Notes (Andrey)**
 ```
@@ -522,6 +528,228 @@ other:
 
 ---
 
+### HOSTP-13 · Premium • Hosts • IdP username › an admin adds an IdP username on the User card, then removes it
+
+- **File:** [`playwright/tests/e2e/premium/hosts/host-idp-username.spec.ts`](../../tests/e2e/premium/hosts/host-idp-username.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "an admin adds an IdP username on the User card"`
+- **Project:** premium · **Role:** the suite admin · **Host:** one online **non-MDM simulated Windows** host — `findSimulations(request, 'windows', 1, 0)`, which walks the descending display-name ordering, skips the first 40 simulations (the transfer/delete specs' part of the pool) and takes slice 0 of what's left
+- **Mode:** UI+API · **Isolation:** parallel, self-contained; `finally` removes the IdP username (a 422 "nothing to remove" is accepted)
+- **Preconditions:** ≥1 online non-MDM simulated Windows host past the transfer/delete specs' slices. The host must start with no IdP username — the test forces that with an API delete before it opens the page.
+- **Data created:** a `pw-idp-ui-<timestamp>@example.com` IdP username on the host, removed in the same test; two permanent `edited_host_idp_data` activities
+
+**Flow**
+
+1. ☐ *(API setup)* Resolve the host.
+   - ✅ *(API)* a host was resolved (`toBeDefined`).
+2. ☐ *(API setup)* `DELETE /hosts/:id/device_mapping/idp` — clears any username a dead run left; a 422 (none to remove) is fine. Then note the id of the newest activity in the log (`latestActivityId`) — both activity checks below count only activities newer than it.
+3. ☐ Open the host at `/hosts/:id` **via URL**.
+   - ✅ *(UI)* **Disk space available** visible (`HostDetailsPage.goto` anchor).
+   - ✅ *(UI)* on the Details tab's **User** card, **Username (IdP)** reads `---`.
+   - ✅ *(UI)* the card's button reads **Add user**.
+4. ☐ Click **Add user**.
+   - ✅ *(UI)* the modal titled **Add user** is open.
+   - ✅ *(UI)* **Save** is **disabled** while the field is empty.
+5. ☐ Type `pw-idp-ui-<timestamp>@example.com` into **Username (IdP)** and click **Save**.
+   - ✅ *(UI)* the modal closes.
+   - ✅ *(UI)* success toast `Updated end user.`
+   - ✅ *(UI)* **Username (IdP)** now reads the username.
+   - ✅ *(UI)* the button now reads **Edit user**.
+   - ✅ *(API)* `GET /hosts/:id` → `end_users[].idp_username` equals the username.
+   - ✅ *(API)* an `edited_host_idp_data` activity newer than the noted id, with this `host_id` and `host_idp_username` = the username, attributed to the suite admin (`assertActivityAfter`).
+6. ☐ Click **Edit user**.
+   - ✅ *(UI)* the modal titled **Edit user** is open.
+   - ✅ *(UI)* **Username (IdP)** is prefilled with the current username.
+7. ☐ Clear the field and click **Save** — an empty save removes the username.
+   - ✅ *(UI)* the modal closes; success toast `Removed end user.`
+   - ✅ *(UI)* **Username (IdP)** reads `---` again; the button reads **Add user** again.
+   - ✅ *(API)* `GET /hosts/:id` reports no IdP username.
+   - ✅ *(API)* an `edited_host_idp_data` activity newer than the noted id, with this `host_id` and `host_idp_username` = `''`, attributed to the suite admin — the same host gets this removal every run, so only a newer one counts.
+8. ☐ *(API teardown, `finally`)* `DELETE /hosts/:id/device_mapping/idp`, tolerating 422.
+
+**Assessment**
+- *Value:* the host's end user through the card and modal, add → edit → remove, with the stored value, the activity record and the button's Add/Edit state all checked. Would catch a modal that saves nothing, a card that doesn't refresh, and a remove that quietly does nothing. The empty-save-means-remove rule (a `DELETE`, not a `PUT` with an empty value) is the non-obvious part, and it's covered.
+- *Coverage gaps:* the SCIM-backed fields (**Full name**, **Groups**, **Department**) stay empty — the premium instance has never received a SCIM request, as the spec's header says; only the admin writes — `canWriteEndUser` also admits maintainers (global or of the host's fleet), and no maintainer or team-admin case exists; **Edit user** is only used to clear, never to replace one username with another; whatever the field refuses, if anything, is untested; the activity's **rendered copy** (feed or host Activity card) is never read — the API record only.
+- *Redundancy:* HOSTP-14 drives the same two endpoints directly and re-checks the card; the free mirror is [HOST-24](02-hosts-shared-and-free.md), where the same button opens the Premium message.
+- *Efficiency / smells:*
+  - Both activity checks are tied to this run: each must be newer than an id noted before the page opened (`latestActivityId` → `assertActivityAfter`), so an earlier run's identical empty-username removal on this same host can't satisfy step 7. Both share one marker, so the removal only has to be newer than the pre-add id, not than the add — enough, since no other spec touches this slice.
+  - The Windows slices are registered in `findSimulations`' slice list (`helpers/api/hosts.ts`), with the free specs' shared read of slice 0.
+  - The card is reached by its `.user-card` class (Fleet's Card is a role-less div) — documented in the POM. Direct-URL entry to the host.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-14 · Premium • Hosts • IdP username › the device_mapping API sets and removes the IdP username
+
+- **File:** [`playwright/tests/e2e/premium/hosts/host-idp-username.spec.ts`](../../tests/e2e/premium/hosts/host-idp-username.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "the device_mapping API sets and removes the IdP username"`
+- **Project:** premium · **Role:** the suite admin (API token) · **Host:** one online non-MDM simulated Windows host, `findSimulations(request, 'windows', 1, 1)` — slice 1, next to HOSTP-13's
+- **Mode:** UI+API (the writes and most checks are API; two page loads check the card follows) · **Isolation:** parallel, self-contained; `finally` removes the username
+- **Preconditions:** ≥2 online non-MDM simulated Windows hosts past the transfer/delete specs' slices
+- **Data created:** a `pw-idp-api-<timestamp>@example.com` IdP username, removed in the same test; activities from the two writes (not asserted)
+
+**Flow**
+
+1. ☐ *(API setup)* Resolve the host → ✅ *(API)* found.
+2. ☐ *(API setup)* `DELETE /hosts/:id/device_mapping/idp`, tolerating 422.
+3. ☐ *(API)* `PUT /hosts/:id/device_mapping` with `{ "email": "pw-idp-api-<timestamp>@example.com", "source": "idp" }`.
+   - ✅ *(API)* 2xx.
+   - ✅ *(API)* response `host_id` is this host.
+   - ✅ *(API)* response `device_mapping` contains `{ email: <username>, source: "mdm_idp_accounts" }` — Fleet reports the IdP username under that source, not the `idp` it was sent with.
+4. ☐ Open the host at `/hosts/:id` **via URL**.
+   - ✅ *(UI)* **Username (IdP)** on the **User** card reads the username.
+5. ☐ *(API)* `DELETE /hosts/:id/device_mapping/idp`.
+   - ✅ *(API)* 2xx.
+   - ✅ *(API)* `GET /hosts/:id` reports no IdP username.
+6. ☐ *(API)* The same `DELETE` again.
+   - ✅ *(API)* **422** — nothing left to remove.
+7. ☐ Open the host again **via URL**.
+   - ✅ *(UI)* **Username (IdP)** reads `---`.
+8. ☐ *(API teardown, `finally`)* the same `DELETE`, tolerating 422.
+
+**Assessment**
+- *Value:* the endpoint contract under HOSTP-13. The `source` translation (`idp` in, `mdm_idp_accounts` out) is exactly the kind of detail an API client depends on and nobody notices changing, and the 422 on a second delete pins the "nothing to remove" answer that the helper's `ignoreMissing` — and every `finally` in this spec — relies on.
+- *Coverage gaps:* no activity assertion (HOSTP-13 has one); a `PUT` that **replaces** an existing username is never sent; no other `source`, no malformed body; `GET /hosts/:id/device_mapping` is never read; no API role probe — an observer's `PUT` should be 403, and the observer case (HOSTP-15) is UI-only.
+- *Redundancy:* at the storage layer the round trip is HOSTP-13's again; what's unique is the response shape and the 422. Folding these assertions into HOSTP-13 would save a host and two page loads, at some cost to failure attribution.
+- *Efficiency / smells:* a mostly-API test living under `tests/e2e/`, paying two page loads for two card reads — defensible, since "the card follows an API write" is its own claim. Step 6 asserts 422 through `deleteHostIdpUsername(..., { ignoreMissing: true })`, the same call the `finally` uses to *tolerate* 422, so the step reads as "tolerate" where it means "expect".
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-15 · Premium • Hosts • IdP username › a global observer is not offered Add user
+
+- **File:** [`playwright/tests/e2e/premium/hosts/host-idp-username.spec.ts`](../../tests/e2e/premium/hosts/host-idp-username.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a global observer is not offered Add user"`
+- **Project:** premium · **Role:** `global-observer` · **Host:** Windows simulation slice 0 — the **same host HOSTP-13 changes**, in parallel
+- **Mode:** UI · **Isolation:** parallel, read-only; own browser context via `withStaticUser`
+- **Preconditions:** `global-observer@fleetdm.com` provisioned with `FLEET_STATIC_USER_PASSWORD`; the host resolvable as in HOSTP-13
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API setup)* Resolve the host → ✅ *(API)* found.
+2. ☐ Log in as `global-observer` in a fresh context (cached session; see HOSTP-04 step 2).
+3. ☐ Open the host at `/hosts/:id` **via URL** → ✅ *(UI)* **Disk space available** visible.
+   - ✅ *(UI)* the **User** card's **Username (IdP)** value is visible — the card rendered for this role.
+   - ✅ *(UI)* the card has no **Add user** or **Edit user** button (count 0).
+
+**Assessment**
+- *Value:* the negative half of `canWriteEndUser`, built the right way: the card's value is asserted visible before the button is asserted absent, so it can't pass on a card that never rendered.
+- *Coverage gaps:* one role — observer+, technician (not admitted by `canWriteEndUser`, so another negative) and fleet-scoped observers are untested, as is the positive maintainer case; no API probe, so a hidden button over an open endpoint would pass here.
+- *Redundancy:* shares its host with HOSTP-13. That's harmless — the button locator matches both **Add user** and **Edit user** and the value check is visibility only — but it means this test sees whichever state HOSTP-13 has the host in. The title says "Add user"; the assertion rightly covers both labels.
+- *Efficiency / smells:* runs in a `withStaticUser` context, which the auto `pageHealth` fixture doesn't watch (see HOSTP-04).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-16 · Premium • Hosts • Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac
+
+> **REAL macOS VM — Fleet sets, rotates and clears a Recovery Lock password on the VMs fleet's Mac.** First run live 2026-09-29, with Andrey's go-ahead. Run it on one worker: two copies would toggle the same fleet. Recovery Lock guards only entry to macOS Recovery (not login, SSH or the MDM channel), and the password stays escrowed in Fleet, readable from the host's **Actions**, until the clear lands. If the Mac is offline when enforcement goes off, the password stays on it until it checks in — don't delete the Mac's host record in that window.
+
+- **File:** [`playwright/tests/e2e/premium/hosts/recovery-lock.spec.ts`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts)
+- **Grep:** `npx playwright test --project=premium --workers=2 -g "enforce on the VMs fleet, verify, view, rotate and clear on the Mac"`
+- **Project:** premium · **Role:** the suite admin · **Scope:** the **VMs** fleet (`vmsFleetId`) · **Host:** the real macOS VM (`liveMacosHost`, resolved by hardware model; the test asserts it's on the VMs fleet)
+- **Mode:** UI+API · **Isolation:** standalone, one test, 25-minute budget (`test.setTimeout`); five waits on the Mac of up to 4 minutes each (the first normally returns at once); an `afterEach` turns enforcement off through the API, even after a timeout. The only spec allowed to turn Recovery Lock on for the VMs fleet (`playwright/CLAUDE.md` → Test hosts)
+- **Preconditions:**
+  - ✅ *(API)* the Mac is on the VMs fleet (`GET /hosts/:id` → `team_id` = `vmsFleetId`).
+  - ✅ *(API)* Recovery Lock enforcement is **off** on the VMs fleet (`GET /teams/:id` → `mdm.enable_recovery_lock_password` false). Asserted, not repaired — the resting-state step in `setup/cleanup.steps.ts` turns it off at the start and end of every premium run.
+  - ☐ *(API wait, ≤4 min)* the Mac has no Recovery Lock password (`mdm.os_settings.recovery_lock_password.status` null) — a dead run's password may still be clearing.
+  - The Mac is online, MDM-enrolled and on the VMs fleet; `FLEET_ADMIN_EMAIL` is set (the activity actor checks).
+- **Data created:** a Recovery Lock password set, rotated and cleared on the Mac; permanent activities `enabled_recovery_lock_passwords`, `set_host_recovery_lock_password`, `viewed_host_recovery_lock_password` (×2 — the second view isn't asserted), `rotated_host_recovery_lock_password`, `disabled_recovery_lock_passwords`. Ends with enforcement off and no password on the Mac, if the clear lands.
+
+**Flow**
+
+1. ☐ *(API precondition)* enforcement off on VMs, then wait for the Mac's status to be null (see Preconditions).
+2. ☐ *(API)* Note the id of the newest activity in the log (`latestActivityId`). Before each later step that records an activity (view, rotate, clear) the test notes it again, and each activity check counts only entries newer than the last note.
+3. ☐ Open the **Dashboard** via URL, click **Controls** → **OS settings** tab → **Passwords** in the sidebar.
+   - ✅ *(UI)* the URL moves to `/controls`, `/controls/os-settings`, then `/controls/os-settings/passwords`.
+4. ☐ Pick **VMs** in the fleet dropdown.
+   - ✅ *(UI)* the dropdown reads `VMs`.
+   - ✅ *(UI)* **Turn on Recovery Lock password** is unchecked.
+5. ☐ Tick **Turn on Recovery Lock password** and click **Save**.
+   - ✅ *(UI)* success toast `Successfully updated Recovery Lock password enforcement.`
+6. ☐ Reload the Passwords page for VMs (`/controls/os-settings/passwords?fleet_id=<VMs>` via URL, pick **VMs** again).
+   - ✅ *(UI)* the **Passwords** heading is visible and the checkbox enabled (`PasswordsPage.goto` anchor), and it is **checked** — the save stuck.
+   - ✅ *(API)* `mdm.enable_recovery_lock_password` is true on VMs.
+   - ✅ *(API)* an `enabled_recovery_lock_passwords` activity for the VMs fleet (`fleet_id` or `team_id`), newer than step 2's id, by the suite admin.
+7. ☐ *(API wait, ≤4 min)* Fleet's 30-second cron sends the Mac `SetRecoveryLock`; wait for its status to read `verified`.
+   - ✅ *(API)* `password_available` is true.
+   - ✅ *(API)* a `set_host_recovery_lock_password` activity for this host, newer than step 2's id, with **no actor** — Fleet's cron set it, not a user.
+8. ☐ Open the host at `/hosts/:id` → Activity card → **Past** tab.
+   - ✅ *(UI)* an item "… set a Recovery Lock password for this host" (the first match — the card shows 8 per page and the VM specs running alongside push older entries off it, so it's read straight after the event).
+9. ☐ Open the **Controls** tab.
+   - ✅ *(UI)* the **Recovery Lock password** row reads `Verified`.
+10. ☐ *(API)* note the newest activity id. **Actions** → **Show Recovery Lock password**.
+    - ✅ *(UI)* the option is offered in the menu (`runAction` asserts it before clicking).
+    - ✅ *(UI)* the Recovery Lock password modal is open.
+    - ✅ *(UI)* the password field is masked; click **Show secret** → it's shown as text, and it isn't empty. Note the value.
+    - ✅ *(UI)* the banner **Password rotates automatically after …** is visible — viewing scheduled Fleet's own rotation.
+    - ✅ *(API)* a `viewed_host_recovery_lock_password` activity for this host, newer than the id just noted, by the suite admin.
+11. ☐ *(API)* note the newest activity id. Click **Rotate password** (✅ *(UI)* visible first).
+    - ✅ *(UI)* success toast `Successfully sent request to rotate Recovery Lock password.`
+    - ✅ *(UI)* the modal closes.
+    - ✅ *(API)* a `rotated_host_recovery_lock_password` activity for this host, newer than the id just noted, by the suite admin.
+12. ☐ Reload the host → Activity card → **Past** tab.
+    - ✅ *(UI)* an item "… triggered rotation of the Recovery Lock password for this host".
+    - ✅ *(UI)* an item "… viewed the Recovery Lock password for this host" (first match each).
+13. ☐ *(API wait, ≤4 min)* the Mac's status reads `verified` again.
+14. ☐ Reload the host, **Actions** → **Show Recovery Lock password**, **Show secret**.
+    - ✅ *(UI)* masked, then shown, not empty — and **different from the password noted in step 10**.
+    - ☐ Click **Close** → ✅ *(UI)* the modal is hidden.
+15. ☐ *(API)* note the newest activity id. Passwords page for VMs (URL, pick **VMs**) → untick the checkbox → **Save** → toast. Reload it for VMs.
+    - ✅ *(UI)* the checkbox is unchecked.
+    - ✅ *(API)* `mdm.enable_recovery_lock_password` is false on VMs.
+    - ✅ *(API)* a `disabled_recovery_lock_passwords` activity for the VMs fleet, newer than the id just noted, by the suite admin.
+16. ☐ *(API wait, ≤4 min)* Fleet sends `ClearRecoveryLock`; wait for the Mac's status to be null.
+    - ✅ *(API)* `password_available` is false.
+17. ☐ Reload the host → **Controls** tab.
+    - ✅ *(UI)* no **Recovery Lock password** row (count 0) — after the tab rendered its table or "No controls".
+18. ☐ Open **Actions**.
+    - ✅ *(UI)* **Transfer** is visible — the menu rendered.
+    - ✅ *(UI)* **Show Recovery Lock password** is absent (count 0).
+19. ☐ *(API teardown, `afterEach`)* `PATCH /teams/<VMs>` with `{ "mdm": { "enable_recovery_lock_password": false } }` — a no-op when step 15 succeeded.
+
+**Assessment**
+- *Value:* high, and the only Recovery Lock coverage in the suite: the fleet setting, Fleet's cron putting a password on a real Mac, the escrow being readable, a manual rotation producing a new password, and the clear — each read through both the UI and the host record. Step 14's "different password" check is what proves the rotation reached the Mac rather than just logging an activity, and the actor-less `set_host_recovery_lock_password` pins who Fleet says set it. Activity freshness is done properly — each activity must be newer than the log's last id before its step (`latestActivityId` → `assertActivityAfter`) — better than most activity checks in the suite.
+- *Live (2026-09-29):* the **virtual** Mac (`VirtualMac2,1`) accepts `SetRecoveryLock` and verifies it; the whole test takes 45–60 s, each Mac round trip well inside the 4-minute waits. Green with dependencies, headed and `--repeat-each=5` (one worker). Fleet's own `set_host_recovery_lock_password` carries `actor_email: ""`, which `assertActivityAfter` treats as no actor.
+- *Coverage gaps:* only the admin — who else may open the modal or **Rotate password** (maintainer, technician, observer, a VMs team admin) is untested; Unassigned and Workstations are never used (by design: only VMs has a Mac); the automatic rotation a view schedules (an hour out) is never seen, nor that clearing drops it, as the header says it does; the modal's copy button is unused; the `failed` status only shows up as a timeout message; on free the Passwords card is paywall-only ([MISC-20](13-labels-packs-dashboard-paywalls.md)).
+- *Redundancy:* none — nothing else touches Recovery Lock. The Actions-menu "positive control, then absence" in step 18 is HOSTP-05's pattern.
+- *Efficiency / smells:*
+  - **Budget.** Four real waits of up to 4 minutes (the dead-run wait normally returns at once) leave about 9 minutes of the 25 for the UI, so a slow Mac fails a wait with Fleet's `detail` before the test times out. If it does time out, the `afterEach` still turns enforcement off.
+  - **The rotation wait** (step 13) doesn't look for `pending` first. It doesn't need to: Fleet marks the password pending inside the rotate request (`InitiateRecoveryLockRotation`), before the success toast, so the wait can't return on the pre-rotation status. The spec says so in a comment.
+  - Label-targeting specs borrow MDM-enrolled macOS simulations onto VMs while they run. If one is there when enforcement turns on, Fleet may queue `SetRecoveryLock` for it as well (⚠️ unverified whether Fleet treats a simulation as Apple silicon) — harmless to this test, which watches only the real Mac, but it widens what the setting touches.
+  - The host Activity card items are read straight after each event because the card shows 8 per page and the VM specs alongside push entries off it — still a race, just a short one; the "viewed" item is only looked for after the rotation, one reload later. They use `.first()`, leaving freshness to the API checks. `controlRow` is documented as a profile row and is reused here for the Recovery Lock row.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -531,14 +759,16 @@ other:
 | Bulk transfer (list → selection bar → modal) | HOSTP-01 | UI-side transfer only ever targets **Unassigned**; no activity-feed assertion; no "Select all matching hosts" behaviour |
 | Transfer-modal affordances (search, disabled submit, Add a fleet) | HOSTP-01, HOSTP-02, HOSTP-04 | current fleet not asserted absent from options; no no-match state |
 | Selection bar (tally, widening affordance, clear) | HOSTP-01, HOSTP-03 | tally never compared to page size; bulk actions not asserted hidden for observers |
-| Single-host transfer, per role | HOSTP-04 (admin, maintainer), HOSTP-05 (team admin denied) | observer / observer-plus / technician; fleet→fleet moves; activity feed |
+| Single-host transfer, per role | HOSTP-04 (admin, maintainer, technician), HOSTP-05 (team admin denied) | observer / observer-plus; fleet→fleet moves; activity feed |
 | Bulk delete | HOSTP-06 | cancel path; observer denial; activity feed; no `finally` restore |
 | Single-host delete | HOSTP-07 (team admin), HOSTP-08 (admin) | cancel path; team observer denial; cross-fleet denial; redirect asserted without a URL check |
 | Host Actions menu gating by platform/MDM/tier | HOSTP-12 + free mirror | role dimension entirely absent; Unlock; enrolled-but-disconnected Apple host |
 | Hosts-list header CTAs by role | HOSTP-10, HOSTP-11 (+ free mirror) | fleet-scoped roles (`team-admin`, `ws-*`); observer-plus; technician |
 | Per-host stored report results | HOSTP-09 | negative case (no stored result → no **Show details**); row count and "last fetched" line; the card-vs-report cell comparison covers the **first row** and, in practice, the furniture's **single** column |
+| Host end user (IdP username) — add, edit, remove, role gate | HOSTP-13 (UI), HOSTP-14 (API contract), HOSTP-15 (observer not offered it); free: [HOST-24](02-hosts-shared-and-free.md) (Premium message), [API-31](14-api-contracts.md) (402) | SCIM-backed fields (the instance has no SCIM data); maintainer / fleet-scoped roles; replacing one username with another; no API role probe |
+| Recovery Lock password — enforce, set, view, rotate, clear on a real Mac | HOSTP-16 | non-admin roles; the automatic rotation a view schedules; the `failed` path |
 | Lock / Wipe / Unlock / Turn off MDM **execution** | — | intentionally uncovered (unrecoverable on QA VMs) |
-| Hosts-list filters (status, label, OS, policy), pagination, sorting, columns, CSV export, host details vitals/software/policies | not this area — `shared/hosts/*` and other audit files | `LabelFilter`, `StatusFilter`, `Pagination`, `clickHoverAction` are unused by these six specs |
+| Hosts-list filters (status, label, OS, policy), pagination, sorting, columns, CSV export, host details vitals/software/policies | not this area — `shared/hosts/*` and other audit files | `LabelFilter`, `StatusFilter`, `Pagination`, `clickHoverAction` are unused by these eight specs |
 
 **Duplication**
 
@@ -555,6 +785,7 @@ Mostly healthy. The API is used for three distinct purposes and it's worth keepi
 - **Setup that must not be a UI flow** — `findSimulatedHostIds` + `transferHosts` staging (HOSTP-01, 06, 07). Correct: staging through the UI would double the runtime and test the same code twice.
 - **Server-truth confirmation after a UI action** — `getHostFleetId` (HOSTP-01, 04) and `hostExists` (HOSTP-06, 07, 08). Justified: the list can serve a stale react-query page, and a UI-only delete assertion can't distinguish "removed from view" from "removed from Fleet".
 - **Preconditions turned into clear failures** — HOSTP-09's `findReportByName` / `getHostReportLastFetched`. Good practice; these are guardrails, not substitutes for UI assertions.
+- **Activity records as the check on who did what** — HOSTP-13 (`edited_host_idp_data`) and HOSTP-16 (five Recovery Lock types) assert the record through the API, each required to be newer than the log's last id before its step (`assertActivityAfter`), so an earlier run's identical entry can't satisfy them; HOSTP-16 also reads Fleet's rendered copy on the host's Activity card. That's the pattern the transfer/delete entries below would want if they gained activity checks.
 - **The gap is the activity feed:** no test in this area asserts `transferred_hosts` / `deleted_host` activity copy, even though the suite has `dashboard.expectActivities` and `helpers/api/activity-copy.ts` for exactly this, and transfers/deletes are the canonical audit-trail events.
 
 **Quick wins**
@@ -564,6 +795,7 @@ Mostly healthy. The API is used for three distinct purposes and it's worth keepi
 3. Add `await expect(page).toHaveURL(/\/hosts\/manage/)` to HOSTP-08's post-delete assertion — the current `firstRowWithLink` check would pass on any table ([`host-delete.spec.ts:109`](../../tests/e2e/premium/hosts/host-delete.spec.ts)).
 4. Point HOSTP-12's macOS case at the `liveMacosHost` worker fixture instead of re-running `findOnlineHost('darwin', { kind: 'real' })`, and raise/target the Linux scan so it can't return `null` from a name-skewed first 100 hosts ([`mdm-actions-availability.spec.ts:63`](../../tests/e2e/premium/hosts/mdm-actions-availability.spec.ts), [`helpers/api/hosts.ts:303`](../../helpers/api/hosts.ts)).
 5. Reconcile the delete-pool restore story: either install `com.fleetqa.perf.refresh.plist` on the VM or correct HOSTP-06's header, which asserts a "scheduled daily refresh" that `install.sh` only sets up behind `--daily-refresh` ([`host-delete.spec.ts:18`](../../tests/e2e/premium/hosts/host-delete.spec.ts), [`tools/perf-hosts/README.md`](../../../tools/perf-hosts/README.md)).
+6. Give HOSTP-16 an `afterEach` that turns enforcement off, and either widen its 20-minute budget or shorten the Mac waits so a slow Mac fails a wait (with Fleet's `detail`) before the test times out and skips its `finally` ([`recovery-lock.spec.ts:60`](../../tests/e2e/premium/hosts/recovery-lock.spec.ts)).
 
 **Bigger bets**
 

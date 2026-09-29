@@ -53,6 +53,11 @@ export class OsSettingsPage {
     await expect(this.page).toHaveURL(/\/controls\/os-settings\/configuration-profiles/);
   }
 
+  async goToPasswords(): Promise<void> {
+    await this.passwordsLink.click();
+    await expect(this.page).toHaveURL(/\/controls\/os-settings\/passwords/);
+  }
+
   /**
    * Click the status link with the highest host count. Falls back to the
    * "Verified" link if all statuses show 0 hosts. Returns the selected

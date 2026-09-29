@@ -19,6 +19,7 @@ import {
   deleteAllInstallSoftwareTitles,
   deleteAllPacks,
   deleteAllQaTestUsers,
+  deleteLeftoverApiTestUsers,
   deleteAllQueries,
   deleteAllScripts,
   deleteAllTeamPolicies,
@@ -31,6 +32,7 @@ import {
   findFleetByName,
   findOnlineHost,
   getAgentOptions,
+  getFleetRecoveryLock,
   getSoftwarePackage,
   listFleetHosts,
   listFleetMaintainedTitles,
@@ -42,6 +44,7 @@ import {
   queueAdHocScript,
   resetSetupExperience,
   setAgentOptions,
+  setFleetRecoveryLock,
   setPinnedVersion,
   transferHosts,
   type UpcomingActivity,
@@ -62,7 +65,9 @@ test('wipe unassigned state', async ({ request }) => {
   // absorb the 402 "Requires Premium" response on free, so they noop
   // instead of failing the Promise.all batch. deleteAllQaTestUsers only
   // touches addresses matching the QA_TEST_EMAIL_RE prefix in
-  // helpers/api/users.ts, so admin/SSO accounts are untouchable.
+  // helpers/api/users.ts, so admin/SSO accounts are untouchable, and
+  // deleteLeftoverApiTestUsers only API-only users named like the specs'
+  // per-run ones (QA_TEST_API_USER_NAME_RE), never the static API users.
   // Setup Experience references install-software titles, and a referenced
   // title can't be deleted (Fleet returns 409). Clear Setup Experience first
   // so the software-title wipe below isn't racing the reference removal.
@@ -84,6 +89,7 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
     deleteAllQaTestUsers(request),
+    deleteLeftoverApiTestUsers(request),
   ]);
 });
 
@@ -211,7 +217,10 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
 //  - the script timeout is Fleet's default — the timeout case lowers it to 60 s
 //    and restores it in a `finally` a timed-out test never reaches;
 //  - on premium, every durable install/uninstall fixture is uninstalled — its
-//    resting state, which a dead run can leave the other way.
+//    resting state, which a dead run can leave the other way;
+//  - on premium, Recovery Lock enforcement is off on the VMs fleet —
+//    `recovery-lock.spec.ts` turns it on and off, and Fleet clears the Mac's
+//    password on its next cron tick once it's off.
 //
 // It repairs what the suite itself leaves behind and nothing else. A VM that's
 // offline is only logged: its specs fail on it with a message of their own.
@@ -251,6 +260,10 @@ test('bring the real VMs to their resting state', async ({ request }) => {
   }
 
   if (!vms) return;
+  if (await getFleetRecoveryLock(request, vms.id)) {
+    console.warn('[vm preflight] Recovery Lock was on for the VMs fleet — turning it off');
+    await setFleetRecoveryLock(request, vms.id, false);
+  }
   await Promise.all(
     VM_SOFTWARE_FIXTURES.filter((f) => hosts.has(f.platform)).map(async (fixture) => {
       const title = await findVmFixtureTitle(request, vms.id, fixture);

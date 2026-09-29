@@ -1,4 +1,4 @@
-import { APIRequestContext, expect } from '@playwright/test';
+import { APIRequestContext, APIResponse, expect } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders, type HostRef } from './core';
 
 /**
@@ -330,7 +330,10 @@ export async function findMdmSimulations(
  * Slices claimed: linux 0–1 `software-label-targets.spec.ts`; darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
  * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
- * onto the VMs fleet).
+ * onto the VMs fleet); windows 0–1 `premium/hosts/host-idp-username.spec.ts`
+ * (an IdP username set and removed, never moved). On free, windows 0 is read
+ * by `free/hosts/host-idp-username.spec.ts` and `api/free/license.spec.ts`,
+ * both of which write nothing.
  */
 export async function findSimulations(
   request: APIRequestContext,
@@ -950,4 +953,111 @@ export async function listHostsRunningOs(
   });
   await expect(res, `Failed to list hosts running ${osName} ${osVersion}`).toBeOK();
   return ((await res.json()).hosts ?? []).map((h: { id: number; os_version: string }) => ({ id: h.id, os: h.os_version }));
+}
+
+// ── End user (IdP username) ──────────────────────────────────────────────────
+
+/** One entry of a host's `device_mapping` — an email and the source that reported it. */
+export interface DeviceMapping {
+  email: string;
+  source: string;
+}
+
+/**
+ * `PUT /hosts/:id/device_mapping` with `source: "idp"`: sets the host's IdP
+ * username, which the host details **User** card shows as *Username (IdP)*.
+ * Premium only; free answers 402 (`ErrMissingLicense`). Returns the raw response
+ * so a spec can assert either outcome.
+ */
+export async function putHostIdpUsername(
+  request: APIRequestContext,
+  hostId: number,
+  email: string,
+): Promise<APIResponse> {
+  return request.put(apiUrl(`hosts/${hostId}/device_mapping`), {
+    headers: authHeaders(),
+    data: { email, source: 'idp' },
+  });
+}
+
+/**
+ * `DELETE /hosts/:id/device_mapping/idp`: removes the host's IdP username.
+ * Fleet answers 422 when the host has none; `ignoreMissing` treats that as done,
+ * for a `finally` that may run after the test already removed it.
+ */
+export async function deleteHostIdpUsername(
+  request: APIRequestContext,
+  hostId: number,
+  { ignoreMissing = false }: { ignoreMissing?: boolean } = {},
+): Promise<APIResponse> {
+  const res = await request.delete(apiUrl(`hosts/${hostId}/device_mapping/idp`), {
+    headers: authHeaders(),
+  });
+  if (!(ignoreMissing && res.status() === 422)) {
+    await expect(res, `Failed to remove the IdP username of host ${hostId}`).toBeOK();
+  }
+  return res;
+}
+
+/** The host's IdP username as `GET /hosts/:id` reports it (`end_users[0].idp_username`), or null. */
+export async function getHostIdpUsername(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<string | null> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const endUsers = ((await res.json()).host?.end_users ?? []) as Array<{ idp_username?: string }>;
+  return endUsers.find((u) => u.idp_username)?.idp_username ?? null;
+}
+
+// ── Recovery Lock password ───────────────────────────────────────────────────
+
+/**
+ * A Mac's Recovery Lock password as `GET /hosts/:id` reports it
+ * (`mdm.os_settings.recovery_lock_password`). `status` is `pending` while Fleet
+ * sets, rotates or clears it, `verified` once the Mac has confirmed, `failed`,
+ * or null when the host has none. Reading it here is not a view: unlike
+ * `GET /hosts/:id/recovery_lock_password`, it records no activity and schedules
+ * no rotation.
+ */
+export interface HostRecoveryLockStatus {
+  status: 'pending' | 'verified' | 'failed' | null;
+  detail: string;
+  passwordAvailable: boolean;
+}
+
+export async function getHostRecoveryLockStatus(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostRecoveryLockStatus> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const rl = (await res.json()).host?.mdm?.os_settings?.recovery_lock_password ?? {};
+  return { status: rl.status ?? null, detail: rl.detail ?? '', passwordAvailable: !!rl.password_available };
+}
+
+/**
+ * Polls until the host's Recovery Lock status is `expected`. A `failed` along
+ * the way isn't final — Fleet retries the command — so it keeps polling, and a
+ * timeout reports the last status with Fleet's detail.
+ */
+export async function waitForRecoveryLockStatus(
+  request: APIRequestContext,
+  hostId: number,
+  expected: HostRecoveryLockStatus['status'],
+  timeout: number,
+): Promise<HostRecoveryLockStatus> {
+  let last: HostRecoveryLockStatus = { status: null, detail: '', passwordAvailable: false };
+  try {
+    await expect
+      .poll(async () => (last = await getHostRecoveryLockStatus(request, hostId)).status, {
+        timeout,
+        intervals: [5_000],
+        message: `host ${hostId}'s Recovery Lock status to become ${expected}`,
+      })
+      .toBe(expected);
+  } catch (e) {
+    throw new Error(`${(e as Error).message}\nFleet's last detail: ${last.detail || '(none)'}`);
+  }
+  return last;
 }

@@ -25,12 +25,14 @@ pages/
 ├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
 │                       #   detail pages, CVE detail, FMA, and the add-software forms
 ├── controls/           # ControlsPage, OsUpdates, OsSettings, profiles, certificates,
-│                       #   scripts, variables, and the setup-experience pages
+│                       #   Passwords (Recovery Lock), scripts, variables, and the
+│                       #   setup-experience pages
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
 ├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage
 ├── labels/             # LabelsPage
 ├── packs/              # PacksListPage, PackEditPage
-└── settings/           # Organization info/advanced, Integrations, TeamSettings
+└── settings/           # Organization info/advanced, Integrations, TeamSettings,
+    │                   #   FleetUsersPage (a fleet's Users tab + its header)
     └── users/          # UsersPage, Create/Edit user + API user, shared UserFormFields
 ```
 

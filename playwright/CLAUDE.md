@@ -86,9 +86,14 @@ delivered it, and never commit a lock profile, even for a spec that "only upload
 If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 
 The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
-version or deadline, a DDM software-update enforcement declaration, or Recovery Lock password enforcement —
-they make the real hosts download an OS update, reboot mid-suite, or take a recovery password. Exercise those
-settings on Workstations and restore them in the same test.
+version or deadline, or a DDM software-update enforcement declaration — they make the real hosts download an
+OS update or reboot mid-suite. Exercise those settings on Workstations and restore them in the same test.
+
+**Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
+2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and
+turning it off makes Fleet clear it from the Mac. That spec turns it on for the VMs fleet and off in an
+`afterEach`, and the resting-state step turns it off after a dead run. Nothing else sets it on the VMs fleet,
+and nothing sets it on free, where the global setting would reach the free Mac.
 
 ## Locators and waits (Fleet-specific gotchas)
 
@@ -153,7 +158,7 @@ Folder conventions:
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`) plus MDM setup-experience entities and the Workstations team's content. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
+2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities and the Workstations team's content. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
 3. `cleanup-teardown` — same wipe steps run again at end of project regardless of pass/fail, so a crashed worker still leaves a clean instance. Both projects point at the same `setup/cleanup.steps.ts`.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.

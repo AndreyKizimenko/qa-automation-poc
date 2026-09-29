@@ -1,15 +1,18 @@
 # Settings › Users — premium — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 31 (40 at runtime — two role loops expand) · **Projects:** premium
+**Specs covered:** 7 files · **Test declarations:** 34 (43 at runtime — two role loops expand) · **Projects:** premium
 
 Covers `/settings/users`: the user list page (search, per-row Actions, Add-user dropdown), the two
 creation sub-pages (`/new/human`, `/new/api`), the edit sub-page (`/:id/edit`), the delete modal, and
 form validation. Premium adds the **Fleets** column, the fleet-assignment permission mode (which is
-the *default* on premium), and the `Observer+` / `Technician` / `GitOps` roles. Six files split by
+the *default* on premium), the `Observer+` / `Technician` / `GitOps` roles, and the Fleet MFA
+(*Enable two-factor authentication (email)*) option on the create form. Six files split by
 operation rather than by lifecycle; only `edit` and `delete` use API preconditions — both create specs
-drive creation through the UI, once per role/fleet permutation.
+drive creation through the UI, once per role/fleet permutation. The seventh, `team-admin-scope`, is a
+different seat: a **team admin** managing their own fleet's members on the fleet's **Users** tab
+(`/settings/fleets/users?fleet_id=…`), and the rename-yes / delete-no permission on the fleet itself.
 
-Near-verbatim free mirrors exist for five of the six files (`tests/e2e/free/settings/users/`) and the
+Near-verbatim free mirrors exist for five of the seven files (`tests/e2e/free/settings/users/`) and the
 tier-agnostic list behaviours (search, pagination, Require-password-reset, Reset-sessions) live in
 `tests/e2e/shared/settings/users/`. Both are cross-referenced below.
 
@@ -48,6 +51,9 @@ tier-agnostic list behaviours (search, pagination, Require-password-reset, Reset
 | USRP-29 | `navigation-and-layout.spec.ts` | first-page rows expose name, role, fleets, status, and Actions | UI | ☐ |
 | USRP-30 | `navigation-and-layout.spec.ts` | Add user dropdown exposes Regular user and API-only user options | UI | ☐ |
 | USRP-31 | `navigation-and-layout.spec.ts` | current admin cannot delete themselves | UI | ☐ |
+| USRP-32 | `team-admin-scope.spec.ts` | a team admin creates a member, edits their name and role, then removes them | UI+API | ☐ |
+| USRP-33 | `team-admin-scope.spec.ts` | a team admin may rename their fleet but not delete it | UI+API | ☐ |
+| USRP-34 | `regular-user-create.spec.ts` | two-factor option › the two-factor checkbox starts unchecked, needs email, and hides under SSO | UI | ☐ |
 
 All specs live under [`playwright/tests/e2e/premium/settings/users/`](../../tests/e2e/premium/settings/users/).
 
@@ -451,7 +457,7 @@ other:
 
 **Assessment**
 - *Value:* UI→API→UI round-trip on name/email/role for the human form, plus the `Global` Fleets-cell render.
-- *Coverage gaps:* **GitOps global role is never created from the regular form** (⚠️ unclear whether Fleet offers it there — the `GlobalRole` type includes it and the free spec's comment says GitOps is premium-only, so this looks like a real gap). No login-as-the-created-user check, so "role saved" is only proven by the list cell. No SSO/MFA authentication-mode variants (`authSsoRadio` exists in the POM and is unused).
+- *Coverage gaps:* **GitOps global role is never created from the regular form** (⚠️ unclear whether Fleet offers it there — the `GlobalRole` type includes it and the free spec's comment says GitOps is premium-only, so this looks like a real gap). No login-as-the-created-user check, so "role saved" is only proven by the list cell. No SSO/MFA authentication-mode variants are ever submitted — USRP-34 toggles **Single sign-on** and reads the MFA checkbox, but never saves a user with either.
 - *Redundancy:* **5 iterations of one code path** — only `Observer` vs `Observer+` is behaviourally distinct. Mirrors USRP-02 (API form, same dropdown component) and the free spec's 3-role loop. The 5-assertion row block here is `assertApiUserRow` minus the pill — see the `expectUserRow` note in Area observations.
 - *Efficiency / smells:* `if (created) createdUserIds.push(...)` (line 74) silently skips cleanup on a lookup miss — benign here because the email matches `QA_TEST_EMAIL_RE` and `cleanup-setup` reaps it, unlike USRP-02.
 
@@ -1070,6 +1076,137 @@ other:
 
 ---
 
+### USRP-32 · Premium • Settings • team admin scope › a team admin creates a member, edits their name and role, then removes them
+
+- **File:** [`team-admin-scope.spec.ts`](../../tests/e2e/premium/settings/users/team-admin-scope.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a team admin creates a member, edits their name and role"`
+- **Project:** premium · **Role:** `team-admin` (static user — admin on **Workstations** and **VMs**, no global role) · **Scope:** Workstations
+- **Mode:** UI+API · **Isolation:** independent (not serial); own browser context via `withStaticUser`; `finally` deletes the member through the admin API
+- **Preconditions:** `team-admin@fleetdm.com` provisioned with `FLEET_STATIC_USER_PASSWORD`; `FLEET_TEST_USER_PASSWORD` set (the member's password); the Workstations fleet (`workstationsFleetId`)
+- **Data created:** human user `qa-test-<ts>-member@fleetdm.com` ("QA Fleet Member <ts>"), created *by the team admin*, deleted in `finally`; the `cleanup-setup` qa-test sweep reaps it after a dead run. Activities for the create, role change and removal (not asserted).
+
+**Flow**
+
+1. ☐ Log in as `team-admin` in a fresh context (cached session, re-logging in only if it bounced).
+2. ☐ Open the **Dashboard** via URL and pick **Workstations** in the fleet dropdown.
+   - ✅ *(UI)* the dropdown reads `Workstations`.
+3. ☐ Open the user menu → **Users**.
+   - ✅ *(UI)* the URL is `/settings/fleets/users?fleet_id=<Workstations>` — a team admin's **Users** lands on their fleet's Users tab, not `/settings/users`.
+4. ☐ Click **Add user**.
+   - ✅ *(UI)* the create-user modal opens (a team admin gets the create form; a global admin would get a picker of existing users).
+5. ☐ Fill **Full name**, **Email** and **Password**, leave the role at its default, and click **Add**.
+   - ✅ *(UI)* success toast `Successfully created QA Fleet Member <ts>.`; the modal closes.
+6. ☐ Type the email into the tab's **Search** box.
+   - ✅ *(UI)* the member's row contains the name and `Observer` — the default fleet role.
+   - ✅ *(API)* `GET /users?query=<email>` → `global_role` null and exactly one fleet role, `{ Workstations, observer }`.
+7. ☐ Row **Actions** → **Edit**.
+   - ✅ *(UI)* the edit modal opens with **Full name** prefilled.
+8. ☐ Change the name to `… - Edited`, pick **Admin** in **Team role**, click **Save**.
+   - ✅ *(UI)* success toast `Successfully edited QA Fleet Member <ts>.` — Fleet names the user as they were *before* the edit; the modal closes.
+9. ☐ Search the email again.
+   - ✅ *(UI)* the row contains the edited name and `Admin`.
+   - ✅ *(API)* the user's name is the edited one and its fleet roles are exactly `[{ Workstations, admin }]`.
+10. ☐ Row **Actions** → **Remove**.
+    - ✅ *(UI)* the remove modal opens; click **Remove** → success toast `Successfully removed QA Fleet Member <ts> - Edited`; the modal closes.
+11. ☐ Search the email again.
+    - ✅ *(UI)* no row for it (count 0).
+    - ✅ *(API)* the user **still exists** — removing from a fleet doesn't delete — and has no fleet roles.
+12. ☐ *(API teardown, `finally`)* delete the member through the admin API if it exists.
+
+**Assessment**
+- *Value:* the team admin's whole member-management loop from their own seat, each step read back from the server, including the one thing a global-admin test can't show: **Remove** takes the user off the fleet and leaves the account. The pre-edit-name toast is pinned as Fleet's behaviour rather than guessed at. First coverage of `/settings/fleets/users` anywhere in the area.
+- *Coverage gaps:* the team admin's **limits** are untested — nothing checks they can't give the member a role on a fleet they don't administer (QA), can't grant a global role, or can't edit or remove a global user listed on their fleet's tab; the Observer+ / Technician / Maintainer fleet roles are never picked; the member never signs in (the header explains: a forced password reset and two logins against the 10-per-minute login limit, where the API read already shows the role); the fleet-scoped activity copy is unasserted.
+- *Redundancy:* the role-dropdown mechanics echo USRP-13/18 on the global admin's pages; the entry point, modals and seat differ, so the overlap is thin.
+- *Efficiency / smells:* `FleetUsersPage` reaches its modals by component class (Fleet's `Modal` has no dialog role) and picks **Team role** through the react-select control's class — each documented, but three class fallbacks in one new POM. `fleetRoles()` accepts `fleets` or `teams`, tolerant of the API rename at the cost of never saying which key Fleet sent. The context is a `withStaticUser` one, which the auto `pageHealth` fixture doesn't watch.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### USRP-33 · Premium • Settings • team admin scope › a team admin may rename their fleet but not delete it
+
+- **File:** [`team-admin-scope.spec.ts`](../../tests/e2e/premium/settings/users/team-admin-scope.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a team admin may rename their fleet but not delete it"`
+- **Project:** premium · **Role:** `team-admin` · **Fleets:** Workstations (administered), QA (`qaFleetId`, not administered)
+- **Mode:** UI+API · **Isolation:** independent; changes nothing by construction; own context via `withStaticUser`
+- **Preconditions:** the `team-admin` static user; the Workstations and QA fleets
+- **Data created:** none. **A rename is never saved:** Workstations and VMs are declared by name in gitops, so a renamed fleet would be orphaned by the next apply (which creates a new, empty fleet under the old name) and every worker resolving `workstationsFleetId` by name would fail meanwhile.
+
+**Flow**
+
+1. ☐ Log in as `team-admin` in a fresh context.
+2. ☐ Open `/settings/fleets/users?fleet_id=<Workstations>` **via URL**.
+   - ✅ *(UI)* **Add user** visible (`FleetUsersPage.goto` anchor).
+   - ✅ *(UI)* **Rename fleet** visible in the fleet header.
+   - ✅ *(UI)* **Delete fleet** absent (count 0) — withheld from everyone but global admins; the visible Rename proves the header rendered.
+3. ☐ Click **Rename fleet**.
+   - ✅ *(UI)* **Fleet name** reads `Workstations`.
+4. ☐ Click **Cancel** → ✅ *(UI)* the rename modal closes.
+5. ☐ *(API, as the team admin — their session token from the browser cookie, sent as a bearer token)* `PATCH /fleets/<Workstations>` with `{ "name": "" }`.
+   - ✅ *(API)* **422** — authorized, then refused for the empty name; nothing changes.
+6. ☐ *(API, as the team admin)* the same on `/fleets/<QA>`.
+   - ✅ *(API)* **403** — not authorized on a fleet they don't administer.
+
+**Assessment**
+- *Value:* a neat answer to a hard permission to test — proving "may rename" without renaming a gitops-owned fleet. The 422/403 pair checks itself: if Fleet ever validated before authorizing, the QA call would turn 422 and fail, so the Workstations 422 can't quietly stop meaning "authorized". The Delete-absent-beside-Rename-present shape keeps the absence check honest.
+- *Coverage gaps:* **delete is only a missing button** — there's no `DELETE /fleets/<Workstations>` → 403 probe as the team admin, deliberately: Fleet has no delete it refuses *after* authorizing (as the empty-name rename is), so if the gate regressed the probe would delete Workstations. The server side of delete is left to Fleet's own authz tests; **Add hosts** / **Manage enroll secrets** in the same header are unasserted for this role; the rename modal's Save is never exercised, even to see it enabled; team maintainer / observer (who should see neither button) aren't checked.
+- *Redundancy:* none in this area; fleet create/delete as a global admin is MISC-27's throwaway fleet in [area 13](13-labels-packs-dashboard-paywalls.md).
+- *Efficiency / smells:* direct-URL entry to the Users tab (USRP-32 covers the menu path, so that's fine). `sessionBearerHeaders` reads Fleet's `__Host-token` / `token` cookie — a tidy way to call the API as a static user with no token of its own, but it ties the test to Fleet's cookie name. The API calls are the real assertions; the UI half is presence only. `pageHealth` doesn't watch the `withStaticUser` context.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### USRP-34 · Create regular user (premium) — two-factor option › the two-factor checkbox starts unchecked, needs email, and hides under SSO
+
+- **File:** [`regular-user-create.spec.ts`](../../tests/e2e/premium/settings/users/regular-user-create.spec.ts) — its own **non-serial** describe below the serial create block, so a failure here can't skip USRP-11…16
+- **Grep:** `npx playwright test --project=premium -g "the two-factor checkbox starts unchecked"`
+- **Project:** premium · **Mode:** UI · **Isolation:** independent; never submits
+- **Preconditions:** admin session; **SSO configured on the premium instance** — the Authentication radios render only then, and the test asserts **Single sign-on** is enabled, so without SSO it fails rather than skips; `GET /config` decides the expected enabled state (Fleet can send email if `smtp_settings.configured`, or if `email.backend` is `"ses"` — `canSendEmail`, mirroring the form's own rule)
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API)* `GET /config` → can Fleet send email?
+2. ☐ Open `/settings/users` via URL (✅ *(UI)* first row visible), click **Add user** → **Regular user**.
+3. ☐ Look at **Enable two-factor authentication (email)**.
+   - ✅ *(UI)* visible.
+   - ✅ *(UI)* unchecked.
+   - ✅ *(UI)* **enabled** if Fleet can send email, **disabled** if not — only the branch matching the instance's config runs.
+4. ☐ Under **Authentication**, click **Single sign-on**.
+   - ✅ *(UI)* the **Single sign-on** radio was enabled, and is now checked.
+   - ✅ *(UI)* the two-factor checkbox is gone (count 0) — Fleet refuses MFA for SSO users.
+5. ☐ Click **Password**.
+   - ✅ *(UI)* the two-factor checkbox is back.
+
+**Assessment**
+- *Value:* the form rules around Fleet MFA — off by default, dependent on email, excluded by SSO. Each is a small regression that lets an admin create a user who can't sign in. Pairs with the free absence checks in [USRF-05 / USRF-09](09-users-free-and-shared.md) and with [API-32](14-api-contracts.md) (free refuses `mfa_enabled` with 402).
+- *Coverage gaps:* **MFA is never turned on anywhere in the suite** — the box is never ticked and no premium user is saved with it, by UI or API; the edit form's checkbox (same rule, `EditUserPage.tsx`) is untested on premium; only the instance's current email branch runs, so the other half of the enabled/disabled rule goes unverified until the config changes; after switching back to Password the checkbox's unchecked/enabled state isn't re-checked; its visible label isn't asserted.
+- *Redundancy:* steps 1–2 repeat USRP-11's landing.
+- *Efficiency / smells:* `mfaCheckbox` is found by the accessible name `mfa_enabled` — Fleet's `Checkbox` takes its name from the `name` prop, not the label — so the locator keys on a form-field name no user sees, and a label copy change passes unnoticed (documented in `UserFormFields`). `canSendEmail` re-implements the front end's rule as the oracle; if Fleet changes the rule, the test's expectation and the product drift apart without either being wrong on its own terms. The SSO dependency is stated in the test's comment and surfaces as a `toBeEnabled()` failure on the radio.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1078,7 +1215,8 @@ other:
 |---|---|---|
 | Users list chrome + navbar entry | USRP-28, 30 | column set never asserted; no sorting |
 | Row shape (Name/Role/Fleets/Status/Actions) | USRP-29 | assertions are non-empty only; Status copy unchecked |
-| Create human user, global role | USRP-12 (5 roles) | **GitOps** global role never created here (⚠️ unclear if offered); SSO/MFA authentication mode never used |
+| Create human user, global role | USRP-12 (5 roles) | **GitOps** global role never created here (⚠️ unclear if offered); no user is ever saved with SSO or MFA |
+| Fleet MFA option on the create form | USRP-34 (default off, email-dependent, hidden under SSO); free absence in USRF-05/09; free API refusal API-32 | **MFA never turned on** by UI or API; edit form's checkbox untested on premium; only the instance's current email branch runs |
 | Create human user, fleet-scoped | USRP-13, 14, 15 | per-fleet role never verified via API; >2 fleets untested |
 | Create API user, global role | USRP-02 (6 roles) | token never exercised against the API |
 | Create API user, fleet-scoped | USRP-03, 04, 05 | same |
@@ -1088,6 +1226,8 @@ other:
 | Edit API user | USRP-20 | save not verified; name/role/fleet edits untested |
 | Delete user | USRP-21 | Cancel path; deleting an API user; API 404 confirmation |
 | Self-protection | USRP-31 | only Delete; self-demotion untested |
+| A fleet's Users tab, as its team admin (create / edit / remove member) | USRP-32 | the team admin's limits (other fleets, global roles, global users on their tab); Observer+ / Technician / Maintainer fleet roles; member never signs in |
+| Fleet rename / delete permission, as a team admin | USRP-33 (rename allowed by API 422-vs-403; Delete button absent) | no `DELETE /fleets/:id` → 403 probe; rename never saved (deliberate — gitops owns the name); team maintainer / observer view of the header |
 | Form validation | USRP-23–27 | **password policy copy, duplicate email, duplicate API name, name length all untested**; edit-form validation copy untested |
 | Activity feed | USRP-10, 16, 19, 22 | actor never asserted; fleet-role-change copy untested |
 | Invites (SMTP-based "invite user") | — | entirely absent (⚠️ unclear whether this instance has SMTP configured, which may be why) |

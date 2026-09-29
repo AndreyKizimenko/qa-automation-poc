@@ -55,6 +55,8 @@ test.describe('Edit user', () => {
 
     await expect(page).toHaveURL(/\/settings\/users\/\d+\/edit\b/);
     await expect(editUserPage.humanHeading).toBeVisible();
+    // Fleet MFA is premium: the edit form offers no two-factor checkbox on free.
+    await expect(editUserPage.form.mfaCheckbox).toHaveCount(0);
 
     await editUserPage.form.fullName.fill(updatedName);
     await editUserPage.form.selectGlobalRole('Maintainer');

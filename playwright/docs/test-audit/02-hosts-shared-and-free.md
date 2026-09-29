@@ -1,8 +1,8 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 12 files · **Test declarations:** 23 entries (21 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **26 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 2 `free/hosts` specs)
+**Specs covered:** 13 files · **Test declarations:** 24 entries (22 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **27 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 3 `free/hosts` specs)
 
-This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, and a custom **MDM command** read back through the Activity card). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The two `free/` specs are role/paywall matrices that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
+This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
 **Host-population split — read this before reproducing anything manually.** There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM.** On premium they sit on the **VMs** fleet (id 103); on free they are in Unassigned. Specs reach them with `findOnlineHost(..., { kind: 'real' })` ([`helpers/api/hosts.ts:202`](../../helpers/api/hosts.ts)), which keys on the reported **hardware model** (`VirtualMac2,1`, `QEMU Virtual Machine`) — **not** on MDM enrollment: since perf-hosts PR #45 roughly 30% of the osquery-perf simulations are MDM-enrolled too, so enrollment no longer tells a real device from a simulation. `liveMacosHost` ([`fixtures.ts:276`](../../fixtures.ts)) is the macOS VM resolved that way (its error message still says "MDM-enrolled"; it does not check). Everything else runs against whatever simulation the API resolver returns. Simulations ignore live-query SQL, report thin/absent vitals, **never execute a script and never acknowledge an MDM command** — which is why HOST-19…HOST-23 are real-VM-only by construction. The macOS VMs lack the Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub; Python is exercised on Linux.
 
@@ -20,6 +20,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-19, HOST-23 | real macOS VM (`requireRealHost`, which wraps `findOnlineHost(…, { kind: 'real' })`) — **mandatory**: a script or MDM command must reach a device that executes/answers it. HOST-23 additionally asserts the VM is MDM-enrolled (`On …`) |
 | HOST-20, HOST-21 | real **Ubuntu** VM (`kind: 'real'`) — mandatory |
 | HOST-22 | one real VM per variant: macOS (zsh), Ubuntu (bash, Python), **Windows** (PowerShell) — mandatory |
+| HOST-24 | an online **non-MDM simulated** Windows host (`findSimulations`, slice 0) — read-only, and a simulation keeps it off the free VMs, which sit in Unassigned |
 
 ## Contents
 
@@ -48,6 +49,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-21 | `shared/hosts/host-run-script.spec.ts` | Run script › a script that outlives the agent timeout is stopped, and the details say why | UI+API | ☐ |
 | HOST-22 | `shared/hosts/host-run-script.spec.ts` | Run script › a `<interpreter>` script runs under `<interpreter>` (4 cases: zsh, bash, Python, PowerShell) | UI+API | ☐ |
 | HOST-23 | `shared/hosts/mdm-commands.spec.ts` | a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it | UI+API | ☐ |
+| HOST-24 | `free/hosts/host-idp-username.spec.ts` | Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field | UI | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -1007,6 +1009,44 @@ other:
 
 ---
 
+### HOST-24 · Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field
+
+- **File:** [`playwright/tests/e2e/free/hosts/host-idp-username.spec.ts`](../../tests/e2e/free/hosts/host-idp-username.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Add user opens the Fleet Premium message"`
+- **Project:** free only · **Mode:** UI · **Isolation:** standalone, read-only — nothing is saved
+- **Preconditions:** an online **non-MDM simulated** Windows host on the free instance (`findSimulations(request, 'windows', 1, 0)`); any host would do for a read-only check, and a simulation keeps it off the free VMs in Unassigned. The host must have no IdP username — on free none can be set ([API-31](14-api-contracts.md)), and a non-MDM simulation reports no IdP account of its own.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API setup)* Resolve the host.
+   - ✅ *(API)* a host was resolved (`toBeDefined`).
+2. ☐ Open the host at `/hosts/:id` **via URL**.
+   - ✅ *(UI)* **Disk space available** visible (`HostDetailsPage.goto` anchor).
+   - ✅ *(UI)* the **User** card's **Username (IdP)** reads `---`.
+   - ✅ *(UI)* the card's button reads **Add user** — offered on free too: the button is gated by role, not tier.
+3. ☐ Click **Add user**.
+   - ✅ *(UI)* the modal titled **Add user** is open.
+   - ✅ *(UI)* it shows "This feature is included in Fleet Premium".
+   - ✅ *(UI)* there's no **Username (IdP)** field (count 0).
+   - ✅ *(UI)* there's no **Save** button (count 0).
+
+**Assessment**
+- *Value:* the free half of the IdP-username pair ([HOSTP-13](03-hosts-premium.md) on premium), and the right shape for a paywall that sits behind a button rather than on a page: the modal's title proves it opened, so the two absences can't pass on a modal that never rendered. Catches the field leaking onto free, and the button disappearing — which would lose the upsell Fleet shows it for.
+- *Coverage gaps:* the modal is never closed; the Premium message's link is unchecked; only the global admin — whether a free **observer** is offered the button (it shouldn't be, by `canWriteEndUser`) is untested on free; the API refusal lives in [API-31](14-api-contracts.md), not here.
+- *Redundancy:* complements [MISC-20](13-labels-packs-dashboard-paywalls.md)'s page-level paywall sweep — this gate isn't a page, so it couldn't be a row in that table. Mirrors HOSTP-13's steps 3–4 with the inverted answer, which is the justified kind of tier duplication (like HOST-12/13/14).
+- *Efficiency / smells:* draws Windows slice 0 on free — the same host as API-31; `findSimulations`' slice list in `helpers/api/hosts.ts` records the shared read. Harmless while both only read or get refused; if API-31's gate ever regressed, its `PUT` would leave a username on this host and fail the `---` check here too. Direct-URL entry to the host, like the rest of the area's host-detail tests.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1025,6 +1065,7 @@ other:
 | Host details vitals | HOST-01, HOST-03 | only Agent + (implicitly) Disk space; Memory, Processor, OS, Disk encryption, IPs, Added to Fleet unasserted |
 | Refetch | HOST-01 | no in-flight/disabled state, no offline-host path |
 | Local user accounts card | HOST-02 | no empty state, no clear-search, other columns unasserted |
+| **User** card (host end user / IdP username) | HOST-24 (free: *Add user* opens the Premium message) | premium add / edit / remove is area 03 (HOSTP-13…15); the free observer's view of the button; the modal's close path |
 | Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS Applications/Full-inventory filter is covered (HOST-17) but the *absence* of that dropdown on Windows/Linux is not |
 | Host reports tab | HOST-06, HOST-18 | "don't store results" toggle behaviour and card Actions untested; the Newest/Oldest sorts are covered only as an "awaiting results sorts last" partition, so the recency ordering itself is unasserted (and vacuous on free) |
 | Host live report | HOST-05 | Stop/cancel, Errors tab, results CSV, 0%-responded path |
@@ -1045,7 +1086,7 @@ other:
 
 **UI-vs-API balance**
 
-Healthy overall — 21 of 23 entries validate through the browser, and the two API assertions that carry weight are both *justified* rather than shortcuts:
+Healthy overall — 22 of 24 entries validate through the browser, and the two API assertions that carry weight are both *justified* rather than shortcuts:
 
 - **HOST-01** uses `GET /hosts/:id → detail_updated_at` to prove the "Last fetched less than a minute ago" text followed from *this* refetch. There is no UI-only way to distinguish that from a background detail cycle, so the API check is the assertion, not a shortcut.
 - **HOST-09** compares the downloaded enroll-secret file against `GET /spec/enroll_secret`. Correctness here *is* a value-match against server state; the UI cannot self-verify it.

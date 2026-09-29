@@ -1,5 +1,5 @@
 import { test, expect } from '@fixtures';
-import { deleteUser, findUserByEmail, qaTestPassword } from '@helpers/api';
+import { canSendEmail, deleteUser, findUserByEmail, getAppConfig, qaTestPassword } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import type { GlobalRole } from '@pages';
 
@@ -183,5 +183,40 @@ test.describe('Create regular user (premium)', () => {
     const sampleEmail = `qa-test-${stamp}-observer@fleetdm.com`;
     await dashboard.goto();
     await dashboard.expectActivity(activityCopy.user.created({ email: sampleEmail }));
+  });
+});
+
+// Its own describe: the block above is serial, and a failure here must not
+// skip the create cases.
+test.describe('Create regular user (premium) — two-factor option', () => {
+  // Fleet MFA's checkbox — QA Wolf's three 2FA flows each open by asserting it
+  // starts unchecked. Its enabled state follows whether Fleet can send the
+  // magic-link email, so the expectation reads that from the config rather
+  // than assuming either way. Choosing Single sign-on hides it: Fleet refuses
+  // MFA for SSO users, and the form keeps the two from being combined. The SSO
+  // radio is enabled only while SSO is configured, which the premium instance
+  // keeps (playwright/CLAUDE.md → Project pipeline).
+  test('the two-factor checkbox starts unchecked, needs email, and hides under SSO', async ({
+    usersPage,
+    createUserPage,
+    request,
+  }) => {
+    const emailReady = canSendEmail(await getAppConfig(request));
+
+    await usersPage.goto();
+    await usersPage.openAddUser('Regular user');
+    const { form } = createUserPage;
+    await expect(form.mfaCheckbox).toBeVisible();
+    await expect(form.mfaCheckbox).not.toBeChecked();
+    if (emailReady) await expect(form.mfaCheckbox).toBeEnabled();
+    else await expect(form.mfaCheckbox).toBeDisabled();
+
+    await expect(form.authSsoRadio).toBeEnabled();
+    await form.authSsoLabel.click();
+    await expect(form.authSsoRadio).toBeChecked();
+    await expect(form.mfaCheckbox).toHaveCount(0);
+
+    await form.authPasswordLabel.click();
+    await expect(form.mfaCheckbox).toBeVisible();
   });
 });

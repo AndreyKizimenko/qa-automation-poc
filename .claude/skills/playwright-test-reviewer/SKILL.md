@@ -34,6 +34,8 @@ is a question. Say so rather than asserting it.
 2. **A setting that updates, reboots or locks a real host, set where one can receive it:** an OS-update
    minimum version or deadline, a DDM software-update declaration, Recovery Lock password enforcement. On
    premium, that's the VMs fleet. On free, it's any global setting, because the free VMs sit in Unassigned.
+   The one approved exception: `recovery-lock.spec.ts` turning Recovery Lock on for the VMs fleet, provided it
+   turns it off in an `afterEach` and the resting-state step still turns it off after a dead run.
 3. **Host-side behaviour asserted against a simulation.** Software inventory, script output, profile
    delivery or verification, certificates and agent versions need `kind: 'real'`. Simulations ignore
    live-query SQL, return no rows ~20% of runs and never install anything. (Server-side decisions, like which

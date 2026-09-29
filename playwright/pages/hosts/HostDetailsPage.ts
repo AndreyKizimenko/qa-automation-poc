@@ -13,6 +13,8 @@ import { InstallDetailsModal, UninstallDetailsModal } from '../components/Softwa
 import { SelectReportModal } from '../components/SelectReportModal';
 import { Toast } from '../components/Toast';
 import { TransferHostModal } from '../components/TransferHostModal';
+import { UpdateEndUserModal } from '../components/UpdateEndUserModal';
+import { RecoveryLockPasswordModal } from '../components/RecoveryLockPasswordModal';
 
 /**
  * /hosts/:id/details — detailed view of a single host with tabs for Details,
@@ -37,6 +39,8 @@ export class HostDetailsPage {
   readonly selectReportModal: SelectReportModal;
   /** Raised by Actions → Transfer; the same component the hosts list uses. */
   readonly transferModal: TransferHostModal;
+  readonly endUserModal: UpdateEndUserModal;
+  readonly recoveryLockModal: RecoveryLockPasswordModal;
   /** Raised by Actions → Run script. */
   readonly runScriptModal: RunScriptModal;
   /** A script run's result — from the Activity card or the Run script modal. */
@@ -77,6 +81,16 @@ export class HostDetailsPage {
   readonly usersHeading: Locator;
   readonly usersSearch: Locator;
   readonly usersRows: Locator;
+
+  // Details tab — the "User" card: the host's end user, from the IdP.
+  readonly userCard: Locator;
+  /** The card's term/value pairs — *Username (IdP)*, *Full name (IdP)*, *Groups (IdP)*, *Department (IdP)*. */
+  readonly userCardData: DataSet;
+  /**
+   * *Add user* while the host has no IdP username, *Edit user* once it has one.
+   * Shown to admins and maintainers (global or of the host's fleet) on either tier.
+   */
+  readonly updateEndUserButton: Locator;
 
   // Reports tab. The tab, its controls, and the report cards are role-less
   // wrappers, so each is scoped by the `host-reports-tab` / `host-report-card`
@@ -171,6 +185,8 @@ export class HostDetailsPage {
     this.certificates = new CertificatesCard(page);
     this.selectReportModal = new SelectReportModal(page);
     this.transferModal = new TransferHostModal(page);
+    this.endUserModal = new UpdateEndUserModal(page);
+    this.recoveryLockModal = new RecoveryLockPasswordModal(page);
     this.runScriptModal = new RunScriptModal(page);
     this.scriptDetailsModal = new ScriptDetailsModal(page);
     this.mdmCommandDetailsModal = new MdmCommandDetailsModal(page);
@@ -195,6 +211,12 @@ export class HostDetailsPage {
     this.usersHeading = this.usersCard.getByRole('heading', { name: 'Local user accounts' });
     this.usersSearch = this.usersCard.getByPlaceholder('Search local user accounts by username');
     this.usersRows = this.usersCard.getByRole('table').locator('tbody').getByRole('row');
+
+    // `user-card` is the card's own class; Fleet's Card is a role-less div.
+    this.userCard = page.locator('.user-card');
+    this.userCardData = new DataSet(this.userCard);
+    // The icon's alt text leads the accessible name ("plus Add user", "pencil Edit user").
+    this.updateEndUserButton = this.userCard.getByRole('button', { name: /(Add|Edit) user$/ });
 
     this.reportsTabPanel = page.locator('.host-reports-tab');
     this.reportsCount = this.reportsTabPanel.locator('.host-reports-tab__count');
@@ -475,7 +497,11 @@ export class HostDetailsPage {
    */
   async runAction(label: string): Promise<void> {
     await this.actionsButton.click();
-    await this.actionOptions.filter({ hasText: new RegExp(`^${label}$`) }).click();
+    // Asserted first: a click on an option the menu doesn't offer would wait out
+    // the whole test instead of failing here.
+    const option = this.actionOption(label);
+    await expect(option).toBeVisible();
+    await option.click();
   }
 
   /** Opens the Run script modal via Actions → Run script. */
