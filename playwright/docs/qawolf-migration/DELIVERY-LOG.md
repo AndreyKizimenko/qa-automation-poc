@@ -154,8 +154,10 @@ OS-update declaration.
 **A profile's commands on one host** — `premium/controls/os-settings/profile-delivery-retry.spec.ts` (new, +
 `listHostMdmCommands`, `activityCopy.mdmCommand.forProfile`, Resend on `HostDetailsPage`). Install, Resend from the
 host's Controls tab and removal, each command tied to the profile by name: the Activity card names it, the API
-counts it. The retry case — three retries, then Failed — is **skipped**: the approved refused payload (an unknown
-`com.apple.` type) is accepted by macOS 26.6, so it needs a payload the Mac really rejects (`TODO.md`).
+counts it. Then a profile the Mac refuses — a Wi-Fi payload with no SSID, approved for the VMs (an unknown
+`com.apple.` type, the first candidate, is accepted by macOS 26.6): four InstallProfile commands, all Error, the
+first and Fleet's three retries, then **Failed** on the Controls tab — whose name gains the failed count,
+"Controls 1".
 
 **Software, policies and reports** — `premium/software/software-label-targets.spec.ts`,
 `premium/policies/policy-label-targets.spec.ts`, `premium/reports/report-label-targets.spec.ts` (new, + the dropdown

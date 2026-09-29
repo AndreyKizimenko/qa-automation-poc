@@ -19,7 +19,6 @@ Skips are tracked in one of two places depending on who owns the fix:
 
 | Test | Why | Unblock |
 |---|---|---|
-| `tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts` → `a profile the host refuses is retried three times, then reads Failed` | Needs a profile the Mac refuses at install. The approved candidate — an unknown `com.apple.` payload type (`rejectedMobileconfig`) — is accepted by macOS 26.6: acknowledged and verified on the premium VM (2026-09-29). | Andrey approves a payload macOS rejects (a Wi-Fi payload without `SSID_STR`, a VPN payload without `VPNType`, …); `rejectedMobileconfig` builds it; unskip. |
 | `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
 
 Product-defect skips live in

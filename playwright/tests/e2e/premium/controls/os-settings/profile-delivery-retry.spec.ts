@@ -17,8 +17,8 @@
  *
  * Each profile targets a manual label holding only the VM, so no borrowed
  * simulation on the fleet gets it. The inert one is `inertMobileconfig`; the
- * refused one is `rejectedMobileconfig` — an unknown `com.apple.` payload type,
- * which macOS rejects without applying anything. Both approved for the VMs.
+ * refused one is `rejectedMobileconfig` — a Wi-Fi payload with no SSID, which
+ * macOS rejects without applying anything. Both approved for the VMs.
  *
  * Every assertion about a command is scoped to this run's profile by name, so
  * counting them counts only our own. Counts come from the API; the Activity card
@@ -130,12 +130,6 @@ test.describe('Premium • Controls • Configuration profiles — delivery on o
     vmsFleetId,
     request,
   }) => {
-    // Needs a profile macOS refuses. The approved one — an unknown `com.apple.`
-    // payload type — is accepted by macOS 26.6: acknowledged, then verified
-    // (checked 2026-09-29). Unblocked by Andrey approving a payload the Mac
-    // rejects (e.g. a Wi-Fi or VPN payload missing its required key) and
-    // `rejectedMobileconfig` building that instead. See TODO.md.
-    test.skip(true, 'no approved payload that macOS 26 refuses — see TODO.md');
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
     const n = runNonce();

@@ -214,8 +214,10 @@ export class HostDetailsPage {
     this.reportsEmptyState = page.getByRole('heading', { name: 'No reports scheduled' });
 
     this.detailsTab = page.getByRole('tab', { name: 'Details' });
-    this.controlsTab = page.getByRole('tab', { name: 'Controls', exact: true });
-    this.controlsPanel = page.getByRole('tabpanel', { name: 'Controls', exact: true });
+    // The tab carries a count of the host's failed controls ("Controls 1"), and
+    // its panel takes the tab's name.
+    this.controlsTab = page.getByRole('tab', { name: /^Controls( \d+)?$/ });
+    this.controlsPanel = page.getByRole('tabpanel', { name: /^Controls( \d+)?$/ });
     this.softwareTab = page.getByRole('tab', { name: 'Software' });
     this.reportsTab = page.getByRole('tab', { name: 'Reports' });
     this.policiesTab = page.getByRole('tab', { name: 'Policies' });

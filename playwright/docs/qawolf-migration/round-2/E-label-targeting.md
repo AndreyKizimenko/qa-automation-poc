@@ -151,7 +151,7 @@ The batch's own **Done when** below, plus:
 | target | status | notes |
 |---|---|---|
 | inert profile fixtures | ✅ | `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` + READMEs; both lifecycle specs moved onto them; the two lock fixtures deleted |
-| `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ◐ | install → Activity names the InstallProfile → **Resend** on the Controls tab (a second InstallProfile, verified again) → delete → the RemoveProfile. The retry case (3 retries, then Failed) is **skipped**: the approved refused payload is accepted by macOS 26.6 — needs a new payload approved (`TODO.md`) |
+| `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ✅ | install → Activity names the InstallProfile → **Resend** on the Controls tab (a second InstallProfile, verified again) → delete → the RemoveProfile; and a Wi-Fi profile with no SSID the Mac refuses: four InstallProfile commands, all Error — the first and Fleet's 3 retries — then **Failed** on the Controls tab and in the Activity card |
 | `premium/controls/os-settings/profile-declarations.spec.ts` | ✅ | three declarations of Apple's no-op test type — no target, include all, exclude — over the VM + two borrowed simulations; *verified* is the device's DDM report. QA Wolf's second flow (the refused delete) is `profile-broken-labels`'s declaration case |
 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | ✅ **retargeted** | the refused delete — manual and dynamic labels, targeted by a `.mobileconfig`, a declaration or a Windows `.xml`; the label and target survive it, and the delete goes through once the profile is gone. Workstations, so nothing is delivered |
 | `premium/controls/os-settings/profile-label-targets.spec.ts` | ✅ | macOS: three profiles (include all · include any + exclude · exclude) over the VM + two borrowed simulations; Windows: include all + exclude, then an Edit that excludes the VM and takes the profile back off it. Set membership server-side, the setting read back on the device |
@@ -199,8 +199,13 @@ is: **uploading a profile is delivering it.**
   `~/Desktop/test-data/organized/apple/macos/profiles/invalid/device-rejects/macos-unknown-payload-type.mobileconfig`.
   An unknown type *outside* `com.apple.` is not refused: macOS installs it as a custom preference domain,
   which is exactly what the inert profile relies on. **On macOS 26.6 the `com.apple.` one isn't refused
-  either** — the VM acknowledged it and Fleet verified it — so the retry case is skipped until a payload the
-  Mac really rejects is approved (`TODO.md`).
+  either** — the VM acknowledged it and Fleet verified it. Andrey then approved a **Wi-Fi payload with no
+  `SSID_STR`** (`device-rejects/macos-wifi-missing-ssid.mobileconfig`, built with `AutoJoin` off): macOS refuses
+  it — *"ConfigProfilePluginDomain (-307): Some required information in the profile is missing."* — and the Mac
+  VM (`VirtualMac2,1`) has no Wi-Fi interface for it to touch, only ethernet (read on the device). The VPN
+  candidate was passed over: a VPN payload, if ever accepted, is one that can reroute the MDM channel.
+- **A failed control puts a count on the host's Controls tab** — "Controls 1" — and its panel takes the same
+  name, so both are matched as `/^Controls( \d+)?$/`. The exact name hung the first run of the retry case.
 - **`profile-broken-labels` covers the refused delete.** Since Fleet 4.87 (`DeleteLabel` in
   `server/datastore/mysql/labels.go`) a label that a profile or declaration targets can't be deleted — 422,
   *"Couldn't delete. A configuration profile targets this label. Please delete the profile and try again."* —

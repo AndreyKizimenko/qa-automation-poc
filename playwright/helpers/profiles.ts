@@ -167,13 +167,15 @@ export function inertDeclaration(name: string): InertDeclaration {
 }
 
 /**
- * Meant as a macOS profile the Mac refuses at install, so Fleet retries it and
- * then reports it Failed. Its one payload has an unknown `com.apple.` type —
- * the approved payload, from Andrey's `device-rejects` test set — **but macOS
- * 26.6 accepts it**: the VM acknowledged it and Fleet verified it (2026-09-29),
- * presumably as a custom preference domain, like {@link inertMobileconfig}.
- * Still inert either way; it just doesn't fail. The retry test that uses it is
- * skipped until a payload the Mac really refuses is approved.
+ * A macOS profile the Mac refuses at install, so Fleet retries it and then
+ * reports it Failed. Its one payload is a Wi-Fi network with no `SSID_STR`, the
+ * key a Wi-Fi payload can't do without — Andrey's
+ * `device-rejects/macos-wifi-missing-ssid.mobileconfig`, approved for the VMs,
+ * with `AutoJoin` off. Were it ever accepted it would still change nothing:
+ * a network with no name can't be joined, and the VMs have no Wi-Fi interface
+ * — their network is virtual ethernet. (An unknown `com.apple.` payload type,
+ * the obvious choice, isn't refused: macOS 26.6 installs it as a preference
+ * domain.)
  */
 export function rejectedMobileconfig(name: string): GeneratedProfile {
   assertOwnName(name);
@@ -186,17 +188,21 @@ export function rejectedMobileconfig(name: string): GeneratedProfile {
 	<array>
 		<dict>
 			<key>PayloadDisplayName</key>
-			<string>${name} unknown payload</string>
+			<string>${name} Wi-Fi without SSID</string>
 			<key>PayloadIdentifier</key>
-			<string>${identifier}.inner</string>
+			<string>${identifier}.wifi</string>
 			<key>PayloadType</key>
-			<string>com.apple.fleet.nonexistent.payloadtype</string>
+			<string>com.apple.wifi.managed</string>
 			<key>PayloadUUID</key>
 			<string>${crypto.randomUUID().toUpperCase()}</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
-			<key>MadeUpKey</key>
-			<string>made-up-value</string>
+			<key>EncryptionType</key>
+			<string>WPA2</string>
+			<key>HIDDEN_NETWORK</key>
+			<false/>
+			<key>AutoJoin</key>
+			<false/>
 		</dict>
 	</array>
 	<key>PayloadDisplayName</key>

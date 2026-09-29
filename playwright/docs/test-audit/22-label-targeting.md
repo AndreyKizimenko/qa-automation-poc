@@ -62,7 +62,7 @@ run that timed out with 4 profiles, 4 simulations and 6 labels left behind.
 | LT-03 | `premium/controls/os-settings/profile-broken-labels.spec.ts` | a {manual, dynamic} label that {a macOS profile, a declaration, a Windows profile} targets can't be deleted until the profile is gone | UI+API | ☐ |
 | LT-04 | `premium/controls/os-settings/profile-declarations.spec.ts` | a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick | UI+API | ☐ |
 | LT-05 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | a profile is installed, resent and removed by commands the host names it in | UI+API | ☐ |
-| LT-06 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | a profile the host refuses is retried three times, then reads Failed — **skipped** | UI+API | ☐ |
+| LT-06 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | a profile the host refuses is retried three times, then reads Failed | UI+API | ☐ |
 | LT-07 | `premium/software/software-label-targets.spec.ts` | a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick | UI+API | ☐ |
 | LT-08 | `premium/policies/policy-label-targets.spec.ts` | include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick | UI+API | ☐ |
 | LT-09 | `premium/reports/report-label-targets.spec.ts` | include all and include any schedule a report on exactly the hosts their labels pick | UI+API | ☐ |
@@ -298,10 +298,10 @@ other:
 
 ---
 
-### LT-06 · Premium • Controls • Configuration profiles — delivery on one host › a profile the host refuses is retried three times, then reads Failed — **skipped**
+### LT-06 · Premium • Controls • Configuration profiles — delivery on one host › a profile the host refuses is retried three times, then reads Failed
 
 - **File:** [`playwright/tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts`](../../tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts)
-- **Status:** `test.skip` — see [`TODO.md`](../../TODO.md). It needs a profile the Mac refuses, and the approved one — an unknown `com.apple.` payload type — is **accepted by macOS 26.6** (the VM acknowledged it and Fleet verified it, 2026-09-29). Unskipped once a payload the Mac really rejects is approved.
+- **Refused profile:** `rejectedMobileconfig` — a Wi-Fi payload with no `SSID_STR`, approved for the VMs. macOS answers each InstallProfile with *"ConfigProfilePluginDomain (-307): Some required information in the profile is missing."* and applies nothing; the Mac VM has no Wi-Fi interface anyway. (An unknown `com.apple.` payload type isn't refused: macOS 26.6 installs it.)
 
 **Flow, as written**
 
@@ -314,8 +314,8 @@ other:
    - ✅ *(UI)* *"The InstallProfile command for <name> failed."*
 
 **Assessment**
-- *Value:* would be high — QA Wolf's flow waited for "Failed" and asserted nothing about the retries.
-- *Blocked on:* a payload approval, not a product bug.
+- *Value:* high — QA Wolf's flow waited for "Failed" and asserted nothing about the retries; this counts them, and a failed control's count on the Controls tab ("Controls 1") is on the path.
+- *Cost:* ~2.5 min on the Mac — four InstallProfile commands a reconciler tick apart, then Failed.
 
 **Notes (Andrey)**
 ```

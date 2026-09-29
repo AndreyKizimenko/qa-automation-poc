@@ -313,8 +313,8 @@ what you write, and the docs have to move with the code or the next audit pays f
   both tiers side by side. Triage it with `playwright-run-reviewer`. Run the full suite locally only if CI
   can't, and say so.
 - **Before any run that touches the real VMs, check nothing else is:** `gh run list --limit 5`. The nightly
-  is scheduled for 05:00 UTC (gitops) and 05:30 (Playwright), but GitHub has been starting it 5–6.5 h late
-  (2026-09-26 09:42, 09-27 10:22, 09-28 11:27 UTC) — check `gh run list --workflow "Playwright — Premium" --event schedule`
+  is scheduled for 05:00 UTC (gitops) and 05:30 (Playwright), but since 2026-08-27 GitHub has been creating
+  this repo's scheduled runs 4–6.5 h late — the event itself, all crons shifted together — so check `gh run list --workflow "Playwright — Premium" --event schedule`
   for today's, and `gh run list` right before you run. Two runs on the same VMs corrupt each other — one queue per VM, and
   shared fixtures each run's cleanup removes. CI's concurrency groups only keep CI from colliding with itself.
 
