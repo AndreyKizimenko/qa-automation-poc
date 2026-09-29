@@ -103,11 +103,17 @@ export default defineConfig({
   // report at all. The real-VM specs are what make a run long: each VM works one
   // queue, and a retried VM test can cost 5–15 min.
   globalTimeout: process.env.CI ? 100 * 60_000 : 0,
-  // CI runs at 2 — the shared Fleet QA instance has limited concurrency
-  // headroom, and higher worker counts there surface as flaky navigation
-  // timeouts under load even when the test logic is correct. Local dev defaults
-  // to 4 for faster feedback. `WORKERS` env or `--workers=N` overrides either.
-  workers: process.env.WORKERS ? Number(process.env.WORKERS) : process.env.CI ? 2 : 4,
+  // CI runs free at 2 and premium at 3 — the shared Fleet QA instances have
+  // limited concurrency headroom, and more workers there surface as flaky
+  // navigation timeouts under load even when the test logic is correct.
+  // Premium's third worker leans on its MySQL's 2 CPU / 4 GB; the real VMs
+  // still work one queue each, so VM specs share it. Local dev defaults to 4
+  // for faster feedback. `WORKERS` env or `--workers=N` overrides either.
+  workers: process.env.WORKERS
+    ? Number(process.env.WORKERS)
+    : process.env.CI
+      ? suite === 'premium' ? 3 : 2
+      : 4,
   // Fleet serves /assets/bundle-*.js without Cache-Control, so Cloudflare
   // doesn't cache it (cf-cache-status: DYNAMIC) and every cold browser
   // context refetches the 4.7 MB bundle from origin. Under origin load
