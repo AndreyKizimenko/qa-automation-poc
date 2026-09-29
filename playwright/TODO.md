@@ -20,6 +20,7 @@ Skips are tracked in one of two places depending on who owns the fix:
 | Test | Why | Unblock |
 |---|---|---|
 | `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
+| `tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts` (whole file) | Its fixtures, `fleet-test-passcode.mobileconfig` and `fleet-test-screenlock.xml`, gate access to a host, and on free Unassigned *is* where the real VMs are — so Fleet delivered each upload to them before the delete step ran (the Windows VM's DeviceLock history showed 32 deliveries, macOS 7). The premium copy is safe: its Unassigned and Workstations fleets hold no real host. | Batch E's inert fixture pair ([E-label-targeting.md §1](docs/qawolf-migration/round-2/E-label-targeting.md)) replaces both, in this spec and its premium sibling. |
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md) — currently
