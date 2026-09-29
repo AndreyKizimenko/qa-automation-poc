@@ -182,6 +182,12 @@ covers delivery, Resend, removal and a declaration on the free Mac.
 guards that refusal for a `.mobileconfig`, a declaration and a Windows `.xml`, manual and dynamic labels, and the
 release once the profile is gone. On Workstations, so nothing is delivered.
 
+**The nightly as one chain** — `.github/workflows/qa-nightly.yml` (new). The nightly was three clock-spaced
+schedules (Render 04:00 UTC, gitops 05:00, Playwright 05:30), and since 2026-08-27 GitHub has started this repo's
+scheduled runs 4–6.5 h late, all together — the order held by luck. `QA — Nightly` runs Render's deploy hooks, a
+30-min wait, both instances' `/healthz`, then per tier the gitops chain and, whatever it did, the suite; one
+05:00 UTC schedule, still started late, but in order. Also bumps `upload-artifact` to v7 (Node 24).
+
 **Version pins that never cleared** — `helpers/api/fma.ts` (fixed). `setPinnedVersion(…, '')` sent no `version`
 field at all — Playwright drops an empty-string multipart field — so Fleet changed nothing and D's Claude walk,
 `version-pinning` and the stranded-pin cleanup all left their pins in place. It failed the 09-29 nightly, the

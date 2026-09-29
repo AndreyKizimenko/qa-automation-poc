@@ -10,18 +10,18 @@ name: QA — Nightly
 #     ├─► gitops premium ─► Playwright premium (whatever gitops did)
 #     └─► gitops free    ─► Playwright free    (whatever gitops did)
 #
-# Started at 12 AM Central by an outside scheduler calling this workflow's
-# workflow_dispatch: GitHub creates this repo's scheduled runs hours late (4–6.5 h
-# since 2026-08-27), so a `schedule:` can't hold a time. The schedule below is a
-# fallback for a night the outside trigger doesn't fire: the run stands down
-# when a dispatched one already started that UTC day.
+# Scheduled for 05:00 UTC (12 AM CDT). GitHub starts scheduled runs late — since
+# 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — and
+# the chain doesn't mind: every step waits on the one before it, not on a clock.
+# For a start at an exact time, an outside scheduler can call workflow_dispatch.
 #
 #   gh workflow run "QA — Nightly"
 #
 # The tier jobs take no concurrency group of their own: the called workflows
 # hold their instance's group (`<tier>-fleetqa-instance`), and a job in the same
-# group would wait on its own callees. The chain's own group keeps the fallback
-# from starting while a dispatched chain is still running.
+# group would wait on its own callees. The chain's own group keeps a second
+# chain — a manual run beside the scheduled one — from redeploying the
+# instances under a running suite.
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ on:
         type: number
         default: 30
   schedule:
-    - cron: '0 7 * * *' # fallback only — 2 h after the 12 AM CDT trigger, plus GitHub's lag
+    - cron: '0 5 * * *' # 05:00 UTC = 12 AM CDT (11 PM CST); GitHub starts it hours late
 
 concurrency:
   group: qa-nightly-chain
@@ -45,36 +45,7 @@ permissions:
   contents: read
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-    outputs:
-      run: ${{ steps.check.outputs.run }}
-    steps:
-      - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          if [[ "$EVENT" != schedule ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          today=$(date -u +%Y-%m-%d)
-          dispatched=$(gh api -X GET "repos/${{ github.repository }}/actions/workflows/qa-nightly.yml/runs" \
-            -f event=workflow_dispatch -f created=">=$today" --jq '.total_count')
-          if (( dispatched > 0 )); then
-            echo "::notice::A dispatched nightly already started today; the fallback stands down."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::No dispatched nightly today; the outside trigger didn't fire, so the fallback runs the chain."
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-
   render-deploy:
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     uses: ./.github/workflows/render-deploy.yml
     secrets: inherit
 
@@ -86,8 +57,8 @@ jobs:
   # Past this point each job checks render-settle's result itself, because a
   # job's default `success()` also counts a failed hook further up the chain.
   render-settle:
-    needs: [gate, render-deploy]
-    if: ${{ !cancelled() && needs.gate.outputs.run == 'true' }}
+    needs: render-deploy
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:

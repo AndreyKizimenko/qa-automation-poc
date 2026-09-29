@@ -66,7 +66,7 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `qa-nightly.yml` | 12 AM Central via an outside trigger (`workflow_dispatch`); a 07:00 UTC `schedule` as fallback | **The nightly**, as one chain: Render redeploy → 30-min wait + both instances healthy → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
+| `qa-nightly.yml` | 05:00 UTC daily (GitHub starts it hours late), manual | **The nightly**, as one chain: Render redeploy → 30-min wait + both instances healthy → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
 | `render-deploy.yml` | Manual, `workflow_call` | Hits Render deploy hooks so the free + premium instances pick up the latest Fleet release. The nightly's first step. |
 | `gitops-free.yml` / `gitops-premium.yml` | Manual, `workflow_call` | Apply the baseline gitops config to the matching instance via the `gitops-action` composite. |
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
@@ -81,20 +81,12 @@ Nightly ordering is by dependency, not by clock: `qa-nightly.yml` fires both
 Render deploy hooks, waits 30 min for the deploys to finish (a hook only queues
 one, and Render keeps the old instance serving until the new one is live), checks
 both instances' `/healthz`, then runs each tier's gitops chain and, once it has
-finished — green or red — that tier's suite, the two tiers side by side. It's started at 12 AM
-Central by an outside scheduler calling its `workflow_dispatch`, because since
-2026-08-27 GitHub has been creating this repo's scheduled runs 4–6.5 h late; its
-own 07:00 UTC `schedule` is a fallback that stands down once a dispatched run has
-started that UTC day. The outside trigger is one call, with a fine-grained token
-that has **Actions: read and write** on this repo and nothing else:
-
-```bash
-curl -fsS -X POST \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/AndreyKizimenko/qa-automation-poc/actions/workflows/qa-nightly.yml/dispatches \
-  -d '{"ref":"main"}'
-```
+finished — green or red — that tier's suite, the two tiers side by side. It's
+scheduled for 05:00 UTC (12 AM CDT), and GitHub starts it late — since 2026-08-27
+this repo's scheduled runs have been starting 4–6.5 h after their cron time —
+which the chain tolerates, since no step waits on a clock. A start at an exact
+time would take an outside scheduler calling its `workflow_dispatch` with a token
+that has **Actions: read and write** on this repo.
 
 Each tier's gitops chain and Playwright suite share a concurrency group
 (`<tier>-fleetqa-instance`), so an apply and a test run — or two test runs —

@@ -112,7 +112,7 @@ resting-state step assume them plain). So:
 - **Don't run the full suite while you build** — README §9. Your specs, both tiers, with deps once;
   `--workers=2` on VM specs; the full suite once, at the end, via `QA — Branch run`.
 - **Nothing else may be using the VMs** when you run a VM spec: `gh run list --limit 5` first, and stay clear of
-  the nightly — `QA — Nightly`, started at 12 AM Central and about 1.5 h long (#66); `gh run list` shows it.
+  the nightly — `QA — Nightly`, scheduled for 05:00 UTC but started hours late by GitHub, about 1.5 h long.
 - **`fleetctl` must stay within a minor of the server.** Several of these flows shell out to it. The released
   4.92.1 against the 4.93 RC is fine; what silently broke gitops `software:` was the 4.85 client CI used to fall
   back to. If a flow needs output only the RC's client prints, build one from `~/repositories/fleet`
@@ -143,7 +143,7 @@ The batch's own **Done when** below, plus:
 > **Status (2026-09-29):** in review as [PR #65](https://github.com/AndreyKizimenko/qa-automation-poc/pull/65) —
 > everything above except the last item. Andrey dispatches the branch run himself,
 > clear of the nightly — which GitHub has been starting 4–6.5 h after its 05:00 UTC schedule since 2026-08-27,
-> and which #66 turns into one chain started at 12 AM Central by an outside trigger.
+> and which this PR also turns into one chain (`QA — Nightly`), ordered by dependency rather than by clock.
 
 ---
 
