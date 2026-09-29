@@ -69,6 +69,7 @@ export class MyWidget {
 | `EditAppearanceModal` | `/software/titles/:id` summary card | Fleet's `EditIconModal`: custom icon + display name behind one Save. The file control swaps between an empty uploader and a staged-file card, so it targets `input[type="file"]` rather than a fixed id |
 | `VersionsModal` | `/software/titles/:id` summary card + accordion badge | Version pinning for Fleet-maintained apps: latest / exact / major-version radios. `pinTargetLabel` and `pinTargetApiValue` map a target to its radio label and to the `version` value Fleet stores |
 | `SelectReportModal` | Host Actions → Live report | Lists the reports the host's fleet can run; picking one navigates to its edit screen with the host pre-targeted |
+| `TargetLabelSelector` | Add / Edit profile modals (premium); next, the declaration, policy, software and report forms | Fleet's label target: All hosts / Custom, then the tabbed Include (Any / All) and Exclude label lists. Constructed on the modal or form that owns it. Radios are hidden inputs, so a choice clicks the `<label>` wrapping the radio — with a page-rooted `has`, since a `has` locator carrying the container's chain matches nothing |
 | `clickHoverAction` | Any hover-revealed row/card icon (download, trash, refetch) | Not a class — a helper function. Fleet keeps these icons `display: none` until the parent is hovered, and a plain `hover()` + `click()` can lose the hover mid-click |
 
 ## Promoting a page-local locator to a component

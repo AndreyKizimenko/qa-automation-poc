@@ -96,6 +96,12 @@ export class HostDetailsPage {
   readonly reportsEmptyState: Locator;
 
   readonly detailsTab: Locator;
+  /**
+   * The Controls tab: every profile, declaration and OS setting Fleet lists for
+   * the host, with its status — what used to be the OS settings modal.
+   */
+  readonly controlsTab: Locator;
+  readonly controlsPanel: Locator;
   readonly softwareTab: Locator;
   readonly reportsTab: Locator;
   readonly policiesTab: Locator;
@@ -207,6 +213,8 @@ export class HostDetailsPage {
     this.reportsEmptyState = page.getByRole('heading', { name: 'No reports scheduled' });
 
     this.detailsTab = page.getByRole('tab', { name: 'Details' });
+    this.controlsTab = page.getByRole('tab', { name: 'Controls', exact: true });
+    this.controlsPanel = page.getByRole('tabpanel', { name: 'Controls', exact: true });
     this.softwareTab = page.getByRole('tab', { name: 'Software' });
     this.reportsTab = page.getByRole('tab', { name: 'Reports' });
     this.policiesTab = page.getByRole('tab', { name: 'Policies' });
@@ -242,6 +250,27 @@ export class HostDetailsPage {
   async goto(hostId: number): Promise<void> {
     await this.page.goto(`/hosts/${hostId}`);
     await expect(this.vitalsDiskSpace).toBeVisible();
+  }
+
+  /**
+   * Opens the Controls tab and waits for its table or its empty state — with no
+   * controls, the tab renders both.
+   */
+  async openControlsTab(): Promise<void> {
+    await this.controlsTab.click();
+    await expect(
+      this.controlsPanel.getByRole('table').or(this.controlsPanel.getByText('No controls')).first(),
+    ).toBeVisible();
+  }
+
+  /**
+   * The Controls table's row for one profile, by its exact name. Columns: Name,
+   * Status (Verified / Verifying / Pending / Failed), Details, Actions (Resend).
+   */
+  controlRow(name: string): Locator {
+    return this.controlsPanel
+      .getByRole('row')
+      .filter({ has: this.page.getByRole('cell', { name, exact: true }) });
   }
 
   async openSoftwareTab(): Promise<void> {

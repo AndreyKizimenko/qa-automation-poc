@@ -34,6 +34,7 @@ that's a page-object responsibility.
 | [`perf.ts`](./perf.ts) | `measureNav()`, `measureSearch()` — time user-perceived loads |
 | [`perf-teardown.ts`](./perf-teardown.ts) | Performance summary table + historical comparison |
 | [`team-scope.ts`](./team-scope.ts) | `fleetIdFor(scope, workstationsFleetId)` — maps `'All fleets'` / `'Unassigned'` / `'Workstations'` to the `fleet_id` URL value (`undefined` / `0` / wsId) for scope-aware page-object `goto({ fleetId })` calls |
+| [`profiles.ts`](./profiles.ts) | `inertMobileconfig(name)` / `inertWindowsProfile(name)` / `inertDeclaration(name)` (Apple's no-op `management.test`) / `rejectedMobileconfig(name)` (a profile macOS refuses, for Fleet's retries) — configuration profiles generated at run time on the pattern of the committed inert pair, each with a name, `PayloadIdentifier` and preference domain of its own so parallel uploads never collide; `runNonce()`. Every name starts `pw-` for the cleanup sweep. One generated Windows profile per fleet at a time: they share the one approved LocURI |
 | [`vm-fixtures.ts`](./vm-fixtures.ts) | `VM_SOFTWARE_FIXTURES` — the VMs fleet's durable install/uninstall software (declared in `gitops/premium-fleetqa/fleets/vms.yml`), `findVmFixtureTitle`, `isVmFixtureInstalled`, `ensureVmFixtureUninstalled`. Shared by `software-lifecycle-on-host.spec.ts` and the cleanup preflight |
 | [`vuln.ts`](./vuln.ts) | Vulnerability column assertions (`expectRowHasVulnData`, `expectSingleCve`, `assertVulnTooltip`) for specs that drill into the "Vulnerabilities" column of the DataTable |
 | [`catalogs/`](./catalogs/) | Typed app-store reference catalogs: `fmaApps`, `vppApps`, `vppUiSearchNames`, `androidApps`. Pick (id + platform) for API/GitOps tests; pick a name for UI search tests |
@@ -44,16 +45,17 @@ that's a page-object responsibility.
 |--------|---------------|
 | `core.ts` | `apiUrl`, `apiLatestUrl`, `authHeaders`, `getApiToken`, `withApiRequest`, shared `HostRef` / `FleetRef` types |
 | `activities.ts` | `assertActivity` (test-side check; fails the test if missing), `findActivity` (lower-level lookup) |
-| `hosts.ts` | `findOnlineHost` (resolve by platform + `kind: 'real' \| 'simulated'`), `findHostByPlatform`, `findHostWithSoftware`, `findSimulatedHostIds`, `hostExists`, `getHostFleetId`, `getHostDetailUpdatedAt`, `requireRealHost` (the online real VM of a platform, or a failure), `listFleetHosts`, `waitForHostRefetch` / `waitForNoPendingRefetch`, `listUpcomingActivities` / `cancelUpcomingActivity` (a host's queue), `transferHosts`, `transferHostsByFilter` |
+| `hosts.ts` | `findOnlineHost` (resolve by platform + `kind: 'real' \| 'simulated'`), `findHostByPlatform`, `findHostWithSoftware`, `findSimulatedHostIds`, `findMdmSimulations` (MDM-enrolled simulations on Unassigned to borrow onto the VMs fleet as the "outside the label" host), `hostExists`, `getHostFleetId`, `getHostDetailUpdatedAt`, `requireRealHost` (the online real VM of a platform, or a failure), `listFleetHosts`, `waitForHostRefetch` / `waitForNoPendingRefetch`, `listUpcomingActivities` / `cancelUpcomingActivity` (a host's queue), `transferHosts`, `transferHostsByFilter` |
 | `fleets.ts` | `findFleetByName`, `createFleet`, `deleteFleet`, `recreateFleet`, plus the per-fleet webhook / host-expiry getters and setters |
 | `software.ts` | `uploadSoftwarePackage`, `findSoftwareTitleByPackageName`, `deleteSoftwareTitle*`, `getSoftwareTitle`, `getSoftwarePackage`, `findVulnerableSoftwareBySources`, `SoftwareTitleRef` / `SoftwarePackageRef` |
 | `fma.ts` | `findFmaIdBySlug`, `addFmaToFleet` |
 | `app-store.ts` | `addAppStoreApp`, `AppStorePlatform` |
 | `mdm.ts` | Bootstrap package, EULA, setup assistant, and setup-experience getters/deleters, plus the bulk `deleteAllConfigurationProfiles` / `deleteAllScripts` used by cleanup |
+| `profiles.ts` | Configuration profiles three ways: the fleet's record (`uploadProfile` with label targets, `getProfile`, `findProfileByName`, `deleteProfile`), the host's (`listHostProfiles`, `hostsListingProfile` — which of a set of hosts Fleet lists it for, `waitForHostProfileStatus`, `waitForHostProfileGone`), and the device's (`queryHost`, `readManagedPreferenceDomain`, `readWindowsPolicyValue` — always filtered to one domain or value) |
 | `config.ts` | `getAppConfig`, `patchAppConfig`, `setGlobalDiskEncryption`, and the typed `AppConfig` / `WebhookSettings` shapes |
 | `policies.ts` | `createPolicy`, `deletePolicies`, `PolicyRef` |
 | `reports.ts` | `createReport`, `listReports`, `findReportBy{Id,Name}`, `deleteReport`, `deleteReportsMatching`, `getHostReportLastFetched` |
-| `labels.ts` | `deleteLabelsMatching` |
+| `labels.ts` | `deleteLabelsMatching`, `deleteLabelsWithPrefix` (the cleanup sweep's), `getLabelId`, `listLabelHostIds`, `createManualLabel` / `setManualLabelHosts` (a label holding exactly the hosts a targeting spec chose), `deleteLabelById` (returns the status — Fleet refuses to delete a targeted label) |
 | `variables.ts` | `listVariables`, `deleteVariablesMatching` |
 | `enroll-secrets.ts` | Global + per-team enroll-secret getters and setters |
 | `users.ts` | `createUser` / `createApiUser`, `updateUser`, `deleteUser`, `findUserByEmail`, `requirePasswordReset`, `deleteUserSessions`, plus `qaTestEmail()` / `deleteAllQaTestUsers()` for disposable test users |

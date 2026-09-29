@@ -108,7 +108,7 @@ Consolidated from the batch files, so the dependency graph is visible in one pla
 
 | component | batch | what it wraps |
 |---|---|---|
-| **`ProfileTargetsForm`** | E | include-all / include-any / exclude label targeting. The highest-leverage new object in round 2: one component, four consumers (profiles, declarations, software, policies). |
+| **`TargetLabelSelector`** (planned as `ProfileTargetsForm`) | E | include-all / include-any / exclude label targeting. The highest-leverage new object in round 2. Fleet has two variants sharing one root — tabbed (profiles, declarations, policies) and dropdown (software, reports) — and one component object covers both. |
 | `RunScriptModal` | D | Actions → Run script: script picker, Run now vs Schedule for later |
 | `ScriptDetailsModal` | D | script output, exit status, status message line |
 | `MdmCommandDetailsModal` | D | request payload and response textareas |

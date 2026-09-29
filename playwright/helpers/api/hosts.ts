@@ -283,6 +283,52 @@ export async function findSimulatedHostIds(
     .map((h) => ({ id: h.id, displayName: h.display_name }));
 }
 
+/**
+ * How far into the end of the display-name ordering the borrowing specs start.
+ * {@link findSimulatedHostIds} hands the transfer and delete specs slices at
+ * offsets 0–25 of that same ordering, so starting past 40 keeps a borrowed
+ * simulation from being moved or deleted by one of them mid-test.
+ */
+const BORROW_SKIP = 40;
+
+/**
+ * Online, MDM-enrolled simulations on Unassigned — hosts a label-targeting spec
+ * can move onto the VMs fleet as the "same platform, outside the label" host
+ * beside the real VM. Only an MDM-enrolled host is one Fleet decides profile
+ * targeting for, which is what makes it outside the label rather than merely
+ * outside MDM; a simulation answers that server-side decision as well as a VM
+ * does (it lists every profile that targets it, and none that doesn't).
+ *
+ * `offset` claims a distinct slice of those hosts, as with
+ * {@link findSimulatedHostIds}; specs that borrow at the same time keep theirs
+ * apart. Returns fewer than `count` when the pool can't cover it — callers
+ * assert on the length they need.
+ *
+ * Slices claimed, per platform: 0–1 `profile-label-targets.spec.ts` (moved onto
+ * the VMs fleet); 2–3 `profile-broken-labels.spec.ts` (label members only, never moved).
+ */
+export async function findMdmSimulations(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows',
+  count: number,
+  offset = 0,
+): Promise<number[]> {
+  const perPage = 100;
+  const maxPages = 10;
+  const simulated: OnlineHost[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
+    simulated.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && matchesKind(h, 'simulated')));
+    const enrolled = simulated
+      .slice(BORROW_SKIP)
+      .filter((h) => h.mdm?.connected_to_fleet && h.team_id == null);
+    if (enrolled.length >= offset + count || batch.length < perPage) {
+      return enrolled.slice(offset, offset + count).map((h) => h.id);
+    }
+  }
+  return [];
+}
+
 /** Lock/wipe state as Fleet reports it on the host detail endpoint. */
 export interface HostDeviceState {
   /** 'unlocked' | 'locked' | 'wiped' — absent until the host has an action. */
@@ -679,6 +725,8 @@ export interface ListedHost {
   orbitVersion: string | null;
   /** False when fleetd runs with scripts disabled; null when the host hasn't said. */
   scriptsEnabled: boolean | null;
+  /** Whether it's one of the QA VMs rather than a simulation — see {@link HostKind}. */
+  real: boolean;
 }
 
 /**
@@ -699,12 +747,14 @@ export async function listFleetHosts(
     platform: string;
     orbit_version: string | null;
     scripts_enabled: boolean | null;
+    hardware_model?: string;
   }>;
   return hosts.map((h) => ({
     id: h.id,
     platform: h.platform,
     orbitVersion: h.orbit_version ?? null,
     scriptsEnabled: h.scripts_enabled ?? null,
+    real: REAL_DEVICE_MODEL.test(h.hardware_model ?? ''),
   }));
 }
 
@@ -776,6 +826,8 @@ interface OnlineHost {
   mdm?: { enrollment_status?: string | null; connected_to_fleet?: boolean | null };
   /** Set only when the simulation runs orbit — see {@link findSimulatedHostForMdm}. */
   orbit_version?: string | null;
+  /** The host's fleet; null for Unassigned. */
+  team_id?: number | null;
 }
 
 async function listOnlineHosts(

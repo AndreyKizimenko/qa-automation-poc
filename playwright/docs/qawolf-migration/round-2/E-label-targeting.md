@@ -149,8 +149,8 @@ The batch's own **Done when** below, plus:
 | inert profile fixtures | ✅ | `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` + READMEs; both lifecycle specs moved onto them; the two lock fixtures deleted |
 | `premium/controls/os-settings/profile-delivery-retry.spec.ts` | ☐ | |
 | `premium/controls/os-settings/profile-declarations.spec.ts` | ☐ | |
-| `premium/controls/os-settings/profile-broken-labels.spec.ts` | ☐ | **retargeted** — see below |
-| `premium/controls/os-settings/profile-label-targets.spec.ts` | ☐ | |
+| `premium/controls/os-settings/profile-broken-labels.spec.ts` | ✅ **retargeted** | the refused delete — manual and dynamic labels, targeted by a `.mobileconfig`, a declaration or a Windows `.xml`; the label and target survive it, and the delete goes through once the profile is gone. Workstations, so nothing is delivered |
+| `premium/controls/os-settings/profile-label-targets.spec.ts` | ✅ | macOS: three profiles (include all · include any + exclude · exclude) over the VM + two borrowed simulations; Windows: include all + exclude, then an Edit that excludes the VM and takes the profile back off it. Set membership server-side, the setting read back on the device |
 | `premium/controls/os-settings/configuration-profiles.spec.ts` | ☐ augment | fixture swap landed; the delivery augment hasn't |
 | `premium/controls/os-updates/macos-updates.spec.ts` | ☐ | |
 | `premium/controls/os-updates/ddm-conflict.spec.ts` | ☐ | |
@@ -188,12 +188,33 @@ is: **uploading a profile is delivering it.**
 - **The "outside the label" host is a simulation moved onto the VMs fleet** for the test (from a distinct
   slice, as the transfer specs do) and moved back, with a cleanup sweep for any left there. One profile then
   shows both halves: delivered on the VM inside the label, not listed on the simulation outside it.
+- **Two more payloads approved for the VMs** (same day): Apple's no-op test declaration,
+  `com.apple.configuration.management.test` (only an `Echo` string), for `profile-declarations`; and, for the
+  retry case, a profile macOS refuses at install — an unknown **`com.apple.`** PayloadType, as in
+  `~/Desktop/test-data/organized/apple/macos/profiles/invalid/device-rejects/macos-unknown-payload-type.mobileconfig`.
+  An unknown type *outside* `com.apple.` is not refused: macOS installs it as a custom preference domain,
+  which is exactly what the inert profile relies on.
 - **`profile-broken-labels` covers the refused delete.** Since Fleet 4.87 (`DeleteLabel` in
   `server/datastore/mysql/labels.go`) a label that a profile or declaration targets can't be deleted — 422,
   *"Couldn't delete. A configuration profile targets this label. Please delete the profile and try again."* —
   and 4.91 removed the "broken" modal the three QA Wolf flows asserted. The broken state is no longer reachable
   through the product, so the spec asserts the refusal across `.mobileconfig`, declaration and Windows `.xml`,
   and that the label and the profile's targeting both survive it.
+
+### Built for every targeting spec
+
+- **`TargetLabelSelector`** (`pages/components/`) — the plan's `ProfileTargetsForm`, named after Fleet's
+  component. It serves the tabbed widget (profiles, declarations, policies); the dropdown variant's methods
+  come with the software and report specs, once probed. Two traps it absorbs: the radios are hidden inputs
+  (it clicks the `<label>` wrapping the radio), and a tab's accessible name — and its panel's — gains
+  " check" once the tab holds a label.
+- `ConfigurationProfilesPage` — targets on upload, the **Edit profile** modal (hover-revealed, like download
+  and delete), "N labels", the broken-label warning; `HostDetailsPage` — the **Controls** tab and its rows.
+- `helpers/profiles.ts` — inert profiles generated per run; `helpers/api/profiles.ts` — the fleet, host and
+  device views of a profile; `createManualLabel` / `setManualLabelHosts` / `deleteLabelById`;
+  `findMdmSimulations` — the borrowable simulations, past the transfer specs' slice of the pool.
+- The VMs sweep in `setup/cleanup.steps.ts` deletes `pw-*` profiles, returns borrowed simulations and deletes
+  `pw-*` labels — proven against a run that timed out with all three left behind.
 
 ### What the source flows turned out to be
 

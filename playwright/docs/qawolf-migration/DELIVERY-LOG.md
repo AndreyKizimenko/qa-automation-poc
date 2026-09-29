@@ -135,6 +135,16 @@ later each time, which is why neither locked. Skipped on `main` the same night (
 - `CLAUDE.md`, the author and reviewer skills and the round-2 README now say **uploading a profile is
   delivering it**.
 
+**Who a targeted profile reaches** — `premium/controls/os-settings/profile-label-targets.spec.ts` (new, +
+`TargetLabelSelector`, `helpers/profiles.ts`, `helpers/api/profiles.ts`, `findMdmSimulations`, the Controls tab on
+`HostDetailsPage`, the Edit modal on `ConfigurationProfilesPage`). Five macOS flows and the Windows trio in two
+tests. The real VM sits inside the labels and two MDM-enrolled simulations borrowed onto the VMs fleet sit
+outside them — the server-side decision a simulation answers as well as a VM, the delivery only the VM can — and
+each profile must be listed on exactly the hosts its labels pick. macOS: include all, include any + exclude, and
+exclude-only side by side, each verified on the VM and read back on the device, the excluded one absent;
+Windows: include all + exclude, then an Edit that excludes the VM, which Fleet answers by removing it. QA Wolf's
+`verifiedHostsCount >= 2` could not fail; each of these fails on the matching targeting bug.
+
 ## Round 2 · Batch D — execution on hosts
 
 Real round-trips to the real VMs: run a script and read what it did, send an MDM command and read the answer,
