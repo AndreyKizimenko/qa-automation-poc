@@ -24,7 +24,7 @@
  * created the report is set to 60 s through the API, which lands a real VM's
  * first row in about a minute.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   createManualLabel,
   deleteLabelById,
@@ -42,7 +42,7 @@ import { runNonce } from '@helpers/profiles';
 const SIM_OFFSET = 4;
 
 test.describe('Premium • Reports — label targeting', () => {
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('include all and include any schedule a report on exactly the hosts their labels pick', async ({
     dashboard,

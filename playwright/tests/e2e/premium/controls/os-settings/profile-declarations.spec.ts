@@ -28,7 +28,7 @@
  * applied") was a refused label delete; that's
  * `profile-broken-labels.spec.ts`'s declaration case.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   createManualLabel,
   deleteLabelById,
@@ -52,7 +52,7 @@ import type { ProfileTarget } from '@pages';
 const SIM_OFFSET = 2;
 
 test.describe('Premium • Controls • Configuration profiles — declarations', () => {
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick', async ({
     dashboard,

@@ -517,3 +517,13 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
 });
 
 export { expect } from '@playwright/test';
+
+/**
+ * Retries for a describe whose tests wait on a real VM. CI retries every test
+ * twice, but a VM test's attempt runs 10–15 minutes and a wedged host fails
+ * every attempt the same way, so two such tests at three attempts each are 90
+ * of a run's ~300 worker-minutes and can reach the run's globalTimeout. One
+ * retry still turns a transient into `flaky` in the report; locally there are
+ * none, so a repeated run shows a test's real spread.
+ */
+export const HOST_RETRIES = process.env.CI ? 1 : 0;

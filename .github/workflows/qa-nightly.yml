@@ -10,7 +10,8 @@ name: QA — Nightly
 #     ├─► gitops premium ─► Playwright premium (whatever gitops did)
 #     └─► gitops free    ─► Playwright free    (whatever gitops did)
 #
-# Scheduled for 03:00 UTC (10 PM CDT). GitHub starts scheduled runs late — since
+# Scheduled for 03:17 UTC (10:17 PM CDT) — off the top of the hour, which GitHub
+# documents as its most-delayed slot. GitHub starts scheduled runs late — since
 # 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — so it
 # lands around 1–4:30 AM Central and is done before morning. The chain doesn't
 # mind the lag: every step waits on the one before it, not on a clock. If GitHub
@@ -29,11 +30,11 @@ on:
   workflow_dispatch:
     inputs:
       render-wait-minutes:
-        description: Minutes to let the Render deploys finish before gitops starts
+        description: Minutes to let the Render deploys finish before gitops starts (only without Render API credentials)
         type: number
         default: 30
   schedule:
-    - cron: '0 3 * * *' # 03:00 UTC = 10 PM CDT (9 PM CST); GitHub starts it hours late
+    - cron: '17 3 * * *' # 03:17 UTC = 10:17 PM CDT (9:17 PM CST); GitHub starts it hours late
 
 concurrency:
   group: qa-nightly-chain
@@ -53,9 +54,13 @@ jobs:
 
   # A deploy hook only queues the deploy, and Render keeps the old instance
   # serving until the new one is live, so the instance answering says nothing
-  # about the deploy being done — the wait is what covers it. The health check
-  # after it catches an instance that came up broken. It runs even if a hook
-  # failed: that instance simply wasn't redeployed, and the night still runs.
+  # about the deploy being done. Render's API does: with RENDER_API_KEY and the
+  # two service ids set, the wait polls each service's newest deploy until it is
+  # live, and fails on a failed or cancelled one — the case the instance itself
+  # never reports. Without them it is the fixed wait. The health check after it
+  # catches an instance that came up broken, and the build report records which
+  # build the night is actually testing. It runs even if a hook failed: that
+  # instance simply wasn't redeployed, and the night still runs.
   # Past this point each job checks render-settle's result itself, because a
   # job's default `success()` also counts a failed hook further up the chain.
   render-settle:
@@ -67,7 +72,39 @@ jobs:
       - name: Let the deploys finish
         env:
           WAIT_MINUTES: ${{ inputs.render-wait-minutes || 30 }}
-        run: sleep $(( WAIT_MINUTES * 60 ))
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          PREMIUM_SERVICE_ID: ${{ secrets.RENDER_PREMIUM_SERVICE_ID }}
+          FREE_SERVICE_ID: ${{ secrets.RENDER_FREE_SERVICE_ID }}
+        run: |
+          if [[ -z "$RENDER_API_KEY" || -z "$PREMIUM_SERVICE_ID" || -z "$FREE_SERVICE_ID" ]]; then
+            echo "No Render API credentials (RENDER_API_KEY, RENDER_PREMIUM_SERVICE_ID, RENDER_FREE_SERVICE_ID): waiting $WAIT_MINUTES min"
+            sleep $(( WAIT_MINUTES * 60 ))
+            exit 0
+          fi
+          # The newest deploy of each service is the one the hook just queued; an
+          # instance whose hook failed shows its previous, live deploy and passes.
+          for tier in premium free; do
+            service=$([[ $tier == premium ]] && echo "$PREMIUM_SERVICE_ID" || echo "$FREE_SERVICE_ID")
+            for attempt in $(seq 1 60); do
+              status="$(curl -fsS --max-time 20 \
+                -H "Authorization: Bearer $RENDER_API_KEY" -H 'Accept: application/json' \
+                "https://api.render.com/v1/services/$service/deploys?limit=1" \
+                | jq -r '.[0].deploy.status // "unknown"' 2>/dev/null || echo unknown)"
+              case "$status" in
+                live)
+                  echo "$tier deploy is live"
+                  continue 2 ;;
+                build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                  echo "::error::The $tier deploy ended as '$status' — the instance is still serving the previous build"
+                  exit 1 ;;
+                *)
+                  echo "$tier deploy: $status (check $attempt of 60)"
+                  sleep 30 ;;
+              esac
+            done
+            echo "::error::The $tier deploy wasn't live after 30 min"
+            exit 1
+          done
 
       - name: Both instances are healthy
         env:
@@ -85,6 +122,24 @@ jobs:
             done
             echo "::error::The $tier instance isn't healthy 15 min after the deploy wait"
             exit 1
+          done
+
+      # Render keeps the previous build serving when a deploy fails, so the run
+      # records which build each instance is actually on.
+      - name: Report the builds under test
+        env:
+          PREMIUM_URL: ${{ secrets.FLEET_PREMIUM_URL }}
+          FREE_URL: ${{ secrets.FLEET_FREE_URL }}
+          PREMIUM_TOKEN: ${{ secrets.FLEET_PREMIUM_API_TOKEN }}
+          FREE_TOKEN: ${{ secrets.FLEET_FREE_API_TOKEN }}
+        run: |
+          for tier in premium free; do
+            url=$([[ $tier == premium ]] && echo "$PREMIUM_URL" || echo "$FREE_URL")
+            token=$([[ $tier == premium ]] && echo "$PREMIUM_TOKEN" || echo "$FREE_TOKEN")
+            build="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$url/api/latest/fleet/version" \
+              | jq -r '"\(.version) @ \(.revision)"' 2>/dev/null || echo unknown)"
+            echo "::notice title=$tier build::$build"
+            echo "- **$tier**: \`$build\`" >> "$GITHUB_STEP_SUMMARY"
           done
 
   gitops-premium:

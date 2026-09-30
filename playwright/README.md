@@ -79,12 +79,13 @@ From `playwright/`:
 
 | Command | What it runs |
 |---|---|
-| `npm run test:premium` | Premium suite, headless |
+| `npm run test:premium` | Premium suite, headless — three invocations in sequence: the main project, the exclusive specs, gitops-mode |
 | `npm run test:premium:headed` | Premium suite, browser visible |
 | `npm run test:premium:ui` | Premium suite, Playwright UI |
 | `npm run test:free` | Free suite, headless |
 | `npm run test:free:headed` | Free suite, browser visible |
 | `npm run test:free:ui` | Free suite, Playwright UI |
+| `npm run test:gitops-mode` | The gitops-mode specs alone: login, the specs on one worker, teardown |
 | `npm run test:loadtest` | Loadtest tests, headless |
 | `npm run test:loadtest:headed` | Loadtest tests, browser visible |
 | `npm run test:loadtest:ui` | Loadtest tests, Playwright UI |

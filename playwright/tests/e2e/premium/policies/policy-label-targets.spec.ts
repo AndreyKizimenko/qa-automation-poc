@@ -21,7 +21,7 @@
  * come from the pool that isn't enrolled, leaving the scarce enrolled ones to
  * the profile specs.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   createManualLabel,
   deleteFleetPolicies,
@@ -38,7 +38,7 @@ import type { PolicyTarget } from '@pages';
 const SIM_OFFSET = 2;
 
 test.describe('Premium • Policies — label targeting', () => {
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick', async ({
     dashboard,

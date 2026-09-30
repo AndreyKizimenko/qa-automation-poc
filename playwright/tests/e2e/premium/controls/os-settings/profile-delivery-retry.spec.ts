@@ -25,7 +25,7 @@
  * is asserted to show the newest one, because it pages its feed and other specs
  * send the same Mac commands at the same time.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import {
   createManualLabel,
@@ -46,7 +46,7 @@ import { inertMobileconfig, rejectedMobileconfig, runNonce } from '@helpers/prof
 const INSTALL_ATTEMPTS = 1 + 3;
 
 test.describe('Premium • Controls • Configuration profiles — delivery on one host', () => {
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a profile is installed, resent and removed by commands the host names it in', async ({
     hostDetails,

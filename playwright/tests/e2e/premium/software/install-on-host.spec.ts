@@ -16,7 +16,7 @@
  * `software-lifecycle-on-host.spec.ts`.
  */
 import * as fs from 'fs';
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import { inertDeb } from '@helpers/deb';
 import {
@@ -40,6 +40,7 @@ async function openAddSoftware(dashboard: DashboardPage, softwareTitles: Softwar
 }
 
 test.describe('Premium • Software • Install on host', () => {
+  test.describe.configure({ retries: HOST_RETRIES });
   test('"Deploy" creates an install policy, and Fleet installs through it on the Linux VM', async ({
     dashboard,
     softwareTitles,

@@ -7,6 +7,7 @@ name: QA — Branch run
 # tier's suite.
 #
 #   gh workflow run "QA — Branch run" -f branch=<branch>
+#   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial
 #
 # The branch's gitops config stays applied to the QA instances until the next
 # nightly re-applies main's. A branch that changes gitops leaves that change in
@@ -24,6 +25,11 @@ on:
         required: true
         type: string
         default: main
+      workers:
+        description: Worker count for both suites (blank — what playwright.config.ts sets for CI)
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -40,6 +46,7 @@ jobs:
     uses: ./.github/workflows/playwright-premium.yml
     with:
       ref: ${{ inputs.branch }}
+      workers: ${{ inputs.workers }}
     secrets: inherit
 
   gitops-free:
@@ -53,4 +60,5 @@ jobs:
     uses: ./.github/workflows/playwright-free.yml
     with:
       ref: ${{ inputs.branch }}
+      workers: ${{ inputs.workers }}
     secrets: inherit

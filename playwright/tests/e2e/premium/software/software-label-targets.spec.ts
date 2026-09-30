@@ -32,7 +32,7 @@
  * Linux rather than QA Wolf's macOS app because a `.deb` can be minted per run;
  * which hosts are offered a title doesn't depend on the platform.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   createManualLabel,
   deleteLabelById,
@@ -56,7 +56,7 @@ const SIM_OFFSET = 0;
 const REFUSED = "Couldn't delete. Software uses this label as a custom target. Remove the label from the software target and try again.";
 
 test.describe('Premium • Software — label-scoped software', () => {
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick', async ({
     softwareTitleDetail,

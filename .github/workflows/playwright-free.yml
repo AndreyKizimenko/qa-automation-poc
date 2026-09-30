@@ -6,10 +6,21 @@ name: Playwright — Free
 
 on:
   workflow_dispatch:
+    inputs:
+      workers:
+        description: Worker count for the suite (blank — what playwright.config.ts sets for CI)
+        required: false
+        type: string
+        default: ''
   workflow_call:
     inputs:
       ref:
         description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
+      workers:
+        description: Worker count for the suite (blank — what playwright.config.ts sets for CI)
         required: false
         type: string
         default: ''
@@ -113,6 +124,7 @@ jobs:
         id: suite
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/suite
+          WORKERS: ${{ inputs.workers }}
         run: SUITE=free npx playwright test --project=free --reporter=github,blob
 
       # Runs whether the suite passed or failed, but not when it never ran (a
