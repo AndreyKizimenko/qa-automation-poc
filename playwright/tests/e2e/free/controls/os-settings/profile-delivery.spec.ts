@@ -20,7 +20,7 @@
  * own. macOS only: free's lifecycle spec puts the one approved inert Windows
  * profile on Unassigned too, and two profiles setting one LocURI undo each other.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import {
   deleteProfile,
@@ -37,7 +37,7 @@ import {
 import { inertDeclaration, inertMobileconfig, runNonce, writeProfile } from '@helpers/profiles';
 
 test.describe('Free • Controls • Configuration profiles — delivery to the real Mac', () => {
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a profile is installed, resent and removed, and the host names it in each command', async ({
     dashboard,

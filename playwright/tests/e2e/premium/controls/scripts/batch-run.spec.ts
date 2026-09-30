@@ -28,7 +28,7 @@
  * through the API rather than watching the progress page.
  */
 import * as crypto from 'crypto';
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import {
   deleteScript,
@@ -55,7 +55,7 @@ const incompatibleWithShell = (h: ListedHost): boolean =>
 const nonce = (): string => `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
 
 test.describe('Premium • Controls • Batch script run', () => {
-  test.describe.configure({ timeout: 720_000 });
+  test.describe.configure({ timeout: 720_000, retries: HOST_RETRIES });
 
   test('a batch on one VM of each platform puts each host in the status its platform earns', async ({
     dashboard,

@@ -38,7 +38,7 @@
  * one generated Windows profile at a time — they all set the same LocURI — which
  * is why the Windows case is one profile edited, not several.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   createManualLabel,
   deleteLabelById,
@@ -87,7 +87,7 @@ async function openProfilesOnVmsFleet({ dashboard, controls, osSettings, configu
 }
 
 test.describe('Premium • Controls • Configuration profiles — label targeting', () => {
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick', async ({
     dashboard,

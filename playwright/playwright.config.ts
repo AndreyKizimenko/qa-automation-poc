@@ -98,6 +98,8 @@ function resolveSuite(): Suite {
 // A main project and its exclusive one must never share an invocation: the
 // exclusive project depends only on login setup, so in one invocation the two
 // would run side by side — the one thing the exclusive specs exist to avoid.
+// gitops-mode can't share one with any other browser project either: enabling
+// gitops mode makes every mutating control read-only.
 // Worker processes get no `--project` flags, so this only ever acts in the runner.
 {
   const named = parseProjectArgs(process.argv);
@@ -105,6 +107,16 @@ function resolveSuite(): Suite {
     if (named.includes(tier) && named.includes(`${tier}-exclusive`)) {
       fail(
         `--project=${tier} and --project=${tier}-exclusive can't run in one invocation — the exclusive specs would run beside the main ones. Run them one after the other (npm run test:${tier} does).`,
+      );
+    }
+  }
+  if (named.includes('gitops-mode')) {
+    const beside = named.filter(
+      (n) => n !== 'gitops-mode' && PROJECT_TO_SUITE[n] !== undefined && !n.endsWith('-setup'),
+    );
+    if (beside.length) {
+      fail(
+        `--project=gitops-mode can't run in one invocation with --project=${beside.join(', ')} — gitops mode would disable every control they click. Run it on its own, after them (npm run test:premium does).`,
       );
     }
   }
@@ -201,7 +213,7 @@ export default defineConfig({
         '**/loadtest/**',
         // Enabling gitops mode is a global config write that disables the
         // controls every other mutating spec depends on. It gets its own
-        // single-worker project, which runs after this one finishes.
+        // single-worker project, run in its own invocation after this one's.
         '**/gitops-mode/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
@@ -240,7 +252,13 @@ export default defineConfig({
       teardown: 'cleanup-teardown',
     },
 
-    // ── GitOps mode (runs last, single worker) ────────────────────────────────
+    // ── GitOps mode (its own invocation after the exclusive specs, one worker) ─
+    // Enabling gitops mode is a global config write that makes every mutating
+    // control read-only, so these specs run alone: CI's third `playwright test`
+    // step, and `npm run test:premium`'s third invocation. Like the exclusive
+    // projects they depend only on login setup — a dependency on `premium` would
+    // skip them whenever one unrelated main-project test is red, and put the
+    // whole suite in front of a local `npm run test:gitops-mode`.
     // The teardown turns the flag back off however the run ended. It is not the
     // only safety net: `cleanup-setup` clears the flag too, because a Playwright
     // teardown project doesn't run on a SIGKILL and a stuck flag disables the
@@ -263,7 +281,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
       },
-      dependencies: ['premium'],
+      dependencies: ['premium-setup'],
       teardown: 'gitops-mode-teardown',
       // A retry re-enters a test whose setup assumes a known exception state,
       // and a gitops failure is something to read rather than paper over.

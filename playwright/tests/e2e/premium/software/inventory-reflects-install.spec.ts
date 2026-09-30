@@ -21,7 +21,7 @@
  * Premium only (installing software is premium), on the VMs fleet; see
  * `install-on-host.spec.ts`.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { inertDeb } from '@helpers/deb';
 import {
   deleteSoftwareTitle,
@@ -45,7 +45,7 @@ async function inventoryFor(hostDetails: HostDetailsPage, hostId: number, name: 
 
 test.describe('Premium • Software • Inventory reflects installs', () => {
   // Three install attempts, minutes apart, on a VM other specs are using too.
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a package that installs appears in the Inventory once the host re-reports', async ({
     hostDetails,

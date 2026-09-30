@@ -6,10 +6,21 @@ name: Playwright — Premium
 
 on:
   workflow_dispatch:
+    inputs:
+      workers:
+        description: Worker count for the suite (blank — what playwright.config.ts sets for CI)
+        required: false
+        type: string
+        default: ''
   workflow_call:
     inputs:
       ref:
         description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
+      workers:
+        description: Worker count for the suite (blank — what playwright.config.ts sets for CI)
         required: false
         type: string
         default: ''
@@ -30,10 +41,11 @@ permissions:
 
 jobs:
   test:
-    # A guard against a hung run, with room for growth: Playwright's own
-    # globalTimeout stops the suite at 100 min in CI, so a long run still
-    # finishes with its report before this limit is reached.
-    timeout-minutes: 120
+    # A guard against a hung run, with room for growth: Playwright stops the
+    # main suite at 100 min (globalTimeout) and the exclusive and gitops-mode
+    # steps at 15 each, so a run that uses all of it still merges and uploads
+    # its report inside this limit.
+    timeout-minutes: 135
     runs-on: ubuntu-latest
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -108,19 +120,21 @@ jobs:
           npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
           fleetctl --version
 
-      # The main project and the exclusive one run as two steps. The exclusive
-      # specs flip global switches, so they must run after every parallel spec
-      # has finished — but not only when those specs passed: as a Playwright
-      # dependency, one unrelated failure would skip them all. Each step writes a
-      # blob report to its own directory (the blob reporter clears its directory
-      # first), and the last step merges them into the one HTML report. The
-      # suite stops itself at 100 min (globalTimeout) and the exclusive step at
-      # 15, so even a run that uses all of it merges and uploads its report
-      # inside the job's 120.
+      # The main project, the exclusive specs and the gitops-mode specs run as
+      # three steps. The exclusive specs flip global switches and gitops mode
+      # makes every mutating control read-only, so each must run after every
+      # parallel spec has finished — but not only when those specs passed: as a
+      # Playwright dependency, one unrelated failure would skip them all. Each
+      # step writes a blob report to its own directory (the blob reporter clears
+      # its directory first), and the last step merges them into the one HTML
+      # report. The suite stops itself at 100 min (globalTimeout) and the two
+      # single-worker steps at 15 each, so even a run that uses all of it merges
+      # and uploads its report inside the job's 135.
       - name: Run the suite
         id: suite
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/suite
+          WORKERS: ${{ inputs.workers }}
         run: SUITE=premium npx playwright test --project=premium --reporter=github,blob
 
       # Runs whether the suite passed or failed, but not when it never ran (a
@@ -131,11 +145,17 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
         run: SUITE=premium npx playwright test --project=premium-exclusive --reporter=github,blob --global-timeout=900000
 
+      - name: Run the gitops-mode specs
+        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/gitops-mode
+        run: SUITE=premium npx playwright test --project=gitops-mode --reporter=github,blob --global-timeout=900000
+
       - name: Merge the reports
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
         run: |
           mkdir -p blob-report/all
-          find blob-report/suite blob-report/exclusive -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          find blob-report/suite blob-report/exclusive blob-report/gitops-mode -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
           npx playwright merge-reports --reporter html blob-report/all
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose

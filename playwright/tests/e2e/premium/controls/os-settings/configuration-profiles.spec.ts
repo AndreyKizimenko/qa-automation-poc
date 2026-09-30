@@ -16,7 +16,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   assertActivity,
   deleteProfile,
@@ -155,7 +155,7 @@ test.describe('MDM • OS settings — configuration profile upload validation',
 });
 
 test.describe('MDM • OS settings — a profile for all hosts, delivered and removed (VMs fleet)', () => {
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('the macOS VM installs and verifies it, and loses it when it is deleted', async ({
     dashboard,

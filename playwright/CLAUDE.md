@@ -35,7 +35,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `fixtures.ts` — page-object fixtures, worker fixtures (fleet ids, `liveMacosHost`), the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`).
-- `docs/` — `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `qawolf-migration/` (the migration record + per-flow audit), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
+- `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `qawolf-migration/` (the migration record + per-flow audit), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
 
 ## Test hosts
@@ -133,7 +133,7 @@ matrix in `playwright.config.ts` is the source of truth:
 | `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
-| `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`) | n/a | `.auth/premium-admin.json` |
+| `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`), one worker, its own invocation after `premium-exclusive` | n/a | `.auth/premium-admin.json` |
 | `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
 | `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, one worker, its own invocation after `free` | n/a | `.auth/free-admin.json` |
 
@@ -145,8 +145,10 @@ Folder conventions:
 - Loadtest spec → `tests/loadtest/**`.
 - Anything that turns gitops mode **on** → `tests/e2e/premium/gitops-mode/`. Enabling it is a global config
   write that makes every mutating control in the UI read-only, so it cannot share a window with any other
-  project. Adding a `--project` name also means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`,
-  which throws at config load for a name it doesn't know.
+  project: the `gitops-mode` project runs alone, as CI's third step and `npm run test:premium`'s third
+  invocation, and the config refuses to run it beside another browser project. Adding a `--project` name also
+  means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`, which throws at config load for a name it
+  doesn't know.
 - A spec that flips a global setting which breaks specs running beside it — turning off script execution,
   say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). The
   `premium-exclusive` / `free-exclusive` projects run those on one worker, **in their own `playwright test`
@@ -168,11 +170,14 @@ Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instan
 
 The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the *Workstations* step inside `cleanup.steps.ts` skips on free (that fleet is premium-only); `wipe unassigned state` runs on both, and its `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
 
-The `gitops-mode` project runs **after** premium (`dependencies: ['premium']`), pinned to `workers: 1` with
-`fullyParallel: false` and `retries: 0`, and its `gitops-mode-teardown` project turns the flag back off.
+The `gitops-mode` project runs in **its own invocation after the exclusive specs** — CI's third step
+(`if: !cancelled()`, merged into the same report) and `npm run test:premium`'s third invocation — pinned to
+`workers: 1` with `fullyParallel: false` and `retries: 0`. Like the exclusive projects it depends only on
+`premium-setup`: a dependency on `premium` would skip it whenever one unrelated main-project test is red, and
+put the whole suite in front of a local run. Its `gitops-mode-teardown` project turns the flag back off.
 `cleanup-setup` calls `disableGitOpsMode` as well, because a teardown project doesn't run on a `SIGKILL` and a
-stuck flag disables the *next* run's entire suite. Run it with `npm run test:gitops-mode` (full chain) or
-`npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
+stuck flag disables the *next* run's entire suite. Run it with `npm run test:gitops-mode` (login, the specs,
+teardown) or `npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
 
 `cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
 and a run killed mid-spec would otherwise leave every script spec of the next run failing.
@@ -217,18 +222,19 @@ Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment nami
 ## CI and the shared instances — current facts
 
 The one place for facts that change. Skills and docs point here rather than restating them, so when one
-changes, change it here.
+changes, change it here. The reasoning behind the flow — why the chain is ordered as it is, what bounds a run,
+how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 
 | | |
 |---|---|
-| **the nightly** | `QA — Nightly` (`.github/workflows/qa-nightly.yml`): both Render deploy hooks → a 30-min wait → both instances' `/healthz` → per tier, the nightly gitops chain, then that tier's suite (whatever gitops did). Cron `0 3 * * *`, but GitHub has been starting this repo's scheduled runs 4–6.5 h late since 2026-08-27, so expect it around 07:00–09:30 UTC. About 1.5 h |
-| **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; a red gitops step stops that tier's suite. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready |
+| **the nightly** | `QA — Nightly` (`.github/workflows/qa-nightly.yml`): both Render deploy hooks → wait for the deploys (polls Render's API when `RENDER_API_KEY` + the two service ids are set, else 30 min) → both instances' `/healthz` → a notice with each instance's build → per tier, the nightly gitops chain, then that tier's suite (whatever gitops did). Cron `17 3 * * *`, but GitHub has been starting this repo's scheduled runs 4–6.5 h late since 2026-08-27, so expect it around 07:00–09:30 UTC. About 1.25 h |
+| **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; a red gitops step stops that tier's suite. `-f workers=N` runs both suites at that count, for a trial without a config commit. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready |
 | **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
 | **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
-| **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the run at 100 min (`globalTimeout`), report included; the job's limit is 120 |
-| **runtime** | premium ~56 min, free ~10 (2026-09-29). 83 of premium's 110 test-minutes are on the real VMs, which is why more workers stop helping |
-| **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project and its exclusive specs run as two steps and merge into this one report), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
-| **a failure in the main project** | doesn't skip the exclusive specs: they run as their own step afterwards, pass or fail |
+| **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`) and the exclusive and gitops-mode steps at 15 each, reports included; the premium job's limit is 135, free's 120 |
+| **runtime** | premium ~42 min at 3 workers, free ~10 at 2 (2026-09-30, run 36649240469). Both are worker-bound to the last minute: premium's 123 test-minutes / 3. About 85 of those minutes wait on the real VMs, and three workers picking Linux installs at once cost ~13 of them to queue contention, so a 4th worker is worth ~31–34 min only while the Linux waits stay inside their budgets. `run_timeline.py` in the run-reviewer skill reconstructs this per worker |
+| **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
+| **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail |
 | **the instances' build** | both redeploy the 4.93 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
 
 ## Pre-PR check

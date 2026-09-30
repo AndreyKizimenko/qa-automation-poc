@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test:premium": "SUITE=premium playwright test --project=premium; s=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=premium-exclusive; e=$?; exit $((s || e))",
-    "test:premium:headed": "SUITE=premium playwright test --project=premium --headed; s=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=premium-exclusive --headed; e=$?; exit $((s || e))",
+    "test:premium": "SUITE=premium playwright test --project=premium; s=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=premium-exclusive; e=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-gitops-mode playwright test --project=gitops-mode; g=$?; exit $((s || e || g))",
+    "test:premium:headed": "SUITE=premium playwright test --project=premium --headed; s=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=premium-exclusive --headed; e=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-gitops-mode playwright test --project=gitops-mode --headed; g=$?; exit $((s || e || g))",
     "test:premium:ui": "SUITE=premium playwright test --project=premium --ui",
     "test:premium:exclusive": "SUITE=premium playwright test --project=premium-exclusive",
     "test:gitops-mode": "SUITE=premium playwright test --project=gitops-mode",

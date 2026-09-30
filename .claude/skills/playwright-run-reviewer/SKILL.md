@@ -57,6 +57,26 @@ or unexpected test — every attempt's status, duration, de-ANSI'd error, and th
 **absolute paths** to its screenshot, video, error-context, and trace. It also
 lists the slowest tests for the perf note. Start every triage here.
 
+When the question is the run's *pacing* rather than its failures — the duration
+moved, the worker count changed, a red run ended with tests marked "did not run",
+or the tail needs explaining — lay the run out on one clock:
+
+```bash
+python3 <skill>/scripts/run_timeline.py "<report-dir>" --tail 10 --platforms
+```
+
+It prints the peak number of results in flight (the worker count that actually
+applied — a merged report's `actualWorkers` metadata sums its invocations, so
+don't read that field) and how busy each worker was, results in flight per
+minute, the slowest files, every long result in start order with
+its worker, what was still running in the last N minutes, and the worker time
+spent in failed attempts. `--platforms` tallies host-bound minutes per real-VM
+platform — from the test title when it names one, else from the platform the
+spec's source resolves its host for — and lists what it had to call `mixed` or
+`?`. Read the tail and the per-minute line together: workers all
+busy to the last minute means the run is worker-bound; a tail of installs on one
+VM means that host's serial queue is the floor, and no worker count moves it.
+
 ## 2. Triage each test in the `attention` list
 
 For each entry, reach a verdict using the evidence, not just the error string.
@@ -149,7 +169,8 @@ For a **suspected product-defect**, draft a ready-to-file Fleet bug — title,
 environment, steps to reproduce, expected vs actual, and the snapshot/screenshot
 as evidence — but **do not file it**; present it for the human to review and
 submit. For a mostly-green run, keep it short: confirm the pass, then the flaky/
-skip/perf notes worth a glance.
+skip/perf notes worth a glance — and, when the duration moved, one line on why,
+from `run_timeline.py`.
 
 Save the full triage as a dated markdown report under
 `playwright/docs/run-reviews/<date>-<project>.md` (create the dir if missing) so

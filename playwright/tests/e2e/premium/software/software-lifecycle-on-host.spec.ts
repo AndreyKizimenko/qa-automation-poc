@@ -43,7 +43,7 @@
  * show it has loaded. The queued state is asserted through the API, which
  * reports `pending_install` / `pending_uninstall` the moment the click lands.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import {
   getHostSoftwareState,
@@ -74,7 +74,7 @@ async function newestActivityAt(request: APIRequestContext, hostId: number, type
 test.describe('Premium • Software • Install and uninstall on host', () => {
   // Two host round-trips — each a queued action and an inventory refetch — on a
   // VM other specs queue work on.
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   for (const fixture of VM_SOFTWARE_FIXTURES) {
     test(`a ${fixture.label} installs on the ${fixture.platform} VM and uninstalls again`, async ({

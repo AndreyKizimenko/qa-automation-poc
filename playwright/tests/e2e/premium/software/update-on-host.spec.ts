@@ -45,7 +45,7 @@
  * runs, `setup/cleanup.steps.ts` also clears any pin it finds on this fleet at
  * the start of every run.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { inertDeb } from '@helpers/deb';
 import {
   compareVersions,
@@ -115,7 +115,7 @@ async function claudeOn(request: APIRequestContext, fleetId: number, platform: '
 }
 
 test.describe('Premium • Software • Update on host', () => {
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('a package the library moves ahead of is offered Update, and only then', async ({
     hostDetails,

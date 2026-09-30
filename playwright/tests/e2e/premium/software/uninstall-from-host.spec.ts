@@ -14,7 +14,7 @@
  * a failure here is about uninstalling. A clean uninstall of every durable
  * fixture is `software-lifecycle-on-host.spec.ts`.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import { inertDeb } from '@helpers/deb';
 import {
@@ -27,7 +27,7 @@ import {
 } from '@helpers/api';
 
 test.describe('Premium • Software • Uninstall from host', () => {
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('an uninstall that fails leaves the software installed, and the Library offers a retry', async ({
     hostDetails,
