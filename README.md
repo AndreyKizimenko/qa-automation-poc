@@ -104,27 +104,31 @@ loadtest spec is run.
 
 All workflows live in [.github/workflows/](.github/workflows/). Every
 workflow supports `workflow_dispatch`; reusable ones also expose
-`workflow_call`.
+`workflow_call`. This section is the map; the reasoning behind the flow is
+[playwright/docs/ci-pipeline.md](playwright/docs/ci-pipeline.md).
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `qa-nightly.yml` | 03:00 UTC daily (GitHub starts it hours late), manual | **The nightly**, as one chain: Render redeploy → 30-min wait + both instances healthy → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
+| `qa-nightly.yml` | 03:17 UTC daily (GitHub starts it hours late), manual | **The nightly**, as one chain: Render redeploy → wait for the deploys (Render's API when its credentials are set, else 30 min) + both instances healthy + a notice with each build → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
 | `render-deploy.yml` | Manual, `workflow_call` | Hits Render deploy hooks so the free + premium instances pick up the latest Fleet release. The nightly's first step. |
 | `gitops-free.yml` / `gitops-premium.yml` | Manual, `workflow_call` | Apply the baseline gitops config to the matching instance via the `gitops-action` composite. |
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
 | `nightly-qa-gitops-free.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Free chain: apply baseline → verify → apply min → verify → fleetctl checks. |
 | `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, plus parallel verify of the Workstations team. Both passes also apply the QA and VMs fleets (`qa.yml`, `vms.yml`). |
-| `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. |
-| `qa-branch-run.yml` | Manual (`branch` input) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`. |
-| `playwright-check.yml` | PR + push to `main` touching `playwright/**`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
+| `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — the main project, then the exclusive specs and (premium) gitops-mode as their own steps, merged into one report; project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. Optional `workers` input. |
+| `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a worker-count trial. |
+| `playwright-check.yml` | Every PR, push to `main`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. Runs on every PR, with no path filter, because it is a required status check and one that never reports leaves a PR unmergeable. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
 
 Nightly ordering is by dependency, not by clock: `qa-nightly.yml` fires both
-Render deploy hooks, waits 30 min for the deploys to finish (a hook only queues
-one, and Render keeps the old instance serving until the new one is live), checks
-both instances' `/healthz`, then runs each tier's gitops chain and, once it has
-finished — green or red — that tier's suite, the two tiers side by side. It's
-scheduled for 03:00 UTC (10 PM CDT), and GitHub starts it late — since 2026-08-27
+Render deploy hooks, waits for the deploys to finish (a hook only queues one, and
+Render keeps the old instance serving until the new one is live — so the wait
+polls Render's deploy API when `RENDER_API_KEY` and the two service ids are set,
+failing on a failed deploy, and otherwise sleeps 30 min), checks both instances'
+`/healthz`, records each instance's build, then runs each tier's gitops chain
+and, once it has finished — green or red — that tier's suite, the two tiers side
+by side. It's scheduled for 03:17 UTC (10:17 PM CDT), off the top of the hour,
+and GitHub starts it late — since 2026-08-27
 this repo's scheduled runs have been starting 4–6.5 h after their cron time — so
 it lands around 1–4:30 AM Central and is done before morning. The chain tolerates
 the lag, since no step waits on a clock. A start at an exact
@@ -159,6 +163,7 @@ Instance + gitops:
 | `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium |
 | `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec, both tiers) |
 | `RENDER_FREE_DEPLOY_HOOK`, `RENDER_PREMIUM_DEPLOY_HOOK` | render-deploy |
+| `RENDER_API_KEY`, `RENDER_FREE_SERVICE_ID`, `RENDER_PREMIUM_SERVICE_ID` | qa-nightly's deploy wait (optional: without them it is a fixed 30-min sleep) |
 
 Test users — the role-access specs authenticate as pre-provisioned static users
 rather than creating them, so each needs its bearer token as a secret. Prefixed

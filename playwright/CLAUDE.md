@@ -35,7 +35,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `fixtures.ts` — page-object fixtures, worker fixtures (fleet ids, `liveMacosHost`), the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `test-data/` — fixtures consumed by specs, organised as `<platform>/<category>/<file>` (e.g. `apple/macos/scripts/macos-create-marker.sh`).
-- `docs/` — `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `qawolf-migration/` (the migration record + per-flow audit), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
+- `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `qawolf-migration/` (the migration record + per-flow audit), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
 
 ## Test hosts
@@ -222,7 +222,8 @@ Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment nami
 ## CI and the shared instances — current facts
 
 The one place for facts that change. Skills and docs point here rather than restating them, so when one
-changes, change it here.
+changes, change it here. The reasoning behind the flow — why the chain is ordered as it is, what bounds a run,
+how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 
 | | |
 |---|---|

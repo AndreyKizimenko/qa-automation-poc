@@ -221,8 +221,14 @@ The 60s test timeout and 10s expect timeout are both workarounds for a shared-QA
 render-latency issue, not intended defaults — see [TODO.md](TODO.md#config-workarounds) for the
 revert condition.
 
-Workers default to 2 in CI (the shared instance has limited concurrency headroom) and 4
-locally. Override either with `WORKERS=N` or `--workers=N`.
+Worker counts are per tier in CI and higher locally; the current numbers and why they are what they are
+live in [CLAUDE.md's facts table](CLAUDE.md#ci-and-the-shared-instances--current-facts) and
+[docs/ci-pipeline.md](docs/ci-pipeline.md). Override either with `WORKERS=N` or `--workers=N`.
+
+Three more projects run **alone, in their own invocation after the main project**: `premium-exclusive` and
+`free-exclusive` (specs that turn a global switch off) and `gitops-mode` (specs that turn gitops mode on).
+Each depends only on the tier's login setup, and the config refuses to name one beside another browser
+project — [docs/ci-pipeline.md](docs/ci-pipeline.md) has the reasoning.
 
 Project scope is decided by folder — no tags. The `testIgnore` matrix in `playwright.config.ts` is the source of truth.
 
@@ -294,10 +300,14 @@ Run history is stored in `.perf-history/` (max 10 runs, oldest pruned automatica
 Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
 `.github/workflows/playwright-premium.yml`) — run nightly by `QA — Nightly`
-(`qa-nightly.yml`) after each tier's gitops chain, and runnable on demand via `workflow_dispatch` (no inputs; each runs its whole
-project). To run a branch the way the nightly does — its gitops chain first,
-then the suite, on both tiers — use `qa-branch-run.yml`:
-`gh workflow run "QA — Branch run" -f branch=<branch>`.
+(`qa-nightly.yml`) after each tier's gitops chain, and runnable on demand via `workflow_dispatch`. Each
+job runs the main project, then the exclusive specs and (premium) gitops-mode as separate steps, and merges
+the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
+tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
+`-f workers=N` for a worker-count trial.
+
+Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in
+[docs/ci-pipeline.md](docs/ci-pipeline.md).
 
 `playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint)
 on any PR touching `playwright/**`, and on push to `main` so the check registers
