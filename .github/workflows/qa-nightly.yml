@@ -110,11 +110,15 @@ jobs:
         env:
           PREMIUM_URL: ${{ secrets.FLEET_PREMIUM_URL }}
           FREE_URL: ${{ secrets.FLEET_FREE_URL }}
+        # A URL secret may end in a slash, and Fleet answers a doubled slash with a
+        # redirect that `-f` alone counts as success, so the slash is stripped and
+        # redirects are followed.
         run: |
           for tier in premium free; do
             url=$([[ $tier == premium ]] && echo "$PREMIUM_URL" || echo "$FREE_URL")
+            url="${url%/}"
             for attempt in $(seq 1 30); do
-              if curl -fsS -o /dev/null --max-time 10 "$url/healthz"; then
+              if curl -fsSL -o /dev/null --max-time 10 "$url/healthz"; then
                 echo "$tier is healthy"
                 continue 2
               fi
@@ -125,7 +129,8 @@ jobs:
           done
 
       # Render keeps the previous build serving when a deploy fails, so the run
-      # records which build each instance is actually on.
+      # records which build each instance is actually on. A failed read says how
+      # it failed (HTTP status, or a body jq couldn't parse) rather than "unknown".
       - name: Report the builds under test
         env:
           PREMIUM_URL: ${{ secrets.FLEET_PREMIUM_URL }}
@@ -135,9 +140,17 @@ jobs:
         run: |
           for tier in premium free; do
             url=$([[ $tier == premium ]] && echo "$PREMIUM_URL" || echo "$FREE_URL")
+            url="${url%/}"
             token=$([[ $tier == premium ]] && echo "$PREMIUM_TOKEN" || echo "$FREE_TOKEN")
-            build="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$url/api/latest/fleet/version" \
-              | jq -r '"\(.version) @ \(.revision)"' 2>/dev/null || echo unknown)"
+            body="$(mktemp)"
+            status="$(curl -sSL --max-time 20 -o "$body" -w '%{http_code}' \
+              -H "Authorization: Bearer $token" "$url/api/latest/fleet/version" || echo curl-failed)"
+            if [[ "$status" == "200" ]] && build="$(jq -er '"\(.version) @ \(.revision)"' "$body" 2>/dev/null)"; then
+              :
+            else
+              build="unreadable (HTTP $status; body starts: $(head -c 80 "$body" | tr -d '\n'))"
+            fi
+            rm -f "$body"
             echo "::notice title=$tier build::$build"
             echo "- **$tier**: \`$build\`" >> "$GITHUB_STEP_SUMMARY"
           done
