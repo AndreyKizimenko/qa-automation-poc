@@ -83,15 +83,15 @@ run with E (2026-09-29): premium 532 passed, free 279, no failures.
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
 | **[F](F-provisioning.md)** ◐ | Provisioning-gated — IdP, team admin, technician, recovery lock | built and green on `playwright/qawolf-round2-batch-f` ([PR #72](https://github.com/AndreyKizimenko/qa-automation-poc/pull/72)); awaiting the branch run | 13 | 4 new + 5 augments |
-| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | one decision (the hourly flow); the rest nightly | 9 | 5 |
+| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | reviewed and decided 2026-09-29; ready to build | 9 | 3 new + 1 augment |
 | | | **remaining** | **22** | |
 
 **F and G each have a *Start here* block** at the top of their file: which skills to call, what to read, and
 what's decided. **F** was reviewed before it was built: the two "manual enrollment" flows turned out to run a
 script (a duplicate of `host-run-script`, cut), and the MFA flows and the Fedora `.rpm` flow moved to the
-suite's [long-term goals](../../long-term-goals.md) with the other host types it lacks. **G**'s attempt retries take minutes,
-not hours (Fleet queues the next attempt as soon as one fails), so they belong in the nightly. Only the
-continuous-automation flow is hourly, and how to build it is Andrey's call. F and G touch different surfaces
+suite's [long-term goals](../../long-term-goals.md) with the other host types it lacks. **G** was reviewed the same
+way: retries make 3 attempts in total and take minutes, and even the "hourly" continuous flow is testable in
+minutes, since a continuous script automation re-fires on every failing result and a refetch delivers one. F and G touch different surfaces
 and can run in either order, but never at the same time as another run on the same instance.
 
 **Before either, read §9**: how batches run since D, which docs move with the code, and the patterns E added.
