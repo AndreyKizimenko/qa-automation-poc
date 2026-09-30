@@ -198,9 +198,16 @@ export class ScriptsLibraryPage {
     await expect(row).toBeHidden();
   }
 
+  /**
+   * Delete `name` if the library lists it. Waits for the list to have rendered
+   * — rows or the empty state — before looking: a check that runs ahead of the
+   * list's fetch sees nothing, skips the delete, and the upload that follows is
+   * refused as a duplicate ("A script with this name already exists."), which
+   * is how a serial group's retry fails after a leftover from its first attempt.
+   */
   async deleteIfExists(name: string): Promise<void> {
-    const row = this.itemByName(name);
-    if (await row.isVisible().catch(() => false)) {
+    await expect(this.list.firstItem.or(this.list.emptyState)).toBeVisible();
+    if (await this.itemByName(name).isVisible()) {
       await this.deleteScript(name);
     }
   }
