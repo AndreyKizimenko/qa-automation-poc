@@ -72,9 +72,22 @@ export class PackEditPage {
     // Each host option row contains a dedicated "add" button (.target-option__add-btn)
     // rendered by Fleet's <Button variant="icon">. Click it directly — the inner
     // SVG has pointer-events:none, so clicking the button avoids needing force.
+    // The count beside "Select pack targets" is `targets_count` from the
+    // POST /targets the picker sends whenever its selection changes. The same
+    // request also fires on mount and on every search keystroke, so the one to
+    // wait for is the one whose body carries the selected host. Under load its
+    // answer can outlast an assertion's window while the chip is already
+    // selected, so the response is awaited first, then the rendered count —
+    // which matches only a non-zero value — confirms the add took.
+    const counted = this.page.waitForResponse((response) => {
+      if (response.request().method() !== 'POST' || !/\/fleet\/targets$/.test(new URL(response.url()).pathname)) {
+        return false;
+      }
+      const body = response.request().postDataJSON() as { selected?: { hosts?: unknown[] } } | null;
+      return (body?.selected?.hosts?.length ?? 0) > 0;
+    });
     await this.firstHostOption.locator('.target-option__add-btn').click();
-
-    // Confirms the add actually selected a host: the locator matches only a non-zero count.
+    await counted;
     await expect(this.uniqueHostCount).toBeVisible();
   }
 
