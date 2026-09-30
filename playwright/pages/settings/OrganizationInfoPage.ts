@@ -30,6 +30,9 @@ export class OrganizationInfoPage {
   readonly orgNameInput: Locator;
   readonly supportUrlInput: Locator;
   readonly saveButton: Locator;
+  // Logo cards changed since the last Save. Their writes follow the toast, so
+  // save() waits for each of them by mode.
+  private readonly stagedLogoModes = new Set<OrgLogoMode>();
 
   constructor(page: Page) {
     this.page = page;
@@ -92,17 +95,33 @@ export class OrganizationInfoPage {
   async setLogo(mode: OrgLogoMode, filePath: string): Promise<void> {
     await this.logoCard(mode).locator('input.org-info__hidden-file-input').setInputFiles(filePath);
     await expect(this.removeLogoButton(mode)).toBeEnabled();
+    this.stagedLogoModes.add(mode);
   }
 
   /** Stage the removal of one mode's logo. Takes effect on Save. */
   async removeLogo(mode: OrgLogoMode): Promise<void> {
     await this.removeLogoButton(mode).click();
     await expect(this.removeLogoButton(mode)).toBeDisabled();
+    this.stagedLogoModes.add(mode);
   }
 
-  /** Save the form and wait for the success toast. */
+  /**
+   * Save the form: wait for the success toast and, for every logo card changed
+   * since the last Save, for that logo's write too. Fleet's Info card PATCHes
+   * org_info, shows the toast, and only then PUTs or DELETEs `/logo?mode=<mode>`
+   * for each staged card — so the toast alone says nothing about the logo, and
+   * a config read right after it can still see the previous one.
+   */
   async save(): Promise<void> {
+    const logoWrites = [...this.stagedLogoModes].map((mode) =>
+      this.page.waitForResponse(
+        (response) =>
+          response.url().includes(`/logo?mode=${mode}`) && response.request().method() !== 'GET',
+      ),
+    );
     await this.saveButton.click();
     await this.toast.expectSuccess('Successfully updated settings.');
+    await Promise.all(logoWrites);
+    this.stagedLogoModes.clear();
   }
 }
