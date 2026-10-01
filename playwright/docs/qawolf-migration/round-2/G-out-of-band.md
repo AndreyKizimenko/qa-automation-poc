@@ -117,9 +117,12 @@ unbuilt C9 #17 (`python-run-python-script-with-policy-automation-on-linux-host`,
   night would stop being installed on the fourth night.
 - **Script execution must be on** in the main project. The exclusive specs turn it off, but since #73 they run
   as their own step after the main project; `cleanup-setup` turns it back on for the next run.
-- **Budget:** a script attempt on Linux is well under a minute, an install 1–2 min: ~6–8 min of the Ubuntu VM
-  across the two tests. Price it against premium's ~56-min nightly, where D's and E's specs already queue on the
-  same VM.
+- **Budget, measured:** `policy-automation-runs` 12.7 min and the failing Deploy 6.9 min, side by side on 2
+  workers with `install-on-host`'s passing Deploy (2026-10-01). A script attempt is about a minute; a refetch is
+  1–2 min, more when another spec's is outstanding, which is why only the first refetch waits one out. Price it
+  against premium's ~56-min nightly, where D's and E's specs already queue on the same VM.
+- **Continuous on leaves a policy that fires on every refetch.** Its cleanup is an `afterEach`, which runs after
+  a timeout, not a `finally`, which doesn't.
 - **Continuous on, and the hourly policy run.** Once continuous is on, the VM's own scheduled policy run can
   land inside the test and start one more 3-attempt run (`IsExecutionPendingForHost` stops it only while an
   attempt is pending). Assert the run the refetch started, not that nothing else ever runs.
@@ -287,6 +290,8 @@ around, and GITOPS-PLAN §8 for all three.
 | target | status | notes |
 |---|---|---|
 | `premium/policies/policy-automations.spec.ts` | ✅ augment | a row's Automations cell → *Manage automations* on Workstations: Install software (a per-run `.deb`), Run script (a per-run script) and Continuous saved together; the API stores all three, the cell reads *Edit automations* / *2 automations*, the modal reopens on them. Its own describe, outside the serial webhook one. Green with dependencies |
+| `premium/policies/policy-automation-runs.spec.ts` | ✅ **new** — one test | on the Ubuntu VM: a Python script that exits 3, run by a `SELECT 1 WHERE 0 > 1;` policy scoped by a manual label to the VM — 3 attempts (each `ran_script` with the policy's id, an empty actor and exit 3), the last opened from the host's Activity card; a refetch with continuous off queues nothing; Continuous ticked in the row's modal, the next refetch brings exactly 3 more. Cleanup in an `afterEach` (a timed-out `finally` would leave a continuous failing policy firing on every refetch). 20-min timeout. Green with dependencies and headed; 5× on 2 workers beside the failing Deploy, 10/10, 10.2–11.2 min each (12.7 min before the later refetches stopped waiting out other specs') |
+| `premium/software/install-on-host.spec.ts` | ✅ augment | the failure twin of its Deploy test: a per-run amd64 `.deb` (the aarch64 VM refuses it) uploaded with Deploy — 3 `failed_install` attempts, each the install policy's and Fleet's, then *Failed* in the Library and *"Fleet failed to install …"* in the Activity card. Green with dependencies and headed; 5×, 5.5–7.6 min each |
 | `premium/software/patch-policy.spec.ts` | ✅ **new** | Workstations, apps no other spec adds — LocalSend (macOS) and KeePassXC (Windows). macOS: Actions → Deploy → Patch walked through every option and back off, each save read back (the table above) and each reopen showing what was saved; the policy is `macOS - <title> up to date`. Windows: no *End user experience* under Force patch, and the server refuses Notify (*only available for macOS Fleet-maintained apps*) and both flags at once (*Only one of …*), 400 each. Green with dependencies, headed, 5× (one worker: copies would add the same app) |
 | `free/policies/policy-automations.spec.ts` | ✅ augment (free twin) | the same modal on a free policy lists only *Send webhook or create ticket* — no install, script, profile, calendar or conditional-access rows, no Continuous; the *Filter by automation* dropdown is absent. Green with dependencies |
 

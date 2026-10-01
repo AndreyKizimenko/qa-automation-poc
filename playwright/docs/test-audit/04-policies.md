@@ -1,6 +1,6 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 26 · **Projects:** premium / free
+**Specs covered:** 7 files · **Test declarations:** 27 · **Projects:** premium / free
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
@@ -42,6 +42,7 @@ the duplication is visible.
 | POL-24 | `free/policies/policy-automations.spec.ts` | Free • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
 | POL-25 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • one policy's automations › install software, run script and continuous, saved together from the row, are stored and reopen | UI+API | ☐ |
 | POL-26 | `free/policies/policy-automations.spec.ts` | Free • Policies • one policy's automations › a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds | UI | ☐ |
+| POL-27 | `premium/policies/policy-automation-runs.spec.ts` | Premium • Policies • automation runs › a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on | UI+API · **real VM** | ☐ |
 
 ---
 
@@ -919,6 +920,45 @@ other:
 - *Value:* free's half of POL-25. The rows are gated by the policy being global, not by the tier (`PolicyAutomationsFields`' `isGlobalPolicy`), and every policy on free is global — so a change that keyed the rows on something else would offer free automations its API refuses (`premium:"true"` fields).
 - *Coverage gaps:* the webhook row is disabled until the scope-wide webhook is on (POL-10 turns it on), so ticking it here isn't exercised; free's modal says "…on **All fleets**", copy carried over from premium.
 - *Efficiency:* a few seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-27 · Premium • Policies • automation runs › a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-automation-runs.spec.ts`](../../tests/e2e/premium/policies/policy-automation-runs.spec.ts)
+- **Grep:** `npx playwright test --project=premium policy-automation-runs --workers=2`
+- **Project:** premium · **Host:** the **Ubuntu VM** on the VMs fleet (`requireRealHost(request, 'linux')`) — scripts run only on real hosts, and the Macs have no `python3`
+- **Mode:** UI+API · **Timeout:** 20 min, CI `HOST_RETRIES` · **Isolation:** one test; everything it makes is per-run (`pw-auto-run-<nonce>`)
+- **Source:** QA Wolf `policies/script-run-retries-up-to-3-times-…`, `activity-feed/individual-activity-items-for-all-attempts-…`, `policies/enabling-continuous-…-retries-every-hour`, `python/run-python-script-with-policy-automation-on-macos-host` (round 2, batch G); also round 1's unbuilt C9 #17 (the Linux Python one)
+- **Preconditions (API):** a manual label holding only the Ubuntu VM; a Python script on the VMs fleet that prints `pw policy automation <nonce>: failing on purpose` and exits 3; a fleet policy `SELECT 1 WHERE 0 > 1;` (it can't pass), `platform: linux`, `labels_include_any` that label, `script_id` that script, continuous off.
+- **Data created:** the label, script and policy, deleted in an **`afterEach`** (policy first, any queued attempt cancelled) — it runs after a timeout, which a `finally` doesn't, and a continuous never-passing policy left behind would run its script on every refetch any spec asks of the VM. The VMs sweep removes `pw-*` policies, scripts and labels a killed run leaves, and the resting-state step cancels a queued `pw-*` script.
+
+**Flow**
+
+1. ☐ *(API)* Wait out any refetch in flight, request one, wait for the VM's `policy_updated_at` to move.
+   - ✅ *(API)* exactly **3** `ran_script` activities carry the policy's id once none is queued — the first run and two retries — each with an empty actor (Fleet ran it) and exit code 3.
+2. ☐ Host details → Activity → **Past** → the newest *"Fleet ran the `<script>` script on this host."*
+   - ✅ *(UI)* the details modal reads `Exit code: 3 (Script failed.)` and shows the script's line followed by orbit's `script execution error: exit status 3`.
+3. ☐ *(API)* Refetch again and wait for the policy results to land.
+   - ✅ *(API)* nothing is queued for the script, and there are still 3 attempts: the policy was already failing, and continuous is off.
+4. ☐ Dashboard → **Policies** → **VMs** → the policy's Automations cell → **Manage automations**.
+   - ✅ *(UI)* Run script is ticked with the script shown. Tick **Continuous software & script automations**, **Save** → toast `Successfully updated policy automations.`
+   - ✅ *(API)* `continuous_automations_enabled` is true.
+5. ☐ *(API)* Refetch once more.
+   - ✅ *(API)* exactly **6** attempts once none is queued — a fresh 3, each exit code 3. Continuous re-fires on a still-failing result *and* restarts the attempt count; without the restart the refetch would bring one run, not three.
+
+**Assessment**
+- *Value:* the only coverage of a policy's run-script automation actually running, of Fleet's retry ladder for it, and of continuous automations. The negative step is what makes the continuous step mean something: the same refetch with the setting off queues nothing.
+- *Coverage gaps:* the hourly cadence isn't asserted (it's osquery's policy update interval, a config value); a script that *passes* isn't run (cut as a DUP: it would only show that a success isn't retried); the retry stopping once the policy passes isn't exercised (the SQL can't pass); install-software automations and their own cap (10 failures per host and installer per 24 h) are SWH-15's.
+- *Efficiency:* six script runs and three refetches on the Ubuntu VM — **12.7 min** measured beside `install-on-host`'s two Deploys; it shares the VM's one queue with every other VM spec. The waits' worst-case budgets add up past the 20-min timeout, so a VM that's very slow shows as a timeout rather than at the slow wait; the `afterEach` makes that safe.
 
 **Notes (Andrey)**
 ```

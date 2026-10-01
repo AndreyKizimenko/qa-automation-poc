@@ -1,6 +1,6 @@
 # Software on hosts — test audit
 
-**Specs covered:** 6 files · **Entries:** 11 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 18 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
+**Specs covered:** 6 files · **Entries:** 12 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 19 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
 This area covers Fleet **delivering software to a real device**: a package the VMs fleet keeps for the purpose,
 installed from the host's Library, followed until the host reports it back, then uninstalled and followed
@@ -219,6 +219,7 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 | ~~SWH-01~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the custom-package install loop; now SWH-14 | — | — |
 | ~~SWH-02~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the FMA added from its catalog page and installed; now SWH-14 + SWL-01 | — | — |
 | SWH-03 | `premium/software/install-on-host.spec.ts` | "Deploy" creates an install policy, and Fleet installs through it on the Linux VM | UI+API | ☐ |
+| SWH-15 | `premium/software/install-on-host.spec.ts` | a Deploy whose install fails is tried 3 times, then reads Failed (listed beside SWH-03: its failure twin) | UI+API | ☐ |
 | ~~SWH-04~~ | ~~`premium/software/uninstall-from-host.spec.ts`~~ | **Retired 2026-09-28** — the uninstall loop; now SWH-14 | — | — |
 | SWH-05 | `premium/software/uninstall-from-host.spec.ts` | an uninstall that fails leaves the software installed, and the Library offers a retry | UI+API | ☐ |
 | SWH-06 | `premium/software/inventory-reflects-install.spec.ts` | a package that installs appears in the Inventory once the host re-reports | UI+API | ☐ |
@@ -417,6 +418,40 @@ other:
   - The activity assertion encodes a behaviour that is **on the decision list** as a possible defect. If Fleet adds the suffix, this fails and the fix is to the regex; worth a comment pointing at the decision if it becomes an issue.
   - The Deploy switch is a class-scoped locator (`.software-deploy-slider__container`) — justified in the POM (Fleet's `Slider` names nothing), but a candidate for the preflight watch list.
   - It relies on a refetch triggering a policy run; if Fleet ever decouples those, the 7-minute wait becomes "the next scheduled policy run", which can be an hour.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWH-15 · Premium • Software • Install on host › a Deploy whose install fails is tried 3 times, then reads Failed
+
+- **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
+- **Grep:** `npx playwright test --project=premium install-on-host -g "fails" --workers=2`
+- **Project:** premium · **Host:** the Ubuntu VM · **Timeout:** 15 min, CI `HOST_RETRIES`
+- **Mode:** UI+API · **Source:** QA Wolf `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` (round 2, batch G)
+- **Preconditions (API):** a per-run `fleet-pw-deploy-fails-<stamp>` `.deb` built for **amd64**, uploaded to the VMs fleet with Deploy (`automatic_install`) — the aarch64 VM's dpkg refuses it, so every attempt fails without touching the host, and the package never arriving keeps Fleet's `[Install software] … (deb)` policy failing.
+- **Data created:** the package and its policy, deleted in the `finally` (policy first, any queued attempt cancelled); the VMs sweep removes `[Install software] fleet-pw-*` policies and `fleet-pw-*` titles a dead run leaves.
+
+**Flow**
+
+1. ☐ *(API)* The `[Install software] <title> (deb)` policy exists on the VMs fleet.
+2. ☐ *(API)* Wait out any refetch in flight, request one.
+   - ✅ *(API)* once nothing is queued for the title, exactly **3** `installed_software` activities for it, all `failed_install`, each carrying the install policy's id and an empty actor (Fleet installed, no user); the host's status for the title settles at `failed_install`.
+3. ☐ Host details → Activity → **Past**.
+   - ✅ *(UI)* the newest item for the title reads *"Fleet failed to install `<title>` on this host."*
+4. ☐ Host details → Software → **Library**, filtered to the title.
+   - ✅ *(UI)* its status button reads **Failed**.
+
+**Assessment**
+- *Value:* the failure twin of SWH-03, and the only test of a policy-queued install's retries — a different path in Fleet from a direct install's (SWH-07): `shouldRetryPolicyAutomationSoftwareInstall`, which also needs the policy still failing and counts failures per host and installer (10 in 24 h, then Fleet stops — which is why the package is new every run).
+- *Coverage gaps:* the 10-failure cap itself isn't reached (it would take four runs of three); a retry that succeeds isn't exercised; continuous automations for installs (re-fire on every failing result unless the last install succeeded within the policy interval) aren't — POL-27 covers continuous for scripts.
+- *Efficiency:* three failed installs on the Ubuntu VM, a few minutes; dpkg refuses the wrong architecture quickly.
 
 **Notes (Andrey)**
 ```

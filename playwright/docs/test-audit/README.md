@@ -37,7 +37,9 @@ files · ~350 test declarations · 4 projects**.
 
 > **Batch G (retries half) added 2026-10-01** (`playwright/qawolf-round2-batch-g`): a policy's own automations modal
 > — Install software, Run script and Continuous saved from the row, and free's webhook-only twin (area **04**
-> POL-25…26); patch policies for Fleet-maintained apps, every option's stored flags (area **06** SWL-33…34).
+> POL-25…26); patch policies for Fleet-maintained apps, every option's stored flags (area **06** SWL-33…34); on the
+> Ubuntu VM, a policy's failing script tried 3 times and re-run by continuous automations (**04** POL-27), and a
+> Deploy whose install fails, tried 3 times (**21** SWH-15).
 
 ## The area files
 
@@ -46,7 +48,7 @@ files · ~350 test declarations · 4 projects**.
 | 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
 | 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
-| 04 | [Policies](04-policies.md) | 26 | premium, free |
+| 04 | [Policies](04-policies.md) | 27 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 34 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
@@ -63,10 +65,10 @@ files · ~350 test declarations · 4 projects**.
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
-| 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**469 entries** covering every test in the suite. An entry can expand into several
+**471 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

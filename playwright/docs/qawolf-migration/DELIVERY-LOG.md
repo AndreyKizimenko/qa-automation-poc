@@ -126,6 +126,8 @@ deletes on Workstations alongside it.
 
 | slice | what |
 |---|---|
+| policy automation runs | new `premium/policies/policy-automation-runs.spec.ts`, one test on the Ubuntu VM: a policy's failing Python script tried 3 times; a refetch with continuous off queues nothing; with Continuous ticked in the row's modal, the next refetch runs 3 more. Cleanup in an `afterEach`, since a timed-out test would otherwise leave a continuous failing policy firing on every refetch. Closes round 1's unbuilt C9 #17 too |
+| failing Deploy | `install-on-host.spec.ts` gains a Deploy whose install fails (an amd64 `.deb` on the aarch64 VM): 3 attempts by the install policy, then *Failed* — the policy-queued retry path, distinct from `inventory-reflects-install`'s direct one |
 | patch policies | new `premium/software/patch-policy.spec.ts` on Workstations — LocalSend (macOS) walked through every patch option and back off from Actions → Deploy, each save read back through the API; KeePassXC (Windows) has no Notify, and the server refuses Notify and both patch flags at once. `SoftwareDeploySelector` (component), `SoftwareTitleDetailPage.openDeploy`; `findPatchPolicy`; `findFmaIdBySlug` pages through the catalog (it had read 500 of 1,424) |
 | one policy's automations | `premium/policies/policy-automations.spec.ts` gains a row's *Manage automations* modal on Workstations: Install software, Run script and Continuous saved together, read back through the API, the row reading *2 automations*, the modal reopening on them; free's twin — the same modal offers only *Send webhook or create ticket*, and the automation filter is absent. `PolicyAutomationsFields` (component), `PoliciesListPage.openPolicyAutomations`; `createFleetPolicy` / `updateFleetPolicy` / `getFleetPolicy` |
 
