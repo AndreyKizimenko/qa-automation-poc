@@ -44,7 +44,7 @@ permissions:
 jobs:
   verify:
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       FLEET_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_URL || secrets.FLEET_PREMIUM_URL }}
       FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}

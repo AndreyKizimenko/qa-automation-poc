@@ -27,7 +27,7 @@ permissions:
 jobs:
   check:
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: playwright

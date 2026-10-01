@@ -46,7 +46,7 @@ jobs:
     # steps at 15 each, so a run that uses all of it still merges and uploads
     # its report inside this limit.
     timeout-minutes: 135
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
     container:
