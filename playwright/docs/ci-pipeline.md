@@ -110,6 +110,12 @@ instance itself never reports), else waits a fixed time; then `/healthz`; then a
 scheduled workflows, and this repo's runs have been starting hours late. Nothing in the chain waits on a
 clock, so the lag costs nothing but the start time.
 
+**The runner image is pinned, not `ubuntu-latest`.** Every job names `ubuntu-26.04`, so the OS under the
+nightly changes only in a commit that had its branch run, never when GitHub repoints the `-latest` label
+(`ubuntu-latest` goes from 24.04 to 26.04 between 2026-10-19 and 11-19). The suite itself runs in the
+`mcr.microsoft.com/playwright` container, so the host image matters to the gitops, verify and Render jobs: the
+gitops action needs only bash, curl, jq, npm and the `fleetctl` npm package.
+
 **A PR runs the static gate only.** The suites run against the shared instances, so a run per PR would have
 PRs corrupting each other's state and the nightly's. A branch gets its full run once, at the end of a piece of
 work, as `QA — Branch run`, dispatched by the person who owns the instances. `Playwright — Check` runs on every

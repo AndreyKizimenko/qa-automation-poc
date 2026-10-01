@@ -45,7 +45,7 @@ jobs:
     # globalTimeout stops the suite at 100 min in CI, so a long run still
     # finishes with its report before this limit is reached.
     timeout-minutes: 120
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
     container:
