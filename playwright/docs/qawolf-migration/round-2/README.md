@@ -83,7 +83,7 @@ run with E (2026-09-29): premium 532 passed, free 279, no failures.
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
 | **[F](F-provisioning.md)** ✅ | Provisioning-gated — IdP, team admin, technician, recovery lock | merged in [PR #72](https://github.com/AndreyKizimenko/qa-automation-poc/pull/72) (2026-09-29) | 13 | 4 new + 5 augments |
-| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | reviewed 2026-09-29, re-reviewed 2026-10-01 (2 flows cut as DUPs); building on `playwright/qawolf-round2-batch-g` | 9 | 2 new + 2 augments |
+| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | reviewed 2026-09-29, re-reviewed 2026-10-01 (2 flows cut as DUPs); built and green on `playwright/qawolf-round2-batch-g` ([PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78)); awaiting the branch run | 9 | 2 new + 2 augments |
 | | | **remaining** | **22** | |
 
 **F and G each have a *Start here* block** at the top of their file: which skills to call, what to read, and

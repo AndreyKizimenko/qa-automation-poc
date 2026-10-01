@@ -4,6 +4,10 @@
 augments, 2 cut as DUPs**, reviewed against the flow bodies and Fleet's 4.93 RC source on 2026-09-29 and
 re-reviewed against the specs beside them on 2026-10-01 (decisions 3–5).
 
+> **Built 2026-10-01** on `playwright/qawolf-round2-batch-g` — [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78),
+> awaiting its branch run. What shipped is in [What landed](#what-landed-retries-half); the block below is
+> the handoff it was built from.
+>
 > ## ▶ Start here — refreshed 2026-09-29, after F and #73
 >
 > A–F, gitops mode V1 and #73 (fleet-scoped CVE probe; exclusive specs as their own CI step) are on `main`.
