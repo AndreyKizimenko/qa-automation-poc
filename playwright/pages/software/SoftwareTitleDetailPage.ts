@@ -140,6 +140,8 @@ export class SoftwareTitleDetailPage {
   /** Open the Actions menu and pick an item. Not available on custom packages. */
   async runAction(action: SoftwareTitleAction): Promise<void> {
     await this.actionsDropdown.click();
+    // Asserted first: a click on an option the menu doesn't offer has no timeout of its own.
+    await expect(this.actionOption(action), `"${action}" in the Actions menu`).toBeVisible();
     await this.actionOption(action).click();
   }
 

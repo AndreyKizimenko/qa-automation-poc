@@ -83,18 +83,18 @@ test.describe('Premium • Software • Patch policies', () => {
     try {
       const { name: titleName } = await getSoftwareTitle(request, workstationsFleetId, titleId);
       const stored = () => findPatchPolicy(request, workstationsFleetId, titleId);
-      const page = softwareTitleDetail;
-      const deploy = page.deploy;
+      const title = softwareTitleDetail;
+      const deploy = title.deploy;
 
       await openTitle({ dashboard, softwareTitles, softwareLibrary, softwareTitleDetail }, titleName);
       expect(await stored(), 'no patch policy before Patch is ticked').toBeNull();
 
       await test.step('Patch, with its default — Patch when app is closed', async () => {
-        await page.openDeploy();
+        await title.openDeploy();
         await deploy.setPatch(true);
         await expect(deploy.patchOption('Patch when app is closed')).toBeChecked();
-        await page.saveDeploy();
-        await page.toast.expectSuccess('Successfully updated deploy options.');
+        await title.saveDeploy();
+        await title.toast.expectSuccess('Successfully updated deploy options.');
         await expect.poll(async () => contract(await stored())).toEqual({
           installs: true,
           patchWhenClosed: true,
@@ -109,14 +109,14 @@ test.describe('Premium • Software • Patch policies', () => {
       });
 
       await test.step('Force patch, notifying the end user first', async () => {
-        await page.openDeploy();
+        await title.openDeploy();
         await expect(deploy.patchCheckbox).toHaveAttribute('aria-checked', 'true');
         await expect(deploy.patchOption('Patch when app is closed')).toBeChecked();
         await deploy.choosePatchOption('Force patch');
         await expect(deploy.endUserExperienceValue).toHaveText('Patch immediately');
         await deploy.chooseEndUserExperience('Notify before patching');
-        await page.saveDeploy();
-        await page.toast.expectSuccess('Successfully updated deploy options.');
+        await title.saveDeploy();
+        await title.toast.expectSuccess('Successfully updated deploy options.');
         await expect.poll(async () => contract(await stored())).toEqual({
           installs: true,
           patchWhenClosed: false,
@@ -126,11 +126,11 @@ test.describe('Premium • Software • Patch policies', () => {
       });
 
       await test.step('Force patch, immediately', async () => {
-        await page.openDeploy();
+        await title.openDeploy();
         await expect(deploy.patchOption('Force patch')).toBeChecked();
         await expect(deploy.endUserExperienceValue).toHaveText('Notify before patching');
         await deploy.chooseEndUserExperience('Patch immediately');
-        await page.saveDeploy();
+        await title.saveDeploy();
         await expect.poll(async () => contract(await stored())).toEqual({
           installs: true,
           patchWhenClosed: false,
@@ -140,11 +140,11 @@ test.describe('Premium • Software • Patch policies', () => {
       });
 
       await test.step('End user initiated: the policy stays, with nothing to install', async () => {
-        await page.openDeploy();
+        await title.openDeploy();
         await expect(deploy.patchOption('Force patch')).toBeChecked();
         await deploy.choosePatchOption('End user initiated (manual)');
         await expect(deploy.endUserExperience).toHaveCount(0);
-        await page.saveDeploy();
+        await title.saveDeploy();
         await expect.poll(async () => contract(await stored())).toEqual({
           installs: false,
           patchWhenClosed: false,
@@ -154,11 +154,11 @@ test.describe('Premium • Software • Patch policies', () => {
       });
 
       await test.step('unticking Patch deletes the policy', async () => {
-        await page.openDeploy();
+        await title.openDeploy();
         await expect(deploy.patchOption('End user initiated (manual)')).toBeChecked();
         await deploy.setPatch(false);
         await expect(deploy.patchOptions).toHaveCount(0);
-        await page.saveDeploy();
+        await title.saveDeploy();
         await expect.poll(stored).toBeNull();
       });
     } finally {
@@ -181,16 +181,16 @@ test.describe('Premium • Software • Patch policies', () => {
     try {
       const { name: titleName } = await getSoftwareTitle(request, workstationsFleetId, titleId);
       const stored = () => findPatchPolicy(request, workstationsFleetId, titleId);
-      const page = softwareTitleDetail;
-      const deploy = page.deploy;
+      const title = softwareTitleDetail;
+      const deploy = title.deploy;
 
       await openTitle({ dashboard, softwareTitles, softwareLibrary, softwareTitleDetail }, titleName);
-      await page.openDeploy();
+      await title.openDeploy();
       await deploy.setPatch(true);
       await deploy.choosePatchOption('Force patch');
       await expect(deploy.endUserExperience, 'Notify before patching is macOS-only').toHaveCount(0);
-      await page.saveDeploy();
-      await page.toast.expectSuccess('Successfully updated deploy options.');
+      await title.saveDeploy();
+      await title.toast.expectSuccess('Successfully updated deploy options.');
       await expect.poll(async () => contract(await stored())).toEqual({
         installs: true,
         patchWhenClosed: false,

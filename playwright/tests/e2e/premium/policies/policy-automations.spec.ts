@@ -159,6 +159,8 @@ test.describe("Premium • Policies • one policy's automations", () => {
       await dashboard.goto();
       await dashboard.navbar.goToPolicies();
       await policiesList.teamDropdown.select('Workstations');
+      // Narrowed first: Workstations lists inherited global policies too, and the list pages at 20.
+      await policiesList.search.fill(policyName);
       await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
 
       await policiesList.openPolicyAutomations(policyName);
