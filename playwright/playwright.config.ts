@@ -110,6 +110,15 @@ function resolveSuite(): Suite {
       );
     }
   }
+  // One invocation loads one `.env.<suite>`, so projects of two tiers in one
+  // invocation would point the second tier's setup and specs at the first
+  // tier's instance — its login state written with the other instance's session.
+  const tiers = [...new Set(named.map((n) => PROJECT_TO_SUITE[n]).filter(Boolean))];
+  if (tiers.length > 1) {
+    fail(
+      `--project=${named.join(', --project=')} target ${tiers.join(' and ')} — one invocation loads one instance's .env. Run each tier in its own invocation.`,
+    );
+  }
   if (named.includes('gitops-mode')) {
     const beside = named.filter(
       (n) => n !== 'gitops-mode' && PROJECT_TO_SUITE[n] !== undefined && !n.endsWith('-setup'),
