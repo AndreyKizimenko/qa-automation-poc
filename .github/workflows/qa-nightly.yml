@@ -66,7 +66,7 @@ jobs:
   render-settle:
     needs: render-deploy
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 75
     steps:
       - name: Let the deploys finish

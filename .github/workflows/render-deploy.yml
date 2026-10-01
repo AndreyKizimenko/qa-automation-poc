@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   free:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger Render redeploy (free)
         run: |
@@ -33,7 +33,7 @@ jobs:
           curl -fsSL -X POST "${{ secrets.RENDER_FREE_DEPLOY_HOOK }}"
 
   premium:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Trigger Render redeploy (premium)
         run: |
