@@ -18,6 +18,8 @@ export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
 export type { TeamScope } from './components/TeamDropdown';
 export { TargetLabelSelector } from './components/TargetLabelSelector';
+export { PolicyAutomationsFields, FLEET_POLICY_AUTOMATION_KEYS } from './components/PolicyAutomationsFields';
+export type { PolicyAutomationKey } from './components/PolicyAutomationsFields';
 export type { LabelMode, LabelScopeOption } from './components/TargetLabelSelector';
 export { PlatformDropdown } from './components/PlatformDropdown';
 export type { AppStorePlatformLabel } from './components/PlatformDropdown';

@@ -1,6 +1,6 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 24 · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 26 · **Projects:** premium / free
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
@@ -40,6 +40,8 @@ the duplication is visible.
 | POL-22 | `free/policies/sql-validation.spec.ts` | save gating › the Save policy modal disables Save until a platform is selected | UI | ☐ |
 | POL-23 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
 | POL-24 | `free/policies/policy-automations.spec.ts` | Free • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
+| POL-25 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • one policy's automations › install software, run script and continuous, saved together from the row, are stored and reopen | UI+API | ☐ |
+| POL-26 | `free/policies/policy-automations.spec.ts` | Free • Policies • one policy's automations › a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds | UI | ☐ |
 
 ---
 
@@ -849,6 +851,74 @@ other:
 - *Coverage gaps:* same as POL-23 (no second submit, no error path, no per-control disabled assertions), plus the one thing free's file is uniquely positioned to check and doesn't: that the **premium-only workflows are absent or paywalled** in this modal while it is locked or otherwise.
 - *Redundancy:* **byte-identical to POL-23 apart from the missing `teamDropdown.select('All fleets')`.** With POL-09 ↔ POL-10 that makes the whole free automations file a copy of the premium one, now at two tests each rather than one.
 - *Efficiency / smells:* same as POL-23 — spec-level `.modal__content-wrapper-disabled` class locator that belongs in `PoliciesListPage`, spec-level `page.route` regex, and the abandoned hold on an assertion failure. Cost is one extra full browser session per nightly free run for an assertion the premium copy already makes against the same React component.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-25 · Premium • Policies • one policy's automations › install software, run script and continuous, saved together from the row, are stored and reopen
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-automations.spec.ts`](../../tests/e2e/premium/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "one policy's automations"`
+- **Project:** premium · **Scopes:** Workstations only — it has no hosts, so nothing the automations point at ever runs
+- **Mode:** UI+API · **Isolation:** its own describe, outside POL-09/23's serial one; touches no global config
+- **Source:** QA Wolf `policies/manage-all-automations-for-a-given-policy-at-once` (round 2, batch G)
+- **Preconditions (API):** a Workstations policy `pw-policy-automations-<nonce>` (`platform: linux`), a script `pw-policy-automations-<nonce>.sh` and a generated `.deb` titled `fleet-pw-policy-automations-<nonce>`, all on Workstations.
+- **Data created:** the three above, deleted in the `finally` — the policy first, since Fleet won't delete a title an install policy points at. The Workstations wipe in `cleanup.steps.ts` removes whatever a dead run leaves.
+
+**Flow**
+
+1. ☐ Dashboard → **Policies** → team dropdown **Workstations**.
+   - ✅ *(UI)* the policy's Automations cell is a button named **Add automation** (it shows "---").
+2. ☐ Search the policy, click its Automations cell.
+   - ✅ *(UI)* the **Manage automations** modal reads "Manage automations for the `<policy>` policy on Workstations."
+3. ☐ Tick **Install software**, pick the package's title; tick **Run script**, pick the script; tick **Continuous software & script automations**; **Save**.
+   - ✅ *(UI)* each picker shows what was picked; the modal closes; toast `Successfully updated policy automations.`
+   - ✅ *(API)* the policy's `install_software.software_title_id` is the title, `run_script.id` the script, `continuous_automations_enabled` true.
+4. ☐ Look at the row again.
+   - ✅ *(UI)* the cell is now named **Edit automations** and reads **2 automations** — Continuous is a setting, not an automation.
+5. ☐ Reopen the modal.
+   - ✅ *(UI)* Install software and Run script are ticked with the title and script shown; Continuous is ticked. **Cancel**.
+
+**Assessment**
+- *Value:* the only coverage of the row's per-policy automations modal, which is the UI path to script and software automations (`install-on-host`'s Deploy creates its policy itself). The API read-back catches a modal that looks saved and isn't; the reopen catches one that saved and can't show it.
+- *Coverage gaps:* no **removal** (untick and save → the automations gone); the Resend configuration profile, Calendar and Conditional access rows aren't exercised (they read *Not enabled for Workstations* or are disabled there); the multi-package picker only renders for a title with more than one package; no validation case (ticking Install software and saving with nothing picked).
+- *Efficiency:* ~10 s, no host.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-26 · Free • Policies • one policy's automations › a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds
+
+- **File:** [`playwright/tests/e2e/free/policies/policy-automations.spec.ts`](../../tests/e2e/free/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "one policy's automations"`
+- **Project:** free · **Mode:** UI · **Isolation:** its own describe; touches no global config
+- **Preconditions (API):** a global policy `pw-policy-automations-<nonce>`, deleted in the `finally`.
+
+**Flow**
+
+1. ☐ Dashboard → **Policies**.
+   - ✅ *(UI)* the platform filter renders and the **Filter by automation** one doesn't (`renderAutomationFilter` is premium-only).
+2. ☐ Search the policy, click its Automations cell (**Add automation**).
+   - ✅ *(UI)* the modal lists exactly one automation, **Send webhook or create ticket**; none of Install software, Run script, Resend configuration profile, Calendar event, Conditional access; no Continuous checkbox. **Cancel**.
+
+**Assessment**
+- *Value:* free's half of POL-25. The rows are gated by the policy being global, not by the tier (`PolicyAutomationsFields`' `isGlobalPolicy`), and every policy on free is global — so a change that keyed the rows on something else would offer free automations its API refuses (`premium:"true"` fields).
+- *Coverage gaps:* the webhook row is disabled until the scope-wide webhook is on (POL-10 turns it on), so ticking it here isn't exercised; free's modal says "…on **All fleets**", copy carried over from premium.
+- *Efficiency:* a few seconds.
 
 **Notes (Andrey)**
 ```

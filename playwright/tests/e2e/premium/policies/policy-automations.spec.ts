@@ -1,22 +1,41 @@
 /**
- * Premium • Policies • automations. The policies-list "Automations" modal
- * enables the global failing-policies webhook with a destination URL; the
- * change persists (verified server-side).
+ * Premium • Policies • automations, both ways the policies list sets them:
  *
- * Mutates GLOBAL config (webhook_settings.failing_policies_webhook) — the
- * original is snapshotted + restored via the config helper. A global policy is
- * seeded/torn down via the API so the "Automations" button is enabled (it's
- * disabled until the scope has ≥1 policy).
+ *   - **Scope-wide** — the "Manage automations" button's modal enables the
+ *     global failing-policies webhook with a destination URL; the change
+ *     persists (verified server-side). This mutates GLOBAL config
+ *     (webhook_settings.failing_policies_webhook): the original is snapshotted
+ *     and restored via the config helper, and a global policy is seeded so the
+ *     button is enabled (it's disabled until the scope has ≥1 policy).
+ *   - **One policy's** — a row's Automations cell opens that policy's own
+ *     "Manage automations" modal (Fleet's ManageAutomationsModal, around
+ *     PolicyAutomationsFields). QA Wolf's `manage-all-automations-for-a-given-policy-at-once`:
+ *     Install software, Run script and Continuous saved together, all three
+ *     stored, the row summarised as "2 automations", and the modal reopening on
+ *     them. On **Workstations**, which has no hosts, with a script and a package
+ *     made for the run — so nothing the automations point at ever runs. Whether
+ *     they *run* is `policy-automation-runs.spec.ts` and `install-on-host.spec.ts`,
+ *     on the Ubuntu VM.
  *
- * Grounded in frontend/pages/policies/ManagePoliciesPage + its AutomationsModal
- * / OtherWorkflowsModal (toast "Successfully updated policy automations.").
+ * Grounded in frontend/pages/policies/ManagePoliciesPage — AutomationsModal /
+ * OtherWorkflowsModal, ManageAutomationsModal, PoliciesTableConfig's
+ * AutomationsCell (toast "Successfully updated policy automations." for both).
  */
 import { test, expect } from '@fixtures';
+import { inertDeb } from '@helpers/deb';
+import { runNonce } from '@helpers/profiles';
 import {
+  createFleetPolicy,
   createPolicy,
+  deleteFleetPolicies,
   deletePolicies,
+  deleteScript,
+  deleteSoftwareTitle,
   getAppConfig,
+  getFleetPolicy,
   patchAppConfig,
+  uploadScript,
+  uploadSoftwarePackageBuffer,
   type FailingPoliciesWebhook,
 } from '@helpers/api';
 
@@ -106,5 +125,77 @@ test.describe('Premium • Policies • automations', () => {
     release();
     await expect(policiesList.automationsModal).toBeHidden();
     await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+  });
+});
+
+test.describe("Premium • Policies • one policy's automations", () => {
+  test('install software, run script and continuous, saved together from the row, are stored and reopen', async ({
+    dashboard,
+    policiesList,
+    workstationsFleetId,
+    request,
+  }) => {
+    const n = runNonce();
+    const policyName = `pw-policy-automations-${n}`;
+    const scriptName = `pw-policy-automations-${n}.sh`;
+    const packageName = `fleet-pw-policy-automations-${n}`;
+    const policy = await createFleetPolicy(request, workstationsFleetId, {
+      name: policyName,
+      query: 'SELECT 1;',
+      platform: 'linux',
+    });
+    let scriptId: number | undefined;
+    let titleId: number | undefined;
+
+    try {
+      scriptId = await uploadScript(request, workstationsFleetId, scriptName, '#!/bin/sh\necho "pw: never runs"\n');
+      ({ titleId } = await uploadSoftwarePackageBuffer(
+        request,
+        workstationsFleetId,
+        `${packageName}_1.0.0_all.deb`,
+        inertDeb(packageName, '1.0.0'),
+      ));
+
+      await dashboard.goto();
+      await dashboard.navbar.goToPolicies();
+      await policiesList.teamDropdown.select('Workstations');
+      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
+
+      await policiesList.openPolicyAutomations(policyName);
+      await expect(policiesList.policyAutomationsModal).toContainText(
+        `Manage automations for the ${policyName} policy on Workstations.`,
+      );
+      await policiesList.policyAutomations.installSoftware(packageName);
+      await policiesList.policyAutomations.runScript(scriptName);
+      await policiesList.policyAutomations.setContinuous(true);
+      await policiesList.savePolicyAutomations();
+      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+
+      // All three stored, on the policy itself.
+      const stored = await getFleetPolicy(request, workstationsFleetId, policy.id);
+      expect(stored.installSoftwareTitleId).toBe(titleId);
+      expect(stored.runScript?.id).toBe(scriptId);
+      expect(stored.continuousAutomationsEnabled).toBe(true);
+
+      // The row summarises two automations — Continuous is a setting, not one.
+      const cell = policiesList.automationsCell(policyName);
+      await expect(cell).toHaveAccessibleName('Edit automations');
+      await expect(cell).toHaveText('2 automations');
+
+      // And the modal reopens on what was saved.
+      await policiesList.openPolicyAutomations(policyName);
+      const fields = policiesList.policyAutomations;
+      await expect(fields.checkbox('install_software')).toHaveAttribute('aria-checked', 'true');
+      await expect(fields.selectedValue('install_software')).toHaveText(packageName);
+      await expect(fields.checkbox('run_script')).toHaveAttribute('aria-checked', 'true');
+      await expect(fields.selectedValue('run_script')).toHaveText(scriptName);
+      await expect(fields.continuousCheckbox).toHaveAttribute('aria-checked', 'true');
+      await policiesList.cancelPolicyAutomations();
+    } finally {
+      // The policy first: Fleet won't delete a title an install policy points at.
+      await deleteFleetPolicies(request, workstationsFleetId, [policy.id]);
+      if (titleId !== undefined) await deleteSoftwareTitle(request, workstationsFleetId, titleId);
+      if (scriptId !== undefined) await deleteScript(request, scriptId);
+    }
   });
 });

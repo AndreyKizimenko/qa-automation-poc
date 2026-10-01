@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
+import { PolicyAutomationsFields } from '../components/PolicyAutomationsFields';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
 
@@ -36,6 +37,14 @@ export class PoliciesListPage {
   readonly policyWebhookUrlInput: Locator;
   readonly saveAutomationsButton: Locator;
 
+  // One policy's automations (a row's Automations cell → "Manage automations"
+  // modal, Fleet's ManageAutomationsModal), as opposed to the scope-wide
+  // webhook modal above.
+  readonly policyAutomationsModal: Locator;
+  readonly policyAutomations: PolicyAutomationsFields;
+  readonly savePolicyAutomationsButton: Locator;
+  readonly cancelPolicyAutomationsButton: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -64,6 +73,50 @@ export class PoliciesListPage {
     this.policyAutomationsToggle = this.automationsModal.getByRole('switch');
     this.policyWebhookUrlInput = this.automationsModal.getByPlaceholder('https://server.com/example');
     this.saveAutomationsButton = this.automationsModal.getByRole('button', { name: 'Save', exact: true });
+
+    // Fleet's Modal is a role-less div whose title is a plain span; the
+    // component's own class is the only thing that tells this modal apart from
+    // the webhook one, whose title also reads "...automations".
+    this.policyAutomationsModal = page.locator('.manage-automations-modal');
+    this.policyAutomations = new PolicyAutomationsFields(this.policyAutomationsModal);
+    this.savePolicyAutomationsButton = this.policyAutomationsModal.getByRole('button', { name: 'Save', exact: true });
+    this.cancelPolicyAutomationsButton = this.policyAutomationsModal.getByRole('button', { name: 'Cancel', exact: true });
+  }
+
+  /**
+   * A policy row's Automations cell. It's a `role="button"` div whose name says
+   * what it holds: "Add automation" when empty, "Edit automation: <name>" with
+   * one, "Edit automations" (showing "N automations") with more. Read-only roles
+   * get a plain span instead, with no button at all.
+   */
+  automationsCell(policyName: string): Locator {
+    return this.table
+      .rowWith(policyName)
+      .getByRole('button', { name: /^(Add automation|Edit automations?\b)/ });
+  }
+
+  /**
+   * Narrows the list to `policyName` and opens its Manage automations modal from
+   * the row's Automations cell. Searching first keeps a row past the first page
+   * reachable.
+   */
+  async openPolicyAutomations(policyName: string): Promise<void> {
+    await this.search.fill(policyName);
+    const cell = this.automationsCell(policyName);
+    await expect(cell).toHaveCount(1);
+    await cell.click();
+    await expect(this.policyAutomationsModal).toBeVisible();
+  }
+
+  /** Saves the policy's automations; the modal closes once Fleet has stored them. */
+  async savePolicyAutomations(): Promise<void> {
+    await this.savePolicyAutomationsButton.click();
+    await expect(this.policyAutomationsModal).toBeHidden();
+  }
+
+  async cancelPolicyAutomations(): Promise<void> {
+    await this.cancelPolicyAutomationsButton.click();
+    await expect(this.policyAutomationsModal).toBeHidden();
   }
 
   /** Open the "Automations" modal (button is enabled once a policy exists). */

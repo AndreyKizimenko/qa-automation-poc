@@ -283,5 +283,24 @@ around, and GITOPS-PLAN §8 for all three.
 
 ## What landed (retries half)
 
-*Nothing yet. Add a row per target spec as it lands (status, and what changed from the plan), the way
-[E](E-label-targeting.md#what-landed) does.*
+| target | status | notes |
+|---|---|---|
+| `premium/policies/policy-automations.spec.ts` | ✅ augment | a row's Automations cell → *Manage automations* on Workstations: Install software (a per-run `.deb`), Run script (a per-run script) and Continuous saved together; the API stores all three, the cell reads *Edit automations* / *2 automations*, the modal reopens on them. Its own describe, outside the serial webhook one. Green with dependencies |
+| `free/policies/policy-automations.spec.ts` | ✅ augment (free twin) | the same modal on a free policy lists only *Send webhook or create ticket* — no install, script, profile, calendar or conditional-access rows, no Continuous; the *Filter by automation* dropdown is absent. Green with dependencies |
+
+### Built for the batch
+
+- `PolicyAutomationsFields` (`pages/components/`) — Fleet's shared automations fields, by their checkbox
+  names (`install_software`, `run_script`, …: Fleet's `Checkbox` uses its `name` as the accessible name), the
+  two react-select pickers and the Continuous checkbox. `PoliciesListPage` gains the per-policy modal:
+  `automationsCell`, `openPolicyAutomations`, `savePolicyAutomations`.
+- `helpers/api/policies.ts` — `createFleetPolicy` / `updateFleetPolicy` / `getFleetPolicy`, with the
+  automation and patch fields.
+- `playwright.config.ts` refuses projects of two tiers in one invocation: it reads only the first
+  `--project`, so `--project=premium-setup --project=free-setup` had written a premium session into
+  `.auth/free-admin.json`.
+
+### Found on the way
+
+- **Free's per-policy modal says "…policy on All fleets"** (and *Not enabled for All fleets*), copy from
+  premium; free has no fleets. Cosmetic; not filed.

@@ -102,8 +102,11 @@ export async function assertActivityAfter(
 }
 
 export interface HostActivity {
+  id: number;
   type: string;
   createdAt: string;
+  /** Empty for an activity Fleet records on its own, such as a policy automation's run. */
+  actorEmail: string;
   details: Record<string, unknown>;
 }
 
@@ -119,9 +122,11 @@ export async function listHostActivities(
   });
   await expect(res, `Failed to list activities for host ${hostId}`).toBeOK();
   return ((await res.json()).activities ?? []).map(
-    (a: { type: string; created_at: string; details: Record<string, unknown> }) => ({
+    (a: { id: number; type: string; created_at: string; actor_email?: string | null; details: Record<string, unknown> }) => ({
+      id: a.id,
       type: a.type,
       createdAt: a.created_at,
+      actorEmail: a.actor_email ?? '',
       details: a.details ?? {},
     }),
   );

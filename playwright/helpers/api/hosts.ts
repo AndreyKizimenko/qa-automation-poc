@@ -513,7 +513,12 @@ export async function getHostDetailUpdatedAt(
  *    with a baseline taken before the change could have been ingested; to know
  *    the inventory is current, wait on `detail_updated_at` instead.
  */
-export type HostCollectedAtField = 'detail_updated_at' | 'software_updated_at';
+/**
+ * When Fleet last stored each kind of collection. `policy_updated_at` moves when
+ * the host's policy results land — after Fleet has queued whatever automations
+ * those results fire, in the same request.
+ */
+export type HostCollectedAtField = 'detail_updated_at' | 'software_updated_at' | 'policy_updated_at';
 
 /** When Fleet last stored `field` for the host (empty string if never). */
 export async function getHostCollectedAt(

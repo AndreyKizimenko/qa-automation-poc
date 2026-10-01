@@ -77,3 +77,112 @@ export async function listHostPolicyIds(request: APIRequestContext, hostId: numb
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
   return (((await res.json()).host?.policies ?? []) as Array<{ id: number }>).map((p) => p.id).sort((a, b) => a - b);
 }
+
+/** What a fleet policy's create or update can set — Fleet's own field names, snake_case. */
+export interface FleetPolicyFields {
+  name?: string;
+  query?: string;
+  description?: string;
+  resolution?: string;
+  /** Comma-separated `darwin` / `windows` / `linux`; empty targets every platform. */
+  platform?: string;
+  /** Label names: the policy runs only on hosts in any of them. */
+  labels_include_any?: string[];
+  /** The library script the policy runs on a failing host; `null` removes the automation. */
+  script_id?: number | null;
+  /** The title the policy installs on a failing host; `null` removes the automation. */
+  software_title_id?: number | null;
+  continuous_automations_enabled?: boolean;
+  /** `patch` ties the policy to `patch_software_title_id`, a Fleet-maintained app. */
+  type?: 'dynamic' | 'patch';
+  patch_software_title_id?: number;
+  patch_when_closed?: boolean;
+  notify_before_patching?: boolean;
+}
+
+/** A fleet policy as Fleet stores it — the fields the policy specs read back. */
+export interface FleetPolicy {
+  id: number;
+  name: string;
+  query: string;
+  platform: string;
+  type: string;
+  continuousAutomationsEnabled: boolean;
+  patchWhenClosed: boolean;
+  notifyBeforePatching: boolean;
+  /** The title its install automation installs, or null. */
+  installSoftwareTitleId: number | null;
+  /** The script its run-script automation runs, or null. */
+  runScript: { id: number; name: string } | null;
+  /** The Fleet-maintained title a patch policy checks, or null. */
+  patchSoftwareTitleId: number | null;
+}
+
+interface RawFleetPolicy {
+  id: number;
+  name: string;
+  query: string;
+  platform?: string;
+  type?: string;
+  continuous_automations_enabled?: boolean;
+  patch_when_closed?: boolean;
+  notify_before_patching?: boolean;
+  install_software?: { software_title_id: number } | null;
+  run_script?: { id: number; name: string } | null;
+  patch_software?: { software_title_id: number } | null;
+}
+
+function toFleetPolicy(p: RawFleetPolicy): FleetPolicy {
+  return {
+    id: p.id,
+    name: p.name,
+    query: p.query,
+    platform: p.platform ?? '',
+    type: p.type ?? 'dynamic',
+    continuousAutomationsEnabled: p.continuous_automations_enabled ?? false,
+    patchWhenClosed: p.patch_when_closed ?? false,
+    notifyBeforePatching: p.notify_before_patching ?? false,
+    installSoftwareTitleId: p.install_software?.software_title_id ?? null,
+    runScript: p.run_script ? { id: p.run_script.id, name: p.run_script.name } : null,
+    patchSoftwareTitleId: p.patch_software?.software_title_id ?? null,
+  };
+}
+
+/** Creates a policy on a fleet (premium). Throws on a refusal, with Fleet's message. */
+export async function createFleetPolicy(
+  request: APIRequestContext,
+  fleetId: number,
+  fields: FleetPolicyFields & { name: string },
+): Promise<FleetPolicy> {
+  const res = await request.post(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders(), data: fields });
+  if (!res.ok()) {
+    throw new Error(`[createFleetPolicy] ${res.status()} creating "${fields.name}": ${await res.text()}`);
+  }
+  return toFleetPolicy((await res.json()).policy);
+}
+
+/** Changes a fleet policy's fields; anything not passed stays as it was. */
+export async function updateFleetPolicy(
+  request: APIRequestContext,
+  fleetId: number,
+  policyId: number,
+  fields: FleetPolicyFields,
+): Promise<FleetPolicy> {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}/policies/${policyId}`), {
+    headers: authHeaders(),
+    data: fields,
+  });
+  if (!res.ok()) throw new Error(`[updateFleetPolicy] ${res.status()} on policy ${policyId}: ${await res.text()}`);
+  return toFleetPolicy((await res.json()).policy);
+}
+
+/** A fleet policy as Fleet stores it now. */
+export async function getFleetPolicy(
+  request: APIRequestContext,
+  fleetId: number,
+  policyId: number,
+): Promise<FleetPolicy> {
+  const res = await request.get(apiUrl(`fleets/${fleetId}/policies/${policyId}`), { headers: authHeaders() });
+  if (!res.ok()) throw new Error(`[getFleetPolicy] ${res.status()} on policy ${policyId}: ${await res.text()}`);
+  return toFleetPolicy((await res.json()).policy);
+}
