@@ -37,7 +37,7 @@ files · ~350 test declarations · 4 projects**.
 
 > **Batch G (retries half) added 2026-10-01** (`playwright/qawolf-round2-batch-g`): a policy's own automations modal
 > — Install software, Run script and Continuous saved from the row, and free's webhook-only twin (area **04**
-> POL-25…26).
+> POL-25…26); patch policies for Fleet-maintained apps, every option's stored flags (area **06** SWL-33…34).
 
 ## The area files
 
@@ -48,7 +48,7 @@ files · ~350 test declarations · 4 projects**.
 | 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
 | 04 | [Policies](04-policies.md) | 26 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 32 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 34 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
@@ -66,7 +66,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 11 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**467 entries** covering every test in the suite. An entry can expand into several
+**469 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

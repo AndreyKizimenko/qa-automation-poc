@@ -186,3 +186,19 @@ export async function getFleetPolicy(
   if (!res.ok()) throw new Error(`[getFleetPolicy] ${res.status()} on policy ${policyId}: ${await res.text()}`);
   return toFleetPolicy((await res.json()).policy);
 }
+
+/**
+ * The fleet's patch policy for a Fleet-maintained title, or null. Found by what
+ * it patches, not by name: Fleet names it itself ("macOS - <title> up to date").
+ */
+export async function findPatchPolicy(
+  request: APIRequestContext,
+  fleetId: number,
+  titleId: number,
+): Promise<FleetPolicy | null> {
+  const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
+  if (!res.ok()) throw new Error(`[findPatchPolicy] ${res.status()}: ${await res.text()}`);
+  const raw = ((await res.json()).policies ?? []) as RawFleetPolicy[];
+  const found = raw.find((p) => p.type === 'patch' && p.patch_software?.software_title_id === titleId);
+  return found ? toFleetPolicy(found) : null;
+}

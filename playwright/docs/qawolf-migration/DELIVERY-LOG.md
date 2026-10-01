@@ -126,6 +126,7 @@ deletes on Workstations alongside it.
 
 | slice | what |
 |---|---|
+| patch policies | new `premium/software/patch-policy.spec.ts` on Workstations — LocalSend (macOS) walked through every patch option and back off from Actions → Deploy, each save read back through the API; KeePassXC (Windows) has no Notify, and the server refuses Notify and both patch flags at once. `SoftwareDeploySelector` (component), `SoftwareTitleDetailPage.openDeploy`; `findPatchPolicy`; `findFmaIdBySlug` pages through the catalog (it had read 500 of 1,424) |
 | one policy's automations | `premium/policies/policy-automations.spec.ts` gains a row's *Manage automations* modal on Workstations: Install software, Run script and Continuous saved together, read back through the API, the row reading *2 automations*, the modal reopening on them; free's twin — the same modal offers only *Send webhook or create ticket*, and the automation filter is absent. `PolicyAutomationsFields` (component), `PoliciesListPage.openPolicyAutomations`; `createFleetPolicy` / `updateFleetPolicy` / `getFleetPolicy` |
 
 ## Round 2 · Batch F — provisioning-gated

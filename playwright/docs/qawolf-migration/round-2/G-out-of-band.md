@@ -193,14 +193,15 @@ continuous checkbox (probe the live modal: QA Wolf reached it two ways, the row'
 
 ### Patch policies
 
-`SoftwareDeploySelector.tsx` → `getPatchPolicyFlags` is what each patch option stores on the policy:
+`SoftwareDeploySelector.tsx` → `getPatchPolicyFlags` is what each patch option stores on the policy, and
+`DeployModal.tsx` leaves the install automation (`software_title_id`) off for manual:
 
-| option | `patch_when_closed` | `notify_before_patching` | `continuous_automations_enabled` |
-|---|---|---|---|
-| *Patch when app is closed* | ✓ | | ✓ |
-| *Force patch* | | | |
-| *Force patch* + *Notify before patching* (macOS only) | | ✓ | ✓ |
-| *End user initiated (manual)* | | | |
+| option | installs on failure | `patch_when_closed` | `notify_before_patching` | `continuous_automations_enabled` |
+|---|---|---|---|---|
+| *Patch when app is closed* | ✓ | ✓ | | ✓ |
+| *Force patch* | ✓ | | | |
+| *Force patch* + *Notify before patching* (macOS only) | ✓ | | ✓ | ✓ |
+| *End user initiated (manual)* | | | | |
 
 The server refuses the two patch flags together and `notify_before_patching` outside macOS Fleet-maintained apps
 (`server/fleet/policies.go`). All of it is decided server-side, so Workstations — no hosts — answers it.
@@ -286,6 +287,7 @@ around, and GITOPS-PLAN §8 for all three.
 | target | status | notes |
 |---|---|---|
 | `premium/policies/policy-automations.spec.ts` | ✅ augment | a row's Automations cell → *Manage automations* on Workstations: Install software (a per-run `.deb`), Run script (a per-run script) and Continuous saved together; the API stores all three, the cell reads *Edit automations* / *2 automations*, the modal reopens on them. Its own describe, outside the serial webhook one. Green with dependencies |
+| `premium/software/patch-policy.spec.ts` | ✅ **new** | Workstations, apps no other spec adds — LocalSend (macOS) and KeePassXC (Windows). macOS: Actions → Deploy → Patch walked through every option and back off, each save read back (the table above) and each reopen showing what was saved; the policy is `macOS - <title> up to date`. Windows: no *End user experience* under Force patch, and the server refuses Notify (*only available for macOS Fleet-maintained apps*) and both flags at once (*Only one of …*), 400 each. Green with dependencies, headed, 5× (one worker: copies would add the same app) |
 | `free/policies/policy-automations.spec.ts` | ✅ augment (free twin) | the same modal on a free policy lists only *Send webhook or create ticket* — no install, script, profile, calendar or conditional-access rows, no Continuous; the *Filter by automation* dropdown is absent. Green with dependencies |
 
 ### Built for the batch
@@ -295,12 +297,17 @@ around, and GITOPS-PLAN §8 for all three.
   two react-select pickers and the Continuous checkbox. `PoliciesListPage` gains the per-policy modal:
   `automationsCell`, `openPolicyAutomations`, `savePolicyAutomations`.
 - `helpers/api/policies.ts` — `createFleetPolicy` / `updateFleetPolicy` / `getFleetPolicy`, with the
-  automation and patch fields.
+  automation and patch fields; `findPatchPolicy`.
+- `SoftwareDeploySelector` (`pages/components/`) — Force install, Patch, the Patch options radios and the
+  macOS-only End user experience dropdown; `SoftwareTitleDetailPage.openDeploy` / `saveDeploy`.
 - `playwright.config.ts` refuses projects of two tiers in one invocation: it reads only the first
   `--project`, so `--project=premium-setup --project=free-setup` had written a premium session into
   `.auth/free-admin.json`.
 
 ### Found on the way
+
+- **`findFmaIdBySlug` read one page of 500**, and the 4.93 catalog holds 1,424 entries: any slug past the first
+  page threw "No Fleet-maintained app found". Every spec so far had used apps early in the alphabet. It pages now.
 
 - **Free's per-policy modal says "…policy on All fleets"** (and *Not enabled for All fleets*), copy from
   premium; free has no fleets. Cosmetic; not filed.
