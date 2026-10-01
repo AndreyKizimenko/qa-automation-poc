@@ -42,10 +42,10 @@ permissions:
 jobs:
   test:
     # A guard against a hung run, with room for growth: Playwright stops the
-    # main suite at 100 min (globalTimeout) and the exclusive and gitops-mode
-    # steps at 15 each, so a run that uses all of it still merges and uploads
-    # its report inside this limit.
-    timeout-minutes: 135
+    # main suite at 100 min (globalTimeout), the exclusive specs at 45 and the
+    # gitops-mode specs at 15, so a run that uses all of it still merges and
+    # uploads its report inside this limit.
+    timeout-minutes: 170
     runs-on: ubuntu-latest
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -121,15 +121,17 @@ jobs:
           fleetctl --version
 
       # The main project, the exclusive specs and the gitops-mode specs run as
-      # three steps. The exclusive specs flip global switches and gitops mode
-      # makes every mutating control read-only, so each must run after every
-      # parallel spec has finished — but not only when those specs passed: as a
-      # Playwright dependency, one unrelated failure would skip them all. Each
-      # step writes a blob report to its own directory (the blob reporter clears
-      # its directory first), and the last step merges them into the one HTML
-      # report. The suite stops itself at 100 min (globalTimeout) and the two
-      # single-worker steps at 15 each, so even a run that uses all of it merges
-      # and uploads its report inside the job's 135.
+      # three steps. The exclusive specs flip global switches or need a real VM's
+      # queue to themselves, and gitops mode makes every mutating control
+      # read-only, so each must run after every parallel spec has finished — but
+      # not only when those specs passed: as a Playwright dependency, one
+      # unrelated failure would skip them all. Each step writes a blob report to
+      # its own directory (the blob reporter clears its directory first), and the
+      # last step merges them into the one HTML report. The suite stops itself at
+      # 100 min (globalTimeout), the exclusive specs at 45 (policy-automation-runs
+      # is up to 20 min an attempt, and VM describes retry once in CI) and the
+      # gitops-mode specs at 15, so even a run that uses all of it merges and
+      # uploads its report inside the job's 170.
       - name: Run the suite
         id: suite
         env:
@@ -143,7 +145,7 @@ jobs:
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
-        run: SUITE=premium npx playwright test --project=premium-exclusive --reporter=github,blob --global-timeout=900000
+        run: SUITE=premium npx playwright test --project=premium-exclusive --reporter=github,blob --global-timeout=2700000
 
       - name: Run the gitops-mode specs
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}

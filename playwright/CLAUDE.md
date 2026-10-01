@@ -150,7 +150,10 @@ Folder conventions:
   means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`, which throws at config load for a name it
   doesn't know.
 - A spec that flips a global setting which breaks specs running beside it — turning off script execution,
-  say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). The
+  say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). So does one that
+  needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs at priority 0, below
+  every user-requested one, so beside the install specs its attempts wait out their budget
+  (`premium/exclusive/policies/policy-automation-runs.spec.ts`). The
   `premium-exclusive` / `free-exclusive` projects run those on one worker, **in their own `playwright test`
   invocation after the main project has finished** — whether or not it passed. CI runs them as a second step
   (`if: !cancelled()`) and merges both into one report; `npm run test:premium` / `test:free` run the two in
@@ -231,7 +234,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; a red gitops step stops that tier's suite. `-f workers=N` runs both suites at that count, for a trial without a config commit. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready |
 | **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
 | **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
-| **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`) and the exclusive and gitops-mode steps at 15 each, reports included; the premium job's limit is 135, free's 120 |
+| **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`), premium's exclusive step at 45 (free's at 15) and the gitops-mode step at 15, reports included; the premium job's limit is 170, free's 120 |
 | **runtime** | premium ~42 min at 3 workers, free ~10 at 2 (2026-09-30, run 36649240469). Both are worker-bound to the last minute: premium's 123 test-minutes / 3. About 85 of those minutes wait on the real VMs, and three workers picking Linux installs at once cost ~13 of them to queue contention, so a 4th worker is worth ~31–34 min only while the Linux waits stay inside their budgets. `run_timeline.py` in the run-reviewer skill reconstructs this per worker |
 | **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
 | **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail |

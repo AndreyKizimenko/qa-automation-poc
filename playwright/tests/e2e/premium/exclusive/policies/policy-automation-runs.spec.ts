@@ -24,6 +24,14 @@
  * osquery's policy update interval, and a refetch delivers a result at once.
  * Python runs on the Ubuntu VM because the Macs have no Command Line Tools.
  *
+ * **Why `exclusive/`.** Fleet queues what a policy automation runs at priority
+ * 0, below anything a user asks a host to do, and picks a host's next activity by
+ * priority before age (`HostScriptRequestPayload.Priority()`,
+ * `activateNextUpcomingActivity`). Beside the main project's install specs, an
+ * attempt's retry waits behind every install they queue on the Ubuntu VM — in a
+ * CI run, past the step's budget. The `premium-exclusive` project runs it alone,
+ * after the main project, with the VMs idle.
+ *
  * **Counting.** A ran_script activity carries the policy's id, and the policy is
  * made for the run, so every match is this run's. A run is settled when no
  * attempt of the script is queued: Fleet queues a retry in the same request
@@ -72,8 +80,9 @@ const FAILING_EXIT_CODE = 3;
 
 test.describe('Premium • Policies • automation runs', () => {
   // Six script runs (about a minute each) and three refetches (one to two
-  // minutes each) on a VM whose one queue other specs share: 12.7 min measured
-  // beside install-on-host's two installs, so 15 would be no margin.
+  // minutes each): 8.5 min measured on an idle VM, more when a dead run left
+  // work on its queue. The exclusive step's CI global timeout leaves room for a
+  // retry.
   test.describe.configure({ timeout: 1_200_000, retries: HOST_RETRIES });
 
   /** What the test made — removed in the afterEach, which runs even when the test times out. */

@@ -238,8 +238,11 @@ export default defineConfig({
     // ── Exclusive (its own invocation after the main project, single worker) ───
     // For specs that flip a global setting which breaks whatever runs beside
     // them — turning off script execution makes Fleet refuse every new script
-    // run and hold every queued one. They live under an `exclusive/` folder in
-    // their tier's tree, and run only once every parallel spec has finished.
+    // run and hold every queued one — and for specs that need a real VM's queue
+    // to themselves: a policy automation's runs queue below every user-requested
+    // one, so beside the install specs they starve. They live under an
+    // `exclusive/` folder in their tier's tree, and run only once every parallel
+    // spec has finished.
     //
     // "After the main project" is ordered by running them as a separate
     // `playwright test` invocation (a second CI step; `npm run test:premium`

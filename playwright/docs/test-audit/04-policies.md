@@ -42,7 +42,7 @@ the duplication is visible.
 | POL-24 | `free/policies/policy-automations.spec.ts` | Free • Policies • automations › the automations form locks itself while the save is in flight | UI | ☐ |
 | POL-25 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • one policy's automations › install software, run script and continuous, saved together from the row, are stored and reopen | UI+API | ☐ |
 | POL-26 | `free/policies/policy-automations.spec.ts` | Free • Policies • one policy's automations › a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds | UI | ☐ |
-| POL-27 | `premium/policies/policy-automation-runs.spec.ts` | Premium • Policies • automation runs › a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on | UI+API · **real VM** | ☐ |
+| POL-27 | `premium/exclusive/policies/policy-automation-runs.spec.ts` | Premium • Policies • automation runs › a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on | UI+API · **real VM** | ☐ |
 
 ---
 
@@ -933,9 +933,9 @@ other:
 
 ### POL-27 · Premium • Policies • automation runs › a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on
 
-- **File:** [`playwright/tests/e2e/premium/policies/policy-automation-runs.spec.ts`](../../tests/e2e/premium/policies/policy-automation-runs.spec.ts)
-- **Grep:** `npx playwright test --project=premium policy-automation-runs --workers=2`
-- **Project:** premium · **Host:** the **Ubuntu VM** on the VMs fleet (`requireRealHost(request, 'linux')`) — scripts run only on real hosts, and the Macs have no `python3`
+- **File:** [`playwright/tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts`](../../tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts)
+- **Grep:** `npx playwright test --project=premium-exclusive policy-automation-runs` (by file name: the exclusive project's `testDir` is `tests/e2e`)
+- **Project:** `premium-exclusive` — alone after the main project, since Fleet queues an automation's attempts below every user-requested activity and beside the install specs they starve · **Host:** the **Ubuntu VM** on the VMs fleet (`requireRealHost(request, 'linux')`) — scripts run only on real hosts, and the Macs have no `python3`
 - **Mode:** UI+API · **Timeout:** 20 min, CI `HOST_RETRIES` · **Isolation:** one test; everything it makes is per-run (`pw-auto-run-<nonce>`)
 - **Source:** QA Wolf `policies/script-run-retries-up-to-3-times-…`, `activity-feed/individual-activity-items-for-all-attempts-…`, `policies/enabling-continuous-…-retries-every-hour`, `python/run-python-script-with-policy-automation-on-macos-host` (round 2, batch G); also round 1's unbuilt C9 #17 (the Linux Python one)
 - **Preconditions (API):** a manual label holding only the Ubuntu VM; a Python script on the VMs fleet that prints `pw policy automation <nonce>: failing on purpose` and exits 3; a fleet policy `SELECT 1 WHERE 0 > 1;` (it can't pass), `platform: linux`, `labels_include_any` that label, `script_id` that script, continuous off.
@@ -958,7 +958,7 @@ other:
 **Assessment**
 - *Value:* the only coverage of a policy's run-script automation actually running, of Fleet's retry ladder for it, and of continuous automations. The negative step is what makes the continuous step mean something: the same refetch with the setting off queues nothing.
 - *Coverage gaps:* the hourly cadence isn't asserted (it's osquery's policy update interval, a config value); a script that *passes* isn't run (cut as a DUP: it would only show that a success isn't retried); the retry stopping once the policy passes isn't exercised (the SQL can't pass); install-software automations and their own cap (10 failures per host and installer per 24 h) are SWH-15's.
-- *Efficiency:* six script runs and three refetches on the Ubuntu VM — **12.7 min** measured beside `install-on-host`'s two Deploys; it shares the VM's one queue with every other VM spec. The waits' worst-case budgets add up past the 20-min timeout, so a VM that's very slow shows as a timeout rather than at the slow wait; the `afterEach` makes that safe.
+- *Efficiency:* six script runs and three refetches on the Ubuntu VM — **8.5 min** alone in `premium-exclusive` (the whole exclusive step 9.2 min); in the main project it took 10–13 min beside the install specs and, in CI, starved past its budget (Fleet queues an automation's attempts below every user-requested activity). The waits' worst-case budgets add up past the 20-min timeout, so a VM that's very slow shows as a timeout rather than at the slow wait; the `afterEach` makes that safe.
 
 **Notes (Andrey)**
 ```

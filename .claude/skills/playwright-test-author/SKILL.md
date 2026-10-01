@@ -157,7 +157,8 @@ A change isn't done until the docs describing it are current, in the same commit
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot and restore global config inside the test** (`getAppConfig` / `patchAppConfig` in
   `helpers/api/config.ts`), not in a hook. A spec that flips a switch other specs depend on goes in
-  `tests/e2e/<tier>/exclusive/`.
+  `tests/e2e/<tier>/exclusive/`, and so does one that needs a real VM's queue to itself: Fleet runs a policy
+  automation's scripts and installs below every user-requested activity, so beside the install specs they starve.
 - **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
   `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
 
