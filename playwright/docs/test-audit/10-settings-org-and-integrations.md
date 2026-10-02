@@ -1,6 +1,6 @@
 # Settings — org, integrations, webhooks, secrets — test audit
 
-**Specs covered:** 10 files · **Test declarations:** 13 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the two shared specs run in both)
+**Specs covered:** 10 files · **Test declarations:** 13 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the three shared specs run in both)
 
 This area covers Fleet's **Settings** section: Organization info, Fleet Desktop, Advanced
 options, the organization logo, a fleet's own settings page, enroll secrets, and the
@@ -25,7 +25,7 @@ fleet host-expiry derivation, the SSO form-gating case) mutate nothing.
 | SET-01 | `premium/settings/organization/organization-info.spec.ts` | Premium • Settings • Organization info › org name and support URL persist across reload | UI | ☐ |
 | SET-02 | `free/settings/organization/organization-info.spec.ts` | Free • Settings • Organization info › org name and support URL persist across reload | UI | ☐ |
 | SET-03 | `premium/settings/organization/fleet-desktop.spec.ts` | Premium • Settings • Fleet Desktop › the Fleet Desktop section shows the Custom transparency URL field | UI | ☐ |
-| SET-04 | `premium/settings/advanced-options.spec.ts` | Premium • Settings • advanced options › editing one advanced field leaves its neighbours untouched | UI+API | ☐ |
+| SET-04 | `shared/settings/organization/advanced-options.spec.ts` | Settings • advanced options › editing the SMTP fields saves them and leaves every other section untouched | UI+API | ☐ |
 | SET-05 | `premium/settings/enroll-secrets.spec.ts` | Premium • Settings • enroll secrets › add an enroll secret to the Workstations fleet | UI+API | ☐ |
 | SET-06 | `shared/settings/host-status-webhook.spec.ts` | Shared • Settings • Host status webhook › enabling the host status webhook with a destination URL persists | UI+API | ☐ |
 | SET-07 | `premium/settings/team-host-status-webhook.spec.ts` | Premium • Settings • fleet host status webhook › a team admin enables their fleet host status webhook and it persists | UI+API | ☐ |
@@ -135,40 +135,40 @@ other:
 
 ---
 
-### SET-04 · Premium • Settings • advanced options › editing one advanced field leaves its neighbours untouched
+### SET-04 · Settings • advanced options › editing the SMTP fields saves them and leaves every other section untouched
 
-- **File:** [`playwright/tests/e2e/premium/settings/advanced-options.spec.ts`](../../tests/e2e/premium/settings/advanced-options.spec.ts)
-- **Grep:** `npx playwright test -g "editing one advanced field leaves its neighbours untouched"`
-- **Project:** premium · **Scopes:** global
-- **Mode:** UI+API · **Isolation:** standalone; restore in a `try/finally` inside the test body (not an `afterEach`)
-- **Preconditions:** admin session. SMTP deliberately **unconfigured** on the QA instance — that is why the SMTP `domain` field is safe to scribble on. A full `GET /config` is captured as `before`.
-- **Data created / mutated:** **global** `smtp_settings.domain` → `pw-advanced-<epoch-ms>.example.com`. The `finally` PATCHes `smtp_settings.domain` back to its original (or `''`).
-  - The card's Save is a **single bundled write**: Fleet's `performSave` posts `smtp_settings`, `features`, `host_expiry_settings`, `server_settings` and `activity_expiry_settings` together, whatever the user touched. So one click here can in principle rewrite all five.
-  - ⚠️ If the restore is skipped the leftover is cosmetic (a bogus SMTP domain on an instance with SMTP off). The **real** blast radius is a Fleet-side formData bug: the test exists precisely because a bundled save could silently flip `features.enable_software_inventory` off (kills every software spec), rewrite `server_settings.server_url` (kills agent check-ins), or turn on `host_expiry_settings` (Fleet then **deletes the simulated hosts** the whole host batch depends on). The spec deliberately never edits host expiry itself, and deliberately does **not** try to PATCH whole snapshotted subtrees back — `/config` rejects them with 400 because they carry read-only members such as `smtp_settings.configured`.
+- **File:** [`playwright/tests/e2e/shared/settings/organization/advanced-options.spec.ts`](../../tests/e2e/shared/settings/organization/advanced-options.spec.ts)
+- **Grep:** `npx playwright test -g "editing the SMTP fields saves them"`
+- **Project:** premium **and** free (moved from `premium/settings/` in round 3 batch A: the card and every subtree it compares exist on free) · **Scopes:** global
+- **Mode:** UI+API · **Isolation:** standalone; `beforeEach` snapshots `smtp_settings`, `afterEach` restores the three edited members (an `afterEach`, so a timed-out test still restores them)
+- **Preconditions:** admin session. SMTP deliberately **unconfigured** on both QA instances — that is why the SMTP Domain, Verify SSL certs and Enable STARTTLS fields are safe to change. A full `GET /config` is captured as `before`.
+- **Data created / mutated:** **global** `smtp_settings.domain` → `pw-advanced-<epoch-ms>.example.com`; `verify_ssl_certs` and `enable_start_tls` → the opposite of their current values (both default to on). The `afterEach` PATCHes all three back.
+  - The card's Save is a **single bundled write**: Fleet's `performSave` posts `smtp_settings`, `features`, `host_expiry_settings`, `server_settings` and `activity_expiry_settings` together, whatever the user touched, **as they were loaded** when the page opened. So one click here can in principle rewrite all five — and can revert another session's change to `features` / `server_settings` made while the page was open.
+  - ⚠️ If the restore is skipped the leftover is cosmetic (SMTP is off). The **real** blast radius is a Fleet-side formData bug: the test exists precisely because a bundled save could silently flip `features.enable_software_inventory` off (kills every software spec), rewrite `server_settings.server_url` (kills agent check-ins), or turn on `host_expiry_settings` (Fleet then **deletes the simulated hosts** the whole host batch depends on). The spec deliberately never edits host expiry itself — QA Wolf's flow left it on with a 1-day window — and does **not** PATCH whole snapshotted subtrees back: `/config` rejects them with 400 because they carry read-only members such as `smtp_settings.configured`.
 
 **Flow**
 
-1. ☐ `GET /config` and note `smtp_settings.domain` plus the other four subtrees.
+1. ☐ `GET /config` and note the SMTP fields plus the other four subtrees.
 2. ☐ Open **Settings → Organization → Advanced options** (via URL `/settings/organization/advanced`).
    - ✅ *(UI)* Heading **Host lifecycle** visible (the page has no title of its own; the first section is the anchor) — `OrganizationAdvancedPage.goto()`.
-3. ☐ Set **Domain** to `pw-advanced-<timestamp>.example.com`, click **Save**.
+3. ☐ Set **Domain** to `pw-advanced-<timestamp>.example.com`, flip **Verify SSL certs** and **Enable STARTTLS** (Fleet's `Checkbox`, accessible names `verifySSLCerts` / `enableStartTLS`), click **Save**.
    - ✅ *(UI)* Success toast `Successfully updated settings.`
 4. ☐ Reload `/settings/organization/advanced`.
-   - ✅ *(UI)* **Domain** field value equals the marker — the edit survives a reload.
+   - ✅ *(UI)* **Domain** equals the marker; both checkboxes show their new state — the edits survive a reload.
 5. ☐ Re-read `GET /config`.
-   - ✅ *(API)* `smtp_settings.domain` equals the marker.
+   - ✅ *(API)* `smtp_settings.domain`, `verify_ssl_certs`, `enable_start_tls` hold the new values.
+   - ✅ *(API)* The rest of `smtp_settings` equals its pre-save snapshot.
    - ✅ *(API)* `features`, `host_expiry_settings`, `server_settings`, `activity_expiry_settings` each `toEqual` their pre-save snapshot — compared as **whole subtrees** so a reset nested field can't slip through.
    - ✅ *(API)* Named re-assertions on the two the rest of the suite is most exposed to: `features.enable_software_inventory` and `server_settings.server_url` unchanged.
    - ✅ *(UI)* `page.url()` still contains `/settings/organization/advanced` (non-retrying string check).
 
 **Assessment**
-- *Value:* the highest-value test in this area. It is the only guard against a bundled-save regression silently resetting instance settings that dozens of other specs assume. A failure here is a real Fleet bug, not a test to repair.
-- *Coverage gaps:* none of the Advanced card's *functional* fields are exercised — host expiry window, activity retention, server URL, "enable analytics", host status webhook interplay — so a broken host-expiry save would not be caught (deliberate: enabling expiry deletes simulated hosts). Nothing asserts SMTP validation or the SMTP "test connection" path. `sso_settings` and `agent_options` are not in `OWNED_SUBTREES`, so if the bundled save ever grew to include them the guard would not notice.
+- *Value:* the highest-value test in this area, now on both tiers. It is the only guard against a bundled-save regression silently resetting instance settings that dozens of other specs assume. A failure here is a real Fleet bug, not a test to repair.
+- *Coverage gaps:* host expiry window, activity retention, server URL and the Features switches are never edited — deliberately: expiry deletes simulated hosts, and the Features switches (Live reports, Script execution, Generative AI) and Store report results are what other specs stand on. Nothing asserts SMTP validation or the "test connection" path. `sso_settings` and `agent_options` are not in `OWNED_SUBTREES`, so if the bundled save ever grew to include them the guard would not notice.
 - *Redundancy:* `features.enable_software_inventory` / `server_settings.server_url` are also asserted by [`tests/api/gitops-verify/org-settings.spec.ts`](../../tests/api/gitops-verify/org-settings.spec.ts) and [`tests/api/config.spec.ts`](../../tests/api/config.spec.ts), but there as static drift checks — not as "survives an unrelated save", so this is complementary, not duplicate.
 - *Efficiency / smells:*
-  - Restore lives in `try/finally` (`advanced-options.spec.ts:79-81`) rather than an `afterEach`. A hard test timeout can abandon the body before `finally` runs; `afterEach` gets its own timeout budget and is the more reliable restore surface. Same pattern in SET-07.
-  - `expect(page.url()).toContain(...)` (`:78`) is a non-web-first assertion with no retry, and adds nothing after `goto()` already anchored on the heading.
-  - The subtree comparison is snapshot-vs-snapshot across a window in which other workers are live (`fullyParallel: true`, 2–4 workers). No other spec writes these five subtrees today, so it holds — but it is an implicit ordering assumption worth a comment.
+  - `expect(page.url()).toContain(...)` is a non-web-first assertion with no retry, and adds nothing after `goto()` already anchored on the heading.
+  - The subtree comparison is snapshot-vs-snapshot across a window in which other workers are live (`fullyParallel: true`). Nothing else in the main project writes these five subtrees today, so it holds; a spec that does belongs in `exclusive/`.
 
 **Notes (Andrey)**
 ```
@@ -582,7 +582,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 | SET-01 | global `org_info.org_name`, `org_info.contact_url` | `GET /config` in `beforeEach` | `afterEach` → `PATCH /config` (two fields only) | Instance named `PW Org <ts>`; fails `gitops-verify` org-name check; visible to all users |
 | SET-02 | same, on the free instance | same | same | same, on free |
 | SET-03 | nothing | — | — | — |
-| SET-04 | global `smtp_settings.domain` (bundled save also posts `features`, `host_expiry_settings`, `server_settings`, `activity_expiry_settings`) | full `GET /config` in body | `try/finally` → `PATCH /config` (domain only) | Cosmetic leftover; but a Fleet formData bug here could disable software inventory, rewrite the server URL, or enable host expiry (→ simulated hosts deleted) |
+| SET-04 | global `smtp_settings.domain`, `verify_ssl_certs`, `enable_start_tls` (bundled save also posts `features`, `host_expiry_settings`, `server_settings`, `activity_expiry_settings`) | `smtp_settings` in `beforeEach`, full `GET /config` in body | `afterEach` → `PATCH /config` (the three SMTP members) | Cosmetic leftover; but a Fleet formData bug here could disable software inventory, rewrite the server URL, or enable host expiry (→ simulated hosts deleted) |
 | SET-05 | Workstations fleet enroll-secret list (adds one) | `GET /fleets/<id>/secrets` in `beforeEach` | `afterEach` → `PATCH /fleets/<id>/secrets` (**replaces the whole list**) | Junk secrets accumulate; a bad snapshot deletes the gitops `FLEET_ENROLL_SECRET` → simulated hosts can't re-enroll into Workstations |
 | SET-06 | global `webhook_settings.host_status_webhook` | `GET /config` in `beforeEach` | `afterEach` → `PATCH /config` (merges within `webhook_settings`) | Instance keeps POSTing host-status alerts to `example.com`; enabled state leaks into later reads |
 | SET-07 | Workstations fleet **whole** `webhook_settings` subtree | `GET /teams/<id>` in body | `try/finally` → `PATCH /teams/<id>` (whole subtree, verbatim) | Fleet's gitops failing-policies webhook + its policy ids are wiped (PATCH replaces the subtree) → policy automations silently off |
@@ -634,7 +634,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 1. Delete one of SET-01/SET-02 and move the survivor to `tests/e2e/shared/settings/organization/organization-info.spec.ts` — the form is tier-agnostic and the specs are byte-identical.
 2. Add a reload + two UI value assertions to SET-06 ([`shared/settings/host-status-webhook.spec.ts:34`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)) so persistence isn't proven by `GET /config` alone.
 3. Move SET-09's three inline raw locators onto `IntegrationsPage` (`mdm.spec.ts:16,20,26`) and route it through `gotoMdm()` — removes the last spec-level class selectors in this area.
-4. Convert the `try/finally` restores in SET-04 (`advanced-options.spec.ts:79`) and SET-07 (`team-host-status-webhook.spec.ts:73`) to `afterEach` hooks (nesting SET-07's describe so SET-08 is unaffected) — `finally` can be abandoned on a hard timeout, and these two restores protect the enroll-secret/webhook state the suite leans on.
+4. Convert the `try/finally` restores in ~~SET-04~~ (done 2026-10-02) and SET-07 (`team-host-status-webhook.spec.ts:73`) to `afterEach` hooks (nesting SET-07's describe so SET-08 is unaffected) — `finally` can be abandoned on a hard timeout, and these two restores protect the enroll-secret/webhook state the suite leans on.
 5. Drop the dead `IntegrationsPage.goto()` / `scimText` members, or give them a spec (Ticket destinations is the only Integrations card with a POM anchor and no test).
 
 **Bigger bets**
