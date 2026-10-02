@@ -10,6 +10,7 @@ outside this repo.
 | [`perf-hosts/`](perf-hosts/README.md) | `launchd` daemons running Fleet's osquery-perf simulator, keeping ~300 online hosts on each QA instance | A dedicated macOS QA VM |
 | [`windows-mdm-loadtest/`](windows-mdm-loadtest/README.md) | Drivers for the Windows MDM profile fan-out and team-transfer load-test scenarios | Anywhere with API access to the load-test instance |
 | [`kubernetes/`](kubernetes/README.md) | Deploys a Fleet release to Docker Desktop Kubernetes to smoke-test the Helm chart | Your machine, from a `fleetdm/fleet` clone |
+| [`loadtest-api-audit/`](loadtest-api-audit/README.md) | Checks every request in the Playwright `loadtest-api` matrix against the Fleet source: registered route, decoded parameters | Your machine, with a `fleetdm/fleet` checkout |
 
 ## Before you run anything
 

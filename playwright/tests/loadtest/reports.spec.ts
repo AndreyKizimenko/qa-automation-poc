@@ -47,9 +47,10 @@ test.describe('Reports load times', () => {
 
     const reportName = await reportsList.firstReportName();
 
-    await measureNav(page, testInfo, 'Team - search', async () => {
-      await reportsList.search.fill(reportName);
-      await expect(reportsList.table.rowWith(reportName).first()).toBeVisible();
-    });
+    await measureSearch(
+      page, testInfo, 'Team - search',
+      reportsList.search, reportName,
+      async () => { await expect(reportsList.table.rowWith(reportName).first()).toBeVisible(); },
+    );
   });
 });

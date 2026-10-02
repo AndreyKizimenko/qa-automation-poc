@@ -65,6 +65,8 @@ module.exports = tseslint.config(
       '.auth/**',
       '.perf-results/**',
       '.perf-history/**',
+      '.perf-results-api/**',
+      '.perf-history-api/**',
       'test-results/**',
       'playwright-report/**',
       '.playwright-mcp/**',

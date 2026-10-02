@@ -4,6 +4,13 @@ import * as path from 'path';
 
 const RESULTS_DIR = path.resolve(__dirname, '../.perf-results');
 
+/**
+ * The per-page budget. A measurement over it is annotated `perf-slow` so the
+ * HTML report lists it, but it never fails the test: the loadtest project
+ * records timings, and a 20 s page is a finding, not a flake.
+ */
+export const PERF_BUDGET_MS = 5_000;
+
 export interface PerfResult {
   section: string;
   label: string;
@@ -20,6 +27,9 @@ export function formatElapsed(ms: number): string {
 function saveResult(testInfo: TestInfo, label: string, ms: number): void {
   const elapsed = formatElapsed(ms);
   testInfo.annotations.push({ type: 'load-time', description: `${label} - ${elapsed}` });
+  if (ms > PERF_BUDGET_MS) {
+    testInfo.annotations.push({ type: 'perf-slow', description: `${label} - ${elapsed} is over the ${PERF_BUDGET_MS / 1000}s budget` });
+  }
 
   const section = testInfo.titlePath[1].replace(' load times', '');
   const result: PerfResult = { section, label, elapsed, ms };

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { PerfResult, formatElapsed } from './perf';
+import { finishApiRun } from './perf-api';
 
 const RESULTS_DIR = path.resolve(__dirname, '../.perf-results');
 const HISTORY_DIR = path.resolve(__dirname, '../.perf-history');
@@ -59,6 +60,10 @@ function sortSections(sections: string[]): string[] {
 }
 
 export default async function globalTeardown() {
+  // The API-timing project writes one file per family; merge and report them
+  // first so a run of either project prints exactly its own table.
+  finishApiRun();
+
   if (!fs.existsSync(RESULTS_DIR)) return;
 
   const files = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));

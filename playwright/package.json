@@ -17,6 +17,7 @@
     "test:loadtest": "SUITE=loadtest playwright test --project=loadtest",
     "test:loadtest:headed": "SUITE=loadtest playwright test --project=loadtest --headed",
     "test:loadtest:ui": "SUITE=loadtest playwright test --project=loadtest --ui",
+    "test:loadtest:api": "SUITE=loadtest playwright test --project=loadtest-api --reporter=list,html",
     "test:gitops-verify:free": "SUITE=free GITOPS_TARGET=../gitops/free-fleetqa playwright test --project=gitops-verify",
     "test:gitops-verify:free-min": "SUITE=free GITOPS_TARGET=../gitops/free-fleetqa-min playwright test --project=gitops-verify",
     "test:gitops-verify:premium": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa playwright test --project=gitops-verify",

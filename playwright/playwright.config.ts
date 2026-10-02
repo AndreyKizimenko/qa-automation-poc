@@ -20,6 +20,7 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'free-setup': 'free',
   loadtest: 'loadtest',
   'loadtest-setup': 'loadtest',
+  'loadtest-api': 'loadtest',
 };
 
 const SUITE_AMBIGUOUS_PROJECTS: ReadonlySet<string> = new Set([
@@ -377,6 +378,14 @@ export default defineConfig({
     {
       name: 'loadtest',
       testDir: './tests/loadtest',
+      // The API-timing specs live beside the page-load ones but run in their
+      // own project below, without a browser.
+      testIgnore: ['**/api/**'],
+      // One page load at a time: four workers timing against one instance
+      // measured their own contention, not the server. A loadtest run is a
+      // manual, local one, so the extra runtime is accepted.
+      workers: 1,
+      fullyParallel: false,
       timeout: 60000,
       use: {
         ...devices['Desktop Chrome'],
@@ -384,6 +393,20 @@ export default defineConfig({
       },
       expect: { timeout: 30000 },
       dependencies: ['loadtest-setup'],
+      retries: 0,
+    },
+
+    // ── Loadtest API timing (no browser; one request in flight) ─────────────
+    // Samples every request shape in tests/loadtest/api/shapes.ts against the
+    // loadtest instance with a bearer token — no login setup, no page health.
+    // A family test samples hundreds of requests, and the per-request cap is
+    // API_TIMEOUT_MS in helpers/perf-api.ts, so the test timeout is off.
+    {
+      name: 'loadtest-api',
+      testDir: './tests/loadtest/api',
+      workers: 1,
+      fullyParallel: false,
+      timeout: 0,
       retries: 0,
     },
   ],
