@@ -1,6 +1,6 @@
 # Labels, packs, dashboard automations, free paywalls — test audit
 
-**Specs covered:** 10 files · **Entries:** 29 · **Test declarations:** 48 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
+**Specs covered:** 11 files · **Entries:** 30 · **Test declarations:** 49 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
 
 This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the **dashboard** itself — its platform filter, the "Hosts enrolled" chart, the historical chart card and the per-fleet switches that empty it, plus the **activity-feed automations** modal (the global `activities_webhook`) — and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits. The four dashboard specs are read-only apart from MISC-27, which is the only test in the suite that creates and deletes a fleet of its own — a sanctioned exception, for a reason worth reading before re-running it by hand.
 
@@ -37,6 +37,7 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-27 | `premium/dashboard/historical-data-collection.spec.ts` | each fleet switch empties its own chart dataset, and re-enabling restores both | UI+API | ☐ |
 | MISC-28 | `free/dashboard/historical-data-collection.spec.ts` | the chart card offers one dataset and charts it | UI | ☐ |
 | MISC-29 | `free/dashboard/historical-data-collection.spec.ts` | Activity & data retention offers the hosts online switch and not the premium one | UI+API | ☐ |
+| MISC-30 | `shared/dashboard/activity-feed.spec.ts` | Dashboard • activity feed filters › search, type, date and sort narrow the feed to one actor's activities | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
@@ -1159,6 +1160,44 @@ other:
 - *Coverage gaps:* nothing on **premium's** Advanced options page asserts the mirror (that the vulnerabilities switch *is* present and editable there) — the premium half of this gate is untested; the switch is never toggled anywhere, so the deployment-wide write path, its confirmation modal, and the "Disabled globally" tooltip it puts on the per-fleet checkboxes are wholly uncovered (deliberately — see the box, and the same gap is called out in MISC-27); the page's other Activity & data retention controls (activity expiry) are untouched, and SET-04 in [`10-settings-org-and-integrations.md`](10-settings-org-and-integrations.md) only asserts the Advanced card's fields don't disturb each other.
 - *Redundancy:* none — this is the only spec that reads the Advanced options retention section. It shares the page with SET-04, which writes a different field on it.
 - *Efficiency / smells:* the second absence assertion uses a raw `organizationAdvanced.page.getByText(...)` in the spec body rather than a POM accessor. The two checkbox members on `OrganizationAdvancedPage` carry the *visible* semantics in their names (`hostsOnlineHistoricalCheckbox`) while their locators carry Fleet's inverted `name` prop — a documented mismatch, and the reason the POM's comment block is longer than the class.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-30 · Dashboard • activity feed filters › search, type, date and sort narrow the feed to one actor's activities
+
+- **File:** [`playwright/tests/e2e/shared/dashboard/activity-feed.spec.ts`](../../tests/e2e/shared/dashboard/activity-feed.spec.ts)
+- **Grep:** `npx playwright test -g "narrow the feed to one actor"`
+- **Project:** premium **and** free · **Scopes:** global (premium: the dashboard on **All fleets**, where the feed shows) · **Mode:** UI+API
+- **Isolation:** standalone; the actor and anything it left are deleted in an `afterEach`
+- **Preconditions:** a throwaway global **maintainer** `QA Feed <ms>` / `qa-test-<ms>-feed@fleetdm.com`, created through the API. Through a **cookie-less** context with its own token it logs in, creates a global report `pw-feed-<ms>` and deletes it — three activities whose actor is that user.
+- **Data created:** the user (deleted in the `afterEach`; swept as `qa-test-*`) and the report (deleted by the user; by the `afterEach` if the test died first)
+
+**Flow**
+
+1. ☐ Open the dashboard (premium: **All fleets**); scroll to **Activity**.
+2. ☐ Type the user's name into **Search activities by user's name or email**.
+   - ✅ *(UI)* Exactly **3** rows, newest first: `deleted the report pw-feed-<ms> globally.`, `created a report … globally.`, `successfully logged in`.
+   - ✅ *(UI)* Every row's actor is the user.
+3. ☐ Type filter (**All types** → **Added report**).
+   - ✅ *(UI)* 1 row, the create. Back to **All types**: 3 rows.
+4. ☐ Date filter **Yesterday**.
+   - ✅ *(UI)* `No activities match the current criteria`; no rows. **Today**: 3 rows.
+5. ☐ **Sort by oldest**.
+   - ✅ *(UI)* The three rows in reverse: logged in, created, deleted.
+
+**Assessment**
+- *Value:* the feed's four controls, each able to fail: the server-side search, the type and date query parameters, and the sort direction, all over rows the test made (QA Wolf's flow walked ten pages and picked a random actor). On both tiers.
+- *Coverage gaps:* searching by **email** (the same prefix match), the type filter's own search box, multi-page results under a filter, and the 7-day / 30-day / 3- / 12-month ranges (identical "start date" arithmetic to Today's, but unexercised).
+- *Redundancy:* `expectActivities` reads the feed in many lifecycle specs, but never through a filter.
+- *Efficiency / smells:* "Yesterday" / "Today" use the browser's local midnight; a run that crosses it between the user's actions and the filter would fail (rare, and the failure says so). The type dropdown is reached by its `activity-type-select__*` classes (documented on `DashboardPage.selectActivityType`).
 
 **Notes (Andrey)**
 ```

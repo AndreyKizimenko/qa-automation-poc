@@ -52,7 +52,12 @@ export { MyAccountPage } from './account';
 
 // Dashboard (its own top-level nav entry)
 export { DashboardPage } from './DashboardPage';
-export type { ChartDatasetLabel, DashboardPlatformLabel } from './DashboardPage';
+export type {
+  ActivityDateFilter,
+  ActivitySort,
+  ChartDatasetLabel,
+  DashboardPlatformLabel,
+} from './DashboardPage';
 
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';

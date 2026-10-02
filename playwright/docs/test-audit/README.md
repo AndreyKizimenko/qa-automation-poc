@@ -57,7 +57,7 @@ files · ~350 test declarations · 4 projects**.
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 15 | premium, free |
 | 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 34 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 30 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
@@ -68,7 +68,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**477 entries** covering every test in the suite. An entry can expand into several
+**478 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under
