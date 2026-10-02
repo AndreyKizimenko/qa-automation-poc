@@ -14,7 +14,7 @@
  * `cleanup-setup` if a run dies first.
  */
 import { test, expect } from '@fixtures';
-import { apiUrl, createUser, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
+import { apiLogin, apiUrl, createUser, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
 
 test.describe('Settings • Users • an admin sets a password', () => {
   let userId: number | undefined;
@@ -50,7 +50,8 @@ test.describe('Settings • Users • an admin sets a password', () => {
       ignoreHTTPSErrors: true,
     });
     try {
-      const login = (password: string) => api.post(apiUrl('login'), { data: { email, password } });
+      // Three logins in a row: `apiLogin` waits out Fleet's suite-wide login throttle.
+      const login = (password: string) => apiLogin(api, email, password);
 
       const before = await login(oldPassword);
       expect(before.ok(), 'the user logs in with the password they were created with').toBeTruthy();

@@ -29,7 +29,7 @@
  */
 import { test, expect } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { apiUrl, createUser, deleteReport, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
+import { apiLogin, apiUrl, createUser, deleteReport, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
 
 test.describe('Dashboard • activity feed filters', () => {
   let userId: number | undefined;
@@ -59,7 +59,7 @@ test.describe('Dashboard • activity feed filters', () => {
     // logged as the user rather than the suite's admin.
     const api = await playwright.request.newContext({ baseURL: process.env.FLEET_URL, ignoreHTTPSErrors: true });
     try {
-      const login = await api.post(apiUrl('login'), { data: { email, password: qaTestPassword() } });
+      const login = await apiLogin(api, email, qaTestPassword());
       await expect(login).toBeOK();
       const headers = { Authorization: `Bearer ${(await login.json()).token as string}` };
       const created = await api.post(apiUrl('queries'), { headers, data: { name: reportName, query: 'SELECT 1;' } });

@@ -9,16 +9,21 @@
  * premium nothing would. So the spec is built so that it can only ever remove
  * its own secret:
  *
- * - The secret it adds is a known marker (`pw-enroll-<ms>-…`, 32+ characters),
+ * - The secret it adds is a known marker (`~pw-enroll-<ms>-…`, 32+ characters),
  *   and every row action finds its row by that value (`EnrollSecretModal`
- *   has no first-row shortcut).
+ *   has no first-row shortcut). Fleet lists secrets `ORDER BY secret`, and the
+ *   Add hosts modal offers the first; the leading `~` sorts after every
+ *   printable character, so the marker is never the secret
+ *   `add-hosts-download.spec.ts` sees offered while it runs beside this one.
  * - Fleet saves the list it has cached plus or minus one, and the modal shows
  *   "You have no enroll secrets" for a moment before the list arrives; a save
  *   in that moment would replace the whole list. So it waits until the modal
  *   lists as many secrets as the API does before adding.
  * - The `afterEach` is a union restore (`restoreGlobalEnrollSecrets`): the
  *   live list minus the marker, plus any original that has gone missing. Never
- *   a snapshot replace, which would drop anything added since.
+ *   a snapshot replace, which would drop anything added since. It retries (the
+ *   QA gateway serves the odd 502) until a read-back shows every original and
+ *   no marker; `cleanup.steps.ts` removes a marker a killed run left.
  *
  * Shared: the global list, the modal and the endpoint are the same on both
  * tiers. On premium the Hosts page is put on All fleets, the scope whose
@@ -29,7 +34,12 @@
  * (`onSaveSecret` / `onDeleteSecret`).
  */
 import { test, expect } from '@fixtures';
-import { getGlobalEnrollSecrets, restoreGlobalEnrollSecrets, type EnrollSecret } from '@helpers/api';
+import {
+  GLOBAL_ENROLL_MARKER,
+  getGlobalEnrollSecrets,
+  restoreGlobalEnrollSecrets,
+  type EnrollSecret,
+} from '@helpers/api';
 
 const secretsOf = (list: EnrollSecret[]) => list.map((s) => s.secret);
 
@@ -44,7 +54,13 @@ test.describe('Settings • global enroll secrets', () => {
   });
 
   test.afterEach(async ({ request }) => {
-    await restoreGlobalEnrollSecrets(request, { keep: original, remove: marker ? [marker] : [] });
+    const remove = marker ? [marker] : [];
+    await expect(async () => {
+      await restoreGlobalEnrollSecrets(request, { keep: original, remove });
+      const live = secretsOf(await getGlobalEnrollSecrets(request));
+      expect(live, 'every original global enroll secret is back').toEqual(expect.arrayContaining(secretsOf(original)));
+      for (const m of remove) expect(live).not.toContain(m);
+    }).toPass({ timeout: 30_000 });
     marker = undefined;
   });
 
@@ -55,7 +71,7 @@ test.describe('Settings • global enroll secrets', () => {
     page,
   }) => {
     expect(original.length, 'the instance has its global enroll secret').toBeGreaterThan(0);
-    marker = `pw-enroll-${Date.now()}-${test.info().parallelIndex}-playwright`;
+    marker = `~${GLOBAL_ENROLL_MARKER}${Date.now()}-${test.info().parallelIndex}-playwright`;
 
     await dashboard.goto();
     await dashboard.navbar.goToHosts();

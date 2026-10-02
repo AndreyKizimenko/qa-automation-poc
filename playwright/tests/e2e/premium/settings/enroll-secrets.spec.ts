@@ -8,9 +8,11 @@
  *
  * The modal is opened via the `?fleet_id=…&manage_enroll_secrets=1` deep link;
  * the editor pre-fills a generated secret, which the test keeps. Row actions
- * find the row by the secret's value (`EnrollSecretModal`), and the test waits
- * for the modal to list the fleet's secrets before adding, since Fleet saves
- * its cached list plus one.
+ * find the row by the secret's value (`EnrollSecretModal`). The test waits for
+ * the modal to list the fleet's secrets before adding; for a fleet that list
+ * comes from the fleets query while the save uses a separate fleet-secrets
+ * query, so the wait narrows the window rather than closing it — the snapshot
+ * restore is what makes a wrong save harmless here.
  *
  * Grounded in frontend/components/EnrollSecrets (EnrollSecretModal +
  * SecretEditorModal + DeleteSecretModal); toasts "Successfully added enroll

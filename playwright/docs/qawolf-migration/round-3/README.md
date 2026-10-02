@@ -53,7 +53,7 @@ here** block, the gap table, the review to do first, facts for the build, the de
 
 | batch | theme | hosts | gaps | status |
 |---|---|---|---:|---|
-| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | reviewed 2026-10-02 (16 build, 3 cut); building |
+| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | built 2026-10-02 (16 built, 3 cut); PR open |
 | **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none | 24 | ready for review |
 | **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | ready for review |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | ready for review |

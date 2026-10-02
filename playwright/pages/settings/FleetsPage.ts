@@ -9,8 +9,9 @@ export type FleetRowAction = 'Rename' | 'Delete';
  * `/settings/fleets` — Settings › Fleets: the fleets table, **Add fleet**, and
  * each row's Actions (Rename / Delete) with their modals. Premium only.
  *
- * Only a spec that owns a throwaway `pw-*` fleet acts here; the fleets gitops
- * declares (Workstations, VMs, QA, Mobile) are never renamed or deleted.
+ * Only a spec that owns a throwaway `pw-*` fleet acts here; the standing
+ * fleets (Workstations, VMs and QA from gitops; Mobile, kept by hand) are never
+ * renamed or deleted.
  */
 export class FleetsPage {
   readonly page: Page;

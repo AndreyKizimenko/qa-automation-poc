@@ -79,7 +79,9 @@ test.describe('Premium • Software • All fleets scope across the navbar', () 
     await expect(controls.page).toHaveURL(/fleet_id=\d+/);
     await expect(controls.teamDropdown.currentValue).not.toHaveText('All fleets');
     await controls.teamDropdown.trigger.click();
-    expect(await controls.teamDropdown.options.allInnerTexts()).not.toContain('All fleets');
+    // The open menu must list a real fleet before its missing aggregate means anything.
+    await expect(controls.teamDropdown.options.filter({ hasText: /^Workstations$/ })).toBeVisible();
+    await expect(controls.teamDropdown.options.filter({ hasText: /^All fleets$/ })).toHaveCount(0);
   });
 });
 
@@ -116,6 +118,7 @@ test.describe('Premium • Software • Unassigned scope across the navbar', () 
     await hostsList.navbar.goToReports();
     await expect(reportsList.teamDropdown.currentValue).toHaveText('All fleets');
     await reportsList.teamDropdown.trigger.click();
-    expect(await reportsList.teamDropdown.options.allInnerTexts()).not.toContain('Unassigned');
+    await expect(reportsList.teamDropdown.options.filter({ hasText: /^Workstations$/ })).toBeVisible();
+    await expect(reportsList.teamDropdown.options.filter({ hasText: /^Unassigned$/ })).toHaveCount(0);
   });
 });

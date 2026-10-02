@@ -968,7 +968,7 @@ other:
 
 **Flow**
 
-1. ☐ *(API)* Log in as the user with the old password.
+1. ☐ *(API)* Log in as the user with the old password (`apiLogin`, which waits out Fleet's suite-wide `/login` throttle rather than reading a 429 as a verdict).
    - ✅ *(API)* `POST /login` succeeds; the returned token authenticates `GET /me`.
 2. ☐ Open **Settings → Users**, search the user's email, row **Actions → Edit**.
    - ✅ *(UI)* URL is `/settings/users/<id>/edit`; heading **Edit user**.

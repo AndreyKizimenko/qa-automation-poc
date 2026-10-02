@@ -1177,7 +1177,7 @@ other:
 - **Grep:** `npx playwright test -g "narrow the feed to one actor"`
 - **Project:** premium **and** free · **Scopes:** global (premium: the dashboard on **All fleets**, where the feed shows) · **Mode:** UI+API
 - **Isolation:** standalone; the actor and anything it left are deleted in an `afterEach`
-- **Preconditions:** a throwaway global **maintainer** `QA Feed <ms>` / `qa-test-<ms>-feed@fleetdm.com`, created through the API. Through a **cookie-less** context with its own token it logs in, creates a global report `pw-feed-<ms>` and deletes it — three activities whose actor is that user.
+- **Preconditions:** a throwaway global **maintainer** `QA Feed <ms>` / `qa-test-<ms>-feed@fleetdm.com`, created through the API. Through a **cookie-less** context with its own token it logs in (`apiLogin`, throttle-aware), creates a global report `pw-feed-<ms>` and deletes it — three activities whose actor is that user.
 - **Data created:** the user (deleted in the `afterEach`; swept as `qa-test-*`) and the report (deleted by the user; by the `afterEach` if the test died first)
 
 **Flow**

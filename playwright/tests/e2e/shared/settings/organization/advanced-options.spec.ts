@@ -11,8 +11,9 @@
  *
  * So it edits the most inert fields on the card — the SMTP section's Domain,
  * Verify SSL certs and Enable STARTTLS, all unused on the QA instances (SMTP is
- * deliberately unconfigured) — and then asserts every neighbouring subtree, and
- * the rest of `smtp_settings`, came through the save byte-identical. The two
+ * deliberately unconfigured) — and then asserts every neighbouring subtree, the
+ * rest of `smtp_settings`, and the `mdm` / `sso_settings` members the save also
+ * posts, came through the save unchanged. The two
  * checkboxes are flipped from whatever they are now, so the test holds in
  * either state.
  *
@@ -42,6 +43,22 @@ const OWNED_SUBTREES = [
   'server_settings',
   'activity_expiry_settings',
 ] as const;
+
+/**
+ * The save also posts these members of `mdm` and `sso_settings` from the form.
+ * They're compared by name, not as whole subtrees: other specs change the rest
+ * of `mdm` while this one runs.
+ */
+const postedNeighbours = (config: Record<string, unknown>) => {
+  const mdm = (config.mdm ?? {}) as Record<string, unknown>;
+  const sso = (config.sso_settings ?? {}) as Record<string, unknown>;
+  return {
+    apple_server_url: mdm.apple_server_url,
+    apple_require_hardware_attestation: mdm.apple_require_hardware_attestation,
+    only_allow_apple_business_enrollment: mdm.only_allow_apple_business_enrollment,
+    sso_server_url: sso.sso_server_url,
+  };
+};
 
 /** The `smtp_settings` members this test edits. */
 const EDITED_SMTP = ['domain', 'verify_ssl_certs', 'enable_start_tls'] as const;
@@ -122,6 +139,9 @@ test.describe('Settings • advanced options', () => {
       (after.server_settings as Record<string, unknown>)?.server_url,
       'server URL must be unchanged',
     ).toBe((before.server_settings as Record<string, unknown>)?.server_url);
+    expect(postedNeighbours(after), 'the MDM and SSO fields the save posts must be unchanged').toEqual(
+      postedNeighbours(before),
+    );
 
     expect(page.url()).toContain('/settings/organization/advanced');
   });

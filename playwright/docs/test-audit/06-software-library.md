@@ -1464,7 +1464,7 @@ other:
 6. ☐ Click **Controls**.
    - ✅ *(UI)* The URL carries a concrete `fleet_id=<n>` — Controls configures one fleet at a time, so it cannot honour the aggregate and lands on a real fleet instead of rendering an empty scope.
    - ✅ *(UI)* Its team dropdown does **not** read All fleets.
-   - ☐ Open that dropdown. ✅ *(UI)* its entries do **not** include **All fleets** — the aggregate is dropped from the picker entirely, not merely left unselected.
+   - ☐ Open that dropdown. ✅ *(UI)* it lists **Workstations** (so the menu is really open) and does **not** include **All fleets** — the aggregate is dropped from the picker entirely, not merely left unselected.
 
 **Assessment**
 - *Value:* the counterpart to SWL-09 on the other axis — one scope across five *different* pages rather than one page's tabs — and it pins the single deliberate exception instead of papering over it. The "All fleets isn't even in Controls' picker" assertion is what separates an intended fallback from a bug.
@@ -1573,7 +1573,7 @@ other:
    - ✅ *(UI)* After each, the fleet picker still reads **Unassigned**.
 3. ☐ Click **Reports**.
    - ✅ *(UI)* The picker reads **All fleets**.
-   - ✅ *(UI)* Opened, it offers no **Unassigned** (`ManageQueriesPage`: `includeNoTeam: false`).
+   - ✅ *(UI)* Opened, it lists **Workstations** (so the menu is really open) and no **Unassigned** (`ManageQueriesPage`: `includeNoTeam: false`).
 
 **Assessment**
 - *Value:* the Unassigned half of SWL-32 (QA Wolf's "switching tabs doesn't switch to All teams" flow, C6 #28): a scope that resets on navigation would make every Unassigned-scoped flow quietly operate on the aggregate.

@@ -4,12 +4,12 @@
  * the API.
  *
  * **The fleet is a throwaway `pw-fleet-<ms>`, created and deleted by this
- * test.** `playwright/CLAUDE.md` forbids creating or deleting fleets in test
- * bodies to protect the fleets gitops declares; a fleet that exists only
- * between this test's first and last step is the exception that rule allows.
- * Anything it leaves behind is removed by the `afterEach` (which runs even when
- * the test times out) and, after a run killed outright, by the `pw-*` fleet
- * sweep in `setup/cleanup.steps.ts`.
+ * test.** `playwright/CLAUDE.md` protects the instance's standing fleets and
+ * allows a throwaway `pw-*` one that exists only between a test's first and
+ * last step. Anything this test leaves behind is removed by the `afterEach`,
+ * which looks up both of its names and runs even when the test times out, and,
+ * after a run killed outright, by the `pw-*` fleet sweep in
+ * `setup/cleanup.steps.ts`.
  *
  * While it exists the fleet shows in every fleet picker, gets a generated
  * enroll secret and copied agent options, and logs activities — none of which
@@ -32,24 +32,26 @@ async function fleetName(request: APIRequestContext, id: number): Promise<string
 }
 
 test.describe('Premium • Settings • fleet lifecycle', () => {
-  let fleetId: number | undefined;
+  // The names this test may have created, looked up by name afterwards: the UI
+  // creates the fleet before the test knows its id.
+  let names: string[] = [];
 
   test.afterEach(async ({ request }) => {
-    if (fleetId === undefined) return;
-    const id = fleetId;
-    fleetId = undefined;
+    const leftover = names;
+    names = [];
     // The QA gateway serves the odd 502, so one attempt isn't a guarantee.
-    await expect
-      .poll(() => deleteFleet(request, id, { ignoreMissing: true }).then(() => true, () => false), {
-        timeout: 30_000,
-        message: `throwaway fleet ${id} could not be deleted`,
-      })
-      .toBe(true);
+    await expect(async () => {
+      for (const name of leftover) {
+        const fleet = await findFleetByName(request, name);
+        if (fleet) await deleteFleet(request, fleet.id, { ignoreMissing: true });
+      }
+    }).toPass({ timeout: 30_000 });
   });
 
   test('an admin adds, renames and deletes a fleet', async ({ fleetsPage, request }) => {
     const name = `pw-fleet-${Date.now()}`;
     const renamed = `${name}-renamed`;
+    names = [name, renamed];
 
     await fleetsPage.goto();
     await fleetsPage.addFleet(name);
@@ -57,7 +59,7 @@ test.describe('Premium • Settings • fleet lifecycle', () => {
     await expect(fleetsPage.row(name)).toBeVisible();
     const created = await findFleetByName(request, name);
     expect(created, 'the new fleet exists in the API').not.toBeNull();
-    fleetId = created!.id;
+    const fleetId = created!.id;
 
     await fleetsPage.renameFleet(name, renamed);
     await fleetsPage.toast.expectSuccess(`Successfully updated fleet name to ${renamed}.`);
@@ -68,6 +70,6 @@ test.describe('Premium • Settings • fleet lifecycle', () => {
     await fleetsPage.deleteFleet(renamed);
     await fleetsPage.toast.expectSuccess(`Successfully deleted ${renamed}.`);
     await expect(fleetsPage.row(renamed)).toHaveCount(0);
-    await expect.poll(() => fleetName(request, fleetId!), { message: 'the fleet is gone from the API' }).toBeNull();
+    await expect.poll(() => fleetName(request, fleetId), { message: 'the fleet is gone from the API' }).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
 **19 gaps → about 9 specs, nearly all augments, after merges.** `Settings forms` · `Enroll secrets` · `Users` ·
 `Labels` · `Theme and account` · `Activity feed`
 
-**Status: reviewed 2026-10-02, building** (planned 2026-10-01). Decisions below; the table's last column is the review.
+**Status: built 2026-10-02, PR open** (planned 2026-10-01). Decisions below; the table's last column is the review; *What landed* at the end.
 
 > ## ▶ Start here
 >
@@ -259,3 +259,19 @@ Unassigned persistence, My account's Fleets line, fleet lifecycle.
 | C1 #5, C1 #19 | `shared/settings/enroll-secrets.spec.ts` (new), `premium/settings/enroll-secrets.spec.ts` | Global: gear → Enroll secrets on All fleets; waits for the modal to list the API's count (it flashes an empty state first, and a save then would replace the whole list); adds `pw-enroll-<ms>-…`, copies it (clipboard read back), deletes only its row; API checked after each write for every original. Union-restore `afterEach`. Workstations: the generated secret copied and deleted. Each instance's global list hashed before and after 6 runs per tier: unchanged. `--repeat-each=5` green |
 | C7 #10 | `premium/settings/fleets-lifecycle.spec.ts` (new) | Add fleet → Rename → Delete on `pw-fleet-<ms>`, named-row assertions (not QA Wolf's counts), API after each step; `afterEach` delete; `pw-*` fleet sweep in `cleanup.steps.ts`; the rule in `playwright/CLAUDE.md`. Batch B's C3 #15 uses the same pattern |
 | C5 #8 | `shared/dashboard/activity-feed.spec.ts` (new) | Built around a disposable actor, not QA Wolf's ten-page walk: search by name → exactly its 3 activities (newest first); type, date (Yesterday's empty state, Today) and sort each asserted over them. Both tiers |
+
+**Verified** (2026-10-02, against `4.93.0-rc` on both instances): every changed spec once with dependencies and
+headed on each tier it targets (premium 46/46 incl. setup and teardown, free 23 passed / 8 premium-only cleanup
+steps skipped), plus `add-hosts-download.spec.ts` beside the global enroll-secret spec; `--repeat-each=5` on the
+enroll-secret and Advanced-options specs; the gitops-mode project once (its two specs read the rebuilt
+`EnrollSecretModal`). Each instance's global enroll-secret list hashed before and after: unchanged.
+`playwright-test-reviewer` on the branch: no blockers; its ten findings fixed (restore retry + read-back and a
+marker sweep, the `mdm` / `sso_settings` fields Advanced's save also posts, a throttle-aware `apiLogin`, menu
+assertions that could pass on a closed menu, the fleet `afterEach` by name, a marker that sorts after the real
+secret, webhook values that always differ from what's stored, and three doc corrections).
+
+**Found along the way** (not filed — Andrey's call): Fleet's "Manage enroll secrets" modal renders "You have no
+enroll secrets" with *Add secret* live for 50–400 ms before its list arrives, and its save posts the cached list
+plus the new secret (`globalSecrets || []`). A secret saved in that window — or after the list request fails —
+replaces every existing global secret with the new one.
+

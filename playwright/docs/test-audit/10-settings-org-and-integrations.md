@@ -145,7 +145,7 @@ other:
 - **Mode:** UI+API · **Isolation:** standalone; `beforeEach` snapshots `smtp_settings`, `afterEach` restores the three edited members (an `afterEach`, so a timed-out test still restores them)
 - **Preconditions:** admin session. SMTP deliberately **unconfigured** on both QA instances — that is why the SMTP Domain, Verify SSL certs and Enable STARTTLS fields are safe to change. A full `GET /config` is captured as `before`.
 - **Data created / mutated:** **global** `smtp_settings.domain` → `pw-advanced-<epoch-ms>.example.com`; `verify_ssl_certs` and `enable_start_tls` → the opposite of their current values (both default to on). The `afterEach` PATCHes all three back.
-  - The card's Save is a **single bundled write**: Fleet's `performSave` posts `smtp_settings`, `features`, `host_expiry_settings`, `server_settings` and `activity_expiry_settings` together, whatever the user touched, **as they were loaded** when the page opened. So one click here can in principle rewrite all five — and can revert another session's change to `features` / `server_settings` made while the page was open.
+  - The card's Save is a **single bundled write**: Fleet's `performSave` posts `smtp_settings`, `features`, `host_expiry_settings`, `server_settings` and `activity_expiry_settings` together, whatever the user touched, **as they were loaded** when the page opened. So one click here can in principle rewrite all five, plus three `mdm` members and `sso_settings.sso_server_url` — and can revert another session's change to `features` / `server_settings` made while the page was open.
   - ⚠️ If the restore is skipped the leftover is cosmetic (SMTP is off). The **real** blast radius is a Fleet-side formData bug: the test exists precisely because a bundled save could silently flip `features.enable_software_inventory` off (kills every software spec), rewrite `server_settings.server_url` (kills agent check-ins), or turn on `host_expiry_settings` (Fleet then **deletes the simulated hosts** the whole host batch depends on). The spec deliberately never edits host expiry itself — QA Wolf's flow left it on with a 1-day window — and does **not** PATCH whole snapshotted subtrees back: `/config` rejects them with 400 because they carry read-only members such as `smtp_settings.configured`.
 
 **Flow**
@@ -162,6 +162,7 @@ other:
    - ✅ *(API)* The rest of `smtp_settings` equals its pre-save snapshot.
    - ✅ *(API)* `features`, `host_expiry_settings`, `server_settings`, `activity_expiry_settings` each `toEqual` their pre-save snapshot — compared as **whole subtrees** so a reset nested field can't slip through.
    - ✅ *(API)* Named re-assertions on the two the rest of the suite is most exposed to: `features.enable_software_inventory` and `server_settings.server_url` unchanged.
+   - ✅ *(API)* The other fields the save posts are unchanged, compared by name: `mdm.apple_server_url`, `mdm.apple_require_hardware_attestation`, `mdm.only_allow_apple_business_enrollment`, `sso_settings.sso_server_url` (the rest of `mdm` moves under other specs).
    - ✅ *(UI)* `page.url()` still contains `/settings/organization/advanced` (non-retrying string check).
 
 **Assessment**
@@ -239,7 +240,7 @@ other:
 2. ☐ Tick the enable checkbox — `setHostStatusWebhookEnabled(true)` reads `aria-checked` first so it is idempotent whatever the instance's starting state.
    - ✅ *(UI)* The checkbox reports `aria-checked="true"`.
 3. ☐ Fill **Destination URL** with `https://example.com/host-status-webhook`.
-4. ☐ Pick **Percentage of hosts** → `5%` and **Number of days** → `3 days` (both default to 1; react-select v1 menus, rendered only while the webhook is enabled) — `selectHostStatusOption`.
+4. ☐ Pick **Percentage of hosts** → `5%` and **Number of days** → `3 days` (`10%` / `7 days` if those are already stored, so the save always changes them; both default to 1; react-select v1 menus, rendered only while the webhook is enabled) — `selectHostStatusOption`.
    - ✅ *(UI)* Each dropdown shows the picked value.
 5. ☐ Click **Save** — `saveHostStatusWebhook()`.
    - ✅ *(UI)* Success toast `Successfully updated settings.`
@@ -601,7 +602,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 - **Project:** premium **and** free · **Scopes:** global (on premium the Hosts page is put on **All fleets**)
 - **Mode:** UI+API · **Isolation:** standalone; clipboard permissions; `beforeEach` snapshot, `afterEach` **union restore**
 - **Preconditions:** the instance's own global enroll secret (the test fails if there is none). `beforeEach` reads `GET /spec/enroll_secret`.
-- **Data created / mutated:** a marker secret `pw-enroll-<ms>-<worker>-playwright` on the **global** list, deleted by the test. `afterEach` → `restoreGlobalEnrollSecrets`: the live list minus the marker, plus any original that has gone missing; it writes nothing when the list is already right and refuses to post an empty list.
+- **Data created / mutated:** a marker secret `~pw-enroll-<ms>-<worker>-playwright` on the **global** list, deleted by the test. The leading `~` sorts it after every real secret (Fleet lists them `ORDER BY secret`, and the Add hosts modal offers the first), so `add-hosts-download.spec.ts` never sees it offered. `afterEach` → `restoreGlobalEnrollSecrets` inside a `toPass` (the gateway's odd 502): the live list minus the marker, plus any original that has gone missing, then a read-back that every original is there and the marker isn't; it writes nothing when the list is already right and refuses to post an empty list. The cleanup projects' **remove test-added global enroll secrets** step removes a marker a killed run left.
   - ⚠️ **The global secret is what the ~300 simulations re-enroll with** on every daemon restart. Fleet's only write here is a full replace, and the UI posts its cached list ± one. So every row action goes by the secret's value, the test waits for the modal to list the API's count before adding (the modal flashes "You have no enroll secrets" for 50–400 ms first, and a save then would replace the whole list), and the API is checked after each write for every original secret. On free, gitops re-pins the secret nightly; on premium nothing would.
 
 **Flow**
@@ -637,7 +638,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/settings/fleets-lifecycle.spec.ts`](../../tests/e2e/premium/settings/fleets-lifecycle.spec.ts)
 - **Grep:** `npx playwright test -g "an admin adds, renames and deletes a fleet"`
-- **Project:** premium · **Mode:** UI+API · **Isolation:** standalone; `afterEach` deletes the fleet by id (retried for the gateway's odd 502), and the cleanup projects' **sweep throwaway pw-\* fleets** step removes any a killed run left
+- **Project:** premium · **Mode:** UI+API · **Isolation:** standalone; `afterEach` looks up both names the test may have created and deletes what it finds (retried for the gateway's odd 502), and the cleanup projects' **sweep throwaway pw-\* fleets** step removes any a killed run left
 - **Preconditions:** none
 - **Data created:** a throwaway fleet `pw-fleet-<ms>`, renamed `pw-fleet-<ms>-renamed`, deleted by the test. While it exists it shows in every fleet picker and gets an enroll secret and agent options — nothing reads it by name. Allowed by `playwright/CLAUDE.md`'s throwaway-fleet rule (Andrey, 2026-10-02).
 

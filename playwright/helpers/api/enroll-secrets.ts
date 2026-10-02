@@ -3,6 +3,12 @@
 import { APIRequestContext } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
+/**
+ * What every test-added global enroll secret contains, so a sweep can find one
+ * a killed run left (`removeGlobalEnrollMarkers`).
+ */
+export const GLOBAL_ENROLL_MARKER = 'pw-enroll-';
+
 export interface EnrollSecret {
   secret: string;
 }
@@ -53,6 +59,18 @@ export async function restoreGlobalEnrollSecrets(
   if (!res.ok()) {
     throw new Error(`[restoreGlobalEnrollSecrets] ${res.status()}: ${await res.text()}`);
   }
+}
+
+/**
+ * Removes every global enroll secret containing {@link GLOBAL_ENROLL_MARKER} —
+ * the cleanup sweep for a test-added secret a killed run left. Leaves every
+ * other secret as it is.
+ */
+export async function removeGlobalEnrollMarkers(request: APIRequestContext): Promise<void> {
+  const markers = (await getGlobalEnrollSecrets(request))
+    .map((s) => s.secret)
+    .filter((s) => s.includes(GLOBAL_ENROLL_MARKER));
+  if (markers.length) await restoreGlobalEnrollSecrets(request, { keep: [], remove: markers });
 }
 
 /** Current enroll secrets for a team/fleet. */
