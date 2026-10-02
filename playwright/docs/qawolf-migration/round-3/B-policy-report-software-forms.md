@@ -319,4 +319,9 @@ already have it.
 
 ## What landed
 
-*Nothing yet.*
+Built on `playwright/qawolf-round3-batch-b`. Each slice was run on every tier it targets before it was
+committed.
+
+| slice | gaps | what |
+|---|---|---|
+| policies | C3 #4, #10, #11, #12, #15, #18, #27 | **free + premium `policy-automations.spec.ts`**: the serial describe's webhook test is now the lifecycle *enable → tick the seeded policy's Send webhook → turn off* (API: `policy_ids` holds the policy, and keeps it once off; the row's cell reads *Edit automation: Webhook*, then *Add automation*, since Fleet labels the cell from the webhook's state); the `afterEach` restores `policy_ids`. A test per tier for Ticket with no integration → *Add integration* → `/settings/integrations`. Premium: a fleet's failing-policies webhook on a throwaway `pw-fleet-webhook-*` fleet, opened by id, stored on the fleet and not in global config, and the modal reopening on it. **free + premium `sql-validation.spec.ts`**: the bad-SQL policy is saved, reopened with the exact SQL and the error, deleted in an `afterEach`. **premium `policies.spec.ts`**: a Workstations policy is listed there and not under VMs. **New `shared/policies/policy-autofill.spec.ts`**: Autofill, live; both fields fill. Premium 22/22, free 10/10 |

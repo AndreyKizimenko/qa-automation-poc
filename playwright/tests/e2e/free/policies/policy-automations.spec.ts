@@ -1,11 +1,17 @@
 /**
  * Free • Policies • automations, both ways the policies list sets them:
  *
- *   - **Scope-wide** — the same failing-policies webhook enable/persist as
- *     premium (webhook automations exist on free); free has no team dropdown.
- *     This mutates GLOBAL config (webhook_settings.failing_policies_webhook):
- *     the original is snapshotted and restored via the config helper, and a
- *     global policy is seeded so the "Automations" button is enabled.
+ *   - **Scope-wide** — the same failing-policies webhook lifecycle as premium
+ *     (webhook automations exist on free; free has no team dropdown): enabled
+ *     with a destination URL, ticked for one policy in that policy's own modal
+ *     (stored in `policy_ids`, the cell reading "Webhook"), and turned off
+ *     again, keeping the URL and the policy while the cell goes back to "Add
+ *     automation". This mutates GLOBAL config
+ *     (webhook_settings.failing_policies_webhook): the original, `policy_ids`
+ *     included, is snapshotted and restored via the config helper, and a global
+ *     policy is seeded so the "Automations" button is enabled. With no ticket
+ *     integration, choosing Ticket offers "Add integration", which leads to
+ *     Settings › Integrations.
  *   - **One policy's** — a row's Automations cell opens the same "Manage
  *     automations" modal premium's fleet policies have, but every policy on free
  *     is global, and `PolicyAutomationsFields` gives a global policy only *Send
@@ -39,10 +45,12 @@ test.describe('Free • Policies • automations', () => {
 
   let original: FailingPoliciesWebhook;
   let policyId: number;
+  let policyName: string;
 
   test.beforeEach(async ({ request }) => {
     original = (await getAppConfig(request)).webhook_settings?.failing_policies_webhook ?? {};
-    ({ id: policyId } = await createPolicy(request, { name: `pw-policy-auto-${Date.now()}` }));
+    policyName = `pw-policy-auto-${runNonce()}`;
+    ({ id: policyId } = await createPolicy(request, { name: policyName }));
   });
 
   test.afterEach(async ({ request }) => {
@@ -51,27 +59,63 @@ test.describe('Free • Policies • automations', () => {
         failing_policies_webhook: {
           enable_failing_policies_webhook: original.enable_failing_policies_webhook ?? false,
           destination_url: original.destination_url ?? '',
+          policy_ids: original.policy_ids ?? [],
         },
       },
     });
     await deletePolicies(request, [policyId]);
   });
 
-  test('enabling the failing-policies webhook persists', async ({ policiesList, request }) => {
+  test('the failing-policies webhook is enabled, sent for one policy, and turned off again', async ({
+    policiesList,
+    request,
+  }) => {
     const webhookUrl = 'https://example.com/pw-policy-webhook';
+    const stored = async (): Promise<FailingPoliciesWebhook> =>
+      (await getAppConfig(request)).webhook_settings?.failing_policies_webhook ?? {};
 
-    await policiesList.goto();
+    await test.step('enable it with a destination URL', async () => {
+      await policiesList.goto();
 
-    await policiesList.openAutomations();
-    await policiesList.setPolicyAutomations(true);
-    await policiesList.selectWebhookWorkflow();
-    await policiesList.policyWebhookUrlInput.fill(webhookUrl);
-    await policiesList.saveAutomations();
-    await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+      await policiesList.openAutomations();
+      await policiesList.setPolicyAutomations(true);
+      await policiesList.selectWebhookWorkflow();
+      await policiesList.policyWebhookUrlInput.fill(webhookUrl);
+      await policiesList.saveAutomations();
+      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
 
-    const webhook = (await getAppConfig(request)).webhook_settings?.failing_policies_webhook ?? {};
-    expect(webhook.enable_failing_policies_webhook).toBe(true);
-    expect(webhook.destination_url).toBe(webhookUrl);
+      const webhook = await stored();
+      expect(webhook.enable_failing_policies_webhook).toBe(true);
+      expect(webhook.destination_url).toBe(webhookUrl);
+    });
+
+    await test.step("tick Send webhook in the policy's own modal", async () => {
+      // `SELECT 1;` passes on every host, so the webhook never has a failure to send.
+      await policiesList.openPolicyAutomations(policyName);
+      await expect(policiesList.policyAutomationsModal).toContainText(
+        `Manage automations for the ${policyName} policy`,
+      );
+      await policiesList.policyAutomations.setAutomation('ticket_webhook', true);
+      await policiesList.savePolicyAutomations();
+      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+
+      expect((await stored()).policy_ids).toContain(policyId);
+      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
+    });
+
+    await test.step('turn it off, keeping the URL and the policy', async () => {
+      await policiesList.openAutomations();
+      await policiesList.setPolicyAutomations(false);
+      await policiesList.saveAutomations();
+      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+
+      const webhook = await stored();
+      expect(webhook.enable_failing_policies_webhook).toBe(false);
+      expect(webhook.destination_url).toBe(webhookUrl);
+      expect(webhook.policy_ids).toContain(policyId);
+      // The cell names the webhook only while the webhook is on.
+      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
+    });
   });
 
   test('the automations form locks itself while the save is in flight', async ({
@@ -143,6 +187,42 @@ test.describe("Free • Policies • one policy's automations", () => {
       }
       await expect(fields.continuousCheckbox).toHaveCount(0);
       await policiesList.cancelPolicyAutomations();
+    } finally {
+      await deletePolicies(request, [policyId]);
+    }
+  });
+});
+
+test.describe('Free • Policies • automations with no ticket integration', () => {
+  test('choosing Ticket offers "Add integration", which leads to Settings › Integrations', async ({
+    dashboard,
+    policiesList,
+    integrationsPage,
+    request,
+  }) => {
+    // The instances carry no Jira or Zendesk integration: gitops doesn't declare
+    // `integrations`, so every apply clears them, and no spec adds one. Checked
+    // first so a configured integration fails here, not as a missing button.
+    const { integrations } = await getAppConfig(request);
+    expect(integrations?.jira ?? [], 'no Jira integration on the instance').toHaveLength(0);
+    expect(integrations?.zendesk ?? [], 'no Zendesk integration on the instance').toHaveLength(0);
+
+    // The Manage automations button stays disabled until there's a policy.
+    const { id: policyId } = await createPolicy(request, { name: `pw-policy-no-integration-${runNonce()}` });
+    try {
+      await dashboard.goto();
+      await dashboard.navbar.goToPolicies();
+
+      // Nothing is saved: the slider and the radio are only switched in the form.
+      await policiesList.openAutomations();
+      await policiesList.setPolicyAutomations(true);
+      await policiesList.selectTicketWorkflow();
+      await expect(policiesList.noIntegrationsMessage).toBeVisible();
+      await expect(policiesList.addIntegrationButton).toBeEnabled();
+
+      await policiesList.addIntegrationButton.click();
+      await expect(policiesList.page).toHaveURL(/\/settings\/integrations/);
+      await expect(integrationsPage.ticketingHeading).toBeVisible();
     } finally {
       await deletePolicies(request, [policyId]);
     }

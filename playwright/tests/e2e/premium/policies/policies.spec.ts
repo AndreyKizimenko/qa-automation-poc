@@ -2,9 +2,15 @@
  * Policies CRUD lifecycle scoped to a specific fleet on premium. Each
  * scope (All fleets + Workstations) runs as a serial describe so a
  * per-step failure pinpoints which CRUD action regressed.
+ *
+ * Then fleet isolation, on its own: a Workstations policy is listed under
+ * Workstations and not under the VMs fleet. Reading the VMs fleet's list
+ * changes nothing on it.
  */
 import { test, expect } from '@fixtures';
-import { assertActivity } from '@helpers/api';
+import { assertActivity, createFleetPolicy, deleteFleetPolicies } from '@helpers/api';
+import { VMS_FLEET } from '@helpers/api/static-users';
+import { runNonce } from '@helpers/profiles';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { PolicyFormValues, SavePolicyValues, TeamScope } from '@pages';
@@ -108,3 +114,35 @@ for (const scope of SCOPES) {
     });
   });
 }
+
+test.describe('Policies — fleet isolation', () => {
+  test("a fleet's policy is listed under its fleet and not under another", async ({
+    dashboard,
+    policiesList,
+    request,
+    workstationsFleetId,
+    vmsFleetId,
+  }) => {
+    const name = `pw-policy-isolation-${runNonce()}`;
+    const policy = await createFleetPolicy(request, workstationsFleetId, { name, query: 'SELECT 1;' });
+
+    try {
+      await dashboard.goto();
+      await dashboard.navbar.goToPolicies();
+      await policiesList.teamDropdown.select('Workstations');
+      await policiesList.search.fill(name);
+      await expect(policiesList.table.rowWith(name)).toBeVisible();
+
+      await policiesList.teamDropdown.selectByLabel(VMS_FLEET);
+      await expect(policiesList.page).toHaveURL(new RegExp(`fleet_id=${vmsFleetId}\\b`));
+      await policiesList.search.fill(name);
+      await policiesList.table.waitForSettled();
+      // The empty state is what proves the VMs list loaded with this search,
+      // so the missing row is an answer rather than a page still loading.
+      await expect(policiesList.table.emptyState).toBeVisible();
+      await expect(policiesList.table.rowWith(name)).toHaveCount(0);
+    } finally {
+      await deleteFleetPolicies(request, workstationsFleetId, [policy.id]);
+    }
+  });
+});

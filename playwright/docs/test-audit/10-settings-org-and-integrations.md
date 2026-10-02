@@ -610,7 +610,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 | MDM — end-user migration workflow | SET-09 (URL validation only) | Save/persistence; voluntary-vs-forced mode; Save gating on invalid URL |
 | MDM — macOS EULA | SET-10 | Non-PDF / oversize rejection; view-EULA action; replace-in-place |
 | SSO — end-user authentication (IdP) | SET-11 (render + one gating case) | Entity-ID gating; Metadata-URL-or-Metadata either/or; save path; **Fleet users** tab |
-| Integrations — Ticket destinations (Jira / Zendesk) | **nothing** | `IntegrationsPage.goto()` and `ticketDestinationsHeading` exist but no spec calls them |
+| Integrations — Ticketing (Jira / Zendesk) | the heading only, through the policies modal: POL-28/29 ([04](04-policies.md)) click **Add integration** in the Ticket workflow's empty state and assert `IntegrationsPage.ticketingHeading` on the page it opens | Adding, editing or deleting a Jira or Zendesk integration; `IntegrationsPage.goto()` (which waits on `ticketingHeading`) has no caller |
 | Integrations — Calendars, Certificate authorities, Conditional access, Change management, IdP/SCIM | free paywall rows only ([`free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts)) | No premium functional coverage at all; `IntegrationsPage.scimText` is dead code |
 | ABM / VPP token upload, renewal, expiry warnings | **nothing** | Whole flow untested, yet SET-09 and SET-10 silently *depend* on ABM already being configured |
 
@@ -635,7 +635,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 2. Add a reload + two UI value assertions to SET-06 ([`shared/settings/host-status-webhook.spec.ts:34`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)) so persistence isn't proven by `GET /config` alone.
 3. Move SET-09's three inline raw locators onto `IntegrationsPage` (`mdm.spec.ts:16,20,26`) and route it through `gotoMdm()` — removes the last spec-level class selectors in this area.
 4. Convert the `try/finally` restores in SET-04 (`advanced-options.spec.ts:79`) and SET-07 (`team-host-status-webhook.spec.ts:73`) to `afterEach` hooks (nesting SET-07's describe so SET-08 is unaffected) — `finally` can be abandoned on a hard timeout, and these two restores protect the enroll-secret/webhook state the suite leans on.
-5. Drop the dead `IntegrationsPage.goto()` / `scimText` members, or give them a spec (Ticket destinations is the only Integrations card with a POM anchor and no test).
+5. Drop the dead `IntegrationsPage.goto()` / `scimText` members, or give them a spec (Ticketing is reached only through POL-28/29's **Add integration**, never through `goto()`).
 
 **Bigger bets**
 

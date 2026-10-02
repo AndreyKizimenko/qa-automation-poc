@@ -5,7 +5,7 @@ import { Toast } from '../components/Toast';
 
 /**
  * /settings/integrations — the Integrations section, with a left-side nav
- * listing integration categories. The default subpage is "Ticket destinations".
+ * listing integration categories. The default subpage is "Ticketing".
  * Premium-only IdP / SCIM / Calendars / etc. subpages are gated on license.
  *
  * The MDM subpage (`/settings/integrations/mdm`) hosts the macOS EULA
@@ -19,7 +19,7 @@ export class IntegrationsPage {
   readonly toast: Toast;
 
   /** Default subpage heading when landing on /settings/integrations. */
-  readonly ticketDestinationsHeading: Locator;
+  readonly ticketingHeading: Locator;
   readonly scimText: Locator;
 
   // MDM subpage — EULA section.
@@ -52,10 +52,7 @@ export class IntegrationsPage {
     this.uploader = new FileUploader(page);
     this.toast = new Toast(page);
 
-    this.ticketDestinationsHeading = page.getByRole('heading', {
-      name: 'Ticket destinations',
-      exact: true,
-    });
+    this.ticketingHeading = page.getByRole('heading', { name: 'Ticketing', exact: true });
     this.scimText = page.getByText(/SCIM/i);
 
     this.eulaHeading = page.getByRole('heading', {
@@ -111,7 +108,7 @@ export class IntegrationsPage {
 
   async goto(): Promise<void> {
     await this.page.goto('/settings/integrations');
-    await expect(this.ticketDestinationsHeading).toBeVisible();
+    await expect(this.ticketingHeading).toBeVisible();
   }
 
   /** MDM subpage. Anchors on the EULA heading (present when ABM is configured). */

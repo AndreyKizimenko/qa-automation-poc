@@ -111,6 +111,23 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch B — policy, report and software forms
+
+24 gaps round 1 left in forms it opened and never finished. Each flow was reviewed against the spec beside it
+before anything was built, on `playwright/qawolf-round3-batch-b`. Detail in
+[round-3/B-policy-report-software-forms.md](round-3/B-policy-report-software-forms.md#what-landed).
+
+**What the review changed.** Two cuts: C4 #P13 (a one-off check that a new osquery table shipped) and C6 #21
+(types into the Ace editors and never saves). Ten gaps folded into tests that already existed. The org-wide
+*Store report results* toggle has no confirmation and an hourly job deletes every stored result while it's off,
+so Andrey reshaped C5 #15 into what it protects: a long-standing gitops report still collecting, and a new one
+storing its first row. AI Autofill is tested live. A fleet's own webhook runs on a throwaway `pw-*` fleet,
+because fleetdm/fleet#54619 makes Workstations unsafe beside `team-host-status-webhook`.
+
+| slice | what |
+|---|---|
+| policies | both tiers' global webhook test becomes a lifecycle: enabled, ticked for one policy in that policy's own modal (`policy_ids`, the cell reading *Webhook*), turned off with the URL and the policy kept (the cell back to *Add automation*); the `afterEach` restores `policy_ids` too. Ticket with no integration → *Add integration* → Settings › Integrations (both tiers). A fleet's own webhook, enabled on a throwaway `pw-fleet-webhook-*` fleet, stored on the fleet and not in global config (premium). A policy with a syntax error saved and reopened with its SQL and the error (both tiers). A Workstations policy isn't listed under the VMs fleet (premium). New `shared/policies/policy-autofill.spec.ts`: Autofill fills Description and Resolution from Fleet's live call to fleetdm.com. `PoliciesListPage.selectTicketWorkflow`, `PolicyEditPage.autofillButton`; `IntegrationsPage.ticketingHeading` (4.93's heading; the old anchor waited on "Ticket destinations") |
+
 ## Round 2 · Batch G — policy automations and retries
 
 The retries half of G: 9 source flows, re-reviewed against the specs beside them before anything was built,

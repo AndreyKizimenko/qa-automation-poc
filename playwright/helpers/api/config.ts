@@ -107,6 +107,12 @@ export interface AppConfig {
   smtp_settings?: { configured?: boolean; [key: string]: unknown };
   /** Set by the server's own config, not the API: `backend` is `"ses"` when Fleet sends email through SES. */
   email?: { backend?: string; [key: string]: unknown };
+  /** Ticket integrations; the policy and vulnerability automations offer "Ticket" only when one is set. */
+  integrations?: { jira?: unknown[]; zendesk?: unknown[]; [key: string]: unknown };
+  /** `ai_features_disabled` gates the policy form's Autofill buttons. */
+  server_settings?: { ai_features_disabled?: boolean; [key: string]: unknown };
+  /** Where report results go; `result.plugin` is the name the report form's log-destination copy shows. */
+  logging?: { result?: { plugin?: string; [key: string]: unknown }; [key: string]: unknown };
   [key: string]: unknown;
 }
 
@@ -259,6 +265,17 @@ export async function getAppConfig(request: APIRequestContext): Promise<AppConfi
     throw new Error(`[getAppConfig] ${res.status()}: ${await res.text()}`);
   }
   return res.json();
+}
+
+/**
+ * The result log plugin reports send their results to when automations are on
+ * (`logging.result.plugin`, e.g. "filesystem"). The report form and details page
+ * name it, capitalised, as the log destination.
+ */
+export async function resultLogPlugin(request: APIRequestContext): Promise<string> {
+  const plugin = (await getAppConfig(request)).logging?.result?.plugin;
+  if (!plugin) throw new Error('[resultLogPlugin] the config names no result log plugin');
+  return plugin;
 }
 
 /**
