@@ -20,20 +20,13 @@ function matchesPlatform(
 }
 
 /**
- * Display name of the first host on the instance (any platform, online or
- * not). Returns null if the instance has no hosts. Handy for seeding a
- * deterministic host into a manual-label / target picker.
+ * A host's display name by id — what the UI's host pickers search and list.
+ * Pairs with {@link findSimulations}, which hands out ids.
  */
-export async function firstHostDisplayName(
-  request: APIRequestContext,
-): Promise<string | null> {
-  const res = await request.get(apiUrl('hosts'), {
-    headers: authHeaders(),
-    params: { per_page: '1' },
-  });
-  if (!res.ok()) return null;
-  const body = await res.json();
-  return body.hosts?.[0]?.display_name ?? null;
+export async function getHostDisplayName(request: APIRequestContext, hostId: number): Promise<string> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (await res.json()).host.display_name as string;
 }
 
 /** Find a host of a given platform that has vulnerable software. */
@@ -327,7 +320,8 @@ export async function findMdmSimulations(
  * targets, who a label holds. Disjoint from {@link findMdmSimulations}' pool;
  * same slicing.
  *
- * Slices claimed: linux 0–1 `software-label-targets.spec.ts`; darwin 0–1
+ * Slices claimed: linux 0–1 `software-label-targets.spec.ts`, 2
+ * `shared/labels/labels.spec.ts` (a manual label's member, never moved); darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
  * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
  * onto the VMs fleet); windows 0–1 `premium/hosts/host-idp-username.spec.ts`

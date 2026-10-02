@@ -26,6 +26,8 @@ import {
   deleteAllTeamPolicies,
   deleteLabelsWithPrefix,
   deleteFleetPolicies,
+  deleteFleetsWithPrefix,
+  removeGlobalEnrollMarkers,
   deleteReport,
   deleteSoftwareTitle,
   disableGitOpsMode,
@@ -96,6 +98,29 @@ test('wipe unassigned state', async ({ request }) => {
   // theirs `PW_VAR_*`, and the Variables list pages at 20. After the scripts:
   // Fleet refuses to delete a variable a script still references.
   await deleteVariablesMatching(request, 'PW_VAR_');
+});
+
+// A spec that needs a fleet of its own creates a throwaway `pw-*` one and deletes
+// it in an afterEach (`fleets-lifecycle`, `historical-data-collection`, batch B's
+// policy webhook). A run killed hard skips even that, and a stray fleet sits in
+// every fleet picker; this removes them. No standing fleet starts `pw-`. A
+// failure here only logs: a stray fleet is a nuisance, and failing cleanup-setup
+// over one would skip the whole run.
+test('sweep throwaway pw-* fleets', async ({ request }) => {
+  test.skip(process.env.SUITE === 'free', 'fleets are premium-only');
+  await deleteFleetsWithPrefix(request, 'pw-').catch((err) =>
+    console.warn('[cleanup] pw-* fleet sweep failed; the next run retries:', err),
+  );
+});
+
+// `shared/settings/enroll-secrets.spec.ts` adds a marker secret to the global
+// list and removes it in its afterEach. A killed run can leave it; this removes
+// only secrets carrying the marker, never another (the simulations re-enroll
+// with the global secret). Logs rather than fails, like the fleet sweep.
+test('remove test-added global enroll secrets', async ({ request }) => {
+  await removeGlobalEnrollMarkers(request).catch((err) =>
+    console.warn('[cleanup] global enroll-secret marker sweep failed; the next run retries:', err),
+  );
 });
 
 test('wipe Workstations team state', async ({ request }) => {

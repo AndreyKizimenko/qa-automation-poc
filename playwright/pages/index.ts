@@ -52,7 +52,12 @@ export { MyAccountPage } from './account';
 
 // Dashboard (its own top-level nav entry)
 export { DashboardPage } from './DashboardPage';
-export type { ChartDatasetLabel, DashboardPlatformLabel } from './DashboardPage';
+export type {
+  ActivityDateFilter,
+  ActivitySort,
+  ChartDatasetLabel,
+  DashboardPlatformLabel,
+} from './DashboardPage';
 
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';
@@ -139,6 +144,8 @@ export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
 export { ChangeManagementPage } from './settings/ChangeManagementPage';
 export { TeamSettingsPage } from './settings/TeamSettingsPage';
+export { FleetsPage } from './settings/FleetsPage';
+export type { FleetRowAction } from './settings/FleetsPage';
 export { FleetUsersPage } from './settings/FleetUsersPage';
 export type { FleetRole } from './settings/FleetUsersPage';
 export {

@@ -32,7 +32,8 @@ pages/
 ├── labels/             # LabelsPage
 ├── packs/              # PacksListPage, PackEditPage
 └── settings/           # Organization info/advanced, Integrations, TeamSettings,
-    │                   #   FleetUsersPage (a fleet's Users tab + its header)
+    │                   #   FleetUsersPage (a fleet's Users tab + its header),
+    │                   #   FleetsPage (Settings › Fleets: add / rename / delete)
     └── users/          # UsersPage, Create/Edit user + API user, shared UserFormFields
 ```
 

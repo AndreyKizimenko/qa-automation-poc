@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 35 (→ 86 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 36 (→ 87 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -14,7 +14,7 @@ persistence across the navbar, and role/scope gating on **Add software** and the
 
 `library.spec.ts` is still the lifecycle workhorse: a double loop (2 scopes × 7
 add cases) around a serial `add → delete → activity feed` describe, i.e. 43 of
-the 86 runtime tests in this area. Around it sit two newer rings. The **shape**
+the 87 runtime tests in this area. Around it sit two newer rings. The **shape**
 specs each seed one distinctly-named title and inspect one property of it
 (`script-only-package`, `package-scripts`, `custom-icons`, `display-name`,
 `version-pinning`). The **read-only** specs touch no state at all
@@ -100,7 +100,8 @@ locator ambiguous. The claims in force today:
 | SWL-32 | `premium/software/no-teams-views.spec.ts` | All fleets sticks from Hosts to Policies, and Controls falls back to a fleet | UI | ☐ |
 | SWL-33 | `premium/software/patch-policy.spec.ts` | a macOS app: each patch option stores its own policy, and unticking Patch removes it | UI+API | ☐ |
 | SWL-34 | `premium/software/patch-policy.spec.ts` | a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once | UI+API | ☐ |
-| SWL-35 | `premium/software/package-scripts.spec.ts` | editing all four Advanced options saves each of them | UI+API | ☐ |
+| SWL-35 | `premium/software/no-teams-views.spec.ts` | Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets | UI | ☐ |
+| SWL-36 | `premium/software/package-scripts.spec.ts` | editing all four Advanced options saves each of them | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -375,11 +376,11 @@ other:
    - ✅ *(API)* `GET /software/titles/<id>?fleet_id=0` → `software_package.self_service === true` — `getSoftwarePackage()`. The POM comment states a reopened modal renders stale config, so the UI cannot be used for this.
 
 **Assessment**
-- *Value:* one of the area's two in-UI edit round-trips (SWL-35 is the other, for the four scripts) and the only one for Self-service. Also pins the "Save changes?" double-confirmation behaviour.
-- *Coverage gaps:* only one of the modal's fields is exercised here — the four scripts are SWL-35's and label scoping is `software-label-targets.spec.ts`'s ([area 22](22-label-targeting.md)); categories (which self-service *reveals* and this test never looks at) and installer replacement are untested. No success-toast assertion. No **Cancel**/discard path. No UI confirmation at all that the title now shows a self-service badge, and no check that the package appears under **Self-service** on a host's software Library. The `Self-service only` filter switch on the Library page is modelled ([`SoftwareLibraryPage.ts:36`](../../pages/software/SoftwareLibraryPage.ts#L36)) but never used by any spec.
+- *Value:* one of the area's two in-UI edit round-trips (SWL-36 is the other, for the four scripts) and the only one for Self-service. Also pins the "Save changes?" double-confirmation behaviour.
+- *Coverage gaps:* only one of the modal's fields is exercised here — the four scripts are SWL-36's and label scoping is `software-label-targets.spec.ts`'s ([area 22](22-label-targeting.md)); categories (which self-service *reveals* and this test never looks at) and installer replacement are untested. No success-toast assertion. No **Cancel**/discard path. No UI confirmation at all that the title now shows a self-service badge, and no check that the package appears under **Self-service** on a host's software Library. The `Self-service only` filter switch on the Library page is modelled ([`SoftwareLibraryPage.ts:36`](../../pages/software/SoftwareLibraryPage.ts#L36)) but never used by any spec.
 - *Redundancy:* none — this assertion is unique in the suite.
 - *Efficiency / smells:*
-  - The edit affordance used here is the **All hosts** badge ([`SoftwareInstallerCard.ts:59`](../../pages/components/SoftwareInstallerCard.ts#L59)) — an accessible-name match on a *label-scope* badge, which breaks the moment a package has a real label scope or the badge copy changes. The row's own **Edit software** button is modelled (`installerCard.editSoftwareButton`) and SWL-31 opens the same modal with it; SWL-35 uses the badge as this spec does.
+  - The edit affordance used here is the **All hosts** badge ([`SoftwareInstallerCard.ts:59`](../../pages/components/SoftwareInstallerCard.ts#L59)) — an accessible-name match on a *label-scope* badge, which breaks the moment a package has a real label scope or the badge copy changes. The row's own **Edit software** button is modelled (`installerCard.editSoftwareButton`) and SWL-31 and SWL-36 open the same modal with it.
   - "A reopened modal renders stale config" is a described product defect used to justify an API-only assertion, but there is no row for it in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) and no filed Fleet issue — per `CLAUDE.md` that should be filed, not silently worked around.
   - `EditSoftwareModal.save()` clicks `confirmSaveButton` unconditionally; if Fleet ever *stops* showing the confirmation for this change, the test fails on a missing dialog rather than adapting.
 
@@ -1433,11 +1434,11 @@ other:
 
 **Assessment**
 - *Value:* three promises nothing else in the suite checks. The download round-trip is the **only** exercise of Fleet's installer-*serving* path anywhere (SWL-02's assessment flags Download as never clicked — this closes it), and hashing three ways localises the failure. The add form's Advanced options are the only coverage of setting scripts **at add time**, checked where Fleet stores them. And the Edit-modal comparison is the only assertion that the scripts a user reads are the scripts Fleet will run, on four non-empty scripts, each with a guard against `'' === ''`.
-- *Coverage gaps:* the add form is given only two of its four editors — install and uninstall keep Fleet's generated defaults, so overriding a generated script at add time is untested; the post-install editor isn't read back on the add form before submitting (the API check catches a lost value, but not where it was lost); no Download on an FMA / VPP / Android title; nothing tests that the one-shot download token actually expires; no unauthorized-download probe; the Self-service switch the modal opens on is not asserted to be off. Writing scripts through the **Edit** modal is SWL-35.
+- *Coverage gaps:* the add form is given only two of its four editors — install and uninstall keep Fleet's generated defaults, so overriding a generated script at add time is untested; the post-install editor isn't read back on the add form before submitting (the API check catches a lost value, but not where it was lost); no Download on an FMA / VPP / Android title; nothing tests that the one-shot download token actually expires; no unauthorized-download probe; the Self-service switch the modal opens on is not asserted to be off. Writing scripts through the **Edit** modal is SWL-36.
 - *Redundancy:* the add and delete halves duplicate SWL-01/02's `custom` Linux case.
 - *Efficiency / smells:*
   - Three concerns in one test (add-time scripts, download, edit-modal read-back) behind one 90 s budget; a failure in the download half hides whether the editors still match.
-  - The Edit modal is opened here (and in SWL-35) via the expanded row's `installerCard.editSoftwareButton`, while SWL-06 opens the same modal via the **All hosts** label badge (`installerCard.openEdit()`) — two affordances for one modal within this area, and the badge breaks the moment a package has a real label scope.
+  - The Edit modal is opened here (and in SWL-36) via the expanded row's `installerCard.editSoftwareButton`, while SWL-06 opens the same modal via the **All hosts** label badge (`installerCard.openEdit()`) — two affordances for one modal within this area, and the badge breaks the moment a package has a real label scope.
   - `download.path` is Playwright's temp path; nothing asserts the file is non-empty before hashing, so a zero-byte download fails on a hash mismatch rather than on the obvious cause.
 
 **Notes (Andrey)**
@@ -1471,7 +1472,7 @@ other:
 6. ☐ Click **Controls**.
    - ✅ *(UI)* The URL carries a concrete `fleet_id=<n>` — Controls configures one fleet at a time, so it cannot honour the aggregate and lands on a real fleet instead of rendering an empty scope.
    - ✅ *(UI)* Its team dropdown does **not** read All fleets.
-   - ☐ Open that dropdown. ✅ *(UI)* its entries do **not** include **All fleets** — the aggregate is dropped from the picker entirely, not merely left unselected.
+   - ☐ Open that dropdown. ✅ *(UI)* it lists **Workstations** (so the menu is really open) and does **not** include **All fleets** — the aggregate is dropped from the picker entirely, not merely left unselected.
 
 **Assessment**
 - *Value:* the counterpart to SWL-09 on the other axis — one scope across five *different* pages rather than one page's tabs — and it pins the single deliberate exception instead of papering over it. The "All fleets isn't even in Controls' picker" assertion is what separates an intended fallback from a bug.
@@ -1565,7 +1566,32 @@ other:
 
 ---
 
-### SWL-35 · Premium • Software • Package scripts › editing all four Advanced options saves each of them
+### SWL-35 · Premium • Software • Unassigned scope across the navbar › Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets
+
+- **File:** [`playwright/tests/e2e/premium/software/no-teams-views.spec.ts`](../../tests/e2e/premium/software/no-teams-views.spec.ts)
+- **Grep:** `npx playwright test -g "Unassigned sticks across Hosts"`
+- **Project:** premium only (free has no fleet picker) · **Mode:** UI · **Isolation:** read-only
+- **Preconditions:** none
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open the dashboard; click **Hosts** in the navbar; pick **Unassigned** in the fleet picker.
+2. ☐ Click **Controls**, then **Software**, then **Policies**, then **Hosts** again.
+   - ✅ *(UI)* After each, the fleet picker still reads **Unassigned**.
+3. ☐ Click **Reports**.
+   - ✅ *(UI)* The picker reads **All fleets**.
+   - ✅ *(UI)* Opened, it lists **Workstations** (so the menu is really open) and no **Unassigned** (`ManageQueriesPage`: `includeNoTeam: false`).
+
+**Assessment**
+- *Value:* the Unassigned half of SWL-32 (QA Wolf's "switching tabs doesn't switch to All teams" flow, C6 #28): a scope that resets on navigation would make every Unassigned-scoped flow quietly operate on the aggregate.
+- *Coverage gaps:* the Dashboard (no Unassigned either) isn't visited; returning from Reports to Hosts isn't asserted (QA Wolf's flow shows it stays on All fleets).
+- *Redundancy:* SWL-09 checks Unassigned across Software's own tabs; this crosses areas.
+- *Efficiency / smells:* like SWL-32, a navbar test living in `premium/software/` — see recommendation 4.
+
+---
+
+### SWL-36 · Premium • Software • Package scripts › editing all four Advanced options saves each of them
 
 - **File:** [`playwright/tests/e2e/premium/software/package-scripts.spec.ts`](../../tests/e2e/premium/software/package-scripts.spec.ts) (L138)
 - **Grep:** `npx playwright test --project=premium -g "editing all four Advanced options saves each of them"`
@@ -1623,11 +1649,11 @@ other:
 | Feature / user flow | Covered by | Gap |
 |---|---|---|
 | Add custom package (`.pkg` / `.msi` / `.deb` / `.sh`) | SWL-01, SWL-05, SWL-30 (script-only `.sh`), SWL-31 (generated `.deb`, with a pre-install query and a post-install script set under Advanced options) | The rest of Advanced options on add (overriding the generated install / uninstall scripts, self-service, categories, label scope); duplicate-add rejection; server-side rejection of a valid extension with a corrupt payload; `.exe`, `.rpm`, `.tar.gz` fixtures sit in `test-data/` unused |
-| Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | Editing an FMA's scripts — SWL-35 drives the same modal and `PATCH` on a custom package instead, deliberately, since an edited FMA install script sets a sticky `install_script_edited` flag that auto-update carries forward; catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
+| Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | Editing an FMA's scripts — SWL-36 drives the same modal and `PATCH` on a custom package instead, deliberately, since an edited FMA install script sets a sticky `install_script_edited` flag that auto-update carries forward; catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
 | Add Apple VPP app | SWL-01 (Bear, iOS) | macOS and iPadOS VPP platforms; the App Store *search* UI (`vppUiSearchNames` exists for it, unused); missing/expired VPP-token error path |
 | Add Managed Google Play app | SWL-01 (ChatGPT) | Invalid application-ID error path; no post-add catalog re-check (FMA and VPP both have one) |
 | Library tab list | SWL-01, SWL-02, SWL-19 (it is a strict subset of Inventory), SWL-25/27 (a row renders the custom icon / display name) | Library's own columns (Version / Type / Hosts / Status), sorting and pagination — SWL-16–18 cover the **Inventory** table only; the **Self-service only** filter switch (`SoftwareLibraryPage.selfServiceSwitch`, still used by zero specs) |
-| Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, read against the API); SWL-35 (all four written in one save, read back through the API) | Edited scripts shown in a reopened modal (API-only read-back); clearing a script back to empty; categories; re-uploading a replacement installer; Cancel/discard on a dirty form. Label scope is `software-label-targets.spec.ts` ([area 22](22-label-targeting.md)) |
+| Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, read against the API); SWL-36 (all four written in one save, read back through the API) | Edited scripts shown in a reopened modal (API-only read-back); clearing a script back to empty; categories; re-uploading a replacement installer; Cancel/discard on a dirty form. Label scope is `software-label-targets.spec.ts` ([area 22](22-label-targeting.md)) |
 | Delete installer | SWL-02, SWL-07 | Cancel path; per-version delete on a multi-package title; blocked-delete when referenced by Setup Experience (only covered incidentally in `install-software.spec.ts`) |
 | Add-software gating | SWL-04 (All fleets tooltip), SWL-20 (button presence per role), SWL-24 (client-side file rejection) | An observer *navigating* to `/software/add/package` by URL; direct URL to `/software/add/*` without `fleet_id`; free-tier paywall on `/software/add/*` — [`paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts) lists no `software/add` URL despite `library.spec`'s header claiming all four paths are paywalled |
 | Automations button gating | SWL-11–15 (now incl. `team-admin` and the no-picker `ws-maintainer`) | `ws-observer` (covered by SWL-20 but not here); `global-observer-plus` / `global-technician`; modal internals (covered in `vulnerability-automations.spec.ts`) |
@@ -1656,11 +1682,11 @@ other:
 8. **Three seeded-then-deleted FMA titles.** SWL-25, SWL-26 and SWL-27 each add a distinct Fleet-maintained app (a real CDN fetch, 90 s budget) and delete it, purely to reach a title-detail page and test *title-level presentation* that has nothing to do with the installer kind.
 9. **Two `COLUMNS` lists.** `shared/software/titles-table.spec.ts` (SWL-16) and `premium/software/role-access.spec.ts` (SWL-20, ×3 roles) each declare and assert the same five-column list. Two copies, one table.
 10. **Two role lists on one page, already drifted.** `role-access.spec.ts` sweeps five roles; `manage-automations-access.spec.ts` sweeps four (no `ws-observer`). Same login mechanism, same page, same picker — different rosters.
-11. **Add + delete re-proved three more times.** SWL-30 and SWL-31 each re-run the full custom-package add → library-listing → delete round-trip that SWL-01/02 already own, to reach their shape assertions (as SWL-05/07/08 do for the edit). SWL-35 shows the cheaper pattern: it seeds its package through the API and spends the browser only on the Edit modal.
+11. **Add + delete re-proved three more times.** SWL-30 and SWL-31 each re-run the full custom-package add → library-listing → delete round-trip that SWL-01/02 already own, to reach their shape assertions (as SWL-05/07/08 do for the edit). SWL-36 shows the cheaper pattern: it seeds its package through the API and spends the browser only on the Edit modal.
 
 **UI-vs-API balance**
 
-- **SWL-06's and SWL-35's API-only persistence checks** (`getSoftwarePackage` → `self_service === true`; the four edited scripts) are the two places in this area where API stands in for a UI assertion. Both are *documented* as necessary (the reopened Edit modal renders stale config) but that's an unfiled product defect being routed around — per `CLAUDE.md` it belongs in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a Fleet issue. In the meantime SWL-06 could assert the visible self-service badge; SWL-35 has no visible stand-in short of reopening the modal.
+- **SWL-06's and SWL-36's API-only persistence checks** (`getSoftwarePackage` → `self_service === true`; the four edited scripts) are the two places in this area where API stands in for a UI assertion. Both are *documented* as necessary (the reopened Edit modal renders stale config) but that's an unfiled product defect being routed around — per `CLAUDE.md` it belongs in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a Fleet issue. In the meantime SWL-06 could assert the visible self-service badge; SWL-36 has no visible stand-in short of reopening the modal.
 - **`assertActivity` in SWL-01/02/05/07 is justified** — it is the activity-payload contract (type + `details.software_title` + `actor_email`) plus the mechanism that extracts `software_package` for the feed matchers. It is not a shortcut around a UI assertion, because SWL-03/08 assert the rendered feed separately.
 - **SWL-21's API cross-check is the best pattern in the area.** The rendered "N items" count is compared against `GET /software/fleet_maintained_apps` *under the same filters*, so a catalog that grows with every Fleet release can't invalidate the test and no number is baked into the spec. Worth copying wherever a count is asserted.
 - **The newer shape specs pair each UI assertion with the stored value** — SWL-25 (`icon_url`), SWL-28/29 (`pinned_version`, `version`), SWL-30 (`install_script` byte-for-byte, `uninstall_script === ''`), SWL-31 (`hash_sha256`, the two scripts set at add time, and all four scripts against the Edit modal). That is the shape the rest of the area should follow: the UI assertion says the user can see it, the API assertion says Fleet stored it, and a failure names which half broke.
@@ -1684,7 +1710,7 @@ other:
 
 **Bigger bets**
 
-1. **Collapse `edit-package.spec` into `library.spec` as an eighth case.** Add an `edit` sub-test that runs only for `custom` cases (or only for one designated case), reusing the already-uploaded installer. Removes one 16 MB upload per run and ~3 duplicated sub-tests, and gets the edit round-trip covered on **Workstations** as well as Unassigned — which is where the `edited … on the <fleet> fleet` activity suffix currently has no coverage at all. Then invest the freed budget in the Edit-modal fields nothing exercises yet — categories and installer replacement (the four scripts are SWL-35's).
+1. **Collapse `edit-package.spec` into `library.spec` as an eighth case.** Add an `edit` sub-test that runs only for `custom` cases (or only for one designated case), reusing the already-uploaded installer. Removes one 16 MB upload per run and ~3 duplicated sub-tests, and gets the edit round-trip covered on **Workstations** as well as Unassigned — which is where the `edited … on the <fleet> fleet` activity suffix currently has no coverage at all. Then invest the freed budget in the Edit-modal fields nothing exercises yet — categories and installer replacement (the four scripts are SWL-36's).
 2. **Own the "software is never installed anywhere" gap explicitly.** Either (a) build one host-backed install spec against `liveMacosHost` — upload a small `.pkg`, install from the host's Software tab, assert pending → installed and the `installed_software` activity, then uninstall — accepting that it is a single-host serial test; or (b) write it down as a permanent boundary in `TODO.md` so nobody assumes the library specs cover installation. Today the suite silently reads as if add-to-library were the whole feature. `install_software` policy automation ([`C6-software.md` flow 25](../qawolf-migration/audit/C6-software.md)) sits behind the same decision.
 3. **A `disposableFmaTitle` fixture.** SWL-25, SWL-26 and SWL-27 each pay a real CDN fetch and a 90 s budget to reach a title-detail page, and each must hand-pick a slug no other spec has claimed — which is why this file now needs a claims table. A worker- or test-scoped fixture that seeds one FMA title, yields `{ titleId, titleName }` and deletes it in teardown would collapse three seeds into one mechanism, make the claim implicit, and give SWL-31/SWL-30 somewhere to put their `finally`-block bookkeeping. The same fixture would let SWL-26 (a purely *client-side* validator) stop adding an app at all if it were pointed at any existing title.
 4. **Decide who owns SWL-32.** It is a navbar + team-dropdown test living in `premium/software/no-teams-views.spec.ts`, asserting nothing about software. Either move it to a shared navigation spec, or rename the file to what it now covers (scope behaviour) and move SWL-09/10's software-specific halves out.

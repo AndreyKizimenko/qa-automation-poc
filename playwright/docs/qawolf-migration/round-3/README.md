@@ -53,8 +53,8 @@ here** block, the gap table, the review to do first, facts for the build, the de
 
 | batch | theme | hosts | gaps | status |
 |---|---|---|---:|---|
-| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | ready for review |
-| **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | built: 22, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82), awaiting its branch run |
+| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | built 2026-10-02 (16 built, 3 cut); [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81), merged into [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) for one branch run |
+| **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | built: 22, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A), awaiting its branch run |
 | **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | ready for review |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | ready for review |
 | **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | ready for review |

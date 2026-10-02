@@ -118,12 +118,14 @@ test.describe('Premium • gitops mode — gated surfaces', () => {
     const modal = new EnrollSecretModal(page);
     await modal.goto(workstationsFleetId);
 
+    // Gating is per control type, not per secret, so the first row speaks for all.
+    const row = modal.rowControls(modal.rows.first());
     await expectGatedByGitOps(modal.addSecretButton, repoUrl);
-    await expectGatedByGitOps(modal.editSecretButton, repoUrl);
-    await expectGatedByGitOps(modal.deleteSecretButton, repoUrl);
+    await expectGatedByGitOps(row.edit, repoUrl);
+    await expectGatedByGitOps(row.delete, repoUrl);
 
-    await expectNotGatedByGitOps(modal.copyButton);
-    await expectNotGatedByGitOps(modal.showSecretButton);
+    await expectNotGatedByGitOps(row.copy);
+    await expectNotGatedByGitOps(row.show);
     await expectNotGatedByGitOps(modal.doneButton);
   });
 

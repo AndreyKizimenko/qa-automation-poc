@@ -72,6 +72,9 @@ regenerate both on every restart.
   profiles: MDM-enrolled simulations are scarce) or `findSimulations` (everything else — a disjoint pool), each
   spec on its own slice (the registry is in `helpers/api/hosts.ts`), move them back in the `finally`; the VMs
   sweep returns any a dead run left.
+- **The simulations re-enroll with the global enroll secret** on every daemon restart. Never replace the global
+  list from a snapshot or post it empty: `restoreGlobalEnrollSecrets` is the one write a spec makes there, and
+  `EnrollSecretModal` acts on a secret by its value only (`shared/settings/enroll-secrets.spec.ts`).
 
 ### Never deploy a passcode profile to a real host
 
@@ -117,7 +120,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Cross-module imports use the path aliases configured in `tsconfig.json`: `@fixtures`, `@helpers/*`, `@pages`, `@pages/*`. Sibling imports inside a module stay relative (`./Foo`) to keep intra-module coupling visible.
 - Specs target one of three scopes: Unassigned (no team), Workstations (the gitops-provisioned premium team), or All fleets (the global aggregate, used for reports/policies). Selection happens via `<page>.teamDropdown.select(scope)`, which is idempotent and a no-op on free (free has no dropdown).
 - Premium specs that need to call `<page>.goto({ fleetId })` for the Workstations variant pull the fleet id from the `workstationsFleetId` worker fixture (resolved once per worker via the Fleet API).
-- Do not create or delete teams from test bodies. Workstations is provisioned by gitops and never deleted; its content is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
+- Do not create, rename or delete the instance's standing fleets: Workstations, VMs and QA (declared in gitops) and Mobile (kept by hand, see `gitops/premium-fleetqa/README.md`). A spec that needs a fleet of its own creates a **throwaway `pw-*` fleet** (`createFleet`), deletes it in the test, and deletes it again in an `afterEach` (which survives a timeout); the `cleanup-setup` / `cleanup-teardown` sweep removes any `pw-*` fleet a killed run left (approved by Andrey 2026-10-02; `fleets-lifecycle.spec.ts`, `historical-data-collection.spec.ts`). Never give a durable fleet a `pw-` name. Workstations is provisioned by gitops and never deleted; its content is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
 - The `pageHealth` fixture is **auto-applied** to every test — it monitors uncaught page exceptions, console errors and 5xx server errors, and asserts at teardown. Uncaught exceptions come from `page.on('pageerror')`: Chromium doesn't surface them as console messages, so without that listener a render that throws passes silently. Tests that intentionally trigger console errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. 4xx is not flagged: it's normal app behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and assertions catch the meaningful ones. New specs need no setup to participate.
 - For per-test state (a script, a custom package), upload as a precondition and clean up at the end of the same test.
 
@@ -175,7 +178,7 @@ Folder conventions:
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities and the Workstations team's content. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
+2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities and the Workstations team's content. On premium it also removes throwaway `pw-*` fleets, and on both tiers any test-added (`pw-enroll-`) global enroll secret. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
 3. `cleanup-teardown` — same wipe steps run again at end of project regardless of pass/fail, so a crashed worker still leaves a clean instance. Both projects point at the same `setup/cleanup.steps.ts`.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.

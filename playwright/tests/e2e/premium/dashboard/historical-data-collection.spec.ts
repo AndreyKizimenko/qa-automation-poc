@@ -86,10 +86,10 @@ async function withChartResponse(
 
 /**
  * Removes the throwaway fleet, retrying on a schedule until Fleet accepts the
- * delete. Nothing else in the suite sweeps a stray fleet — it would sit in
- * every other spec's fleet dropdown until somebody noticed — and the QA
- * instance's gateway serves the occasional 502, so one attempt isn't enough of
- * a guarantee.
+ * delete. The cleanup projects sweep `pw-*` fleets only at a run's edges, so a
+ * stray one would sit in every other spec's fleet dropdown until then — and the
+ * QA instance's gateway serves the occasional 502, so one attempt isn't enough
+ * of a guarantee.
  */
 async function deleteFleetWithRetry(request: APIRequestContext, id: number): Promise<void> {
   await expect

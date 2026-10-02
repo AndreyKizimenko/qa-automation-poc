@@ -112,7 +112,7 @@ Consumer map (who breaks if a builder is wrong):
 | `software.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts), [premium/software/edit-package](../../tests/e2e/premium/software/edit-package.spec.ts) | Unassigned, Workstations |
 | `appStoreApp.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts) | Unassigned, Workstations |
 | `configurationProfile.*` | [premium](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts) + [free os-settings](../../tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts) | Unassigned, Workstations (free: none) |
-| `label.*` | [premium/labels](../../tests/e2e/premium/labels/labels.spec.ts) | n/a (global) |
+| `label.*` | [shared/labels](../../tests/e2e/shared/labels/labels.spec.ts) | n/a (global) |
 | `user.*` | premium+free `settings/users/{api-user-create,regular-user-create,edit,delete}.spec.ts` (8 specs) | n/a |
 | `activityAutomations.*` | [premium/dashboard/automations-activity](../../tests/e2e/premium/dashboard/automations-activity.spec.ts) | n/a |
 
@@ -252,7 +252,7 @@ other:
    - ✅ *(UNIT)* `created a label demo.` / `edited the label demo.` / `deleted the label demo.`
 
 **Assessment**
-- *Value:* article check for the global (no-scope) label copy used by [premium/labels](../../tests/e2e/premium/labels/labels.spec.ts).
+- *Value:* article check for the global (no-scope) label copy used by [shared/labels](../../tests/e2e/shared/labels/labels.spec.ts).
 - *Coverage gaps:* the helper comment says Fleet appends ` on the <fleet> fleet` for team-scoped labels; there is no builder and no test for that variant — team-scoped label activities are unassertable today.
 - *Redundancy:* none.
 - *Efficiency / smells:* none.

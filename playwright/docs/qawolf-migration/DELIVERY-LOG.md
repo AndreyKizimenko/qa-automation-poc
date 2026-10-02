@@ -131,6 +131,25 @@ because fleetdm/fleet#54619 makes Workstations unsafe beside `team-host-status-w
 | software | the vulnerability automation turned off again keeps its URL (both tiers). `package-scripts.spec.ts` adds its package with a pre-install query and post-install script typed into the add form, stored as typed, and a second test rewrites all four Advanced options on a per-run `fleet-pw-*` package and reads each back. `setAceValue` (component helper), `EditSoftwareModal.setScript`, `SoftwareCustomPackagePage.uploadPackage({ preInstallQuery, postInstallScript })`. A repeat save's toast can be the previous save's, so the webhook tests poll the stored state |
 | variables | `custom-variables.spec.ts` moves to `shared/controls/` (the page isn't tier-gated), so free gains its two tests; plus a script using `$FLEET_SECRET_<NAME>` refused until the variable exists and then uploaded from the same modal, and a variable a script uses refused deletion — asserted by names, the scope's wording held for [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621). `createVariable`; `ScriptsLibraryPage` uploads take an in-memory file |
 
+## Round 3 · Batch A — settings, users, labels, account
+
+19 gaps reviewed on `playwright/qawolf-round3-batch-a` (2026-10-02): 16 built, 3 cut (the Labels Description
+sort, both Fleet web address flows). Detail and Andrey's decisions in
+[round-3/A-settings-users-labels.md](round-3/A-settings-users-labels.md#what-landed).
+
+| slice | what |
+|---|---|
+| labels on free | `premium/labels/labels.spec.ts` → `shared/labels/labels.spec.ts` (free had no label coverage); the Dynamic lifecycle renames to a special-characters name (C1 #14 folded); the Manual label takes a Linux simulation, not the first host; both deletes page the list |
+| Advanced options on free | `premium/settings/advanced-options.spec.ts` → `shared/settings/organization/`; the save now also flips Verify SSL certs and Enable STARTTLS (C7 #13 folded), checks the rest of `smtp_settings` is untouched, and restores in an `afterEach` |
+| host status webhook | `shared/settings/host-status-webhook.spec.ts` also sets Percentage of hosts (5%) and Number of days (3 days) and reads all four values back after a reload, then through the API; `IntegrationsPage` gains `selectHostStatusOption` for the two react-select v1 dropdowns |
+| theme | `shared/account/theme.spec.ts` gains System following the OS live and Light pinning against a dark OS, via `page.emulateMedia`; the sign-out half of the flows was cut (the theme is per-browser localStorage by design) |
+| an admin sets a password | new `shared/settings/users/edit-password.spec.ts`: Edit user → Password on a throwaway user; a cookie-less API login takes the new password, refuses the old one, and the old token turns 401; `EditUserPage.newPassword` (the edit form's field is placeholdered `••••••••`) |
+| team admin on My account | `premium/account/my-account.spec.ts`: `team-admin` joins the role loop (email, name, `2 fleets`; its Role check skipped behind fleetdm/fleet#54620, which reads `Various`), and a new test hovers the Fleets value for the tooltip naming Workstations and VMs (`MyAccountPage.hoverFleets`) |
+| Unassigned across the navbar | `premium/software/no-teams-views.spec.ts` gains its own describe: Unassigned picked on Hosts survives Controls, Software, Policies and Hosts again; Reports falls back to All fleets and doesn't offer Unassigned |
+| enroll secrets | new `shared/settings/enroll-secrets.spec.ts` (global add / copy / delete from the Hosts gear menu, both tiers, union restore via `restoreGlobalEnrollSecrets`); `premium/settings/enroll-secrets.spec.ts` gains copy + delete on Workstations. `EnrollSecretModal` rebuilt around value-scoped actions (its `.first()` buttons removed) and adopted by `HostsListPage`; the gitops-mode specs read gated state through `rowControls` |
+| fleet lifecycle | new `premium/settings/fleets-lifecycle.spec.ts` + `FleetsPage`: a throwaway `pw-fleet-<ms>` added, renamed and deleted through Settings › Fleets, each step checked by toast, row and API. `cleanup.steps.ts` gains **sweep throwaway pw-\* fleets** (`deleteFleetsWithPrefix`); `playwright/CLAUDE.md` now allows `pw-*` fleets in test bodies (Andrey, 2026-10-02) |
+| activity feed filters | new `shared/dashboard/activity-feed.spec.ts`: a throwaway maintainer logs in, creates and deletes a global report through the API; searching its name yields exactly those 3 rows; type *Added report* → 1, *Yesterday* → empty state, *Today* → 3, *Sort by oldest* reverses them. `DashboardPage` gains the feed's search, type, date and sort controls |
+
 ## Round 2 · Batch G — policy automations and retries
 
 The retries half of G: 9 source flows, re-reviewed against the specs beside them before anything was built,
