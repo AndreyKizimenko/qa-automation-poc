@@ -50,7 +50,7 @@ files · ~350 test declarations · 4 projects**.
 | 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
 | 04 | [Policies](04-policies.md) | 27 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 34 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 35 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 28 | free, both |
@@ -68,7 +68,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**474 entries** covering every test in the suite. An entry can expand into several
+**475 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

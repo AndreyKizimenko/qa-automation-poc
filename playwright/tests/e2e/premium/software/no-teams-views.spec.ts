@@ -5,9 +5,9 @@
  * detail page, which offers no "Add software" action. Read-only (offline hosts
  * keep their last-checkin software/OS/vuln records).
  *
- * The second describe covers the other end of the same behaviour — the "All
- * fleets" aggregate surviving a walk across the whole navbar, and the one page
- * that cannot honour it.
+ * The second describe covers the same behaviour across the navbar: the "All
+ * fleets" aggregate and the Unassigned scope each surviving a walk between the
+ * pages that offer them, and the pages that cannot honour them.
  */
 import { test, expect } from '@fixtures';
 
@@ -80,5 +80,42 @@ test.describe('Premium • Software • All fleets scope across the navbar', () 
     await expect(controls.teamDropdown.currentValue).not.toHaveText('All fleets');
     await controls.teamDropdown.trigger.click();
     expect(await controls.teamDropdown.options.allInnerTexts()).not.toContain('All fleets');
+  });
+});
+
+/**
+ * Unassigned is offered on Hosts, Controls, Software and Policies, and not on
+ * Reports (`ManageQueriesPage` sets `includeNoTeam: false`), so Reports is
+ * where the walk ends: it falls back to the aggregate.
+ */
+test.describe('Premium • Software • Unassigned scope across the navbar', () => {
+  test('Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets', async ({
+    dashboard,
+    hostsList,
+    controls,
+    softwareTitles,
+    policiesList,
+    reportsList,
+  }) => {
+    await dashboard.goto();
+    await dashboard.navbar.goToHosts();
+    await hostsList.teamDropdown.select('Unassigned');
+
+    const carriesScope = [
+      { label: 'Controls', go: () => hostsList.navbar.goToControls(), page: controls },
+      { label: 'Software', go: () => controls.navbar.goToSoftware(), page: softwareTitles },
+      { label: 'Policies', go: () => softwareTitles.navbar.goToPolicies(), page: policiesList },
+      { label: 'Hosts', go: () => policiesList.navbar.goToHosts(), page: hostsList },
+    ];
+
+    for (const { label, go, page } of carriesScope) {
+      await go();
+      await expect(page.teamDropdown.currentValue, `${label} kept the scope`).toHaveText('Unassigned');
+    }
+
+    await hostsList.navbar.goToReports();
+    await expect(reportsList.teamDropdown.currentValue).toHaveText('All fleets');
+    await reportsList.teamDropdown.trigger.click();
+    expect(await reportsList.teamDropdown.options.allInnerTexts()).not.toContain('Unassigned');
   });
 });

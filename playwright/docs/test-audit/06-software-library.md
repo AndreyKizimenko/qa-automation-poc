@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 34 (→ 85 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 35 (→ 86 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -98,6 +98,7 @@ locator ambiguous. The claims in force today:
 | SWL-32 | `premium/software/no-teams-views.spec.ts` | All fleets sticks from Hosts to Policies, and Controls falls back to a fleet | UI | ☐ |
 | SWL-33 | `premium/software/patch-policy.spec.ts` | a macOS app: each patch option stores its own policy, and unticking Patch removes it | UI+API | ☐ |
 | SWL-34 | `premium/software/patch-policy.spec.ts` | a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once | UI+API | ☐ |
+| SWL-35 | `premium/software/no-teams-views.spec.ts` | Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets | UI | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1546,6 +1547,39 @@ other:
 - *Value:* the platform half of the contract, and the server enforcing what the UI only hides.
 - *Coverage gaps:* the both-flags refusal is platform-independent and only checked here.
 - *Efficiency:* no host; under a minute.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWL-35 · Premium • Software • Unassigned scope across the navbar › Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets
+
+- **File:** [`playwright/tests/e2e/premium/software/no-teams-views.spec.ts`](../../tests/e2e/premium/software/no-teams-views.spec.ts)
+- **Grep:** `npx playwright test -g "Unassigned sticks across Hosts"`
+- **Project:** premium only (free has no fleet picker) · **Mode:** UI · **Isolation:** read-only
+- **Preconditions:** none
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open the dashboard; click **Hosts** in the navbar; pick **Unassigned** in the fleet picker.
+2. ☐ Click **Controls**, then **Software**, then **Policies**, then **Hosts** again.
+   - ✅ *(UI)* After each, the fleet picker still reads **Unassigned**.
+3. ☐ Click **Reports**.
+   - ✅ *(UI)* The picker reads **All fleets**.
+   - ✅ *(UI)* Opened, it offers no **Unassigned** (`ManageQueriesPage`: `includeNoTeam: false`).
+
+**Assessment**
+- *Value:* the Unassigned half of SWL-32 (QA Wolf's "switching tabs doesn't switch to All teams" flow, C6 #28): a scope that resets on navigation would make every Unassigned-scoped flow quietly operate on the aggregate.
+- *Coverage gaps:* the Dashboard (no Unassigned either) isn't visited; returning from Reports to Hosts isn't asserted (QA Wolf's flow shows it stays on All fleets).
+- *Redundancy:* SWL-09 checks Unassigned across Software's own tabs; this crosses areas.
+- *Efficiency / smells:* like SWL-32, a navbar test living in `premium/software/` — see recommendation 4.
 
 **Notes (Andrey)**
 ```
