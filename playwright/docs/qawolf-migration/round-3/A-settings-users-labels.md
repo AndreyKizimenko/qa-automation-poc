@@ -3,7 +3,7 @@
 **19 gaps → about 9 specs, nearly all augments, after merges.** `Settings forms` · `Enroll secrets` · `Users` ·
 `Labels` · `Theme and account` · `Activity feed`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: reviewed 2026-10-02, building** (planned 2026-10-01). Decisions below; the table's last column is the review.
 
 > ## ▶ Start here
 >
@@ -24,27 +24,27 @@
 
 ## The gaps
 
-| Gap | What's untested today | Proposed target | Kind | Source flow |
-|---|---|---|---|---|
-| round 1 C1 #3 | host status webhook: the host % and days fields are never set or read back | `shared/settings/host-status-webhook.spec.ts` | augment | `flows-Free/hosts-edit-host-status-webhook.flow.js` |
-| round 1 C1 #17 | as round 1 C1 #3, premium | `shared/settings/host-status-webhook.spec.ts` | augment | `flows-Premium/hosts-edit-host-status-webhook.flow.js` |
-| round 1 C1 #5 | enroll secret add / copy / delete on the global list (only CTA visibility is asserted) | `shared/settings/enroll-secrets.spec.ts` (global secrets, both tiers) | new | `flows-Free/hosts-global-admin-can-see-and-click-cta-buttons.flow.js` |
-| round 1 C1 #19 | premium: enroll secret copy and delete (add only today) — the flow works on the global list; on premium that's covered by C1 #5's shared spec, so this row is Workstations copy + delete | `premium/settings/enroll-secrets.spec.ts` | augment | `flows-Premium/hosts-global-admin-can-see-and-click-cta-buttons.flow.js` |
-| round 1 C1 #14 | a label whose name has special characters — created, listed, deleted (round 1 called it redundant; nothing tests it) | `shared/labels/labels.spec.ts`, after C1 #2's move | augment | `flows-Premium/hosts-create-and-delete-label-with-special-characters.flow.js` |
-| round 1 C9 #13 | Labels page: sort by Description (Name only today); sorting by Type proves nothing while every label is dynamic | `premium/labels/sort-view.spec.ts` | augment | `flows-Premium/new-labels-page-sort-labels-and-view-all-hosts-on-dedicated-labels-page.flow.js` |
-| round 1 C1 #2 | label CRUD on free (premium-only today; FREE-COVERAGE-AUDIT S5) — `labels.spec.ts` is tier-agnostic | move `premium/labels/labels.spec.ts` to `shared/labels/` | augment | `flows-Free/hosts-create-edit-and-delete-custom-label.flow.js` |
-| round 1 C5 #2 | theme: System default and Light, and the choice surviving a sign-out/sign-in (Dark + reload only today) | `shared/account/theme.spec.ts` | augment | `flows-Free/general-dashboard-widgets-hosts-active-ui-and-filters.flow.ts` (misnamed: it holds the free dark-mode flow) |
-| round 1 C5 #11 | as round 1 C5 #2, premium | `shared/account/theme.spec.ts` | augment | `flows-Premium/general-dark-mode-dark-mode-ui-and-fleet-automatically-uses-user-preference-on-dark-mode.flow.ts` |
-| round 1 C7 #1 | an admin sets another user's password (round 1: verify through an API login, not a UI landing) | `shared/settings/users/` (one password test for both tiers, with C7 #8) | augment | `flows-Free/settings-admin-able-to-edit-existing-users-password.flow.js` |
-| round 1 C7 #8 | as round 1 C7 #1, premium | `shared/settings/users/`, with C7 #1 | augment | `flows-Premium/settings-admin-able-to-edit-existing-users-password.flow.js` |
-| round 1 C7 #3 | Advanced options on free (premium-only spec; FREE-COVERAGE-AUDIT S9 says move it to shared/) | move `premium/settings/advanced-options.spec.ts` to `shared/settings/organization/` | augment | `flows-Free/settings-edit-advanced-options.flow.js` |
-| round 1 C7 #13 | Advanced options: Verify SSL, STARTTLS and the other fields (only SMTP domain edited; host expiry avoided on purpose) | `shared/settings/organization/advanced-options.spec.ts`, after C7 #3's move | augment | `flows-Premium/settings-edit-advanced-options.flow.js` |
-| round 1 C7 #4 | Organization settings › Fleet web address — no page object, no test | review: a server_url change on a shared instance (decision) | review | `flows-Free/settings-edit-fleet-web-address.flow.js` |
-| round 1 C7 #14 | as round 1 C7 #4, premium | review | review | `flows-Premium/settings-edit-fleet-web-address.flow.js` |
-| round 1 C7 #10 | fleet create / rename / delete — no lifecycle check (suite rule: no team create/delete in test bodies) | review: API-only throwaway fleet, or cut (decision) | review | `flows-Premium/settings-create-edit-and-delete-team-premium.flow.js` |
-| round 1 C10 #10 | My account as a team admin: "2 fleets" and a role of "Various" (the `team-admin` static user isn't in MY_ACCOUNT_USERS) | `premium/account/my-account.spec.ts` | augment | `flows-Premium/role-access-premium-verify-team-admin-role-and-access-premium.flow.js` |
-| round 1 C6 #28 | Unassigned stays selected across Hosts and Controls (only All fleets persistence is asserted) | `premium/software/no-teams-views.spec.ts` | augment | `flows-Premium/no-teams-no-teams-switching-tabs-doesnt-switch-to-all-teams.flow.js` |
-| round 1 C5 #8 | activity feed: filter by actor / type / date, and sort by time | `shared/dashboard/activity-feed.spec.ts` (the filters aren't tier-gated) | new | `flows-Premium/activity-feed-filter-activity-feed-by-actor-full-name-email-type-and-date-sort-by-time.flow.js` |
+| Gap | What's untested today | Proposed target | Kind | Source flow | Decision |
+|---|---|---|---|---|---|
+| round 1 C1 #3 | host status webhook: the host % and days fields are never set or read back | `shared/settings/host-status-webhook.spec.ts` | augment | `flows-Free/hosts-edit-host-status-webhook.flow.js` | **build**: set both dropdowns and read them back through the API |
+| round 1 C1 #17 | as round 1 C1 #3, premium | `shared/settings/host-status-webhook.spec.ts` | augment | `flows-Premium/hosts-edit-host-status-webhook.flow.js` | **build**, with C1 #3 (one shared augment) |
+| round 1 C1 #5 | enroll secret add / copy / delete on the global list (only CTA visibility is asserted) | `shared/settings/enroll-secrets.spec.ts` (global secrets, both tiers) | new | `flows-Free/hosts-global-admin-can-see-and-click-cta-buttons.flow.js` | **build**, `shared/` on both tiers (Andrey, 2026-10-02); afterEach restores any original that went missing, never a stale snapshot (§2.2) |
+| round 1 C1 #19 | premium: enroll secret copy and delete (add only today) — the flow works on the global list; on premium that's covered by C1 #5's shared spec, so this row is Workstations copy + delete | `premium/settings/enroll-secrets.spec.ts` | augment | `flows-Premium/hosts-global-admin-can-see-and-click-cta-buttons.flow.js` | **build**: Workstations copy + delete under the existing restore |
+| round 1 C1 #14 | a label whose name has special characters — created, listed, deleted (round 1 called it redundant; nothing tests it) | `shared/labels/labels.spec.ts`, after C1 #2's move | augment | `flows-Premium/hosts-create-and-delete-label-with-special-characters.flow.js` | **fold**: the Dynamic lifecycle renames its label to a special-characters name, so list, delete toast and activity feed all carry it; no new test |
+| round 1 C9 #13 | Labels page: sort by Description (Name only today); sorting by Type proves nothing while every label is dynamic | `premium/labels/sort-view.spec.ts` | augment | `flows-Premium/new-labels-page-sort-labels-and-view-all-hosts-on-dedicated-labels-page.flow.js` | **cut** (Andrey, 2026-10-02): the same client-side table sort the Name test already proves |
+| round 1 C1 #2 | label CRUD on free (premium-only today; FREE-COVERAGE-AUDIT S5) — `labels.spec.ts` is tier-agnostic | move `premium/labels/labels.spec.ts` to `shared/labels/` | augment | `flows-Free/hosts-create-edit-and-delete-custom-label.flow.js` | **build**: move to `shared/labels/`; the Manual label takes a simulation, not `firstHostDisplayName` |
+| round 1 C5 #2 | theme: System default and Light, and the choice surviving a sign-out/sign-in (Dark + reload only today) | `shared/account/theme.spec.ts` | augment | `flows-Free/general-dashboard-widgets-hosts-active-ui-and-filters.flow.ts` (misnamed: it holds the free dark-mode flow) | **build, narrowed**: System follows the OS live, an explicit choice pins it (`initTheme`), via `emulateMedia`. **Sign-out half cut** (Andrey, 2026-10-02): logout clears only the session by design |
+| round 1 C5 #11 | as round 1 C5 #2, premium | `shared/account/theme.spec.ts` | augment | `flows-Premium/general-dark-mode-dark-mode-ui-and-fleet-automatically-uses-user-preference-on-dark-mode.flow.ts` | **build**, with C5 #2 |
+| round 1 C7 #1 | an admin sets another user's password (round 1: verify through an API login, not a UI landing) | `shared/settings/users/` (one password test for both tiers, with C7 #8) | augment | `flows-Free/settings-admin-able-to-edit-existing-users-password.flow.js` | **build**: `shared/settings/users/edit-password.spec.ts` (the edit specs are tier-split); new password logs in, old one and old token get 401 |
+| round 1 C7 #8 | as round 1 C7 #1, premium | `shared/settings/users/`, with C7 #1 | augment | `flows-Premium/settings-admin-able-to-edit-existing-users-password.flow.js` | **build**, with C7 #1 |
+| round 1 C7 #3 | Advanced options on free (premium-only spec; FREE-COVERAGE-AUDIT S9 says move it to shared/) | move `premium/settings/advanced-options.spec.ts` to `shared/settings/organization/` | augment | `flows-Free/settings-edit-advanced-options.flow.js` | **build**: move to `shared/settings/organization/` |
+| round 1 C7 #13 | Advanced options: Verify SSL, STARTTLS and the other fields (only SMTP domain edited; host expiry avoided on purpose) | `shared/settings/organization/advanced-options.spec.ts`, after C7 #3's move | augment | `flows-Premium/settings-edit-advanced-options.flow.js` | **fold** into the moved test: Verify SSL certs + Enable STARTTLS beside the domain, each restored; host expiry still untouched |
+| round 1 C7 #4 | Organization settings › Fleet web address — no page object, no test | review: a server_url change on a shared instance (decision) | review | `flows-Free/settings-edit-fleet-web-address.flow.js` | **cut** (Andrey, 2026-10-02): a save re-syncs DEP profiles with Apple; validation is client-side only and moving to submit-only; Advanced options already guards `server_url` |
+| round 1 C7 #14 | as round 1 C7 #4, premium | review | review | `flows-Premium/settings-edit-fleet-web-address.flow.js` | **cut**, with C7 #4 |
+| round 1 C7 #10 | fleet create / rename / delete — no lifecycle check (suite rule: no team create/delete in test bodies) | review: API-only throwaway fleet, or cut (decision) | review | `flows-Premium/settings-create-edit-and-delete-team-premium.flow.js` | **build** (Andrey, 2026-10-02): one `pw-fleet-*` created, renamed, deleted through the UI; `pw-*` fleet sweep in `cleanup.steps.ts` |
+| round 1 C10 #10 | My account as a team admin: "2 fleets" and a role of "Various" (the `team-admin` static user isn't in MY_ACCOUNT_USERS) | `premium/account/my-account.spec.ts` | augment | `flows-Premium/role-access-premium-verify-team-admin-role-and-access-premium.flow.js` | **build**: `team-admin` joins MY_ACCOUNT_USERS; its Role check skipped behind fleetdm/fleet#54620 |
+| round 1 C6 #28 | Unassigned stays selected across Hosts and Controls (only All fleets persistence is asserted) | `premium/software/no-teams-views.spec.ts` | augment | `flows-Premium/no-teams-no-teams-switching-tabs-doesnt-switch-to-all-teams.flow.js` | **build**: read-only sibling of the All-fleets walk |
+| round 1 C5 #8 | activity feed: filter by actor / type / date, and sort by time | `shared/dashboard/activity-feed.spec.ts` (the filters aren't tier-gated) | new | `flows-Premium/activity-feed-filter-activity-feed-by-actor-full-name-email-type-and-date-sort-by-time.flow.js` | **build**: a disposable `qa-test-*` actor and its three activities |
 
 ## 1. Review first
 
@@ -202,13 +202,19 @@ Andrey's call. [Batch B](B-policy-report-software-forms.md)'s C3 #15 would use t
 `qaTestEmail`, `getAppConfig` / `patchAppConfig`, `getGlobalEnrollSecrets`, `getTeamEnrollSecrets` /
 `setTeamEnrollSecrets`, `deleteLabelsMatching`, the fleet helpers.
 
-## Decisions to put to Andrey
+## Decisions (answered by Andrey, 2026-10-02)
 
-1. **Fleet web address:** cut, or validation only (§2.1).
-2. **Global enroll secrets:** OK to add and delete a `pw-enroll-*` secret beside the one the simulations
-   re-enroll with, using the marker-only cleanup (§2.2)?
-3. **Fleet lifecycle:** cut, or a `pw-*` throwaway fleet plus a sweep, turning `historical-data-collection`'s
-   precedent into a rule (§2.3)?
+1. **Fleet web address: cut** (C7 #4, #14). A save re-syncs the DEP profiles with Apple (§2.1); the form's
+   validation runs in the browser only, so a validation test proves a validator, and Fleet is moving validation
+   to submit-only. `advanced-options.spec.ts` already asserts a neighbouring save leaves `server_url` alone.
+2. **Global enroll secrets: build, in `shared/`, on both tiers.** The cleanup is a **union restore**, not
+   marker-only: the `afterEach` reads the live list and posts it back minus the marker plus any secret from the
+   test's opening snapshot that has gone missing. Marker-only can't recover a test that deleted the wrong row;
+   the union can, and never drops a secret added since. Premium's gitops doesn't declare global secrets, so
+   on premium nothing else would put one back.
+3. **Fleet lifecycle: build**, one `pw-fleet-*` per run plus a `pw-*` fleet sweep in `cleanup.steps.ts`.
+   `playwright/CLAUDE.md` now says when a test body may create a fleet. Batch B's C3 #15 uses the same pattern.
+4. **Cuts beyond the plan:** C9 #13 (Description sort) and the sign-out half of C5 #2 / #11 (theme).
 
 ## Free coverage
 
