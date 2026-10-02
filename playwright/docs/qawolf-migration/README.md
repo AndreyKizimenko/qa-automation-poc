@@ -1,9 +1,11 @@
 # QA Wolf → Playwright migration
 
-**Round 1: complete.** 269 flows handed over, 267 audited, 250 portable, **250 covered**. Lock and Wipe are the
-only commands never fired — their **availability is asserted across macOS, Windows and Ubuntu on both tiers**,
-so the gating is covered even though the destructive act isn't. Shipped in PR #35 (Batches 1–3) and PR #36
-(Batch 4).
+**Round 1: shipped, with gaps.** 269 flows handed over, 267 audited, 250 portable. Shipped in PR #35 (Batches
+1–3) and PR #36 (Batch 4) as "250 covered", but a flow-by-flow audit on 2026-10-01 found **141 of the 228 rows
+it ported partial or missing**, mostly role variants merged into specs that were never written. Those, and
+round 2's 13 remaining gaps, are **[round 3](round-3/README.md)**. Lock and Wipe are the only commands never
+fired: their **availability is asserted across macOS, Windows and Ubuntu on both tiers**, so the gating is
+covered even though the destructive act isn't.
 
 QA Wolf handed us a suite of `*.flow.js` files that were never runnable here — they import helpers that don't
 exist in this repo, hardcode `@qawolf.email` accounts, and create teams inline. We treated them as **coverage
@@ -18,10 +20,12 @@ transcripts**: harvest *what* each tested, re-author *how* against this suite's 
 | know what shipped and why, batch by batch | **[DELIVERY-LOG.md](DELIVERY-LOG.md)** |
 | check one specific flow's fate | **[audit/](audit/)** — per-flow disposition tables, C1–C10 |
 | work on **round 2** (the 2026-08-28 export) | **[round-2/README.md](round-2/README.md)** — batches, POM work, standing rules |
+| work on **round 3** (the gaps rounds 1 and 2 left) | **[round-3/README.md](round-3/README.md)** — the batches, the triage, the audit behind them |
 | understand a specific spec's decisions | **the spec's own header comment** — that's where grounding lives |
 
-`audit/` is the primary evidence: every flow, its disposition, its target path, and the notes behind the call.
-Start there for "did we cover X?".
+`audit/` is the primary evidence for round 1: every flow, its disposition, its target path, and the notes
+behind the call. For "did we cover X?", check [round-3/INDEX.md](round-3/INDEX.md) too: a row there means
+the disposition's target doesn't yet assert all of it.
 
 ## Standing instance preconditions
 
@@ -88,22 +92,25 @@ restart (so fixtures resolve hosts by API at run time, never by stored id), and 
 deleted simulation never returns on its own — osquery-perf enrolls once at startup
 with no node-invalid recovery.
 
-## Round 2 — in progress (54 of 127 flows shipped)
+## Round 2 — A–F shipped, G in review
 
 A second export (`qa-wolf/Fleet_20260828 (1)/`) arrived 2026-08-28 with QA Wolf's live free and premium
 environments. Three of its five folders were round 1 re-exported as TypeScript and have been removed; of the
-**156 new flows, 29 were cut** and the surviving **127 map to 60 target specs across seven batches.**
+**156 new flows, 29 were cut** and the surviving **127 map to 60 target specs across seven batches.** Batches
+A–F and gitops-mode V1 are merged (PRs #61, #63, #65, #72); batch G's policy automations and retries are in
+review as [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78).
 
-| | |
-|---|---|
-| **shipped** | batches **A**, **B**, **C** and **gitops-mode V1** — 54 flows, [PR #61](https://github.com/AndreyKizimenko/qa-automation-poc/pull/61) |
-| **next** | **D** (host execution) — needs nothing that doesn't already exist |
-| **blocked** | **F** — mailbox, IdP and Fedora host; **E** needs an inert profile fixture first |
+**Everything round 2 lives in [`round-2/`](round-2/)**: start at its [README](round-2/README.md). We keep
+their coverage, not their tests.
 
-**Everything round 2 lives in [`round-2/`](round-2/)** — start at its [README](round-2/README.md).
-We keep their coverage, not their tests.
+## Round 3 — the gaps
+
+The 2026-10-01 audit's 154 gaps: 141 in eight batches (A–H), 13 cut, accepted or moved to long-term goals
+with the reason. **Everything round 3 lives in [`round-3/`](round-3/)**: start at its
+[README](round-3/README.md).
 
 ## Source flows
 
-`flows-Free/` (52) and `flows-Premium/` (217) at the repo root, untracked and gitignored. Kept for reference
-only — they are not runnable and are not part of the suite.
+Round 1's are in `qa-wolf/flows-Free/` (52) and `qa-wolf/flows-Premium/` (217); round 2's in
+`qa-wolf/Fleet_20260828 (1)/{Free,Premium}/src/tests/`. Untracked and gitignored, kept for reference only:
+they are not runnable and are not part of the suite. Round 3's batches start by reading them.
