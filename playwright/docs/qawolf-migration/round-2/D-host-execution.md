@@ -265,9 +265,9 @@ behaviour as a dimension.
 
 Use the **real VMs**, not the simulations. Resolve them at run time —
 `findOnlineHost(request, platform, { kind: 'real' })`, the `vmsFleetId` worker fixture for the premium VMs
-fleet, `liveMacosHost` for a macOS one — never by stored name or id. Simulations ignore live-query SQL, return
-no rows ~20% of runs and never install anything, so a green assertion against one proves nothing about the
-feature.
+fleet, `liveMacosHost` for a macOS one — never by stored name or id. Simulations answer every live query with one
+canned row whatever the SQL, pass every policy and fake their script and install results, so a green assertion
+against one proves nothing about the feature.
 
 > **⚠️ Never deploy a passcode profile to a real host.** It blocks access permanently, there is no recovery,
 > and there are only a few VMs per tier. No `com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`,

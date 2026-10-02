@@ -29,7 +29,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `controls/batch-script-on-hundreds-of-hosts` | [D](D-host-execution.md) | `tests/e2e/premium/controls/scripts/batch-run.spec.ts` | **new** |
 | `controls/controls-macos-custom-settings-upload-and-remove-configuration-profile` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts` | augment |
 | `controls/controls-macos-custom-settings-verify-warning-symbol-upon-deleting-custom-label-from-hosts` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts` | **new** |
-| `controls/controls-macos-updates-ui-validation` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/macos-updates.spec.ts` | **new** |
+| `controls/controls-macos-updates-ui-validation` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts` | **new** |
 | `controls/disable-script-execution-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
 | `controls/disable-script-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
 | `controls/error-script-fails-in-ui-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
@@ -40,8 +40,8 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `controls/scripts-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `custom-icons/add-edit-and-delete-custom-icons` | [B](B-self-contained.md) | `tests/e2e/premium/software/custom-icons.spec.ts` | **new** |
 | `custom-icons/only-valid-icons-can-be-uploaded-size-dimensions-are-respected` | [B](B-self-contained.md) | `tests/e2e/premium/software/custom-icons.spec.ts` | **new** |
-| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-macos` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/ddm-conflict.spec.ts` | **new** |
-| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-windows` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/ddm-conflict.spec.ts` | **new** |
+| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-macos` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts` | **new** |
+| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-windows` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts` | **new** |
 | `dashboard/dashboard-widgets-hosts-active-ui-and-filters` | [A](A-no-setup.md) | `tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts` | **new** |
 | `dashboard/dashboard-widgets-vulnerability-exposure` | [A](A-no-setup.md) | `tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts` | **new** |
 | `dashboard/display-and-filter-platform-cards-global-admin` | [A](A-no-setup.md) | `tests/e2e/shared/dashboard/platform-cards.spec.ts` | **new** |
@@ -53,11 +53,11 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `general/disable-hosts-online-and-vulnerabilities-chart-fleets-only` | [B](B-self-contained.md) | `tests/e2e/premium/dashboard/historical-data-collection.spec.ts` | **new** — moved from A; A's `fleet-scoped-cards.spec.ts` keeps the read-only half |
 | `general/upload-edit-delete-custom-logo-from-fleet-organization-dark-mode` | [B](B-self-contained.md) | `tests/e2e/shared/settings/organization/custom-logo.spec.ts` | **new** |
 | `general/upload-edit-delete-custom-logo-from-fleet-organization-light-mode` | [B](B-self-contained.md) | `tests/e2e/shared/settings/organization/custom-logo.spec.ts` | **new** |
-| `gitops/gitops-gitops-mode-in-navbar-and-learn-more-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/navbar-and-links.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-controls` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-hosts` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-settings` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-yaml-links-lead-to-repository-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/navbar-and-links.spec.ts` | **new** |
+| `gitops/gitops-gitops-mode-in-navbar-and-learn-more-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/01-indicator-and-links.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-controls` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-hosts` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-settings` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-yaml-links-lead-to-repository-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/01-indicator-and-links.spec.ts` | **new** |
 | `hosts-details/host-details-software-filter-by-top-level-applications-installed-applications-appear-in-applications-filtered` | [C](C-host-reads.md) | `tests/e2e/shared/hosts/host-software.spec.ts` | augment |
 | `hosts/labels-include-all-install-software-on-hosts-that-include-all-labels-and-hosts-that-do-not-include-all-labels-do-not-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |
 | `hosts/labels-include-any-add-software-to-hosts-that-include-any-labels-and-hosts-that-do-not-include-any-labels-cannot-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |

@@ -1,6 +1,6 @@
 # Batch G — Out-of-band
 
-**14 source flows.** gitops mode V1 shipped (5 flows, #61). **The retries half: 9 flows → 2 new specs + 2
+**14 source flows.** gitops mode V1 shipped (5 flows, #61). **The retries half: 9 flows → 3 new specs + 2
 augments, 2 cut as DUPs**, reviewed against the flow bodies and Fleet's 4.93 RC source on 2026-09-29 and
 re-reviewed against the specs beside them on 2026-10-01 (decisions 3–5).
 
@@ -47,7 +47,7 @@ Every flow body was read, not just its title (F's plan had two rows built on tit
 |---|---|---|
 | `activity-feed/individual-activity-items-for-all-attempts-for-failed-software-scripts` | a failing policy with a failing `run_script` automation on an Ubuntu VM; counts the recent *"Fleet ran errorscipt.sh"* items in Past: **3** | merged with the next row — the same behaviour |
 | `policies/script-run-retries-up-to-3-times-when-triggered-by-a-policy-automation` | the same, on a Mac, with a **stateful** script that logs its attempt number on the host (and a reset script): output *"Intentional failure on attempt 3"*, 3 upcoming timestamps | **new** `policy-automation-runs` — 3 attempts, asserted as three `ran_script` activities through the API; no stateful script or reset needed. The same test goes on into the continuous case (decision 3) |
-| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | an `install_software` automation whose install fails: 3 upcoming *"Fleet will install"*, then *"Fleet failed to install"*, Library status *Failed* | **augment** `premium/software/install-on-host.spec.ts` (decision 5) — the failure twin of its Deploy test: a per-run `fleet-pw-*` `.deb` whose install script is `exit 1`, so nothing touches the VM, and Fleet's own `[Install software] …` policy keeps failing |
+| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | an `install_software` automation whose install fails: 3 upcoming *"Fleet will install"*, then *"Fleet failed to install"*, Library status *Failed* | **new** `premium/exclusive/software/deploy-install-retries.spec.ts` (decision 5) — the failure twin of `install-on-host`'s Deploy test: a per-run `fleet-pw-*` `.deb` built for amd64, which the aarch64 VM's dpkg refuses, so nothing installs, and Fleet's own `[Install software] …` policy keeps failing |
 | `fleet-maintained-filters/failing-policies/confirm-script-ran-in-ui-on-failing-host-policy` | the passing counterpart: a script that succeeds runs **once** (*"attempt 1"*, one timestamp) | **cut · DUP** (decision 4) — the failing case shows the automation firing, *"Fleet ran …"* and the card; all this adds is "a success isn't retried", which is the one `scriptFailed` branch in `orbit.go` |
 | `python/run-python-script-with-policy-automation-on-macos-host` | a `.py` policy automation on a Mac; ends on a screenshot of the details modal | **folded into the failing script, on the Ubuntu VM** (decisions 2 and 4): the premium Macs have no Command Line Tools, so their `python3` is Apple's install stub (D found the same; `host-run-script` runs Python on Linux). `policy-automation-runs`' script *is* a Python script |
 | `policies/enabling-continuous-software-and-script-automations-on-a-policy-retries-every-hour` | reads the Activity history QA Wolf's util accumulated over hours: bursts of 3 attempts, 30–90 min apart. Its assertion (`≥ 3` timestamps) passes after a single burst, so it never proved a re-fire | **new** `policy-automation-runs`, **refetch-driven** (decision 1): testable in minutes, and one test with the 3-attempt case (decision 3) |
@@ -85,8 +85,10 @@ Every flow body was read, not just its title (F's plan had two rows built on tit
    refetch → 3 new attempts.
 4. **Two flows cut as DUPs.** The passing-script flow (subsumed by the failing case) and the OS-specific policy
    flow (it never sets a platform; its CRUD is round 1's). No `policy-platform-targets` spec.
-5. **The failing install is `install-on-host`'s second test**, the failure twin of its Deploy test, not a case
-   in `policy-automation-runs`. It isn't a DUP of `inventory-reflects-install`: an install a policy queued
+5. **The failing install is its own spec, `deploy-install-retries`, in `premium-exclusive`**, the failure twin
+   of `install-on-host`'s Deploy test, not a case in `policy-automation-runs`. It started as `install-on-host`'s
+   second test and moved after the second branch run: a policy's installs queue at priority 0, and a failed
+   install script backs orbit off for up to 5 minutes (fleetdm/fleet#54607), stalling the VM for everything else. It isn't a DUP of `inventory-reflects-install`: an install a policy queued
    retries through `shouldRetryPolicyAutomationSoftwareInstall`, a direct one through `shouldRetrySoftwareInstall`.
 
 Net: Ubuntu VM time goes from 10 script runs + 3 installs to 6 + 3. The script test also closes round 1's
@@ -99,28 +101,30 @@ unbuilt C9 #17 (`python-run-python-script-with-policy-automation-on-linux-host`,
 
 ### Hosts, fixtures and cleanup
 
-- **Scripts and installs run only on real VMs**; simulations never run anything. Everything that executes here
+- **Scripts and installs run only on real VMs**; simulations only report runs and installs they never performed. Everything that executes here
   runs on the **Ubuntu VM** (`requireRealHost(request, 'linux')`): fastest round trip, and it has `python3`.
 - **Two VM tests in all**: `policy-automation-runs`' one script test (6 script runs, 3 refetches) and
-  `install-on-host`'s failing Deploy (3 installs). Each VM works one queue of upcoming activities, so they
+  `deploy-install-retries`' failing Deploy (3 installs), both in `premium-exclusive`. Each VM works one queue of upcoming activities, so they
   interleave with each other and with D's and E's work there; count by policy, script and title, never by
   position in the feed.
 - **Scope the script policy to the Ubuntu VM.** A policy on the VMs fleet runs on all three VMs and on any
-  simulation a label-targeting spec has borrowed there; simulations answer policies at random, so an unscoped
-  policy queues automations on hosts that never run them. `platform: linux` plus a manual label holding only the
+  simulation a label-targeting spec has borrowed there. Simulations pass every policy except `SELECT 0;`, but the
+  Mac and Windows VMs would fail it too, and queue attempts of their own. `platform: linux` plus a manual label holding only the
   VM (`createManualLabel`). Name the policy, label, script and package `pw-*` / `fleet-pw-*`: the VMs sweep
   removes them after a dead run, and the resting-state step cancels the suite's queued scripts and installs.
   The failing Deploy's policy is Fleet's own `[Install software] …` one, scoped as the passing Deploy's is.
 - **Trigger the policy with a refetch**, not the hourly run: `waitForNoPendingRefetch`, then
   `requestHostRefetch`. A refetch also re-runs policies, which is exactly what the continuous case uses.
-- **A failing install** = `inertDeb(...)` uploaded with `installScript: 'exit 1'` — nothing is installed, the
-  VM is untouched. Never use the durable fixtures in `helpers/vm-fixtures.ts`.
+- **A failing install** = `inertDeb(name, '1.0.0', 'amd64')`, which the aarch64 VM's dpkg refuses, so nothing is
+  installed and the VM is untouched. A failed install *script* stalls orbit (#54607), which is why this one runs
+  exclusive; elsewhere, fail an install with a pre-install query that returns no rows. Never use the durable fixtures in `helpers/vm-fixtures.ts`.
 - **A per-run package is required, not just tidy.** Fleet caps failed policy installs at
   `MaxPolicyAutomationInstallAttempts` (10) per host and installer, in a Redis counter whose 24-hour expiry
   restarts on every failure (`installFailureLimitReached`, fleetdm/fleet#51746). A fixed package failing 3 times a
   night would stop being installed on the fourth night.
-- **Script execution must be on** in the main project. The exclusive specs turn it off, but since #73 they run
-  as their own step after the main project; `cleanup-setup` turns it back on for the next run.
+- **Script execution must be on.** `shared/exclusive/script-execution-disabled.spec.ts` turns it off, but it
+  runs in the same one-worker exclusive project as `policy-automation-runs`, so never beside it, and restores it
+  in the test; `cleanup-setup` turns it back on after a dead run.
 - **Budget, measured:** `policy-automation-runs` 12.7 min and the failing Deploy 6.9 min, side by side on 2
   workers with `install-on-host`'s passing Deploy (2026-10-01). A script attempt is about a minute; a refetch is
   1–2 min, more when another spec's is outstanding, which is why only the first refetch waits one out. Price it
@@ -184,7 +188,7 @@ Read [README.md](README.md) first for the standing rules and how a batch runs. S
 
 ## Policy automations and retries
 
-*9 source flows → 2 new specs + 2 augments; 2 cut as DUPs.*
+*9 source flows → 3 new specs + 2 augments; 2 cut as DUPs.*
 
 | Target spec | Kind | Source flows folded in |
 |---|---|---|
@@ -225,7 +229,9 @@ disables gitops mode whatever happened — an aborted run that leaves it on disa
   name: 'gitops-mode',
   testDir: './tests/e2e/premium/gitops-mode',
   workers: 1,
-  dependencies: ['premium'],
+  // Its own invocation after the exclusive step; a dependency on 'premium' would skip it whenever one
+  // main-project test is red.
+  dependencies: ['premium-setup'],
   teardown: 'gitops-mode-teardown',
 }
 ```

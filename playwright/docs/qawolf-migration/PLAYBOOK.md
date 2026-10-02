@@ -136,9 +136,11 @@ If the instance has both real devices and simulated ones, they are good at oppos
 | | real VM | osquery-perf simulation |
 |---|---|---|
 | count | ~3 per tier | ~300 per tier |
-| live query | **runs the actual SQL** | ignores it; returns one canned row, and **no rows ~20% of runs** |
+| live query | **runs the actual SQL** | ignores it; returns one canned row (osquery-perf's default is no rows ~20% of runs; our daemons set `--live_query_no_results_prob 0`) |
+| policies | real results | pass every policy except `SELECT 0;` (`--policy_pass_prob` defaults to 1) |
+| scripts and installs | really run | the ~half that simulate orbit report a run or install they never performed (random exit code; installs fail ~5%) |
 | labels | correct | matches contradictory labels (one darwin sim is in "Fedora Linux", "MS Windows" *and* "All Linux") |
-| MDM | enrolled (macOS/Windows) | never |
+| MDM | enrolled (macOS/Windows) | ~30% of the macOS and Windows simulations (`--mdm_prob 0.3`) |
 | local users / agent versions | real | ~50–75% report users; a mix of fleetd and vanilla-osquery |
 | disposable? | **no — never destroy one** | yes, and the pool is repopulated |
 

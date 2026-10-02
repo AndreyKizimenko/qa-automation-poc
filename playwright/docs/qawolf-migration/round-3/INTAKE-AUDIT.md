@@ -87,14 +87,14 @@ Fixed in this PR:
   now covers it ("delete from host details"). It's covered, so it isn't a gap. The audit table keeps the
   original disposition as the record.
 
-Left for [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78), which rewrites the same
-round-2 files:
+Fixed in [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78), which rewrites the same round-2 files:
 
-- `round-2/G-out-of-band.md`: the review table, decision 5 and *Facts* still describe an `install-on-host`
-  augment using `installScript: 'exit 1'`. The failing Deploy became its own exclusive spec. The header's
-  count should be 3 new + 2 augments. The gitops snippet still shows `dependencies: ['premium']`, and
-  "Script execution must be on in the main project" is stale.
-- `round-2/README.md`: batch G's status line ("retries half not started") and batch A's DUP count.
-- `round-2/INDEX.md`: target paths that moved after the index was written. The OS-updates rows (lines 32, 43,
-  44) are now under `premium/exclusive/os-updates/`. The gitops-mode rows (lines 56–60) are now
-  `01-indicator-and-links.spec.ts` / `02-gated-surfaces.spec.ts`, not `navbar-and-links` / `gated-surface`.
+- `round-2/G-out-of-band.md`: the review table, decision 5 and *Facts* described the failing Deploy as an
+  `install-on-host` augment using `installScript: 'exit 1'`; it's its own exclusive spec, failing by
+  architecture. The counts now read 3 new + 2 augments, the gitops snippet depends on `premium-setup`, and the
+  script-execution note names the exclusive project.
+- `round-2/README.md`: batch G's status lines.
+- `round-2/INDEX.md`: the OS-update rows (lines 32, 43, 44) now point at `premium/exclusive/os-updates/`, and the
+  gitops-mode rows (lines 56–60) at `01-indicator-and-links.spec.ts` / `02-gated-surfaces.spec.ts`.
+- The simulation facts in `playwright/CLAUDE.md`, the reviewer skill, the PLAYBOOK and round 2's README and batch
+  boxes ("no rows ~20% of runs", "never install anything", "answer policies at random").

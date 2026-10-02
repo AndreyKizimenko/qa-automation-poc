@@ -61,8 +61,11 @@ regenerate both on every restart.
   (`preInstallQuery` on `uploadSoftwarePackageBuffer`), which stops before the script and doesn't trigger it;
   a spec whose point is the script failure itself goes in `exclusive/` (`deploy-install-retries.spec.ts`).
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
-  pagination). They ignore live-query SQL, return no rows ~20% of runs and never install anything, so a green
-  assertion against one proves nothing about the feature. A deleted simulation never comes back on its own.
+  pagination). They answer every live query with the same canned row, whatever the SQL (the daemons run with
+  `--live_query_no_results_prob 0`, so they always answer), and pass every policy except `SELECT 0;`. The ~half
+  that simulate orbit report script runs and installs they never performed: random output and exit code, and
+  an install that fails ~5% of the time. So a green assertion against one proves nothing about the feature. A
+  deleted simulation never comes back on its own.
 - **A simulation can answer what Fleet decides server-side** — which hosts a profile is listed for, which are
   offered a software title, which a policy or report targets — so a label-targeting spec moves two onto the VMs
   fleet as the "outside the label" hosts beside the real VM. Borrow with `findMdmSimulations` (only for

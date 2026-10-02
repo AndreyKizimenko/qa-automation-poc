@@ -72,7 +72,7 @@ detail — what landed, what was retargeted, what was found — is in
 | **[C](C-host-reads.md)** ✅ | Live host, read-only | 8 | 8 | 3 retargets; the vitals-refetch row moved to D |
 | **[D](D-host-execution.md)** ✅ | Execution on hosts — scripts, MDM commands, install/uninstall/update, batch runs | 31 | 10 | durable VM software in `vms.yml`; resting-state preflight; `QA — Branch run` workflow |
 | **[E](E-label-targeting.md)** ✅ | Label targeting — profiles, declarations, software, policies, reports | 21 | 10 | inert profile fixtures (the free VMs had been getting lock profiles); set membership over simulations borrowed onto VMs; `QA — Nightly` chain |
-| **[G](G-out-of-band.md)** ◐ | gitops mode **V1** — its own project, runs last | 5 | 5 | retries half not started; gitops V2 parked |
+| **[G](G-out-of-band.md)** ◐ | gitops mode **V1** — its own project, runs last | 5 | 5 | the retries half is in the *Remaining* table; gitops V2 went to [round 3](../round-3/H-gitops-mode-v2.md) |
 
 That is **106 flows**, and the whole `gitops-mode` project. The suite went from 113 spec files to **178**; D
 added the `premium-exclusive` / `free-exclusive` projects for specs that flip a global switch. The first full
@@ -83,7 +83,7 @@ run with E (2026-09-29): premium 532 passed, free 279, no failures.
 | batch | theme | setup needed | flows | specs |
 |---|---|---|---:|---:|
 | **[F](F-provisioning.md)** ✅ | Provisioning-gated — IdP, team admin, technician, recovery lock | merged in [PR #72](https://github.com/AndreyKizimenko/qa-automation-poc/pull/72) (2026-09-29) | 13 | 4 new + 5 augments |
-| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | reviewed 2026-09-29, re-reviewed 2026-10-01 (2 flows cut as DUPs); built and green on `playwright/qawolf-round2-batch-g` ([PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78)); awaiting the branch run | 9 | 2 new + 2 augments |
+| **[G](G-out-of-band.md)** (rest) | Policy automations and retries | reviewed 2026-09-29, re-reviewed 2026-10-01 (2 flows cut as DUPs); built on `playwright/qawolf-round2-batch-g` ([PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78)), branch run green 2026-10-02 | 9 | 3 new + 2 augments |
 | | | **remaining** | **22** | |
 
 **F and G each have a *Start here* block** at the top of their file: which skills to call, what to read, and
@@ -145,8 +145,8 @@ nothing multi-MB is committed. The one case that still needs a decision is the >
 
 Batches C through F all touch hosts. **Use the real VMs, not the simulations**, wherever the assertion depends
 on a real answer — software inventory, script output, profile delivery, certificates, agent versions. An
-osquery-perf simulation ignores live-query SQL, returns no rows ~20% of runs, and never actually installs
-anything, so a green test against one proves nothing about the feature.
+osquery-perf simulation answers every live query with one canned row whatever the SQL, passes every policy,
+and fakes its script and install results, so a green test against one proves nothing about the feature.
 
 The suite already resolves them; nothing new is needed:
 

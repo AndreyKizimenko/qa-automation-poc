@@ -60,8 +60,9 @@ Both share each instance and are good at opposite jobs — pick per spec via
 
 - **`'real'`** — genuine device behaviour. Runs the query's actual SQL, reports real users and agent versions,
   supports MDM. Only ~3 per tier, so **never destroy one**.
-- **`'simulated'`** — volume for bulk work. Ignores live-query SQL, returns no rows ~20% of runs, and matches
-  contradictory labels. Disposable, but a deleted simulation **never comes back on its own**.
+- **`'simulated'`** — volume for bulk work. Answers every live query with one canned row whatever the SQL,
+  passes every policy except `SELECT 0;`, fakes script and install results (the ~half that simulate orbit), and
+  matches contradictory labels. Disposable, but a deleted simulation **never comes back on its own**.
 
 Split by **hardware model**: the QA VMs report `VirtualMac2,1` or `QEMU Virtual Machine`, osquery-perf reports
 fixed consumer models. It holds on both tiers and across re-enrollment — MDM enrollment stopped being a usable

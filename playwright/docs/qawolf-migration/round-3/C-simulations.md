@@ -86,7 +86,7 @@ Read every flow body. Known so far:
 - **They ignore live-query SQL.** Every live query to a simulation returns the same row whatever the SQL
   (`agent.go:3644-3660`). Our daemons run with `--live_query_no_results_prob 0`
   (`tools/perf-hosts/com.fleetqa.perf.premium.plist`), so they do answer, but nothing in this batch should depend
-  on what they answer. (`playwright/CLAUDE.md`'s "no rows ~20% of runs" is osquery-perf's default, not our setting.)
+  on what they answer.
 - **Half of them simulate orbit** (`-orbit_prob` 0.5), and those fake installs and script runs with a result:
   they don't install anything, but they don't sit pending either.
 - **Deleted simulations come back only at the daemons' daily refresh**, if then. Never delete one you didn't
