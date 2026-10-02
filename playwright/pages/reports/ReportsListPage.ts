@@ -162,7 +162,9 @@ export class ReportsListPage {
     // The report name is the first row's primary entity link. Resolving it via the
     // primary link stays correct whether or not the selection-checkbox column renders
     // (it is gated on edit permission + team-scoped query presence), and reads the
-    // link's text without any tooltip-suffix the cell may inject.
-    return this.table.firstRowPrimaryLinkText();
+    // link's text without any tooltip-suffix the cell may inject. On a fleet's page
+    // the link also carries the "Inherited" badge for global reports as a second
+    // line, which is not part of the name.
+    return (await this.table.firstRowPrimaryLinkText()).split('\n')[0].trim();
   }
 }

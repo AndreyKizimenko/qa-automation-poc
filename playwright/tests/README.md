@@ -40,6 +40,7 @@ tests/
 │   │   └── premium/          # global, fleet-scoped, multi-fleet, endpoint-allowlisted
 │   └── gitops-verify/        # GitOps drift checks
 └── loadtest/                 # Page load / search timing tests (loadtest project, local-only)
+    └── api/                  # API timing (loadtest-api project, local-only)
 ```
 
 Tier-routing rules:
@@ -60,6 +61,12 @@ Tier-routing rules:
   `measureNav` / `measureSearch` from `@helpers/perf` to time
   user-perceived page loads. Lives in `tests/loadtest/` so the premium
   and free projects skip it by folder exclusion.
+
+- **API timing** — "How fast does each request shape answer under
+  high-scale data?" Runs in the `loadtest-api` project (no browser).
+  `tests/loadtest/api/shapes.ts` lists every endpoint + sort/filter
+  combination worth timing; `helpers/perf-api.ts` samples and grades
+  them. Slow is flagged; never-succeeds fails.
 
 - **GitOps verify** — "Does the live instance match the gitops config?"
   Runs in the `gitops-verify` project (no browser, just the request

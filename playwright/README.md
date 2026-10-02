@@ -71,6 +71,14 @@ The last step of that doc — setting `FLEET_LOADTEST_FLEET_ID` in
 `.env.loadtest` — is required; the loadtest fixtures throw at setup if
 it's missing.
 
+The same instance also serves `npm run test:loadtest:api`, which times the
+API directly (`tests/loadtest/api/`): each request shape is sampled 2–10×
+(`API_SAMPLES=N` to override, `API_PRIORITY=P0` for the known-bad subset),
+medians go to `.perf-history-api/<timestamp>/summary.md`, and the console
+table compares them with the previous runs. Shapes whose data is missing
+(no policies in the fleet, no finished batch run) are reported as skipped
+rather than timed against an empty response.
+
 ---
 
 ## Running tests
@@ -89,6 +97,7 @@ From `playwright/`:
 | `npm run test:loadtest` | Loadtest tests, headless |
 | `npm run test:loadtest:headed` | Loadtest tests, browser visible |
 | `npm run test:loadtest:ui` | Loadtest tests, Playwright UI |
+| `npm run test:loadtest:api` | API timing against the loadtest instance — no browser, one request in flight, every family; `-g <family>` for one |
 | `npm run test:gitops-verify:free` | Verify free-fleetqa baseline matches the live free instance |
 | `npm run test:gitops-verify:free-min` | Verify free-fleetqa-min variant matches the live free instance |
 | `npm run test:gitops-verify:premium` | Verify premium-fleetqa baseline (no-team scope) |
@@ -148,6 +157,7 @@ playwright/
 │   │   ├── role-access/          # Per-role endpoint allow/deny probes, split free/ + premium/
 │   │   └── gitops-verify/        # GitOps drift checks
 │   └── loadtest/                 # Page-load timing (loadtest project only)
+│       └── api/                  # API timing (loadtest-api project only)
 ├── pages/                        # Page Object Model — see pages/README.md
 │   ├── components/               # Reused widgets (DataTable, Navbar, TeamDropdown, etc.)
 │   ├── DashboardPage.ts          # Root — the one page with no feature folder
@@ -229,6 +239,8 @@ Three more projects run **alone, in their own invocation after the main project*
 `free-exclusive` (specs that turn a global switch off) and `gitops-mode` (specs that turn gitops mode on).
 Each depends only on the tier's login setup, and the config refuses to name one beside another browser
 project — [docs/ci-pipeline.md](docs/ci-pipeline.md) has the reasoning.
+
+`loadtest-api` is the one project with no browser: it has its own `testDir` (`tests/loadtest/api/`, which the `loadtest` project ignores), one worker, no test timeout (the per-request cap is `API_REQUEST_TIMEOUT_MS`, 90 s), and authenticates with the bearer token from `.env.loadtest`.
 
 Project scope is decided by folder — no tags. The `testIgnore` matrix in `playwright.config.ts` is the source of truth.
 

@@ -1,6 +1,6 @@
 # Loadtest / performance — test audit
 
-**Specs covered:** 11 files · **Test declarations:** 73 · **Entries below:** 11 (one per spec file) · **Project:** loadtest
+**Specs covered:** 12 files · **Test declarations:** 76 page loads + 12 API families · **Entries below:** 12 (one per spec file) · **Projects:** loadtest, loadtest-api
 
 `tests/loadtest/` times how long Fleet's list and detail pages take to become usable against a
 deliberately over-populated instance (500 policies / 500 reports / 500 labels / 400 scripts /
@@ -15,6 +15,10 @@ Because 73 near-identical declarations would produce 73 near-identical entries, 
 > `helpers/perf-teardown.ts`, `playwright.config.ts`, or any spec. No `expect(ms).toBeLessThan(...)`,
 > no non-zero exit on a slowdown, no CI workflow. A page that takes 29 seconds passes.
 > **This is a report generator, not a test suite** — see [Area observations](#area-observations).
+>
+> Two things changed on 2026-10-01: a page over the 5 s budget now carries a `perf-slow` annotation
+> (still no failure), and the API-timing spec ([PERF-12](#perf-12--apiapi-timingspects--api-timing))
+> **does** fail a family when a request never succeeds — slowness alone still only flags.
 
 ## Contents
 
@@ -31,6 +35,7 @@ Because 73 near-identical declarations would produce 73 near-identical entries, 
 | [PERF-09](#perf-09--controlsspects--controls-load-times) | `loadtest/controls.spec.ts` | 14 | `Controls` | PERF | ☐ |
 | [PERF-10](#perf-10--labelsspects--labels-load-times) | `loadtest/labels.spec.ts` | 1 | `Labels` | PERF | ☐ |
 | [PERF-11](#perf-11--usersspects--users-load-times) | `loadtest/users.spec.ts` | 1 | `Users` | PERF | ☐ |
+| [PERF-12](#perf-12--apiapi-timingspects--api-timing) | `loadtest/api/api-timing.spec.ts` | 12 families (~530 shapes) | `.perf-history-api/` | PERF + gate | ☐ |
 
 `Mode` is **PERF** for all 73 declarations. `Manual?` is per-spec-file; the per-measurement `☐`
 boxes live in each entry's table.
@@ -661,6 +666,56 @@ other:
 - *Efficiency / smells:* worth keeping only as a cheap control measurement (a baseline for
   "bundle + trivial query" that the heavier pages can be read against) — if that is the intent it
   should be labelled as such, otherwise it is noise.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### PERF-12 · `api/api-timing.spec.ts` — API timing
+
+- **File:** [`playwright/tests/loadtest/api/api-timing.spec.ts`](../../tests/loadtest/api/api-timing.spec.ts) ·
+  matrix [`shapes.ts`](../../tests/loadtest/api/shapes.ts) · ids [`resolve.ts`](../../tests/loadtest/api/resolve.ts) ·
+  engine [`helpers/perf-api.ts`](../../helpers/perf-api.ts)
+- **Grep:** `npm run test:loadtest:api -- -g hosts` (any family: ui, dashboard, hosts, host-details, software,
+  vulnerabilities, os-versions, policies, reports, labels, controls, admin)
+- **Project:** loadtest-api · **Mode:** PERF with a gate · 12 tests, one per family
+- **Isolation:** read-only GETs, one request in flight, bearer token; no browser, no cleanup
+- **Preconditions:** `.env.loadtest`; the gitops loadtest bundle applied to `FLEET_LOADTEST_FLEET_ID`
+  (policies / reports / profiles / scripts shapes skip with a reason otherwise); crons run
+
+| # | Test title | What it samples | Ready-state / gate | Manual? |
+|---|---|---|---|---|
+| 1 | `dashboard` | the requests `/dashboard` fans out to, incl. `os_versions` and `macadmins` | *(API)* status + timing per shape | ☐ |
+| 2 | `hosts` | `hosts` + `hosts/count`: every allowlisted `order_key`, status, search (± `device_mapping`), label, policy / software / OS / CVE filters, MDM filters, `populate_*`, CSV export, summaries | *(API)* | ☐ |
+| 3 | `host-details` | `hosts/{id}` fan-out for the first-by-name, most-issues and a Windows host; `commands?host_identifier` | *(API)* | ☐ |
+| 4 | `software` | titles and versions: sorts, deep pages, vulnerable / exploit / CVSS filters, search, Library filters, FMA catalog, setup-experience lists | *(API)* | ☐ |
+| 5 | `vulnerabilities` | every allowlisted sort, exploited, search, deep pages, CVE detail | *(API)* | ☐ |
+| 6 | `os-versions` | no-platform vs per-platform, sorts, detail | *(API)* | ☐ |
+| 7 | `policies` | global and fleet lists, inherited, automation types, host-count sorts, detail, automation activities | *(API)* | ☐ |
+| 8 | `reports` | lists, platform, search, sorts, report rows | *(API)* | ☐ |
+| 9 | `labels` | with and without host counts, sorts, summary, detail | *(API)* | ☐ |
+| 10 | `controls` | profiles, OS-settings summaries, scripts, batch runs, variables, certificates, integrations | *(API)* | ☐ |
+| 11 | `admin` | users, fleets, config, activity feed sorts / filters / deep pages | *(API)* | ☐ |
+
+**Assessment**
+- *Value:* this is the inventory fleetdm/fleet#44388 asked for, plus the shapes behind #35799, #45415,
+  #51954, #47755, #47722, #48996, #44170, #4890, #52213 and #51896, each tagged with its issue in the
+  report. Medians over several samples, with the previous runs beside them, make a release-over-release
+  regression visible without a browser in the loop.
+- *Gate semantics:* `slow` (median over `API_BUDGET_MS`, default 5 s) is flagged and keeps sampling until the
+  per-shape cap (`API_SHAPE_BUDGET_MS`, 3 min); `error` / `broken` fail the family through soft expectations
+  so every shape is still reported; `unavailable` (optional shape, 4xx throughout — Apple MDM summaries with
+  MDM off) and `skipped` (unresolved id) never fail.
+- *Coverage gaps:* write paths (`hosts/transfer`, `mdm/profiles/batch`, `software/batch`, gitops apply) and the
+  device-token endpoints are documented in the plan but not implemented — they mutate the dataset.
+- *Caveats:* single-instance numbers depend on what else is hitting the instance; the run metadata records the
+  dataset counts and resolved ids so two runs can be compared honestly.
 
 **Notes (Andrey)**
 ```

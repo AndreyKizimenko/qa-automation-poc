@@ -78,4 +78,26 @@ test.describe('Hosts load times', () => {
       await expect(hostsList.table.firstRowWithLink).toBeVisible();
     });
   });
+
+  // Page 1000 of 50 rows: the offset cost of a deep page with the UI's
+  // default sort. Direct URL because goto() has no page option and the
+  // navigation itself is the measurement.
+  test('Page 1000', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+    await measureNav(page, testInfo, 'Page 1000', async () => {
+      await page.goto(`/hosts/manage?fleet_id=${loadtestFleetId}&page=1000&order_key=display_name&order_direction=asc`);
+      await expect(hostsList.table.firstRowWithLink).toBeVisible();
+    });
+  });
+
+  // Export hosts dumps the whole filtered view as CSV (`hosts/report`) — 17 s
+  // for one 100k-host fleet on 4.93. The clock stops once the download is
+  // fully written, which is when the user can open it.
+  test('Export hosts', async ({ hostsList, loadtestFleetId, page }, testInfo) => {
+    await hostsList.goto({ fleetId: loadtestFleetId });
+
+    await measureNav(page, testInfo, 'Export hosts', async () => {
+      const download = await hostsList.exportHosts();
+      await download.path();
+    });
+  });
 });

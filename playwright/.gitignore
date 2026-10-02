@@ -10,6 +10,8 @@ node_modules/
 .auth/
 .perf-results/
 .perf-history/
+.perf-results-api/
+.perf-history-api/
 
 # Per-run triage write-ups produced by the playwright-run-reviewer skill.
 # Each one is a snapshot of a single CI run; the durable conclusions get

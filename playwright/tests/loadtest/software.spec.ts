@@ -46,6 +46,18 @@ test.describe('Software load times', () => {
     });
   });
 
+  // ── Library tab ─────────────────────────────────────────────────────────────
+  // `software/titles?available_for_install=true` — the loadtest fleet carries
+  // hundreds of installers and the filter was 10 s on 4.93.
+  test('Library tab', async ({ softwareTitles, loadtestFleetId, page }, testInfo) => {
+    await softwareTitles.goto({ fleetId: loadtestFleetId });
+
+    await measureNav(page, testInfo, 'Library tab', async () => {
+      await softwareTitles.gotoLibraryTab();
+      await expect(softwareTitles.table.firstRowWithLink).toBeVisible();
+    });
+  });
+
   // ── Search ──────────────────────────────────────────────────────────────────
   test('Search software', async ({ softwareTitles, loadtestFleetId, page }, testInfo) => {
     await softwareTitles.goto({ fleetId: loadtestFleetId });

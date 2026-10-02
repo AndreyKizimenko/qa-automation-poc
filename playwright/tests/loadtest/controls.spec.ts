@@ -1,15 +1,31 @@
 import { test, expect } from '@fixtures';
+import { getAppConfig, withApiRequest } from '@helpers/api';
 import { measureNav } from '@helpers/perf';
+
+// With MDM off, OS updates, Configuration profiles and Certificates render an
+// "Additional configuration required" panel instead of their data, so timing
+// them says nothing. Skip those with the reason rather than fail on the anchor.
+let appleOrWindowsMdm = false;
+let androidMdm = false;
+
+test.beforeAll(async () => {
+  const mdm = (await withApiRequest((request) => getAppConfig(request))).mdm ?? {};
+  const flags = mdm as { enabled_and_configured?: boolean; windows_enabled_and_configured?: boolean; android_enabled_and_configured?: boolean };
+  appleOrWindowsMdm = !!(flags.enabled_and_configured || flags.windows_enabled_and_configured);
+  androidMdm = !!flags.android_enabled_and_configured;
+});
 
 test.describe('Controls load times', () => {
   // ── OS Updates ──────────────────────────────────────────────────────────────
   test('OS Updates', async ({ osUpdates, loadtestFleetId, page }, testInfo) => {
+    test.skip(!appleOrWindowsMdm, 'Apple or Windows MDM is off on this instance; the page shows "Additional configuration required"');
     await measureNav(page, testInfo, 'OS Updates', async () => {
       await osUpdates.goto({ fleetId: loadtestFleetId });
     });
   });
 
   test('OS Updates - View hosts for top OS', async ({ osUpdates, hostsList, loadtestFleetId, page }, testInfo) => {
+    test.skip(!appleOrWindowsMdm, 'Apple or Windows MDM is off on this instance; the page shows "Additional configuration required"');
     await osUpdates.goto({ fleetId: loadtestFleetId });
 
     await measureNav(page, testInfo, 'OS Updates - top OS hosts', async () => {
@@ -29,12 +45,16 @@ test.describe('Controls load times', () => {
   });
 
   test('Configuration profiles', async ({ configurationProfiles, loadtestFleetId, page }, testInfo) => {
+    test.skip(!appleOrWindowsMdm, 'Apple or Windows MDM is off on this instance; the page shows "Additional configuration required"');
     await measureNav(page, testInfo, 'Configuration profiles', async () => {
       await configurationProfiles.goto({ fleetId: loadtestFleetId });
+      // goto() anchors on the heading; the profile list is the data this times.
+      await expect(configurationProfiles.listItem.first()).toBeVisible();
     });
   });
 
   test('Certificates', async ({ certificates, loadtestFleetId, page }, testInfo) => {
+    test.skip(!androidMdm, 'Android MDM is off on this instance; the page shows "Additional configuration required"');
     await measureNav(page, testInfo, 'Certificates', async () => {
       await certificates.goto({ fleetId: loadtestFleetId });
     });
@@ -81,6 +101,7 @@ test.describe('Controls load times', () => {
   test('Scripts - Library', async ({ scriptsLibrary, loadtestFleetId, page }, testInfo) => {
     await measureNav(page, testInfo, 'Scripts - Library', async () => {
       await scriptsLibrary.goto({ fleetId: loadtestFleetId });
+      await expect(scriptsLibrary.listItem.first()).toBeVisible();
     });
   });
 
@@ -96,6 +117,9 @@ test.describe('Controls load times', () => {
   test('Variables', async ({ variables, loadtestFleetId, page }, testInfo) => {
     await measureNav(page, testInfo, 'Variables', async () => {
       await variables.goto({ fleetId: loadtestFleetId });
+      // The loadtest bundle provisions no variables, so the empty state is a
+      // legitimate end of the load here.
+      await expect(variables.table.rowOrEmpty()).toBeVisible();
     });
   });
 });

@@ -130,7 +130,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Seven browser/API projects target three Fleet environments. Each has its own env file
+Eight browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder — no tags. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
@@ -139,7 +139,8 @@ matrix in `playwright.config.ts` is the source of truth:
 |---|---|---|---|
 | `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**`, `**/exclusive/**` | `.auth/premium-admin.json` |
 | `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**` | `.auth/free-admin.json` |
-| `loadtest` | `tests/loadtest/**` only (`testDir`) | n/a | `.auth/loadtest-admin.json` |
+| `loadtest` | `tests/loadtest/**` only (`testDir`), one worker | `**/api/**` | `.auth/loadtest-admin.json` |
+| `loadtest-api` | `tests/loadtest/api/**` only (`testDir`), one worker, no browser | n/a | bearer token |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`), one worker, its own invocation after `premium-exclusive` | n/a | `.auth/premium-admin.json` |
 | `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
@@ -198,7 +199,7 @@ suite's own queued installs and scripts, resets the script timeout to Fleet's de
 uninstalls any durable fixture a dead run left installed. A VM that's offline is only logged — its specs fail
 on it with their own message.
 
-The `loadtest` project depends only on `loadtest-setup`. Each project's setup chain is otherwise independent — no cross-project sharing.
+The `loadtest` project depends only on `loadtest-setup`; `loadtest-api` depends on nothing (it sends the bearer token from `FLEET_API_TOKEN`, logging in with the admin credentials when that token is stale). Each project's setup chain is otherwise independent — no cross-project sharing.
 
 ## Env vars
 
@@ -221,6 +222,8 @@ Default: a spec is a single end-to-end flow; cleanup runs at the end of the same
 - Cleanup still runs inside the same describe block (the `delete` sub-test), so an aborted create still leaves the cleanup-teardown project to wipe state.
 
 **Performance specs** (`tests/loadtest/`) follow different rules. They live in the `tests/loadtest/` tree (which the loadtest project's `testDir` targets exclusively, and which premium/free skip via `testIgnore`), and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
+
+**API timing specs** (`tests/loadtest/api/`, the `loadtest-api` project) have no browser at all. `shapes.ts` is the request matrix — one entry per endpoint + sort/filter combination, with the fleetdm/fleet issue it guards — and `helpers/perf-api.ts` samples each shape several times with one request in flight, classifies it (`ok` / `slow` / `error` / `broken` / `unavailable` / `skipped`) and keeps run history under `.perf-history-api/`. Over the 5 s budget is `slow` and only flagged; a request that never succeeds is `broken` and fails its family. Add a shape by adding a line to `shapes.ts`; add an id it needs to `resolve.ts`; then run `python3 tools/loadtest-api-audit/audit-shapes.py` from the repo root — Fleet ignores unknown query parameters, so a misspelt one would silently time the wrong request. The plan and the rationale for every family live in `docs/test-plans/loadtest-api-timing.md`.
 
 ## Skips
 
