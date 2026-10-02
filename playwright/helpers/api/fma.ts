@@ -26,16 +26,20 @@ export async function findFmaIdBySlug(
   const cached = _fmaIdBySlug.get(slug);
   if (cached) return cached;
 
-  const res = await request.get(apiUrl('software/fleet_maintained_apps'), {
-    headers: authHeaders(),
-    params: { fleet_id: String(fleetId), per_page: '500' },
-  });
-  await expect(res, `Failed to list Fleet-maintained apps`).toBeOK();
-  const body = await res.json();
-  const apps = (body.fleet_maintained_apps ?? []) as FmaListEntry[];
-
-  for (const app of apps) {
-    if (app.slug) _fmaIdBySlug.set(app.slug, app.id);
+  // The catalog outgrew one page (1,424 entries on 4.93), so read every page:
+  // a slug past the first would otherwise read as missing.
+  const perPage = 500;
+  for (let page = 0; !_fmaIdBySlug.has(slug); page++) {
+    const res = await request.get(apiUrl('software/fleet_maintained_apps'), {
+      headers: authHeaders(),
+      params: { fleet_id: String(fleetId), per_page: String(perPage), page: String(page) },
+    });
+    await expect(res, `Failed to list Fleet-maintained apps`).toBeOK();
+    const apps = ((await res.json()).fleet_maintained_apps ?? []) as FmaListEntry[];
+    for (const app of apps) {
+      if (app.slug) _fmaIdBySlug.set(app.slug, app.id);
+    }
+    if (apps.length < perPage) break;
   }
 
   const found = _fmaIdBySlug.get(slug);

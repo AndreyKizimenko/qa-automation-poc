@@ -50,7 +50,6 @@ Read every flow body. Known so far:
 - **R2 #88 needs no VM.** Whether *Run* is offered is a server-side decision, so a Linux simulation in the
   existing Unassigned spec shows it. Don't click it there.
 - **C5 #13** (from batch B) is a host's Library tab, read-only on a VM.
-- **The CLAUDE.md simulation facts are stale** (§2.1): fix them in the same PR as this batch, or tell Andrey.
 
 ## 2. Facts for the build
 
@@ -59,11 +58,11 @@ Read every flow body. Known so far:
 - **Every live query to a simulation returns the same row, whatever the SQL** (`cmd/osquery-perf/agent.go:3644-3660,
   3730-3745`), and our daemons run with `--live_query_no_results_prob 0`
   (`tools/perf-hosts/com.fleetqa.perf.premium.plist:37-38`). So **every simulation shows Pass** in a live policy
-  run, and only a VM can show Fail. `playwright/CLAUDE.md`'s "return no rows ~20% of runs" is osquery-perf's
-  default, not ours. Whether the running daemons match the plist is unverified.
+  run, and only a VM can show Fail. Checked live on 2026-10-02: 12 of 12 premium simulations answered `SELECT
+  'probe' … WHERE 1 = 0;` with the canned `netconf` row.
 - **Simulations with orbit** (`-orbit_prob` 0.5) fake script runs, with random output and an exit code of 0 or 1
-  at random (`agent.go:2167-2173`), and record installs. CLAUDE.md's "never install anything" is true of the disk,
-  not of what Fleet records.
+  at random (`agent.go:2167-2173`), and record installs (failing ~5% of the time). Nothing lands on a disk, but Fleet
+  records the result.
 - **A live run never finishes while an online targeted host hasn't answered**: it ends at `ActualResults >=
   Online` (`server/service/service_campaigns.go:195-197`), with no timeout. Bound every wait, or press Stop.
 
@@ -158,7 +157,6 @@ and `export-csv.spec.ts:21`; API: `createManualLabel`, `createPolicy`, `requireR
 
 1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut.
 2. **R2 #72's Linux VM minutes** (§3): worth it, given the Linux queue is the floor?
-3. **The CLAUDE.md simulation facts** (§2.1): correct them in this batch's PR?
 
 ## Free coverage
 

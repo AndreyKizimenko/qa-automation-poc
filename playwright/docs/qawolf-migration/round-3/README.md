@@ -64,7 +64,7 @@ here** block, the gap table, the review to do first, facts for the build, the de
 
 A–D need nothing that doesn't exist; E's per-role source read is done, so it's a design job; F works on
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
-Every batch file lists the decisions to put to Andrey **before** building: 28 across the round, most of them "cut,
+Every batch file lists the decisions to put to Andrey **before** building: 25 across the round, most of them "cut,
 or build it this narrow way". Batches touch different surfaces and can run in any order, **but
 never two at once against the same instance.**
 
@@ -120,11 +120,13 @@ three arrive with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automa
   `browser_run_code_unsafe`, which echoes the code it runs — a session cookie included.
 - **The round-1 source flows are in `qa-wolf/flows-Free/` (52) and `qa-wolf/flows-Premium/` (217)**, untracked,
   not at the repo root as older docs say.
-- **`playwright/CLAUDE.md` is out of date about simulations in two ways.** Our perf daemons run with
-  `--live_query_no_results_prob 0`, so a simulation always answers a live query, with the same row whatever the
-  SQL: every simulation **passes** a live policy. And the ~half that simulate orbit **do** run scripts and record
-  installs (exit 0 or 1 at random, within ~35 s), though nothing lands on a disk. Simulations also pass every
-  scheduled policy except `SELECT 0;`. Batches C, D and G spell out what that means for them.
+- **What a simulation answers** (corrected in `playwright/CLAUDE.md` with PR #78; it used to say "no rows ~20% of
+  runs" and "never install anything"). Our perf daemons run with `--live_query_no_results_prob 0`, so a simulation
+  always answers a live query, with the same canned row whatever the SQL (checked live 2026-10-02: 12 of 12
+  answered a `WHERE 1 = 0` query with a row), and every simulation **passes** a live policy. The ~half that
+  simulate orbit **do** report script runs and installs (exit 0 or 1 at random, within ~35 s), though nothing lands
+  on a disk. Simulations also pass every scheduled policy except `SELECT 0;`. Batches C, D and G spell out what
+  that means for them.
 
 ## 6. Decisions round 3 already carries
 
@@ -132,5 +134,12 @@ three arrive with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automa
   readable mailbox, a certificate authority: [`../../long-term-goals.md`](../../long-term-goals.md). (Premium's
   ABM connection works, so setup-assistant validation is in batch F.)
 - **A second VM per platform is deferred** (Andrey, 2026-10-01): batches use the one real VM per platform.
+- **Six Fleet bugs were filed from the planning** (2026-10-02):
+  [#54619](https://github.com/fleetdm/fleet/issues/54619) (a fleet's webhook saves wipe each other, batch B),
+  [#54620](https://github.com/fleetdm/fleet/issues/54620) ("Various", A),
+  [#54621](https://github.com/fleetdm/fleet/issues/54621) ("No team" copy, B), and
+  [#54622](https://github.com/fleetdm/fleet/issues/54622), [#54623](https://github.com/fleetdm/fleet/issues/54623),
+  [#54624](https://github.com/fleetdm/fleet/issues/54624) (role gating, E). A test that hits one asserts the
+  intended behaviour and skips with the bug's `TODO`, plus a `blocked-by-product-bugs.md` row.
 - **Role coverage is a matrix, not a flow per role** (batch E): one spec per area with the role as a dimension,
   the way `host-delete` and `manage-automations-access` already do it.

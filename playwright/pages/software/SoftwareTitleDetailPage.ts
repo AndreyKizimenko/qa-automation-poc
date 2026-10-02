@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataSet } from '../components/DataSet';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
+import { SoftwareDeploySelector } from '../components/SoftwareDeploySelector';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
 import { EditSoftwareModal } from '../components/EditSoftwareModal';
 import { EditAppearanceModal } from '../components/EditAppearanceModal';
@@ -39,6 +40,14 @@ export class SoftwareTitleDetailPage {
   readonly editAppearanceModal: EditAppearanceModal;
   readonly versionsModal: VersionsModal;
   readonly toast: Toast;
+  /**
+   * Actions → Deploy: Force install and Patch for the title (Fleet's
+   * DeployModal around SoftwareDeploySelector). Fleet's Modal is a role-less div
+   * whose title is a plain span, so the component's class is the handle.
+   */
+  readonly deployModal: Locator;
+  readonly deploy: SoftwareDeploySelector;
+  readonly deploySaveButton: Locator;
   /**
    * The page's main software-name heading. The visible text is the title's
    * display name, but the accessible name is the static `software display
@@ -80,6 +89,9 @@ export class SoftwareTitleDetailPage {
     this.editAppearanceModal = new EditAppearanceModal(page);
     this.versionsModal = new VersionsModal(page);
     this.toast = new Toast(page);
+    this.deployModal = page.locator('.deploy-modal');
+    this.deploy = new SoftwareDeploySelector(this.deployModal);
+    this.deploySaveButton = this.deployModal.getByRole('button', { name: 'Save', exact: true });
     this.hostCountLink = page.locator('a[href*="software_title_id"]').first();
 
     // Scoped to the summary card: the Edit-appearance modal renders its own
@@ -128,6 +140,8 @@ export class SoftwareTitleDetailPage {
   /** Open the Actions menu and pick an item. Not available on custom packages. */
   async runAction(action: SoftwareTitleAction): Promise<void> {
     await this.actionsDropdown.click();
+    // Asserted first: a click on an option the menu doesn't offer has no timeout of its own.
+    await expect(this.actionOption(action), `"${action}" in the Actions menu`).toBeVisible();
     await this.actionOption(action).click();
   }
 
@@ -142,6 +156,20 @@ export class SoftwareTitleDetailPage {
       await this.runAction('Edit appearance');
     }
     await this.editAppearanceModal.expectOpen();
+  }
+
+  /** Actions → Deploy. Fleet-maintained apps and app-store apps only; a custom package has no Actions menu. */
+  async openDeploy(): Promise<void> {
+    await expect(this.actionsDropdown).toBeVisible();
+    await this.runAction('Deploy');
+    await expect(this.deployModal).toBeVisible();
+  }
+
+  /** Saves the Deploy choices; the modal closes once Fleet has written the policies. */
+  async saveDeploy(): Promise<void> {
+    await expect(this.deploySaveButton).toBeEnabled();
+    await this.deploySaveButton.click();
+    await expect(this.deployModal).toBeHidden();
   }
 
   /**

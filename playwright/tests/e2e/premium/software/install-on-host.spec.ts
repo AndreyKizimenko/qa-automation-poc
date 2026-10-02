@@ -13,7 +13,10 @@
  * policy that points at it, so it can't be one of the fleet's durable fixtures.
  * Both are removed in a `finally`, and the cleanup sweep removes what a dead run
  * left. Installing and uninstalling the durable fixtures is
- * `software-lifecycle-on-host.spec.ts`.
+ * `software-lifecycle-on-host.spec.ts`; a Deploy whose install fails, and Fleet's
+ * retries of it, is `premium/exclusive/software/deploy-install-retries.spec.ts` —
+ * in the exclusive project, because a policy's installs queue below every
+ * user-requested one and a failed install stalls orbit (fleetdm/fleet#54607).
  */
 import * as fs from 'fs';
 import { test, expect, HOST_RETRIES } from '@fixtures';
@@ -41,6 +44,7 @@ async function openAddSoftware(dashboard: DashboardPage, softwareTitles: Softwar
 
 test.describe('Premium • Software • Install on host', () => {
   test.describe.configure({ retries: HOST_RETRIES });
+
   test('"Deploy" creates an install policy, and Fleet installs through it on the Linux VM', async ({
     dashboard,
     softwareTitles,

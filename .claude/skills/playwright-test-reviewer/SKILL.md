@@ -37,8 +37,8 @@ is a question. Say so rather than asserting it.
    The one approved exception: `recovery-lock.spec.ts` turning Recovery Lock on for the VMs fleet, provided it
    turns it off in an `afterEach` and the resting-state step still turns it off after a dead run.
 3. **Host-side behaviour asserted against a simulation.** Software inventory, script output, profile
-   delivery or verification, certificates and agent versions need `kind: 'real'`. Simulations ignore
-   live-query SQL, return no rows ~20% of runs and never install anything. (Server-side decisions, like which
+   delivery or verification, certificates and agent versions need `kind: 'real'`. Simulations answer
+   every live query with the same canned row, pass every policy, and fake their script and install results. (Server-side decisions, like which
    hosts a profile is listed for or which are offered a title, a simulation answers correctly. Don't flag
    those.)
 4. **Durable fixtures changed or deleted:** the VMs fleet's software in `helpers/vm-fixtures.ts` /

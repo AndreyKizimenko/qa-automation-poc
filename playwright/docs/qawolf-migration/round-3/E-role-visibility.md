@@ -89,7 +89,7 @@ Read every flow body; the INDEX row is the audit's summary of it. What the bodie
 | 10 | **`global-technician`** is in no row, but the human user exists. | A cheap extra column in every matrix. Ask whether it's wanted. |
 | 11 | **C3 #22 isn't a role property.** The automation-type filter's options depend on the scope, and are the same for every role (`ManagePoliciesPage.tsx:105-118,741-818`). | A scope check in a policies list spec (batch B's area), or cut. |
 | 12 | **Round 2 #49 / #50 have nothing to vary.** The platform cards aren't role-gated. | Cut, or replace with the cell that is gated: the Activity card shows for global roles, not team roles. |
-| 13 | **Five UI-vs-API disagreements** (§2). | Questions for Andrey first. |
+| 13 | **Five UI-vs-API disagreements** (§2): three filed as Fleet bugs (#54622, #54623, #54624), two by design. | Cells on a filed bug assert the intended behaviour and skip with the bug's TODO. |
 
 ## 2. What each role sees
 
@@ -132,22 +132,27 @@ So C9 #14 holds: a team maintainer edits and deletes a label they wrote. `premiu
 checks a gitops label, which no team role authored. The OS card's "Create new policy" that C7 #16 asserts no
 longer exists. Drop it.
 
-**Where the UI and the API disagree** (read from code, not run). Each is a question for Andrey before it's a
-test; if he calls one a bug, follow the blocked-flows workflow:
+**Where the UI and the API disagree.** Reproduced on premium on 2026-10-02: three are Fleet bugs, now filed, and
+two are by design. A cell on a filed bug asserts the intended behaviour and skips with `TODO(fleetdm/fleet#N)` and a
+row in `docs/blocked-by-product-bugs.md` until the fix lands.
 
 1. **Transfer for a team admin** is hidden (`HostActionsDropdown/helpers.tsx:142-155`), but the API grants
    `transfer_host` to a user who holds the role on both fleets (`policy.rego:405-409`). `team-admin` holds
-   Workstations and VMs, so it's testable, and it contradicts `host-transfer-permissions.spec.ts`'s comment that
-   Fleet "withholds" it.
+   Workstations and VMs. **By design:** Fleet's role table marks Transfer for fleet roles as REST API only
+   (`articles/role-based-access.md`, the fleet-level table's footnote), so `host-transfer-permissions.spec.ts`'s
+   comment stands.
 2. **A global technician sees the "create a report" link** in the host Live report modal
-   (`SelectReportModal.tsx:99-100`), but `/reports/new` shows them a 403 (`router/index.tsx:785`).
+   (`SelectReportModal.tsx:99-100`), but `/reports/new` shows them a 403. **Filed:**
+   [fleetdm/fleet#54622](https://github.com/fleetdm/fleet/issues/54622).
 3. **A team admin on an inherited policy:** the row's automations modal unlocks Ticket / Webhook
-   (`PolicyAutomationsFields.tsx:142-147`), and saving writes app config, which answers 403. Only while the global
-   webhook or ticket automation is on.
+   (`PolicyAutomationsFields.tsx:142-147`), and saving writes app config, which answers 403; the modal stays open
+   with no error. Only while the global webhook or ticket automation is on. **Filed:**
+   [fleetdm/fleet#54623](https://github.com/fleetdm/fleet/issues/54623).
 4. **Maintainers and report automations:** no *Manage automations* button (`ManageQueriesPage.tsx:132`), yet the
    API and the edit form's slider let them set `automations_enabled`. Likely by design.
-5. **A global observer+ on an Unassigned policy:** *Run* is hidden (`useTeamIdParam.ts:524-527`), though the API
-   allows it.
+5. **A global observer+ on an Unassigned policy:** *Run* is hidden (`useTeamIdParam.ts:524-527`: `!!currentTeam?.id`
+   is false for Unassigned's id 0), though the role table says observer+ runs all policies. **Filed:**
+   [fleetdm/fleet#54624](https://github.com/fleetdm/fleet/issues/54624).
 
 ## 3. The pattern to copy
 
@@ -258,8 +263,7 @@ anything or touches a lock setting.
 3. **Ownership of the overlapping writes** (finding 6), agreed with whoever runs A and B.
 4. **P30 and the role CRUD rows** (finding 7): cut, or one looped write test.
 5. **A `global-technician` column** in each matrix (finding 10).
-6. **The five UI-vs-API disagreements** in §2: a bug, or the intended design? And C3 #22, round 2 #49 / #50:
-   cut, or the replacement cells (findings 11, 12).
+6. **C3 #22, round 2 #49 / #50:** cut, or the replacement cells (findings 11, 12).
 
 ## Free coverage
 

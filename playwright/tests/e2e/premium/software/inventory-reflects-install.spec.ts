@@ -10,13 +10,17 @@
  *   - a package that is still pending, or that failed, never appears there, even
  *     after a fresh inventory read. A failed install is retried: Fleet makes
  *     `MaxSoftwareInstallAttempts` (3) attempts, reporting it pending between
- *     them, before the failure sticks — so the pending window is several minutes
- *     long and the Inventory is read inside it.
+ *     them, before the failure sticks — so the Inventory is read inside that
+ *     pending window, a minute or two long.
  *
  * Both run on the aarch64 Linux VM with packages built per run by
- * `helpers/deb.ts`. The failure is deterministic rather than contrived: the
- * package is built for `amd64`, and dpkg refuses an architecture the machine
- * isn't. Nothing reaches the host either way.
+ * `helpers/deb.ts`. The failing one is an ordinary package with a pre-install
+ * query that returns no rows (`SELECT 1 WHERE 1 = 0;`): orbit stops before the
+ * install script and Fleet records the install failed, so nothing reaches the
+ * host. Not a package dpkg refuses: a failed install *script* puts orbit's config
+ * loop into a backoff of up to 5 min, which stalls every other spec's installs and
+ * scripts on this VM; a failed pre-install query doesn't.
+ * TODO(fleetdm/fleet#54607): see docs/blocked-by-product-bugs.md.
  *
  * Premium only (installing software is premium), on the VMs fleet; see
  * `install-on-host.spec.ts`.
@@ -89,14 +93,15 @@ test.describe('Premium • Software • Inventory reflects installs', () => {
     request,
   }) => {
     const host = await requireRealHost(request, 'linux');
-    const name = `fleet-pw-wrong-arch-${Date.now().toString(36)}`;
-    // Built for amd64: the aarch64 VM's dpkg refuses it, so the install fails
-    // on the device without touching it.
+    const name = `fleet-pw-precondition-${Date.now().toString(36)}`;
+    // A pre-install query that can never pass: every attempt stops before the
+    // install script runs, and Fleet records it failed.
     const title = await uploadSoftwarePackageBuffer(
       request,
       vmsFleetId,
-      `${name}_1.0.0_amd64.deb`,
-      inertDeb(name, '1.0.0', 'amd64'),
+      `${name}_1.0.0_all.deb`,
+      inertDeb(name, '1.0.0'),
+      { preInstallQuery: 'SELECT 1 WHERE 1 = 0;' },
     );
 
     try {
@@ -105,7 +110,7 @@ test.describe('Premium • Software • Inventory reflects installs', () => {
       await hostDetails.library.install(name);
 
       // Queued is not installed. Fleet reports the install pending until its last
-      // attempt has failed, which is minutes away, so this read is inside that
+      // attempt has failed, a minute or more away, so this read is inside that
       // window — and confirmed to be.
       await inventoryFor(hostDetails, host.id, name);
       await expect(hostDetails.softwareNameLink(name)).toHaveCount(0);

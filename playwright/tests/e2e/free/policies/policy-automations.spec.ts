@@ -1,15 +1,27 @@
 /**
- * Free • Policies • automations. Same failing-policies webhook enable/persist
- * as premium (webhook automations exist on free); free has no team dropdown.
+ * Free • Policies • automations, both ways the policies list sets them:
  *
- * Mutates GLOBAL config (webhook_settings.failing_policies_webhook) — the
- * original is snapshotted + restored via the config helper. A global policy is
- * seeded/torn down via the API so the "Automations" button is enabled.
+ *   - **Scope-wide** — the same failing-policies webhook enable/persist as
+ *     premium (webhook automations exist on free); free has no team dropdown.
+ *     This mutates GLOBAL config (webhook_settings.failing_policies_webhook):
+ *     the original is snapshotted and restored via the config helper, and a
+ *     global policy is seeded so the "Automations" button is enabled.
+ *   - **One policy's** — a row's Automations cell opens the same "Manage
+ *     automations" modal premium's fleet policies have, but every policy on free
+ *     is global, and `PolicyAutomationsFields` gives a global policy only *Send
+ *     webhook or create ticket*: no Install software, Run script, Resend
+ *     configuration profile, Calendar event or Conditional access, and no
+ *     Continuous checkbox (they need a fleet policy, and their API fields are
+ *     `premium:"true"`). The premium twin is in
+ *     `premium/policies/policy-automations.spec.ts`.
  *
- * Grounded in frontend/pages/policies/ManagePoliciesPage + its AutomationsModal
- * / OtherWorkflowsModal.
+ * Grounded in frontend/pages/policies/ManagePoliciesPage — AutomationsModal /
+ * OtherWorkflowsModal, ManageAutomationsModal; `renderAutomationFilter` (the
+ * "Filter by automation" dropdown renders on premium only).
  */
 import { test, expect } from '@fixtures';
+import { FLEET_POLICY_AUTOMATION_KEYS } from '@pages';
+import { runNonce } from '@helpers/profiles';
 import {
   createPolicy,
   deletePolicies,
@@ -102,5 +114,37 @@ test.describe('Free • Policies • automations', () => {
     release();
     await expect(policiesList.automationsModal).toBeHidden();
     await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+  });
+});
+
+test.describe("Free • Policies • one policy's automations", () => {
+  test("a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds", async ({
+    dashboard,
+    policiesList,
+    page,
+    request,
+  }) => {
+    const policyName = `pw-policy-automations-${runNonce()}`;
+    const { id: policyId } = await createPolicy(request, { name: policyName });
+
+    try {
+      await dashboard.goto();
+      await dashboard.navbar.goToPolicies();
+      // The automation filter beside the platform one is premium's alone.
+      await expect(page.getByRole('combobox', { name: 'platform-dropdown' })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Filter by automation' })).toHaveCount(0);
+
+      await policiesList.openPolicyAutomations(policyName);
+      const fields = policiesList.policyAutomations;
+      await expect(fields.checkbox('ticket_webhook')).toBeVisible();
+      await expect(fields.allCheckboxes()).toHaveCount(1);
+      for (const key of FLEET_POLICY_AUTOMATION_KEYS.filter((k) => k !== 'ticket_webhook')) {
+        await expect(fields.checkbox(key), `${key} is a fleet policy's automation`).toHaveCount(0);
+      }
+      await expect(fields.continuousCheckbox).toHaveCount(0);
+      await policiesList.cancelPolicyAutomations();
+    } finally {
+      await deletePolicies(request, [policyId]);
+    }
   });
 });

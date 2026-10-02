@@ -111,6 +111,26 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 2 · Batch G — policy automations and retries
+
+The retries half of G: 9 source flows, re-reviewed against the specs beside them before anything was built,
+then built on `playwright/qawolf-round2-batch-g`. Detail in
+[round-2/G-out-of-band.md](round-2/G-out-of-band.md#what-landed-retries-half).
+
+**What the review changed.** The OS-specific policy flow never sets a platform (it saves the default
+`SELECT 1` under the name "Mac OS Query…"): cut as a duplicate of round 1's policy CRUD. The passing-script
+flow only added "a success isn't retried": cut, and the Python flow moved onto the failing script. The failing
+script and the continuous case became one test, since continuous needs the 3-attempt run first; the failing
+install became `install-on-host`'s failure twin. `patch-policy` avoids 7-Zip, which `library.spec` adds and
+deletes on Workstations alongside it.
+
+| slice | what |
+|---|---|
+| policy automation runs | new `premium/exclusive/policies/policy-automation-runs.spec.ts` (in `premium-exclusive`: Fleet queues an automation's attempts below every user-requested activity, so beside the install specs they starved — see the batch file), one test on the Ubuntu VM: a policy's failing Python script tried 3 times; a refetch with continuous off queues nothing; with Continuous ticked in the row's modal, the next refetch runs 3 more. Cleanup in an `afterEach`, since a timed-out test would otherwise leave a continuous failing policy firing on every refetch. Closes round 1's unbuilt C9 #17 too |
+| failing Deploy | new `premium/exclusive/software/deploy-install-retries.spec.ts` (first `install-on-host`'s second test): a Deploy whose install fails (an amd64 `.deb` on the aarch64 VM), 3 attempts by the install policy, then *Failed* — the policy-queued retry path, distinct from `inventory-reflects-install`'s direct one. In `premium-exclusive`: its installs queue below every user-requested one, and each failure backs orbit off (filed [fleetdm/fleet#54607](https://github.com/fleetdm/fleet/issues/54607)); `inventory-reflects-install` now fails with a pre-install query, which doesn't |
+| patch policies | new `premium/software/patch-policy.spec.ts` on Workstations — LocalSend (macOS) walked through every patch option and back off from Actions → Deploy, each save read back through the API; KeePassXC (Windows) has no Notify, and the server refuses Notify and both patch flags at once. `SoftwareDeploySelector` (component), `SoftwareTitleDetailPage.openDeploy`; `findPatchPolicy`; `findFmaIdBySlug` pages through the catalog (it had read 500 of 1,424) |
+| one policy's automations | `premium/policies/policy-automations.spec.ts` gains a row's *Manage automations* modal on Workstations: Install software, Run script and Continuous saved together, read back through the API, the row reading *2 automations*, the modal reopening on them; free's twin — the same modal offers only *Send webhook or create ticket*, and the automation filter is absent. `PolicyAutomationsFields` (component), `PoliciesListPage.openPolicyAutomations`; `createFleetPolicy` / `updateFleetPolicy` / `getFleetPolicy` |
+
 ## Round 2 · Batch F — provisioning-gated
 
 Reviewed against the 13 source flows, the suite and Fleet's 4.93 RC source before anything was built, then

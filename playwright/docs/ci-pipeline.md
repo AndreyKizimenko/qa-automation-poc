@@ -72,7 +72,8 @@ on one; the `testIgnore` matrix in `playwright.config.ts` is the source of truth
 every spec and can be wrong silently; a folder cannot.
 
 **The specs that hold a global lock run alone, as their own invocation — not as a dependent project.** The
-exclusive specs (script execution off) and gitops-mode live in their own projects on one worker, and CI runs
+exclusive specs (script execution off; a policy automation that needs the Ubuntu VM's queue to itself — Fleet
+runs its attempts below every user-requested activity) and gitops-mode live in their own projects on one worker, and CI runs
 each as a separate `playwright test` step after the main project, pass or fail, merging the blob reports into
 one HTML report. A Playwright *dependency* on the main project would have done the ordering but with the wrong
 failure semantics: one unrelated red test skips every dependent, and a local run of the small project would
@@ -93,7 +94,8 @@ attempts of two such tests are 90 of a run's roughly 300 worker-minutes and can 
 Locally there are no retries, so repeating one test shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
-minutes with its report written; the two single-worker steps stop at 15 each; the job limit sits above the sum.
+minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
+gitops-mode step and free's exclusive step at 15; the job limit sits above the sum.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.
 

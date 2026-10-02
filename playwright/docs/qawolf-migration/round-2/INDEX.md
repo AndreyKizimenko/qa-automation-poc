@@ -6,7 +6,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | Source flow | Batch | Target spec | Kind |
 |---|---|---|---|
 | `activity-feed/host-activity-show-configuration-profile-name-and-status` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts` | **new** |
-| `activity-feed/individual-activity-items-for-all-attempts-for-failed-software-scripts` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — merged with the script-retries flow: 3 attempts |
+| `activity-feed/individual-activity-items-for-all-attempts-for-failed-software-scripts` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — merged with the script-retries flow: 3 attempts |
 | `api-max-request-file-sizes/run-mdm-commands-with-file-size-3mb` | [A](A-no-setup.md) | `tests/api/premium/max-request-file-sizes.spec.ts` | augment |
 | `api-max-request-file-sizes/run-mdm-commands-with-files-less-than-2mb` | [A](A-no-setup.md) | `tests/api/premium/max-request-file-sizes.spec.ts` | augment |
 | `api-max-request-file-sizes/upload-multiple-batch-profiles-totaling-greater-2621mb` | [A](A-no-setup.md) | `tests/api/premium/max-request-file-sizes.spec.ts` | augment |
@@ -29,7 +29,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `controls/batch-script-on-hundreds-of-hosts` | [D](D-host-execution.md) | `tests/e2e/premium/controls/scripts/batch-run.spec.ts` | **new** |
 | `controls/controls-macos-custom-settings-upload-and-remove-configuration-profile` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts` | augment |
 | `controls/controls-macos-custom-settings-verify-warning-symbol-upon-deleting-custom-label-from-hosts` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts` | **new** |
-| `controls/controls-macos-updates-ui-validation` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/macos-updates.spec.ts` | **new** |
+| `controls/controls-macos-updates-ui-validation` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts` | **new** |
 | `controls/disable-script-execution-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
 | `controls/disable-script-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/exclusive/script-execution-disabled.spec.ts` | **new** (moved to the exclusive project) |
 | `controls/error-script-fails-in-ui-free [FREE]` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
@@ -40,8 +40,8 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `controls/scripts-execution-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `custom-icons/add-edit-and-delete-custom-icons` | [B](B-self-contained.md) | `tests/e2e/premium/software/custom-icons.spec.ts` | **new** |
 | `custom-icons/only-valid-icons-can-be-uploaded-size-dimensions-are-respected` | [B](B-self-contained.md) | `tests/e2e/premium/software/custom-icons.spec.ts` | **new** |
-| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-macos` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/ddm-conflict.spec.ts` | **new** |
-| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-windows` | [E](E-label-targeting.md) | `tests/e2e/premium/controls/os-updates/ddm-conflict.spec.ts` | **new** |
+| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-macos` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts` | **new** |
+| `custom-software-updates-ddm/cannot-deploy-custom-software-update-enforcement-declaration-ddm-when-manage-os-settings-are-set-windows` | [E](E-label-targeting.md) | `tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts` | **new** |
 | `dashboard/dashboard-widgets-hosts-active-ui-and-filters` | [A](A-no-setup.md) | `tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts` | **new** |
 | `dashboard/dashboard-widgets-vulnerability-exposure` | [A](A-no-setup.md) | `tests/e2e/premium/dashboard/fleet-scoped-cards.spec.ts` | **new** |
 | `dashboard/display-and-filter-platform-cards-global-admin` | [A](A-no-setup.md) | `tests/e2e/shared/dashboard/platform-cards.spec.ts` | **new** |
@@ -49,15 +49,15 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `dashboard/display-and-filter-platform-cards-global-maintainer` | [A](A-no-setup.md) | `tests/e2e/shared/dashboard/platform-cards.spec.ts` | **new** |
 | `dashboard/display-and-filter-platform-cards-global-observer` | [A](A-no-setup.md) | `tests/e2e/shared/dashboard/platform-cards.spec.ts` | **new** |
 | `fleet-maintained-filters/Fleet maintained apps filter` | [A](A-no-setup.md) | `tests/e2e/premium/software/fleet-maintained-filters.spec.ts` | **new** |
-| `fleet-maintained-filters/failing-policies/confirm-script-ran-in-ui-on-failing-host-policy` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — the passing case: one run |
+| `fleet-maintained-filters/failing-policies/confirm-script-ran-in-ui-on-failing-host-policy` | [G](G-out-of-band.md) | — | **cut · DUP** of `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` — the failing case shows the automation firing; only "a success isn't retried" is left (G decision 4) |
 | `general/disable-hosts-online-and-vulnerabilities-chart-fleets-only` | [B](B-self-contained.md) | `tests/e2e/premium/dashboard/historical-data-collection.spec.ts` | **new** — moved from A; A's `fleet-scoped-cards.spec.ts` keeps the read-only half |
 | `general/upload-edit-delete-custom-logo-from-fleet-organization-dark-mode` | [B](B-self-contained.md) | `tests/e2e/shared/settings/organization/custom-logo.spec.ts` | **new** |
 | `general/upload-edit-delete-custom-logo-from-fleet-organization-light-mode` | [B](B-self-contained.md) | `tests/e2e/shared/settings/organization/custom-logo.spec.ts` | **new** |
-| `gitops/gitops-gitops-mode-in-navbar-and-learn-more-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/navbar-and-links.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-controls` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-hosts` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-gated-areas-of-the-ui-settings` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/gated-surface.spec.ts` | **new** |
-| `gitops/gitops-mode-yaml-links-lead-to-repository-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/navbar-and-links.spec.ts` | **new** |
+| `gitops/gitops-gitops-mode-in-navbar-and-learn-more-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/01-indicator-and-links.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-controls` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-hosts` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-gated-areas-of-the-ui-settings` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts` | **new** |
+| `gitops/gitops-mode-yaml-links-lead-to-repository-url` | [G](G-out-of-band.md) | `tests/e2e/premium/gitops-mode/01-indicator-and-links.spec.ts` | **new** |
 | `hosts-details/host-details-software-filter-by-top-level-applications-installed-applications-appear-in-applications-filtered` | [C](C-host-reads.md) | `tests/e2e/shared/hosts/host-software.spec.ts` | augment |
 | `hosts/labels-include-all-install-software-on-hosts-that-include-all-labels-and-hosts-that-do-not-include-all-labels-do-not-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |
 | `hosts/labels-include-any-add-software-to-hosts-that-include-any-labels-and-hosts-that-do-not-include-any-labels-cannot-install-software` | [E](E-label-targeting.md) | `tests/e2e/premium/software/software-label-targets.spec.ts` | **new** |
@@ -70,17 +70,17 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `mdm/past-and-upcoming-host-activities-add-mdm-commands-macos-ios-ipados` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `mdm/run-mdm-command-macos-premium` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/mdm-commands.spec.ts` | **new** (shared — same surface on free) |
 | `packages/add-custom-package-that-only-contains-a-script` | [B](B-self-contained.md) | `tests/e2e/premium/software/script-only-package.spec.ts` | **new** |
-| `policies/enabling-continuous-software-and-script-automations-on-a-policy-retries-every-hour` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — refetch-driven (G decision 1) |
+| `policies/enabling-continuous-software-and-script-automations-on-a-policy-retries-every-hour` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — refetch-driven, one test with the 3-attempt case (G decisions 1, 3) |
 | `policies/global-activity-item-is-shown-when-a-policy-is-automatically-created-during-software-installer-add` | [D](D-host-execution.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | **new** |
-| `policies/global-admin-able-to-create-and-delete-an-os-specific-policy-premium` | [G](G-out-of-band.md) | `tests/e2e/shared/policies/policy-platform-targets.spec.ts` | **new** — CRUD half is a DUP; platform targeting on both tiers |
+| `policies/global-admin-able-to-create-and-delete-an-os-specific-policy-premium` | [G](G-out-of-band.md) | — | **cut · DUP** of `tests/e2e/premium/policies/policies.spec.ts` — never sets a platform; create → delete only (G decision 4) |
 | `policies/manage-all-automations-for-a-given-policy-at-once` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automations.spec.ts` | augment |
-| `policies/patch-policy-fleet-maintained-apps` | [G](G-out-of-band.md) | `tests/e2e/premium/software/patch-policy.spec.ts` | **new** — on Workstations (7-Zip is durable on VMs) |
+| `policies/patch-policy-fleet-maintained-apps` | [G](G-out-of-band.md) | `tests/e2e/premium/software/patch-policy.spec.ts` | **new** — on Workstations, with Fleet-maintained apps no other spec adds |
 | `policies/policies-include-all` | [E](E-label-targeting.md) | `tests/e2e/premium/policies/policy-label-targets.spec.ts` | **new** |
 | `policies/report-include-all` | [E](E-label-targeting.md) | `tests/e2e/premium/reports/report-label-targets.spec.ts` | **new** |
-| `policies/script-run-retries-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — 3 attempts in total |
-| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — a per-run `.deb` whose install script exits 1 |
+| `policies/script-run-retries-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — 3 attempts in total |
+| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts` | **new** — a Deploy whose per-run amd64 `.deb` the VM refuses (G decision 5; in `premium-exclusive`, fleetdm/fleet#54607) |
 | `python/run-python-script-on-macos-host` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
-| `python/run-python-script-with-policy-automation-on-macos-host` | [G](G-out-of-band.md) | `tests/e2e/premium/policies/policy-automation-runs.spec.ts` | **new** — on the Ubuntu VM: the Macs have no `python3` (G decision 2) |
+| `python/run-python-script-with-policy-automation-on-macos-host` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — the automation's script is Python, on the Ubuntu VM: the Macs have no `python3` (G decisions 2, 4) |
 | `queries-global-users/global-admin-able-to-select-teams-target-for-query-premium` | [A](A-no-setup.md) | `tests/e2e/premium/reports/reports.spec.ts` | augment · check DUP |
 | `reports/reports-filter-by-newer-results` | [C](C-host-reads.md) | `tests/e2e/shared/hosts/host-reports-tab.spec.ts` | augment · **retargeted** |
 | `reports/reports-filter-by-newer-results [FREE]` | [C](C-host-reads.md) | `tests/e2e/shared/hosts/host-reports-tab.spec.ts` | augment · **retargeted** |

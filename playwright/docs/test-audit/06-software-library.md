@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 15 files · **Test declarations:** 32 (→ 83 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 34 (→ 85 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -96,6 +96,8 @@ locator ambiguous. The claims in force today:
 | SWL-30 | `premium/software/script-only-package.spec.ts` | a `.sh` is added as a script-only package and removed again | UI+API | ☐ |
 | SWL-31 | `premium/software/package-scripts.spec.ts` | the installer downloads byte-identical and Advanced options shows its stored scripts | UI+API | ☐ |
 | SWL-32 | `premium/software/no-teams-views.spec.ts` | All fleets sticks from Hosts to Policies, and Controls falls back to a fleet | UI | ☐ |
+| SWL-33 | `premium/software/patch-policy.spec.ts` | a macOS app: each patch option stores its own policy, and unticking Patch removes it | UI+API | ☐ |
+| SWL-34 | `premium/software/patch-policy.spec.ts` | a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1468,6 +1470,82 @@ other:
 - *Coverage gaps:* the walk never returns to another page after Controls, so nothing proves the fallback doesn't **poison** the remembered scope for the next navigation — which is precisely the localStorage hazard [`CLAUDE.md`](../../CLAUDE.md) warns about ("some preserve the last-used team via localStorage and render the wrong scope even though the URL is correct"). Settings, Queries and the dashboard itself are outside the sweep. The assertion is on the dropdown **label** only: no page content, and no `fleet_id` check in the URL on the four pages that do carry the scope.
 - *Redundancy:* shares its premise with SWL-09 on a different axis; the navbar hops themselves are exercised by every other area's specs.
 - *Efficiency / smells:* the test pulls six page-object fixtures (`dashboard`, `hostsList`, `softwareTitles`, `reportsList`, `policiesList`, `controls`) to make label-only assertions, and reaches `controls.page` through the POM for the URL check. It is a navbar / team-dropdown test living in a file named for "Software • no teams views" — the placement is the weakest thing about it.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWL-33 · Premium • Software • Patch policies › a macOS app: each patch option stores its own policy, and unticking Patch removes it
+
+- **File:** [`playwright/tests/e2e/premium/software/patch-policy.spec.ts`](../../tests/e2e/premium/software/patch-policy.spec.ts)
+- **Grep:** `npx playwright test --project=premium patch-policy -g "macOS"`
+- **Project:** premium · **Scope:** Workstations (no hosts — nothing is ever patched) · **Mode:** UI+API
+- **Source:** QA Wolf `policies/patch-policy-fleet-maintained-apps` (round 2, batch G)
+- **Preconditions (API):** LocalSend (`localsend/darwin`, claimed by no other spec) added to Workstations.
+- **Data created:** the title and its patch policy, deleted in the `finally` (policy first); the Workstations wipe removes what a dead run leaves.
+
+**Flow**
+
+1. ☐ Dashboard → **Software** → **Workstations** → **Library** → search → the title.
+   - ✅ *(API)* no patch policy yet.
+2. ☐ **Actions → Deploy** → tick **Patch**.
+   - ✅ *(UI)* **Patch when app is closed** is chosen by default. **Save** → toast `Successfully updated deploy options.`
+   - ✅ *(API)* a `patch` policy for the title, named `macOS - LocalSend up to date`, platform `darwin`, installing the title, `patch_when_closed` and continuous on, `notify_before_patching` off.
+3. ☐ Deploy → **Force patch** → **End user experience** (it opens on *Patch immediately*) → **Notify before patching** → **Save**.
+   - ✅ *(UI)* the modal reopened on Patch ticked and *Patch when app is closed*.
+   - ✅ *(API)* installs, `notify_before_patching` and continuous on, `patch_when_closed` off.
+4. ☐ Deploy → End user experience → **Patch immediately** → **Save**.
+   - ✅ *(UI)* reopened on Force patch with *Notify before patching*.
+   - ✅ *(API)* installs; all three flags off.
+5. ☐ Deploy → **End user initiated (manual)** → **Save**.
+   - ✅ *(UI)* reopened on Force patch; the End user experience dropdown goes once manual is chosen.
+   - ✅ *(API)* the policy stays, with **no install automation** and every flag off.
+6. ☐ Deploy → untick **Patch** → **Save**.
+   - ✅ *(UI)* reopened on manual; the options go once Patch is unticked.
+   - ✅ *(API)* no patch policy for the title.
+
+**Assessment**
+- *Value:* the only coverage of patch policies — a 4.9x feature whose options map onto three policy flags plus whether the policy installs at all, decided in the frontend (`getPatchPolicyFlags`, `DeployModal`) and stored server-side. Each step reopens the modal on what was saved, so a modal that writes one thing and shows another fails.
+- *Coverage gaps:* the policy's query (it fails on any version older than the newest Fleet maintains) isn't run on a host; Force install, the other Deploy checkbox, isn't touched; patching from the Add-software page (the same selector) isn't.
+- *Efficiency:* no host; well under a minute, most of it adding the app.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWL-34 · Premium • Software • Patch policies › a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once
+
+- **File:** [`playwright/tests/e2e/premium/software/patch-policy.spec.ts`](../../tests/e2e/premium/software/patch-policy.spec.ts)
+- **Grep:** `npx playwright test --project=premium patch-policy -g "Windows"`
+- **Project:** premium · **Scope:** Workstations · **Mode:** UI+API
+- **Preconditions (API):** KeePassXC (`keepassxc/windows`, claimed by no other spec) added to Workstations — a different app from SWL-33's, so the two never share a title name in the Library.
+
+**Flow**
+
+1. ☐ Software → Workstations → Library → the title → **Actions → Deploy** → tick **Patch** → **Force patch**.
+   - ✅ *(UI)* no End user experience dropdown — Notify is macOS-only. **Save** → toast.
+   - ✅ *(API)* a `patch` policy named `Windows - KeePassXC up to date`, platform `windows`, installing the title, every flag off.
+2. ☐ *(API)* `PATCH` the policy with `notify_before_patching: true`.
+   - ✅ *(API)* 400 — *"notify_before_patching" is only available for macOS Fleet-maintained apps.*
+3. ☐ *(API)* `PATCH` it with `patch_when_closed` and `notify_before_patching` both true.
+   - ✅ *(API)* 400 — *Only one of "patch_when_closed" or "notify_before_patching" can be set to true*; the policy is as it was.
+
+**Assessment**
+- *Value:* the platform half of the contract, and the server enforcing what the UI only hides.
+- *Coverage gaps:* the both-flags refusal is platform-independent and only checked here.
+- *Efficiency:* no host; under a minute.
 
 **Notes (Andrey)**
 ```

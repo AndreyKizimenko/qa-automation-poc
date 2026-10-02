@@ -149,6 +149,10 @@ A change isn't done until the docs describing it are current, in the same commit
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
   it. A refetch also re-runs a host's policies immediately.
+- **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
+  `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
+  config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
+  (fleetdm/fleet#54607). Where the script failure itself is the point, the spec goes in `exclusive/`.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.
 
@@ -157,7 +161,8 @@ A change isn't done until the docs describing it are current, in the same commit
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot and restore global config inside the test** (`getAppConfig` / `patchAppConfig` in
   `helpers/api/config.ts`), not in a hook. A spec that flips a switch other specs depend on goes in
-  `tests/e2e/<tier>/exclusive/`.
+  `tests/e2e/<tier>/exclusive/`, and so does one that needs a real VM's queue to itself: Fleet runs a policy
+  automation's scripts and installs below every user-requested activity, so beside the install specs they starve.
 - **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
   `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
 

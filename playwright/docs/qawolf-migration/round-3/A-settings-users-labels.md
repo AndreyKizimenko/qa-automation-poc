@@ -68,8 +68,9 @@ long-term, and write it into the table. Already found:
 - **C10 #10 needs a suite fix first.** `expectedRoleDisplay` (`helpers/api/static-users.ts:333`) returns
   "Admin" for `team-admin`, but Fleet shows **"Various"**: `generateRole` has no all-admin branch
   (`AccountSidePanel` `helpers.tsx:461-481`). Fleets reads "2 fleets" with a tooltip, premium only
-  (`AccountSidePanel.tsx:136`). Check with Andrey whether "Various" for a user who is admin everywhere they
-  are anything is intended. It reads like a Fleet bug.
+  (`AccountSidePanel.tsx:136`). It's a Fleet bug, filed as
+  [fleetdm/fleet#54620](https://github.com/fleetdm/fleet/issues/54620) (2026-10-02): build the row asserting
+  "Admin", and skip that one check with `TODO(fleetdm/fleet#54620)` and a row in `docs/blocked-by-product-bugs.md` until it's fixed.
 - **C5 #8: don't port the flow.** It seeds a random actor and walks ten pages. Build it around a disposable
   actor (§3).
 - **QA Wolf's copy has drifted**: "Create fleet" is now "Add fleet", and the "Manage enroll secret" button is
@@ -208,7 +209,6 @@ Andrey's call. [Batch B](B-policy-report-software-forms.md)'s C3 #15 would use t
    re-enroll with, using the marker-only cleanup (§2.2)?
 3. **Fleet lifecycle:** cut, or a `pw-*` throwaway fleet plus a sweep, turning `historical-data-collection`'s
    precedent into a rule (§2.3)?
-4. **"Various"** as the role of a user who is admin on every fleet they belong to: intended, or a bug (§1)?
 
 ## Free coverage
 

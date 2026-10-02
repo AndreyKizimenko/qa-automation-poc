@@ -417,6 +417,12 @@ export async function hostVulnerableVersions(
 export interface PackageScripts {
   installScript?: string;
   uninstallScript?: string;
+  /**
+   * An osquery query the host runs before installing: no rows, and orbit stops
+   * there and Fleet records a failed install — without running the install
+   * script, and without the error a failed install script hands orbit.
+   */
+  preInstallQuery?: string;
 }
 
 /**
@@ -425,6 +431,10 @@ export interface PackageScripts {
  * whose package is decided at run time. Unlike that helper a 409 is an error:
  * a run-time package is named to be new, so a clash means a leftover the caller
  * should hear about.
+ *
+ * `automaticInstall` is the upload form's **Deploy**: Fleet also creates an
+ * `[Install software] <title> (<ext>)` policy on the fleet whose automation
+ * installs the package on every host that fails it — every host missing it.
  */
 export async function uploadSoftwarePackageBuffer(
   request: APIRequestContext,
@@ -432,6 +442,7 @@ export async function uploadSoftwarePackageBuffer(
   fileName: string,
   buffer: Buffer,
   scripts: PackageScripts = {},
+  { automaticInstall = false }: { automaticInstall?: boolean } = {},
 ): Promise<SoftwarePackageRef> {
   const res = await request.post(apiUrl('software/package'), {
     headers: authHeaders(),
@@ -440,6 +451,8 @@ export async function uploadSoftwarePackageBuffer(
       ...(fleetId ? { fleet_id: String(fleetId) } : {}),
       ...(scripts.installScript ? { install_script: scripts.installScript } : {}),
       ...(scripts.uninstallScript ? { uninstall_script: scripts.uninstallScript } : {}),
+      ...(scripts.preInstallQuery ? { pre_install_query: scripts.preInstallQuery } : {}),
+      ...(automaticInstall ? { automatic_install: 'true' } : {}),
     },
     timeout: 120_000,
   });
