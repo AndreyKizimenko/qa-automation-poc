@@ -8,14 +8,14 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 
 | ID | Spec | Test | Mode | Manual? |
 |---|---|---|---|---|
-| MISC-01 | `premium/labels/labels.spec.ts` | Premium • Labels • Dynamic label lifecycle › create | UI | ☐ |
-| MISC-02 | `premium/labels/labels.spec.ts` | Premium • Labels • Dynamic label lifecycle › edit | UI | ☐ |
-| MISC-03 | `premium/labels/labels.spec.ts` | Premium • Labels • Dynamic label lifecycle › delete | UI | ☐ |
-| MISC-04 | `premium/labels/labels.spec.ts` | Premium • Labels • Dynamic label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
-| MISC-05 | `premium/labels/labels.spec.ts` | Premium • Labels • Manual label lifecycle › create | UI+API | ☐ |
-| MISC-06 | `premium/labels/labels.spec.ts` | Premium • Labels • Manual label lifecycle › edit | UI | ☐ |
-| MISC-07 | `premium/labels/labels.spec.ts` | Premium • Labels • Manual label lifecycle › delete | UI | ☐ |
-| MISC-08 | `premium/labels/labels.spec.ts` | Premium • Labels • Manual label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
+| MISC-01 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › create | UI | ☐ |
+| MISC-02 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › edit to a name with special characters | UI | ☐ |
+| MISC-03 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › delete | UI | ☐ |
+| MISC-04 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
+| MISC-05 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › create | UI+API | ☐ |
+| MISC-06 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › edit | UI | ☐ |
+| MISC-07 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › delete | UI | ☐ |
+| MISC-08 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
 | MISC-09 | `premium/labels/sort-view.spec.ts` | the Name column sorts ascending by default and toggles to descending | UI | ☐ |
 | MISC-10 | `premium/labels/sort-view.spec.ts` | "View all hosts" lands on the Hosts list filtered by that label | UI | ☐ |
 | MISC-11 | `premium/labels/role-access.spec.ts` | global observer cannot add labels and can only view hosts | UI | ☐ |
@@ -42,13 +42,13 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 
 ---
 
-### MISC-01 · Premium • Labels • Dynamic label lifecycle › create
+### MISC-01 · Labels • Dynamic label lifecycle › create
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Dynamic label lifecycle › create"`
-- **Project:** premium · **Scopes:** none — labels are created globally (no team dropdown)
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Dynamic label lifecycle › create"`
+- **Project:** premium **and** free · **Scopes:** none — labels are created globally (no team dropdown)
 - **Mode:** UI · **Isolation:** serial describe, step 1 of 4 (shares `name` / `editedName` closure vars with edit/delete/activity)
-- **Preconditions:** `beforeAll` opens a cookie-less API context (`baseURL` from `FLEET_URL`) and calls `deleteLabelsMatching(ctx, 'pw-label-dyn')` — `GET /labels?per_page=500`, then `DELETE /labels/id/:id` for every non-builtin label whose name contains the marker. Fleet's cleanup projects do **not** wipe labels, so this is the spec's own self-heal. Instance carries ~27 gitops labels; list is client-side-paginated at 20/page, sorted by name.
+- **Preconditions:** `beforeAll` opens a cookie-less API context (`baseURL` from `FLEET_URL`) and calls `deleteLabelsMatching(ctx, 'pw-label-dyn')` — `GET /labels?per_page=500`, then `DELETE /labels/id/:id` for every non-builtin label whose name contains the marker. The cleanup projects sweep `pw-*` labels on premium only (the VMs-fleet step, skipped on free), so this is the spec's own self-heal on free. Each instance carries 20-odd gitops labels; list is client-side-paginated at 20/page, sorted by name.
 - **Data created:** label `pw-label-dyn-<timestamp>` — renamed by MISC-02, removed by MISC-03
 
 **Flow**
@@ -84,13 +84,13 @@ other:
 
 ---
 
-### MISC-02 · Premium • Labels • Dynamic label lifecycle › edit
+### MISC-02 · Labels • Dynamic label lifecycle › edit to a name with special characters
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Dynamic label lifecycle › edit"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 2 of 4 (depends on MISC-01)
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Dynamic label lifecycle › edit to a name"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 2 of 4 (depends on MISC-01)
 - **Preconditions:** the label from MISC-01 exists
-- **Data created:** renames the label to `<name>-edited`
+- **Data created:** renames the label to `<name> !@#$%^&*()_-+=` (round 3 batch A, C1 #14: a name with special characters)
 
 **Flow**
 
@@ -99,13 +99,13 @@ other:
    - ✅ *(UI)* URL matches `/labels/<id>`.
    - ✅ *(UI)* **Name** field pre-populated with the original name.
    - ✅ *(UI)* **Description** field pre-populated with the original description.
-3. ☐ Overwrite **Name** → `<name>-edited`, **Description** → `… (edited)`; click **Save**.
+3. ☐ Overwrite **Name** → `<name> !@#$%^&*()_-+=`, **Description** → `… (edited)`; click **Save**.
    - ✅ *(UI)* Success toast `Label updated successfully.`
 4. ☐ Re-open `/labels/manage` and page to the renamed row.
-   - ✅ *(UI)* Row for the edited name is visible and contains the edited description.
+   - ✅ *(UI)* Row for the edited name is visible, shows the special-characters name verbatim, and contains the edited description.
 
 **Assessment**
-- *Value:* the strongest assertion in the file — the edit form is verified to *load* existing values (name + description), not just accept new ones.
+- *Value:* the strongest assertion in the file — the edit form is verified to *load* existing values (name + description), not just accept new ones. The special-characters name then rides through the list, the delete toast (MISC-03) and the activity feed (MISC-04), which is QA Wolf's special-characters flow folded in rather than a lifecycle of its own.
 - *Coverage gaps:* the label's type and query are not re-asserted after edit; whether a Dynamic label can be converted to Manual (or vice versa) is untested; the edit form's platform field is never read back.
 - *Redundancy:* mirrored 1:1 by MISC-06.
 - *Efficiency / smells:* none material. The pre-populated-value assertions are exactly what similar CRUD specs in the suite usually omit — worth copying elsewhere.
@@ -120,11 +120,11 @@ other:
 
 ---
 
-### MISC-03 · Premium • Labels • Dynamic label lifecycle › delete
+### MISC-03 · Labels • Dynamic label lifecycle › delete
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Dynamic label lifecycle › delete"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 3 of 4 · this is the lifecycle's cleanup
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Dynamic label lifecycle › delete"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 3 of 4 · this is the lifecycle's cleanup
 - **Preconditions:** renamed label from MISC-02 exists
 
 **Flow**
@@ -133,14 +133,14 @@ other:
    - ✅ *(UI)* The `Delete label` modal is visible (`.modal__modal_container` filtered by title text — Fleet's Modal renders a role-less title).
 2. ☐ Click **Delete** inside the modal.
    - ✅ *(UI)* Success toast `Successfully deleted <editedName>.`
-3. ☐ Re-open `/labels/manage`.
-   - ✅ *(UI)* No row matching the edited name — `rowFor(name)` has count 0.
+3. ☐ Re-open `/labels/manage` and page through the whole list.
+   - ✅ *(UI)* No row matching the edited name on any page — `locateRow(editedName)` returns a locator with count 0.
 
 **Assessment**
 - *Value:* confirms the delete confirmation modal wires to a real delete and the toast names the label.
 - *Coverage gaps:* the modal's **Cancel** path is untested; label deletion's side effects (hosts losing the label, software/profile targeting that referenced it) are untested.
 - *Redundancy:* mirrored by MISC-07.
-- *Efficiency / smells:* **false-pass risk** — the final assertion uses `rowFor()` ([`labels.spec.ts:91`](../../tests/e2e/premium/labels/labels.spec.ts)), which only looks at **page 1**, while create/edit deliberately use the paging `locateRow()`. With ~27 gitops labels the `pw-label-…` name can sit on page 2, so a delete that silently failed would still pass. Use `locateRow` (assert the returned locator has count 0) or a `GET /labels` check.
+- *Efficiency / smells:* the absence check pages the whole list (`locateRow`), so it costs a page walk; it used to read page 1 only and could pass on a failed delete (FINDINGS #1, fixed 2026-10-02).
 
 **Notes (Andrey)**
 ```
@@ -152,11 +152,11 @@ other:
 
 ---
 
-### MISC-04 · Premium • Labels • Dynamic label lifecycle › activity feed shows create → edit → delete
+### MISC-04 · Labels • Dynamic label lifecycle › activity feed shows create → edit → delete
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Dynamic label lifecycle › activity feed shows create → edit → delete"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 4 of 4 (needs MISC-01…03 to have run)
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Dynamic label lifecycle › activity feed shows create → edit → delete"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 4 of 4 (needs MISC-01…03 to have run)
 
 **Flow**
 
@@ -184,23 +184,24 @@ other:
 
 ---
 
-### MISC-05 · Premium • Labels • Manual label lifecycle › create
+### MISC-05 · Labels • Manual label lifecycle › create
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Manual label lifecycle › create"`
-- **Project:** premium · **Mode:** UI+API (API used for the host precondition only) · **Isolation:** serial step 1 of 4 in the second describe
-- **Preconditions:** `beforeAll` purges `pw-label-man*` labels via the API (same helper as MISC-01). `firstHostDisplayName(request)` → `GET /hosts?per_page=1` supplies a host display name; `test.skip(!hostName)` if the instance has none. `pageHealth.disable()` — typing in the host picker makes Fleet log a benign 4xx (`Invalid usage: missing required parameter(s)`) to the console.
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › create"`
+- **Project:** premium **and** free · **Mode:** UI+API (API used for the host precondition only) · **Isolation:** serial step 1 of 4 in the second describe
+- **Preconditions:** `beforeAll` purges `pw-label-man*` labels via the API (same helper as MISC-01). `findSimulations(request, 'linux', 1, 2)` picks an online Linux **simulation** (slice 2, registered in `helpers/api/hosts.ts`) and `getHostDisplayName` reads its name; the test fails if the pool has none. Never a real VM: on free the VMs share the label's global scope. `pageHealth.disable()` — typing in the host picker makes Fleet log a benign 4xx (`Invalid usage: missing required parameter(s)`) to the console.
 - **Data created:** label `pw-label-man-<timestamp>` with one host member
 
 **Flow**
 
-1. ☐ *(API precondition)* Fetch the first host's display name.
+1. ☐ *(API precondition)* Pick a Linux simulation and read its display name.
 2. ☐ Open `/labels/manage` via URL → click **Add label** → URL `/labels/new`.
 3. ☐ Click the **Manual** radio label.
    - ✅ *(UI)* The `Manual` radio is checked.
 4. ☐ Fill **Name** / **Description**.
 5. ☐ Type the host's display name into the host **search box**, then click the first result.
    - ✅ *(UI)* First search result (`.display_name__cell`) is visible (`addHost`).
+   - ✅ *(UI)* The host the picker selected is the one searched for (`addHost`'s return value).
    - ✅ *(UI)* The clicked host now appears in the **selected-hosts** table (`.targets-input__hosts-selected-table`) — guards against saving a manual label with zero hosts, which the server rejects with a 422.
 6. ☐ Click **Save**.
    - ✅ *(UI)* Success toast `Label added successfully.`
@@ -212,7 +213,7 @@ other:
 - *Value:* the only coverage of the manual-label host picker (search → select → selected table), which is a distinct Fleet component (`TargetsInput`) from the dynamic form.
 - *Coverage gaps:* **membership is never verified after save** — nothing asserts the label has 1 host (no Hosts-count column read, no "View all hosts" follow-through, no `GET /labels/:id/hosts`). ⚠️ unclear whether the labels table even has a host-count column. Also untested: removing a host from a manual label, adding several hosts, and the empty-selection 422 path the POM comment describes.
 - *Redundancy:* steps 2, 4, 6, 7 duplicate MISC-01 exactly.
-- *Efficiency / smells:* `addHost()` **returns** the selected host name and the spec discards it ([`labels.spec.ts:135`](../../tests/e2e/premium/labels/labels.spec.ts)) — if the picker selected a *different* host than the one searched for, the test still passes. `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. `.display_name__cell` / `.targets-input__*` are raw class locators (documented in the POM, acceptable) but `.first()` on the search results is a tolerated shortcut.
+- *Efficiency / smells:* `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. `.display_name__cell` / `.targets-input__*` are raw class locators (documented in the POM, acceptable) but `.first()` on the search results is a tolerated shortcut.
 
 **Notes (Andrey)**
 ```
@@ -224,11 +225,11 @@ other:
 
 ---
 
-### MISC-06 · Premium • Labels • Manual label lifecycle › edit
+### MISC-06 · Labels • Manual label lifecycle › edit
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Manual label lifecycle › edit"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 2 of 4
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › edit"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 2 of 4
 
 **Flow** — byte-for-byte the same as MISC-02, against the manual label.
 
@@ -255,11 +256,11 @@ other:
 
 ---
 
-### MISC-07 · Premium • Labels • Manual label lifecycle › delete
+### MISC-07 · Labels • Manual label lifecycle › delete
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Manual label lifecycle › delete"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 3 of 4 · lifecycle cleanup
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › delete"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 3 of 4 · lifecycle cleanup
 
 **Flow** — identical to MISC-03.
 
@@ -267,14 +268,14 @@ other:
    - ✅ *(UI)* `Delete label` modal visible.
 2. ☐ Confirm **Delete**.
    - ✅ *(UI)* Toast `Successfully deleted <editedName>.`
-3. ☐ Re-open the list.
-   - ✅ *(UI)* `rowFor(editedName)` count 0.
+3. ☐ Re-open the list and page through it.
+   - ✅ *(UI)* `locateRow(editedName)` count 0 on every page.
 
 **Assessment**
 - *Value:* duplicate of MISC-03; adds nothing manual-specific.
 - *Coverage gaps:* deleting a manual label with members doesn't assert the member host loses the label.
 - *Redundancy:* **direct duplicate of MISC-03.**
-- *Efficiency / smells:* same page-1-only false-pass as MISC-03 ([`labels.spec.ts:175`](../../tests/e2e/premium/labels/labels.spec.ts)).
+- *Efficiency / smells:* none beyond the duplication; the absence check pages the list, as MISC-03's does.
 
 **Notes (Andrey)**
 ```
@@ -286,11 +287,11 @@ other:
 
 ---
 
-### MISC-08 · Premium • Labels • Manual label lifecycle › activity feed shows create → edit → delete
+### MISC-08 · Labels • Manual label lifecycle › activity feed shows create → edit → delete
 
-- **File:** [`playwright/tests/e2e/premium/labels/labels.spec.ts`](../../tests/e2e/premium/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Premium • Labels • Manual label lifecycle › activity feed shows create → edit → delete"`
-- **Project:** premium · **Mode:** UI · **Isolation:** serial step 4 of 4
+- **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › activity feed shows create → edit → delete"`
+- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 4 of 4
 
 **Flow** — identical to MISC-04, with the manual label's names.
 
@@ -1214,9 +1215,9 @@ Mostly healthy. The API is used in three distinct ways here and only one is a sh
 
 **Quick wins**
 
-1. Fix the page-1-only delete assertions — use `locateRow()` (or `GET /labels`) at [`labels.spec.ts:91`](../../tests/e2e/premium/labels/labels.spec.ts) and [`:175`](../../tests/e2e/premium/labels/labels.spec.ts); today a failed delete can pass green.
+1. ~~Fix the page-1-only delete assertions~~ — done 2026-10-02: both deletes page the list with `locateRow()`.
 2. Give MISC-21 a positive control (assert the settings sidebar rendered) at [`paywalls.spec.ts:58-61`](../../tests/e2e/free/paywalls.spec.ts) — it is currently vacuous.
-3. Assert `addHost()`'s return value equals the requested host name at [`labels.spec.ts:135`](../../tests/e2e/premium/labels/labels.spec.ts), and follow up with a **View all hosts** membership check so manual labels are actually verified.
+3. ~~Assert `addHost()`'s return value~~ (done 2026-10-02); still open: a **View all hosts** membership check so manual labels are actually verified.
 4. Delete MISC-08 (duplicate of MISC-04) and reduce MISC-06/07 to the manual-specific parts — removes one dashboard feed walk and two redundant CRUD round-trips from every premium run.
 5. Tighten `PackEditPage.saveButton` to an exact name and swap `page.getByText(packName)).toBeHidden()` for `packsList.packRow(name)).toHaveCount(0)` ([`PackEditPage.ts:38`](../../pages/packs/PackEditPage.ts), [`packs.spec.ts:53`](../../tests/e2e/shared/packs/packs.spec.ts)).
 

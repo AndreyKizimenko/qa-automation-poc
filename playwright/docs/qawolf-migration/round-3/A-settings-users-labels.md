@@ -247,4 +247,6 @@ Unassigned persistence, My account's Fleets line, fleet lifecycle.
 
 ## What landed
 
-*Nothing yet.*
+| gaps | spec | what |
+|---|---|---|
+| C1 #2, C1 #14 | `shared/labels/labels.spec.ts` (moved from `premium/labels/`) | Dynamic + Manual lifecycles now run on free too. Dynamic's edit renames to `<name> !@#$%^&*()_-+=`, which the list, delete toast and activity feed then carry. Manual takes `findSimulations` Linux slice 2 (`getHostDisplayName` replaces `firstHostDisplayName`), and asserts the picker chose that host. Both deletes check absence with the paging `locateRow` (test-audit FINDINGS #1) |

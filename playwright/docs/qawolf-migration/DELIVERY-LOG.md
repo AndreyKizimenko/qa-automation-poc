@@ -111,6 +111,16 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch A — settings, users, labels, account
+
+19 gaps reviewed on `playwright/qawolf-round3-batch-a` (2026-10-02): 16 built, 3 cut (the Labels Description
+sort, both Fleet web address flows). Detail and Andrey's decisions in
+[round-3/A-settings-users-labels.md](round-3/A-settings-users-labels.md#what-landed).
+
+| slice | what |
+|---|---|
+| labels on free | `premium/labels/labels.spec.ts` → `shared/labels/labels.spec.ts` (free had no label coverage); the Dynamic lifecycle renames to a special-characters name (C1 #14 folded); the Manual label takes a Linux simulation, not the first host; both deletes page the list |
+
 ## Round 2 · Batch G — policy automations and retries
 
 The retries half of G: 9 source flows, re-reviewed against the specs beside them before anything was built,
