@@ -3,7 +3,7 @@
 **24 gaps → about 11 specs, nearly all augments, after merges.** `Policy automations` · `Policy and report saves`
 · `Report settings` · `Software Advanced options` · `Secrets in scripts`
 
-**Status: reviewed and decided 2026-10-02; building** (planned 2026-10-01).
+**Status: built 2026-10-02 — [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82), awaiting its branch run** (planned 2026-10-01).
 
 > ## ▶ Start here
 >
