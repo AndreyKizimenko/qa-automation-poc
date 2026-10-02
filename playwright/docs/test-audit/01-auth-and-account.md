@@ -1,6 +1,6 @@
 # Auth & account — test audit
 
-**Specs covered:** 9 files · **Test declarations:** 18 · **Projects:** premium / free
+**Specs covered:** 9 files · **Test declarations:** 19 · **Projects:** premium / free
 
 This area covers everything before and around the app shell: the `/login` form (password
 and SSO), client-side form validation, sign-out, the forgot-password entry point, and the
@@ -41,8 +41,9 @@ re-renders (and detaches) the login inputs.
 | AUTH-14 | `shared/account/change-password.spec.ts` | My Account change password › rotate + re-login | UI+API | ☐ |
 | AUTH-15 | `shared/account/theme.spec.ts` | Account • theme › Dark applies + persists | UI | ☐ |
 | AUTH-16 | `free/account/my-account.spec.ts` | Free • My Account › 3 static roles (loop) | UI | ☐ |
-| AUTH-17 | `premium/account/my-account.spec.ts` | Premium • My Account › 7 static roles (loop) | UI | ☐ |
+| AUTH-17 | `premium/account/my-account.spec.ts` | Premium • My Account › 8 static roles (loop) | UI | ☐ |
 | AUTH-18 | `shared/account/theme.spec.ts` | Account • theme › System follows the OS live, Light pins against it | UI | ☐ |
+| AUTH-19 | `premium/account/my-account.spec.ts` | Premium • My Account › team-admin's Fleets tooltip names both of their fleets | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some
 assertions/setup via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -579,9 +580,9 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/account/my-account.spec.ts`](../../tests/e2e/premium/account/my-account.spec.ts)
 - **Grep:** `npx playwright test -g "sees their email, name, role, and fleets"`
-- **Project:** premium only · **Roles (loop → 7 tests):** `global-admin`, `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician`, `ws-maintainer`, `ws-observer`
+- **Project:** premium only · **Roles (loop → 8 tests):** `team-admin`, `global-admin`, `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician`, `ws-maintainer`, `ws-observer`
 - **Mode:** UI · **Isolation:** per-role context via `withStaticUser`; admin storage untouched
-- **Preconditions:** all seven static humans pre-provisioned on premium; `FLEET_STATIC_USER_PASSWORD` set; the `Workstations` fleet exists (gitops)
+- **Preconditions:** all eight static humans pre-provisioned on premium; `FLEET_STATIC_USER_PASSWORD` set; the `Workstations` and `VMs` fleets exist (gitops)
 - **Data created:** cached session file `.auth/static-premium-<key>.json` per role
 - **Cross-link:** free mirror is **AUTH-16**
 
@@ -592,12 +593,12 @@ other:
 3. ☐ Read the profile form and side panel.
    - ✅ *(UI)* **Email** input value equals the catalog email.
    - ✅ *(UI)* **Full name** input value equals the catalog name.
-   - ✅ *(UI)* Side-panel **Role** `<dd>` text equals `expectedRoleDisplay(spec)` — `Admin` / `Maintainer` / `Observer` / `Observer+` / `Technician`, mirroring Fleet's `capitalizeRole`.
-   - ✅ *(UI)* Side-panel **Fleets** `<dd>` text equals `expectedFleetsDisplay(spec)` — `Global` for the five global roles, `Workstations` for the two fleet-scoped ones.
+   - ✅ *(UI)* Side-panel **Role** `<dd>` text equals `expectedRoleDisplay(spec)` — `Admin` / `Maintainer` / `Observer` / `Observer+` / `Technician`, mirroring Fleet's `capitalizeRole`. **Not asserted for `team-admin`** (`TODO(fleetdm/fleet#54620)`): an admin of every one of their fleets reads `Various`, because `generateRole` has every-same-role branches for the other roles but not admin. Listed in `docs/blocked-by-product-bugs.md`.
+   - ✅ *(UI)* Side-panel **Fleets** `<dd>` text equals `expectedFleetsDisplay(spec)` — `Global` for the five global roles, `Workstations` for the two single-fleet ones, `2 fleets` for `team-admin`.
 
 **Assessment**
 - *Value:* Good coverage breadth for the side panel — five global roles plus fleet-scoped display, including `Observer+` and `Technician`, which nothing else asserts in the UI.
-- *Coverage gaps:* (a) **`team-admin` is provisioned in the catalog but absent from `MY_ACCOUNT_USERS`** — it's the only static human with **two** fleet assignments, so the `"N fleets"` branch of `expectedFleetsDisplay` and the `'Various'` branch of `expectedRoleDisplay` ([`static-users.ts:333-341`](../../helpers/api/static-users.ts)) are **never exercised by any test in this area**. The QA Wolf audit listed this as blocked on provisioning a `team-admin`; that user now exists, so the gap is a one-line fix. (b) Same catalog-not-API fidelity issue as AUTH-16. (c) **Position** field, **Update** (profile edit), **Get API token** all untested. (d) No negative check that a low-privilege role *cannot* see something on this page.
+- *Coverage gaps:* (a) `team-admin`'s Role is skipped behind fleetdm/fleet#54620, and no static human has *mixed* fleet roles, so the `'Various'` branch of `expectedRoleDisplay` is still never exercised. (b) Same catalog-not-API fidelity issue as AUTH-16. (c) **Position** field, **Update** (profile edit), **Get API token** all untested. (d) No negative check that a low-privilege role *cannot* see something on this page.
 - *Redundancy:* Same body as AUTH-16 for three shared roles; overlaps [`tests/api/role-access/premium/*.spec.ts`](../../tests/api/role-access/premium/) on role semantics. Seven browser logins for what is fundamentally one page rendering a two-row side panel — the highest cost-per-assertion cluster in this area (mitigated substantially by the cross-run session cache).
 - *Efficiency / smells:* (a) `new MyAccountPage(page)` inline. (b) `/account` by URL, never via the navbar. (c) `expectedRoleDisplay` / `expectedFleetsDisplay` re-implement Fleet's `frontend/utilities/helpers.tsx` logic in test code — if Fleet's formatter changes, the helper changes with it and the test keeps passing.
 
@@ -648,6 +649,37 @@ other:
 
 ---
 
+### AUTH-19 · Premium • My Account › team-admin's Fleets tooltip names both of their fleets
+
+- **File:** [`playwright/tests/e2e/premium/account/my-account.spec.ts`](../../tests/e2e/premium/account/my-account.spec.ts)
+- **Grep:** `npx playwright test -g "Fleets tooltip names both"`
+- **Project:** premium only (free has no Fleets line) · **Mode:** UI · **Isolation:** `team-admin`'s own context via `withStaticUser`
+- **Preconditions:** the `team-admin` static user, admin of **Workstations** and **VMs** (catalog in `helpers/api/static-users.ts`)
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Sign in as `team-admin`; open `/account` via URL. ✅ *(UI)* **My account** heading visible.
+2. ☐ Hover the **Fleets** value (`2 fleets`) — `hoverFleets()`, on Fleet's TooltipWrapper element.
+   - ✅ *(UI)* The tooltip names **Workstations**.
+   - ✅ *(UI)* The tooltip names **VMs**.
+
+**Assessment**
+- *Value:* the side panel's only multi-fleet rendering (`teamNames.length > 1` in `AccountSidePanel.tsx`), which QA Wolf's team-admin flow pointed at. AUTH-17 checks the `2 fleets` text; this checks which fleets it means.
+- *Coverage gaps:* names come from the catalog, not the API, as in AUTH-17.
+- *Redundancy:* none.
+- *Efficiency / smells:* one more browser login, mitigated by the session cache; the hover target is a class (documented on the POM method).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 ### Coverage map
@@ -663,7 +695,7 @@ other:
 | SSO (SAML) | AUTH-12 (button + tooltip), AUTH-13 (full Okta round-trip) | Which user signed in; JIT-assigned role; SSO logout/SLO; SSO-required mode hiding the password form; button absent when SSO off |
 | MFA | — | **No coverage at all.** `updateUser` supports `mfa_enabled` ([`helpers/api/users.ts:181`](../../helpers/api/users.ts)) but no spec sets it |
 | Session lifecycle | — | **No coverage.** Expiry, `DELETE /users/:id/sessions` (helper exists, unused by this area), concurrent sessions |
-| My Account — read | AUTH-16 (free, 3 roles), AUTH-17 (premium, 7 roles) | `team-admin` / multi-fleet display; **Position** field; values sourced from catalog not API |
+| My Account — read | AUTH-16 (free, 3 roles), AUTH-17 (premium, 8 roles), AUTH-19 (multi-fleet tooltip) | `team-admin`'s Role (fleetdm/fleet#54620); mixed fleet roles (`Various`); **Position** field; values sourced from catalog not API |
 | My Account — edit profile | — | **No coverage.** `positionInput` / `updateButton` exist on the POM and are used by zero tests |
 | Change password (self-service) | AUTH-14 | Wrong original password; mismatch; policy violation; Cancel; old password stops working |
 | Get API token | — | **No coverage.** `getApiTokenButton` on the POM, used by zero tests |
@@ -687,7 +719,7 @@ The inverse problem does appear: several assertions are **weaker than the UI cou
 
 ### Quick wins
 
-1. Add `team-admin` to `MY_ACCOUNT_USERS` in [`tests/e2e/premium/account/my-account.spec.ts:18`](../../tests/e2e/premium/account/my-account.spec.ts) — the user is already provisioned, and it's the only way to exercise the `"N fleets"` / `'Various'` display branches.
+1. ~~Add `team-admin` to `MY_ACCOUNT_USERS`~~ (done 2026-10-02, Role check behind fleetdm/fleet#54620) in [`tests/e2e/premium/account/my-account.spec.ts:18`](../../tests/e2e/premium/account/my-account.spec.ts) — the user is already provisioned, and it's the only way to exercise the `"N fleets"` / `'Various'` display branches.
 2. Switch AUTH-01 (and any future form login) to `loginAsAdmin` from [`helpers/auth.ts`](../../helpers/auth.ts), or move its `/sso`-probe wait + throttle retry into `LoginPage.login()` — today the hardening lives only in the helper, and the specs that hit `/login` hardest don't use it.
 3. Give `pageHealth` an `ignore(pattern)` alongside `disable()` in [`fixtures.ts:270`](../../fixtures.ts), then narrow the four `disable()` calls (AUTH-02/03/04/10) so those tests keep 5xx detection. AUTH-09 already runs clean with health on, which suggests the residual noise is small and pattern-able.
 4. Add a `myAccount` page-object fixture — four specs (AUTH-14/15/16/17) currently do `new MyAccountPage(page)` inline, against the suite's own convention.
