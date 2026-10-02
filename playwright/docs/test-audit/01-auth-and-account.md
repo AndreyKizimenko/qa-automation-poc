@@ -1,6 +1,6 @@
 # Auth & account — test audit
 
-**Specs covered:** 9 files · **Test declarations:** 17 · **Projects:** premium / free
+**Specs covered:** 9 files · **Test declarations:** 18 · **Projects:** premium / free
 
 This area covers everything before and around the app shell: the `/login` form (password
 and SSO), client-side form validation, sign-out, the forgot-password entry point, and the
@@ -42,6 +42,7 @@ re-renders (and detaches) the login inputs.
 | AUTH-15 | `shared/account/theme.spec.ts` | Account • theme › Dark applies + persists | UI | ☐ |
 | AUTH-16 | `free/account/my-account.spec.ts` | Free • My Account › 3 static roles (loop) | UI | ☐ |
 | AUTH-17 | `premium/account/my-account.spec.ts` | Premium • My Account › 7 static roles (loop) | UI | ☐ |
+| AUTH-18 | `shared/account/theme.spec.ts` | Account • theme › System follows the OS live, Light pins against it | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some
 assertions/setup via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -524,7 +525,7 @@ other:
 
 **Assessment**
 - *Value:* Moderate. Asserts the mechanism (class + persistence) without screenshots, which is the right call — the suite keeps no visual baselines.
-- *Coverage gaps:* **Light** and **System** are never selected, so switching *back* is untested and the test always leaves the context dark. `System` (`prefers-color-scheme`) has no coverage at all. Persistence is only checked across a reload — the migration audit ([`C5-reports-dashboard-general.md`](../qawolf-migration/audit/C5-reports-dashboard-general.md), flows #2/#11) specifically wanted persistence **across logout/login**, which would prove the preference is stored per-user rather than per-browser. Nothing asserts a dark-mode page is actually legible (accepted — no baselines).
+- *Coverage gaps:* System and Light are AUTH-18's. Persistence is checked across a reload only; across a sign-out was considered and cut in round 3 batch A (2026-10-02): the preference is per-browser localStorage by design (`LogoutPage` clears only the session and token), so it would test browser storage, not Fleet. Nothing asserts a dark-mode page is actually legible (accepted — no baselines).
 - *Redundancy:* none in-suite; supersedes the two screenshot-heavy QA Wolf dark-mode flows.
 - *Efficiency / smells:* (a) `new MyAccountPage(page)` inline — no `myAccount` fixture. (b) Raw `page.locator('body')` and `label[for="theme-dark"]` in the spec/POM; the label selector is justified and commented, but the `dark-mode` body assertion would read better as `myAccount.expectDarkMode()`. (c) One-directional: a `for (const theme of ['Dark','Light'])` shape would cover the toggle back and leave the context clean.
 
@@ -599,6 +600,43 @@ other:
 - *Coverage gaps:* (a) **`team-admin` is provisioned in the catalog but absent from `MY_ACCOUNT_USERS`** — it's the only static human with **two** fleet assignments, so the `"N fleets"` branch of `expectedFleetsDisplay` and the `'Various'` branch of `expectedRoleDisplay` ([`static-users.ts:333-341`](../../helpers/api/static-users.ts)) are **never exercised by any test in this area**. The QA Wolf audit listed this as blocked on provisioning a `team-admin`; that user now exists, so the gap is a one-line fix. (b) Same catalog-not-API fidelity issue as AUTH-16. (c) **Position** field, **Update** (profile edit), **Get API token** all untested. (d) No negative check that a low-privilege role *cannot* see something on this page.
 - *Redundancy:* Same body as AUTH-16 for three shared roles; overlaps [`tests/api/role-access/premium/*.spec.ts`](../../tests/api/role-access/premium/) on role semantics. Seven browser logins for what is fundamentally one page rendering a two-row side panel — the highest cost-per-assertion cluster in this area (mitigated substantially by the cross-run session cache).
 - *Efficiency / smells:* (a) `new MyAccountPage(page)` inline. (b) `/account` by URL, never via the navbar. (c) `expectedRoleDisplay` / `expectedFleetsDisplay` re-implement Fleet's `frontend/utilities/helpers.tsx` logic in test code — if Fleet's formatter changes, the helper changes with it and the test keeps passing.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### AUTH-18 · Account • theme › System follows the OS colour scheme live, and Light pins the theme against it
+
+- **File:** [`playwright/tests/e2e/shared/account/theme.spec.ts`](../../tests/e2e/shared/account/theme.spec.ts)
+- **Grep:** `npx playwright test -g "System follows the OS colour scheme live"`
+- **Project:** premium **and** free · **Mode:** UI
+- **Isolation:** runs as the shared **admin** on the default `page`; the theme is context-local `localStorage`, as in AUTH-15. `page.emulateMedia({ colorScheme })` plays the OS preference.
+- **Preconditions:** none
+- **Data created:** none (context-local `localStorage`)
+
+**Flow**
+
+1. ☐ Set the OS (browser) to **light**; open `/account` via URL. ✅ *(UI)* **My account** heading visible.
+2. ☐ Select **System**. ✅ *(UI)* the radio is checked; `<body>` has no `dark-mode` class.
+3. ☐ Switch the OS to **dark**, without reloading.
+   - ✅ *(UI)* `<body>` gains `dark-mode` — System follows the OS live (Fleet's `prefers-color-scheme` listener).
+4. ☐ Switch the OS back to **light**. ✅ *(UI)* `dark-mode` goes away again.
+5. ☐ Switch the OS to **dark** (✅ *(UI)* `dark-mode` is back), then select **Light**.
+   - ✅ *(UI)* `<body>` loses `dark-mode` — an explicit choice overrides a dark OS.
+6. ☐ Reload, the OS still dark.
+   - ✅ *(UI)* The **Light** radio is checked and `<body>` has no `dark-mode` — the choice is stored and still wins.
+
+**Assessment**
+- *Value:* covers the behaviour the QA Wolf flow is named for ("Fleet automatically uses user preference") without its screenshots: System's live OS tracking, and that an explicit choice stops it. Picking Light under a dark OS is what makes the Light assertion able to fail.
+- *Coverage gaps:* Dark under a light OS isn't asserted to *pin* (AUTH-15 picks Dark under the default light OS and reloads, which comes close). The command palette's theme toggle isn't covered here. Nothing checks a page is legible in either theme (no visual baselines, by design).
+- *Redundancy:* none; AUTH-15 is Dark + reload only.
+- *Efficiency / smells:* `new MyAccountPage(page)` inline and raw `page.locator('body')`, as AUTH-15.
 
 **Notes (Andrey)**
 ```
