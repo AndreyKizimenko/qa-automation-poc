@@ -94,7 +94,7 @@ attempts of two such tests are 90 of a run's roughly 300 worker-minutes and can 
 Locally there are no retries, so repeating one test shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
-minutes with its report written; premium's exclusive step at 45 (a 20-minute VM test and its one CI retry), the
+minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
 gitops-mode step and free's exclusive step at 15; the job limit sits above the sum.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.

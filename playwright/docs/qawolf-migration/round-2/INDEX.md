@@ -78,7 +78,7 @@ Every one of the 127 source flows that survived [triage](TRIAGE.md), and where i
 | `policies/policies-include-all` | [E](E-label-targeting.md) | `tests/e2e/premium/policies/policy-label-targets.spec.ts` | **new** |
 | `policies/report-include-all` | [E](E-label-targeting.md) | `tests/e2e/premium/reports/report-label-targets.spec.ts` | **new** |
 | `policies/script-run-retries-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — 3 attempts in total |
-| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/software/install-on-host.spec.ts` | augment — a Deploy whose per-run `.deb` install script exits 1 (G decision 5) |
+| `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts` | **new** — a Deploy whose per-run amd64 `.deb` the VM refuses (G decision 5; in `premium-exclusive`, fleetdm/fleet#54607) |
 | `python/run-python-script-on-macos-host` | [D](D-host-execution.md) | `tests/e2e/shared/hosts/host-run-script.spec.ts` | **new** |
 | `python/run-python-script-with-policy-automation-on-macos-host` | [G](G-out-of-band.md) | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — the automation's script is Python, on the Ubuntu VM: the Macs have no `python3` (G decisions 2, 4) |
 | `queries-global-users/global-admin-able-to-select-teams-target-for-query-premium` | [A](A-no-setup.md) | `tests/e2e/premium/reports/reports.spec.ts` | augment · check DUP |

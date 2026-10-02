@@ -189,7 +189,7 @@ Read [README.md](README.md) first for the standing rules and how a batch runs. S
 | Target spec | Kind | Source flows folded in |
 |---|---|---|
 | `tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts` | **new** — one test, in `premium-exclusive` | `policies/script-run-retries-up-to-3-times-when-triggered-by-a-policy-automation`<br>`activity-feed/individual-activity-items-for-all-attempts-for-failed-software-scripts` (a failing script: 3 attempts)<br>`policies/enabling-continuous-software-and-script-automations-on-a-policy-retries-every-hour` (refetch-driven: continuous off → no new run; on → a new 3-attempt run)<br>`python/run-python-script-with-policy-automation-on-macos-host` (the script is Python, on the Ubuntu VM) |
-| `tests/e2e/premium/software/install-on-host.spec.ts` | augment | `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` (a Deploy whose install fails: 3 attempts, then *Failed*) |
+| `tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts` | **new**, in `premium-exclusive` | `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` (a Deploy whose install fails: 3 attempts, then *Failed*) |
 | `tests/e2e/premium/policies/policy-automations.spec.ts` | augment (+ free twin) | `policies/manage-all-automations-for-a-given-policy-at-once` |
 | `tests/e2e/premium/software/patch-policy.spec.ts` | **new** | `policies/patch-policy-fleet-maintained-apps` (on Workstations, apps no other spec adds) |
 | — | **cut · DUP** | `fleet-maintained-filters/failing-policies/confirm-script-ran-in-ui-on-failing-host-policy` (decision 4)<br>`policies/global-admin-able-to-create-and-delete-an-os-specific-policy-premium` (decision 4) |
@@ -295,7 +295,7 @@ around, and GITOPS-PLAN §8 for all three.
 |---|---|---|
 | `premium/policies/policy-automations.spec.ts` | ✅ augment | a row's Automations cell → *Manage automations* on Workstations: Install software (a per-run `.deb`), Run script (a per-run script) and Continuous saved together; the API stores all three, the cell reads *Edit automations* / *2 automations*, the modal reopens on them. Its own describe, outside the serial webhook one. Green with dependencies |
 | `premium/exclusive/policies/policy-automation-runs.spec.ts` | ✅ **new** — one test, **moved to `exclusive/`** after its branch run (8.5 min alone there, the exclusive step 9.2 min, green) | on the Ubuntu VM: a Python script that exits 3, run by a `SELECT 1 WHERE 0 > 1;` policy scoped by a manual label to the VM — 3 attempts (each `ran_script` with the policy's id, an empty actor and exit 3), the last opened from the host's Activity card; a refetch with continuous off queues nothing; Continuous ticked in the row's modal, the next refetch brings exactly 3 more. Cleanup in an `afterEach` (a timed-out `finally` would leave a continuous failing policy firing on every refetch). 20-min timeout. Green with dependencies and headed; 5× on 2 workers beside the failing Deploy, 10/10, 10.2–11.2 min each (12.7 min before the later refetches stopped waiting out other specs') |
-| `premium/software/install-on-host.spec.ts` | ✅ augment | the failure twin of its Deploy test: a per-run amd64 `.deb` (the aarch64 VM refuses it) uploaded with Deploy — 3 `failed_install` attempts, each the install policy's and Fleet's, then *Failed* in the Library and *"Fleet failed to install …"* in the Activity card. Green with dependencies and headed; 5×, 5.5–7.6 min each |
+| `premium/exclusive/software/deploy-install-retries.spec.ts` | ✅ **new** — started as `install-on-host`'s second test, **moved to `exclusive/`** after the second branch run | the failure twin of `install-on-host`'s Deploy test: a per-run amd64 `.deb` (the aarch64 VM refuses it) uploaded with Deploy — 3 `failed_install` attempts, each the install policy's and Fleet's, then *Failed* in the Library and *"Fleet failed to install …"* in the Activity card. Green with dependencies and headed; 5×, 5.5–7.6 min each |
 | `premium/software/patch-policy.spec.ts` | ✅ **new** | Workstations, apps no other spec adds — LocalSend (macOS) and KeePassXC (Windows). macOS: Actions → Deploy → Patch walked through every option and back off, each save read back (the table above) and each reopen showing what was saved; the policy is `macOS - <title> up to date`. Windows: no *End user experience* under Force patch, and the server refuses Notify (*only available for macOS Fleet-maintained apps*) and both flags at once (*Only one of …*), 400 each. Green with dependencies, headed, 5× (one worker: copies would add the same app) |
 | `free/policies/policy-automations.spec.ts` | ✅ augment (free twin) | the same modal on a free policy lists only *Send webhook or create ticket* — no install, script, profile, calendar or conditional-access rows, no Continuous; the *Filter by automation* dropdown is absent. Green with dependencies |
 
@@ -315,14 +315,23 @@ around, and GITOPS-PLAN §8 for all three.
 
 ### Found on the way
 
+- **A failed install script puts orbit's config loop into backoff** — 1, 2, 4, then 5 min — delaying every
+  install and script queued on the host: filed as [fleetdm/fleet#54607](https://github.com/fleetdm/fleet/issues/54607)
+  (released; orbit ≥ 1.58.0). Found triaging the second PR #78 branch run, where the Ubuntu VM's installs sat
+  `pending` 5–10 min (three Linux specs failed); reproduced in isolation — three failed installs held a normal
+  one 8.7 min. Scripts that exit non-zero don't trigger it, and nor does a failed pre-install query. So the
+  failing Deploy moved to `exclusive/` too, and `inventory-reflects-install` now fails its install with a
+  pre-install query instead of an amd64 package (row in `docs/blocked-by-product-bugs.md`).
+
 - **A policy automation's runs queue below everything a user asks for.** Fleet gives fleet-initiated scripts and
   installs priority 0 and picks a host's next activity by priority before age
   (`HostScriptRequestPayload.Priority()`, `activateNextUpcomingActivity` ORDER BY `priority DESC, created_at`).
   In the PR #78 branch run, `policy-automation-runs`' continuous-run retry was queued at 20:28:19 and the VM then
   ran five later-requested installs and uninstalls first; the test gave up at its 6-min settle and passed on the
   CI retry, and the run took 53.5 min against the nightly's 43.4 (Linux VM test-minutes 36.9 → 73.3). By design,
-  so the spec moved to `premium/exclusive/`: alone after the main project, on idle VMs. The exclusive step's CI
-  global timeout went 15 → 45 min (a 20-min attempt and its retry), the job's limit 135 → 170.
+  so the spec moved to `premium/exclusive/`: alone after the main project, on idle VMs. With the failing Deploy
+  there too, the exclusive step measures 13.2 min; its CI global timeout went 15 → 60 min (each VM spec retried
+  once), the job's limit 135 → 185.
 
 - **`findFmaIdBySlug` read one page of 500**, and the 4.93 catalog holds 1,424 entries: any slug past the first
   page threw "No Fleet-maintained app found". Every spec so far had used apps early in the alphabet. It pages now.

@@ -1,6 +1,6 @@
 # Software on hosts — test audit
 
-**Specs covered:** 6 files · **Entries:** 12 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 19 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
+**Specs covered:** 7 files · **Entries:** 12 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 19 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
 This area covers Fleet **delivering software to a real device**: a package the VMs fleet keeps for the purpose,
 installed from the host's Library, followed until the host reports it back, then uninstalled and followed
@@ -90,8 +90,11 @@ for "Last fetched" to move once on its own (Fleet's own refetch), then click **R
 move again, and look.
 
 **5. A failed install is retried.** Fleet makes `MaxSoftwareInstallAttempts` = **3** attempts and reports
-`pending_install` between them, so "Failed" only sticks **~6 minutes** after the click. SWH-07 depends on this
-window; a manual re-runner who expects an instant red status will think the flow is stuck.
+`pending_install` between them, so "Failed" only sticks a minute or more after the click — several minutes
+when the failure is a failed install *script*, because each one puts orbit's config loop into a 1, 2, 4… min
+backoff that holds up everything queued on the host (fleetdm/fleet#54607). SWH-07 depends on this window and
+fails its installs with a pre-install query, which doesn't trigger the backoff; a manual re-runner who expects
+an instant red status will think the flow is stuck.
 
 **6. The Upcoming activity item is not asserted in the UI.** An idle VM picks an install up within seconds —
 often before the page that would show it has loaded — and a busy one after an unpredictable wait behind other
@@ -197,7 +200,7 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
   if one is missing rather than uploading it by hand.
 - **The per-run tests need a `.deb` you build.** The committed `.deb`s are the wrong ones for them:
   `fleet-playwright-install_1.0.0_all.deb` *is* the durable Linux fixture (uploading it again would share its
-  title), and `fleet-playwright-pkg_1.0.0_amd64.deb` is `amd64` — the right file for SWH-07 (wrong arch) and
+  title), and `fleet-playwright-pkg_1.0.0_amd64.deb` is `amd64` — the right file for SWH-15 (wrong arch) and
   the wrong one for everything else. `test-data/linux/software/make-deb.py` takes `name version arch` and
   writes an installable one (`python3 test-data/linux/software/make-deb.py fleet-pw-manual 1.0.0 all`); or,
   from `playwright/`:
@@ -219,7 +222,7 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 | ~~SWH-01~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the custom-package install loop; now SWH-14 | — | — |
 | ~~SWH-02~~ | ~~`premium/software/install-on-host.spec.ts`~~ | **Retired 2026-09-28** — the FMA added from its catalog page and installed; now SWH-14 + SWL-01 | — | — |
 | SWH-03 | `premium/software/install-on-host.spec.ts` | "Deploy" creates an install policy, and Fleet installs through it on the Linux VM | UI+API | ☐ |
-| SWH-15 | `premium/software/install-on-host.spec.ts` | a Deploy whose install fails is tried 3 times, then reads Failed (listed beside SWH-03: its failure twin) | UI+API | ☐ |
+| SWH-15 | `premium/exclusive/software/deploy-install-retries.spec.ts` | a Deploy whose install fails is tried 3 times, then reads Failed (listed beside SWH-03: its failure twin) | UI+API | ☐ |
 | ~~SWH-04~~ | ~~`premium/software/uninstall-from-host.spec.ts`~~ | **Retired 2026-09-28** — the uninstall loop; now SWH-14 | — | — |
 | SWH-05 | `premium/software/uninstall-from-host.spec.ts` | an uninstall that fails leaves the software installed, and the Library offers a retry | UI+API | ☐ |
 | SWH-06 | `premium/software/inventory-reflects-install.spec.ts` | a package that installs appears in the Inventory once the host re-reports | UI+API | ☐ |
@@ -429,11 +432,11 @@ other:
 
 ---
 
-### SWH-15 · Premium • Software • Install on host › a Deploy whose install fails is tried 3 times, then reads Failed
+### SWH-15 · Premium • Software • Deploy install retries › a Deploy whose install fails is tried 3 times, then reads Failed
 
-- **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
-- **Grep:** `npx playwright test --project=premium install-on-host -g "fails" --workers=2`
-- **Project:** premium · **Host:** the Ubuntu VM · **Timeout:** 15 min, CI `HOST_RETRIES`
+- **File:** [`playwright/tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts`](../../tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts)
+- **Grep:** `npx playwright test --project=premium-exclusive deploy-install-retries` (by file name)
+- **Project:** `premium-exclusive` — alone after the main project: a policy's installs queue at priority 0, below every user-requested one, and each failed install script backs orbit off for 1, 2, 4… min (fleetdm/fleet#54607) · **Host:** the Ubuntu VM · **Timeout:** 15 min, CI `HOST_RETRIES`
 - **Mode:** UI+API · **Source:** QA Wolf `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` (round 2, batch G)
 - **Preconditions (API):** a per-run `fleet-pw-deploy-fails-<stamp>` `.deb` built for **amd64**, uploaded to the VMs fleet with Deploy (`automatic_install`) — the aarch64 VM's dpkg refuses it, so every attempt fails without touching the host, and the package never arriving keeps Fleet's `[Install software] … (deb)` policy failing.
 - **Data created:** the package and its policy, deleted in the `finally` (policy first, any queued attempt cancelled); the VMs sweep removes `[Install software] fleet-pw-*` policies and `fleet-pw-*` titles a dead run leaves.
@@ -451,7 +454,7 @@ other:
 **Assessment**
 - *Value:* the failure twin of SWH-03, and the only test of a policy-queued install's retries — a different path in Fleet from a direct install's (SWH-07): `shouldRetryPolicyAutomationSoftwareInstall`, which also needs the policy still failing and counts failures per host and installer (10 in 24 h, then Fleet stops — which is why the package is new every run).
 - *Coverage gaps:* the 10-failure cap itself isn't reached (it would take four runs of three); a retry that succeeds isn't exercised; continuous automations for installs (re-fire on every failing result unless the last install succeeded within the policy interval) aren't — POL-27 covers continuous for scripts.
-- *Efficiency:* three failed installs on the Ubuntu VM, a few minutes; dpkg refuses the wrong architecture quickly.
+- *Efficiency:* three failed installs on the Ubuntu VM — dpkg refuses each at once, but each also puts orbit into its backoff (1, then 2 min), which is why the spec runs alone in `premium-exclusive`.
 
 **Notes (Andrey)**
 ```
@@ -573,18 +576,18 @@ other:
 - **Grep:** `npm run test:premium -- -g "a pending or failed install never appears in the Inventory"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real **aarch64** Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 900 s; `finally` waits (≤ 5 min, errors swallowed) for `failed_install` to stick, then deletes the title
-- **Preconditions:** online real Ubuntu VM that is **not amd64** — the whole test rests on dpkg refusing the architecture
-- **Data created:** a per-run `fleet-pw-wrong-arch-<base36>` **amd64** title. Nothing reaches the host. Deleted in `finally`.
+- **Preconditions:** online real Ubuntu VM
+- **Data created:** a per-run `fleet-pw-precondition-<base36>` title (arch `all`) with a **pre-install query that returns no rows** (`SELECT 1 WHERE 1 = 0;`). No install script ever runs, so nothing reaches the host. Deleted in `finally`.
 
 **Flow**
 
-1. ☐ *(API setup)* Upload `fleet-pw-wrong-arch-<base36>_1.0.0_amd64.deb` (built with `Architecture: amd64`). By hand: `test-data/linux/software/fleet-playwright-pkg_1.0.0_amd64.deb` is an equivalent wrong-arch file.
+1. ☐ *(API setup)* Upload `fleet-pw-precondition-<base36>_1.0.0_all.deb` with **Advanced options → Pre-install query** `SELECT 1 WHERE 1 = 0;`. (Not a package dpkg refuses: a failed install *script* backs orbit off for up to 5 min and stalls everything queued on the VM, fleetdm/fleet#54607; a failed pre-install query doesn't.)
 2. ☐ Host details → **Software** → **Library** → search the name → click **Install**.
    - ✅ *(UI)* Toast "Software is installing. To see details, go to Details > Activity."
 3. ☐ **Straight away**, reload the host → **Software** → **Inventory** → search the name.
    - ✅ *(UI)* The table settles; no name link for the package.
    - ✅ *(API)* The status is **still** `pending_install` — confirming the Inventory read in the step above happened inside the pending window, not after it.
-4. ☐ Wait — **about 6 minutes**. Fleet tries three times (`MaxSoftwareInstallAttempts`), reporting pending between attempts; dpkg refuses each. Then **Refetch** and wait for "Last fetched" to move.
+4. ☐ Wait — **a minute or two**. Fleet tries three times (`MaxSoftwareInstallAttempts`), reporting pending between attempts; each stops at the pre-install query. Then **Refetch** and wait for "Last fetched" to move.
    - ✅ *(API)* Status reaches `failed_install` (≤ 10 min); after a post-status refetch, installed versions are `[]`.
    - ✅ *(API)* The host's activities (newest 50) hold exactly **three** `installed_software` entries for this title, each with status `failed_install`.
 5. ☐ Reload the host → **Software** → **Inventory** → search the name.
@@ -595,14 +598,14 @@ other:
 7. ☐ (No user action) `finally` — wait for `failed_install` if not already there, delete the title.
 
 **Assessment**
-- *Value:* the best-designed failure in the area. The failure is **deterministic and harmless** (the architecture mismatch means nothing touches the host), the pending-window read is *proved* to be inside the window by reading the status after it, and the three-attempt assertion documents a Fleet behaviour (`MaxSoftwareInstallAttempts`) that would otherwise surprise every manual tester.
+- *Value:* the best-designed failure in the area. The failure is **deterministic and harmless** (the pre-install query stops every attempt before the install script, so nothing touches the host — and orbit isn't put into the backoff a failed install script causes), the pending-window read is *proved* to be inside the window by reading the status after it, and the three-attempt assertion documents a Fleet behaviour (`MaxSoftwareInstallAttempts`) that would otherwise surprise every manual tester.
 - *Coverage gaps:*
-  - **The failure's reason is never read.** The **Failed** button opens the Install details modal with dpkg's architecture error in **Details** — the most informative thing on screen, and the one assertion that would tell a wrong-arch refusal from any other failure. `InstallDetailsModal.revealOutput()` exists.
+  - **The failure's reason is never read.** The **Failed** button opens the Install details modal with the pre-install query's empty result — the one assertion that would tell this failure from any other. `InstallDetailsModal.revealOutput()` exists.
   - **Retry** is asserted visible, never clicked. The per-attempt activities are asserted via API only, not as three items in the host's Past tab.
 - *Redundancy:* none.
 - *Efficiency / smells:*
   - **The exact count of three pins a Fleet constant.** Deliberate — but if `MaxSoftwareInstallAttempts` changes this fails on the count with a message about activities, not about retries. Worth a comment naming the constant at the assertion.
-  - `listHostActivities` reads the newest **50**. The Ubuntu VM carries six parallel tests from this area plus the script specs; a busy window could push an attempt past 50 within the ~6 minutes.
+  - `listHostActivities` reads the newest **50**. The Ubuntu VM carries six parallel tests from this area plus the script specs; a busy window could push an attempt past 50 within the minute or two.
   - **Budget:** 600 + 240 + 120 s of waits inside a 900 s timeout, after an upload and an Inventory round-trip. A slow day ends in a timeout, and a timeout skips the `finally`.
   - The `finally` itself can add 5 min to a failing run (it waits for the retries to finish before deleting).
 

@@ -149,6 +149,10 @@ A change isn't done until the docs describing it are current, in the same commit
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
   it. A refetch also re-runs a host's policies immediately.
+- **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
+  `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
+  config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
+  (fleetdm/fleet#54607). Where the script failure itself is the point, the spec goes in `exclusive/`.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.
 

@@ -42,10 +42,10 @@ permissions:
 jobs:
   test:
     # A guard against a hung run, with room for growth: Playwright stops the
-    # main suite at 100 min (globalTimeout), the exclusive specs at 45 and the
+    # main suite at 100 min (globalTimeout), the exclusive specs at 60 and the
     # gitops-mode specs at 15, so a run that uses all of it still merges and
     # uploads its report inside this limit.
-    timeout-minutes: 170
+    timeout-minutes: 185
     runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -128,10 +128,10 @@ jobs:
       # unrelated failure would skip them all. Each step writes a blob report to
       # its own directory (the blob reporter clears its directory first), and the
       # last step merges them into the one HTML report. The suite stops itself at
-      # 100 min (globalTimeout), the exclusive specs at 45 (policy-automation-runs
-      # is up to 20 min an attempt, and VM describes retry once in CI) and the
-      # gitops-mode specs at 15, so even a run that uses all of it merges and
-      # uploads its report inside the job's 170.
+      # 100 min (globalTimeout), the exclusive specs at 60 (13 min measured; two
+      # VM specs of up to 20 and 15 min an attempt, each retried once in CI) and
+      # the gitops-mode specs at 15, so even a run that uses all of it merges and
+      # uploads its report inside the job's 185.
       - name: Run the suite
         id: suite
         env:
@@ -145,7 +145,7 @@ jobs:
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
-        run: SUITE=premium npx playwright test --project=premium-exclusive --reporter=github,blob --global-timeout=2700000
+        run: SUITE=premium npx playwright test --project=premium-exclusive --reporter=github,blob --global-timeout=3600000
 
       - name: Run the gitops-mode specs
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}

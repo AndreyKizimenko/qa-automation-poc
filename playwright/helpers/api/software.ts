@@ -417,6 +417,12 @@ export async function hostVulnerableVersions(
 export interface PackageScripts {
   installScript?: string;
   uninstallScript?: string;
+  /**
+   * An osquery query the host runs before installing: no rows, and orbit stops
+   * there and Fleet records a failed install — without running the install
+   * script, and without the error a failed install script hands orbit.
+   */
+  preInstallQuery?: string;
 }
 
 /**
@@ -445,6 +451,7 @@ export async function uploadSoftwarePackageBuffer(
       ...(fleetId ? { fleet_id: String(fleetId) } : {}),
       ...(scripts.installScript ? { install_script: scripts.installScript } : {}),
       ...(scripts.uninstallScript ? { uninstall_script: scripts.uninstallScript } : {}),
+      ...(scripts.preInstallQuery ? { pre_install_query: scripts.preInstallQuery } : {}),
       ...(automaticInstall ? { automatic_install: 'true' } : {}),
     },
     timeout: 120_000,
