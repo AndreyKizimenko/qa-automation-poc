@@ -127,6 +127,7 @@ sort, both Fleet web address flows). Detail and Andrey's decisions in
 | team admin on My account | `premium/account/my-account.spec.ts`: `team-admin` joins the role loop (email, name, `2 fleets`; its Role check skipped behind fleetdm/fleet#54620, which reads `Various`), and a new test hovers the Fleets value for the tooltip naming Workstations and VMs (`MyAccountPage.hoverFleets`) |
 | Unassigned across the navbar | `premium/software/no-teams-views.spec.ts` gains its own describe: Unassigned picked on Hosts survives Controls, Software, Policies and Hosts again; Reports falls back to All fleets and doesn't offer Unassigned |
 | enroll secrets | new `shared/settings/enroll-secrets.spec.ts` (global add / copy / delete from the Hosts gear menu, both tiers, union restore via `restoreGlobalEnrollSecrets`); `premium/settings/enroll-secrets.spec.ts` gains copy + delete on Workstations. `EnrollSecretModal` rebuilt around value-scoped actions (its `.first()` buttons removed) and adopted by `HostsListPage`; the gitops-mode specs read gated state through `rowControls` |
+| fleet lifecycle | new `premium/settings/fleets-lifecycle.spec.ts` + `FleetsPage`: a throwaway `pw-fleet-<ms>` added, renamed and deleted through Settings › Fleets, each step checked by toast, row and API. `cleanup.steps.ts` gains **sweep throwaway pw-\* fleets** (`deleteFleetsWithPrefix`); `playwright/CLAUDE.md` now allows `pw-*` fleets in test bodies (Andrey, 2026-10-02) |
 
 ## Round 2 · Batch G — policy automations and retries
 

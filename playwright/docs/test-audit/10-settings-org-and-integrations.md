@@ -1,6 +1,6 @@
 # Settings — org, integrations, webhooks, secrets — test audit
 
-**Specs covered:** 11 files · **Test declarations:** 14 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the four shared specs run in both)
+**Specs covered:** 12 files · **Test declarations:** 15 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the four shared specs run in both)
 
 This area covers Fleet's **Settings** section: Organization info, Fleet Desktop, Advanced
 options, the organization logo, a fleet's own settings page, enroll secrets, and the
@@ -36,6 +36,7 @@ fleet host-expiry derivation, the SSO form-gating case) mutate nothing.
 | SET-12 | `shared/settings/organization/custom-logo.spec.ts` | Settings • Organization logo › a light-mode logo replaces the default and removing it restores it | UI+API | ☐ |
 | SET-13 | `shared/settings/organization/custom-logo.spec.ts` | … › a dark-mode logo replaces the default and removing it restores it | UI+API | ☐ |
 | SET-14 | `shared/settings/enroll-secrets.spec.ts` | Settings • global enroll secrets › an admin adds, copies and deletes a global enroll secret, and the others stay | UI+API | ☐ |
+| SET-15 | `premium/settings/fleets-lifecycle.spec.ts` | Premium • Settings • fleet lifecycle › an admin adds, renames and deletes a fleet | UI+API | ☐ |
 
 ---
 
@@ -591,6 +592,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 | SET-12 | global `org_info.org_logo_url_light_mode` **+ its alias** `org_logo_url_light_background`; also the viewer's account theme (client-side only) | `GET /config` at the top of the **test body** | `finally` → `restoreOrgLogo(…,'light',…)`: `DELETE /logo?mode=light` if there was none, else `PATCH /config` writing **both** fields. Restores **one mode**, never both — restoring the other would roll back SET-13 | Every user of the instance, and the login page, is branded with the Playwright test logo. A `PATCH` that only empties one URL field is **not** a fix — the deprecated alias still points at the old blob |
 | SET-13 | same for dark: `org_info.org_logo_url_dark_mode` **+ its alias** `org_logo_url` (the bare field) | same | same, with `mode=dark` | same, for dark-mode viewers |
 | SET-14 | **global** enroll-secret list (adds a marker, deletes it) | `GET /spec/enroll_secret` in `beforeEach` | `afterEach` → union restore (`restoreGlobalEnrollSecrets`: live − marker + any missing original; never empty) | A wrong-row delete would drop the secret the simulations re-enroll with; the union restore puts it back |
+| SET-15 | a throwaway `pw-fleet-<ms>` (created, renamed, deleted) | — | `afterEach` → `DELETE /fleets/<id>` (retried); cleanup sweep of `pw-*` fleets | A stranded fleet shows in every fleet picker until the next run's sweep |
 
 ### SET-14 · Settings • global enroll secrets › an admin adds, copies and deletes a global enroll secret, and the others stay
 
@@ -620,6 +622,43 @@ The reference table for a manual pass. "Restored?" describes what the automation
 - *Coverage gaps:* edit/rotate, `<32 characters` validation, duplicate rejection; whether a secret enrolls a host.
 - *Redundancy:* SET-05 is the same flow at fleet scope. `add-hosts-download.spec.ts` reads the global list (its `[0]`, which the appended marker never is).
 - *Efficiency / smells:* the add is proven through the API plus the row appearing; nothing re-reads the list after a reload.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SET-15 · Premium • Settings • fleet lifecycle › an admin adds, renames and deletes a fleet
+
+- **File:** [`playwright/tests/e2e/premium/settings/fleets-lifecycle.spec.ts`](../../tests/e2e/premium/settings/fleets-lifecycle.spec.ts)
+- **Grep:** `npx playwright test -g "an admin adds, renames and deletes a fleet"`
+- **Project:** premium · **Mode:** UI+API · **Isolation:** standalone; `afterEach` deletes the fleet by id (retried for the gateway's odd 502), and the cleanup projects' **sweep throwaway pw-\* fleets** step removes any a killed run left
+- **Preconditions:** none
+- **Data created:** a throwaway fleet `pw-fleet-<ms>`, renamed `pw-fleet-<ms>-renamed`, deleted by the test. While it exists it shows in every fleet picker and gets an enroll secret and agent options — nothing reads it by name. Allowed by `playwright/CLAUDE.md`'s throwaway-fleet rule (Andrey, 2026-10-02).
+
+**Flow**
+
+1. ☐ Open **Settings › Fleets** (`/settings/fleets`). ✅ *(UI)* **Add fleet** visible.
+2. ☐ **Add fleet** → **Fleet name** `pw-fleet-<ms>` → **Create**.
+   - ✅ *(UI)* Toast `Successfully created pw-fleet-<ms>.`; the fleet's row (by its name link) is in the table.
+   - ✅ *(API)* A fleet of that name exists.
+3. ☐ The row's **Actions → Rename** → **Fleet name** `…-renamed` → **Save**.
+   - ✅ *(UI)* Toast `Successfully updated fleet name to …-renamed.`; the new name's row is there and the old one's is gone.
+   - ✅ *(API)* The fleet (same id) has the new name.
+4. ☐ The row's **Actions → Delete** → **Delete** in "Delete fleet".
+   - ✅ *(UI)* Toast `Successfully deleted …-renamed.`; no row.
+   - ✅ *(API)* `GET /fleets/<id>` returns 404.
+
+**Assessment**
+- *Value:* the only UI coverage of fleet create / rename / delete (QA Wolf C7 #10); gitops applies exercise the API, not these three modals. Asserts named rows, not QA Wolf's row counts, which race other specs.
+- *Coverage gaps:* name validation (duplicate, reserved names such as "No team" / "All fleets", which the Add modal maps to its own errors); deleting a fleet that holds hosts (they move to Unassigned); the activity feed's fleet entries (no `activityCopy` for fleets yet).
+- *Redundancy:* the gitops-mode specs check these same controls are gated; this checks they work.
+- *Efficiency / smells:* the row Actions are a react-select reached by class (`FleetsPage.runRowAction`), as on the Labels page.
 
 **Notes (Andrey)**
 ```

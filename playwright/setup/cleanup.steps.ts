@@ -25,6 +25,7 @@ import {
   deleteAllTeamPolicies,
   deleteLabelsWithPrefix,
   deleteFleetPolicies,
+  deleteFleetsWithPrefix,
   deleteReport,
   deleteSoftwareTitle,
   disableGitOpsMode,
@@ -91,6 +92,15 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllQaTestUsers(request),
     deleteLeftoverApiTestUsers(request),
   ]);
+});
+
+// A spec that needs a fleet of its own creates a throwaway `pw-*` one and deletes
+// it in an afterEach (`fleets-lifecycle`, `historical-data-collection`, batch B's
+// policy webhook). A run killed hard skips even that, and a stray fleet sits in
+// every fleet picker; this removes them. No fleet gitops declares starts `pw-`.
+test('sweep throwaway pw-* fleets', async ({ request }) => {
+  test.skip(process.env.SUITE === 'free', 'fleets are premium-only');
+  await deleteFleetsWithPrefix(request, 'pw-');
 });
 
 test('wipe Workstations team state', async ({ request }) => {

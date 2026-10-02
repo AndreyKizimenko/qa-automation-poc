@@ -139,6 +139,8 @@ export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';
 export { IntegrationsPage } from './settings/IntegrationsPage';
 export { ChangeManagementPage } from './settings/ChangeManagementPage';
 export { TeamSettingsPage } from './settings/TeamSettingsPage';
+export { FleetsPage } from './settings/FleetsPage';
+export type { FleetRowAction } from './settings/FleetsPage';
 export { FleetUsersPage } from './settings/FleetUsersPage';
 export type { FleetRole } from './settings/FleetUsersPage';
 export {
