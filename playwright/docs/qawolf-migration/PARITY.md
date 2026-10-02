@@ -3,9 +3,15 @@
 What we were handed, what happened to each flow, and what the suite has to show for it. This is the
 "did we actually replace QA Wolf" document.
 
-**Bottom line: 267 flows audited, 250 portable, 250 covered.** The only thing not exercised end-to-end is the
-*act* of locking or wiping a device — and even there, the **permission surface is now asserted on all three
-platforms and both tiers**. Nothing is uncovered through oversight.
+**Bottom line: 267 flows audited, 250 portable — and 141 of the 228 rows round 1 ported still partial or
+missing** (audit of 2026-10-01, [round-3/INTAKE-AUDIT.md](round-3/INTAKE-AUDIT.md)). Round 1 shipped as "250
+covered", counting every row that wasn't CUT as covered. Most of the shortfall is role variants MERGEd into
+specs that were never written, and AUGMENTs that kept the flow's first step and dropped the rest. Those gaps
+are [round 3](round-3/README.md). The *act* of locking or wiping a device is still the one thing deliberately
+never exercised; its **permission surface is asserted on all three platforms and both tiers**.
+
+The sections below are round 1's accounting as it shipped (dispositions, not verified coverage); the per-area
+table's last column now says how many of each area's rows round 3 holds.
 
 ---
 
@@ -38,7 +44,7 @@ re-authored *how*.
 | **CUT** | not portable / not worth porting | 17 | 6% |
 | | **total** | **267** | |
 
-**Portable = 250 (94%).** All 250 are now covered.
+**Portable = 250 (94%).** Shipped as all 250 covered; 141 of the 228 ported (all but the DUPs) have a gap — see round 3.
 
 The 126 MERGEs are why 250 flows became ~114 spec files rather than 250. QA Wolf wrote one flow per role per
 tier; we collapse those. C3 (policies) is the extreme case — 31 of its 38 flows merged into 2 specs, because
@@ -48,16 +54,16 @@ QA Wolf had a separate flow for each of admin/maintainer/observer/observer-plus 
 
 | area | flows | DUP | AUG | NEW | MERGE | CUT | outcome |
 |---|---:|---:|---:|---:|---:|---:|---|
-| C1 hosts list | 27 | 0 | 0 | 13 | 13 | 1 | complete |
-| C2 hosts details | 25 | 0 | 0 | 8 | 11 | 6 | complete; Lock/Wipe covered as availability only |
-| C3 policies | 38 | 2 | 1 | 2 | 31 | 2 | complete |
-| C4 queries / schedule | 35 | 3 | 2 | 8 | 20 | 2 | complete |
-| C5 reports / dashboard | 20 | 0 | 3 | 7 | 9 | 1 | complete |
-| C6 software | 28 | 2 | 9 | 3 | 12 | 2 | complete |
-| C7 settings | 28 | 3 | 7 | 13 | 4 | 1 | complete |
-| C8 controls / scripts / secrets | 24 | 1 | 3 | 6 | 14 | 0 | complete |
-| C9 MDM / labels / misc | 17 | 0 | 4 | 9 | 3 | 1 | complete |
-| C10 auth / roles / API | 25 | 11 | 4 | 0 | 9 | 1 | complete |
+| C1 hosts list | 27 | 0 | 0 | 13 | 13 | 1 | 11 gaps → [round 3](round-3/INDEX.md) |
+| C2 hosts details | 25 | 0 | 0 | 8 | 11 | 6 | 2 gaps → [round 3](round-3/INDEX.md); Lock/Wipe covered as availability only |
+| C3 policies | 38 | 2 | 1 | 2 | 31 | 2 | 27 gaps → [round 3](round-3/INDEX.md) |
+| C4 queries / schedule | 35 | 3 | 2 | 8 | 20 | 2 | 28 gaps → [round 3](round-3/INDEX.md) |
+| C5 reports / dashboard | 20 | 0 | 3 | 7 | 9 | 1 | 11 gaps → [round 3](round-3/INDEX.md) |
+| C6 software | 28 | 2 | 9 | 3 | 12 | 2 | 14 gaps → [round 3](round-3/INDEX.md) |
+| C7 settings | 28 | 3 | 7 | 13 | 4 | 1 | 15 gaps → [round 3](round-3/INDEX.md) |
+| C8 controls / scripts / secrets | 24 | 1 | 3 | 6 | 14 | 0 | 14 gaps → [round 3](round-3/INDEX.md) |
+| C9 MDM / labels / misc | 17 | 0 | 4 | 9 | 3 | 1 | 11 gaps → [round 3](round-3/INDEX.md) |
+| C10 auth / roles / API | 25 | 11 | 4 | 0 | 9 | 1 | 8 gaps → [round 3](round-3/INDEX.md) |
 | **total** | **267** | **22** | **33** | **69** | **126** | **17** | |
 
 Per-flow detail — every flow, its disposition, and its target — is in [`audit/`](audit/). Those tables are the

@@ -1,0 +1,209 @@
+# Batch F — MDM, setup experience and Android settings
+
+**10 gaps → about 7 augments and 2 new specs.** `Setup experience` · `Disk encryption` · `OS updates` ·
+`MDM settings` · `Automatic enrollment` · `Android`
+
+**Status: ready for review** (planned 2026-10-01).
+
+> ## ▶ Start here
+>
+> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
+> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> [README.md](README.md) §4–§5, round 2's [README §5](../round-2/README.md) (never lock a VM) and
+> [§9](../round-2/README.md#9-working-a-batch-since-d), `playwright/CLAUDE.md` (**Test hosts**, and the OS-update
+> rule: never on the VMs fleet), then this file.
+>
+> **What this batch is.** MDM and setup settings round 1 only rendered: saved, reloaded and read back. It
+> runs on **Workstations, the premium fleet with no real hosts**, so nothing is delivered to a device. Two of its
+> settings are global (the macOS migration settings, end-user authentication), and one (manual agent install)
+> breaks two main-project specs if it's left on.
+>
+> Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
+> both instances run.
+
+## The gaps
+
+| Gap | What's untested today | Proposed target | Kind | Source flow |
+|---|---|---|---|---|
+| round 1 C7 #17 | a fleet's OS-update settings stay on that fleet (other scopes unaffected) | `premium/exclusive/os-updates/macos-updates.spec.ts` | augment | `flows-Premium/settings-macos-updates-settings-setup-options-only-apply-at-team-level.flow.js` |
+| round 1 C7 #28 | automatic enrollment: the IdP fields' tooltips (saving changed IdP values is a cut: they're the global end-user-auth settings gitops declares, and a save re-syncs every fleet's DEP profile) | `premium/settings/integrations/automatic-enrollment.spec.ts` | augment | `flows-Premium/settings-view-and-edit-automatic-enrollment.flow.js` |
+| round 1 C8 #4 | setup experience: "Install Fleet's agent (fleetd) manually" disables Install software and Run script (needs a bootstrap package; nothing resets it today) | `premium/exclusive/…` (new), plus `macos_manual_agent_install: false` in `resetSetupExperience` | new | `flows-Premium/controls-controls-macos-setup-experience-check-install-fleetd-manually.flow.js` |
+| round 1 C8 #6 | macOS setup: Require IdP and Lock end user info saved, reloaded, read back through the API; "Preview end user experience" is an external link (assert href and target) | `premium/controls/setup-experience/users.spec.ts` | augment | `flows-Premium/controls-controls-macos-setup-ui-validation.flow.js` |
+| round 1 C9 #6 | BitLocker PIN required: saved and read back on Workstations, with disk encryption on first (the gating only today, on Unassigned) | `premium/controls/os-settings/disk-encryption.spec.ts` | augment | `flows-Premium/bitlocker-require-bitlocker-pin-is-now-available-under-advanced-options-on-the-disk-encryption-tab-can-be-toggled-on-and-off.flow.js` |
+| round 1 C9 #2 | setup assistant: a bad automatic-enrollment profile is refused with Apple's error (CONFIG_NAME_INVALID) and a Learn more link — Fleet validates it with Apple through any ABM token, which premium has (the valid upload passes) | `premium/controls/setup-experience/setup-assistant.spec.ts` | augment | `flows-Premium/configuration-profiles-uploading-bad-profile-shows-error-and-links-to-error-docs.flow.js` |
+| round 1 C9 #8 | macOS accounts: let end users edit, saved and read back | `premium/controls/setup-experience/users.spec.ts` | augment | `flows-Premium/mac-os-accounts-allow-end-users-to-edit-their-macos-local-account-account-name-and-full-name.flow.js` |
+| round 1 C9 #9 | MDM settings: the Apple card's fields, the mode radios, the example payload (webhook URL only today) | `premium/settings/integrations/mdm.spec.ts` | augment | `flows-Premium/mdm-mobile-device-management-mdm-ui-validation.flow.js` |
+| round 1 C9 #3 | Android web apps: a web-clip application id and its icon — Fleet can create a web app but never delete one (`POST /software/web_apps` only) | review: one pinned web app, or the add form's Chrome banner only (decision) | review | `flows-Premium/android-android-deploy-web-apps-web-clips.flow.js` |
+| round 1 C9 #4 | Android: a Play app's Edit configuration saved and read back (`managedConfiguration` / `workProfileWidgets`) | `premium/software/…` (new) on Workstations | new | `flows-Premium/android-android-software-and-configurations.flow.js` |
+
+## 1. Review first
+
+Read every flow body. Known so far:
+
+- **C8 #4 goes in `premium-exclusive`, and needs a cleanup fix first** (§2.1).
+- **C7 #28: build the tooltips, cut the save** (§2.4).
+- **C9 #3: a decision.** Fleet can create an Android web app but never delete one (§2.5).
+- **C8 #6's "Preview end user experience" is an external link**, not a modal: assert its `href` and `target`
+  (§2.2). The bootstrap-docs half of the flow is a cut, as round 1 also said.
+- **C9 #6's copy is stale** ("Turn on disk encryption", "Advanced options"); 4.93 has per-platform tabs.
+- **C7 #17's flow also covers disk encryption and end-user authentication.** Those halves are C9 #6 and C9 #8;
+  this row is the OS-update half.
+- **C9 #9: save only with `enable=false`**, restore afterwards, and never click "Turn off MDM" or "Renew
+  certificate" (§2.3).
+- **C9 #2 came from triage** ([TRIAGE.md](TRIAGE.md#moved-back-in-after-triage)): a bad setup-assistant profile
+  is refused with Apple's error, which premium can produce today.
+
+## 2. Facts for the build
+
+### 2.1 Install fleetd manually (C8 #4)
+
+- `SetupExperience/cards/BootstrapPackage/components/BootstrapAdvancedOptions/BootstrapAdvancedOptions.tsx`:
+  an "Advanced options" reveal (`:57-64`), checkbox **"Install Fleet's agent (fleetd) manually"** (`:79`) with
+  its own Save → `PATCH /api/v1/fleet/setup_experience {fleet_id, macos_manual_agent_install}`, toast
+  "Successfully updated." (`:33-37`).
+- **Needs** a bootstrap package uploaded, and no macOS setup software or setup script. The UI disables the box
+  otherwise (`BootstrapPackage.tsx:186-190`); the server answers 422 ("…first specify a macos_bootstrap_package"
+  / "…first disable setup experience software" / "…first remove your setup experience script",
+  `ee/server/service/teams.go:2914-2938`).
+- **It disables, macOS only:** Install software's row checkboxes, "Cancel setup if software fails" and Save
+  (`InstallSoftwareForm.tsx:243-244,337-360`), and Run script's uploader (`SetupExperienceScriptUploader.tsx:50-68`).
+  Shared tooltip: "Disabled because you manually install Fleet's agent (Bootstrap package > Advanced options).
+  Use your bootstrap package to install software during the setup experience." Rows render only if the fleet
+  has macOS software ("No software available to install" otherwise), so upload one **unselected** macOS package
+  after enabling.
+- **Why exclusive:** `install-software.spec.ts` and `run-script.spec.ts` run on Workstations in the main project,
+  and this disables both. **Nothing resets it**: `resetMacosSetupToggles` sends only end-user auth and the managed
+  local account (`helpers/api/mdm.ts:123-134`), and deleting the bootstrap package doesn't clear it on the server.
+  Add `macos_manual_agent_install: false` to `resetSetupExperience` (so `cleanup-setup` resets it) **before**
+  the first run. Unverified: this may explain round 2's "Install-software form disabled even with gitops off"
+  (#54169, closed as not reproducible).
+- Reuse `bootstrap-package.spec.ts`'s fixture (`test-data/apple/macos/bootstrap-package/dummy-bootstrap-package.pkg`).
+  Nothing is delivered: a bootstrap package acts only at automatic enrollment.
+
+### 2.2 macOS setup and end-user info (C8 #6, C9 #8)
+
+- `users.spec.ts` "renders + IdP and hidden-admin toggles round-trip" saves without a reload or an API read-back;
+  "Lock end user info renders only when Require IdP is enabled" is visibility only. Both run on Unassigned and
+  Workstations.
+- Read back from `GET /teams/:id`: `mdm.setup_experience.{enable_end_user_authentication, lock_end_user_info,
+  enable_create_local_admin_account, end_user_local_account_type}` (`frontend/interfaces/team.ts:67-78`).
+- "Lock end user info" ("Account Name and Full name will be locked to IdP values in Setup Assistant. macOS
+  only."; `…/UsersForm/components/EndUserAuthSection/EndUserAuthSection.tsx:71-95`). Toggling IdP sets Lock to
+  match (`UsersForm.tsx:90-101`). Lock without IdP is a 422 (`teams.go:2886-2895`).
+- "Preview end user experience" is a `CustomLink newTab` to
+  `https://fleetdm.com/learn-more-about/setup-experience/end-user-authentication` (`Users.tsx:177-185`). Assert
+  `href` and `target`, as `macos-updates.spec.ts:102` does.
+- **Turning end-user auth on queues an ABM profile job** (`ee/server/service/mdm.go:361-365`), and Workstations
+  is the ABM default fleet for macOS, iOS and iPadOS (`gitops/premium-fleetqa/default.yml:21-25`). Fold C9 #8 into
+  the existing round-trip test rather than racing it on the same fleet.
+
+### 2.3 Disk encryption, OS updates, MDM settings (C9 #6, C7 #17, C9 #9)
+
+- **BitLocker PIN (C9 #6).** The existing spec is serial and Unassigned-only, and checks the gating. The PIN
+  checkbox is disabled until "Enable disk encryption" is ticked, and unticking clears it
+  (`OSSettings/cards/DiskEncryption/DiskEncryption.tsx:195-202,420-446`); the server also refuses a PIN without
+  encryption (`server/fleet/app.go:517-525`). Save: `POST /api/v1/fleet/disk_encryption {fleet_id,
+  windows_settings: {enable_disk_encryption, require_bitlocker_pin}}`; read `team.mdm.windows_settings.
+  require_bitlocker_pin`. **There's no fleet-scoped disk-encryption helper** (only `get/setGlobalDiskEncryption`),
+  and cleanup doesn't reset Workstations' encryption, so restore in an `afterEach`. Guard that Workstations holds
+  no real host (`listFleetHosts(...).filter(h => h.real)`, as `ddm-conflict.spec.ts:59-61` does).
+- **OS updates stay on their fleet (C7 #17).** `premium/exclusive/os-updates/macos-updates.spec.ts` saves a minimum
+  version and deadline on Workstations and clears them. Add: snapshot Unassigned (`getAppConfig().mdm.macos_updates`)
+  and QA (`getFleetOsUpdates(request, qaFleetId)`) before, compare after. Reads only, never the VMs fleet. It
+  stays in `exclusive/`.
+- **MDM settings (C9 #9).** The Apple card ("Apple (macOS, iOS, iPadOS) MDM turned on.", Edit →
+  `/settings/integrations/mdm/apple`): h1 "Apple Push Certificate Portal"; Common name (CN), Organization name, MDM
+  server URL, Renew date (`ApplePushCertInfo.tsx:25-49`; CN and renew date are already covered via the CLI,
+  `tests/cli/shared/get-read-only.spec.ts:43-48`). End-user migration (`EndUserMigrationSection.tsx`): slider
+  Enabled / Disabled, radios `voluntary` / `forced` disabled unless enabled (`:189-211`), "Example payload"
+  (`:239-245`; "An example request sent to your configured Webhook URL.", JSON across several lines, so parse it).
+  Save `PATCH /config {mdm: {macos_migration: {enable, mode, webhook_url}}}`, toast "Successfully updated end user
+  migration." Global, premium + ABM only, and no other spec reads it. Whether mode and URL persist with
+  `enable=false` is unverified.
+
+### 2.4 Automatic enrollment (C7 #28)
+
+`automatic-enrollment.spec.ts` uploads and deletes a EULA and checks the IdP form flags a cleared required field;
+its header says it stays client-side because saving would `PATCH` global config. That's right: **these are the
+global end-user-auth settings**, declared in gitops (`gitops/premium-fleetqa/default.yml:16-20`), the suite's
+*Require IdP* checkbox depends on them (disabled unless entity id, IdP name and metadata are all set,
+`frontend/utilities/permissions/permissions.ts:28-33`), and a save re-syncs every fleet's DEP profile
+(`server/service/appconfig.go:1855-1883`). **Cut the save.** Build the tooltips
+(`IdentityProviders/components/EndUserAuthSection/EndUserAuthSection.tsx`: `:160` "A required human friendly name
+for the identity provider that will provide single sign-on authentication.", `:171` Entity ID "…Okta calls this
+Audience Restriction.", `:188` "Metadata URL provided by the identity provider.", `:200` "Metadata XML provided by
+the identity provider.").
+
+### 2.5 Android (C9 #3, C9 #4)
+
+- Android MDM is on (`default.yml:56`).
+- **Edit configuration (C9 #4).** Add a Play app to Workstations with `addAppStoreApp(request, workstationsFleetId,
+  { appStoreId, platform: 'android' })`, **not** one another spec uses (`com.openai.chatgpt`,
+  `com.alltrails.alltrails`). `SoftwareTitleDetailPage.runAction('Edit configuration')`; modal "Edit
+  configuration", an Ace editor "Configuration", toast "<name> configuration updated." API `PATCH
+  /software/titles/:id/app_store_app {fleet_id, configuration}`; only `managedConfiguration` and
+  `workProfileWidgets` are allowed top-level keys (`server/fleet/android.go:329-366`). Reopening shows tab-indented
+  JSON, so compare parsed values; Ace auto-pairs brackets, so set the content through the editor's API.
+- **Web apps (C9 #3).** No UI creates one: `POST /api/v1/fleet/software/web_apps` (multipart `title`, `url`,
+  optional square PNG icon of 512 px or more) returns an `app_store_id`, and the title is then added and removed
+  like a Play app. **There is no delete** (`server/service/handler.go:959`), so every create is permanent in the
+  Android Enterprise. Typing a web-app id into the Android form shows "This is an Android web app and it requires
+  Google Chrome to work. Please make sure you add Google Chrome to this fleet." (`SoftwareAndroidForm.tsx:130-144`).
+  **Options:** create one web app once and pin its id in the spec (durable, like the VM fixtures), or test only the
+  client-side banner. The flow's id is probably QA Wolf's own (unverified).
+
+### 2.6 A bad setup-assistant profile (C9 #2)
+
+`SetOrUpdateMDMAppleSetupAssistant` validates a new profile with Apple's API through any ABM token
+(`ee/server/service/mdm.go:692`, `server/mdm/apple/apple_mdm.go:365`), and `setup-assistant.spec.ts`'s valid upload
+passes on premium every night, so a token works. Upload a malformed profile and assert Fleet's refusal
+("Couldn't add. CONFIG_NAME_INVALID", per round 1) and its "Learn more" link. Nothing is saved: Fleet validates before
+storing. Generate the fixture in the test, or commit a `test-data/apple/macos/setup-assistant/` file with a README.
+
+## Reusable pieces
+
+`SetupExperienceUsersPage`, `BootstrapPackagePage` (needs the Advanced options locators), `InstallSoftwarePage`,
+`RunScriptPage`, `DiskEncryptionPage` (`goto({ fleetId, platform })`), `OsUpdatesPage`, `IntegrationsPage`
+(`gotoMdm`, `gotoSsoEndUsers`), `SetupAssistantPage`, `SoftwareTitleDetailPage.runAction`; API (`helpers/api/mdm.ts`):
+`resetSetupExperience`, `resetMacosSetupToggles`, `get/deleteBootstrapPackage`, `clearSetupExperienceSoftware`;
+(`fleets.ts`) `getFleetOsUpdates`, `clearFleetOsUpdates`, `setFleetMacosUpdates`; `getAppConfig` / `patchAppConfig`,
+`addAppStoreApp`, `deleteSoftwareTitle`, `listFleetHosts`.
+
+## Decisions to put to Andrey
+
+1. **C9 #3:** one permanent, pinned Android web app, or the banner only (§2.5).
+2. **C8 #4:** OK to add `macos_manual_agent_install: false` to the cleanup reset and run the spec in
+   `premium-exclusive` (§2.1)?
+3. **C7 #28:** confirm the cut of the IdP save (§2.4).
+
+## Free coverage
+
+Every row is premium-only. Free's check is the paywall, which `tests/e2e/free/paywalls.spec.ts:14-35` already
+covers for these pages.
+
+## Traps this batch will hit
+
+- **The Workstations wipe doesn't reset** manual agent install, disk encryption, the BitLocker PIN,
+  `end_user_local_account_type`, the global macOS migration settings or end-user auth. Restore each in an
+  `afterEach`, and add a cleanup reset for any that would break other specs if stranded.
+- **The users, bootstrap-package, install-software and run-script specs all write Workstations' setup
+  experience** in the main project at once. Augment the existing tests rather than adding parallel writers.
+- **Every form here is gated in gitops mode**, so a run that overlaps the gitops-mode step sees them disabled.
+- **Never on the VMs fleet**: no OS-update setting, no disk encryption, no setup experience change there.
+
+## Done when
+
+- Every row has a written review decision; the questions above have Andrey's answer.
+- The augments and new specs built on premium, each reading its save back through the API and restoring it;
+  C8 #4 in `premium-exclusive` with its cleanup reset.
+- `npm run check` clean; each changed spec run with dependencies, once headed; the exclusive one by file name
+  (`--project=premium-exclusive <file>`).
+- `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.
+- Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a
+  [test-audit](../../test-audit/README.md) entry per `test()`, `helpers/README.md` / `pages/README.md`, any new
+  fixture's `test-data/` README, and this round's [README](README.md) batch table and [INDEX](INDEX.md).
+- PR open, Andrey told it's ready for its branch run.
+
+## What landed
+
+*Nothing yet.*
