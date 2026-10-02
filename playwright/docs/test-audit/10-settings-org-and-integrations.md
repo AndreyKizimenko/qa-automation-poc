@@ -27,7 +27,7 @@ fleet host-expiry derivation, the SSO form-gating case) mutate nothing.
 | SET-03 | `premium/settings/organization/fleet-desktop.spec.ts` | Premium • Settings • Fleet Desktop › the Fleet Desktop section shows the Custom transparency URL field | UI | ☐ |
 | SET-04 | `shared/settings/organization/advanced-options.spec.ts` | Settings • advanced options › editing the SMTP fields saves them and leaves every other section untouched | UI+API | ☐ |
 | SET-05 | `premium/settings/enroll-secrets.spec.ts` | Premium • Settings • enroll secrets › add an enroll secret to the Workstations fleet | UI+API | ☐ |
-| SET-06 | `shared/settings/host-status-webhook.spec.ts` | Shared • Settings • Host status webhook › enabling the host status webhook with a destination URL persists | UI+API | ☐ |
+| SET-06 | `shared/settings/host-status-webhook.spec.ts` | Shared • Settings • Host status webhook › enabling the host status webhook with a URL, percentage and window persists | UI+API | ☐ |
 | SET-07 | `premium/settings/team-host-status-webhook.spec.ts` | Premium • Settings • fleet host status webhook › a team admin enables their fleet host status webhook and it persists | UI+API | ☐ |
 | SET-08 | `premium/settings/team-host-status-webhook.spec.ts` | Premium • Settings • fleet host status webhook › the fleet host expiry checkbox derives from the global and fleet settings | UI+API | ☐ |
 | SET-09 | `premium/settings/integrations/mdm.spec.ts` | Premium • Settings • MDM end-user migration › the migration webhook URL is validated client-side | UI | ☐ |
@@ -223,14 +223,14 @@ other:
 
 ---
 
-### SET-06 · Shared • Settings • Host status webhook › enabling the host status webhook with a destination URL persists
+### SET-06 · Shared • Settings • Host status webhook › enabling the host status webhook with a URL, percentage and window persists
 
 - **File:** [`playwright/tests/e2e/shared/settings/host-status-webhook.spec.ts`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)
-- **Grep:** `npx playwright test -g "enabling the host status webhook with a destination URL persists"`
+- **Grep:** `npx playwright test -g "enabling the host status webhook with a URL, percentage and window persists"`
 - **Project:** premium **and** free (tier-agnostic, lives under `shared/`) · **Scopes:** global
 - **Mode:** UI+API · **Isolation:** standalone; `beforeEach` snapshot + `afterEach` restore
 - **Preconditions:** admin session. `beforeEach` stores `webhook_settings.host_status_webhook` from `GET /config`.
-- **Data created / mutated:** **global** `webhook_settings.host_status_webhook` → `{ enable_host_status_webhook: true, destination_url: 'https://example.com/host-status-webhook' }`. `afterEach` PATCHes the snapshot back (or `{}` if there was none).
+- **Data created / mutated:** **global** `webhook_settings.host_status_webhook` → `{ enable_host_status_webhook: true, destination_url: 'https://example.com/host-status-webhook', host_percentage: 5, days_count: 3 }`. `afterEach` PATCHes the snapshot back (or `{}` if there was none).
   - `PATCH /config` merges *within* `webhook_settings` — verified and documented in [`tests/e2e/premium/dashboard/automations-activity.spec.ts`](../../tests/e2e/premium/dashboard/automations-activity.spec.ts). That is what makes this safe to run in parallel with the three sibling specs that write other keys of the same subtree (`vulnerabilities_webhook`, `failing_policies_webhook`, `activities_webhook`).
   - ⚠️ If the restore is skipped, the instance keeps firing host-status webhooks at `example.com` and the enabled state leaks into any later test that reads this subtree. Note the restore sends `{}` when nothing was configured, which relies on Fleet treating an empty object as "leave defaults" — worth eyeballing by hand once.
 
@@ -241,19 +241,20 @@ other:
 2. ☐ Tick the enable checkbox — `setHostStatusWebhookEnabled(true)` reads `aria-checked` first so it is idempotent whatever the instance's starting state.
    - ✅ *(UI)* The checkbox reports `aria-checked="true"`.
 3. ☐ Fill **Destination URL** with `https://example.com/host-status-webhook`.
-4. ☐ Click **Save** — `saveHostStatusWebhook()`.
+4. ☐ Pick **Percentage of hosts** → `5%` and **Number of days** → `3 days` (both default to 1; react-select v1 menus, rendered only while the webhook is enabled) — `selectHostStatusOption`.
+   - ✅ *(UI)* Each dropdown shows the picked value.
+5. ☐ Click **Save** — `saveHostStatusWebhook()`.
    - ✅ *(UI)* Success toast `Successfully updated settings.`
-5. ☐ Re-read `GET /config`.
-   - ✅ *(API)* `webhook_settings.host_status_webhook.enable_host_status_webhook === true`.
-   - ✅ *(API)* `…destination_url` equals the URL.
-
-**Flagged:** persistence is asserted **only via `GET /config`** — the test never reloads the settings page. A UI bug that saves correctly but fails to rehydrate the checkbox/URL on reload passes here. SET-07, the fleet-scoped sibling, does reload and is strictly stronger; copying its two reload assertions in would cost three lines.
+6. ☐ Reload the page.
+   - ✅ *(UI)* The checkbox is ticked, the URL, `5%` and `3 days` are shown — the page rehydrates what was saved.
+7. ☐ Re-read `GET /config`.
+   - ✅ *(API)* `webhook_settings.host_status_webhook` matches `{ enable_host_status_webhook: true, destination_url: <URL>, host_percentage: 5, days_count: 3 }`.
 
 **Assessment**
 - *Value:* covers the global host-status alert save path on both tiers, plus the idempotent-toggle helper.
-- *Coverage gaps:* the card's other two inputs — **host percentage** and **days count** — are never set or asserted; no validation case (empty or malformed destination URL); no disable-round-trip (turn it off and confirm it clears); nothing asserts the webhook actually fires.
+- *Coverage gaps:* no validation case (empty or malformed destination URL); no disable-round-trip (turn it off and confirm it clears); nothing asserts the webhook actually fires.
 - *Redundancy:* same feature as SET-07 at global scope. The two are complementary (global vs fleet, admin vs team admin), but the *assertions* are near-identical, so any change should be made to both.
-- *Efficiency / smells:* API-only persistence check (above). `hostStatusSaveButton` is `getByRole('button', { name: 'Save', exact: true })` page-wide rather than scoped to the card — fine while the page has one Save, fragile if a second card lands on it. `hostStatusWebhookToggle` matches on the React `name` prop (`enableHostStatusWebhook`), documented in the POM.
+- *Efficiency / smells:* `hostStatusSaveButton` is `getByRole('button', { name: 'Save', exact: true })` page-wide rather than scoped to the card — fine while the page has one Save, fragile if a second card lands on it. `hostStatusWebhookToggle` matches on the React `name` prop (`enableHostStatusWebhook`), documented in the POM.
 
 **Notes (Andrey)**
 ```
@@ -604,7 +605,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 | Organization — Fleet Desktop | SET-03 (presence only) | Setting/saving a custom transparency URL; free-tier absence |
 | Organization — Advanced options | SET-04 (neighbour-preservation only) | Every functional field: host expiry, activity retention, server URL, analytics, SMTP config/test |
 | Enroll secrets — add (fleet-scoped) | SET-05 | Delete / rotate; `<32 char` validation; duplicate rejection; **global (Unassigned) secrets via UI**; secret actually enrolls a host |
-| Host status alerts — global webhook | SET-06 | Host percentage / days count; disable round-trip; UI rehydration on reload; validation |
+| Host status alerts — global webhook | SET-06 | Disable round-trip; validation |
 | Host status alerts — fleet webhook | SET-07 | Negative role case (maintainer/observer cannot save); disable round-trip; URL validation |
 | Host expiry stacking + lock (fleet) | SET-08 | The ticked-and-locked branch never runs on QA instances (global expiry is intentionally off) |
 | MDM — end-user migration workflow | SET-09 (URL validation only) | Save/persistence; voluntary-vs-forced mode; Save gating on invalid URL |
@@ -622,7 +623,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 
 **UI-vs-API balance**
 
-- **SET-06 is the one true offender:** its only persistence evidence is `GET /config`. There is no activity-feed contract to justify it — the settings page is right there, and SET-07 shows the reload assertion costs three lines. Fix this one.
+- **SET-06** used to prove persistence through `GET /config` alone; since 2026-10-02 it reloads the page and reads all four values back before the API check.
 - **SET-05** is API-only for "the secret joined the list". Justifiable for a credential (the server list is authoritative), but the modal's own list is never re-read, so a render regression passes.
 - **SET-04** is API-heavy *by design* — the whole point is comparing config subtrees, and it also does a UI reload check. Correct as is.
 - **SET-07 / SET-10** are the model: UI reload **and** API confirmation.
@@ -632,7 +633,7 @@ The reference table for a manual pass. "Restored?" describes what the automation
 **Quick wins**
 
 1. Delete one of SET-01/SET-02 and move the survivor to `tests/e2e/shared/settings/organization/organization-info.spec.ts` — the form is tier-agnostic and the specs are byte-identical.
-2. Add a reload + two UI value assertions to SET-06 ([`shared/settings/host-status-webhook.spec.ts:34`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)) so persistence isn't proven by `GET /config` alone.
+2. ~~Add a reload + two UI value assertions to SET-06~~ (done 2026-10-02, with the percentage and days fields) ([`shared/settings/host-status-webhook.spec.ts:34`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)) so persistence isn't proven by `GET /config` alone.
 3. Move SET-09's three inline raw locators onto `IntegrationsPage` (`mdm.spec.ts:16,20,26`) and route it through `gotoMdm()` — removes the last spec-level class selectors in this area.
 4. Convert the `try/finally` restores in ~~SET-04~~ (done 2026-10-02) and SET-07 (`team-host-status-webhook.spec.ts:73`) to `afterEach` hooks (nesting SET-07's describe so SET-08 is unaffected) — `finally` can be abandoned on a hard timeout, and these two restores protect the enroll-secret/webhook state the suite leans on.
 5. Drop the dead `IntegrationsPage.goto()` / `scimText` members, or give them a spec (Ticket destinations is the only Integrations card with a POM anchor and no test).

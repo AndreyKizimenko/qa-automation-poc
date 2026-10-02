@@ -121,6 +121,7 @@ sort, both Fleet web address flows). Detail and Andrey's decisions in
 |---|---|
 | labels on free | `premium/labels/labels.spec.ts` → `shared/labels/labels.spec.ts` (free had no label coverage); the Dynamic lifecycle renames to a special-characters name (C1 #14 folded); the Manual label takes a Linux simulation, not the first host; both deletes page the list |
 | Advanced options on free | `premium/settings/advanced-options.spec.ts` → `shared/settings/organization/`; the save now also flips Verify SSL certs and Enable STARTTLS (C7 #13 folded), checks the rest of `smtp_settings` is untouched, and restores in an `afterEach` |
+| host status webhook | `shared/settings/host-status-webhook.spec.ts` also sets Percentage of hosts (5%) and Number of days (3 days) and reads all four values back after a reload, then through the API; `IntegrationsPage` gains `selectHostStatusOption` for the two react-select v1 dropdowns |
 
 ## Round 2 · Batch G — policy automations and retries
 
