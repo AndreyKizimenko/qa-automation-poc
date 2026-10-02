@@ -3,7 +3,7 @@
 **19 gaps → about 9 specs, nearly all augments, after merges.** `Settings forms` · `Enroll secrets` · `Users` ·
 `Labels` · `Theme and account` · `Activity feed`
 
-**Status: built 2026-10-02, PR open** (planned 2026-10-01). Decisions below; the table's last column is the review; *What landed* at the end.
+**Status: built 2026-10-02, [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81)** (planned 2026-10-01). Decisions below; the table's last column is the review; *What landed* at the end.
 
 > ## ▶ Start here
 >
