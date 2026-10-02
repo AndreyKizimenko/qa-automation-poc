@@ -26,6 +26,13 @@ export class EditUserPage {
   readonly backButton: Locator;
   readonly saveButton: Locator;
   readonly cancelButton: Locator;
+  /**
+   * The admin's "set a new password" field on a password-authenticated user.
+   * On the edit form it is placeholdered with dots rather than "Password" (as
+   * on create), and its label collides with the "Password" Authentication
+   * radio, so the placeholder is the handle.
+   */
+  readonly newPassword: Locator;
 
   // API-only edit: endpoint-access controls (same shape as CreateApiUserPage).
   readonly specificEndpointsLabel: Locator;
@@ -43,6 +50,7 @@ export class EditUserPage {
     this.backButton = page.getByRole('link', { name: 'Back to users' });
     this.saveButton = page.getByRole('button', { name: 'Save' });
     this.cancelButton = page.getByRole('button', { name: 'Cancel' });
+    this.newPassword = page.getByPlaceholder('••••••••');
 
     this.specificEndpointsLabel = page.locator('label[for="specific-endpoints"]');
     // Role-less container div — scoped by its component class (same as create).

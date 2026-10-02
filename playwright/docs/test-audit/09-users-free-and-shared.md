@@ -1,6 +1,6 @@
 # Settings › Users — free + shared — test audit
 
-**Specs covered:** 9 files · **Test declarations:** 27 · **Projects:** free (6 specs) / free + premium (3 shared specs)
+**Specs covered:** 10 files · **Test declarations:** 28 · **Projects:** free (6 specs) / free + premium (4 shared specs)
 
 Covers `/settings/users`: the user list (search, pagination, per-row Actions), the
 two creation sub-pages (`/settings/users/new/human`, `/settings/users/new/api`), the
@@ -54,6 +54,7 @@ Free ↔ premium delta, in full (nothing else differs):
 | USRF-25 | `shared/settings/users/row-actions.spec.ts` | User row actions › Reset sessions opens the confirmation modal and confirms | UI | ☐ |
 | USRF-26 | `shared/settings/users/row-actions.spec.ts` | Reset sessions invalidates the user token › resetting the user's sessions invalidates their existing token | UI+API | ☐ |
 | USRF-27 | `shared/settings/users/pagination.spec.ts` | Users pagination › Next pagination control becomes enabled and advances the table | UI | ☐ |
+| USRF-28 | `shared/settings/users/edit-password.spec.ts` | Settings • Users • an admin sets a password › an admin sets a user's password; it logs in, the old one and the old session don't | UI+API | ☐ |
 
 Shared helper used by USRF-02/03 (`assertApiUserRow`,
 [`api-user-create.spec.ts:24-32`](../../tests/e2e/free/settings/users/api-user-create.spec.ts)) —
@@ -946,6 +947,43 @@ other:
 - *Coverage gaps:* **Previous** never exercised (nor that it returns to the original first row); no check that page 2 holds ≤10 distinct rows or that Next disables on the last page; no interaction between search + pagination.
 - *Redundancy:* none within the area.
 - *Efficiency / smells:* the 20-user bulk create is the area's main **cross-spec interference source** — for the life of this spec the first pages of the users table are crowded, which is precisely why every other spec must search-then-act, and it can shift page 1 under USRF-18's row loop. Volume-wise the test is self-sufficient (it doesn't rely on pre-existing users), but 20 users is far more than the 11 needed to enable **Next**; the parallel `Promise.all` create + serial delete also puts 40 API calls around a two-assertion test.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### USRF-28 · Settings • Users • an admin sets a password › an admin sets a user's password; it logs in, the old one and the old session don't
+
+- **File:** [`playwright/tests/e2e/shared/settings/users/edit-password.spec.ts`](../../tests/e2e/shared/settings/users/edit-password.spec.ts)
+- **Grep:** `npx playwright test -g "an admin sets a user's password"`
+- **Project:** premium **and** free · **Mode:** UI+API · **Isolation:** standalone; the user is deleted in an `afterEach`
+- **Preconditions:** a throwaway observer `qa-test-<ms>-pwset@fleetdm.com` created through the API with the suite's test password (`FLEET_TEST_USER_PASSWORD`), no forced reset. A **cookie-less** API context (the browser project's `request` carries the admin session, which would make `/me` pass whatever the token said).
+- **Data created:** that user; deleted in the `afterEach`, and swept by `cleanup-setup` (`qa-test-*`) if a run dies first
+
+**Flow**
+
+1. ☐ *(API)* Log in as the user with the old password.
+   - ✅ *(API)* `POST /login` succeeds; the returned token authenticates `GET /me`.
+2. ☐ Open **Settings → Users**, search the user's email, row **Actions → Edit**.
+   - ✅ *(UI)* URL is `/settings/users/<id>/edit`; heading **Edit user**.
+3. ☐ Type a new password into the **Password** field (placeholder `••••••••`; it sends `new_password`, no old password asked), click **Save**.
+   - ✅ *(UI)* Toast `Successfully edited QA Password Set`.
+4. ☐ *(API)* Log in again.
+   - ✅ *(API)* The **new** password: 200.
+   - ✅ *(API)* The **old** password: 401.
+   - ✅ *(API)* The token from step 1: `GET /me` turns 401 (polled) — Fleet ends the user's sessions when an admin changes the password.
+
+**Assessment**
+- *Value:* the only test of an admin setting someone else's password, on both tiers, proven where it matters — at login — rather than by a UI landing (round 1's note on C7 #1 / #8). Also the second proof, after USRF-26, that Fleet revokes sessions.
+- *Coverage gaps:* the password policy's refusal (too short, no symbol) on the edit form isn't exercised; nor is switching the user to SSO, which clears the password. Not driven by a non-admin.
+- *Redundancy:* the session-revocation half overlaps USRF-26 (Reset sessions), through a different trigger.
+- *Efficiency / smells:* the user is created through the API (it's a precondition, not the feature); the old password comes from the env, so the test can't run without `FLEET_TEST_USER_PASSWORD`.
 
 **Notes (Andrey)**
 ```

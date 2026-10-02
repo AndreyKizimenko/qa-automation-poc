@@ -123,6 +123,7 @@ sort, both Fleet web address flows). Detail and Andrey's decisions in
 | Advanced options on free | `premium/settings/advanced-options.spec.ts` → `shared/settings/organization/`; the save now also flips Verify SSL certs and Enable STARTTLS (C7 #13 folded), checks the rest of `smtp_settings` is untouched, and restores in an `afterEach` |
 | host status webhook | `shared/settings/host-status-webhook.spec.ts` also sets Percentage of hosts (5%) and Number of days (3 days) and reads all four values back after a reload, then through the API; `IntegrationsPage` gains `selectHostStatusOption` for the two react-select v1 dropdowns |
 | theme | `shared/account/theme.spec.ts` gains System following the OS live and Light pinning against a dark OS, via `page.emulateMedia`; the sign-out half of the flows was cut (the theme is per-browser localStorage by design) |
+| an admin sets a password | new `shared/settings/users/edit-password.spec.ts`: Edit user → Password on a throwaway user; a cookie-less API login takes the new password, refuses the old one, and the old token turns 401; `EditUserPage.newPassword` (the edit form's field is placeholdered `••••••••`) |
 
 ## Round 2 · Batch G — policy automations and retries
 
