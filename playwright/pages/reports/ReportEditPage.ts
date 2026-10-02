@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { TargetLabelSelector } from '../components/TargetLabelSelector';
+import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
 
 /**
@@ -12,6 +13,14 @@ import { Toast } from '../components/Toast';
  * The SQL editor is Fleet's `SQLEditor` component (`.sql-editor` wrapper)
  * around Ace; visible code lives in `.ace_content` and keyboard input is
  * routed through the standard hidden `textarea.ace_text-input`.
+ *
+ * The edit form's fields come from report state Fleet keeps across
+ * client-side navigation, and are filled again when the page's own fetch of
+ * the report returns. Reached by clicking "Edit report", the form can show the
+ * right values and still overwrite an edit a moment later: the save then
+ * stores nothing and asks nothing. To edit a report that was just saved, load
+ * the page with `gotoEdit()` and wait for the saved values to show (a fresh
+ * load starts from Fleet's defaults), or let `fillAll()` re-apply what drifted.
  */
 export type ReportPlatform = 'macOS' | 'Windows' | 'Linux' | 'ChromeOS';
 export type ReportInterval =
@@ -33,18 +42,24 @@ export interface ReportFormValues {
   observersCanRun: boolean;
   platforms: ReportPlatform[];
   sql: string;
+  /** The Automations slider; left as it is when omitted. */
+  automations?: boolean;
 }
 
 /**
  * Fields collected by the "Save report" modal that pops on Save for a
- * new report. Platforms / target are left at their modal defaults — the
- * smoke flow exercises name + description + interval + observers-can-run.
+ * new report. Platforms and Automations are left at the modal's defaults
+ * when omitted (every platform the SQL is compatible with; automations off).
  */
 export interface SaveReportValues {
   name: string;
   description: string;
   interval: ReportInterval;
   observersCanRun: boolean;
+  platforms?: ReportPlatform[];
+  automations?: boolean;
+  /** Store data, under the modal's Advanced options; left at its default (on) when omitted. */
+  storeData?: boolean;
 }
 
 export class ReportEditPage {
@@ -87,8 +102,21 @@ export class ReportEditPage {
   readonly saveNewIntervalControl: Locator;
   readonly saveNewIntervalValueLabel: Locator;
   readonly saveNewSubmitButton: Locator;
+  readonly saveNewCancelButton: Locator;
+  /** The Save report modal's Automations slider and the log-destination copy beside it. */
+  readonly saveNewAutomationsSwitch: Locator;
+  readonly saveNewAutomationsCopy: Locator;
+  readonly saveNewAdvancedOptionsButton: Locator;
+  readonly saveNewStoreDataCheckbox: Locator;
   /** The Save report modal's label target — the dropdown variant (Include any / Include all; premium). */
   readonly saveNewTargets: TargetLabelSelector;
+
+  // The edit form's Automations slider and its log-destination copy, and the
+  // Store data checkbox under Advanced options.
+  readonly automationsSwitch: Locator;
+  readonly automationsCopy: Locator;
+  readonly advancedOptionsButton: Locator;
+  readonly storeDataCheckbox: Locator;
 
   // Modal that pops on Save for an existing report.
   readonly confirmSaveModal: Locator;
@@ -100,6 +128,8 @@ export class ReportEditPage {
   readonly saveAsNewModal: Locator;
   readonly saveAsNewNameInput: Locator;
   readonly saveAsNewSubmitButton: Locator;
+  /** The modal's "Fleet" field (premium, and only when the user has more than one fleet to choose). */
+  readonly saveAsNewFleetDropdown: TeamDropdown;
 
   constructor(page: Page) {
     this.page = page;
@@ -150,7 +180,23 @@ export class ReportEditPage {
     this.saveNewIntervalControl = this.saveNewModal.locator('.form-field--frequency .Select-control');
     this.saveNewIntervalValueLabel = this.saveNewModal.locator('.form-field--frequency .Select-value-label');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveNewCancelButton = this.saveNewModal.getByRole('button', { name: 'Cancel', exact: true });
+    // Fleet's Slider is a nameless `role="switch"` button, and the modal holds
+    // only one. Its label ("Automations on/off") and the log-destination
+    // sentence render as one text run beside it.
+    this.saveNewAutomationsSwitch = this.saveNewModal.getByRole('switch');
+    this.saveNewAutomationsCopy = this.saveNewModal.getByText(/Historical results will (not )?be sent to your log destination/);
+    this.saveNewAdvancedOptionsButton = this.saveNewModal.getByRole('button', { name: 'Advanced options' });
+    this.saveNewStoreDataCheckbox = this.saveNewModal.getByRole('checkbox', { name: 'discardData' });
     this.saveNewTargets = new TargetLabelSelector(this.saveNewModal);
+
+    // The edit form has the same nameless slider, the only switch on the page.
+    this.automationsSwitch = page.getByRole('switch');
+    this.automationsCopy = page.getByText(/Historical results will (not )?be sent to your log destination/);
+    this.advancedOptionsButton = page.getByRole('button', { name: 'Advanced options' });
+    // "Store data" is a role=checkbox proxy whose aria-label is the form field
+    // it inverts (`discardData`): ticked means results are stored.
+    this.storeDataCheckbox = page.getByRole('checkbox', { name: 'discardData' });
 
     this.confirmSaveModal = page.locator('.modal__modal_container').filter({ hasText: 'Save changes' });
     this.confirmSaveButton = this.confirmSaveModal.getByRole('button', { name: 'Save', exact: true });
@@ -161,6 +207,7 @@ export class ReportEditPage {
     // <label htmlFor>, so target it by id within the modal.
     this.saveAsNewNameInput = this.saveAsNewModal.locator('#queryName');
     this.saveAsNewSubmitButton = this.saveAsNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveAsNewFleetDropdown = new TeamDropdown(page, this.saveAsNewModal);
   }
 
   /** Platform target checkbox by visible label. */
@@ -209,9 +256,10 @@ export class ReportEditPage {
 
   /**
    * New-report save flow: clicks Save → opens "Save report" modal → fills
-   * name + description + interval + observers-can-run → submits → waits
-   * for the success toast. Fleet redirects to `/reports/:id` on success;
-   * the parsed id is returned.
+   * name + description + interval + observers-can-run, and the platforms,
+   * Automations and Store data when given → submits → waits for the success
+   * toast. Fleet redirects to `/reports/:id` on success; the parsed id is
+   * returned.
    */
   async saveNew(
     values: SaveReportValues,
@@ -232,6 +280,14 @@ export class ReportEditPage {
     }
     if (values.observersCanRun) await this.saveNewObserversCheckbox.check();
     else await this.saveNewObserversCheckbox.uncheck();
+    if (values.platforms) await this.setPlatforms(values.platforms);
+    if (values.automations !== undefined) await this.setSwitch(this.saveNewAutomationsSwitch, values.automations);
+    if (values.storeData !== undefined) {
+      if (!(await this.saveNewStoreDataCheckbox.isVisible())) await this.saveNewAdvancedOptionsButton.click();
+      if (values.storeData) await this.saveNewStoreDataCheckbox.check();
+      else await this.saveNewStoreDataCheckbox.uncheck();
+      await expect(this.saveNewStoreDataCheckbox).toBeChecked({ checked: values.storeData });
+    }
     if (target) {
       await this.saveNewTargets.chooseCustom();
       await this.saveNewTargets.scope(target.option, target.labels);
@@ -251,13 +307,54 @@ export class ReportEditPage {
    * Existing-report save flow: clicks Save → confirms the "Save changes?"
    * modal → waits for the success toast. Fleet then redirects to the report
    * details page (`/reports/:id`).
+   *
+   * Fleet asks for that confirmation only when the save would delete the
+   * report's stored results: the report stores them and the edit changes its
+   * SQL, platforms or minimum osquery version, turns Store data off, or moves
+   * to differential logging (`EditQueryForm`'s `confirmChanges`). Pass
+   * `prompt: false` for an edit that saves straight away; the method then
+   * asserts the modal never opened.
    */
-  async saveExisting(): Promise<void> {
+  async saveExisting(opts: { prompt?: boolean } = {}): Promise<void> {
     await this.saveButton.click();
-    await expect(this.confirmSaveModal).toBeVisible();
-    await this.confirmSaveButton.click();
-    await this.toast.expectSuccess('Report updated.');
+    if (opts.prompt === false) {
+      // Whichever comes first — the prompt or the save — then fail on the prompt
+      // by name rather than as a toast that never came.
+      await expect(this.confirmSaveModal.or(this.toast.success)).not.toHaveCount(0);
+      await expect(this.confirmSaveModal, 'Fleet asked to confirm a save that deletes nothing').toHaveCount(0);
+      await this.toast.expectSuccess('Report updated.');
+    } else {
+      await expect(this.confirmSaveModal).toBeVisible();
+      await this.confirmSaveButton.click();
+      await this.toast.expectSuccess('Report updated.');
+    }
     await this.page.waitForURL(/\/reports\/\d+(?:\?|$)/);
+  }
+
+  /** Opens Advanced options on the edit form, if it isn't already. */
+  async openAdvancedOptions(): Promise<void> {
+    if (!(await this.storeDataCheckbox.isVisible())) await this.advancedOptionsButton.click();
+    await expect(this.storeDataCheckbox).toBeVisible();
+  }
+
+  /** Ticks or unticks Store data under Advanced options. */
+  async setStoreData(on: boolean): Promise<void> {
+    await this.openAdvancedOptions();
+    if (on) await this.storeDataCheckbox.check();
+    else await this.storeDataCheckbox.uncheck();
+    await expect(this.storeDataCheckbox).toBeChecked({ checked: on });
+  }
+
+  /** Sets the edit form's Automations slider. */
+  async setAutomations(on: boolean): Promise<void> {
+    await this.setSwitch(this.automationsSwitch, on);
+  }
+
+  /** Flips a Fleet Slider (`role="switch"`, state in `aria-checked`) to `on`. */
+  private async setSwitch(slider: Locator, on: boolean): Promise<void> {
+    await expect(slider).toBeVisible();
+    if ((await slider.getAttribute('aria-checked')) !== String(on)) await slider.click();
+    await expect(slider).toHaveAttribute('aria-checked', String(on));
   }
 
   /**
@@ -354,6 +451,7 @@ export class ReportEditPage {
     if (values.observersCanRun) await this.observersCanRunCheckbox.check();
     else await this.observersCanRunCheckbox.uncheck();
     await this.setPlatforms(values.platforms);
+    if (values.automations !== undefined) await this.setAutomations(values.automations);
     await this.nameInput.fill(values.name);
     await this.descriptionInput.fill(values.description);
 
@@ -367,6 +465,12 @@ export class ReportEditPage {
     const currentPlatforms = await this.checkedPlatforms();
     if (JSON.stringify(currentPlatforms) !== JSON.stringify(values.platforms)) {
       await this.setPlatforms(values.platforms);
+    }
+    if (
+      values.automations !== undefined &&
+      (await this.automationsSwitch.getAttribute('aria-checked')) !== String(values.automations)
+    ) {
+      await this.setAutomations(values.automations);
     }
     if ((await this.nameInput.inputValue()) !== values.name) {
       await this.nameInput.fill(values.name);
@@ -384,6 +488,9 @@ export class ReportEditPage {
     await expect(this.observersCanRunCheckbox).toBeChecked({ checked: values.observersCanRun });
     expect(await this.checkedPlatforms()).toEqual(values.platforms);
     expect(await this.sqlText()).toContain(values.sql.trim());
+    if (values.automations !== undefined) {
+      await expect(this.automationsSwitch).toHaveAttribute('aria-checked', String(values.automations));
+    }
   }
 
   /** Assert every editable field equals `values` (use after re-opening). */

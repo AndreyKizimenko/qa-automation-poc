@@ -17,6 +17,10 @@ export type TeamScope = 'All fleets' | 'Workstations' | 'Unassigned';
  *
  * On the free tier the dropdown isn't rendered. `select()` no-ops in that
  * case so specs don't have to branch on SUITE.
+ *
+ * Fleet renders the same dropdown as a form field, too — Save as new's
+ * "Fleet" — so the trigger can be scoped to a container; the page header's
+ * dropdown is the default.
  */
 export class TeamDropdown {
   readonly page: Page;
@@ -25,10 +29,11 @@ export class TeamDropdown {
   /** The open menu's entries. Only meaningful after {@link trigger} is clicked. */
   readonly options: Locator;
 
-  constructor(page: Page) {
+  constructor(page: Page, root: Page | Locator = page) {
     this.page = page;
-    this.trigger = page.locator('.fleet-dropdown__button');
-    this.currentValue = page.locator('.fleet-dropdown__button-label');
+    this.trigger = root.locator('.fleet-dropdown__button');
+    this.currentValue = root.locator('.fleet-dropdown__button-label');
+    // Only one menu is open at a time, so the options needn't be scoped.
     this.options = page.locator('.fleet-dropdown__option');
   }
 

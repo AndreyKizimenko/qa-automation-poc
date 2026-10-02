@@ -187,7 +187,10 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
     deleteAllScripts(request, vms.id, (name) => name.startsWith('pw-')),
     // By exact prefix: gitops declares `pw-host-report-results` on this fleet too.
     ...reports
-      .filter((r) => r.name.startsWith('pw-run-script-') || r.name.startsWith('pw-rl-'))
+      .filter(
+        (r) =>
+          r.name.startsWith('pw-run-script-') || r.name.startsWith('pw-rl-') || r.name.startsWith('pw-stored-results-'),
+      )
       .map((r) => deleteReport(request, r.id)),
   ]);
   // After the policies: a title an install policy points at can't be deleted.

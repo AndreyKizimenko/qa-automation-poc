@@ -1,7 +1,8 @@
 /**
- * Free • Reports • automations. Same per-report automations enable/persist as
- * premium (the feature exists on free); free has no team dropdown. The report
- * is seeded + torn down via the API.
+ * Free • Reports • automations. Same per-report automations on → off round
+ * trip as premium, with the list's Automations column read in between (the
+ * feature exists on free); free has no team dropdown. The report is seeded +
+ * torn down via the API.
  *
  * Grounded in frontend/pages/queries/ManageQueriesPage + its
  * ManageQueryAutomationsModal.
@@ -17,14 +18,20 @@ test.describe('Free • Reports • automations', () => {
 
   test.beforeEach(async ({ request }) => {
     name = `${MARKER}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    ({ id } = await createReport(request, { name }));
+    // An interval makes the list read "On" rather than "Paused" (automations on
+    // but never scheduled). Daily keeps the `SELECT 1;` it schedules on the
+    // hosts in scope to one run a day.
+    ({ id } = await createReport(request, { name, interval: 86_400 }));
   });
 
   test.afterEach(async ({ request }) => {
     await deleteReportsMatching(request, name);
   });
 
-  test("enabling a report's automations persists", async ({ reportsList, request }) => {
+  test("a report's automations are turned on, then off again, and the list says so", async ({
+    reportsList,
+    request,
+  }) => {
     await reportsList.goto();
 
     await reportsList.openManageAutomations();
@@ -34,5 +41,18 @@ test.describe('Free • Reports • automations', () => {
 
     const report = await findReportById(request, id);
     expect(report?.automations_enabled).toBe(true);
+
+    // The list's Automations column reads the stored state.
+    await reportsList.search.fill(name);
+    await expect(reportsList.automationsCell(name)).toHaveText('On');
+
+    await reportsList.openManageAutomations();
+    await expect(reportsList.reportAutomationCheckbox(name)).toBeChecked();
+    await reportsList.setReportAutomation(name, false);
+    await reportsList.saveAutomations();
+    await reportsList.toast.expectSuccess('Successfully updated report automations.');
+
+    expect((await findReportById(request, id))?.automations_enabled).toBe(false);
+    await expect(reportsList.automationsCell(name)).toHaveText('Off');
   });
 });
