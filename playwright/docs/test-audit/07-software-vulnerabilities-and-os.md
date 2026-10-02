@@ -26,14 +26,14 @@ and skips when the instance has none.
 | SWV-05 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — exploited-vulnerabilities filter | UI | ☐ |
 | SWV-06 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — list, pagination, and CVE detail flow | UI | ☐ |
 | SWV-07 | `premium/software/vulnerabilities.spec.ts` | `{macOS, Linux (deb), Windows}` host — vulnerable software → version → CVE flow † | UI | ☐ |
-| SWV-08 | `premium/software/vulnerability-automations.spec.ts` | Premium • Software • Vulnerability automations › enabling with a webhook URL persists | UI+API | ☐ |
+| SWV-08 | `premium/software/vulnerability-automations.spec.ts` | Premium • Software • Vulnerability automations › enabling with a webhook URL persists, and turning it off keeps the URL | UI+API | ☐ |
 | SWV-09 | `premium/software/os.spec.ts` | OS tab — platform filter narrows the list to `{macOS, Windows}` | UI | ☐ |
 | SWV-10 | `premium/software/os.spec.ts` | OS tab — "View all hosts" lands on the Hosts list filtered by that OS | UI | ☐ |
 | SWV-11 | `free/software/vulnerabilities.spec.ts` | Software vulnerabilities › Software Titles — vulnerable filter, pagination, and column checks | UI | ☐ |
 | SWV-12 | `free/software/vulnerabilities.spec.ts` | `{macOS, Linux (deb), Windows}` — software titles → version → CVE detail flow † | UI | ☐ |
 | SWV-13 | `free/software/vulnerabilities.spec.ts` | Vulnerabilities tab — list, pagination, and CVE detail flow | UI | ☐ |
 | SWV-14 | `free/software/vulnerabilities.spec.ts` | `{macOS, Linux (deb), Windows}` host — vulnerable software → version → CVE flow † | UI | ☐ |
-| SWV-15 | `free/software/vulnerability-automations.spec.ts` | Free • Software • Vulnerability automations › enabling with a webhook URL persists | UI+API | ☐ |
+| SWV-15 | `free/software/vulnerability-automations.spec.ts` | Free • Software • Vulnerability automations › enabling with a webhook URL persists, and turning it off keeps the URL | UI+API | ☐ |
 | SWV-16 | `premium/software/os.spec.ts` | OS tab — a row drills into that OS with matching version and counts | UI | ☐ |
 | SWV-17 | `premium/software/os.spec.ts` | OS tab — sorting by Hosts reorders the list | UI | ☐ |
 | SWV-18 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities — a CVE hands off to the hosts running each affected version † | UI | ☐ |
@@ -421,14 +421,15 @@ other:
 
 ---
 
-### SWV-08 · Premium • Software • Vulnerability automations › enabling with a webhook URL persists
+### SWV-08 · Premium • Software • Vulnerability automations › enabling with a webhook URL persists, and turning it off keeps the URL
 
-- **File:** [`playwright/tests/e2e/premium/software/vulnerability-automations.spec.ts`](../../tests/e2e/premium/software/vulnerability-automations.spec.ts) (L33)
-- **Grep:** `npx playwright test --project=premium -g "enabling with a webhook URL persists"` (matches the free copy too — add `--project`)
+- **File:** [`playwright/tests/e2e/premium/software/vulnerability-automations.spec.ts`](../../tests/e2e/premium/software/vulnerability-automations.spec.ts) (L34)
+- **Grep:** `npx playwright test --project=premium -g "enabling with a webhook URL persists, and turning it off keeps the URL"` (matches the free copy too — `--project` is mandatory)
 - **Project:** premium · **Scope:** All fleets (the **Automations** button is only enabled there, for global admins)
 - **Mode:** UI+API · **Isolation:** mutates **global** app config; `beforeEach` snapshots `webhook_settings.vulnerabilities_webhook` via `GET /config` and `afterEach` restores it via `PATCH /config` (runs even on failure). Fleet merge-patches within `webhook_settings`, so sibling webhook specs running in parallel are unaffected.
 - **Preconditions:** global-admin session (default premium auth state)
 - **Data created:** app-config change only — reverted in `afterEach`
+- **Source:** QA Wolf round 1 C6 #17 (`software-disable-software-vulnerability-automation`) supplies the off half
 
 **Flow**
 
@@ -446,12 +447,18 @@ other:
    - ✅ *(API)* `GET /config` → `webhook_settings.vulnerabilities_webhook.enable_vulnerabilities_webhook === true` and `destination_url === <url>`.
 6. ☐ Click **Automations** again.
    - ✅ *(UI)* Toggle `aria-checked=true` and the URL field holds the saved value.
+7. ☐ In the same modal, turn the vulnerability automations toggle **off** and click **Save**.
+   - ✅ *(UI)* Toggle `aria-checked=false` before the save; the modal closes afterwards.
+   - ✅ *(API)* `GET /config` is polled until `enable_vulnerabilities_webhook === false` — step 5's identical success toast can still be on screen, so no toast can say this save landed.
+   - ✅ *(API)* `destination_url` still equals `https://example.com/pw-vuln-webhook` — Fleet keeps the URL for the next time the automation is turned on.
+8. ☐ Click **Automations** again.
+   - ✅ *(UI)* Toggle `aria-checked=false`.
 
 **Assessment**
-- *Value:* solid round-trip: UI write → server truth → UI re-read, with guaranteed restore. Catches a modal that appears to save but doesn't persist (a recurring Fleet class of bug).
-- *Coverage gaps:* no ticket workflow (Jira/Zendesk) path; no disable round-trip; no invalid-URL validation/error toast; no assertion that **Automations** is disabled under a specific fleet (the premium-only rule the POM comment documents); no check that the free/premium modal differ; no actual webhook delivery.
+- *Value:* the full round trip in both directions — on, stored, re-read; off, stored, re-read — with a guaranteed restore. Catches a modal that appears to save but doesn't persist, in either direction, and an off switch that also wipes the destination URL.
+- *Coverage gaps:* no ticket workflow (Jira/Zendesk) path; no invalid-URL validation or error toast; the off save has no success-toast assertion at all, and after it the reopened modal is checked only for the switch, so the kept URL is proven through the API alone; no check that the free and premium modals differ; no actual webhook delivery. (**Automations** being disabled on a specific fleet is [SWL-12](06-software-library.md) in area 06.)
 - *Redundancy:* SWV-15 is a near-verbatim copy on free (only the team-dropdown step differs).
-- *Efficiency / smells:* the API assertion is justified (server truth is authoritative and race-free). The grep string is shared with the free copy, so `--project` is mandatory when running one.
+- *Efficiency / smells:* the API assertions are justified — server truth is authoritative, and for the off save it is the only signal that the save completed. The grep string is shared with the free copy, so `--project` is mandatory when running one.
 
 **Notes (Andrey)**
 ```
@@ -683,14 +690,15 @@ other:
 
 ---
 
-### SWV-15 · Free • Software • Vulnerability automations › enabling with a webhook URL persists
+### SWV-15 · Free • Software • Vulnerability automations › enabling with a webhook URL persists, and turning it off keeps the URL
 
 - **File:** [`playwright/tests/e2e/free/software/vulnerability-automations.spec.ts`](../../tests/e2e/free/software/vulnerability-automations.spec.ts) (L32)
-- **Grep:** `npx playwright test --project=free -g "enabling with a webhook URL persists"`
+- **Grep:** `npx playwright test --project=free -g "enabling with a webhook URL persists, and turning it off keeps the URL"`
 - **Project:** free · **Scope:** single (aggregate always in effect)
 - **Mode:** UI+API · **Isolation:** mutates **global** app config; snapshot in `beforeEach`, restore in `afterEach`
 - **Preconditions:** admin session
 - **Data created:** app-config change only — reverted
+- **Source:** QA Wolf round 1 C6 #16 supplies the off half
 
 **Flow**
 
@@ -702,12 +710,16 @@ other:
    - ✅ *(UI)* Modal closes; success toast "Successfully updated vulnerability automations."
    - ✅ *(API)* `GET /config` shows `enable_vulnerabilities_webhook === true` and the exact URL.
 6. ☐ Reopen **Automations** — ✅ *(UI)* toggle on, URL field holds the value.
+7. ☐ In the same modal, toggle vulnerability automations **off** and click **Save**.
+   - ✅ *(UI)* `aria-checked=false` before the save; the modal closes.
+   - ✅ *(API)* `GET /config` polled until `enable_vulnerabilities_webhook === false` (step 5's toast can still be showing); `destination_url` is still the URL.
+8. ☐ Reopen **Automations** — ✅ *(UI)* toggle off.
 
 **Assessment**
-- *Value:* proves the webhook feature is not paywalled on free and persists.
-- *Coverage gaps:* no assertion that the *premium-only* parts of the modal (ticket integrations) are absent on free — the tier check this spec exists for; no disable round-trip; no URL validation.
+- *Value:* proves the webhook feature is not paywalled on free, and that it persists both on and off, keeping the URL when off.
+- *Coverage gaps:* no assertion that the *premium-only* parts of the modal (ticket integrations) are absent on free — the tier check this spec exists for; no URL validation; the off half's kept URL is checked through the API only.
 - *Redundancy:* verbatim duplicate of SWV-08 except the dropdown step (the file header says so).
-- *Efficiency / smells:* API assertion justified (server truth). Shares its grep string with SWV-08.
+- *Efficiency / smells:* API assertions justified (server truth, and the only completion signal for the off save). Shares its grep string with SWV-08.
 
 **Notes (Andrey)**
 ```
@@ -1045,7 +1057,7 @@ other:
 | Severity / CVSS filter (premium) | SWV-19 (options list + disabled-until-vulnerable rule) | **never applied** — no narrowed list, no `min_cvss_score`/`max_cvss_score` in the URL, no **Custom** range inputs, no free-side absence check |
 | Vulnerabilities list pagination + tab reset | SWV-06, SWV-13 | conditional; no column/sort assertions |
 | Host-details Software tab vulnerable filter + Applications↔Full inventory | SWV-07, SWV-14 | narrowing not asserted; host software search untested; no real MDM host variant |
-| Vulnerability-automations webhook | SWV-08, SWV-15 | ticket workflow, disable round-trip, invalid URL, **Automations** disabled outside All fleets, tier-difference assertions, delivery |
+| Vulnerability-automations webhook | SWV-08, SWV-15 (on → stored → re-read, then off → stored with the URL kept → re-read) | ticket workflow, invalid URL, tier-difference assertions, delivery; **Automations** disabled outside All fleets is SWL-12 (area 06) |
 | OS tab platform filter | SWV-09 (premium only) | Linux/ChromeOS/iOS/iPadOS/Android, **All platforms** reset, pagination; free has no platform-filter test (by design — its spec covers only the scope-independent cases) |
 | OS → Hosts hand-off | SWV-10 | URL params, count agreement, pill clearing — all three of which SWV-18 does properly for the CVE hand-off |
 | OS detail page `/software/os/:id` | SWV-16 (premium), SWV-21 (free) | vulnerabilities-table *contents* unread; one OS per run; summary's other fields untouched; `SoftwareOsPage.clickFirstOs` is now dead code (superseded by `openOs(row)`) |
@@ -1064,7 +1076,7 @@ other:
 
 **UI-vs-API balance**
 
-Only SWV-08/SWV-15 assert via API, and it is justified — `GET /config` is the authoritative, race-free check that a modal save persisted, and the UI re-read is still performed. Everything else validates through the browser. The API is used heavily for **discovery** instead: `findVulnerableSoftwareBySources` (up to 5 paged `vulnerable=true` sweeps) and `findHostByPlatform` (up to 50 per-host vulnerable-software probes per platform) run in `beforeAll` for both vulnerability specs — correct in principle (UI scraping would be slower and flakier) but currently the area's biggest reliability liability: the sweep re-runs once per worker under `fullyParallel`, throws the whole chunk on a 500, and the host lookup converts API failures into silent skips. Both use raw `fetch` rather than the sanctioned `withRequest` hook wrapper.
+Only SWV-08/SWV-15 assert via API, and it is justified — `GET /config` is the authoritative, race-free check that a modal save persisted, and the UI re-read is still performed. For the second (off) save it is also the only completion signal: the first save's identical toast can still be on screen, so the test polls `GET /config` until the switch reads off. Everything else validates through the browser. The API is used heavily for **discovery** instead: `findVulnerableSoftwareBySources` (up to 5 paged `vulnerable=true` sweeps) and `findHostByPlatform` (up to 50 per-host vulnerable-software probes per platform) run in `beforeAll` for both vulnerability specs — correct in principle (UI scraping would be slower and flakier) but currently the area's biggest reliability liability: the sweep re-runs once per worker under `fullyParallel`, throws the whole chunk on a 500, and the host lookup converts API failures into silent skips. Both use raw `fetch` rather than the sanctioned `withRequest` hook wrapper.
 
 `findRenderableCve` is a third kind of API use again: not discovery of *what* to test but a probe for **which instance data is navigable at all**, because Fleet links CVEs its own detail endpoint cannot render (#49913). It is the right concession — the alternative is six tests that fail on a product bug they are not about — but it has two costs the entries above record: the assertion target becomes non-deterministic run to run, and a fully-unenriched version turns the test into a silent skip. It is also the area's only API call made from inside a test body rather than a hook.
 

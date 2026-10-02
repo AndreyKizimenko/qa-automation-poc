@@ -97,9 +97,8 @@ test.describe('Free • Policies • automations', () => {
       );
       await policiesList.policyAutomations.setAutomation('ticket_webhook', true);
       await policiesList.savePolicyAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
-
-      expect((await stored()).policy_ids).toContain(policyId);
+      // The previous save's toast can still be showing, so poll the stored state.
+      await expect.poll(async () => (await stored()).policy_ids).toContain(policyId);
       await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
 
@@ -107,10 +106,8 @@ test.describe('Free • Policies • automations', () => {
       await policiesList.openAutomations();
       await policiesList.setPolicyAutomations(false);
       await policiesList.saveAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
-
+      await expect.poll(async () => (await stored()).enable_failing_policies_webhook).toBe(false);
       const webhook = await stored();
-      expect(webhook.enable_failing_policies_webhook).toBe(false);
       expect(webhook.destination_url).toBe(webhookUrl);
       expect(webhook.policy_ids).toContain(policyId);
       // The cell names the webhook only while the webhook is on.

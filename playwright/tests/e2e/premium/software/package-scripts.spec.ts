@@ -1,7 +1,7 @@
 /**
  * Premium • Software • Package scripts and installer download (Unassigned).
  *
- * Two promises Fleet makes about a custom package, both of which a user only
+ * Three promises Fleet makes about a custom package, each of which a user only
  * ever checks by looking:
  *
  *   1. **The installer it serves is the one that was uploaded.** The Library
@@ -10,11 +10,20 @@
  *      fixture on disk *and* against the `hash_sha256` Fleet recorded at upload
  *      — so a mismatch says whether the wrong file was served or the wrong hash
  *      was stored.
- *   2. **Advanced options shows the scripts Fleet will actually run.** The four
- *      editors are compared field by field against the package's stored
- *      scripts, which is the assertion QA Wolf's screenshot of the uninstall
- *      editor was standing in for. Ace drops blank lines from its text layer,
- *      so both sides go through `normalizeScript` before comparison.
+ *   2. **Advanced options shows the scripts Fleet will actually run.** The
+ *      package is added with a pre-install query and a post-install script
+ *      typed into the add form's Advanced options (Fleet generates the install
+ *      and uninstall scripts), both stored as typed, and the Edit modal's four
+ *      editors are compared field by field against the stored package — the
+ *      assertion QA Wolf's screenshot of the uninstall editor was standing in
+ *      for. Ace drops blank lines from its text layer, so both sides go through
+ *      `normalizeScript` before comparison.
+ *   3. **Edited scripts are the ones stored.** All four editors rewritten in
+ *      the Edit modal and saved through "Save changes?", then read back through
+ *      the API (a reopened modal can show stale config). On a per-run
+ *      `fleet-pw-*` package uploaded through the API: a save that edits an
+ *      installer cancels its pending installs, and nothing else may share the
+ *      title under `fullyParallel`.
  *
  * Premium-only — every Add-software path is paywalled on free.
  *
@@ -30,7 +39,9 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { deleteSoftwareTitle, getSoftwarePackage } from '@helpers/api';
+import { deleteSoftwareTitle, getSoftwarePackage, uploadSoftwarePackageBuffer } from '@helpers/api';
+import { inertDeb } from '@helpers/deb';
+import { runNonce } from '@helpers/profiles';
 import { normalizeScript } from '@pages';
 
 const SCOPE = 'Unassigned' as const;
@@ -42,6 +53,11 @@ const FIXTURE = path.resolve(
 );
 const FILE_NAME = 'fleet-playwright-pkg_1.0.0_amd64.deb';
 const TITLE_NAME = 'fleet-playwright-pkg';
+
+// Typed into the add form. `SELECT 1;` returns a row, so on a host the install
+// would go ahead; this package is never installed anywhere.
+const ADD_PRE_INSTALL_QUERY = 'SELECT 1;';
+const ADD_POST_INSTALL_SCRIPT = '#!/bin/sh\necho "pw: post-install ran"\n';
 
 const sha256 = (buffer: Buffer): string =>
   crypto.createHash('sha256').update(buffer).digest('hex');
@@ -65,11 +81,17 @@ test.describe('Premium • Software • Package scripts', () => {
       await softwareTitles.teamDropdown.select(SCOPE);
       await softwareTitles.clickAddSoftware();
       await softwareCustomPackage.openTab();
-      titleId = await softwareCustomPackage.uploadPackage(FIXTURE);
+      titleId = await softwareCustomPackage.uploadPackage(FIXTURE, {
+        preInstallQuery: ADD_PRE_INSTALL_QUERY,
+        postInstallScript: ADD_POST_INSTALL_SCRIPT,
+      });
 
       await expect(softwareTitleDetail.displayHeading).toHaveText(TITLE_NAME);
       const pkg = await getSoftwarePackage(request, FLEET_ID, titleId);
       expect(pkg).not.toBeNull();
+      // What the add form's Advanced options held is what Fleet stored.
+      expect(pkg?.preInstallQuery).toBe(ADD_PRE_INSTALL_QUERY);
+      expect(normalizeScript(pkg?.postInstallScript ?? '')).toBe(normalizeScript(ADD_POST_INSTALL_SCRIPT));
 
       const download = await softwareTitleDetail.installerCard.download();
       expect(download.suggestedFilename).toBe(FILE_NAME);
@@ -98,7 +120,8 @@ test.describe('Premium • Software • Package scripts', () => {
       // A generated .deb install script drives apt against $INSTALLER_PATH and
       // the uninstall script purges the package by the name read off the
       // control file. Pinning those keeps the comparison above from passing on
-      // two matching empty strings if Fleet ever stops generating scripts.
+      // two matching empty strings if Fleet ever stops generating scripts; the
+      // other two hold what the add form was given.
       expect(await modal.scriptText(modal.installScriptEditor)).toContain('$INSTALLER_PATH');
       expect(await modal.scriptText(modal.uninstallScriptEditor)).toContain(TITLE_NAME);
 
@@ -109,6 +132,47 @@ test.describe('Premium • Software • Package scripts', () => {
       titleId = 0;
     } finally {
       if (titleId) await deleteSoftwareTitle(request, FLEET_ID, titleId);
+    }
+  });
+
+  test('editing all four Advanced options saves each of them', async ({ softwareTitleDetail, request }) => {
+    const packageName = `fleet-pw-pkg-scripts-${runNonce()}`;
+    const edited = {
+      preInstallQuery: "SELECT 1 FROM os_version WHERE platform = 'ubuntu';",
+      installScript: `#!/bin/sh\n# pw: edited install\napt-get install --assume-yes -f "$INSTALLER_PATH"\n`,
+      postInstallScript: '#!/bin/sh\necho "pw: edited post-install"\n',
+      uninstallScript: `#!/bin/sh\n# pw: edited uninstall\ndpkg --purge ${packageName}\n`,
+    };
+    const { titleId } = await uploadSoftwarePackageBuffer(
+      request,
+      FLEET_ID,
+      `${packageName}_1.0.0_all.deb`,
+      inertDeb(packageName, '1.0.0'),
+    );
+
+    try {
+      await softwareTitleDetail.goto({ titleId, fleetId: FLEET_ID });
+      // The row's own "Edit software" action, as the test above uses; it renders once the row is open.
+      await softwareTitleDetail.installerCard.expand();
+      await softwareTitleDetail.installerCard.editSoftwareButton.click();
+      const modal = softwareTitleDetail.editSoftwareModal;
+      await modal.expectOpen();
+      await modal.openAdvancedOptions();
+
+      await modal.setScript(modal.preInstallQueryEditor, edited.preInstallQuery);
+      await modal.setScript(modal.installScriptEditor, edited.installScript);
+      await modal.setScript(modal.postInstallScriptEditor, edited.postInstallScript);
+      await modal.setScript(modal.uninstallScriptEditor, edited.uninstallScript);
+      await modal.save();
+      await softwareTitleDetail.toast.expectSuccess(/Successfully edited/);
+
+      const pkg = await getSoftwarePackage(request, FLEET_ID, titleId);
+      expect(pkg?.preInstallQuery).toBe(edited.preInstallQuery);
+      expect(normalizeScript(pkg?.installScript ?? '')).toBe(normalizeScript(edited.installScript));
+      expect(normalizeScript(pkg?.postInstallScript ?? '')).toBe(normalizeScript(edited.postInstallScript));
+      expect(normalizeScript(pkg?.uninstallScript ?? '')).toBe(normalizeScript(edited.uninstallScript));
+    } finally {
+      await deleteSoftwareTitle(request, FLEET_ID, titleId);
     }
   });
 });

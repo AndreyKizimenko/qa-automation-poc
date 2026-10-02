@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 34 (→ 85 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 35 (→ 86 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -14,13 +14,14 @@ persistence across the navbar, and role/scope gating on **Add software** and the
 
 `library.spec.ts` is still the lifecycle workhorse: a double loop (2 scopes × 7
 add cases) around a serial `add → delete → activity feed` describe, i.e. 43 of
-the 83 runtime tests in this area. Around it sit two newer rings. The **shape**
+the 86 runtime tests in this area. Around it sit two newer rings. The **shape**
 specs each seed one distinctly-named title and inspect one property of it
 (`script-only-package`, `package-scripts`, `custom-icons`, `display-name`,
 `version-pinning`). The **read-only** specs touch no state at all
 (`titles-table` on both tiers, `fleet-maintained-filters`, `role-access`,
-`add-software-validation`, `no-teams-views`). `edit-package.spec.ts` remains the
-only in-UI *edit* round-trip that writes something back.
+`add-software-validation`, `no-teams-views`). Two in-UI *edit* round-trips write
+something back: `edit-package.spec.ts` (Self-service) and the second
+`package-scripts` test (all four Advanced-options scripts).
 
 **Standing fact that shapes this whole area:** nothing here ever installs software
 on a host. The premium/free QA hosts are osquery-perf **simulations**, so an
@@ -29,7 +30,8 @@ install/uninstall command has nothing to execute against, and the real macOS VM
 installer is in the library / catalog / activity feed", never "the bits landed on
 a machine". That is still true after the additions below — `script-only-package`
 uploads a shell script Fleet stores as an install script and never runs, and
-`package-scripts` downloads an installer instead of installing it.
+`package-scripts` downloads an installer instead of installing it and stores
+scripts nothing runs.
 
 **Durable precondition — the Fleet-maintained app shelf.** The premium instance's
 **QA** fleet carries a permanent shelf of 10 Fleet-maintained apps × macOS and
@@ -56,7 +58,7 @@ locator ambiguous. The claims in force today:
 | `premium/software/custom-icons.spec.ts` | `anydesk/darwin`, `archaeology/darwin` | Unassigned |
 | `premium/software/display-name.spec.ts` | `clockify/darwin` | Unassigned |
 | `premium/software/script-only-package.spec.ts` | `fleet-playwright-script-package.sh` (→ title `fleet-playwright-script-package`) | Unassigned |
-| `premium/software/package-scripts.spec.ts` | `fleet-playwright-pkg_1.0.0_amd64.deb` (→ title `fleet-playwright-pkg`) | Unassigned |
+| `premium/software/package-scripts.spec.ts` | `fleet-playwright-pkg_1.0.0_amd64.deb` (→ title `fleet-playwright-pkg`), plus a per-run generated `fleet-pw-pkg-scripts-<nonce>` | Unassigned |
 | `premium/controls/setup-experience/install-software.spec.ts` (area 12) | eleven macOS FMA slugs for its pagination case | Unassigned + Workstations |
 | `premium/software/version-pinning.spec.ts` | `Postman` (macOS) on the durable shelf — reads, never adds | QA |
 
@@ -98,6 +100,7 @@ locator ambiguous. The claims in force today:
 | SWL-32 | `premium/software/no-teams-views.spec.ts` | All fleets sticks from Hosts to Policies, and Controls falls back to a fleet | UI | ☐ |
 | SWL-33 | `premium/software/patch-policy.spec.ts` | a macOS app: each patch option stores its own policy, and unticking Patch removes it | UI+API | ☐ |
 | SWL-34 | `premium/software/patch-policy.spec.ts` | a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once | UI+API | ☐ |
+| SWL-35 | `premium/software/package-scripts.spec.ts` | editing all four Advanced options saves each of them | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -177,7 +180,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 
 **Assessment**
 - *Value:* the broadest regression net in the area — proves all four Add-software entry points still work end-to-end (tab navigation, file upload through Fleet's installer pipeline, FMA CDN fetch, VPP catalog submit, Google Play metadata fetch), that scope is carried from the list page into the add flow, that the new title lands on the Library tab under the right fleet, and that Fleet emits the right activity with the right actor.
-- *Coverage gaps:* the title name is never asserted against the expected value (a case where Fleet renders the *wrong* app would pass); the **Type** line is asserted for the app-store cases only, so `Custom package` / `Fleet-maintained` Type copy is unpinned here; no **Advanced options** on add (pre-install query, install/post-install/uninstall scripts, self-service, label scoping, categories) — flagged as net-new in [`C6-software.md` flow 22](../qawolf-migration/audit/C6-software.md); no version/platform/hosts columns asserted on the Library row; no **Download** of the uploaded installer; no duplicate-add rejection, no unsupported-file-type rejection, no oversized-file path; the Android catalog is never re-checked after add; nothing verifies the package is actually *installable* on a host (simulated hosts — see area note).
+- *Coverage gaps:* the title name is never asserted against the expected value (a case where Fleet renders the *wrong* app would pass); the **Type** line is asserted for the app-store cases only, so `Custom package` / `Fleet-maintained` Type copy is unpinned here; no **Advanced options** on add here — SWL-31 sets a pre-install query and a post-install script on the add form for one generated `.deb`, and overriding the generated install / uninstall scripts, label scoping and categories at add time stay untested in this area; no version/platform/hosts columns asserted on the Library row; no **Download** of the uploaded installer; no duplicate-add rejection, no unsupported-file-type rejection, no oversized-file path; the Android catalog is never re-checked after add; nothing verifies the package is actually *installable* on a host (simulated hosts — see area note).
 - *Redundancy:* SWL-05 re-runs this exact custom-package add path with a different `.deb`. The three `custom` cases differ only in the fixture's extension — the browser-side flow is byte-identical, so cases 1–3 buy server-side installer-parsing coverage and nothing UI-side. Add-path coverage also overlaps [`install-software.spec.ts`](../../tests/e2e/premium/controls/setup-experience/install-software.spec.ts), which adds the same four kinds via API.
 - *Efficiency / smells:*
   - The (scope × case) double loop yields 42 runtime tests from 3 declarations; each `add` uploads a real 7–27 MB installer over the browser, so this is the slowest cluster in the suite.
@@ -372,11 +375,11 @@ other:
    - ✅ *(API)* `GET /software/titles/<id>?fleet_id=0` → `software_package.self_service === true` — `getSoftwarePackage()`. The POM comment states a reopened modal renders stale config, so the UI cannot be used for this.
 
 **Assessment**
-- *Value:* the only in-UI edit round-trip in the area, and the only assertion that Fleet's Edit-package modal actually persists a change. Also pins the "Save changes?" double-confirmation behaviour.
-- *Coverage gaps:* only one of the modal's many fields is exercised — no pre-install query, install/post-install/uninstall scripts, categories (which self-service *reveals* and this test never looks at), label scoping, or installer replacement ([`C6-software.md` flows 20/21](../qawolf-migration/audit/C6-software.md) call an `fma-edit-scripts.spec.ts` net-new and unwritten). No success-toast assertion. No **Cancel**/discard path. No UI confirmation at all that the title now shows a self-service badge, and no check that the package appears under **Self-service** on a host's software Library. The `Self-service only` filter switch on the Library page is modelled ([`SoftwareLibraryPage.ts:36`](../../pages/software/SoftwareLibraryPage.ts#L36)) but never used by any spec.
+- *Value:* one of the area's two in-UI edit round-trips (SWL-35 is the other, for the four scripts) and the only one for Self-service. Also pins the "Save changes?" double-confirmation behaviour.
+- *Coverage gaps:* only one of the modal's fields is exercised here — the four scripts are SWL-35's and label scoping is `software-label-targets.spec.ts`'s ([area 22](22-label-targeting.md)); categories (which self-service *reveals* and this test never looks at) and installer replacement are untested. No success-toast assertion. No **Cancel**/discard path. No UI confirmation at all that the title now shows a self-service badge, and no check that the package appears under **Self-service** on a host's software Library. The `Self-service only` filter switch on the Library page is modelled ([`SoftwareLibraryPage.ts:36`](../../pages/software/SoftwareLibraryPage.ts#L36)) but never used by any spec.
 - *Redundancy:* none — this assertion is unique in the suite.
 - *Efficiency / smells:*
-  - The edit affordance used here is the **All hosts** badge ([`SoftwareInstallerCard.ts:59`](../../pages/components/SoftwareInstallerCard.ts#L59)) — an accessible-name match on a *label-scope* badge, which breaks the moment a package has a real label scope or the badge copy changes. The row's own **Edit software** button *is* now modelled (`installerCard.editSoftwareButton`) and SWL-31 opens the same modal with it, so this spec is the odd one out.
+  - The edit affordance used here is the **All hosts** badge ([`SoftwareInstallerCard.ts:59`](../../pages/components/SoftwareInstallerCard.ts#L59)) — an accessible-name match on a *label-scope* badge, which breaks the moment a package has a real label scope or the badge copy changes. The row's own **Edit software** button is modelled (`installerCard.editSoftwareButton`) and SWL-31 opens the same modal with it; SWL-35 uses the badge as this spec does.
   - "A reopened modal renders stale config" is a described product defect used to justify an API-only assertion, but there is no row for it in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) and no filed Fleet issue — per `CLAUDE.md` that should be filed, not silently worked around.
   - `EditSoftwareModal.save()` clicks `confirmSaveButton` unconditionally; if Fleet ever *stops* showing the confirmation for this change, the test fails on a missing dialog rather than adapting.
 
@@ -1396,40 +1399,45 @@ other:
 
 ### SWL-31 · Premium • Software • Package scripts › the installer downloads byte-identical and Advanced options shows its stored scripts
 
-- **File:** [`playwright/tests/e2e/premium/software/package-scripts.spec.ts`](../../tests/e2e/premium/software/package-scripts.spec.ts)
-- **Grep:** `npx playwright test -g "the installer downloads byte-identical and Advanced options shows its stored scripts"`
+- **File:** [`playwright/tests/e2e/premium/software/package-scripts.spec.ts`](../../tests/e2e/premium/software/package-scripts.spec.ts) (L66)
+- **Grep:** `npx playwright test --project=premium -g "the installer downloads byte-identical and Advanced options shows its stored scripts"`
 - **Project:** premium · **Scope:** Unassigned (`FLEET_ID = 0`)
 - **Mode:** UI+API · **Isolation:** independent; `test.setTimeout(90_000)`; API delete in `finally`
+- **Source:** QA Wolf round 1 C6 #22 (`software-add-software-on-team-level`) supplies the add form's Advanced options
 - **Preconditions:** premium license. Fixture [`test-data/linux/software/fleet-playwright-pkg_1.0.0_amd64.deb`](../../test-data/linux/software/fleet-playwright-pkg_1.0.0_amd64.deb) — an inert **662-byte** generated Debian package (one marker file under `/usr/share/fleet-playwright-pkg/`, no maintainer scripts), rebuilt deterministically by `make-deb.py` to sha256 `bf7b4fba…0931a6d5`. It exists so the **title name `fleet-playwright-pkg` is unique across the suite** — every real `.deb` in `test-data/` shares a title with another spec's fixture ("step-cli", "Sublime Text"), and a premium title can hold several packages, so two specs uploading to the same title on the same fleet leave the accordion with two rows and every row-scoped locator ambiguous. A `.deb` in particular because Fleet generates **both** an install and an uninstall script for it, and both are short enough for Ace to render whole (Ace virtualises long documents, so a real installer's scripts would only be partly in the DOM).
-- **Data created:** the title `fleet-playwright-pkg` on `fleet_id=0` — deleted through the UI inside the test.
+- **Data created:** the title `fleet-playwright-pkg` on `fleet_id=0`, carrying the pre-install query `SELECT 1;` and a two-line post-install script (`echo "pw: post-install ran"`) — deleted through the UI inside the test. Nothing installs it, so neither ever runs.
 
 **Flow**
 
-1. ☐ Dashboard → **Software** → **Unassigned** → **Add software** → **Custom package** tab → upload the `.deb`.
+1. ☐ Dashboard → **Software** → **Unassigned** → **Add software** → **Custom package** tab → choose the `.deb`.
+2. ☐ Expand **Advanced options** on the add form (skipped if the editors already render) and write the **Pre-install query** `SELECT 1;` and the **Post-install script** through Ace's own API (`setAceValue` — typing would let Ace auto-indent and close quotes) — `uploadPackage(file, { preInstallQuery, postInstallScript })`.
+   - ✅ *(UI)* **Advanced options** is enabled once a file is chosen (Fleet disables it until then: "Choose a file to modify advanced options.").
+   - ✅ *(UI)* The pre-install editor reads exactly `SELECT 1;`. The post-install editor is not read back on the add form.
+3. ☐ Click **Add software**.
    - ✅ *(UI)* Progress modal (if shown) clears ≤45 s; redirect to `/software/titles/:id` ≤30 s; success toast `/successfully added/` — `uploadPackage()` returns the parsed title id.
    - ✅ *(UI)* The display heading reads exactly `fleet-playwright-pkg`.
-   - ✅ *(API)* The title has an installer package (`getSoftwarePackage` is not null).
-2. ☐ Expand the installer accordion row and click **Download installer**. Fleet mints a one-shot token and triggers a synthetic `<a download>` click, so the browser's download event is the only signal the request happened — `SoftwareInstallerCard.download()`.
+   - ✅ *(API)* The title has an installer package (`getSoftwarePackage` is not null); its pre-install query is exactly `SELECT 1;` and its post-install script equals the one written in step 2 (both through `normalizeScript`). What the add form's Advanced options held is what Fleet stored.
+4. ☐ Expand the installer accordion row and click **Download installer**. Fleet mints a one-shot token and triggers a synthetic `<a download>` click, so the browser's download event is the only signal the request happened — `SoftwareInstallerCard.download()`.
    - ✅ *(UI)* The suggested filename is `fleet-playwright-pkg_1.0.0_amd64.deb`.
    - ✅ The downloaded bytes' SHA-256 equals the fixture on disk's SHA-256 — the installer Fleet serves is the one that was uploaded.
    - ✅ *(API)* The same hash equals the `hash_sha256` Fleet recorded at upload. Hashing both ways is deliberate: a mismatch then says whether the wrong **file** was served or the wrong **hash** was stored.
-3. ☐ Click **Edit software** in the expanded accordion row.
+5. ☐ Click **Edit software** in the expanded accordion row.
    - ✅ *(UI)* The **Edit package** modal (that title for a premium multi-package title; "Edit software" otherwise) is open with its Self-service switch visible — `expectOpen()`.
-4. ☐ Expand **Advanced options** (idempotent — skipped if the editors already render).
+6. ☐ Expand **Advanced options** (idempotent — skipped if the editors already render).
    - ✅ *(UI)* The install- and uninstall-script Ace editors are visible.
-5. ✅ *(UI vs API)* Each of the four editors' rendered code equals the corresponding stored script, field by field: **install**, **uninstall**, **pre-install query**, **post-install**. Both sides go through `normalizeScript()` (trailing whitespace stripped, blank lines dropped) because Ace renders one element per line and drops blank lines from its text layer, so `innerText` is never byte-identical to what Fleet stored. This is the assertion QA Wolf's screenshot of the uninstall editor was standing in for.
-6. ✅ *(UI)* The install script contains `$INSTALLER_PATH` and the uninstall script contains `fleet-playwright-pkg` — a generated `.deb` install script drives apt against `$INSTALLER_PATH` and the uninstall purges the package by the name read off the control file. These pin step 5 against passing on two matching **empty** strings if Fleet ever stopped generating scripts.
-7. ☐ Click **Cancel**. ✅ *(UI)* the modal is hidden.
-8. ☐ Delete from the accordion row (expand → **Delete this version** → confirm).
-   - ✅ *(UI)* The accordion row is hidden afterwards.
+7. ✅ *(UI vs API)* Each of the four editors' rendered code equals the corresponding stored script, field by field: **install**, **uninstall**, **pre-install query**, **post-install**. All four are non-empty — Fleet generated the first two, step 2 wrote the other two. Both sides go through `normalizeScript()` (trailing whitespace stripped, blank lines dropped) because Ace renders one element per line and drops blank lines from its text layer, so `innerText` is never byte-identical to what Fleet stored. This is the assertion QA Wolf's screenshot of the uninstall editor was standing in for.
+8. ✅ *(UI)* The install script contains `$INSTALLER_PATH` and the uninstall script contains `fleet-playwright-pkg` — a generated `.deb` install script drives apt against `$INSTALLER_PATH` and the uninstall purges the package by the name read off the control file. These keep the two generated-script comparisons in step 7 from passing on two matching **empty** strings if Fleet ever stopped generating scripts; step 3's API check does the same for the other two.
+9. ☐ Click **Cancel**. ✅ *(UI)* the modal is hidden.
+10. ☐ Delete from the accordion row (expand → **Delete this version** → confirm).
+    - ✅ *(UI)* The accordion row is hidden afterwards.
 
 **Assessment**
-- *Value:* two promises nothing else in the suite checks. The download round-trip is the **only** exercise of Fleet's installer-*serving* path anywhere (SWL-02's assessment flags Download as never clicked — this closes it), and hashing three ways localises the failure. The Advanced-options comparison is the only assertion that the scripts a user reads are the scripts Fleet will run, and the `$INSTALLER_PATH` / package-name guards stop it degenerating into `'' === ''`.
-- *Coverage gaps:* entirely read-only on the scripts — nothing **edits** one and re-reads it, which remains the largest functional gap in the Edit modal (SWL-06 covers only the Self-service switch); the pre-install-query and post-install comparisons are vacuous for a generated `.deb` (both sides empty); no Download on an FMA / VPP / Android title; nothing tests that the one-shot download token actually expires; no unauthorized-download probe; the Self-service switch the modal opens on is not asserted to be off.
+- *Value:* three promises nothing else in the suite checks. The download round-trip is the **only** exercise of Fleet's installer-*serving* path anywhere (SWL-02's assessment flags Download as never clicked — this closes it), and hashing three ways localises the failure. The add form's Advanced options are the only coverage of setting scripts **at add time**, checked where Fleet stores them. And the Edit-modal comparison is the only assertion that the scripts a user reads are the scripts Fleet will run, on four non-empty scripts, each with a guard against `'' === ''`.
+- *Coverage gaps:* the add form is given only two of its four editors — install and uninstall keep Fleet's generated defaults, so overriding a generated script at add time is untested; the post-install editor isn't read back on the add form before submitting (the API check catches a lost value, but not where it was lost); no Download on an FMA / VPP / Android title; nothing tests that the one-shot download token actually expires; no unauthorized-download probe; the Self-service switch the modal opens on is not asserted to be off. Writing scripts through the **Edit** modal is SWL-35.
 - *Redundancy:* the add and delete halves duplicate SWL-01/02's `custom` Linux case.
 - *Efficiency / smells:*
-  - Two of the four editor comparisons currently prove nothing; only install and uninstall carry a `toContain` guard.
-  - The Edit modal is opened here via `installerCard.editSoftwareButton`, while SWL-06 opens the same modal via the **All hosts** label badge — two different affordances for one modal across two specs (SWL-06's "no Edit affordance is modelled" note predates `editSoftwareButton`).
+  - Three concerns in one test (add-time scripts, download, edit-modal read-back) behind one 90 s budget; a failure in the download half hides whether the editors still match.
+  - The Edit modal is opened here (and in SWL-35) via the expanded row's `installerCard.editSoftwareButton`, while SWL-06 opens the same modal via the **All hosts** label badge (`installerCard.openEdit()`) — two affordances for one modal within this area, and the badge breaks the moment a package has a real label scope.
   - `download.path` is Playwright's temp path; nothing asserts the file is non-empty before hashing, so a zero-byte download fails on a hash mismatch rather than on the obvious cause.
 
 **Notes (Andrey)**
@@ -1557,18 +1565,69 @@ other:
 
 ---
 
+### SWL-35 · Premium • Software • Package scripts › editing all four Advanced options saves each of them
+
+- **File:** [`playwright/tests/e2e/premium/software/package-scripts.spec.ts`](../../tests/e2e/premium/software/package-scripts.spec.ts) (L138)
+- **Grep:** `npx playwright test --project=premium -g "editing all four Advanced options saves each of them"`
+- **Project:** premium · **Scope:** Unassigned (`FLEET_ID = 0`)
+- **Mode:** UI+API · **Isolation:** independent; a per-run package; API delete in `finally`; default 60 s timeout
+- **Source:** QA Wolf round 1 C6 #20 (`software-add-software-edit-and-save-all-scripts-and-queries-for-fleet-maintained-software`) and C8 #23 (`packages-edit-packages-edit-advanced-attributes`) — the same modal and the same `PATCH`, so one test. C6 #20 edited a Fleet-maintained app; this edits a custom package, because editing an FMA's install script sets a sticky `install_script_edited` flag that auto-update carries forward. C6 #21 (each field in isolation, never saved) was cut.
+- **Preconditions (API):** a generated inert `.deb` — `inertDeb('fleet-pw-pkg-scripts-<nonce>', '1.0.0')`, uploaded to Unassigned as `fleet-pw-pkg-scripts-<nonce>_1.0.0_all.deb` with `uploadSoftwarePackageBuffer`, so Fleet generates its install and uninstall scripts. Per-run because a save that edits an installer cancels the title's pending installs, and under `fullyParallel` no other test may share the title.
+- **Data created:** that title, deleted through the API in `finally`; the Unassigned software wipe in `cleanup-setup` / `cleanup-teardown` removes one a dead run leaves.
+
+**Flow**
+
+1. ☐ Open the title's page (`/software/titles/:id?fleet_id=0`, via `SoftwareTitleDetailPage.goto()`).
+   - ✅ *(UI)* Active installer accordion row visible.
+2. ☐ Expand the active installer row and click its **Edit software** action — `installerCard.expand()`, then `editSoftwareButton`.
+   - ✅ *(UI)* The **Edit package** modal is open with its Self-service switch visible — `expectOpen()`.
+3. ☐ Expand **Advanced options**.
+   - ✅ *(UI)* The install- and uninstall-script editors are visible.
+4. ☐ Replace the text of all four editors through Ace's own API — `EditSoftwareModal.setScript()` → `setAceValue()`, since typing would let Ace auto-indent and close quotes:
+   - **Pre-install query** → `SELECT 1 FROM os_version WHERE platform = 'ubuntu';`
+   - **Install script** → `#!/bin/sh`, `# pw: edited install`, `apt-get install --assume-yes -f "$INSTALLER_PATH"`
+   - **Post-install script** → `#!/bin/sh`, `echo "pw: edited post-install"`
+   - **Uninstall script** → `#!/bin/sh`, `# pw: edited uninstall`, `dpkg --purge fleet-pw-pkg-scripts-<nonce>`
+   - ✅ *(UI)* After each, the editor's rendered code equals the new text (both sides through `normalizeScript`, polled).
+5. ☐ Click **Save**, then **Save** in the **Save changes?** confirmation (it warns that pending installs and uninstalls are cancelled) — `save()`.
+   - ✅ *(UI)* The confirmation and the edit modal are both hidden.
+   - ✅ *(UI)* Success toast matching `/Successfully edited/`.
+6. ☐ (No user action) read back.
+   - ✅ *(API)* `getSoftwarePackage`: the pre-install query equals the edited one exactly; the install, post-install and uninstall scripts each equal theirs after `normalizeScript`.
+7. ☐ *(API teardown)* `deleteSoftwareTitle` in `finally`.
+
+**Assessment**
+- *Value:* the only test that writes scripts through Fleet's Edit modal and proves Fleet stored them — all four editors in one save, each read back. It closes the largest Edit-modal gap in the area (SWL-06 exercises only Self-service), and with SWL-31 covers scripts set both at add time and on edit.
+- *Coverage gaps:* the read-back is API-only — the reopened modal is never checked (the spec header cites stale config in a reopened modal, the same unfiled defect SWL-06 routes around), so a modal that saves correctly but then shows the old scripts would pass; the pending-install cancellation the confirmation warns about is never observed, since nothing is pending; the toast is a substring regex rather than the full `Successfully edited <name>.`; no activity-feed assertion for the edit (SWL-08 has one for the Self-service edit); no clearing of a field back to empty, and no Cancel/discard of a dirty form; no Fleet-maintained title (deliberate — see Source); nothing proves Fleet would *run* the edited scripts, since nothing installs the package.
+- *Redundancy:* none — SWL-31 reads the four scripts but never writes them through Edit, and SWL-06 writes only Self-service.
+- *Efficiency / smells:*
+  - Enters by direct URL to the title page rather than dashboard → Software → Library → title, against the click-through convention in `playwright/CLAUDE.md`. Cheap and stable, but it skips the route a user takes.
+  - Opens the modal from the expanded row's **Edit software** action, as SWL-31 in the same file does, not from the **All hosts** badge SWL-06's assessment calls fragile.
+  - Writing through `env.editor.setValue` is the right call for asserting what Fleet stores, but it means no test proves a user can type a multi-line script into these editors.
+  - Fast: a ~1 KB generated package uploaded through the API, no real installer, no progress modal.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
 
 | Feature / user flow | Covered by | Gap |
 |---|---|---|
-| Add custom package (`.pkg` / `.msi` / `.deb` / `.sh`) | SWL-01, SWL-05, SWL-30 (script-only `.sh`), SWL-31 (generated `.deb`) | Advanced options on add (pre-install query, install / post-install / uninstall scripts, self-service, categories, label scope); duplicate-add rejection; server-side rejection of a valid extension with a corrupt payload; `.exe`, `.rpm`, `.tar.gz` fixtures sit in `test-data/` unused |
-| Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | FMA script + query editing ([`C6-software.md` flows 20/21](../qawolf-migration/audit/C6-software.md), unwritten); catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
+| Add custom package (`.pkg` / `.msi` / `.deb` / `.sh`) | SWL-01, SWL-05, SWL-30 (script-only `.sh`), SWL-31 (generated `.deb`, with a pre-install query and a post-install script set under Advanced options) | The rest of Advanced options on add (overriding the generated install / uninstall scripts, self-service, categories, label scope); duplicate-add rejection; server-side rejection of a valid extension with a corrupt payload; `.exe`, `.rpm`, `.tar.gz` fixtures sit in `test-data/` unused |
+| Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | Editing an FMA's scripts — SWL-35 drives the same modal and `PATCH` on a custom package instead, deliberately, since an edited FMA install script sets a sticky `install_script_edited` flag that auto-update carries forward; catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
 | Add Apple VPP app | SWL-01 (Bear, iOS) | macOS and iPadOS VPP platforms; the App Store *search* UI (`vppUiSearchNames` exists for it, unused); missing/expired VPP-token error path |
 | Add Managed Google Play app | SWL-01 (ChatGPT) | Invalid application-ID error path; no post-add catalog re-check (FMA and VPP both have one) |
 | Library tab list | SWL-01, SWL-02, SWL-19 (it is a strict subset of Inventory), SWL-25/27 (a row renders the custom icon / display name) | Library's own columns (Version / Type / Hosts / Status), sorting and pagination — SWL-16–18 cover the **Inventory** table only; the **Self-service only** filter switch (`SoftwareLibraryPage.selfServiceSwitch`, still used by zero specs) |
-| Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, **read-only**) | *Editing* any script or the pre-install query and reading it back; categories; label scope; re-uploading a replacement installer; Cancel/discard on a dirty form |
+| Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, read against the API); SWL-35 (all four written in one save, read back through the API) | Edited scripts shown in a reopened modal (API-only read-back); clearing a script back to empty; categories; re-uploading a replacement installer; Cancel/discard on a dirty form. Label scope is `software-label-targets.spec.ts` ([area 22](22-label-targeting.md)) |
 | Delete installer | SWL-02, SWL-07 | Cancel path; per-version delete on a multi-package title; blocked-delete when referenced by Setup Experience (only covered incidentally in `install-software.spec.ts`) |
 | Add-software gating | SWL-04 (All fleets tooltip), SWL-20 (button presence per role), SWL-24 (client-side file rejection) | An observer *navigating* to `/software/add/package` by URL; direct URL to `/software/add/*` without `fleet_id`; free-tier paywall on `/software/add/*` — [`paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts) lists no `software/add` URL despite `library.spec`'s header claiming all four paths are paywalled |
 | Automations button gating | SWL-11–15 (now incl. `team-admin` and the no-picker `ws-maintainer`) | `ws-observer` (covered by SWL-20 but not here); `global-observer-plus` / `global-technician`; modal internals (covered in `vulnerability-automations.spec.ts`) |
@@ -1597,17 +1656,17 @@ other:
 8. **Three seeded-then-deleted FMA titles.** SWL-25, SWL-26 and SWL-27 each add a distinct Fleet-maintained app (a real CDN fetch, 90 s budget) and delete it, purely to reach a title-detail page and test *title-level presentation* that has nothing to do with the installer kind.
 9. **Two `COLUMNS` lists.** `shared/software/titles-table.spec.ts` (SWL-16) and `premium/software/role-access.spec.ts` (SWL-20, ×3 roles) each declare and assert the same five-column list. Two copies, one table.
 10. **Two role lists on one page, already drifted.** `role-access.spec.ts` sweeps five roles; `manage-automations-access.spec.ts` sweeps four (no `ws-observer`). Same login mechanism, same page, same picker — different rosters.
-11. **Add + delete re-proved three more times.** SWL-30 and SWL-31 each re-run the full custom-package add → library-listing → delete round-trip that SWL-01/02 already own, to reach one shape assertion apiece (as SWL-05/07/08 do for the edit).
+11. **Add + delete re-proved three more times.** SWL-30 and SWL-31 each re-run the full custom-package add → library-listing → delete round-trip that SWL-01/02 already own, to reach their shape assertions (as SWL-05/07/08 do for the edit). SWL-35 shows the cheaper pattern: it seeds its package through the API and spends the browser only on the Edit modal.
 
 **UI-vs-API balance**
 
-- **SWL-06's API-only persistence check** (`getSoftwarePackage` → `self_service === true`) is the one place in this area where API stands in for a UI assertion. It is *documented* as necessary (the reopened Edit modal renders stale config) but that's an unfiled product defect being routed around — per `CLAUDE.md` it belongs in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a Fleet issue, and the test should assert the visible self-service badge in the meantime.
+- **SWL-06's and SWL-35's API-only persistence checks** (`getSoftwarePackage` → `self_service === true`; the four edited scripts) are the two places in this area where API stands in for a UI assertion. Both are *documented* as necessary (the reopened Edit modal renders stale config) but that's an unfiled product defect being routed around — per `CLAUDE.md` it belongs in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a Fleet issue. In the meantime SWL-06 could assert the visible self-service badge; SWL-35 has no visible stand-in short of reopening the modal.
 - **`assertActivity` in SWL-01/02/05/07 is justified** — it is the activity-payload contract (type + `details.software_title` + `actor_email`) plus the mechanism that extracts `software_package` for the feed matchers. It is not a shortcut around a UI assertion, because SWL-03/08 assert the rendered feed separately.
 - **SWL-21's API cross-check is the best pattern in the area.** The rendered "N items" count is compared against `GET /software/fleet_maintained_apps` *under the same filters*, so a catalog that grows with every Fleet release can't invalidate the test and no number is baked into the spec. Worth copying wherever a count is asserted.
-- **The newer shape specs pair each UI assertion with the stored value** — SWL-25 (`icon_url`), SWL-28/29 (`pinned_version`, `version`), SWL-30 (`install_script` byte-for-byte, `uninstall_script === ''`), SWL-31 (`hash_sha256` and all four scripts). That is the shape the rest of the area should follow: the UI assertion says the user can see it, the API assertion says Fleet stored it, and a failure names which half broke.
+- **The newer shape specs pair each UI assertion with the stored value** — SWL-25 (`icon_url`), SWL-28/29 (`pinned_version`, `version`), SWL-30 (`install_script` byte-for-byte, `uninstall_script === ''`), SWL-31 (`hash_sha256`, the two scripts set at add time, and all four scripts against the Edit modal). That is the shape the rest of the area should follow: the UI assertion says the user can see it, the API assertion says Fleet stored it, and a failure names which half broke.
 - **SWL-27 is the outlier.** The display-name round-trip is asserted entirely through the UI, with the API used only to seed and delete — so a heading rendered from client state would pass. It is the one recent spec that does *not* cross-check its write.
 - **API-as-setup is now normal.** SWL-25/26/27 add their Fleet-maintained app through `addFmaToFleet` and SWL-28/29 read the shelf through `listFleetMaintainedTitles`, which is the right call (the add path is SWL-01's job) but means five specs can pass while the UI add flow is broken.
-- **Weak-assertion watch list** (technically UI, but close to no-ops): `expect(titleName.length).toBeGreaterThan(0)` (SWL-01, SWL-05); `rowOrEmpty()` used as a "renders data" proof in SWL-09 and for the `ws-*` roles in SWL-20; the partial tooltip string in SWL-12; `rowWith(name).toHaveCount(0)` in SWL-02 without a search or pagination guard; `available <= total` and `total >= available` in SWL-22 (both hold if the slider does nothing); `libraryCount < inventoryCount` in SWL-19; the pre-install-query and post-install comparisons in SWL-31 (empty === empty for a generated `.deb`).
+- **Weak-assertion watch list** (technically UI, but close to no-ops): `expect(titleName.length).toBeGreaterThan(0)` (SWL-01, SWL-05); `rowOrEmpty()` used as a "renders data" proof in SWL-09 and for the `ws-*` roles in SWL-20; the partial tooltip string in SWL-12; `rowWith(name).toHaveCount(0)` in SWL-02 without a search or pagination guard; `available <= total` and `total >= available` in SWL-22 (both hold if the slider does nothing); `libraryCount < inventoryCount` in SWL-19.
 
 **Quick wins**
 
@@ -1625,7 +1684,7 @@ other:
 
 **Bigger bets**
 
-1. **Collapse `edit-package.spec` into `library.spec` as an eighth case.** Add an `edit` sub-test that runs only for `custom` cases (or only for one designated case), reusing the already-uploaded installer. Removes one 16 MB upload per run and ~3 duplicated sub-tests, and gets the edit round-trip covered on **Workstations** as well as Unassigned — which is where the `edited … on the <fleet> fleet` activity suffix currently has no coverage at all. Then invest the freed budget in the *unexercised* Edit-modal fields (pre-install query, install/uninstall scripts, categories), which is the single largest functional gap in the area.
+1. **Collapse `edit-package.spec` into `library.spec` as an eighth case.** Add an `edit` sub-test that runs only for `custom` cases (or only for one designated case), reusing the already-uploaded installer. Removes one 16 MB upload per run and ~3 duplicated sub-tests, and gets the edit round-trip covered on **Workstations** as well as Unassigned — which is where the `edited … on the <fleet> fleet` activity suffix currently has no coverage at all. Then invest the freed budget in the Edit-modal fields nothing exercises yet — categories and installer replacement (the four scripts are SWL-35's).
 2. **Own the "software is never installed anywhere" gap explicitly.** Either (a) build one host-backed install spec against `liveMacosHost` — upload a small `.pkg`, install from the host's Software tab, assert pending → installed and the `installed_software` activity, then uninstall — accepting that it is a single-host serial test; or (b) write it down as a permanent boundary in `TODO.md` so nobody assumes the library specs cover installation. Today the suite silently reads as if add-to-library were the whole feature. `install_software` policy automation ([`C6-software.md` flow 25](../qawolf-migration/audit/C6-software.md)) sits behind the same decision.
 3. **A `disposableFmaTitle` fixture.** SWL-25, SWL-26 and SWL-27 each pay a real CDN fetch and a 90 s budget to reach a title-detail page, and each must hand-pick a slug no other spec has claimed — which is why this file now needs a claims table. A worker- or test-scoped fixture that seeds one FMA title, yields `{ titleId, titleName }` and deletes it in teardown would collapse three seeds into one mechanism, make the claim implicit, and give SWL-31/SWL-30 somewhere to put their `finally`-block bookkeeping. The same fixture would let SWL-26 (a purely *client-side* validator) stop adding an app at all if it were pointed at any existing title.
 4. **Decide who owns SWL-32.** It is a navbar + team-dropdown test living in `premium/software/no-teams-views.spec.ts`, asserting nothing about software. Either move it to a shared navigation spec, or rename the file to what it now covers (scope behaviour) and move SWL-09/10's software-specific halves out.

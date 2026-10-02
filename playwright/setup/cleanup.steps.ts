@@ -22,6 +22,7 @@ import {
   deleteLeftoverApiTestUsers,
   deleteAllQueries,
   deleteAllScripts,
+  deleteVariablesMatching,
   deleteAllTeamPolicies,
   deleteLabelsWithPrefix,
   deleteFleetPolicies,
@@ -91,6 +92,10 @@ test('wipe unassigned state', async ({ request }) => {
     deleteAllQaTestUsers(request),
     deleteLeftoverApiTestUsers(request),
   ]);
+  // Custom variables are global and nothing else removes them; the specs name
+  // theirs `PW_VAR_*`, and the Variables list pages at 20. After the scripts:
+  // Fleet refuses to delete a variable a script still references.
+  await deleteVariablesMatching(request, 'PW_VAR_');
 });
 
 test('wipe Workstations team state', async ({ request }) => {

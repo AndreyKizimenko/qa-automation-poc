@@ -1,5 +1,5 @@
-// Custom-variable (global secret) API helpers for test cleanup.
-import { APIRequestContext } from '@playwright/test';
+// Custom-variable (global secret) API helpers: seeding and cleanup.
+import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
 export interface VariableRef {
@@ -33,4 +33,14 @@ export async function deleteVariablesMatching(
           .catch((err) => console.warn(`[deleteVariablesMatching] ${v.id}:`, err)),
       ),
   );
+}
+
+/**
+ * Creates a global custom variable and returns its id. Scripts, profiles and
+ * installer scripts reference it as `$FLEET_SECRET_<name>`.
+ */
+export async function createVariable(request: APIRequestContext, name: string, value: string): Promise<number> {
+  const res = await request.post(apiUrl('custom_variables'), { headers: authHeaders(), data: { name, value } });
+  await expect(res, `Failed to create custom variable ${name}`).toBeOK();
+  return (await res.json()).id as number;
 }

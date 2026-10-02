@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { setAceValue } from './aceEditor';
 import { TargetLabelSelector, type LabelScopeOption } from './TargetLabelSelector';
 
 /**
@@ -98,6 +99,12 @@ export class EditSoftwareModal {
     }
     await expect(this.installScriptEditor).toBeVisible();
     await expect(this.uninstallScriptEditor).toBeVisible();
+  }
+
+  /** Replaces one Advanced-options editor's script and checks the editor shows it. */
+  async setScript(editor: Locator, text: string): Promise<void> {
+    await setAceValue(editor, text);
+    await expect.poll(() => this.scriptText(editor)).toBe(normalizeScript(text));
   }
 
   /** The code one Advanced-options editor shows, normalised for comparison. */

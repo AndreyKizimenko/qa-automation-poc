@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { FileUploader } from '../components/FileUploader';
+import { setAceValue } from '../components/aceEditor';
 import { Toast } from '../components/Toast';
 
 /**
@@ -34,6 +35,15 @@ export class SoftwareCustomPackagePage {
    * Only rendered once a file is chosen.
    */
   readonly deploySwitch: Locator;
+  /**
+   * "Advanced options" — disabled until a file is chosen ("Choose a file to
+   * modify advanced options.") — and the two scripts a package has no default
+   * for. The editors are Ace instances told apart only by their wrappers' ids,
+   * the same ids the Edit modal uses.
+   */
+  readonly advancedOptionsButton: Locator;
+  readonly preInstallQueryEditor: Locator;
+  readonly postInstallScriptEditor: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -48,6 +58,9 @@ export class SoftwareCustomPackagePage {
     this.progressModal = page.locator('.file-progress-modal');
     this.progressPercent = this.progressModal.getByText(/^\d{1,3}%$/);
     this.deploySwitch = page.locator('.software-deploy-slider__container').getByRole('switch');
+    this.advancedOptionsButton = page.getByRole('button', { name: 'Advanced options' });
+    this.preInstallQueryEditor = page.locator('#preInstallQuery .ace_content');
+    this.postInstallScriptEditor = page.locator('#post-install-script-editor .ace_content');
   }
 
   /**
@@ -83,9 +96,27 @@ export class SoftwareCustomPackagePage {
    * Stages the file, clicks "Add software", waits for the upload progress
    * modal to clear, and confirms Fleet redirected to the new title's
    * detail page. Returns the new title's id (parsed from the URL).
+   *
+   * `preInstallQuery` / `postInstallScript` are entered under Advanced options
+   * before the upload; the install and uninstall scripts keep the defaults
+   * Fleet generates for the file.
    */
-  async uploadPackage(filePath: string, opts: { deploy?: boolean } = {}): Promise<number> {
+  async uploadPackage(
+    filePath: string,
+    opts: { deploy?: boolean; preInstallQuery?: string; postInstallScript?: string } = {},
+  ): Promise<number> {
     await this.uploader.setFile(filePath);
+    if (opts.preInstallQuery !== undefined || opts.postInstallScript !== undefined) {
+      await expect(this.advancedOptionsButton).toBeEnabled();
+      if (!(await this.preInstallQueryEditor.isVisible())) await this.advancedOptionsButton.click();
+      if (opts.preInstallQuery !== undefined) {
+        await setAceValue(this.preInstallQueryEditor, opts.preInstallQuery);
+        await expect(this.preInstallQueryEditor).toHaveText(opts.preInstallQuery);
+      }
+      if (opts.postInstallScript !== undefined) {
+        await setAceValue(this.postInstallScriptEditor, opts.postInstallScript);
+      }
+    }
     if (opts.deploy) {
       await this.deploySwitch.click();
       await expect(this.deploySwitch).toHaveAttribute('aria-checked', 'true');
