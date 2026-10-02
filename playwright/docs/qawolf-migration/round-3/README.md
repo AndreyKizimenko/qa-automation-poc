@@ -64,7 +64,7 @@ here** block, the gap table, the review to do first, facts for the build, the de
 
 A–D need nothing that doesn't exist; E's per-role source read is done, so it's a design job; F works on
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
-Every batch file lists the decisions to put to Andrey **before** building: 27 across the round, most of them "cut,
+Every batch file lists the decisions to put to Andrey **before** building: 25 across the round, most of them "cut,
 or build it this narrow way". Batches touch different surfaces and can run in any order, **but
 never two at once against the same instance.**
 
@@ -134,5 +134,12 @@ three arrive with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automa
   readable mailbox, a certificate authority: [`../../long-term-goals.md`](../../long-term-goals.md). (Premium's
   ABM connection works, so setup-assistant validation is in batch F.)
 - **A second VM per platform is deferred** (Andrey, 2026-10-01): batches use the one real VM per platform.
+- **Six Fleet bugs were filed from the planning** (2026-10-02):
+  [#54619](https://github.com/fleetdm/fleet/issues/54619) (a fleet's webhook saves wipe each other, batch B),
+  [#54620](https://github.com/fleetdm/fleet/issues/54620) ("Various", A),
+  [#54621](https://github.com/fleetdm/fleet/issues/54621) ("No team" copy, B), and
+  [#54622](https://github.com/fleetdm/fleet/issues/54622), [#54623](https://github.com/fleetdm/fleet/issues/54623),
+  [#54624](https://github.com/fleetdm/fleet/issues/54624) (role gating, E). A test that hits one asserts the
+  intended behaviour and skips with the bug's `TODO`, plus a `blocked-by-product-bugs.md` row.
 - **Role coverage is a matrix, not a flow per role** (batch E): one spec per area with the role as a dimension,
   the way `host-delete` and `manage-automations-access` already do it.

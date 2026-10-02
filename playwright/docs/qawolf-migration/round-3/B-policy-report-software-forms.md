@@ -142,8 +142,10 @@ only); (c) call it for real and assert only that both fields became non-empty.
   `teamsAPI.update` to `team.webhook_settings.failing_policies_webhook`; premium only. **Not on Workstations:**
   `team-host-status-webhook.spec.ts` writes the same `webhook_settings` subtree there in parallel, and
   `ModifyTeam` replaces `WebhookSettings` wholesale, keeping only host activities
-  (`ee/server/service/teams.go:216-228`). So a fleet-scope automations save **may null that fleet's host status
-  webhook**: a possible Fleet bug, unverified live, and worth checking first. The clean target is a throwaway
+  (`ee/server/service/teams.go:216-228`). So a fleet-scope automations save **nulls that fleet's host status
+  webhook**, and a save of the fleet's Settings tab turns its failing-policies webhook off: filed as
+  [fleetdm/fleet#54619](https://github.com/fleetdm/fleet/issues/54619) (2026-10-02). Until it's fixed, a spec that
+  writes one of a fleet's webhooks restores both in its `afterEach`. The clean target is a throwaway
   `pw-*` fleet, which is [batch A](A-settings-users-labels.md)'s fleet-lifecycle decision.
 - **C3 #12, no integration.** "You have no integrations." and a button "Add integration" →
   `/settings/integrations` (`OtherWorkflowsModal.tsx:239-241,304-312`); disabled while the slider is off. The
@@ -219,7 +221,8 @@ only); (c) call it for real and assert only that both fields became non-empty.
   "<script>" script in the "<fleet>" team. Please edit or delete the script and try again.`
   (`secret_variables.go:213-219`). The scan covers library scripts, profiles and host-name templates, not
   installer or setup-experience scripts. **On Unassigned the fleet reads "No team"** (`COALESCE(t.name,'No
-  team')`, `:235`): stale copy if it renders live, so check, and raise it with Andrey.
+  team')`, `:235`): it renders live, filed as [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621). Match the
+  variable and script names, and skip that one check with `TODO(fleetdm/fleet#54621)` and a row in `docs/blocked-by-product-bugs.md` until it's fixed for the fleet wording.
 - `custom-variables.spec.ts` names variables `PW_VAR_<Date.now()>` and cleans up with `deleteVariablesMatching`
   in an `afterEach`. **Delete the script before the variable**: `deleteVariablesMatching` ignores the response,
   so a 409 leaks the variable silently. There's no create-variable API helper (body `{name, value}`), and
@@ -242,8 +245,7 @@ automations), `ReportEditPage` (`saveNew`, `saveExisting`, `openSaveAsNew`, `che
    plus a `cleanup-setup` reset (§2.1).
 2. **AI Autofill:** cut, a stubbed wiring check, or a live non-empty check (§2.2).
 3. **C3 #15:** a throwaway `pw-*` fleet (batch A's decision), or Workstations serialised with
-   `team-host-status-webhook`; and whether a fleet-scope save nulling the host status webhook is a bug (§3.1).
-4. **The "No team" delete copy** (C8 #22), if it renders live: a bug to file?
+   `team-host-status-webhook` (§3.1).
 
 ## Free coverage
 
