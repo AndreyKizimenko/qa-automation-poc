@@ -9,6 +9,7 @@ import { AddHostsModal } from '../components/AddHostsModal';
 import { RunScriptBatchModal } from '../components/RunScriptBatchModal';
 import { TransferHostModal } from '../components/TransferHostModal';
 import { Toast } from '../components/Toast';
+import { EnrollSecretModal } from '../components/EnrollSecretModal';
 
 /**
  * /hosts/manage — the list of all hosts enrolled in Fleet.
@@ -58,12 +59,8 @@ export class HostsListPage {
   readonly editColumnsModal: Locator;
   readonly saveColumnsButton: Locator;
 
-  // Enroll-secret modals (shared EnrollSecrets components).
-  readonly enrollSecretsModal: Locator;
-  readonly addSecretButton: Locator;
-  readonly secretEditorModal: Locator;
-  readonly secretInput: Locator;
-  readonly saveSecretButton: Locator;
+  /** "Manage enroll secrets", opened from the gear menu's Enroll secrets. */
+  readonly enrollSecrets: EnrollSecretModal;
 
   constructor(page: Page) {
     this.page = page;
@@ -130,36 +127,18 @@ export class HostsListPage {
     this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });
     this.saveColumnsButton = this.editColumnsModal.getByRole('button', { name: 'Save', exact: true });
 
-    this.enrollSecretsModal = page.locator('.modal__modal_container').filter({ hasText: 'Manage enroll secrets' });
-    this.addSecretButton = this.enrollSecretsModal.getByRole('button', { name: 'Add secret' });
-    // SecretEditorModal shares the "Add secret" title with the button above, so
-    // scope it by its unique helper text instead.
-    this.secretEditorModal = page
-      .locator('.modal__modal_container')
-      .filter({ hasText: 'Must contain at least 32 characters' });
-    this.secretInput = this.secretEditorModal.getByRole('textbox', { name: 'Secret' });
-    this.saveSecretButton = this.secretEditorModal.getByRole('button', { name: 'Save', exact: true });
+    this.enrollSecrets = new EnrollSecretModal(page);
   }
 
   /**
-   * Open the "Manage enroll secrets" modal for a fleet via its deep-link query
-   * param (avoids hunting the header/empty-state button).
+   * Opens "Manage enroll secrets" the way a user does: the gear menu's Enroll
+   * secrets, for whatever scope the page is on (the global list on free, or on
+   * premium with no fleet selected).
    */
-  async openEnrollSecrets(fleetId: number): Promise<void> {
-    await this.page.goto(`/hosts/manage?fleet_id=${fleetId}&manage_enroll_secrets=1`);
-    await expect(this.enrollSecretsModal).toBeVisible();
-  }
-
-  /**
-   * Add a new enroll secret: opens the editor (pre-filled with a generated
-   * secret), captures it, and saves. Returns the added secret string.
-   */
-  async addEnrollSecret(): Promise<string> {
-    await this.addSecretButton.click();
-    await expect(this.secretEditorModal).toBeVisible();
-    const secret = await this.secretInput.inputValue();
-    await this.saveSecretButton.click();
-    return secret;
+  async openEnrollSecretsFromMenu(): Promise<void> {
+    await this.hostsPageSettingsButton.click();
+    await this.enrollSecretsOption.click();
+    await expect(this.enrollSecrets.modal).toBeVisible();
   }
 
   async goto(opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {

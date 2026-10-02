@@ -72,9 +72,10 @@ test.describe('Premium • gitops mode — exceptions', () => {
     await setGitOpsException(request, 'secrets', true);
     await modal.goto(workstationsFleetId);
 
+    const row = modal.rowControls(modal.rows.first());
     await expectNotGatedByGitOps(modal.addSecretButton);
-    await expectNotGatedByGitOps(modal.editSecretButton);
-    await expectNotGatedByGitOps(modal.deleteSecretButton);
+    await expectNotGatedByGitOps(row.edit);
+    await expectNotGatedByGitOps(row.delete);
     await expect(gitopsWrappers(page)).toHaveCount(0);
   });
 

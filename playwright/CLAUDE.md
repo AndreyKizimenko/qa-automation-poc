@@ -72,6 +72,9 @@ regenerate both on every restart.
   profiles: MDM-enrolled simulations are scarce) or `findSimulations` (everything else — a disjoint pool), each
   spec on its own slice (the registry is in `helpers/api/hosts.ts`), move them back in the `finally`; the VMs
   sweep returns any a dead run left.
+- **The simulations re-enroll with the global enroll secret** on every daemon restart. Never replace the global
+  list from a snapshot or post it empty: `restoreGlobalEnrollSecrets` is the one write a spec makes there, and
+  `EnrollSecretModal` acts on a secret by its value only (`shared/settings/enroll-secrets.spec.ts`).
 
 ### Never deploy a passcode profile to a real host
 
