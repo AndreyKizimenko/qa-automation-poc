@@ -737,7 +737,7 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "OS tab — a row drills into that OS with matching version and counts"` (matches the free copy too — `--project` is mandatory)
 - **Project:** premium · **Scope:** Unassigned
 - **Mode:** UI · **Isolation:** independent, read-only
-- **Preconditions:** at least one OS row under Unassigned whose **Vulnerabilities** cell carries a count. Fleet writes `---` where it has matched none, and those drill into an empty table — the test hard-fails on the anchor rather than skipping, so an instance with no vulnerability data fails here.
+- **Preconditions:** a **macOS or Windows** OS row under Unassigned whose **Vulnerabilities** cell carries a count. Fleet writes `---` where it has matched none, and those drill into an empty table; Linux rows are excluded because a Linux OS's detail page shows a **Kernels** card instead of a Vulnerabilities card (`SoftwareOSDetailsPage.tsx`, `isLinuxLike`). With no such row the test **skips** (data-availability guard).
 - **Data created:** none
 - **Cross-link:** free mirror = **SWV-21**
 
@@ -745,8 +745,9 @@ other:
 
 1. ☐ Open **Software → Inventory** (via URL), select **Unassigned**, click the **OS** tab.
    - ✅ *(UI)* URL matches `/software/os`; the table has a row — `gotoOsTab()`.
-2. ☐ Scan the list for the first row whose **Vulnerabilities** cell reads "N vulnerabilities".
-   - ✅ *(UI)* Such a row exists — `expect(row, 'expected an OS row reporting vulnerabilities').not.toBeNull()`, backed by `SoftwareOsPage.firstRowWithVulnerabilities()` (`findRowByColumnPattern('Vulnerabilities', /^[\d,]+ vulnerabilities$/)`).
+2. ☐ Filter the list to **macOS** (then **Windows**, if no macOS row qualifies) and take the first row whose **Vulnerabilities** cell reads "N vulnerabilities" — `SoftwareOsPage.firstNonLinuxRowWithVulnerabilities()`.
+   - ✅ *(UI)* After each filter change, every row names the platform before a row is read (the list keeps the previous rows while the filtered fetch is in flight).
+   - Skip if neither platform has such a row.
 3. ☐ Read that row's **Name**, **Version**, **Vulnerabilities** and **Hosts** cells — `SoftwareOsPage.rowValues()`; counts are parsed with thousands separators stripped.
 4. ☐ Click the row's Name-column link.
    - ✅ *(UI)* URL matches `/software/os/:id` — `openOs(row)`.
@@ -756,14 +757,14 @@ other:
    - ✅ *(UI)* A level-2 **Vulnerabilities** heading is visible.
    - ✅ *(UI)* The vulnerabilities table has rendered a linked row — `SoftwareOsDetailPage.waitForReady()`.
 6. ☐ (No user action) cross-page count agreement.
-   - ✅ *(UI)* Summary **Hosts** value equals the list row's Hosts count — `hostCount()` (parses the number out of a cell that also carries "Updated N mins ago").
+   - ✅ *(UI)* Summary **Hosts** value is non-zero and no larger than the list row's Hosts count — `hostCount()` (parses the number out of a cell that also carries "Updated N mins ago"). Not equality: sibling specs delete hosts between the two reads.
    - ✅ *(UI)* The `N items` results count above the vulnerabilities table equals the list row's Vulnerabilities count — `vulnerabilityCount()`.
 7. ☐ (No user action) premium column contract.
    - ✅ *(UI)* All five headers visible, exact match: **Vulnerability**, **Severity**, **Probability of exploit**, **Published**, **Detected**.
 
 **Assessment**
 - *Value:* the strongest assertion in the OS half of this area, and the one thing SWV-09/SWV-10 never did — the list and the detail page are fed by **different endpoints**, so this pins that they agree on identity *and* on both rollup counts. The premium column list is also the only place the three paid vulnerability columns are asserted anywhere in the suite (`CveDetailPage`'s premium fields are still unasserted — see SWV-03).
-- *Coverage gaps:* the vulnerabilities table's *contents* are never read (no CVE pattern check, no severity value, no row count against the `N items` figure it was compared to); the summary's other fields (last-updated note, the hosts click-through) are untouched; only one OS — whichever sorts first with vulnerabilities — is exercised, so a platform-specific detail-page break is invisible; no back-navigation.
+- *Coverage gaps:* the vulnerabilities table's *contents* are never read (no CVE pattern check, no severity value, no row count against the `N items` figure it was compared to); the summary's other fields (last-updated note, the hosts click-through) are untouched; only one OS — the first macOS (else Windows) row with vulnerabilities — is exercised, so a platform-specific detail-page break elsewhere is invisible, and a Linux OS's Kernels card is never asserted (on free, three `os_version_id`s each cover two Ubuntu versions and their detail pages sum both versions' hosts, so a Linux variant would trip on that); no back-navigation.
 - *Redundancy:* the `Microsoft `-prefix normalization duplicates SWV-10's, and the drill-in supersedes the "never exercised" note SWV-09 used to carry. SWV-21 is the free mirror, structurally identical minus the scope step and with the premium columns inverted.
 - *Efficiency / smells:*
   - **The count comparison is a live race.** `hosts` and `vulnerabilities` are read from the list, then re-read from a different endpoint seconds later, against a shared instance where sibling specs delete and transfer hosts. SWV-18 explicitly declined an exact host-count comparison for precisely this reason (`expect.poll(...).toBeGreaterThan(0)` instead) — two entries in the same area take opposite positions on the same hazard. ⚠️ worth a verdict: either this is the stricter, correct assertion and SWV-18 is too loose, or this is a latent flake.
@@ -970,7 +971,7 @@ other:
 - **Grep:** `npx playwright test --project=free -g "OS tab — a row drills into that OS with matching version and counts"`
 - **Project:** free · **Scope:** single (no team dropdown)
 - **Mode:** UI · **Isolation:** independent, read-only
-- **Preconditions:** at least one OS row reporting vulnerabilities on the free instance (hard-asserted, not skipped)
+- **Preconditions:** a macOS or Windows OS row reporting vulnerabilities on the free instance (skips without one; Linux rows are excluded, as in SWV-16)
 - **Data created:** none
 - **Cross-link:** premium mirror = **SWV-16**
 
@@ -979,10 +980,10 @@ other:
 Identical to SWV-16 with the scope step removed, and with the column contract **inverted**:
 
 1. ☐ Open **Software → Inventory** (via URL) → click the **OS** tab — ✅ *(UI)* URL `/software/os`, table has a row.
-2. ☐ ✅ *(UI)* A row reporting "N vulnerabilities" exists; read its Name / Version / Vulnerabilities / Hosts.
+2. ☐ Filter to macOS, then Windows — ✅ *(UI)* every row names the platform; take the first row reporting "N vulnerabilities" (skip if none); read its Name / Version / Vulnerabilities / Hosts.
 3. ☐ Click the row's Name link — ✅ *(UI)* URL `/software/os/:id`.
 4. ☐ ✅ *(UI)* `<h1>` contains the Name (minus a leading `Microsoft `) and the Version; **Vulnerabilities** heading visible; table rendered.
-5. ☐ ✅ *(UI)* Summary **Hosts** equals the row's Hosts; the `N items` count equals the row's Vulnerabilities.
+5. ☐ ✅ *(UI)* Summary **Hosts** is non-zero and no larger than the row's Hosts; the `N items` count equals the row's Vulnerabilities.
 6. ☐ (No user action) free column contract.
    - ✅ *(UI)* **Vulnerability** and **Detected** headers are visible.
    - ✅ *(UI)* **Severity**, **Probability of exploit** and **Published** each have count **0** — `SoftwareVulnerabilitiesTableConfig` drops `cvss_score`, `epss_probability` and `cve_published` off-premium, so their absence is part of the free contract.
