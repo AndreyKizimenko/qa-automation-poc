@@ -111,6 +111,28 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch D — batch scripts
+
+9 gaps in batch script runs, all round 1 C8: scheduling for later, cancelling, an edit cancelling pending runs, the
+preview, the counts, the progress page. Reviewed and built on `playwright/qawolf-round3-batch-d`, on top of batch
+C's branch, and shipped with it in [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86)
+(2026-10-03): 4 built, 3 folded, 2 cut (C8 #11; C8 #18's during-run half). Detail and Andrey's decisions in
+[round-3/D-batch-scripts.md](round-3/D-batch-scripts.md#review-decisions-2026-10-03).
+
+**What the review changed.** A scheduled batch lists every targeted host as Pending until it starts, and
+cancelling it finishes it at once with every host under Canceled (probed live). That turned QA Wolf's racy "the
+Pending hosts move to Canceled" into a deterministic test. Batch scripts have no license check, and picking claimed
+simulations by id never reaches a VM, so the plan's premium-only spec became `shared/`, on both tiers. The review
+also found a Fleet bug, filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732): a batch
+whose script is edited while a host's run is still queued behind another activity never finishes, because that
+host stays Pending.
+
+| slice | what |
+|---|---|
+| schedule and cancel | new `shared/controls/scripts/batch-schedule-cancel.spec.ts` (both tiers, simulations on Unassigned, `findSimulations` linux 10–19 and darwin 10–39). A batch scheduled for tomorrow lists its 3 hosts under Pending; its script previews; **Cancel** → "Cancel script?" → the batch is finished and canceled with all 3 under Canceled (API and UI), Pending empty, "Canceled" under Finished, and the preview again. A script scheduled from the Hosts list (Schedule for later, Date / Time in UTC) is stored for the time typed, and Fleet's 2-minute worker starts it. Editing a script mid-run, through the "Save changes?" warning, cancels the runs not yet reported. `RunScriptBatchModal.pickScript` / `chooseSchedule` / `submitSchedule` / `showSchedule`, new `ScriptPreviewModal`, `ScriptBatchDetailsPage.showScript` / `openCancel` / `confirmCancel` / `tabHostCount`, `ScriptsLibraryPage.stageEdit` / `confirmEdit` / `goToBatchProgress`, `HostsListPage.searchFor`; `runScriptBatch`, `cancelScriptBatch`, `listBatchHostIds`, `getBatchSummary`'s `notBefore` / `batchCanceled`, `findScriptableSimulations`, `ListedHost.displayName` |
+| progress page | `premium/controls/scripts/batch-run.spec.ts` gains a describe of its own: Controls → Scripts → **Batch progress** on Workstations shows each tab's empty state. `ScriptsBatchProgressPage.heading` / `openTab` / `emptyState` / `learnMoreLink` / `teamDropdown` |
+| a flake fixed on the way | `batch-run`'s scale test chooses its macOS and Online filters through `HostsListPage.filterTo`, which remakes a choice until the settled table's URL still carries it. The Hosts page rewrites its URL from the filters its table last queried with; on 2026-10-03 a rewrite dropped both filters, *Select all matching* took all 200 hosts on Unassigned, and the modal's count check stopped the run. It stayed hidden until each tier also held offline simulations |
+
 ## Round 3 · Batch C — server-side decisions, over simulations
 
 23 gaps in what Fleet decides on the server — which hosts a policy runs on or links to, what *Select all matching*

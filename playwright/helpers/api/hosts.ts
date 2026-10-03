@@ -328,10 +328,14 @@ export async function findMdmSimulations(
  * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 5
  * `premium/software/no-teams-views.spec.ts` (its Library read, never moved), 6–7
  * `shared/policies/policy-hosts.spec.ts` (refetched for a policy's answer, never
- * moved); darwin 0–1
+ * moved), 10–19 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (batch
+ * script runs on Unassigned, never moved; see {@link findScriptableSimulations});
+ * darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
  * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
- * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only);
+ * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only),
+ * 10–39 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (a batch script
+ * run on Unassigned, never moved);
  * windows 0–1 `premium/hosts/host-idp-username.spec.ts`
  * (an IdP username set and removed, never moved), 2
  * `shared/policies/policy-hosts.spec.ts` (read only). On free, windows 0 is read
@@ -407,6 +411,30 @@ async function findBorrowableSimulations(
     }
   }
   return [];
+}
+
+/**
+ * The simulations in a {@link findSimulations} slice that can run a shell
+ * script right now: online, on Unassigned, simulating fleetd (orbit) with
+ * scripts enabled. Between a third and a half of the pool simulates orbit, so a
+ * slice of `count` yields fewer; callers assert on the number they need.
+ *
+ * A simulation that runs a script reports a random exit code within about 35 s
+ * (it polls every 30 s), so these answer *whether and when* a run reaches a host,
+ * not what the script did. A batch fails outright if any host has left the
+ * script's fleet, which is why the hosts come from a claimed slice nobody moves.
+ */
+export async function findScriptableSimulations(
+  request: APIRequestContext,
+  platform: 'darwin' | 'linux',
+  count: number,
+  offset: number,
+): Promise<HostRef[]> {
+  const slice = new Set(await findSimulations(request, platform, count, offset));
+  const unassigned = await listFleetHosts(request, 0, { status: 'online' });
+  return unassigned
+    .filter((h) => slice.has(h.id) && !h.real && !!h.orbitVersion && h.scriptsEnabled !== false)
+    .map((h) => ({ id: h.id, displayName: h.displayName }));
 }
 
 /** Lock/wipe state as Fleet reports it on the host detail endpoint. */
@@ -805,6 +833,7 @@ export async function hostExists(
 /** A host as the hosts list reports it, with the fields a batch run decides on. */
 export interface ListedHost {
   id: number;
+  displayName: string;
   platform: string;
   /** fleetd/Orbit version, or null for a host that can't run scripts. */
   orbitVersion: string | null;
@@ -829,6 +858,7 @@ export async function listFleetHosts(
   await expect(res, `Failed to list the hosts of fleet ${fleetId}`).toBeOK();
   const hosts = (await res.json()).hosts as Array<{
     id: number;
+    display_name: string;
     platform: string;
     orbit_version: string | null;
     scripts_enabled: boolean | null;
@@ -836,6 +866,7 @@ export async function listFleetHosts(
   }>;
   return hosts.map((h) => ({
     id: h.id,
+    displayName: h.display_name,
     platform: h.platform,
     orbitVersion: h.orbit_version ?? null,
     scriptsEnabled: h.scripts_enabled ?? null,

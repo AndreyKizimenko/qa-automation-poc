@@ -19,6 +19,14 @@ export class RunScriptBatchModal {
   /** "Run a script on <b>N hosts</b>, or schedule a script…" */
   readonly summary: Locator;
   readonly runNowRadio: Locator;
+  readonly scheduleRadio: Locator;
+  /**
+   * "Date (UTC)" / "Time (UTC)", shown only once Schedule for later is picked.
+   * A field's label is replaced by its error while the value is invalid, so
+   * these are found by label only before anything is typed into them.
+   */
+  readonly dateInput: Locator;
+  readonly timeInput: Locator;
   readonly runButton: Locator;
 
   constructor(page: Page) {
@@ -27,11 +35,26 @@ export class RunScriptBatchModal {
     this.modal = page.locator('.run-script-batch-modal');
     this.summary = this.modal.getByText(/^Run a script on/);
     this.runNowRadio = this.modal.getByRole('radio', { name: 'Run now' });
+    this.scheduleRadio = this.modal.getByRole('radio', { name: 'Schedule for later' });
+    this.dateInput = this.modal.getByRole('textbox', { name: 'Date (UTC)' });
+    this.timeInput = this.modal.getByRole('textbox', { name: 'Time (UTC)' });
     this.runButton = this.modal.getByRole('button', { name: 'Run', exact: true });
   }
 
   scriptItem(name: string): Locator {
     return this.modal.getByRole('listitem').filter({ hasText: name });
+  }
+
+  /**
+   * Picks a script from the list and waits for the run step, which names the
+   * script and the platforms it runs on, with Run now preselected.
+   */
+  async pickScript(scriptName: string, platformsNote: string): Promise<void> {
+    const item = this.scriptItem(scriptName);
+    await item.hover();
+    await item.getByRole('button', { name: 'Run script' }).click();
+    await expect(this.modal).toContainText(`${scriptName} will run on compatible hosts (${platformsNote}).`);
+    await expect(this.runNowRadio).toBeChecked();
   }
 
   /**
@@ -42,14 +65,38 @@ export class RunScriptBatchModal {
    * accepted, and would put a second "Show script activity" link on screen.
    */
   async runNow(scriptName: string, platformsNote: string): Promise<void> {
-    const item = this.scriptItem(scriptName);
-    await item.hover();
-    await item.getByRole('button', { name: 'Run script' }).click();
-    await expect(this.modal).toContainText(`${scriptName} will run on compatible hosts (${platformsNote}).`);
-    await expect(this.runNowRadio).toBeChecked();
+    await this.pickScript(scriptName, platformsNote);
     await this.toast.dismissAll();
     await this.runButton.click();
     await this.toast.expectSuccess(/^Successfully ran script\./);
+    await expect(this.modal).toBeHidden();
+  }
+
+  /**
+   * Switches the picked script to Schedule for later, which reveals the Date
+   * and Time fields (both UTC). Fleet's `Radio` hides its `<input>`
+   * (`display:none`), so the label is what takes the click.
+   */
+  async chooseSchedule(): Promise<void> {
+    await this.modal.getByText('Schedule for later', { exact: true }).click();
+    await expect(this.scheduleRadio).toBeChecked();
+    await expect(this.dateInput).toBeVisible();
+    await expect(this.timeInput).toBeVisible();
+  }
+
+  /**
+   * Fills the schedule (`date` as YYYY-MM-DD, `time` as HH:MM, both UTC) and
+   * submits; resolves once Fleet has accepted the scheduled batch. Each field is
+   * filled in one action, so it's never seen half-typed and invalid. Earlier
+   * toasts are cleared first, as in {@link runNow}.
+   */
+  async submitSchedule(date: string, time: string): Promise<void> {
+    await this.dateInput.fill(date);
+    await this.timeInput.fill(time);
+    await expect(this.runButton).toBeEnabled();
+    await this.toast.dismissAll();
+    await this.runButton.click();
+    await this.toast.expectSuccess(/^Successfully scheduled script\./);
     await expect(this.modal).toBeHidden();
   }
 
@@ -58,8 +105,17 @@ export class RunScriptBatchModal {
    * Exactly one such link must be on screen: two cards would make it ambiguous which run it opens.
    */
   async showScriptActivity(): Promise<void> {
-    const link = this.toast.success.getByRole('link', { name: 'Show script activity' });
-    await expect(link, 'exactly one "Show script activity" toast on screen').toHaveCount(1);
+    await this.followToastLink('Show script activity');
+  }
+
+  /** Follows the scheduled toast's "Show schedule" link to Batch progress → Scheduled. */
+  async showSchedule(): Promise<void> {
+    await this.followToastLink('Show schedule');
+  }
+
+  private async followToastLink(name: string): Promise<void> {
+    const link = this.toast.success.getByRole('link', { name });
+    await expect(link, `exactly one "${name}" toast on screen`).toHaveCount(1);
     await link.click();
   }
 }

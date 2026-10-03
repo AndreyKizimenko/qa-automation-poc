@@ -220,6 +220,42 @@ export class HostsListPage {
       .getByRole('checkbox');
   }
 
+  /**
+   * Searches the list (name, hostname, UUID, serial or IP) and waits for the
+   * filtered table. The page rewrites its URL from the filters its table last
+   * queried with, and a rewrite that lands just after a choice takes it back
+   * (it does once the first load settles), so the search is made again until
+   * the settled table still has its `query` param.
+   */
+  async searchFor(query: string): Promise<void> {
+    const held = () => new URL(this.page.url()).searchParams.get('query') === query;
+    await expect(async () => {
+      if (!held()) await this.search.fill(query);
+      await this.table.waitForSettled(15_000);
+      expect(held(), `the search for "${query}" didn't hold`).toBe(true);
+    }).toPass({ timeout: 45_000 });
+  }
+
+  /**
+   * Filters the list by a platform (the label filter's Platforms group) and a
+   * status, and waits until both hold. Like {@link searchFor}, each choice is
+   * made again until the settled table's URL still carries it: the platform's
+   * label route (`/hosts/manage/labels/<id>`) and `status=<status>`. Without
+   * that, a rewrite can drop both, and *Select all matching* then takes every
+   * host on the fleet.
+   */
+  async filterTo(opts: { platform: string; status: 'Online' | 'Offline' }): Promise<void> {
+    const onLabel = () => /\/hosts\/manage\/labels\/\d+/.test(new URL(this.page.url()).pathname);
+    const want = opts.status.toLowerCase();
+    const onStatus = () => new URL(this.page.url()).searchParams.get('status') === want;
+    await expect(async () => {
+      if (!onLabel()) await this.labelFilter.selectPlatform(opts.platform);
+      if (!onStatus()) await this.statusFilter.selectByName(opts.status);
+      await this.table.waitForSettled(15_000);
+      expect(onLabel() && onStatus(), `the ${opts.platform} / ${opts.status} filters didn't hold`).toBe(true);
+    }).toPass({ timeout: 60_000 });
+  }
+
   async selectAllOnPage(): Promise<void> {
     await this.selectAllOnPageCheckbox.click();
     await expect(this.selectionBar).toBeVisible();

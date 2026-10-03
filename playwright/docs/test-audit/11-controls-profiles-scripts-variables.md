@@ -1,6 +1,6 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 11 files · **Test declarations:** 36 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
+**Specs covered:** 12 files · **Test declarations:** 40 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
 
 Covers **Controls → OS settings** (custom configuration profiles, global disk-encryption
 enforcement), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
@@ -17,7 +17,8 @@ so one entry can be several actual test runs: premium profiles ×4 (2 scopes × 
 premium scripts ×6 (2 scopes × macOS/Linux/Windows), free profiles ×2, free scripts ×3, and the
 shared custom-variables tests ×2 (once per tier). The 23 lifecycle-era entries (CTL-01…23) expand to
 **76 test executions** per full premium+free run; CTL-24/25 add 2 (premium only), CTL-26 adds 2 (once
-per exclusive project), CTL-27…34 add 8 (one run each) and CTL-35/36 add 4 (both tiers) — **92** in all.
+per exclusive project), CTL-27…34 add 8 (one run each), CTL-35/36 add 4 (both tiers), CTL-37…39 add 6 (both
+tiers) and CTL-40 adds 1 — **99** in all.
 
 CTL-24…26 are **not** serial-CRUD specs: each is a single standalone flow against real hosts (CTL-24,
 CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-variables.spec.ts`
@@ -63,6 +64,10 @@ CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-vari
 | CTL-34 | `free/controls/os-settings/profile-delivery.spec.ts` | a declaration is verified by the Mac and removed again *(free)* | UI+API | ☐ |
 | CTL-35 | `shared/controls/custom-variables.spec.ts` | a script that uses a variable is refused until the variable exists *(premium + free)* | UI | ☐ |
 | CTL-36 | `shared/controls/custom-variables.spec.ts` | a variable a script uses can't be deleted *(premium + free)* | UI+API | ☐ |
+| CTL-37 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | a batch scheduled for tomorrow lists its hosts as Pending, and cancelling it moves every one to Canceled *(premium + free)* | UI+API | ☐ |
+| CTL-38 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | a script scheduled from the Hosts list is stored for the UTC time typed, and starts then *(premium + free)* | UI+API | ☐ |
+| CTL-39 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | editing a script mid-run cancels the runs not yet reported *(premium + free)* | UI+API | ☐ |
+| CTL-40 | `premium/controls/scripts/batch-run.spec.ts` | Batch progress › a fleet with no batch runs shows each progress tab empty | UI | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -72,10 +77,12 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 or *run* a script on one — they exercise the library only. Script **execution** is now covered, but
 elsewhere and in CTL-24/25: single-host runs are [HOST-19…22](02-hosts-shared-and-free.md) (Host
 details → Actions → Run script, on both tiers), batch runs are CTL-24 (the three real VMs) and CTL-25
-(the simulation pool). There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM** — on
+(the simulation pool), and a batch's schedule, cancel and cancel-on-edit are CTL-37…39 (simulations on
+Unassigned, both tiers). There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM** — on
 the **VMs** fleet (id 103) on premium and in Unassigned on free, resolved with
 `findOnlineHost(…, { kind: 'real' })`, which keys on hardware model (`VirtualMac` / `QEMU`), **not** MDM
-enrollment (~30% of the osquery-perf simulations are MDM-enrolled too). Simulations never run a script;
+enrollment (~30% of the osquery-perf simulations are MDM-enrolled too). The simulations that simulate fleetd "run" a script within
+~35 s and report a random exit code, nothing more;
 osquery-perf answers a *batch* with a random exit code, which CTL-25 turns into arithmetic rather than
 per-host assertions. **Profile delivery to a host is still untested — and must never be tested with
 the passcode / screen-lock fixtures:** a passcode profile deployed to a real VM locks it permanently
@@ -990,7 +997,7 @@ other:
    - `listFleetHosts(request, 0, { status: 'online' })` ([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts); `GET /hosts?fleet_id=0&status=online&per_page=1000`) → each host's `platform`, real `orbit_version` and `scripts_enabled`, filtered to the label's ids.
    - ✅ *(API)* the two lists agree on the count; ✅ *(API)* more than 50 match.
 3. ☐ *(API setup)* upload the script to Unassigned.
-4. ☐ Dashboard → navbar **Hosts** → fleet dropdown **Unassigned** → label filter **macOS** (the Platforms group's entry) → status filter **Online**.
+4. ☐ Dashboard → navbar **Hosts** → fleet dropdown **Unassigned** → label filter **macOS** (the Platforms group's entry) → status filter **Online** (`HostsListPage.filterTo`, which remakes a choice until the settled table's URL still carries it: the page rewrites its URL from the filters its table last queried with, and on 2026-10-03 a rewrite dropped both, so *Select all matching* took all 200 hosts on Unassigned and the modal-count check below caught it).
 5. ☐ Tick the header checkbox (select all on page) → ✅ *(UI)* the selection bar appears → click **Select all matching hosts** → click **Run script**.
    - ✅ *(UI)* the modal reads **"Run a script on `<N>` hosts"**, `N` = the API's matching count, `toLocaleString()`-formatted.
 6. ☐ Hover the script → its **Run script** → ✅ *(UI)* "will run on compatible hosts (macOS and Linux)." → **Run now** checked → **Run** → ✅ *(UI)* toast `/^Successfully ran script\./`.
@@ -1389,6 +1396,179 @@ steps to cut:
 other:
 ```
 
+---
+
+### CTL-37 · Shared • Controls • Batch script schedule and cancel › a batch scheduled for tomorrow lists its hosts as Pending, and cancelling it moves every one to Canceled
+
+- **File:** [`playwright/tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts`](../../tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts) (L71)
+- **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "a batch scheduled for tomorrow"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scope:** **Unassigned**: the script and three simulations from `findSimulations('linux', 3, 10)` (the spec's claimed slice), never the real VMs, which on free sit in Unassigned too
+- **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script, which deletes its batch (a foreign-key cascade), so a batch left by a timed-out test can't fire tomorrow
+- **Source:** QA Wolf round 1 C8 #17 (`scripts-script-execution-can-be-canceled-and-the-script-moves-to-the-correct-status`), with #12's second test, #18's after-cancel half and #15 folded in
+- **Preconditions (API):** the script `pw-batch-cancel-<nonce>.sh` on Unassigned (`uploadScript`), and a batch of it on the three hosts with `not_before` 24 hours ahead (`runScriptBatch`). Nothing ever runs.
+- **Data created:** the script and its batch, both removed by the `afterEach`; Fleet's `scheduled_script_batch` and `canceled_script_batch` activities (permanent)
+
+**Flow**
+
+1. ☐ Dashboard → **Controls** → **Scripts** → fleet **Unassigned** (premium) → side nav **Batch progress** → **Scheduled** tab.
+   - ✅ *(UI)* The **Batch progress** heading is visible.
+   - ✅ *(UI)* The batch's row reads "Will start …".
+2. ☐ Click the row → the batch's details.
+   - ✅ *(UI)* Heading is the script's name; "3 hosts targeted (0% responded)".
+   - ✅ *(UI)* **Pending** tab: named "Pending 3", headed "3 hosts", listing exactly the three hosts. A scheduled batch lists every targeted host as pending; incompatibility is only decided at start.
+3. ☐ **Show script**, then its ✕.
+   - ✅ *(UI)* "Script details" opens, and under "Script content:" shows exactly the uploaded script.
+4. ☐ **Cancel** → "Cancel script?" → **Cancel script**.
+   - ✅ *(UI)* The confirmation reads "This will cancel any pending script runs for `<script>`."
+   - ✅ *(UI)* Success toast "Successfully canceled script."; Fleet returns to Batch progress.
+   - ✅ *(API)* The batch is `finished`, `canceled`, with 3 canceled hosts and 0 in every other status; its Canceled host list is exactly the three ids.
+5. ☐ **Finished** tab → the batch's row → its details.
+   - ✅ *(UI)* The row reads "Canceled …".
+   - ✅ *(UI)* No **Cancel** button on a finished batch.
+   - ✅ *(UI)* **Canceled** tab: named "Canceled 3", headed "3 hosts", listing exactly the three hosts.
+   - ✅ *(UI)* **Pending** tab: named "Pending" (no count), with "No hosts with this status".
+6. ☐ **Show script** again, on the finished batch.
+   - ✅ *(UI)* The same content.
+
+**Assessment**
+- *Value:* High. Cancelling a batch, made deterministic: a batch scheduled for tomorrow can't race a host to its result, and a cancelled scheduled batch finishes at once with every host under Canceled. That's QA Wolf's "the hosts Pending before the cancel are now under Canceled" assertion without the race. It also covers the cancel confirmation and toast, the Finished row's "Canceled", the counts after a cancel (tab names and headers agree), and the batch's script preview in two states. On both tiers.
+- *Coverage gaps:* cancelling a *started* batch, where only the hosts without a result move to Canceled, isn't covered: on simulations that's a 35-second race (and see CTL-39 for a cancel that does land mid-run). The preview in the **Started** state is the same button and modal, so it isn't repeated. The `canceled_script_batch` activity isn't asserted.
+- *Redundancy:* the details page's tab mechanics overlap CTL-24; incidental.
+- *Efficiency / smells:*
+  - The batch is scheduled through the API; scheduling through the form is CTL-38's job.
+  - The cancel returns to Batch progress with no `fleet_id` for an Unassigned batch, so the spec reselects Unassigned (idempotent) before reading the Finished tab.
+  - The preview doesn't name the script (its title is always "Script details" from a batch), so the content is what identifies it.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-38 · Shared • Controls • Batch script schedule and cancel › a script scheduled from the Hosts list is stored for the UTC time typed, and starts then
+
+- **File:** [`playwright/tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts`](../../tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts) (L150)
+- **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "a script scheduled from the Hosts list"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scope:** **Unassigned**: one Linux orbit simulation from `findScriptableSimulations(request, 7, 13)`
+- **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script and its batch · **Timeout:** 7 min (up to 2 to the scheduled time, up to 2 more for Fleet's 2-minute `scheduled_batch_activities` worker)
+- **Source:** QA Wolf round 1 C8 #16 (`scripts-schedule-for-later-allows-the-user-to-customize-the-time-for-the-script-to-run`), with #19 (the Schedule radio and its Date / Time fields) folded in
+- **Preconditions (API):** the script `pw-batch-sched-<nonce>.sh` (`echo scheduled`) on Unassigned
+- **Data created:** the script and its batch, removed by the `afterEach`; the simulation "runs" it (a random exit code); Fleet's `scheduled_script_batch` activity
+
+**Flow**
+
+1. ☐ Dashboard → **Hosts** → fleet **Unassigned** (premium) → search the simulation's name → tick its row → **Run script**.
+   - ✅ *(UI)* The modal reads "Run a script on 1 host".
+2. ☐ Hover the script → **Run script**.
+   - ✅ *(UI)* "`<script>` will run on compatible hosts (macOS and Linux)."; **Run now** is selected.
+3. ☐ Click **Schedule for later**.
+   - ✅ *(UI)* The radio is checked; **Date (UTC)** and **Time (UTC)** appear.
+4. ☐ Type the next whole minute but one (UTC, 1–2 minutes ahead), as `YYYY-MM-DD` and `HH:MM` → **Run**.
+   - ✅ *(UI)* **Run** is enabled; success toast "Successfully scheduled script."; the modal closes.
+5. ☐ The toast's **Show schedule**.
+   - ✅ *(UI)* Batch progress opens on the **Scheduled** tab, and the batch's row reads "Will start …".
+   - ✅ *(API)* The batch is `scheduled`, with `not_before` equal to the date and time typed, in UTC.
+6. ☐ *(API)* Poll the batch every 2 s until it is `started` (≤ 5.5 min).
+   - ✅ *(API)* It starts.
+7. ☐ Reload → **Started** tab.
+   - ✅ *(UI)* The batch's row reads "… / 1 hosts".
+
+**Assessment**
+- *Value:* High. The schedule form end to end, including that the UTC fields are stored as typed (a time-zone slip is the bug this form invites), and that Fleet's worker actually starts the batch: a scheduled batch that never fires fails nowhere else. On both tiers.
+- *Coverage gaps:* the form's validation (a past date, a malformed time, Run disabled while incomplete) is cut: QA Wolf never checked it, and Fleet is moving validation to submit-only. The Scheduled row's tooltip (the scheduled time in the browser's locale) is replaced by the API's `not_before`. Scheduling through **Select all matching** (a filter rather than host ids) isn't covered. Where the started batch's host landed isn't asserted: a simulation's result is random.
+- *Redundancy:* the Hosts-list selection overlaps CTL-24's.
+- *Efficiency / smells:*
+  - The longest test in the area apart from the VM ones: about 4 minutes of one worker per tier, spent waiting for Fleet's worker.
+  - The Started tab is read right after the API sees `started`. The host reports within about 35 s, and the 5-minute completion check could only move the batch to Finished after that, so the read lands while it's still Started.
+  - `HostsListPage.searchFor` retries until the `query` param sticks: the Hosts page rewrites its URL with its default sort just after loading, which can undo an early search.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-39 · Shared • Controls • Batch script schedule and cancel › editing a script mid-run cancels the runs not yet reported
+
+- **File:** [`playwright/tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts`](../../tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts) (L203)
+- **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "editing a script mid-run"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scope:** **Unassigned**: the macOS orbit simulations in `findScriptableSimulations(request, 'darwin', 30, 10)` that aren't in the built-in macOS label (about 15 per tier; at least 5 required)
+- **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script and its batch
+- **Source:** QA Wolf round 1 C8 #8 (`controls-batch-run-scripts-on-hundreds-of-hosts-cancel-all-queued-scripts-if-they-were-modified`)
+- **Preconditions (API):** the script `pw-batch-edit-<nonce>.sh` (`echo before`) on Unassigned; the batch is started (`runScriptBatch`) only once the Library is open
+- **Data created:** the script and its batch, removed by the `afterEach`; the simulations that reported first "ran" it; Fleet's `ran_script_batch` and `updated_script` activities
+
+**Flow**
+
+1. ☐ Dashboard → **Controls** → **Scripts** → fleet **Unassigned** (premium).
+   - ✅ *(UI)* The library lists the script.
+2. ☐ *(API)* Run it as a batch on the simulations; then at once open the script, replace its content (`echo after`, through Ace's API) and click **Save**.
+   - ✅ *(UI)* "Save changes?" reads "The changes you are making will cancel any pending script runs for `<script>`." and "If this script is currently running on a host, it will complete, but results won't appear in Fleet."
+3. ☐ **Save**.
+   - ✅ *(UI)* Success toast "Successfully saved script."
+   - ✅ *(API)* The batch targets every host; at least one run is canceled and none is left pending; ran + errored + pending + incompatible + canceled = targeted; the canceled hosts are among the targeted ones.
+4. ☐ Side nav **Batch progress** → **Started** → the batch → **Canceled** tab.
+   - ✅ *(UI)* The tab is named "Canceled N" for the API's count, and lists exactly the canceled hosts.
+
+**Assessment**
+- *Value:* Medium-high. That saving an edited script cancels *every* run that hasn't reported (none left Pending), which QA Wolf checked over hundreds of hosts, plus the warning that says so. On both tiers.
+- *Coverage gaps:* near-deterministic, not deterministic: it fails only if every host reports before the edit lands. Each simulation polls every 30 s and "runs" for 0–4 s, and the edit lands a couple of seconds after the batch starts, so the odds are about (edit seconds / 30)ⁿ: negligible over ~15 hosts. A run still *queued* behind another activity when its script is edited isn't cancelled properly: it stays Pending and the batch never finishes ([fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)). The test's hosts have nothing queued, so it doesn't reach that. The batch's eventual "Completed" isn't awaited: that's the 5-minute completion check, which CTL-24/25 wait for. Deleting a script with pending runs isn't covered.
+- *Redundancy:* the library edit overlaps CTL-09/CTL-21's (`editScript` is the same path, split here at the warning).
+- *Efficiency / smells:*
+  - The batch is started through the API with the Library already open: the edit's timing is the point, and a UI batch start would spend seconds of the hosts' 30-second window. CTL-24/25 cover starting a batch from the Hosts list.
+  - The hosts must have nothing queued ahead of this batch (#54732), so they come from a darwin slice and skip the built-in macOS label's members. On these instances that label holds the *Ubuntu* simulations, and CTL-25 runs a batch on every online member on Unassigned, in parallel in CI.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-40 · Premium • Controls • Batch progress › a fleet with no batch runs shows each progress tab empty
+
+- **File:** [`playwright/tests/e2e/premium/controls/scripts/batch-run.spec.ts`](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts) (L204)
+- **Grep:** `npx playwright test --project=premium batch-run -g "each progress tab empty"`
+- **Project:** premium · **Scope:** **Workstations**: no spec runs a batch there, and `cleanup-setup` deletes its scripts, which takes any batch with them
+- **Mode:** UI · **Isolation:** read-only
+- **Source:** QA Wolf round 1 C8 #9 (`scripts-batch-script-progress-page-is-accessible-from-the-controls-greater-scripts-page`)
+- **Preconditions:** no batch on Workstations
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Dashboard → **Controls** → **Scripts** → fleet **Workstations** → side nav **Batch progress**.
+   - ✅ *(UI)* The **Batch progress** heading; the fleet dropdown still reads Workstations; **Started** is the open tab.
+2. ☐ Open **Started**, **Scheduled** and **Finished** in turn.
+   - ✅ *(UI)* Each shows "No batch scripts started / scheduled / finished" with its line: "Scripts running on multiple hosts will appear here.", "Scheduled scripts will appear here.", "Completed or canceled batch scripts will appear here."
+3. ☐ Back to **Started**.
+   - ✅ *(UI)* The "Learn more about batch scripts" link.
+
+**Assessment**
+- *Value:* Low-medium. The Scripts side nav's way into Batch progress (the other tests arrive from a toast or the same nav) and each tab's empty state.
+- *Coverage gaps:* free has no fleet that's empty for sure (its Unassigned holds CTL-37…39's batches while that spec runs), so this is premium only. The link's target isn't checked.
+- *Redundancy:* the side-nav entry is shared with CTL-37/39.
+- *Efficiency / smells:* a separate describe from CTL-24/25, outside their VM timeout and retries.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ## Area observations
 
 **Coverage map**
@@ -1402,7 +1582,7 @@ other:
 | Scripts library — upload / list / preview / download / edit / delete | CTL-07…11, CTL-19…23 | Platform tag unasserted; no duplicate-name, empty-file, or unusual-extension cases |
 | Script upload rejection (>500,000 chars) | CTL-12 | Exact-limit boundary (should pass) untested; no free mirror |
 | **Running a script on a host** + output / exit code | [HOST-19…22](02-hosts-shared-and-free.md) (area 02 — effect read back by a report, non-zero exit, timeout, four interpreters) | re-run untested; Pending/Upcoming never observed; the `*-create-marker` / `*-delete-marker` fixtures are still unreferenced (the specs build content at run time) |
-| Batch script execution (Started / Scheduled / Finished tabs, details page) | CTL-24 (3 real VMs → Ran / Errored / Incompatible), CTL-25 (~100 simulations via Select all matching) | **Schedule for later** + Scheduled tab, **cancel**, host-side view of a batch run, and every tab's row list at scale |
+| Batch script execution (Started / Scheduled / Finished tabs, details page) | CTL-24 (3 real VMs → Ran / Errored / Incompatible), CTL-25 (~100 simulations via Select all matching), CTL-37 (scheduled → cancelled: Pending → Canceled, the preview), CTL-38 (Schedule for later from the Hosts list, stored in UTC, started by the worker), CTL-39 (an edit cancels the unreported runs), CTL-40 (empty states, side-nav entry) | cancelling a *started* batch; the schedule form's validation (cut); scheduling by filter; the host-side view of a batch run; every tab's row list at scale; a run queued behind another activity when its script is edited stays Pending ([fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)) |
 | Organization-wide **Script execution** switch | CTL-26 (exclusive project) | queued scripts held while disabled (the reason it's exclusive) never observed; batch / policy-automation / setup-experience run paths not checked while disabled |
 | Custom variables — add / list / delete + name validation | CTL-13, CTL-14 (both tiers) | No value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables |
 | Custom variables in scripts — an unknown `$FLEET_SECRET_*` refused on upload, a referenced variable refused deletion | CTL-35, CTL-36 (both tiers; library scripts on Unassigned) | **Profiles** referencing a variable (both checks cover them); installer and setup-experience scripts; a script on a fleet, whose message names it; the scope wording in the delete refusal ([fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621)); the substituted value reaching a host |

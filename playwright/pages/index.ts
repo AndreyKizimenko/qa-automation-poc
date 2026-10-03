@@ -7,6 +7,7 @@ export { RunScriptModal } from './components/RunScriptModal';
 export { RunScriptBatchModal } from './components/RunScriptBatchModal';
 export type { RunScriptStatus } from './components/RunScriptModal';
 export { ScriptDetailsModal } from './components/ScriptDetailsModal';
+export { ScriptPreviewModal } from './components/ScriptPreviewModal';
 export { MdmCommandDetailsModal } from './components/MdmCommandDetailsModal';
 export { UpdateEndUserModal } from './components/UpdateEndUserModal';
 export { RecoveryLockPasswordModal } from './components/RecoveryLockPasswordModal';

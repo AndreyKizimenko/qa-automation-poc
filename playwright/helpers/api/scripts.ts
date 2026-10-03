@@ -164,9 +164,17 @@ export async function setAgentOptions(
   await expect(res, `Failed to set agent options on ${fleetId === 0 ? 'global' : `fleet ${fleetId}`}`).toBeOK();
 }
 
-/** A batch script run's counts, as `GET /scripts/batch/:id` reports them. */
+/**
+ * A batch script run's state and host counts, as `GET /scripts/batch/:id`
+ * reports them. `canceled` is the number of hosts whose run was cancelled;
+ * `batchCanceled` says the batch itself was.
+ */
 export interface BatchSummary {
+  /** `scheduled`, `started` or `finished`. */
   status: string;
+  /** When a scheduled batch starts, as Fleet stored it (ISO 8601, UTC); null for one run now. */
+  notBefore: string | null;
+  batchCanceled: boolean;
   targeted: number;
   ran: number;
   errored: number;
@@ -181,6 +189,8 @@ export async function getBatchSummary(request: APIRequestContext, batchId: strin
   const b = await res.json();
   return {
     status: b.status,
+    notBefore: b.not_before ?? null,
+    batchCanceled: !!b.canceled,
     targeted: b.targeted_host_count,
     ran: b.ran_host_count,
     errored: b.errored_host_count,
@@ -188,6 +198,51 @@ export async function getBatchSummary(request: APIRequestContext, batchId: strin
     incompatible: b.incompatible_host_count,
     canceled: b.canceled_host_count,
   };
+}
+
+/**
+ * Runs a library script on these hosts as one batch — now, or at `notBefore`
+ * (an ISO 8601 time; one in the past runs now) — and returns the batch's id.
+ * Every host must be on the script's fleet, or Fleet refuses the whole batch.
+ */
+export async function runScriptBatch(
+  request: APIRequestContext,
+  scriptId: number,
+  hostIds: number[],
+  opts: { notBefore?: string } = {},
+): Promise<string> {
+  const res = await request.post(apiUrl('scripts/run/batch'), {
+    headers: authHeaders(),
+    data: { script_id: scriptId, host_ids: hostIds, ...(opts.notBefore ? { not_before: opts.notBefore } : {}) },
+  });
+  await expect(res, `Failed to run script ${scriptId} as a batch on ${hostIds.length} hosts`).toBeOK();
+  return (await res.json()).batch_execution_id as string;
+}
+
+/**
+ * Cancels a batch: every run without a result yet, or, for a scheduled batch,
+ * the whole batch, which then finishes at once.
+ */
+export async function cancelScriptBatch(request: APIRequestContext, batchId: string): Promise<void> {
+  const res = await request.post(apiUrl(`scripts/batch/${batchId}/cancel`), { headers: authHeaders() });
+  await expect(res, `Failed to cancel batch ${batchId}`).toBeOK();
+}
+
+/** A batch's per-host statuses, as its details page tabs name them. */
+export type BatchHostStatusKey = 'ran' | 'errored' | 'pending' | 'incompatible' | 'canceled';
+
+/** The ids of a batch's hosts in one status, from `GET /scripts/batch/:id/host_results`. */
+export async function listBatchHostIds(
+  request: APIRequestContext,
+  batchId: string,
+  status: BatchHostStatusKey,
+): Promise<number[]> {
+  const res = await request.get(apiUrl(`scripts/batch/${batchId}/host_results`), {
+    headers: authHeaders(),
+    params: { status, per_page: '500' },
+  });
+  await expect(res, `Failed to list batch ${batchId}'s ${status} hosts`).toBeOK();
+  return (((await res.json()).hosts ?? []) as Array<{ id: number }>).map((h) => h.id);
 }
 
 /**
