@@ -58,7 +58,8 @@ files · ~350 test declarations · 4 projects**.
 > **Round 3 batch C added 2026-10-03** (`playwright/qawolf-round3-batch-c`): what Fleet decides server-side, over
 > simulations. Area **04**: POL-33 (a policy saved for macOS only runs on macOS hosts, both tiers), POL-34 (a host's
 > policy → the hosts that gave the same answer, both answers, both tiers) and POL-35 (the policies list's Pass / Fail
-> links on premium).
+> links on premium). Area **03**: HOSTP-17 (Low disk space withholds *Select all matching hosts*) and HOSTP-18 (*Select all
+> matching* transfers all 51 offline simulations staged on a throwaway fleet); HOSTP-01 reads its Fleet column.
 
 ## The area files
 
@@ -66,7 +67,7 @@ files · ~350 test declarations · 4 projects**.
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
 | 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
-| 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
+| 03 | [Hosts — premium](03-hosts-premium.md) | 18 | premium |
 | 04 | [Policies](04-policies.md) | 35 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 36 | premium, free |
@@ -87,7 +88,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**496 entries** covering every test in the suite. An entry can expand into several
+**498 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (36 entries → 87 executions), area 11 (36 → 92), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

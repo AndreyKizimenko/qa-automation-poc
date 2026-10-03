@@ -1,6 +1,6 @@
 # Hosts — premium — test audit
 
-**Specs covered:** 8 files · **Entries:** 16 (21 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
+**Specs covered:** 8 files · **Entries:** 18 (23 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
 
 Premium-only host flows: moving hosts between fleets (bulk and single-host, per role), deleting hosts (bulk, from host details, and as a team admin), drilling a report card into one host's stored results, the role/platform gating of the hosts-list CTAs and the host Actions menu, a host's **IdP username** (the host details **User** card, by UI and API, and its role gate), and the **Recovery Lock password** on the real Mac. All eight specs resolve their hosts through the API at runtime — never by name — because the premium QA instance is ~300 osquery-perf **simulations** plus three real VMs. Mutating specs draw disjoint slices of the simulated pool via `findSimulatedHostIds(platform, count, offset)` (transfer, delete) or `findSimulations(platform, count, offset)` (the IdP-username spec, which starts 40 hosts further in); read-only device-fidelity specs take the real VM via the `liveMacosHost` worker fixture. The Recovery Lock spec takes the same VM and **changes its state**.
 
@@ -28,6 +28,8 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-14 | `premium/hosts/host-idp-username.spec.ts` | IdP username › the device_mapping API sets and removes the IdP username | UI+API | ☐ |
 | HOSTP-15 | `premium/hosts/host-idp-username.spec.ts` | IdP username › a global observer is not offered Add user | UI | ☐ |
 | HOSTP-16 | `premium/hosts/recovery-lock.spec.ts` | Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac **(real macOS VM)** | UI+API | ☐ |
+| HOSTP-17 | `premium/hosts/bulk-transfer.spec.ts` | bulk transfer › a filter the server cannot transfer by withholds "Select all matching hosts" | UI | ☐ |
+| HOSTP-18 | `premium/hosts/bulk-transfer.spec.ts` | transfer every matching host › "Select all matching hosts" transfers every host the filter matches, not just the page | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API**, **PERF**.
 
@@ -53,7 +55,8 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 4. ☐ Select **QA** in the fleet dropdown (idempotent — no click if already showing QA).
    - ✅ *(UI)* the dropdown's current value reads exactly `QA` (`TeamDropdown.selectByLabel`).
    - ✅ *(UI)* first row with a link still visible (re-asserted in the spec).
-5. ☐ Tick the table header's select-all checkbox.
+5. ☐ Read the list, then tick the table header's select-all checkbox.
+   - ✅ *(UI)* exactly 3 rows, each with a **Fleet** cell reading `QA` (round 1 C5 #10: the list under a fleet is that fleet's hosts).
    - ✅ *(UI)* the bulk-select bar (`thead.active-selection`) is visible (`selectAllOnPage`).
    - ✅ *(UI)* the tally reads `3 selected`.
    - ✅ *(UI)* **Select all matching hosts** is **hidden** — only a *full* page offers widening.
@@ -70,7 +73,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 
 **Assessment**
 - *Value:* the whole bulk-transfer path — header checkbox → selection bar → modal gating → submit → toast → server truth. Would catch a broken bulk endpoint, a modal that submits without a destination, or a list that doesn't refresh after the move.
-- *Coverage gaps:* the transfer *into* a named fleet is done by API, so the UI only ever transfers **to Unassigned**; no assertion the hosts show up under Unassigned in the list; no `transferred_hosts` activity-feed assertion; **Select all matching hosts** is never exercised (deliberate — it would target the whole load fleet).
+- *Coverage gaps:* the transfer *into* a named fleet is done by API, so the UI only ever transfers **to Unassigned**; no assertion the hosts show up under Unassigned in the list; no `transferred_hosts` activity-feed assertion; **Select all matching hosts** isn't exercised here (it would target the whole load fleet); HOSTP-18 clicks it on a throwaway fleet.
 - *Redundancy:* HOSTP-02 and HOSTP-03 repeat steps 3–6 for one extra assertion each; HOSTP-04 covers the same modal from host details with a real destination pick.
 - *Efficiency / smells:* **cross-spec race** — the spec's docstring claims QA "holds exactly this test's hosts", but [`host-transfer-permissions.spec.ts:55`](../../tests/e2e/premium/hosts/host-transfer-permissions.spec.ts) transfers a Windows sim **into QA** and both files run in parallel (`fullyParallel: true`, 2 workers in CI). An overlapping window makes `3 selected` (`bulk-transfer.spec.ts:48`) see 4, or moves the other spec's host out from under it. The count assertion fails fast rather than mis-transferring, so this is a flake, not a data-loss risk. `hostsList.table.table.locator('tbody').getByRole('row')` at `:63` reaches through the component object instead of using a `DataTable` accessor.
 
@@ -141,7 +144,7 @@ other:
 
 **Assessment**
 - *Value:* the positive counterpart of HOSTP-01's "widening affordance hidden" assertion, plus the only Clear-selection coverage in the area.
-- *Coverage gaps:* doesn't assert the tally equals the page size (50), doesn't assert rows are visually deselected after Clear selection, and the widening button's *behaviour* is untested by design.
+- *Coverage gaps:* doesn't assert the tally equals the page size (50), doesn't assert rows are visually deselected after Clear selection, and the widening button's *behaviour* is HOSTP-18's (on a throwaway fleet, never here).
 - *Redundancy:* steps 1–2 are shared with HOSTP-02. Both could live in one "selection bar" test.
 - *Efficiency / smells:* none beyond the shared setup duplication.
 
@@ -739,6 +742,80 @@ other:
   - **The rotation wait** (step 13) doesn't look for `pending` first. It doesn't need to: Fleet marks the password pending inside the rotate request (`InitiateRecoveryLockRotation`), before the success toast, so the wait can't return on the pre-rotation status. The spec says so in a comment.
   - Label-targeting specs borrow MDM-enrolled macOS simulations onto VMs while they run. If one is there when enforcement turns on, Fleet may queue `SetRecoveryLock` for it as well (⚠️ unverified whether Fleet treats a simulation as Apple silicon) — harmless to this test, which watches only the real Mac, but it widens what the setting touches.
   - The host Activity card items are read straight after each event because the card shows 8 per page and the VM specs alongside push entries off it — still a race, just a short one; the "viewed" item is only looked for after the rotation, one reload later. They use `.first()`, leaving freshness to the API checks. `controlRow` is documented as a profile row and is reused here for the Recovery Lock row.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-17 · Premium • Hosts • bulk transfer › a filter the server cannot transfer by withholds "Select all matching hosts"
+
+- **File:** [`playwright/tests/e2e/premium/hosts/bulk-transfer.spec.ts`](../../tests/e2e/premium/hosts/bulk-transfer.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "withholds"`
+- **Project:** premium · **Scope:** All fleets (the dashboard's default)
+- **Mode:** UI · **Isolation:** parallel; mutates nothing
+- **Source:** QA Wolf `hosts-attempt-to-bulk-transfer-all-hosts-with-filter-unhappy-path` (round 1 C1 #10; round 3, batch C)
+- **Preconditions:** more than a page (50) of hosts with under 32 GB free; ~680 on premium (2026-10-03), most of the load fleet.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open `/dashboard`; click the **Low disk space hosts** card.
+   - ✅ *(UI)* the Hosts list's pill is "hosts filtered by Low disk space"; a row is listed.
+2. ☐ Tick the header select-all checkbox.
+   - ✅ *(UI)* the selection bar reads "All hosts on this page are selected" and "50 selected".
+   - ✅ *(UI)* **Select all matching hosts** isn't there.
+
+**Assessment**
+- *Value:* A safety property, not a cosmetic one. Fleet's server transfers by filter on query, status, label and fleet only, while the page sends every filter it has. Under Low disk space (or a policy, software, OS, vulnerability or MDM filter) "all matching" would move every host the remaining filters match, so the page withholds the button (`showMarkAllPages={!unsupportedFilter}`). A regression there would make a bulk transfer silently over-reach.
+- *Coverage gaps:* One unsupported filter of the seven; the delete action's matching guard (same flag) isn't asserted separately.
+- *Redundancy:* HOSTP-03 is the positive (Unassigned, no filter); together they pin the flag both ways.
+- *Efficiency / smells:* Seconds. The presence half (the page-selected copy and "50 selected") is asserted before the absence, so the check can't pass on a selection bar that never rendered.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-18 · Premium • Hosts • transfer every matching host › "Select all matching hosts" transfers every host the filter matches, not just the page
+
+- **File:** [`playwright/tests/e2e/premium/hosts/bulk-transfer.spec.ts`](../../tests/e2e/premium/hosts/bulk-transfer.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "transfers every host the filter matches"`
+- **Project:** premium · **Scope:** a throwaway `pw-transfer-<nonce>` fleet → Unassigned
+- **Mode:** UI+API · **Isolation:** parallel; its own fleet and an offline pool nothing else uses. The `afterEach` deletes the fleet by name, which returns any host still on it to Unassigned; the cleanup projects sweep a fleet a killed run left.
+- **Source:** QA Wolf `hosts-bulk-transfer-hosts` (round 1 C1 #12; round 3, batch C). QA Wolf moved 50 hosts between two throwaway fleets and back; one fleet and 51 hosts make "all matching" differ from "this page".
+- **Preconditions (API):** 51 **offline** Linux simulations on Unassigned (`findOfflineSimulations`, the most recently seen first). The perf daemons abandon their set of ~300 at the daily refresh (16:00 UTC), and host expiry deletes it a day later, so ~100 Ubuntu ones are always offline and no other picker reads them. Fewer fails with that explanation.
+- **Data created:** the fleet (deleted in the test and in the `afterEach`). The 51 hosts end on Unassigned, where they started.
+
+**Flow**
+
+1. ☐ *(API)* Create `pw-transfer-<nonce>`; `POST /hosts/transfer` the 51 hosts onto it.
+2. ☐ *(guard)* Route `POST /hosts/transfer/filter`: let it through only when `filters.fleet_id` is the throwaway fleet; abort anything else.
+3. ☐ Open the Hosts list on the fleet; select it in the fleet dropdown.
+   - ✅ *(UI)* a row is listed.
+4. ☐ Tick the header checkbox; click **Select all matching hosts**.
+   - ✅ *(UI)* "50 selected", then "All matching hosts are selected" and "51 selected".
+5. ☐ **Transfer** → **Unassigned** → **Transfer**.
+   - ✅ *(UI)* toast "Hosts successfully removed from fleets."
+   - ✅ *(guard)* no request was refused; exactly one by-filter transfer went, with `fleet_id: null` (Unassigned).
+   - ✅ *(API)* the fleet holds no host, and all 51 are on Unassigned, the 51st included: a transfer of the selected page alone would leave one behind.
+6. ☐ *(API, `finally`)* Delete the fleet.
+
+**Assessment**
+- *Value:* The only coverage of `POST /hosts/transfer/filter` from the UI, and of what "Select all matching" actually does: the count it shows and the request it sends. Without the offline pool this needed `exclusive/` or a cut; with it, it costs seconds and touches nothing another spec reads.
+- *Coverage gaps:* Only the fleet filter; a search or status filter combined with it, and a named destination, aren't covered. The guard stops a wrong request rather than reporting what the server would have done with it.
+- *Redundancy:* HOSTP-01 covers the by-id transfer of a selected page.
+- *Efficiency / smells:* ~10 s. The route guard is the safety property: a regression that dropped the fleet from the filter would otherwise move every offline simulation on the instance (still harmless, but not this test's to move).
 
 **Notes (Andrey)**
 ```

@@ -324,12 +324,16 @@ export async function findMdmSimulations(
  * targets, who a label holds. Disjoint from {@link findMdmSimulations}' pool;
  * same slicing.
  *
- * Slices claimed: linux 0–1 `software-label-targets.spec.ts`, 2
- * `shared/labels/labels.spec.ts` (a manual label's member, never moved); darwin 0–1
+ * Slices claimed: linux 0–1 `software-label-targets.spec.ts`, 2–4
+ * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 6–7
+ * `shared/policies/policy-hosts.spec.ts` (refetched for a policy's answer, never
+ * moved); darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
  * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
- * onto the VMs fleet); windows 0–1 `premium/hosts/host-idp-username.spec.ts`
- * (an IdP username set and removed, never moved). On free, windows 0 is read
+ * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only);
+ * windows 0–1 `premium/hosts/host-idp-username.spec.ts`
+ * (an IdP username set and removed, never moved), 2
+ * `shared/policies/policy-hosts.spec.ts` (read only). On free, windows 0 is read
  * by `free/hosts/host-idp-username.spec.ts` and `api/free/license.spec.ts`,
  * both of which write nothing.
  */
@@ -340,6 +344,47 @@ export async function findSimulations(
   offset = 0,
 ): Promise<number[]> {
   return findBorrowableSimulations(request, platform, count, offset, (h) => !h.mdm?.connected_to_fleet);
+}
+
+/**
+ * Offline simulations on Unassigned: the pool for a spec that needs many hosts
+ * and must not shift anyone else's. At their daily refresh
+ * (`tools/perf-hosts/com.fleetqa.perf.refresh.plist`, 16:00 UTC) the perf
+ * daemons enroll a fresh set of ~300 simulations and abandon the previous one,
+ * which stays offline until host expiry (`host_expiry_window: 1`) deletes it a
+ * day later. Every other picker takes online hosts, so nothing else reads or
+ * moves these.
+ *
+ * The most recently seen come first: they belong to the newest abandoned set,
+ * a day from expiry, rather than to an older one expiry is about to delete.
+ * Real VMs are excluded by hardware, as everywhere. Returns fewer than `count`
+ * when the set is thin (a refresh that didn't run) — callers assert on the
+ * length they need.
+ *
+ * Claimed: linux, 51, `premium/hosts/bulk-transfer.spec.ts` (staged on a
+ * throwaway fleet for "Select all matching hosts").
+ */
+export async function findOfflineSimulations(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  count: number,
+): Promise<number[]> {
+  const res = await request.get(apiUrl('hosts'), {
+    headers: authHeaders(),
+    params: {
+      fleet_id: '0',
+      status: 'offline',
+      order_key: 'seen_time',
+      order_direction: 'desc',
+      per_page: '1000',
+    },
+  });
+  await expect(res, 'Failed to list the offline hosts on Unassigned').toBeOK();
+  const hosts = (await res.json()).hosts as Array<{ id: number; platform: string; hardware_model?: string }>;
+  return hosts
+    .filter((h) => matchesPlatform(h.platform, platform) && !REAL_DEVICE_MODEL.test(h.hardware_model ?? ''))
+    .slice(0, count)
+    .map((h) => h.id);
 }
 
 async function findBorrowableSimulations(

@@ -127,6 +127,7 @@ CRUD spec writes and never checks.
 | slice | what |
 |---|---|
 | policies | new `shared/policies/policy-hosts.spec.ts`: a policy saved with only macOS ticked is stored as `darwin` and listed on a macOS simulation, not on a Linux or a Windows one (both tiers); a host's Policies tab → **View all hosts** for a passing and a failing policy lands on the hosts with that answer, the two refetched simulations listed under it and not under the other (both tiers). New `premium/policies/policy-host-counts.spec.ts`: the VMs-fleet policy's Pass and Fail links list exactly the API's hosts. `createPolicy({ platform })`, `getGlobalPolicy`, `getHostPolicyResponses`, `listPolicyHosts`; `PolicyEditPage.saveNew({ platforms })`, `HostDetailsPage.viewAllHostsForPolicy`, `HostsListPage.policyResponseValue` / `selectPolicyResponse` / `hostLink` / `hostNames`, `PoliciesListPage.openHostCount` |
+| transfers | `bulk-transfer.spec.ts`: under the dashboard's Low disk space filter a full page selected offers no *Select all matching hosts* (the server would ignore that filter and move everything else matching). *Select all matching* clicked for the first time, on a throwaway `pw-transfer-*` fleet holding 51 staged offline simulations: "51 selected", transferred to Unassigned by filter behind a request guard that only lets a transfer scoped to that fleet through; every one moved. The QA-staged test reads each row's Fleet cell. `findOfflineSimulations`; `CLAUDE.md` › Test hosts gains the offline pool |
 
 ## Round 3 · Batch B — policy, report and software forms
 
