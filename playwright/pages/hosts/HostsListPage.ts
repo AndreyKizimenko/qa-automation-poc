@@ -55,6 +55,10 @@ export class HostsListPage {
   readonly filterPill: Locator;
   /** The Pass / Fail choice shown beside a policy's filter pill. */
   readonly policyResponseValue: Locator;
+  /** Beside a custom label's pill, for a global user or the label's author. */
+  readonly editLabelButton: Locator;
+  readonly deleteLabelButton: Locator;
+  readonly deleteLabelModal: Locator;
   /** "N hosts" above the table — the list's total for the current filters. */
   readonly resultsCount: Locator;
 
@@ -128,6 +132,11 @@ export class HostsListPage {
     // accessible name and the chosen option is a plain div, so the value is read
     // by the wrapper's class.
     this.policyResponseValue = page.locator('.policies-filter .dropdown__custom-value-label');
+    this.editLabelButton = page.getByRole('button', { name: 'Edit label' });
+    this.deleteLabelButton = page.getByRole('button', { name: 'Delete label' });
+    // DeleteLabelModal: Fleet's Modal renders a role-less title, so the shared
+    // container is scoped by it, as on the Labels page.
+    this.deleteLabelModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete label' });
     this.resultsCount = page.locator('.table-container__results-count');
 
     this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });

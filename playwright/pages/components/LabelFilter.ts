@@ -30,6 +30,24 @@ export class LabelFilter {
     await option.click();
   }
 
+  /**
+   * Filters by one custom label, typed to narrow the menu so a label past its
+   * fold is reachable. The menu's "Filter labels by name..." box mirrors what is
+   * typed into the open select; filling the box itself takes focus from the
+   * select, which closes the menu. Fleet routes the choice to
+   * `/hosts/manage/labels/<id>`.
+   */
+  async selectLabel(name: string): Promise<void> {
+    await this.trigger.click();
+    await expect(this.options.first()).toBeVisible();
+    await this.page.keyboard.type(name);
+    const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+    const option = this.options.filter({ hasText: exact });
+    await expect(option).toHaveCount(1);
+    await option.click();
+    await expect(this.page).toHaveURL(/\/hosts\/manage\/labels\/\d+/);
+  }
+
   /** Picks the first non-platform label (or the first option if none exist). */
   async selectFirstCustomLabel(): Promise<void> {
     await this.trigger.click();

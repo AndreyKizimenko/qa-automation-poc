@@ -59,7 +59,9 @@ files · ~350 test declarations · 4 projects**.
 > simulations. Area **04**: POL-33 (a policy saved for macOS only runs on macOS hosts, both tiers), POL-34 (a host's
 > policy → the hosts that gave the same answer, both answers, both tiers) and POL-35 (the policies list's Pass / Fail
 > links on premium). Area **03**: HOSTP-17 (Low disk space withholds *Select all matching hosts*) and HOSTP-18 (*Select all
-> matching* transfers all 51 offline simulations staged on a throwaway fleet); HOSTP-01 reads its Fleet column.
+> matching* transfers all 51 offline simulations staged on a throwaway fleet); HOSTP-01 reads its Fleet column. Area
+> **13**: the Manual label lifecycle (MISC-05…07) runs from the Hosts list — filtered by the label, edited (one member
+> swapped) and deleted from its pill.
 
 ## The area files
 

@@ -20,16 +20,23 @@
  * `DataTable.rowWith` matches text without a regex, `activityCopy` escapes, the
  * purge matches by `includes` and deletes by id.
  *
- * The Manual label holds one osquery-perf simulation (Linux slice 2 of
- * `findSimulations`), never a real VM: on free, the real VMs sit in the same
- * global scope the label does.
+ * The Manual label holds osquery-perf simulations (Linux slices 2–4 of
+ * `findSimulations`, never moved), never a real VM: on free, the real VMs sit in
+ * the same global scope the label does. Its lifecycle runs where QA Wolf's did,
+ * from the Hosts list (round 1 C9 #11): filtered by the label, the list holds
+ * exactly its two hosts; the pill's **Edit label** opens the form, which swaps
+ * one host for another; the list then holds the new pair; the pill's **Delete
+ * label** deletes it. Membership is read back through the API after the save,
+ * since the toast can't prove what was stored. The Dynamic lifecycle keeps the
+ * Labels page's own Edit and Delete.
  *
- * Grounded in frontend/pages/labels/{ManageLabelsPage,NewLabelPage,EditLabelPage}.
+ * Grounded in frontend/pages/labels/{ManageLabelsPage,NewLabelPage,EditLabelPage}
+ * and the Hosts list's HostsFilterBlock (the label pill and its two buttons).
  */
 import type { PlaywrightWorkerArgs } from '@playwright/test';
 import { test, expect } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { deleteLabelsMatching, findSimulations, getHostDisplayName } from '@helpers/api';
+import { deleteLabelsMatching, findSimulations, getHostDisplayName, getLabelId, listLabelHostIds } from '@helpers/api';
 
 // Cleanup runs in beforeAll (no `request` fixture there), so spin up a
 // cookie-less API context and purge this lifecycle's leftover labels.
@@ -128,26 +135,32 @@ test.describe('Labels • Manual label lifecycle', () => {
   const description = 'Playwright manual label';
   const editedDescription = `${description} (edited)`;
 
+  // Three Linux simulations: the label starts with the first two, and the edit
+  // swaps the second for the third.
+  let hosts: Array<{ id: number; name: string }> = [];
+
   test.beforeAll(async ({ playwright }) => {
     await purgeLabels(playwright, MAN_MARKER);
   });
 
-  test('create', async ({ labelsPage, request, pageHealth }) => {
+  test('create', async ({ labelsPage, hostsList, request, pageHealth }) => {
     // The manual-label host-target search logs a benign 4xx to the console
     // ("Invalid usage: missing required parameter(s)") while typing; the search
     // still returns hosts and the label saves. Opt out of the console-error
     // assertion for this one test.
     pageHealth.disable();
 
-    const [hostId] = await findSimulations(request, 'linux', 1, 2);
-    expect(hostId, 'an online Linux simulation for the manual label').toBeDefined();
-    const hostName = await getHostDisplayName(request, hostId);
+    const ids = await findSimulations(request, 'linux', 3, 2);
+    expect(ids, 'three online Linux simulations for the manual label').toHaveLength(3);
+    hosts = await Promise.all(ids.map(async (id) => ({ id, name: await getHostDisplayName(request, id) })));
 
     await labelsPage.goto();
     await labelsPage.clickAddLabel();
     await labelsPage.selectType('Manual');
     await labelsPage.fillDetails(name, description);
-    expect(await labelsPage.addHost(hostName)).toBe(hostName);
+    for (const host of hosts.slice(0, 2)) {
+      expect(await labelsPage.addHost(host.name)).toBe(host.name);
+    }
     await labelsPage.save();
 
     await labelsPage.toast.expectSuccess('Label added successfully.');
@@ -158,33 +171,66 @@ test.describe('Labels • Manual label lifecycle', () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText(description);
     await expect(row).toContainText('Manual');
+
+    // Filtered by the label, the Hosts list holds exactly its hosts.
+    await labelsPage.navbar.goToHosts();
+    await hostsList.labelFilter.selectLabel(name);
+    await expect(hostsList.filterPill).toHaveAccessibleName(`hosts filtered by ${name}`);
+    await expect
+      .poll(async () => (await hostsList.hostNames()).sort())
+      .toEqual([hosts[0].name, hosts[1].name].sort());
   });
 
-  test('edit', async ({ labelsPage }) => {
-    await labelsPage.goto();
-    await labelsPage.runRowAction(name, 'Edit');
+  test('edit from the Hosts list swaps a host', async ({ labelsPage, hostsList, request, pageHealth }) => {
+    // The same host-target search as create.
+    pageHealth.disable();
 
-    await expect(labelsPage.page).toHaveURL(/\/labels\/\d+/);
+    await hostsList.goto();
+    await hostsList.labelFilter.selectLabel(name);
+    await hostsList.editLabelButton.click();
+
+    await expect(labelsPage.page).toHaveURL(/\/labels\/\d+$/);
     await expect(labelsPage.nameInput).toHaveValue(name);
     await expect(labelsPage.descriptionInput).toHaveValue(description);
+    await expect
+      .poll(async () => (await labelsPage.selectedHostNames()).sort())
+      .toEqual([hosts[0].name, hosts[1].name].sort());
 
     await labelsPage.fillDetails(editedName, editedDescription);
+    await labelsPage.removeHost(hosts[1].name);
+    expect(await labelsPage.addHost(hosts[2].name)).toBe(hosts[2].name);
     await labelsPage.save();
     await labelsPage.toast.expectSuccess('Label updated successfully.');
+
+    const labelId = await getLabelId(request, editedName);
+    await expect
+      .poll(async () => [...(await listLabelHostIds(request, labelId))].sort())
+      .toEqual([hosts[0].id, hosts[2].id].sort());
 
     await labelsPage.goto();
     const row = await labelsPage.locateRow(editedName);
     await expect(row).toBeVisible();
     await expect(row).toContainText(editedDescription);
+
+    await labelsPage.navbar.goToHosts();
+    await hostsList.labelFilter.selectLabel(editedName);
+    await expect(hostsList.filterPill).toHaveAccessibleName(`hosts filtered by ${editedName}`);
+    await expect
+      .poll(async () => (await hostsList.hostNames()).sort())
+      .toEqual([hosts[0].name, hosts[2].name].sort());
   });
 
-  test('delete', async ({ labelsPage }) => {
-    await labelsPage.goto();
-    await labelsPage.runRowAction(editedName, 'Delete');
+  test('delete from the Hosts list', async ({ labelsPage, hostsList }) => {
+    await hostsList.goto();
+    await hostsList.labelFilter.selectLabel(editedName);
+    await hostsList.deleteLabelButton.click();
 
-    await expect(labelsPage.deleteModal).toBeVisible();
-    await labelsPage.deleteConfirmButton.click();
-    await labelsPage.toast.expectSuccess(`Successfully deleted ${editedName}.`);
+    await expect(hostsList.deleteLabelModal).toBeVisible();
+    await hostsList.deleteLabelModal.getByRole('button', { name: 'Delete', exact: true }).click();
+    await hostsList.toast.expectSuccess('Successfully deleted label.');
+    // Fleet drops the label from the route, back to the unfiltered list.
+    await expect(hostsList.page).toHaveURL(/\/hosts\/manage(?!\/labels)/);
+    await expect(hostsList.filterPill).toHaveCount(0);
 
     await labelsPage.goto();
     await expect(await labelsPage.locateRow(editedName)).toHaveCount(0);
