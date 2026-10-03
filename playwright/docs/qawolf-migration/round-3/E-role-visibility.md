@@ -7,11 +7,14 @@
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
+> **Branch from current `main`** (batches A and B merged with
+> [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82)).
 > **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5 (how a round-3 batch runs; rules new since round 2), round 2's
 > [README §9](../round-2/README.md#9-working-a-batch-since-d), `playwright/CLAUDE.md` (the cleanup pipeline;
-> the static users under **Env vars**), then this file.
+> the static users under **Env vars**; the login throttle under **API access**), then this file, then
+> [A](A-settings-users-labels.md)'s and [B](B-policy-report-software-forms.md)'s *What landed*, which built the
+> admin half of five of this batch's rows.
 >
 > **What this batch is.** Round 1 merged QA Wolf's one flow per role per tier per page into role specs for
 > policies and reports. **Those specs were never written**, so the MERGE rows pointing at them counted as
@@ -24,6 +27,27 @@
 >
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the
 > build both instances run.
+>
+> **Since batches A and B (2026-10-03, re-checked against `main` da2aceb).** What applies here:
+>
+> - **The overlapping rows now meet built specs** (finding 6, §6, decision 3). B wrote a fleet's
+>   failing-policies webhook on a throwaway `pw-*` fleet, report automations on/off on All fleets, and Save
+>   as new into Workstations; A wrote Workstations' enroll secrets under a snapshot restore. Each as admin.
+>   On Workstations, a role write of the enroll secrets races A's restore, and one of the fleet's webhook races
+>   `team-host-status-webhook.spec.ts` (§6).
+> - **[#54619](https://github.com/fleetdm/fleet/issues/54619):** saving a fleet's policy automations replaces
+>   its whole `webhook_settings`. `team-admin` can't reach a `pw-*` fleet, so C3 #30's write has no safe fleet
+>   (decision 7).
+> - **The report edit form refills itself** after *Edit report*: load it afresh with `reportEdit.gotoEdit(id)`
+>   and wait for the saved values before editing (P21, P26, P30).
+> - **A toast doesn't prove a second save**: poll the stored state through the API (`expect.poll`).
+> - **An absence check passes on a closed menu**: assert an option that is there before one that isn't.
+> - **Cell labels move under you**: a policy row's Automations cell is named from the *global* webhook's
+>   state, and a report's reads On / Off / Paused (Traps).
+> - **A timed-out test skips its `finally`**: what a spec creates is removed in an `afterEach` (§5).
+> - **`--repeat-each` on a serial describe that writes global config needs `--workers=1`.**
+> - **Building beside another batch:** announce each instance run, and wait for a "go" before a run with
+>   dependencies (`cleanup-setup` wipes global reports and policies and Workstations' policies).
 
 ## The gaps
 
@@ -82,13 +106,13 @@ Read every flow body; the INDEX row is the audit's summary of it. What the bodie
 | 3 | **Mislabeled flows.** C3 #33 ("team maintainer unable to click Manage automations") only checks the header shows the fleet and *All automations* is visible. C3 #22 is about the automation-type **filter's options** by scope (All fleets hides Calendar, Software and Scripts; a fleet enables Software and Scripts), not the button. | Build what the body asserts, and ground the cell in the component. |
 | 4 | **Twins.** P12 = F3 (tier helper aside); C3 #5 = C3 #23 (byte-identical but the import); C7 #21 ≈ C7 #23 (login and fleet differ). | One cell each, on each tier the role exists on. |
 | 5 | **P24 is mostly covered.** Its search and platform-filter steps are `premium/reports/list-filters.spec.ts` as another role; its one new step, "an inherited report has no *Edit report*", is P25. | Fold P24 into P25. |
-| 6 | **Overlaps with other batches**: C3 #30 vs [B](B-policy-report-software-forms.md)'s C3 #15 (a fleet's failing-policies webhook); C7 #22 vs B's C4 #P7 (report automations off, the On/Off cell); C7 #21/#23 vs [A](A-settings-users-labels.md)'s C1 #19 (enroll secret add/copy/delete); P16 vs B's C4 #P15 (Save as new's fleet dropdown). | Decide which batch owns each write. The usual answer: the form batch (A/B) owns the write as admin; E owns only "this role gets the control". |
+| 6 | **Overlaps with other batches**: C3 #30 vs [B](B-policy-report-software-forms.md)'s C3 #15 (a fleet's failing-policies webhook); C7 #22 vs B's C4 #P7 (report automations off, the On/Off cell); C7 #21/#23 vs [A](A-settings-users-labels.md)'s C1 #19 (enroll secret add/copy/delete); P16 vs B's C4 #P15 (Save as new's fleet dropdown). A and B built the admin half of each: C3 #15 on a throwaway `pw-fleet-webhook-*` fleet (`premium/policies/policy-automations.spec.ts`); P7 on All fleets (free + premium `reports/automations.spec.ts`); C1 #19 on Workstations under a snapshot restore of its whole secret list (`premium/settings/enroll-secrets.spec.ts`); P15 into Workstations (`premium/reports/save-as-new.spec.ts`). | Decide which batch owns each write. The usual answer, and what B's plan says: the form batch (A/B) owns the write as admin; E owns only "this role gets the control". On Workstations, a role write of the enroll secrets or the fleet's webhook races a spec already writing there (§6). |
 | 7 | **Low-value CRUD.** P30 (team admin fleet-report CRUD) and C3 #21/#31/#32 (fleet policy CRUD as maintainer, team admin, ws-maintainer). Round 1 called them "~DUP of admin CRUD; only auth differs". | Likely cut P30, or reduce it to a visibility cell. Build **at most one** write test for policies that loops over the write roles. |
 | 8 | **P19 needs a fleet-scoped observer+, and none exists.** There's also no single-fleet team admin (`team-admin` holds two fleets), no team technician, and no human gitops user (only `api-global-gitops`), so a gitops UI column isn't possible. | Decision: provision a `ws-observer-plus` human (a one-shot manual step, password from 1Password, as `helpers/api/static-users.ts`'s header describes), or cut P19. |
 | 9 | **F3 and P12 run a live report against All hosts** (~300 simulations) and wait up to 180 s for "Report finished", then compare "% responded". A live run finishes only once every online targeted host has answered (`service_campaigns.go:195-197`, no timeout), and simulations answer with the same row whatever the SQL. | Target `liveMacosHost` or a label holding the VMs, and bound the wait. |
 | 10 | **`global-technician`** is in no row, but the human user exists. | A cheap extra column in every matrix. Ask whether it's wanted. |
 | 11 | **C3 #22 isn't a role property.** The automation-type filter's options depend on the scope, and are the same for every role (`ManagePoliciesPage.tsx:105-118,741-818`). | A scope check in a policies list spec (batch B's area), or cut. |
-| 12 | **Round 2 #49 / #50 have nothing to vary.** The platform cards aren't role-gated. | Cut, or replace with the cell that is gated: the Activity card shows for global roles, not team roles. |
+| 12 | **Round 2 #49 / #50 have nothing to vary.** The platform cards aren't role-gated. | Cut, or replace with the cell that is gated: the Activity card shows for global roles, not team roles. `DashboardPage.activityHeading` / `activityFeedCard` exist (A's `shared/dashboard/activity-feed.spec.ts`, admin only). |
 | 13 | **Five UI-vs-API disagreements** (§2): three filed as Fleet bugs (#54622, #54623, #54624), two by design. | Cells on a filed bug assert the intended behaviour and skip with the bug's TODO. |
 
 ## 2. What each role sees
@@ -101,6 +125,7 @@ fleet (`HostActionsDropdown.tsx:87-96`). Re-check any cell against the live page
 | area | control | roles that get it | source |
 |---|---|---|---|
 | **Policies** list | *Add policy*, row checkboxes | GA, GM, TA, TM (team roles on their own fleet) | `ManagePoliciesPage.tsx:397-398` |
+| | a row's Automations cell as a button (a plain span for the rest; `PoliciesListPage.automationsCell`) | GA, GM, TA, TM | `:874-875,921-922`; `PoliciesTableConfig.tsx:158-160` |
 | | *Manage automations* | GA, TA; disabled when the fleet has only inherited policies | `:400`, `:640-643` |
 | | inherited rows | an "Inherited" tag, no checkbox | |
 | Policy details | *Edit* | GA, GM; TA / TM on their fleet's policies, **never inherited** | `PolicyDetailsPage.tsx:198-201` |
@@ -180,7 +205,8 @@ Other specs that already take a role dimension, and what they assert, so you ext
 | `premium/software/manage-automations-access.spec.ts` | two admin tests + a `NON_ADMINS` table, in-test loop over scopes | Automations absent on every scope |
 | `premium/labels/role-access.spec.ts` | three tests (global-observer, ws-maintainer, team-admin) | Add label; row actions on a global label: View all hosts only |
 | `premium/hosts/host-transfer-permissions.spec.ts` | `ROLES` loop (admin, maintainer, technician) + a team-admin negative | Transfer works per role; team admin sees Delete, not Transfer |
-| `premium/account/my-account.spec.ts` | `MY_ACCOUNT_USERS` loop (7 users) | email, name, role, fleets (`team-admin` is batch A's C10 #10) |
+| `premium/account/my-account.spec.ts` | `MY_ACCOUNT_USERS` loop (8 users) + a `team-admin` tooltip test | email, name, role, fleets; `team-admin`'s Role skipped behind [fleetdm/fleet#54620](https://github.com/fleetdm/fleet/issues/54620) ("Various"); its "2 fleets" tooltip names both (batch A's C10 #10) |
+| `premium/settings/team-host-status-webhook.spec.ts` | `team-admin` only | writes Workstations' host-status webhook (C3 #30's neighbour, §6) |
 
 `shared/dashboard/platform-cards.spec.ts` runs as admin only: round 2 A folded the maintainer and observer
 flows in and dropped the role dimension, which is why round 2 #49 and #50 are here.
@@ -200,7 +226,9 @@ premium `api-ws-{admin,maintainer,observer}`, `api-ws-maint-qa-obs`, `api-global
 - `withStaticUser(browser, key, fn)` (`helpers/auth.ts`) opens a new context per call. The session is cached
   in `.auth/static-<SUITE>-<key>.json`, checked with `GET /me` before reuse, and re-logged-in when dead.
 - **Logins are throttled at 10 a minute, burst 9, in one bucket shared by every user and worker.** That's why
-  the cache exists. A role costs one login per run; don't design around fresh logins.
+  the cache exists. A role costs one login per run; don't design around fresh logins. A throttled UI login
+  lands back on `/login`, looking like a wrong password. An API-only login goes through `apiLogin`
+  (`helpers/api/users.ts`), which waits out a 429.
 - `sessionBearerHeaders(page)` calls the API as the signed-in role, for confirming that a write the role made
   in the UI landed.
 - The static users can't be edited or re-minted (their bearer tokens can't be rotated). Read their roles;
@@ -210,27 +238,34 @@ premium `api-ws-{admin,maintainer,observer}`, `api-ws-maint-qa-obs`, `api-global
 
 **Correction to a common belief: `cleanup-setup` does not wipe Workstations reports.** `deleteAllQueries`
 lists queries with no team id, which returns global ones only (`server/datastore/mysql/queries.go:864`). The
-Workstations step deletes policies, installable software, profiles and scripts (`setup/cleanup.steps.ts:113-121`).
-Global reports and policies, and Workstations policies, are wiped at run start; the VMs sweep removes `pw-`
-policies, scripts and labels, and `pw-run-script-` / `pw-rl-` reports.
+Workstations step resets the setup experience, deletes policies, installable software, profiles and scripts,
+and clears OS updates (`setup/cleanup.steps.ts:141-152`). Nothing sweeps Workstations reports.
+Global reports and policies, and Workstations policies, are wiped at run start; on premium the VMs sweep removes
+`pw-` policies, scripts and profiles there, every `pw-` label, and VMs reports **by exact prefix**
+(`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), so a new per-run report on the VMs fleet needs its prefix
+added to that list. Throwaway `pw-*` fleets are swept too.
 
 **Durable, read-only:**
 
 - **Workstations reports**: five gitops reports (`collect-default-browser`, `collect-santa-denied-logs`,
   `collect-xprotect-reports`, `detect-apns-certificate`, `detect-apple-intelligence`), authored by no static
   user. Good for "*Edit* shown on a report you didn't write". **Never save or delete them**: gitops owns them.
-- **VMs fleet**: report `pw-host-report-results`; policies "Claude is installed (macOS/Windows)". Those carry
+- **VMs fleet**: report `pw-host-report-results` (gitops; `premium/reports/stored-results.spec.ts` asserts it
+  keeps collecting, and no sweep touches it); policies "Claude is installed (macOS/Windows)". Those carry
   `install_software` automations, so read them, never touch them.
 - **Labels**: 12 gitops global labels on premium (`gitops/premium-fleetqa/default.yml`), and some on free.
 
-**Created by the spec and removed in its `finally`:** a global policy (inherited on a fleet's view), a
-Workstations policy, a global report with `observer_can_run` (the observer cells), a Workstations report
-written by admin (the "someone else's report" cells). Name them `pw-*`. A Workstations report survives
-`cleanup-setup`, so delete it yourself.
+**Created by the spec and removed in an `afterEach`** (a timed-out test skips its `finally`): a global policy
+(inherited on a fleet's view), a Workstations policy, a global report with `observer_can_run` (the observer
+cells), a Workstations report written by admin (the "someone else's report" cells). Name them `pw-*`. A
+Workstations report survives `cleanup-setup` and nothing sweeps it, so delete it yourself, by id, as
+`save-as-new.spec.ts` does with its fleet copy.
 
-**Helpers to add** (`helpers/api/policies.ts`, `reports.ts`): `createPolicy` is global-only, so you need a
-fleet-policy create. After PR #78, `createFleetPolicy` exists; use it. `createReport` has no `observer_can_run`
-option. `deleteReportsMatching` lists global reports only; `listReports(request, fleetId)` reads a fleet's.
+**Helpers** (`helpers/api/policies.ts`, `reports.ts`): `createPolicy` is global-only; `createFleetPolicy`
+creates a fleet's. `createReport` has no `observer_can_run` option (add one). `getReport(request, id)` reads
+any report, global or fleet, including `observerCanRun` and `automationsEnabled`. `deleteReportsMatching` lists
+global reports only; `listReports(request, fleetId)` and `findReportByName(request, name, fleetId)` read a
+fleet's.
 
 **Hosts.** Workstations has **no hosts**, so `ws-maintainer` and `ws-observer` can't open a host's page unless
 a simulation is staged onto Workstations and moved back (`host-delete.spec.ts` does that). `team-admin` sees
@@ -243,13 +278,13 @@ not render on an empty fleet (C7 #24).
 | write | rows | rule |
 |---|---|---|
 | fleet policy create / edit / delete | C3 #21, #31, #32 | one looped test at most (finding 7) |
-| a fleet's failing-policies webhook | C3 #30 | restore in an `afterEach`; nothing in cleanup resets it |
-| report Save as new | P16 | delete the copy |
-| fleet report edit / delete | P21, P26 | on a spec-created report, never a gitops one |
-| report automations toggle | C7 #22 | on a spec-owned report only: the flow **unchecks every report on the fleet** first, which would switch off the gitops reports' automations |
-| fleet enroll secret add / delete | C7 #21, #23 | never delete a secret the test didn't add; hosts enroll with the existing ones |
-| script upload / delete on Workstations | C7 #26 | the fleet sweep removes `pw-` scripts |
-| label create / edit / delete | C9 #14 | Dynamic, named `pw-*` (the flow picks Dynamic or Manual at random; Manual needs a host on the fleet) |
+| a fleet's failing-policies webhook | C3 #30 | **not on Workstations**: a fleet's automations save replaces its whole `webhook_settings` ([#54619](https://github.com/fleetdm/fleet/issues/54619)), which `team-host-status-webhook.spec.ts` writes there as `team-admin`. B wrote it as admin on a throwaway `pw-*` fleet, but `team-admin` holds only Workstations and VMs, and the static users are never re-roled (decision 7). Nothing in cleanup resets a fleet's webhooks |
+| report Save as new | P16 | the modal's Fleet field is `ReportEditPage.saveAsNewFleetDropdown` (a `TeamDropdown` scoped to the modal); delete the copy by id in an `afterEach` |
+| fleet report edit / delete | P21, P26 | on a spec-created report, never a gitops one. Open it with `reportEdit.gotoEdit(id)` and wait for the saved values before editing: the form refills itself and can overwrite an edit. "Save changes?" shows only for an edit that deletes stored results (`saveExisting({ prompt })`) |
+| report automations toggle | C7 #22 | on a spec-owned report only: the flow **unchecks every report on the fleet** first, which would switch off the gitops reports' automations. `ReportsListPage.setReportAutomation(name, on)` touches one; seed the report with an interval, or the cell reads *Paused*; read the cell with `automationsCell(name)`, which matches by content (a column index goes stale when the table re-renders after the save) |
+| fleet enroll secret add / delete | C7 #21, #23 | never delete a secret the test didn't add; hosts enroll with the existing ones. `EnrollSecretModal.addGenerated` + `delete(value)`, and a `setTeamEnrollSecrets` snapshot restore in an `afterEach`: for a fleet the modal lists one query and saves from another, so waiting for rows doesn't guard the save. On Workstations it races `premium/settings/enroll-secrets.spec.ts`'s own restore (decision 3) |
+| script upload / delete on Workstations | C7 #26 | the Workstations wipe deletes its scripts; `ScriptsLibraryPage.uploadScript` takes a path or an in-memory `{ name, mimeType, buffer }` |
+| label create / edit / delete | C9 #14 | Dynamic, named `pw-*` (the flow picks Dynamic or Manual at random; Manual needs a host on the fleet); the VMs sweep removes `pw-` labels on premium |
 | live report, saved | F3, P12, P9 | on `liveMacosHost` or the VMs fleet, not All hosts |
 | live report, ad hoc | P18, P19, P23 | the same; **drop P23's `addHostsToTeam`** (it transfers hosts into fleets) |
 
@@ -260,10 +295,21 @@ anything or touches a lock setting.
 
 1. **P19:** provision a `ws-observer-plus` human user, or cut the row (finding 8).
 2. **C9 #15:** `ws-observer` or `global-observer` (finding 2).
-3. **Ownership of the overlapping writes** (finding 6), agreed with whoever runs A and B.
+3. **Ownership of the overlapping writes** (finding 6). A and B have built the admin half of each, and B's plan
+   assumes E owns only "this role gets the control". For C7 #21 / #23, a role write on Workstations' enroll
+   secrets races A's snapshot restore there (§6).
 4. **P30 and the role CRUD rows** (finding 7): cut, or one looped write test.
 5. **A `global-technician` column** in each matrix (finding 10).
 6. **C3 #22, round 2 #49 / #50:** cut, or the replacement cells (findings 11, 12).
+7. **C3 #30's write** *(new, from A/B learnings)*: `team-admin` can't reach a throwaway `pw-*` fleet, and on
+   Workstations the save races `team-host-status-webhook.spec.ts` ([#54619](https://github.com/fleetdm/fleet/issues/54619)).
+   Options: the visibility cell only (team admin opens Manage automations on Workstations, sees *Webhooks or
+   tickets*, and cancels; B covers the save); a per-run `qa-test-*` user made admin of a `pw-*` fleet (one more
+   UI login under the throttle; `cleanup-setup` sweeps both); or the write on Workstations in one serial
+   describe with `team-host-status-webhook`'s test.
+8. **A `pw-` sweep for Workstations reports** *(new, from A/B learnings)*: nothing removes a Workstations report a
+   killed run leaves (this batch's admin-written report; B's Save-as-new copy has the same gap). Add one to
+   the Workstations step, by exact prefix like the VMs one, or rely on the `afterEach`?
 
 ## Free coverage
 
@@ -275,7 +321,17 @@ are the minimum, not the ceiling.
 
 ## Traps this batch will hit
 
-- **A negative assertion on a page that didn't render** passes. Anchor every absence on a presence (§3).
+- **A negative assertion on a page that didn't render** passes. Anchor every absence on a presence (§3). The
+  same goes for a menu: after opening a `TeamDropdown` (Save as new's Fleet field) or a row's actions, assert
+  an option that's there before one that isn't, or the check passes on a menu that never opened.
+- **A policy row's Automations cell is named from the global failing-policies webhook's state**: "Edit
+  automation: Webhook" while it's on, "Add automation" once it's off, even though the policy is still in
+  `policy_ids`. `policy-automations.spec.ts`'s serial describe turns that webhook on and off from another
+  worker. Assert the cell as a button or as absent (`PoliciesListPage.automationsCell` matches every name), never
+  its label. A cell that needs the global webhook on ([#54623](https://github.com/fleetdm/fleet/issues/54623)'s)
+  writes `webhook_settings.failing_policies_webhook`, and a write to that key from another file races the serial
+  describe.
+- **A report's Automations cell reads On / Off / Paused**; Paused is automations on with interval 0.
 - **Copy in the flows is stale.** QA Wolf matched text like "Manage Automations" and "Add a policy". Take
   names from the component, and match the accessible name, not the visible label.
 - **The login throttle** (§4): ten roles × two tiers × fresh logins would trip it; the session cache doesn't, so
@@ -293,8 +349,8 @@ are the minimum, not the ceiling.
   questions above have Andrey's answer.
 - One role-dimensioned spec per area (policies, reports, host details) plus the hosts-list, labels, scripts and
   dashboard cells, on every tier the role exists on.
-- Every write and live run is its own test, cleans up in a `finally` (an `afterEach` for the webhook), and is
-  confirmed through the API as the signed-in role.
+- Every write and live run is its own test, cleans up in an `afterEach`, and is confirmed through the API as the
+  signed-in role.
 - `npm run check` clean. Each spec run with dependencies on its tiers, and once headed. Anything with a live run
   `--repeat-each=5 --workers=2`.
 - `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.

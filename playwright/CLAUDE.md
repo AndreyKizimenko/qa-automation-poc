@@ -21,7 +21,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 ## Layout
 
 - `tests/e2e/` — browser specs in three sibling folders:
-  - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `hosts/`, `packs/`, `settings/`); both premium and free pick these up via folder structure.
+  - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `command-palette/`, `controls/`, `dashboard/`, `hosts/`, `labels/`, `packs/`, `policies/`, `reports/`, `settings/`, `software/`, plus `exclusive/`); both premium and free pick these up via folder structure.
   - `premium/<area>/` — premium-only flows; each spec has Unassigned + Workstations variants selected via the team dropdown.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
@@ -120,7 +120,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Cross-module imports use the path aliases configured in `tsconfig.json`: `@fixtures`, `@helpers/*`, `@pages`, `@pages/*`. Sibling imports inside a module stay relative (`./Foo`) to keep intra-module coupling visible.
 - Specs target one of three scopes: Unassigned (no team), Workstations (the gitops-provisioned premium team), or All fleets (the global aggregate, used for reports/policies). Selection happens via `<page>.teamDropdown.select(scope)`, which is idempotent and a no-op on free (free has no dropdown).
 - Premium specs that need to call `<page>.goto({ fleetId })` for the Workstations variant pull the fleet id from the `workstationsFleetId` worker fixture (resolved once per worker via the Fleet API).
-- Do not create, rename or delete the instance's standing fleets: Workstations, VMs and QA (declared in gitops) and Mobile (kept by hand, see `gitops/premium-fleetqa/README.md`). A spec that needs a fleet of its own creates a **throwaway `pw-*` fleet** (`createFleet`), deletes it in the test, and deletes it again in an `afterEach` (which survives a timeout); the `cleanup-setup` / `cleanup-teardown` sweep removes any `pw-*` fleet a killed run left (approved by Andrey 2026-10-02; `fleets-lifecycle.spec.ts`, `historical-data-collection.spec.ts`). Never give a durable fleet a `pw-` name. Workstations is provisioned by gitops and never deleted; its content is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
+- Do not create, rename or delete the instance's standing fleets: Workstations, VMs and QA (declared in gitops) and Mobile (kept by hand, see `gitops/premium-fleetqa/README.md`). A spec that needs a fleet of its own creates a **throwaway `pw-*` fleet** (`createFleet`), deletes it in the test, and deletes it again in an `afterEach` (which survives a timeout); the `cleanup-setup` / `cleanup-teardown` sweep removes any `pw-*` fleet a killed run left (approved by Andrey 2026-10-02; `fleets-lifecycle.spec.ts`, `historical-data-collection.spec.ts`). Never give a durable fleet a `pw-` name. Workstations is provisioned by gitops and never deleted; its content (all but its reports) is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
 - The `pageHealth` fixture is **auto-applied** to every test — it monitors uncaught page exceptions, console errors and 5xx server errors, and asserts at teardown. Uncaught exceptions come from `page.on('pageerror')`: Chromium doesn't surface them as console messages, so without that listener a render that throws passes silently. Tests that intentionally trigger console errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. 4xx is not flagged: it's normal app behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and assertions catch the meaningful ones. New specs need no setup to participate.
 - For per-test state (a script, a custom package), upload as a precondition and clean up at the end of the same test.
 
@@ -130,6 +130,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - API helpers are split per area under `helpers/api/` (`core`, `activities`, `app-store`, `cleanup`, `config`, `enroll-secrets`, `fleets`, `fma`, `hosts`, `labels`, `mdm`, `policies`, `reports`, `role-access`, `software`, `static-users`, `users`, `variables`). The barrel `@helpers/api` re-exports everything; specs can also reach for a specific module (`@helpers/api/software`) when they want narrower deps.
 - Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/packs`, `/queries`, `/policies`, etc.
 - Use the Playwright `request` fixture; do not use raw `fetch()` from inside specs.
+- `POST /login` is throttled to 10 a minute in one bucket shared by every user and worker. Browser specs sign in through `withStaticUser`'s cached sessions; an API-only login uses `apiLogin` (`helpers/api/users.ts`), which waits out a 429. A throttled UI login lands back on `/login` looking like a wrong password.
 
 ## Projects (folder-based)
 
@@ -178,7 +179,7 @@ Folder conventions:
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities and the Workstations team's content. On premium it also removes throwaway `pw-*` fleets, and on both tiers any test-added (`pw-enroll-`) global enroll secret. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
+2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies, packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities, and on Workstations its policies, installable software, profiles, scripts, setup experience and OS-update settings — **not its reports**: a spec that puts a report on Workstations deletes it itself. On premium it also removes throwaway `pw-*` fleets, and on both tiers any test-added (`pw-enroll-`) global enroll secret and any `PW_VAR_*` custom variable (after the scripts, since Fleet refuses to delete a variable a script references). `pw-*` labels are swept on premium only, inside the VMs-fleet step, so a free spec deletes its own. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items).
 3. `cleanup-teardown` — same wipe steps run again at end of project regardless of pass/fail, so a crashed worker still leaves a clean instance. Both projects point at the same `setup/cleanup.steps.ts`.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
@@ -196,6 +197,8 @@ teardown) or `npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
 
 `cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
 and a run killed mid-spec would otherwise leave every script spec of the next run failing.
+
+On premium it sweeps the VMs fleet for what the host-execution specs leave there when a test dies: `fleet-pw-*` titles and `pw-*` policies, scripts, profiles and labels by prefix, but reports only by exact prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), because gitops declares `pw-host-report-results` on that fleet. A spec that leaves a new kind of per-run report there adds its prefix to that sweep. Deleting a software title cancels its pending installs and script runs, so a per-run package deleted in an `afterEach` also clears that VM's queue.
 
 It also brings the real VMs to their resting state before the first test and after the last: it cancels the
 suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium

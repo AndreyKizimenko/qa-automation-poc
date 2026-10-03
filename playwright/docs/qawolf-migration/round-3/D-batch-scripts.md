@@ -6,8 +6,8 @@
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
-> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
+> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [README §9](../round-2/README.md#9-working-a-batch-since-d) and
 > [D → What landed](../round-2/D-host-execution.md#what-landed-and-what-changed-from-the-plan) (where
 > `batch-run.spec.ts` came from), `playwright/CLAUDE.md` (**Test hosts**), then this file.
@@ -20,8 +20,35 @@
 > **The fact that shapes it** (§2): simulations **do** run scripts, within about 35 s. So "pending" is a race,
 > and the deterministic route to *Canceled* is a batch **scheduled for later, then cancelled**.
 >
+> **Since batches A and B (2026-10-03).** The full list is in
+> [README §5](README.md#since-batches-a-and-b-2026-10-03). These apply here:
+>
+> - **Re-checking against Fleet's source settled two facts the plan left open and corrected a third.** A
+>   cancelled scheduled batch lists its hosts under Canceled (§2). Deleting a script deletes its batches (§3), so
+>   the cleanup projects' wipe of Unassigned's scripts removes a scheduled batch a dead run left (Traps). For the
+>   same reason, the plan's "batches can't be deleted" was wrong: they go with their script.
+> - **Two runs in a row can share one toast.** A success toast lingers, so a second `runNow` can pass on the first
+>   run's "Successfully ran script." card, and `showScriptActivity` then finds two "Show script activity" links.
+>   Call `toast.dismissAll()` between actions that raise the same kind of toast (C8 #11's two runs) and confirm
+>   each batch through the API (`findBatchId`, `getBatchSummary`), not the toast.
+> - **Write an Ace editor through Ace's API.** `ScriptsLibraryPage.editScript` types the new content
+>   (`replaceEditorContent`), and Ace auto-indents and closes quotes. For C8 #8, write it with `setAceValue`
+>   (`pages/components/aceEditor.ts`), or keep it to one line.
+> - **Remove every per-run thing in an `afterEach`**, not only a `finally`: a timed-out test skips its `finally`,
+>   and a scheduled batch still fires at its time.
+> - **Nothing here writes global config.** C8 #8's flow flips "Disable scripts"; that stays with
+>   `shared/exclusive/script-execution-disabled.spec.ts`.
+> - **Slices already claimed** (`helpers/api/hosts.ts`): `findSimulations` linux 0–2 (2 is batch A's
+>   `labels.spec.ts`), darwin 0–5, windows 0–1; `findSimulatedHostIds` darwin 0–2, 10–11, 20, 30 and windows 0–2,
+>   10.
+> - **Run cost:** the premium main project is worker-bound (~42 of the branch run's ~58 min, 3 workers,
+>   run 37077445852), so this batch's waits on the 2- and 5-minute workers add to it directly.
+> - **If another batch is built at the same time**, announce each run to its session. A run with dependencies
+>   waits for its "go": `cleanup-setup` deletes Unassigned's scripts, and with them every batch on them.
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`
-> (`cmd/osquery-perf/agent.go` at the same commit), the build both instances run.
+> (`cmd/osquery-perf/agent.go` at the same commit), the build both instances run, and again on 2026-10-03 against
+> `main` (da2aceb) and the RC branch's head (ac3c0d6).
 
 ## The gaps
 
@@ -66,9 +93,11 @@ Read every flow body. Known so far:
 - **A batch reads Finished** only after `batch_activity_completion_checker` runs, every 5 minutes
   (`cmd/fleet/cron.go:2436-2470`). `POST /trigger?name=batch_activity_completion_checker` exists but is global;
   don't call it from a test.
-- **Cancelling a scheduled batch** finishes it at once, with every host canceled (`scripts.go:3047`). Whether
-  the Canceled tab lists host rows for a batch that never started is unverified. Check it first, because C8 #12
-  and #18's deterministic halves depend on it.
+- **Cancelling a scheduled batch** finishes it at once, with every host canceled (`scripts.go:3058-3067`). The
+  Canceled tab lists those hosts: its host query counts a host with no run as canceled once its batch is
+  (`server/datastore/mysql/hosts.go:1676-1679`), and the batch's cached count is every host (`scripts.go:3065`).
+  C8 #12 and #18's deterministic halves stand on that. It's read from source, so confirm it on the page in the
+  first build step.
 
 ## 3. Facts for the build
 
@@ -89,8 +118,9 @@ Read every flow body. Known so far:
   (`scripts.go:547,592,610-643`) cancels runs queued and sent without a result. **A scheduled batch is untouched**
   and runs the new content later. Only `updated_script` is logged. Modal "Save changes?": "…will cancel any
   pending script runs for {name}." and "If this script is currently running on a host, it will complete, but
-  results won't appear in Fleet." The batch still ends "Completed". The flow also flips the global "Disable
-  scripts" setting: leave that to the exclusive spec that owns it.
+  results won't appear in Fleet." The batch still ends "Completed". In the UI, `ScriptsLibraryPage.editScript`
+  saves through that modal; it types the content, so set multi-line content with `setAceValue`. The flow also
+  flips the global "Disable scripts" setting: leave that to the exclusive spec that owns it.
 - **The progress pages (C8 #9, #11, #15, #18).** `/controls/scripts/progress?fleet_id=&status=`, tabs "Started",
   "Scheduled", "Finished"; empty state "No batch scripts {started | scheduled | finished}" with "Scripts running on
   multiple hosts will appear here." Details `/controls/scripts/progress/{id}`: "N hosts targeted (X% responded)",
@@ -99,11 +129,16 @@ Read every flow body. Known so far:
   `host_results?status=`, columns "Host name", "Time", "Script output". "Show script" opens "Script details" with
   "Script content:". **The suite's `ScriptDetailsModal` is the host output modal** (`.run-script-details-modal`),
   so the batch preview needs its own component. C8 #9's empty state needs a fleet with no batch history:
-  Workstations probably, unverified.
+  Workstations. No spec runs a batch there, and `cleanup-setup` deletes its scripts, which takes any batch with
+  them (below). Confirm it on the page.
+- **Deleting a script deletes its batches.** `batch_activities.script_id` is `ON DELETE CASCADE`
+  (`server/datastore/mysql/schema.sql:298`), and the batch list joins `scripts` (`scripts.go:3335-3337`). A
+  scheduled batch's job then finds no batch and runs nothing (`server/worker/batch_activities.go`). A batch has
+  no delete of its own.
 - **`batch-run.spec.ts` today:** test 1 runs on the three VMs (VMs fleet) and asserts one host each in Ran /
   Errored / Incompatible with output; test 2 runs on every online macOS simulation on Unassigned through
-  *Select all matching* and checks the counts add up. Cleanup is `deleteScript` in a `finally`; batches stay
-  listed under Finished (they can't be deleted).
+  *Select all matching* and checks the counts add up. Cleanup is `deleteScript` in a `finally`, which removes
+  the batch with it.
 
 ## 4. How to make each one deterministic
 
@@ -111,7 +146,7 @@ Read every flow body. Known so far:
 |---|---|
 | C8 #16, #19 | schedule a minute or two ahead on one or a few simulations; assert the toast, the Scheduled row, then (polling ≤ 5 min) the move to Started. The validation messages need no run |
 | C8 #17 | schedule far ahead (tomorrow), cancel, assert *Canceled* under Finished |
-| C8 #12 | the scheduled cancel, if its Canceled tab lists hosts (§2); otherwise run on 10+ orbit simulations, read Pending at once, cancel, assert Canceled ⊆ the hosts read and non-empty |
+| C8 #12 | the scheduled cancel, whose Canceled tab lists its hosts (§2); if the page disagrees, run on 10+ orbit simulations, read Pending at once, cancel, assert Canceled ⊆ the hosts read and non-empty |
 | C8 #18 | the after-cancel counts via the scheduled cancel; drop the "during a run" half, or accept it as ⊆ / ≥ assertions |
 | C8 #8 | run on 10+ orbit simulations, edit the script at once, assert Canceled ≥ 1 and the batch ends Completed. A race by nature: put it to Andrey |
 | C8 #9, #11, #15 | read-only; #11 right after the toasts, #15 on a scheduled batch (Scheduled), then the same batch after cancelling (Finished) |
@@ -127,7 +162,8 @@ Unassigned).
 `ScriptsBatchProgressPage` (the three tabs, `goto({ fleetId })`, `batch(name)`), `ScriptBatchDetailsPage`
 (`heading`, `summary`, `tab`, `openTab`, `hostNames`, `emptyTab`, `backButton`; add Show script, Cancel and the
 cancel modal); `helpers/api/scripts.ts` (`uploadScript`, `deleteScript`, `getBatchSummary`, `findBatchId`,
-`waitForBatchFinished`, 480 s); `activityCopy.script.ranBatch`; `cancelUpcomingActivity`.
+`waitForBatchFinished`, 480 s); `activityCopy.script.ranBatch`; `cancelUpcomingActivity`;
+`ScriptsLibraryPage.editScript` (C8 #8); `setAceValue` (`pages/components/aceEditor.ts`); `Toast.dismissAll`.
 
 ## Decisions to put to Andrey
 
@@ -136,13 +172,14 @@ cancel modal); `helpers/api/scripts.ts` (`uploadScript`, `deleteScript`, `getBat
 
 ## Traps this batch will hit
 
-- **A scheduled batch outlives a dead run.** Cancel it in an `afterEach`, and give `cleanup.steps.ts` a sweep for
-  scheduled `pw-*` batches if a timed-out test could strand one. What a scheduled batch does when cleanup
-  deletes its script is unverified.
+- **A scheduled batch outlives a dead run.** Cancel it, or delete its script, in an `afterEach`. Deleting the
+  script deletes the batch (§3), so the cleanup projects' wipe of Unassigned's scripts already removes one a dead
+  run left, and no batch sweep is needed. Only a run killed before its teardown leaves one that can fire at its
+  time, on simulations only, before the next run's `cleanup-setup`.
 - **Never upload a batch script to the VMs fleet**, and never run this batch on free: one queue per VM, and the
   free VMs sit in Unassigned.
-- **Batches can't be deleted.** Use unique `pw-*` script names, and assert over your own batch, never the list's
-  first row.
+- **A batch goes only with its script.** Use unique `pw-*` script names, assert over your own batch, never the
+  list's first row, and delete the script only after the last assertion on its batch.
 - **Moving or selecting macOS simulations** shifts `batch-run`'s scale test. Use your own slice, other platforms
   where you can.
 

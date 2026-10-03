@@ -7,8 +7,8 @@
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
-> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
+> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5 (**a failed install script stalls the VM**, fleetdm/fleet#54607), round 2's
 > [README §5](../round-2/README.md) and [§9](../round-2/README.md#9-working-a-batch-since-d), round 2's
 > [D → What landed](../round-2/D-host-execution.md#what-landed-and-what-changed-from-the-plan) (the durable VM
@@ -19,8 +19,32 @@
 > package that runs. **Most of it costs almost no VM time** (§3): live queries go through osquery's distributed
 > path, not the orbit queue the install specs contend for. The script-only package run is the exception.
 >
+> **Since batches A and B (2026-10-03).** The full list is in
+> [README §5](README.md#since-batches-a-and-b-2026-10-03). These apply here:
+>
+> - **Remove what a test leaves behind in an `afterEach`, not only a `finally`** (a timed-out test skips its
+>   `finally`): the script-only package (§2.5), whose queued run would hold the Linux VM's queue for the retry;
+>   the policy run live (§2.2), which every host in its scope also runs on schedule; and the label holding the
+>   VMs, which nothing sweeps on free.
+> - **The VMs sweep only catches names it knows** (`setup/cleanup.steps.ts`, "sweep host-execution leftovers"):
+>   `fleet-pw-*` titles; `pw-*` policies, scripts, profiles and labels; reports by exact prefix only
+>   (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), because gitops' `pw-host-report-results` lives on the same
+>   fleet and is never swept. A per-run report on the VMs fleet needs its prefix added there. **`pw-*` labels are
+>   swept on premium only**: on free a spec deletes its own (`deleteLabelsMatching`, as
+>   `shared/labels/labels.spec.ts` does).
+> - **Reuse what A and B built:** `DashboardPage.selectActivityType` (§2.4); `ReportDetailsPage` (`clickLiveReport`,
+>   `resultRows`, the empty state); and B's `premium/reports/stored-results.spec.ts`, which reads the macOS VM's
+>   row by `requireRealHost('darwin')` and its display name.
+> - **Nothing here writes global config**: no Org settings › Advanced key (`advanced-options.spec.ts` asserts
+>   they stay unchanged) and nothing on the global enroll list.
+> - **Run cost:** the premium branch run takes ~58 min (run 37077445852): the main project ~42 (3 workers,
+>   worker-bound), the exclusive step ~15, gitops-mode ~1. R2 #72's Linux minutes land in the main project.
+> - **If another batch is built at the same time**, announce every VM run to its session and wait for its "go"
+>   before a run with dependencies: each VM has one queue.
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a), PR #78's branch, and Fleet
-> `rc-minor-fleet-v4.93.0`, the build both instances run.
+> `rc-minor-fleet-v4.93.0`, the build both instances run, and again on 2026-10-03 against `main` (da2aceb) and
+> the RC branch's head (ac3c0d6).
 
 ## The gaps
 
@@ -70,15 +94,15 @@ Read every flow body. Known so far:
 
 - **Run policy** (`PolicyDetailsPage.tsx:438`) → target selection ("N hosts targeted (P% online)") → `POST
   /reports/run` with `report_id: null` → "Running policy" / "Policy finished" (`LiveResultsHeading.tsx:84-87`).
-  Today only the button's visibility is checked (`premium/policies/policies.spec.ts:57`).
+  Today only the button's visibility is checked (`premium/policies/policies.spec.ts:63`).
 - **C3 #28:** the Host column sorts with `sortType: "caseInsensitive"` (`PolicyResultsTableConfig.tsx:42-56`),
   client-side, 20 a page; the default sort is Status. Simulations' random mixed-case hostnames
   (`agent.go:2636-2645`) are valid evidence here.
 - **C3 #37:** "(Yes: X%, No: Y%)" with "N host(s)" tooltips; the denominator is the hosts that answered
   (`PolicyResults.tsx:135-151`). Since simulations always pass, target a `pw-*` **manual label holding the three
   VMs** (premium VMs fleet; free Unassigned) with platform-dependent SQL, so one passes and two fail: Yes 33%, No 67%.
-  **Don't target the VMs fleet chip**: label specs borrow simulations onto it (`helpers/api/hosts.ts:331-336`). A
-  missing table lands in Errors, not Fail.
+  **Don't target the VMs fleet chip**: label specs borrow simulations onto it (the slice registries above
+  `findMdmSimulations` and `findSimulations` in `helpers/api/hosts.ts`). A missing table lands in Errors, not Fail.
 - **C4 #F2 / #P8, All hosts and CSV.** `shared/hosts/host-live-query.spec.ts` runs a saved report against one
   Mac; the reports specs stop at the ready state. "Export results" (`QueryResults.tsx:184-213`) downloads
   `"<report name> - Results (MM-dd-yy hh-mm-ss).csv"` (local 12-hour time, `utilities/generate_csv/index.ts:14-16`),
@@ -92,7 +116,7 @@ Read every flow body. Known so far:
 
 - `SaveHostSoftwareInstallResult` sets `refetch_requested` when an install's status is *installed*
   (`server/service/orbit.go:2425-2430`); an uninstall, when the activity status is *uninstalled* (`:1525-1530`).
-- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:671`) →
+- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:684`) →
   `waitForHostRefetch({ refetch: true })` → `POST hosts/:id/refetch`. So nothing proves Fleet asked.
 - **Fold into `software-lifecycle-on-host.spec.ts:80`** on the Mac's durable FMA (Itsycal, `helpers/vm-fixtures.ts:50`),
   left uninstalled: after the install result, assert `refetch_requested` is true, then that `detail_updated_at`
@@ -105,8 +129,9 @@ Read every flow body. Known so far:
 views and the modal, and the dashboard row **unfiltered** (`:133-136`). Add, in the same run: the type filter
 "Ran custom MDM command" (`ran_custom_mdm_command`, `server/fleet/activities.go:1041-1042`; label in
 `frontend/interfaces/activity.ts:584`), the row "ran UserList as a custom MDM command on HOST.", and the same
-`.command-details-modal`. Not tier-gated. `DashboardPage` has no type-filter method yet (batch A's activity-feed
-work adds one, so coordinate). No extra VM time.
+`.command-details-modal`. Not tier-gated. `DashboardPage.selectActivityType('Ran custom MDM command')` sets the
+filter (batch A's `shared/dashboard/activity-feed.spec.ts` uses it); the feed shows only with no fleet selected.
+No extra VM time.
 
 ### 2.5 A script-only package run (R2 #72, #88)
 
@@ -119,9 +144,10 @@ work adds one, so coordinate). No extra VM time.
   if the script printed output.**
 - The current fixture (`test-data/shared/software/fleet-playwright-script-package.sh`) prints nothing. Upload a
   per-run `fleet-pw-script-<nonce>.sh` to the VMs fleet that **echoes and exits 0** (a failure would trip
-  fleetdm/fleet#54607), run it on the Linux VM, delete it in the `finally`; the VMs sweep covers `^fleet-pw-`
-  (`setup/cleanup.steps.ts:165`). Assert Upcoming through `listUpcomingActivities`: the item can be picked up
-  before the page loads.
+  fleetdm/fleet#54607), run it on the Linux VM, delete it in an `afterEach` (deleting the title cancels a run
+  still queued, which would otherwise hold the Linux queue for the retry); the VMs sweep covers `^fleet-pw-`
+  (`OWN_PACKAGE`, `setup/cleanup.steps.ts:195`). Assert Upcoming through `listUpcomingActivities`: the item can
+  be picked up before the page loads.
 - `HostSoftwareLibrary` has no Run / Rerun action, and its `install()` expects the install toast;
   `activity-copy.ts` has no "ran" / "told Fleet to run" entries. Add them.
 
@@ -148,15 +174,20 @@ inventory specs. Read a VMs-fleet VM (`requireRealHost`), read-only: no VM time.
 ## Reusable pieces
 
 `ReportLivePage` (`targetChip`, `run`, `stopButton`, `resultsRows`, `runSummary`), `PolicyDetailsPage.runButton`,
-`ReportEditPage.clickLiveReport`, `HostDetailsPage` (`openLibrary`, `showPastActivities` /
-`showUpcomingActivities`, `activityItem`, `mdmCommandDetailsModal`); the download pattern in `HostsListPage.exportHosts`
-and `export-csv.spec.ts:21`; API: `createManualLabel`, `createPolicy`, `requireRealHost`, `listFleetHosts`,
-`uploadSoftwarePackageBuffer`, `waitForHostSoftwareStatus`, `listUpcomingActivities`.
+`ReportEditPage.clickLiveReport` / `ReportDetailsPage.clickLiveReport`, `HostDetailsPage` (`openLibrary(title)`,
+which filters to one title; `showPastActivities` / `showUpcomingActivities`, `activityItem`, `mdmCommandDetailsModal`),
+`DashboardPage.selectActivityType`; the download pattern in `HostsListPage.exportHosts` and `export-csv.spec.ts:20`;
+API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy`, `createReport`, `getReport`, `requireRealHost`,
+`listFleetHosts`, `uploadSoftwarePackageBuffer`, `waitForHostSoftwareStatus`, `waitForNoPendingRefetch` (reads
+`refetch_requested`), `listUpcomingActivities`.
 
 ## Decisions to put to Andrey
 
 1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut.
 2. **R2 #72's Linux VM minutes** (§3): worth it, given the Linux queue is the floor?
+3. *(new, from A/B learnings)* **R2 #69's type filter:** batch A's `shared/dashboard/activity-feed.spec.ts`
+   proves the feed's type filter (on "Added report", both tiers). Filter by "Ran custom MDM command" as planned,
+   or narrow R2 #69 to the global row's command details modal?
 
 ## Free coverage
 
@@ -173,7 +204,8 @@ Library tab and the refetch row are premium specs today.
 - **Durable VM software is never deleted**, only uninstalled; per-run packages are `fleet-pw-*` and deleted in the
   same test.
 - **A live run has no timeout of its own** (§2.1).
-- **Labels you put the VMs in** are `pw-*`, removed in the `finally`; the VMs sweep catches leftovers.
+- **Labels you put the VMs in** are `pw-*`, removed in an `afterEach`. On premium the VMs sweep catches
+  leftovers; on free nothing sweeps labels, so the spec purges its own.
 
 ## Done when
 

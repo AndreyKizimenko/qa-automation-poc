@@ -11,8 +11,8 @@
  *
  * Runs against the real macOS VM (`liveMacosHost`): a real host runs the query's
  * actual SQL, so the run's results can be asserted on directly. The osquery-perf
- * simulations cannot back this — they ignore the SQL, answer with a fixed row,
- * and return no rows at all for a fraction of runs.
+ * simulations cannot back this — they ignore the SQL and answer every live query
+ * with the same canned row.
  */
 import { test, expect } from '@fixtures';
 import { createReport, deleteReportsMatching } from '@helpers/api';

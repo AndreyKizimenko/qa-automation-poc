@@ -88,7 +88,9 @@ for (const script of SCRIPT_CASES) {
 
       await scriptsLibrary.openScript(script.fileName);
       const persistedContent = await scriptsLibrary.openScriptContent();
-      expect(persistedContent).toContain(script.editAppend);
+      // The whole script, so an editor that reshaped the edit (indenting it,
+      // closing a quote) fails here rather than passing on the appended line.
+      expect(persistedContent).toBe(editedContent.trim());
       await scriptsLibrary.closeScript();
     });
 
