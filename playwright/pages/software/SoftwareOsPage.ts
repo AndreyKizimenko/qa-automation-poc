@@ -60,7 +60,8 @@ export class SoftwareOsPage {
     await expect(option).toBeVisible();
     await option.click();
     await expect(this.platformFilterValue).toHaveText(label);
-    await expect(this.table.firstRow).toBeVisible();
+    // A platform no host runs leaves the list empty, which is a settled result too.
+    await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 
   /** OS name shown in the first row's "Name" column. */
@@ -70,13 +71,36 @@ export class SoftwareOsPage {
   }
 
   /**
-   * The first row whose Vulnerabilities column carries a count — Fleet renders
-   * "---" for an OS it has found none for, and those rows drill into a detail
-   * page with an empty table, which is not what a drill-through spec wants to
-   * assert on.
+   * The first row on screen whose Vulnerabilities column carries a count — Fleet
+   * renders "---" for an OS it has found none for, and those rows drill into a
+   * detail page with an empty table. Any platform qualifies, including Linux,
+   * whose detail page has no Vulnerabilities card; a drill-through into that
+   * card uses `firstNonLinuxRowWithVulnerabilities()`.
    */
   async firstRowWithVulnerabilities(): Promise<Locator | null> {
     return this.table.findRowByColumnPattern('Vulnerabilities', /^[\d,]+ vulnerabilities$/);
+  }
+
+  /**
+   * The first macOS row reporting vulnerabilities, else the first Windows one,
+   * else null. Linux is left out because its detail page lists vulnerabilities
+   * per kernel in a Kernels card and has no Vulnerabilities card
+   * (`SoftwareOSDetailsPage.tsx`, `isLinuxLike`), and on the default host-count
+   * sort a Linux row can be the first one reporting any.
+   *
+   * Leaves the list filtered to the platform it settled on. The list keeps the
+   * previous platform's rows on screen while the filtered fetch is in flight, so
+   * each pass waits until every row names the platform — macOS and Windows rows
+   * carry the word in their Name — before reading one.
+   */
+  async firstNonLinuxRowWithVulnerabilities(): Promise<Locator | null> {
+    for (const platform of ['macOS', 'Windows'] as const) {
+      await this.selectPlatform(platform);
+      await expect(this.table.table.locator('tbody tr').filter({ hasNotText: platform })).toHaveCount(0);
+      const row = await this.firstRowWithVulnerabilities();
+      if (row) return row;
+    }
+    return null;
   }
 
   /** Name, Version, Vulnerabilities and Hosts of one OS row, as rendered. */
