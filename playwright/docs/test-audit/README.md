@@ -63,7 +63,9 @@ files · ~350 test declarations · 4 projects**.
 > **13**: the Manual label lifecycle (MISC-05…07) runs from the Hosts list — filtered by the label, edited (one member
 > swapped) and deleted from its pill, and MISC-31 checks free's dashboard and Hosts list for any fleet scope. Area **02**:
 > HOST-25 flips the host Reports tab's "don't store results" toggle; HOST-04 reads the Inventory's columns and pages it.
-> HOSTP-09 walks back from a report's results to the host.
+> HOSTP-09 walks back from a report's results to the host. Area **07**: SWV-05 checks the exploited filter's rows against
+> the API and their CISA icon; SWV-23 (premium) and SWV-24 (free) a CVE's count and hosts by fleet. Area **06**: SWL-37
+> (a title's View all hosts, both tiers) and SWL-38 (a package on Unassigned in an Unassigned host's Library).
 
 ## The area files
 
@@ -74,8 +76,8 @@ files · ~350 test declarations · 4 projects**.
 | 03 | [Hosts — premium](03-hosts-premium.md) | 18 | premium |
 | 04 | [Policies](04-policies.md) | 35 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 36 | premium, free |
-| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 38 | premium, free |
+| 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 24 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 28 | free, both |
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 15 | premium, free |
@@ -92,7 +94,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**500 entries** covering every test in the suite. An entry can expand into several
+**504 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (36 entries → 87 executions), area 11 (36 → 92), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

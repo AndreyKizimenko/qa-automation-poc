@@ -325,7 +325,8 @@ export async function findMdmSimulations(
  * same slicing.
  *
  * Slices claimed: linux 0–1 `software-label-targets.spec.ts`, 2–4
- * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 6–7
+ * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 5
+ * `premium/software/no-teams-views.spec.ts` (its Library read, never moved), 6–7
  * `shared/policies/policy-hosts.spec.ts` (refetched for a policy's answer, never
  * moved); darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3

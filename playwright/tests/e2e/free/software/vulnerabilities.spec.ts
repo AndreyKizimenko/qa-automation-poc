@@ -16,6 +16,7 @@ import {
   findVulnerableSoftwareBySources,
   findRenderableCve,
   hostVulnerableVersions,
+  listVulnerabilityHosts,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -283,5 +284,36 @@ test.describe('Software vulnerabilities', () => {
     // exactly — the filter contract above is the behaviour, and a non-zero
     // result is what proves the version id resolved to real hosts.
     await expect.poll(() => hostsList.hostCount()).toBeGreaterThan(0);
+  });
+
+  /**
+   * A Vulnerabilities row's "View all hosts" opens the Hosts list filtered by the
+   * CVE (`vulnerability=`), and the hosts it lists are ones Fleet holds affected.
+   * Free's one scope holds hundreds of them, so the page is checked to be a
+   * subset of the API's live list rather than equal to it. Not premium-gated;
+   * premium's twin compares a fleet's whole set. Round 1 C6 #7.
+   */
+  test("Vulnerabilities — a CVE's View all hosts lists hosts it affects", async ({
+    softwareTitles,
+    vulnerabilitiesList,
+    hostsList,
+    request,
+    page,
+  }) => {
+    await softwareTitles.goto();
+    await softwareTitles.gotoVulnerabilitiesTab();
+    const cve = await vulnerabilitiesList.firstCveName();
+
+    await vulnerabilitiesList.viewAllHostsFor(cve);
+    expect(new URL(page.url()).searchParams.get('vulnerability')).toBe(cve);
+    await expect(hostsList.filterPill).toContainText(cve);
+    await expect(hostsList.table.firstRowWithLink).toBeVisible();
+
+    await expect(async () => {
+      const affected = new Set((await listVulnerabilityHosts(request, cve)).map((h) => h.displayName));
+      const listed = await hostsList.hostNames();
+      expect(listed.length).toBeGreaterThan(0);
+      expect(listed.filter((name) => !affected.has(name)), `hosts listed but not affected by ${cve}`).toEqual([]);
+    }).toPass({ timeout: 30_000 });
   });
 });

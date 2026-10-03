@@ -5,6 +5,7 @@ import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
+import { clickHoverAction } from '../components/clickHoverAction';
 
 /**
  * /software/inventory — the list of installed software with vulnerability counts.
@@ -233,6 +234,20 @@ export class SoftwareTitlesPage {
   async clickSoftwareTitle(name: string): Promise<void> {
     const row = this.table.rowWith(name).first();
     await row.getByRole('link', { name }).first().click();
+  }
+
+  /**
+   * The first title row's hover-only "View all hosts", which opens the Hosts
+   * list filtered by the title (`software_title_id`). Returns the title's name
+   * as the row shows it.
+   */
+  async viewAllHostsForFirstTitle(): Promise<string> {
+    const row = this.table.firstRowWithLink;
+    await expect(row).toBeVisible();
+    const name = (await row.getByRole('link').first().innerText()).trim();
+    await clickHoverAction(row, row.getByRole('button', { name: 'View all hosts' }));
+    await expect(this.page).toHaveURL(/\/hosts\/manage\?.*software_title_id=\d+/);
+    return name;
   }
 
   /** Click the first software title's name link in the current view. */
