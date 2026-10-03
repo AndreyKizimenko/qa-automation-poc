@@ -22,7 +22,8 @@ VMs, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-te
 
 | Test | Why | Unblock |
 |---|---|---|
-| `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
+
+_None._
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md) — currently
