@@ -3,8 +3,8 @@
 **23 gaps → about 10 specs, mostly augments, after 4–6 cuts.** `Policy ↔ hosts links` · `Platform targeting` ·
 `Transfers and Select all matching` · `Labels` · `Host tabs` · `Vulnerabilities` · `Unassigned views`
 
-**Status: reviewed 2026-10-03, building** (planned 2026-10-01). 19 gaps kept, 4 cut; see
-[Review decisions](#review-decisions-2026-10-03).
+**Status: built 2026-10-03** (planned 2026-10-01). 19 gaps kept, 4 cut; see
+[Review decisions](#review-decisions-2026-10-03) and [What landed](#what-landed).
 
 > ## ▶ Start here
 >
@@ -294,9 +294,9 @@ took every recommendation below. **19 gaps kept (most folded into existing specs
 
 ### Simulations claimed
 
-`findSimulations`: linux 3–7 (label members 3–4, the Library read 5, policy refetches 6–7), darwin 6–7 and
-windows 2–3 (policy reads and refetches). None is moved. Batch D, built alongside, takes linux 10–39. C1 #12's
-offline hosts come from a separate helper, outside `findSimulations`' pool.
+`findSimulations`: linux 3–7 (label members 3–4 beside `labels.spec`'s existing 2, the Library read 5, policy
+refetches 6–7), darwin 6 and windows 2 (policy reads). None is moved. Batch D, built alongside, takes linux 10–39.
+C1 #12's 51 offline hosts come from `findOfflineSimulations`, outside `findSimulations`' pool.
 
 ## Free coverage
 
@@ -317,16 +317,22 @@ for the vulnerability and Library rows.
 
 ## Done when
 
-- ~~Every row has a written review decision; the questions above have Andrey's answer.~~ Done 2026-10-03.
-- The augments and new specs built, on every tier each targets, each moving back every simulation it borrowed
-  in its `finally` (and claimed in the registry in `helpers/api/hosts.ts`).
-- `npm run check` clean; each changed spec run with dependencies on its tiers, once headed, `--repeat-each=5` for
-  anything waiting on a refetch.
-- `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.
-- Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a
-  [test-audit](../../test-audit/README.md) entry per `test()`, `helpers/README.md` / `pages/README.md`, and this
-  round's [README](README.md) batch table and [INDEX](INDEX.md).
-- PR open, Andrey told it's ready for its branch run.
+All done 2026-10-03 except the last line, which is Andrey's:
+
+- ✅ Every row has a written review decision; the questions have Andrey's answers.
+- ✅ The augments and new specs built, on every tier each targets. No simulation is moved except C1 #12's 51
+  offline ones, which go back by filter and again with the throwaway fleet's deletion; the slices are claimed in
+  `helpers/api/hosts.ts`.
+- ✅ `npm run check` clean (0 errors). Each changed spec run with dependencies and headed on its tiers (premium 59
+  passed with 1 existing skip, free 56 passed); the refetch-dependent policy specs 5×, the other new tests 3–5×.
+- ✅ `playwright-test-reviewer` on the branch's diff: no blockers; a numeric sort for label membership and an assert
+  before the report's host link is clicked, both fixed. The free with-dependencies run then caught the Hosts
+  table's URL rewrite undoing a label choice, and `LabelFilter.selectLabel` retries until the route sticks.
+- ✅ Docs in the same commits: *What landed*, the [DELIVERY-LOG](../DELIVERY-LOG.md), a
+  [test-audit](../../test-audit/README.md) entry per `test()` (POL-33…35, HOSTP-17/18, HOST-25, MISC-31, SWV-23/24,
+  SWL-37/38, and the entries the augments changed), `helpers/README.md` (no new page object, so `pages/README.md`
+  is unchanged), `CLAUDE.md` › Test hosts (the offline pool), this round's [README](README.md) and [INDEX](INDEX.md).
+- ☐ PR open, Andrey told it's ready for its branch run.
 
 ## What landed
 

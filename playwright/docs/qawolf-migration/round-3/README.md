@@ -55,7 +55,7 @@ here** block, the gap table, the review to do first, facts for the build, the de
 |---|---|---|---:|---|
 | **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | **merged** 2026-10-03: 16 built, 3 cut; [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81), shipped in [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) |
 | **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | **merged** 2026-10-03: 22 built, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A); branch run [37077445852](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37077445852) green, 0 flaky |
-| **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | ready for review |
+| **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | **built** 2026-10-03: 19 kept, 4 cut; PR pending, ready for its branch run |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | ready for review |
 | **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | ready for review |
 | **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations | 10 | ready for review |
