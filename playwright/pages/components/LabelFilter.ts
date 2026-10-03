@@ -38,14 +38,20 @@ export class LabelFilter {
    * `/hosts/manage/labels/<id>`.
    */
   async selectLabel(name: string): Promise<void> {
-    await this.trigger.click();
-    await expect(this.options.first()).toBeVisible();
-    await this.page.keyboard.type(name);
     const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
     const option = this.options.filter({ hasText: exact });
-    await expect(option).toHaveCount(1);
-    await option.click();
-    await expect(this.page).toHaveURL(/\/hosts\/manage\/labels\/\d+/);
+    // The Hosts page writes its default sort into the URL once its first load
+    // settles, and that replace can land after a choice made just before it,
+    // taking the page back to the unfiltered route. So the choice is retried
+    // until the label's route sticks.
+    await expect(async () => {
+      await this.trigger.click();
+      await expect(this.options.first()).toBeVisible({ timeout: 3_000 });
+      await this.page.keyboard.type(name);
+      await expect(option).toHaveCount(1, { timeout: 3_000 });
+      await option.click();
+      await expect(this.page).toHaveURL(/\/hosts\/manage\/labels\/\d+/, { timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
   }
 
   /** Picks the first non-platform label (or the first option if none exist). */
