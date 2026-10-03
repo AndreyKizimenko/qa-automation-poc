@@ -125,7 +125,9 @@ Pending hosts move to Canceled" into a deterministic test. Batch scripts have no
 simulations by id never reaches a VM, so the plan's premium-only spec became `shared/`, on both tiers. The review
 also found a Fleet bug, filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732): a batch
 whose script is edited while a host's run is still queued behind another activity never finishes, because that
-host stays Pending.
+host stays Pending. The branch run turned up a second one,
+[fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734): a run cancelled while a host is running it
+still records its result, and the host then shows under no tab.
 
 | slice | what |
 |---|---|

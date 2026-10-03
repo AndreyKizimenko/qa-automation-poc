@@ -221,7 +221,10 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     request,
     page,
   }) => {
-    // Off the macOS label's hosts, which batch-run's scale test may have a run queued on.
+    // Off the macOS label's hosts, which batch-run's scale test may have a run
+    // queued on: a run still queued behind another activity when its script is
+    // edited stays Pending forever. TODO(fleetdm/fleet#54732): once fixed, any
+    // claimed hosts will do.
     const inScaleBatch = await listLabelHostIds(request, await getLabelId(request, 'macOS'), {
       fleetId: 0,
       status: 'online',
@@ -272,7 +275,8 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     // of Canceled (yet lists it under neither), so the cancelled set can shrink
     // after the read above. The Canceled tab is held to the API's cancelled
     // hosts as they stand when the tab is read: its count and its hosts, all
-    // among the targeted ones.
+    // among the targeted ones. TODO(fleetdm/fleet#54734): once fixed, compare
+    // the tab with the cancelled hosts read right after the edit.
     let reads = 0;
     await expect(async () => {
       if (reads++ > 0) {

@@ -1516,7 +1516,7 @@ other:
    - ✅ *(UI)* Success toast "Successfully saved script."
    - ✅ *(API)* The batch targets every host; at least one run is canceled and none is left pending; ran + errored + pending + incompatible + canceled = targeted; the canceled hosts are among the targeted ones.
 4. ☐ Side nav **Batch progress** → **Started** → the batch → **Canceled** tab.
-   - ✅ *(UI)* The tab is named "Canceled N" and lists exactly the hosts the API lists as canceled, read together, retried until they agree. A host that was *running* the script when the edit landed reports a few seconds later, and Fleet then counts it under Ran or Errored (listing it under neither), so the cancelled set can shrink after step 3: a comparison with step 3's count failed twice in branch run 37149323584. That's a Fleet defect, drafted for filing on 2026-10-03.
+   - ✅ *(UI)* The tab is named "Canceled N" and lists exactly the hosts the API lists as canceled, read together, retried until they agree. A host that was *running* the script when the edit landed reports a few seconds later, and Fleet then counts it under Ran or Errored (listing it under neither), so the cancelled set can shrink after step 3: a comparison with step 3's count failed twice in branch run 37149323584. That's [fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734) (filed 2026-10-03; `TODO` at the workaround and a row in `blocked-by-product-bugs.md`).
 
 **Assessment**
 - *Value:* Medium-high. That saving an edited script cancels *every* run that hasn't reported (none left Pending), which QA Wolf checked over hundreds of hosts, plus the warning that says so. On both tiers.

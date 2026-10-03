@@ -306,3 +306,7 @@ Asked 2026-10-03, after the review above:
 - **Filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)** (released since 4.74.0): an edit
   while a host's run is still queued behind another activity leaves that host Pending, and the batch never
   finishes.
+- **Filed [fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734)** after the branch run (released): a
+  run cancelled while a host is running it still records its result, and the host then shows under no tab. It made
+  the edit test flaky (failed twice in run 37149323584); the test now compares the Canceled tab with a live API
+  read. Both bugs have a row under *Worked around in the suite* in `docs/blocked-by-product-bugs.md`.
