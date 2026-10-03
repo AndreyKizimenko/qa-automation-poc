@@ -71,7 +71,6 @@ test.describe('Premium • Controls • Batch script run', () => {
     scriptBatchDetails,
     vmsFleetId,
     request,
-    page,
   }) => {
     const [mac, linux, windows] = await Promise.all(
       (['darwin', 'linux', 'windows'] as const).map((p) => requireRealHost(request, p)),
@@ -100,10 +99,18 @@ test.describe('Premium • Controls • Batch script run', () => {
       await expect(scriptsBatchProgress.batch(scriptName)).toContainText('/ 3 hosts');
 
       const batchId = await findBatchId(request, vmsFleetId, scriptName);
+
+      // The feed is read while this batch's activity is among the newest. After
+      // the minutes the batch takes to finish, the other workers' activity can
+      // bury it deeper than the feed walk reaches.
+      await dashboard.goto();
+      await dashboard.expectActivity(activityCopy.script.ranBatch({ name: scriptName, hostCount: 3 }));
+
       const summary = await waitForBatchFinished(request, batchId);
       expect(summary).toMatchObject({ targeted: 3, ran: 1, errored: 1, incompatible: 1, pending: 0, canceled: 0 });
 
-      await page.reload();
+      await scriptsBatchProgress.goto({ fleetId: vmsFleetId });
+      await scriptsBatchProgress.teamDropdown.selectByLabel('VMs');
       await scriptsBatchProgress.openFinishedTab();
       await expect(scriptsBatchProgress.batch(scriptName)).toContainText('Completed');
       await scriptsBatchProgress.batch(scriptName).click();
@@ -127,9 +134,6 @@ test.describe('Premium • Controls • Batch script run', () => {
         await scriptBatchDetails.openTab(status);
         await expect(scriptBatchDetails.emptyTab).toBeVisible();
       }
-
-      await dashboard.goto();
-      await dashboard.expectActivity(activityCopy.script.ranBatch({ name: scriptName, hostCount: 3 }));
     } finally {
       await deleteScript(request, scriptId);
     }

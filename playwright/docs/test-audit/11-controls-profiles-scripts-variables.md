@@ -946,9 +946,10 @@ other:
    - ✅ *(UI)* exactly one **Show script activity** link is on screen.
    - ✅ *(UI)* Controls → Scripts → **Batch progress**, with the **Started** tab `aria-selected`.
    - ✅ *(UI)* the batch's list item contains **`/ 3 hosts`** — the denominator; the numerator is still moving.
-8. ☐ *(wait — no user action)* ✅ *(API)* `GET /scripts/batch?fleet_id=<VMs>` finds this script's newest batch; `GET /scripts/batch/:id` polls `status` to **`finished`** (10s interval, **480s** budget). Fleet marks a batch finished from a **cron**, which lands **2–4 minutes after the last host reports** — the page doesn't live-update, so the spec waits on the API rather than watching it.
+8. ☐ *(API)* `GET /scripts/batch?fleet_id=<VMs>` finds this script's newest batch. Then open the **Dashboard** → ✅ *(UI)* feed has **"… ran the `<script>` script on 3 hosts."** (`activityCopy.script.ranBatch`). Read now, while the activity is among the newest: on 2026-10-03, read after the wait below, it had been buried under the other workers' activity past the feed walk's 15 pages (a flaky retry in branch run 37149323584).
+8b. ☐ *(wait — no user action)* ✅ *(API)* `GET /scripts/batch/:id` polls `status` to **`finished`** (10s interval, **480s** budget). Fleet marks a batch finished from a **cron**, which lands **2–4 minutes after the last host reports** — the page doesn't live-update, so the spec waits on the API rather than watching it.
    - ✅ *(API)* summary **`{ targeted: 3, ran: 1, errored: 1, incompatible: 1, pending: 0, canceled: 0 }`**.
-9. ☐ Reload the page, click the **Finished** tab.
+9. ☐ Open Batch progress for the VMs fleet (`goto({ fleetId })`, then the fleet dropdown), click the **Finished** tab.
    - ✅ *(UI)* the batch's item contains **Completed**.
 10. ☐ Click the batch.
     - ✅ *(UI)* the details page's `h2` equals the script name.
@@ -959,7 +960,6 @@ other:
     - ✅ *(UI)* the tab lists **exactly** `[<that VM's display name>]`.
     - ✅ *(UI)* Ran's row contains **`ran on Darwin`**; Errored's row contains **`fails on Linux`** (Incompatible has no output).
 12. ☐ Click **Pending**, then **Canceled** → ✅ *(UI)* each shows **"No hosts with this status"**.
-13. ☐ Open the **Dashboard** → ✅ *(UI)* feed has **"… ran the `<script>` script on 3 hosts."** (`activityCopy.script.ranBatch`).
 
 **Assessment**
 - *Value:* high. One batch, three platforms, three different outcomes, each asserted as *the right host in the right tab with its own output* — that is the behaviour of a batch run, not just "a batch exists". The script's `uname` branch is a neat way to get a deterministic Errored row without a second script. Closes the "Batch script execution — untested" gap and retires the orphaned `ScriptsBatchProgressPage` noted in the original audit.
@@ -1516,7 +1516,7 @@ other:
    - ✅ *(UI)* Success toast "Successfully saved script."
    - ✅ *(API)* The batch targets every host; at least one run is canceled and none is left pending; ran + errored + pending + incompatible + canceled = targeted; the canceled hosts are among the targeted ones.
 4. ☐ Side nav **Batch progress** → **Started** → the batch → **Canceled** tab.
-   - ✅ *(UI)* The tab is named "Canceled N" for the API's count, and lists exactly the canceled hosts.
+   - ✅ *(UI)* The tab is named "Canceled N" and lists exactly the hosts the API lists as canceled, read together, retried until they agree. A host that was *running* the script when the edit landed reports a few seconds later, and Fleet then counts it under Ran or Errored (listing it under neither), so the cancelled set can shrink after step 3: a comparison with step 3's count failed twice in branch run 37149323584. That's a Fleet defect, drafted for filing on 2026-10-03.
 
 **Assessment**
 - *Value:* Medium-high. That saving an edited script cancels *every* run that hasn't reported (none left Pending), which QA Wolf checked over hundreds of hosts, plus the warning that says so. On both tiers.

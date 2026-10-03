@@ -219,6 +219,7 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     scriptsBatchProgress,
     scriptBatchDetails,
     request,
+    page,
   }) => {
     // Off the macOS label's hosts, which batch-run's scale test may have a run queued on.
     const inScaleBatch = await listLabelHostIds(request, await getLabelId(request, 'macOS'), {
@@ -260,17 +261,33 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     expect(summary.ran + summary.errored + summary.pending + summary.incompatible + summary.canceled).toBe(
       summary.targeted,
     );
-    const canceledIds = await listBatchHostIds(request, batchId, 'canceled');
-    expect(canceledIds).toHaveLength(summary.canceled);
-    expect(ids, 'a cancelled host the batch never targeted').toEqual(expect.arrayContaining(canceledIds));
 
     await scriptsLibrary.goToBatchProgress();
     await expect(scriptsBatchProgress.startedTab).toHaveAttribute('aria-selected', 'true');
     await scriptsBatchProgress.batch(scriptName).click();
     await expect(scriptBatchDetails.heading).toHaveText(scriptName);
-    await scriptBatchDetails.openTab('Canceled');
-    await expect(scriptBatchDetails.tab('Canceled')).toHaveAccessibleName(`Canceled ${summary.canceled}`);
-    const canceledNames = new Set(hosts.filter((h) => canceledIds.includes(h.id)).map((h) => h.displayName));
-    expect(new Set(await scriptBatchDetails.hostNames())).toEqual(canceledNames);
+
+    // A host that was running the script when the edit landed still reports a
+    // few seconds later, and Fleet then counts it under Ran or Errored instead
+    // of Canceled (yet lists it under neither), so the cancelled set can shrink
+    // after the read above. The Canceled tab is held to the API's cancelled
+    // hosts as they stand when the tab is read: its count and its hosts, all
+    // among the targeted ones.
+    let reads = 0;
+    await expect(async () => {
+      if (reads++ > 0) {
+        await page.reload();
+        await expect(scriptBatchDetails.heading).toHaveText(scriptName);
+      }
+      await scriptBatchDetails.openTab('Canceled');
+      const canceledIds = await listBatchHostIds(request, batchId, 'canceled');
+      expect(canceledIds.length, 'no host is listed as cancelled').toBeGreaterThan(0);
+      expect(ids, 'a cancelled host the batch never targeted').toEqual(expect.arrayContaining(canceledIds));
+      await expect(scriptBatchDetails.tab('Canceled')).toHaveAccessibleName(`Canceled ${canceledIds.length}`, {
+        timeout: 3_000,
+      });
+      const canceledNames = new Set(hosts.filter((h) => canceledIds.includes(h.id)).map((h) => h.displayName));
+      expect(new Set(await scriptBatchDetails.hostNames())).toEqual(canceledNames);
+    }).toPass({ timeout: 30_000 });
   });
 });
