@@ -36,6 +36,10 @@ export class PoliciesListPage {
   readonly policyAutomationsToggle: Locator;
   readonly policyWebhookUrlInput: Locator;
   readonly saveAutomationsButton: Locator;
+  // The Ticket workflow's empty state, shown when no Jira or Zendesk
+  // integration is configured.
+  readonly noIntegrationsMessage: Locator;
+  readonly addIntegrationButton: Locator;
 
   // One policy's automations (a row's Automations cell → "Manage automations"
   // modal, Fleet's ManageAutomationsModal), as opposed to the scope-wide
@@ -73,6 +77,8 @@ export class PoliciesListPage {
     this.policyAutomationsToggle = this.automationsModal.getByRole('switch');
     this.policyWebhookUrlInput = this.automationsModal.getByPlaceholder('https://server.com/example');
     this.saveAutomationsButton = this.automationsModal.getByRole('button', { name: 'Save', exact: true });
+    this.noIntegrationsMessage = this.automationsModal.getByText('You have no integrations.', { exact: true });
+    this.addIntegrationButton = this.automationsModal.getByRole('button', { name: 'Add integration', exact: true });
 
     // Fleet's Modal is a role-less div whose title is a plain span; the
     // component's own class is the only thing that tells this modal apart from
@@ -140,6 +146,12 @@ export class PoliciesListPage {
   async selectWebhookWorkflow(): Promise<void> {
     await this.automationsModal.locator('label').filter({ hasText: 'Webhook' }).click();
     await expect(this.policyWebhookUrlInput).toBeVisible();
+  }
+
+  /** Select the "Ticket" workflow radio; same hidden-input Radio as Webhook, so the label is the target. */
+  async selectTicketWorkflow(): Promise<void> {
+    await this.automationsModal.locator('label').filter({ hasText: 'Ticket' }).click();
+    await expect(this.automationsModal.getByRole('radio', { name: 'Ticket' })).toBeChecked();
   }
 
   /** Save the automations modal; waits for it to close (reliable completion). */

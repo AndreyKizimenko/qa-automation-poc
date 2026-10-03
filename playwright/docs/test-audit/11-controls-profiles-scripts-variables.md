@@ -1,6 +1,6 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 11 files · **Test declarations:** 34 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
+**Specs covered:** 11 files · **Test declarations:** 36 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
 
 Covers **Controls → OS settings** (custom configuration profiles, global disk-encryption
 enforcement), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
@@ -14,12 +14,14 @@ loop and the team dropdown removed.
 
 **Entry ↔ execution count.** Each entry below collapses the `scope` **and** OS-case loops,
 so one entry can be several actual test runs: premium profiles ×4 (2 scopes × macOS/Windows),
-premium scripts ×6 (2 scopes × macOS/Linux/Windows), free profiles ×2, free scripts ×3.
-The 23 lifecycle-era entries expand to **74 test executions** per full premium+free run; CTL-24/25
-add 2 (premium only) and CTL-26 adds 2 (once per exclusive project) — **78** in all.
+premium scripts ×6 (2 scopes × macOS/Linux/Windows), free profiles ×2, free scripts ×3, and the
+shared custom-variables tests ×2 (once per tier). The 23 lifecycle-era entries (CTL-01…23) expand to
+**76 test executions** per full premium+free run; CTL-24/25 add 2 (premium only), CTL-26 adds 2 (once
+per exclusive project), CTL-27…34 add 8 (one run each) and CTL-35/36 add 4 (both tiers) — **92** in all.
 
 CTL-24…26 are **not** serial-CRUD specs: each is a single standalone flow against real hosts (CTL-24,
-CTL-26) or the simulation pool (CTL-25).
+CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-variables.spec.ts`
+(CTL-13/14, CTL-35/36): four independent tests that both tiers run, each cleaning up in an `afterEach`.
 
 ## Contents
 
@@ -37,8 +39,8 @@ CTL-26) or the simulation pool (CTL-25).
 | CTL-10 | `premium/controls/scripts/library.spec.ts` | Scripts library lifecycle (scope) — OS › delete | UI+API | ☐ |
 | CTL-11 | `premium/controls/scripts/library.spec.ts` | Scripts library lifecycle (scope) — OS › activity feed shows upload → edit → delete | UI | ☐ |
 | CTL-12 | `premium/controls/scripts/library.spec.ts` | upload validation › rejects a script larger than 500,000 characters | UI | ☐ |
-| CTL-13 | `premium/controls/custom-variables.spec.ts` | add a custom variable and delete it | UI | ☐ |
-| CTL-14 | `premium/controls/custom-variables.spec.ts` | the add form auto-uppercases and validates the name | UI | ☐ |
+| CTL-13 | `shared/controls/custom-variables.spec.ts` | add a custom variable and delete it *(premium + free)* | UI | ☐ |
+| CTL-14 | `shared/controls/custom-variables.spec.ts` | the add form auto-uppercases and validates the name *(premium + free)* | UI | ☐ |
 | CTL-15 | `free/controls/os-settings/configuration-profiles.spec.ts` | configuration profiles — OS › upload | UI+API | ☐ |
 | CTL-16 | `free/controls/os-settings/configuration-profiles.spec.ts` | configuration profiles — OS › download matches source | UI | ☐ |
 | CTL-17 | `free/controls/os-settings/configuration-profiles.spec.ts` | configuration profiles — OS › delete | UI+API | ☐ |
@@ -59,6 +61,8 @@ CTL-26) or the simulation pool (CTL-25).
 | CTL-32 | `premium/exclusive/os-updates/ddm-conflict.spec.ts` | Windows: an Update CSP profile and a Windows update deadline refuse each other *(premium-exclusive)* | UI+API | ☐ |
 | CTL-33 | `free/controls/os-settings/profile-delivery.spec.ts` | a profile is installed, resent and removed, and the host names it in each command *(free)* | UI+API | ☐ |
 | CTL-34 | `free/controls/os-settings/profile-delivery.spec.ts` | a declaration is verified by the Mac and removed again *(free)* | UI+API | ☐ |
+| CTL-35 | `shared/controls/custom-variables.spec.ts` | a script that uses a variable is refused until the variable exists *(premium + free)* | UI | ☐ |
+| CTL-36 | `shared/controls/custom-variables.spec.ts` | a variable a script uses can't be deleted *(premium + free)* | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -522,14 +526,14 @@ other:
 
 ---
 
-### CTL-13 · Premium • Controls • custom variables › add a custom variable and delete it
+### CTL-13 · Shared • Controls • custom variables › add a custom variable and delete it
 
-- **File:** [`playwright/tests/e2e/premium/controls/custom-variables.spec.ts`](../../tests/e2e/premium/controls/custom-variables.spec.ts)
-- **Grep:** `npx playwright test --project=premium -g "add a custom variable and delete it"`
-- **Project:** premium · **Scopes:** global variables only
-- **Mode:** UI · **Isolation:** self-contained (create + delete in one test); `afterEach` purges the exact name it created via `DELETE /custom_variables/:id` (`deleteVariablesMatching`)
+- **File:** [`playwright/tests/e2e/shared/controls/custom-variables.spec.ts`](../../tests/e2e/shared/controls/custom-variables.spec.ts) (L52)
+- **Grep:** `npx playwright test --project=premium -g "add a custom variable and delete it"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scopes:** global variables only
+- **Mode:** UI · **Isolation:** self-contained (create + delete in one test); the `afterEach` purges the exact name it created via `DELETE /custom_variables/:id` (`deleteVariablesMatching`), after deleting the test's script when there is one (none here)
 - **Preconditions:** none
-- **Data created:** custom variable `PW_VAR_<Date.now()>` with value `pw-secret-value`, deleted in-test. **Note:** the `cleanup-setup`/`cleanup-teardown` projects do **not** wipe custom variables, so a crashed run leaks `PW_VAR_*` rows
+- **Data created:** custom variable `PW_VAR_<Date.now()>` with value `pw-secret-value`, deleted in-test. `cleanup-setup`/`cleanup-teardown` delete any `PW_VAR_*` variable a crashed run leaves (after the Unassigned scripts, since Fleet refuses to delete a variable a script references)
 
 **Flow**
 
@@ -549,10 +553,10 @@ other:
    - ✅ *(UI)* No row with that name remains (`toHaveCount(0)`).
 
 **Assessment**
-- *Value:* Covers the add/delete round-trip and the `$FLEET_SECRET_` reference rendering.
-- *Coverage gaps:* Big one — the variable is never **used**. Nothing uploads a profile or script referencing `$FLEET_SECRET_PW_VAR_*` and checks that Fleet accepts/resolves it, nor that deleting a referenced variable is blocked. Also untested: editing a variable's value, the value being write-only/masked after creation, duplicate-name rejection, the built-in `$FLEET_VAR_*` list on the same page, per-fleet (non-global) variables, and whether Variables is premium-gated at all (it is absent from `free/paywalls.spec.ts`'s list and has no free spec).
+- *Value:* Covers the add/delete round-trip and the `$FLEET_SECRET_` reference rendering, on both tiers — which also shows the Variables page isn't premium-gated (only its description differs on free).
+- *Coverage gaps:* a variable in use is CTL-35/36's, for scripts only — nothing references one from a configuration profile, and nothing proves a host receives the substituted value. Also untested: editing a variable's value, the value being write-only/masked after creation, duplicate-name rejection, the built-in `$FLEET_VAR_*` list on the same page, and per-fleet (non-global) variables.
 - *Redundancy:* none.
-- *Efficiency / smells:* Direct-URL entry contradicts the e2e click-through convention. `variableRow` is a substring row match — safe only because of the `Date.now()` suffix. No API-side confirmation that the secret value was stored.
+- *Efficiency / smells:* Direct-URL entry contradicts the e2e click-through convention. `variableRow` is a substring row match — safe only because of the `Date.now()` suffix. No API-side confirmation that the secret value was stored. The name scheme (`PW_VAR_<Date.now()>`) differs from CTL-35/36's (`PW_VAR_<runNonce>`) in the same file.
 
 **Notes (Andrey)**
 ```
@@ -564,12 +568,12 @@ other:
 
 ---
 
-### CTL-14 · Premium • Controls • custom variables › the add form auto-uppercases and validates the name
+### CTL-14 · Shared • Controls • custom variables › the add form auto-uppercases and validates the name
 
-- **File:** [`playwright/tests/e2e/premium/controls/custom-variables.spec.ts`](../../tests/e2e/premium/controls/custom-variables.spec.ts)
-- **Grep:** `npx playwright test --project=premium -g "auto-uppercases and validates"`
-- **Project:** premium · **Scopes:** n/a
-- **Mode:** UI · **Isolation:** self-contained; nothing is saved, so `afterEach` no-ops
+- **File:** [`playwright/tests/e2e/shared/controls/custom-variables.spec.ts`](../../tests/e2e/shared/controls/custom-variables.spec.ts) (L70)
+- **Grep:** `npx playwright test --project=premium -g "auto-uppercases and validates"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scopes:** n/a
+- **Mode:** UI · **Isolation:** self-contained; nothing is saved, so the `afterEach` no-ops
 - **Preconditions:** none
 - **Data created:** none (form-only)
 
@@ -587,10 +591,10 @@ other:
    - ✅ *(UI)* **Save** is enabled.
 
 **Assessment**
-- *Value:* Cheap, fast, fully deterministic client-side validation check; catches a regression in the name normaliser or the Save gate.
+- *Value:* Cheap, fast, fully deterministic client-side validation check; catches a regression in the name normaliser or the Save gate, on both tiers.
 - *Coverage gaps:* **Value** is left empty yet Save is asserted *enabled* at step 4 — the spec's own header claims the form "requires a value", so either the doc comment or the product is wrong. ⚠️ unclear: whether Save should be disabled with an empty Value; this test asserts it is enabled. Also untested: leading-digit or leading-underscore names, max length, reserved `FLEET_`-prefixed names, and Cancel discarding input.
 - *Redundancy:* none.
-- *Efficiency / smells:* Same direct-URL entry as CTL-13; the two variables tests each re-navigate and re-open the modal, so they could share a helper. Leaves the modal open at teardown (harmless).
+- *Efficiency / smells:* Same direct-URL entry as CTL-13; the two variables tests each re-navigate and re-open the modal, so they could share a helper. Leaves the modal open at teardown (harmless). Running it on free buys little — a client-side validator in a component the tiers share — but costs a second or two.
 
 **Notes (Andrey)**
 ```
@@ -1302,6 +1306,88 @@ steps to cut:
 other:
 ```
 
+---
+
+### CTL-35 · Shared • Controls • custom variables › a script that uses a variable is refused until the variable exists
+
+- **File:** [`playwright/tests/e2e/shared/controls/custom-variables.spec.ts`](../../tests/e2e/shared/controls/custom-variables.spec.ts) (L91)
+- **Grep:** `npx playwright test --project=premium -g "a script that uses a variable is refused until the variable exists"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scope:** the variable is global; the script goes to **Unassigned** (`FLEET_ID = 0`), which on free is where the real VMs are — uploading a script doesn't run it
+- **Mode:** UI · **Isolation:** self-contained, per-run names; the `afterEach` deletes the test's script (exact name, `deleteAllScripts` with a filter) and **then** the variable — Fleet refuses to delete a variable a script still uses, and `deleteVariablesMatching` ignores the refusal
+- **Source:** QA Wolf round 1 C8 #20 (`secrets-scripts-with-a-secret-variable-can-only-be-uploaded-when-such-variable-exists`)
+- **Preconditions:** none. The refusal is a 422, which `pageHealth` doesn't flag.
+- **Data created:** the script `pw-secret-<nonce>.sh`, built in memory (`#!/bin/sh` / `echo "token: $FLEET_SECRET_PW_VAR_<NONCE>"`), on Unassigned, and the variable `PW_VAR_<NONCE>` (value `pw-secret-value`) — both removed by the `afterEach`. The Unassigned wipe catches a leftover script; nothing catches a leftover variable.
+
+**Flow**
+
+1. ☐ Open **Controls → Scripts → Library** on Unassigned (`/controls/scripts/library?fleet_id=0`, via URL).
+   - ✅ *(UI)* The **Library** heading is visible.
+2. ☐ Click **Add script**, choose `pw-secret-<nonce>.sh`, click **Add script** in the modal — `submitScriptUpload()`, which asserts nothing about the outcome.
+   - ✅ *(UI)* Error toast containing `Couldn't add. Variable "$FLEET_SECRET_PW_VAR_<NONCE>" doesn't exist.` — Fleet's server-side check that every `$FLEET_SECRET_*` a script references exists.
+   - ✅ *(UI)* The upload modal stays open, with the file still chosen.
+3. ☐ *(API)* Create the variable `PW_VAR_<NONCE>` — `createVariable()`.
+4. ☐ Click **Add script** in the still-open modal again — the same file, unchanged.
+   - ✅ *(UI)* Success toast *"Successfully uploaded."*
+   - ✅ *(UI)* The modal closes.
+   - ✅ *(UI)* The library lists `pw-secret-<nonce>.sh` (`itemByName` — an exact match on the row's title button).
+
+**Assessment**
+- *Value:* High. The first test in the suite that uses a variable rather than just listing one: Fleet's server-side validation of a script's `$FLEET_SECRET_*` reference, the message the user gets, and — by resending the same upload once the variable exists — proof that the refusal was about the missing variable and nothing else in the file. On both tiers.
+- *Coverage gaps:* scripts only — the same validation covers configuration profiles and installer and setup-experience scripts, none of which is tested; the secret is never substituted, since no script runs on a host, so nothing proves a host receives the value rather than the placeholder; editing an existing script to add an unknown reference (the edit path) is untested; the script's stored content isn't read back.
+- *Redundancy:* the upload-modal mechanics overlap CTL-07/CTL-19's upload step; incidental.
+- *Efficiency / smells:*
+  - Direct-URL entry, as in CTL-13/14.
+  - Creating the variable through the API is right — adding one through the UI is CTL-13's job — and the script never touches disk (`FileUploader.setFile` with a buffer), unlike CTL-12's oversize fixture.
+  - Step 4 relies on Fleet keeping the chosen file after a refusal (documented on `submitScriptUpload`). If Fleet ever clears it, the test fails on a disabled or no-op **Add script** click rather than on a message that says why.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-36 · Shared • Controls • custom variables › a variable a script uses can't be deleted
+
+- **File:** [`playwright/tests/e2e/shared/controls/custom-variables.spec.ts`](../../tests/e2e/shared/controls/custom-variables.spec.ts) (L120)
+- **Grep:** `npx playwright test --project=premium -g "a variable a script uses can't be deleted"` (or `--project=free`)
+- **Project:** premium, free (shared) · **Scope:** the variable is global; the script is on **Unassigned**
+- **Mode:** UI+API · **Isolation:** as CTL-35 — the `afterEach` deletes the script, then the variable
+- **Source:** QA Wolf round 1 C8 #22 (`secrets-variable-that-is-referenced-by-a-script-can-not-be-deleted`)
+- **Preconditions (API):** the variable `PW_VAR_<NONCE>` (`createVariable`) and the script `pw-secret-<nonce>.sh` on Unassigned, which references `$FLEET_SECRET_PW_VAR_<NONCE>` (`uploadScript`)
+- **Data created:** those two, removed by the `afterEach`
+- **Worked around:** the scope part of the refusal is left open for [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621) — on Unassigned Fleet calls the scope `the "No team" team` (and a fleet a "team"). A `TODO(fleetdm/fleet#54621)` in the spec and a row in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) → *Worked around in the suite*.
+
+**Flow**
+
+1. ☐ Open **Controls → Variables → Global variables** (`/controls/variables/global-variables`, via URL).
+   - ✅ *(UI)* The **Global variables** heading is visible.
+2. ☐ Click **Delete `PW_VAR_<NONCE>`** on the row → the **Delete custom variable** modal → **Delete**.
+   - ✅ *(UI)* The delete modal closes.
+   - ✅ *(UI)* Error toast matching `Couldn't delete. PW_VAR_<NONCE> is used by the "pw-secret-<nonce>.sh" script in the <…>. Please edit or delete the script and try again.` — a regex built from the two names, with the scope wildcarded (#54621).
+   - ✅ *(UI)* The variable's row is still listed.
+   - ✅ *(API)* `GET /custom_variables` still returns it.
+
+**Assessment**
+- *Value:* High — Fleet's referential guard (a 409) and the message that tells the user which script to fix. With CTL-35 it covers both directions of the script ↔ variable dependency, on both tiers.
+- *Coverage gaps:* the scope wording is unasserted until #54621 is fixed; a library script only — Fleet's delete scan also covers configuration profiles and host-name templates, neither tested; a script on a fleet (Workstations), where the message names a fleet, isn't covered; deleting the script and then the variable successfully isn't asserted — the `afterEach` does it and ignores the response.
+- *Redundancy:* none.
+- *Efficiency / smells:*
+  - Both preconditions are seeded through the API, so the browser is spent only on the delete — the right split.
+  - Direct-URL entry, as in CTL-13/14.
+  - The regex is built from the names unescaped except for the script name's dots; safe because a variable name is `[A-Z0-9_]` and the nonce is alphanumeric.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ## Area observations
 
 **Coverage map**
@@ -1317,7 +1403,8 @@ other:
 | **Running a script on a host** + output / exit code | [HOST-19…22](02-hosts-shared-and-free.md) (area 02 — effect read back by a report, non-zero exit, timeout, four interpreters) | re-run untested; Pending/Upcoming never observed; the `*-create-marker` / `*-delete-marker` fixtures are still unreferenced (the specs build content at run time) |
 | Batch script execution (Started / Scheduled / Finished tabs, details page) | CTL-24 (3 real VMs → Ran / Errored / Incompatible), CTL-25 (~100 simulations via Select all matching) | **Schedule for later** + Scheduled tab, **cancel**, host-side view of a batch run, and every tab's row list at scale |
 | Organization-wide **Script execution** switch | CTL-26 (exclusive project) | queued scripts held while disabled (the reason it's exclusive) never observed; batch / policy-automation / setup-experience run paths not checked while disabled |
-| Custom variables — add / list / delete + name validation | CTL-13, CTL-14 | Variable never **referenced** from a profile or script; no value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables, no free-tier/paywall coverage |
+| Custom variables — add / list / delete + name validation | CTL-13, CTL-14 (both tiers) | No value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables |
+| Custom variables in scripts — an unknown `$FLEET_SECRET_*` refused on upload, a referenced variable refused deletion | CTL-35, CTL-36 (both tiers; library scripts on Unassigned) | **Profiles** referencing a variable (both checks cover them); installer and setup-experience scripts; a script on a fleet, whose message names it; the scope wording in the delete refusal ([fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621)); the substituted value reaching a host |
 | OS updates (minimum version enforcement) | — | No functional e2e at all — `OsUpdatesPage` is used only by the loadtest spec and the free paywall list |
 | Certificates / Passwords (OS settings sub-pages) | — | No functional e2e — `CertificatesPage` only in the loadtest spec |
 
@@ -1331,7 +1418,7 @@ other:
 
 **UI-vs-API balance**
 
-Balance is healthy — no test in this area validates purely through the API. The API is used in three legitimate roles: (a) activity-feed contract checks via `assertActivity`, which the dashboard tests then re-verify in rendered form; (b) config snapshot/restore in CTL-06 (`getAppConfig`/`setGlobalDiskEncryption` in `beforeEach`/`afterEach`) — exactly the right use, keeping the instance clean even on failure; (c) safety-net purge in CTL-13 (`deleteVariablesMatching`). The one substantive problem is precision, not placement: every `assertActivity` predicate in the profile and script specs matches on **name only** with no fleet/team discriminator, so the concurrently-running Unassigned and Workstations describes (separate describes → separate workers) can satisfy each other's assertion. Also note nothing verifies server state directly after a UI mutation (no `GET /configuration_profiles` or `GET /scripts` confirmation) — the UI list is the only source of truth, which is the correct default here.
+Balance is healthy — no test in this area validates purely through the API. The API is used in three legitimate roles: (a) activity-feed contract checks via `assertActivity`, which the dashboard tests then re-verify in rendered form; (b) config snapshot/restore in CTL-06 (`getAppConfig`/`setGlobalDiskEncryption` in `beforeEach`/`afterEach`) — exactly the right use, keeping the instance clean even on failure; (c) seeding and cleanup in the custom-variables tests — CTL-35/36 create their variable and script through the API (`createVariable`, `uploadScript`) so the browser is spent on the refusal under test, and the `afterEach` deletes the test's script before its variable (`deleteVariablesMatching` ignores Fleet's 409 for a variable still in use). The one substantive problem is precision, not placement: every `assertActivity` predicate in the profile and script specs matches on **name only** with no fleet/team discriminator, so the concurrently-running Unassigned and Workstations describes (separate describes → separate workers) can satisfy each other's assertion. Also note nothing verifies server state directly after a UI mutation (no `GET /configuration_profiles` or `GET /scripts` confirmation) — the UI list is the only source of truth, which is the correct default here.
 
 **Quick wins**
 
@@ -1345,4 +1432,4 @@ Balance is healthy — no test in this area validates purely through the API. Th
 
 1. ~~**Make one script actually run.**~~ **Done** — HOST-19 (area 02) runs a script on the real macOS VM and reads its effect back through a scheduled report's `hash` row, rather than the marker fixtures; CTL-24/25 cover the **Batch progress** tabs and retire the orphaned `ScriptsBatchProgressPage`. What remains is the batch *schedule* and *cancel* paths.
 2. ~~**Assert profile delivery, not just library presence**~~ **Done** (batch E, 2026-09-29) — CTL-27 and CTL-33/34 here, and area 22 for label-targeted delivery; all on generated inert profiles, read back on the device. The original note: ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
-3. **Close the variables loop and trim the tier mirrors.** Make CTL-13 create a variable, reference it as `$FLEET_SECRET_<NAME>` inside an uploaded profile *and* script, assert Fleet accepts the reference and refuses to delete a referenced variable; add variables to the `cleanup.steps.ts` wipe (they are currently the only entity in this area with no project-level cleanup). In the same pass, drop the two free download mirrors (CTL-16, CTL-20) and collapse the per-OS activity-feed sub-tests to one per scope — roughly 12 of the 74 executions for no loss of signal.
+3. **Close the variables loop and trim the tier mirrors.** The script half is done — CTL-35 (an unknown `$FLEET_SECRET_*` refused, then accepted once the variable exists) and CTL-36 (a referenced variable refused deletion), on both tiers. Still open: the same two checks for a **profile** that references a variable. (`cleanup.steps.ts` sweeps `PW_VAR_*` variables after the Unassigned scripts.) In the same pass, drop the two free download mirrors (CTL-16, CTL-20) and collapse the per-OS activity-feed sub-tests to one per scope — roughly 12 of the 74 executions for no loss of signal.

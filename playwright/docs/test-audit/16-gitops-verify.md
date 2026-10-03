@@ -246,7 +246,7 @@ lists *only* custom labels ([`pages/labels/LabelsPage.ts:8-11`](../../pages/labe
 - *Value:* the only exact-cardinality check on labels; catches both a dropped label and manual/leftover labels.
 - *Coverage gaps:* label **content** — `query`, `description`, `label_membership_type: dynamic`, platform — is never compared, so a label whose query was rewritten passes.
 - *Redundancy:* strictly implied by GV-06 + GV-07 together (set equality ⇒ equal cardinality). Kept as the fast-failing signal.
-- *Efficiency / smells:* fragile against the rest of the suite — `setup/cleanup.steps.ts` does **not** delete labels, so an aborted `tests/e2e/premium/labels/labels.spec.ts` leaves a `playwright-*` label behind and this test fails as "drift". Also re-fetches `/labels` in all three tests.
+- *Efficiency / smells:* fragile against the rest of the suite — `setup/cleanup.steps.ts` sweeps `pw-*` labels on premium only (the VMs-fleet step), so on free an aborted `tests/e2e/shared/labels/labels.spec.ts` leaves a `pw-label-*` label behind until that spec's next `beforeAll` purge, and this test can fail as "drift" in between. Also re-fetches `/labels` in all three tests.
 
 **Notes (Andrey)**
 ```

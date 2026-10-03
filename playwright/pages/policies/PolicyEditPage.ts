@@ -83,6 +83,7 @@ export class PolicyEditPage {
   readonly saveNewDescriptionInput: Locator;
   readonly saveNewResolutionInput: Locator;
   readonly saveNewSubmitButton: Locator;
+  readonly saveNewCancelButton: Locator;
   /** The Save policy modal's label target (premium, on a fleet). */
   readonly saveNewTargets: TargetLabelSelector;
 
@@ -129,12 +130,22 @@ export class PolicyEditPage {
     this.saveNewDescriptionInput = this.saveNewModal.locator('textarea[name="description"]');
     this.saveNewResolutionInput = this.saveNewModal.locator('textarea[name="resolution"]');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveNewCancelButton = this.saveNewModal.getByRole('button', { name: 'Cancel', exact: true });
     this.saveNewTargets = new TargetLabelSelector(this.saveNewModal);
   }
 
   /** Platform target checkbox by visible label. */
   platformCheckbox(os: PolicyPlatform): Locator {
     return this.page.getByRole('checkbox', { name: os, exact: true });
+  }
+
+  /**
+   * The Save policy modal's "Autofill" button beside Description or Resolution.
+   * Both are named "Autofill"; Fleet renders each inside its field's <label>,
+   * so the label's text tells them apart.
+   */
+  autofillButton(field: 'Description' | 'Resolution'): Locator {
+    return this.saveNewModal.locator('label').filter({ hasText: field }).getByRole('button', { name: 'Autofill' });
   }
 
   /** All hosts / Custom radio. */

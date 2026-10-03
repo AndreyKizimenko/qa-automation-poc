@@ -10,7 +10,7 @@
  * {@link QA_TEST_EMAIL_RE} — real admin users with normal emails can
  * never be deleted by this code, no matter what.
  */
-import { APIRequestContext, expect } from '@playwright/test';
+import { APIRequestContext, APIResponse, expect } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
 export type UserRole =
@@ -100,6 +100,28 @@ const QA_TEST_DELETE_CAP = 200;
  * to embed a short tag (e.g. role name) into the local-part so logs are
  * easier to scan; the slug is sanitized to `[a-z0-9]+`.
  */
+/**
+ * `POST /login` through `api` — pass a cookie-less context, so what follows is
+ * judged on the returned token alone — waiting out Fleet's login throttle.
+ * Fleet limits `/login` to 10 a minute in one bucket shared by every user and
+ * worker (`server/service/handler.go`; see `helpers/auth.ts`), so a 429 is the
+ * suite's own traffic, not a verdict on the credentials. Returns the first
+ * response that isn't a 429; the caller asserts on it.
+ */
+export async function apiLogin(api: APIRequestContext, email: string, password: string): Promise<APIResponse> {
+  let res: APIResponse | undefined;
+  await expect
+    .poll(
+      async () => {
+        res = await api.post(apiUrl('login'), { data: { email, password } });
+        return res.status();
+      },
+      { message: 'POST /login stayed throttled (429)', intervals: [2_000, 5_000, 7_000], timeout: 40_000 },
+    )
+    .not.toBe(429);
+  return res!;
+}
+
 export function qaTestEmail(slug?: string): string {
   const ts = Date.now();
   const rand = Math.random().toString(36).slice(2, 8);

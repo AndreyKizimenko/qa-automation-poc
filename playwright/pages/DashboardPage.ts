@@ -46,6 +46,18 @@ const PLATFORM_PATHS: Record<DashboardPlatformLabel, string> = {
  */
 export type ChartDatasetLabel = 'Hosts online' | 'Vulnerability exposure';
 
+/** The activity feed's date filter (`ActivityFeedFilters`' DATE_FILTER_OPTIONS). */
+export type ActivityDateFilter =
+  | 'All time'
+  | 'Today'
+  | 'Yesterday'
+  | 'Last 7 days'
+  | 'Last 30 days'
+  | 'Last 3 months'
+  | 'Last 12 months';
+
+export type ActivitySort = 'Sort by newest' | 'Sort by oldest';
+
 export class DashboardPage {
   readonly page: Page;
   readonly navbar: Navbar;
@@ -87,6 +99,11 @@ export class DashboardPage {
   readonly activityFeedCard: Locator;
   readonly firstActivityItem: Locator;
   readonly activityNext: Locator;
+  /** Every activity row on the feed's current page (8 per page). */
+  readonly activityItems: Locator;
+  /** Prefix match on the actor's name or email; the server does the filtering. */
+  readonly activitySearch: Locator;
+  readonly activityEmptyState: Locator;
 
   // "Manage automations" — streams the activity feed to a destination URL.
   readonly automationsButton: Locator;
@@ -174,6 +191,11 @@ export class DashboardPage {
       .getByRole('button', { name: /\bago\b/ })
       .first();
     this.activityNext = this.activityFeedCard.getByRole('button', { name: 'Next' });
+    this.activityItems = this.activityFeedCard.getByRole('button', { name: /\bago\b/ });
+    this.activitySearch = this.activityFeedCard.getByRole('textbox', {
+      name: "Search activities by user's name or email",
+    });
+    this.activityEmptyState = this.activityFeedCard.getByText('No activities match the current criteria');
 
     this.automationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     // The modal class is on both the container and its inner form div, so the
@@ -191,6 +213,45 @@ export class DashboardPage {
       name: 'Save',
       exact: true,
     });
+  }
+
+  /**
+   * Narrows the feed to one activity type, by its filter label ("Added report",
+   * "User login: success"; `ACTIVITY_TYPE_TO_FILTER_LABEL`), or back to "All
+   * types". Fleet's own react-select (prefix `activity-type-select`) renders its
+   * options with no role and opens from its wrapper, so classes are the handle.
+   */
+  async selectActivityType(label: string): Promise<void> {
+    const filters = this.activityFeedCard.locator('.activity-feed-filters');
+    const control = filters.locator('.activity-type-select__control');
+    await control.click();
+    await this.page.locator('.activity-type-select__option').getByText(label, { exact: true }).click();
+    await expect(control).toContainText(label);
+  }
+
+  /** Sets the feed's date filter. */
+  async selectActivityDate(label: ActivityDateFilter): Promise<void> {
+    await this.selectActivityDropdown('date-filter', label);
+  }
+
+  /** Sets the feed's sort order. */
+  async selectActivitySort(label: ActivitySort): Promise<void> {
+    await this.selectActivityDropdown('created-at-filter', label);
+  }
+
+  /**
+   * The date and sort filters are DropdownWrapper (react-select v5). Their
+   * combobox is react-select's hidden dummy input, named by `aria-label`, so the
+   * visible control holding it is what gets clicked; options carry Fleet's
+   * `dropdown-option` test id.
+   */
+  private async selectActivityDropdown(name: string, label: string): Promise<void> {
+    const control = this.activityFeedCard
+      .locator('.react-select__control')
+      .filter({ has: this.page.getByRole('combobox', { name }) });
+    await control.click();
+    await this.page.getByTestId('dropdown-option').filter({ hasText: new RegExp(`^${label}$`) }).click();
+    await expect(control).toHaveText(label);
   }
 
   /**

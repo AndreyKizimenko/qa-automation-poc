@@ -111,10 +111,11 @@ export class ScriptsLibraryPage {
     return this.listItem.filter({ has: this.page.getByRole('button', { name, exact: true }) });
   }
 
-  async uploadScript(filePath: string): Promise<void> {
+  /** `file` is a path on disk, or a `{ name, mimeType, buffer }` built at run time. */
+  async uploadScript(file: Parameters<FileUploader['setFile']>[0]): Promise<void> {
     await this.addScriptButton.click();
     await expect(this.uploadModal).toBeVisible();
-    await this.uploader.setFile(filePath);
+    await this.uploader.setFile(file);
     await this.uploadConfirmButton.click();
     await this.toast.expectSuccess('Successfully uploaded.');
     await expect(this.uploadModal).toBeHidden();
@@ -123,12 +124,13 @@ export class ScriptsLibraryPage {
   /**
    * Stages a script in the upload modal and submits without asserting
    * success — for negative-path uploads where the caller asserts the
-   * rejection toast.
+   * rejection toast. A refused upload leaves the modal open with the file
+   * still chosen, so `uploadConfirmButton` sends the same file again.
    */
-  async submitScriptUpload(filePath: string): Promise<void> {
+  async submitScriptUpload(file: Parameters<FileUploader['setFile']>[0]): Promise<void> {
     await this.addScriptButton.click();
     await expect(this.uploadModal).toBeVisible();
-    await this.uploader.setFile(filePath);
+    await this.uploader.setFile(file);
     await this.uploadConfirmButton.click();
   }
 

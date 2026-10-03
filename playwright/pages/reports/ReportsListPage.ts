@@ -69,6 +69,17 @@ export class ReportsListPage {
     this.saveAutomationsButton = this.manageAutomationsModal.getByRole('button', { name: 'Save', exact: true });
   }
 
+  /**
+   * The Automations cell of `name`'s row: "On", "Off", or "Paused" (on, but no
+   * interval). Matched by that text rather than by column position: the list
+   * re-renders its header after the Manage automations modal saves, and a
+   * column index read from it can land on the neighbouring Performance cell.
+   * No other cell in a row reads exactly one of those words.
+   */
+  automationsCell(name: string): Locator {
+    return this.table.rowWith(name).getByRole('cell', { name: /^(On|Off|Paused)$/ });
+  }
+
   /** A report's automations checkbox inside the "Manage automations" modal. */
   reportAutomationCheckbox(name: string): Locator {
     return this.manageAutomationsModal.getByRole('checkbox', { name });

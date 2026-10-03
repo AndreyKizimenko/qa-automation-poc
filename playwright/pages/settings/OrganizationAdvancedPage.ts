@@ -18,6 +18,14 @@ export class OrganizationAdvancedPage {
 
   /** SMTP domain — the card's most inert field, unused on the QA instances. */
   readonly domainInput: Locator;
+  /**
+   * SMTP "Verify SSL certs" and "Enable STARTTLS" — `smtp_settings.verify_ssl_certs`
+   * / `enable_start_tls`, inert while SMTP is off (it is on both instances).
+   * Fleet's `Checkbox` takes its accessible name from the `name` prop, not the
+   * visible label.
+   */
+  readonly verifySslCertsCheckbox: Locator;
+  readonly enableStartTlsCheckbox: Locator;
   readonly saveButton: Locator;
 
   /**
@@ -58,6 +66,8 @@ export class OrganizationAdvancedPage {
     this.heading = page.getByRole('heading', { name: 'Host lifecycle', exact: true });
 
     this.domainInput = page.getByLabel('Domain', { exact: true });
+    this.verifySslCertsCheckbox = page.getByRole('checkbox', { name: 'verifySSLCerts' });
+    this.enableStartTlsCheckbox = page.getByRole('checkbox', { name: 'enableStartTLS' });
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
 
     this.scriptExecutionCheckbox = page.getByRole('checkbox', { name: 'disableScripts' });

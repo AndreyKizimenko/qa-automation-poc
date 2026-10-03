@@ -140,6 +140,21 @@ export async function deleteFleet(
   await expect(res, `Failed to delete fleet ${id}`).toBeOK();
 }
 
+/**
+ * Deletes every fleet whose name starts with `prefix` — the cleanup sweep for
+ * the throwaway `pw-*` fleets a spec creates and a timed-out run can strand.
+ * Never pass a prefix a gitops-declared fleet could match.
+ */
+export async function deleteFleetsWithPrefix(request: APIRequestContext, prefix: string): Promise<void> {
+  const res = await request.get(apiUrl('fleets'), { headers: authHeaders(), params: { per_page: '500' } });
+  await expect(res, 'Failed to list fleets').toBeOK();
+  const body = await res.json();
+  const fleets = (body.fleets ?? body.teams ?? []) as Array<{ id: number; name: string }>;
+  for (const fleet of fleets.filter((f) => f.name.startsWith(prefix))) {
+    await deleteFleet(request, fleet.id, { ignoreMissing: true });
+  }
+}
+
 /** Delete-then-create. Use in setup specs to clear stale state from prior runs. */
 export async function recreateFleet(
   request: APIRequestContext,

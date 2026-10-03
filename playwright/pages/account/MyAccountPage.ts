@@ -113,6 +113,16 @@ export class MyAccountPage {
   }
 
   /**
+   * Hover the Fleets value to raise its tooltip, which lists the fleet names
+   * when the user belongs to more than one. The tooltip listens on Fleet's
+   * TooltipWrapper element, not the whole row, and has no role or name of its
+   * own, so the wrapper class is the handle (as `HostDetailsPage.hoverAgentVersion`).
+   */
+  async hoverFleets(): Promise<void> {
+    await this.fleetsValue.locator('.component__tooltip-wrapper__element').hover();
+  }
+
+  /**
    * Select a colour theme from the side-panel Theme picker. Fleet's Radio
    * hides the real <input> (display:none) and toggles via its <label for=…>,
    * so click the label; the applied theme surfaces as a `dark-mode` class on

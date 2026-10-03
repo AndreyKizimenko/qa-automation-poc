@@ -6,8 +6,11 @@
 #
 # 1. `pw-host-report-results` — a report with a short interval, so the macOS VM
 #    always holds a fresh stored result. Read by
-#    `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`; waiting
-#    out a first scheduled run inside that test would cost minutes per run.
+#    `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`, where
+#    waiting out a first scheduled run would cost minutes per run, and by
+#    `playwright/tests/e2e/premium/reports/stored-results.spec.ts`, which checks
+#    the result is fresh: a report that has stored results across nightly
+#    redeploys and upgrades is still collecting.
 #
 # 2. Claude, kept installed on the macOS and Windows VMs and tracking latest —
 #    the subject of `playwright/tests/e2e/premium/software/update-on-host.spec.ts`,

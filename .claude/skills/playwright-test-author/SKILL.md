@@ -145,6 +145,9 @@ A change isn't done until the docs describing it are current, in the same commit
   fail to take (a menu that closes on re-render) is fine.
 - A table keeps its old rows under a loading overlay: `table.waitForSettled()` before reading after a
   filter, tab or page change.
+- **A toast doesn't prove the second save.** Fleet's toasts stay up for seconds, so after saving the same
+  form twice, `toast.expectSuccess` can match the first one. Poll the stored state through the API
+  instead (`expect.poll`).
 - **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into

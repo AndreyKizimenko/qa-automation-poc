@@ -41,23 +41,37 @@ files · ~350 test declarations · 4 projects**.
 > Ubuntu VM, a policy's failing script tried 3 times and re-run by continuous automations (**04** POL-27), and a
 > Deploy whose install fails, tried 3 times (**21** SWH-15).
 
+> **Round 3 batch B added 2026-10-02** (`playwright/qawolf-round3-batch-b`): area **04** POL-09/10 rewritten
+> as the failing-policies webhook's whole life (enabled, sent for one policy, turned off), and POL-19/20 as a policy with
+> a syntax error saved and reopened. Added POL-28…32: Ticket with no integration on both tiers, a fleet's own webhook on
+> a throwaway fleet, fleet isolation, and AI Autofill's live call to fleetdm.com on both tiers.
+> Area **05**: the Reports CRUD turns automations on at create and off at edit (RPT-01/03/14/16); RPT-06 saves its
+> broken SQL and reopens it, RPT-07 reads the Save report modal's defaults, and RPT-08/19 turn automations on and off
+> again with the list's cell read in between. Added RPT-23…28: free twins of RPT-06/07, Save as new into another fleet,
+> the edit form's "Save changes?" warnings on both tiers, and stored results from the real macOS VM, for the
+> long-standing gitops report and a new one (the org-wide *Store report results* toggle stays untested by decision).
+> Area **06**: SWL-31 adds its package with a pre-install query and post-install script from the add form; SWL-36 edits
+> all four Advanced options and reads them back. Area **07**: SWV-08/15 turn the vulnerability automation off again.
+> Area **11**: CTL-13/14 move to `shared/` (free gains them), and CTL-35/36 add a script refused until its variable
+> exists and a variable refused deletion while a script uses it.
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
-| 01 | [Auth & account](01-auth-and-account.md) | 17 | premium, free |
+| 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
 | 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
-| 04 | [Policies](04-policies.md) | 27 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 22 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 34 | premium, free |
+| 04 | [Policies](04-policies.md) | 32 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 36 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
-| 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 27 | free, both |
-| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 13 | premium, free |
-| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 34 | premium, free |
+| 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 28 | free, both |
+| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 15 | premium, free |
+| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 36 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 29 | premium, free |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 30 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
@@ -68,9 +82,9 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**471 entries** covering every test in the suite. An entry can expand into several
+**493 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 06 (32 entries → 83 executions), area 11 (26 → 78), area
+the entry header. The widest expansions: area 06 (36 entries → 87 executions), area 11 (36 → 92), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 

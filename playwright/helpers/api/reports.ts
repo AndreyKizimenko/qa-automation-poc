@@ -83,6 +83,43 @@ export async function findReportById(
   return (await listReports(request)).find((r) => r.id === id) ?? null;
 }
 
+/** A report's stored settings, as `GET /queries/:id` returns them. */
+export interface ReportDetails {
+  id: number;
+  name: string;
+  description: string;
+  query: string;
+  /** The owning fleet, or null for a global report. */
+  fleetId: number | null;
+  interval: number;
+  platform: string;
+  logging: string;
+  /** Store data, inverted: true means Fleet doesn't keep the results. */
+  discardData: boolean;
+  automationsEnabled: boolean;
+  observerCanRun: boolean;
+}
+
+/** Reads one report by id, global or fleet-owned. Throws when Fleet can't return it. */
+export async function getReport(request: APIRequestContext, id: number): Promise<ReportDetails> {
+  const res = await request.get(apiUrl(`queries/${id}`), { headers: authHeaders() });
+  await expect(res, `Failed to read report ${id}`).toBeOK();
+  const q = (await res.json()).query;
+  return {
+    id: q.id,
+    name: q.name,
+    description: q.description ?? '',
+    query: q.query,
+    fleetId: q.fleet_id ?? q.team_id ?? null,
+    interval: q.interval ?? 0,
+    platform: q.platform ?? '',
+    logging: q.logging ?? '',
+    discardData: q.discard_data ?? false,
+    automationsEnabled: q.automations_enabled ?? false,
+    observerCanRun: q.observer_can_run ?? false,
+  };
+}
+
 /** Find a report by its exact name (null when absent). */
 export async function findReportByName(
   request: APIRequestContext,

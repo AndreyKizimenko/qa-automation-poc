@@ -5,7 +5,7 @@
 import { APIRequestContext } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
 
-/** Deletes every saved query on the instance. */
+/** Deletes every global saved query (report); a fleet's own reports aren't listed, so they stay. */
 export async function deleteAllQueries(request: APIRequestContext): Promise<void> {
   const res = await request.get(apiUrl('queries'), {
     headers: authHeaders(),

@@ -28,6 +28,15 @@ export class ReportDetailsPage {
   readonly queryModal: Locator;
   readonly queryModalCloseButton: Locator;
 
+  /** "Automations: On / Off / Paused" and "Log destination: <plugin>" under the description. */
+  readonly automationsStatus: Locator;
+  readonly logDestination: Locator;
+  /** The empty state's heading ("Nothing to report", "Collecting results...") and its explanation. */
+  readonly emptyStateHeading: Locator;
+  readonly emptyStateInfo: Locator;
+  /** The stored-results table's rows (header excluded). */
+  readonly resultRows: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -49,6 +58,17 @@ export class ReportDetailsPage {
 
     this.queryModal = page.locator('.modal__modal_container').filter({ hasText: 'Query' });
     this.queryModalCloseButton = this.queryModal.getByRole('button', { name: 'Close' });
+
+    // Each is a role-less div holding a tooltip-wrapped label and a status
+    // component, with nothing to name it by, so the containers' classes are
+    // the handle.
+    this.automationsStatus = container.locator('.query-details-page__automations');
+    this.logDestination = container.locator('.query-details-page__log-destination');
+    // Fleet's EmptyState: the header is an <h3>, the explanation a role-less div.
+    const emptyState = container.locator('.empty-state');
+    this.emptyStateHeading = emptyState.getByRole('heading', { level: 3 });
+    this.emptyStateInfo = emptyState.locator('.empty-state__info');
+    this.resultRows = container.locator('table tbody tr');
   }
 
   async goto(id: number, opts: { fleetId?: number } = {}): Promise<void> {

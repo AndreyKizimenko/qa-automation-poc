@@ -3,7 +3,7 @@
 **24 gaps → about 11 specs, nearly all augments, after merges.** `Policy automations` · `Policy and report saves`
 · `Report settings` · `Software Advanced options` · `Secrets in scripts`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: built 2026-10-02 — [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82), awaiting its branch run** (planned 2026-10-01).
 
 > ## ▶ Start here
 >
@@ -51,39 +51,45 @@
 | round 1 C8 #20 | a script that uses `$FLEET_SECRET_X` is refused until the variable exists | `shared/controls/custom-variables.spec.ts` (not license-gated; free has no variables spec) | augment | `flows-Premium/secrets-scripts-with-a-secret-variable-can-only-be-uploaded-when-such-variable-exists.flow.js` |
 | round 1 C8 #22 | a variable that a script references can't be deleted | `shared/controls/custom-variables.spec.ts` | augment | `flows-Premium/secrets-variable-that-is-referenced-by-a-script-can-not-be-deleted.flow.js` |
 
-## 1. Review first
+## 1. Review (2026-10-02)
 
-Open each flow body (the Source column, under `qa-wolf/`) and its target spec, decide build / fold / cut /
-long-term, and write it into the table. Already found:
+Every flow body and its target spec read, against Fleet `rc-minor-fleet-v4.93.0` and the premium instance.
+**24 gaps → 22 built, 2 cut.** Andrey decided the three open rows on 2026-10-02 (§2). Ten of the builds fold
+into tests that already exist; the rest are new tests beside them. That's 13 specs changed, one moved to
+`shared/`, and three new files.
 
-- **Decisions:** C5 #15 (*Store report results*, §2.1), C3 #27 (AI Autofill, §2.2), C3 #15 (which fleet, §3.1).
-- **Cuts:**
-  - **C6 #21.** The flow types into each editor, never saves, and leaks the Fleet-maintained app it adds. It
-    tests the Ace editor. At most, fold "edit one field, the other three come back unchanged" into C6 #20.
-  - **C4 #P13, the live-run half.** The flow is mostly a live run, which passes vacuously on simulations. Keep
-    the sidebar.
-- **Merges:**
-  - C6 #20 + C8 #23: same modal, same `PATCH`, one test in `package-scripts.spec.ts`.
-  - C6 #16 + #17: the free and premium vulnerability specs each get "turn it off".
-  - C3 #10 on both tiers in one change.
-- **Misdescribed:**
-  - **C4 #P4.** The checkbox is now **"Store data"** (`DiscardDataOption.tsx`, checked = `!discard_data`).
-  - **C4 #P7.** The Automations cell reads "On" / "Off" / "**Paused**" (interval 0).
-  - **C4 #P28.** QA Wolf's checks are vacuous: `.platform:has-text` always passes.
-  - **C5 #13** moved to [batch G](G-real-vms.md). It's a host's Library tab, not a fleet's.
-- **Placement:**
-  - `shared/`: C3 #4 and #12 (no tier gate), C8 #20 and #22 (not license-gated; the Variables tab isn't
-    tier-filtered, `ManageControlsPage.tsx:130-142`, and free has no variables spec).
-  - Free siblings: C3 #11, C4 #P1, #P2, #P28.
-  - C6 #22 goes in `package-scripts.spec.ts` (not `library.spec.ts`), with its own `inertDeb('fleet-pw-…')`:
-    under `fullyParallel`, tests can't share a package.
-- **C3 #4 is half there after PR #78.** Its free test asserts the modal offers the webhook; ticking it and
-  saving is what's left.
+| Gap | Decision | Where it lands | Why |
+|---|---|---|---|
+| C3 #4 | **fold** | free + premium `policy-automations.spec.ts`: the serial describe's webhook test becomes the lifecycle *enable → tick the seeded policy's "Send webhook" (cell reads "Webhook", `policy_ids` holds it) → disable* | It writes the same `failing_policies_webhook` key as the existing test, so it must sit in that serial describe: a `shared/` file would run beside it and its restore would race. The `afterEach` restore gains `policy_ids` (not restored today; premium holds 3 stale ids) |
+| C3 #10 | **fold** | the same test's last step: off, `enable_failing_policies_webhook` false, URL and `policy_ids` kept | Same key, same describe |
+| C3 #12 | **build** (small) | free + premium `policy-automations.spec.ts`, its own test outside the serial describe (it saves nothing) | Ticket with no integration → "You have no integrations." → "Add integration" lands on `/settings/integrations`. Not tier-gated (`OtherWorkflowsModal.tsx`). Lowest value in the batch: first to go if you want it leaner |
+| C3 #15 | **build** (decided, §2.3) | premium `policy-automations.spec.ts`, on a throwaway `pw-fleet-webhook-<ms>` fleet created and deleted in the test | [#54619](https://github.com/fleetdm/fleet/issues/54619) makes Workstations unsafe beside `team-host-status-webhook`. Batch A adds the `pw-*` fleet sweep that catches a dead run's fleet |
+| C3 #11 | **fold** | free + premium `sql-validation.spec.ts`: "a syntax error is surfaced but Save stays enabled" goes on to save, reopen, and find the SQL and the error still there | The flow's purpose is a 4.85 requirement: save SQL the parser flags, to allow for false positives. Deleted in an `afterEach` (a global policy reaches ~300 hosts) |
+| C3 #18 | **build** (small) | premium `policies.spec.ts`, a standalone test: an API-seeded Workstations policy is listed under Workstations and absent under VMs | Fleet isolation is basic to premium and cheap to pin. Not inside the scope loop (no `if (scope)`) |
+| C3 #27 | **build** (decided, §2.2) | live, non-empty: new `shared/policies/policy-autofill.spec.ts` | The endpoint answered in 2.7 s from premium (2026-10-02). A stub would test only React |
+| C4 #P1 | **fold** | premium `reports.spec.ts` "invalid SQL surfaces a syntax error but Save stays enabled" goes on to save (ticking a platform) and reopen; a free twin in `free/reports/reports.spec.ts` | Same requirement as C3 #11 |
+| C4 #P2 | **fold** | the Reports CRUD, both tiers: *create* turns automations on (the Save modal's slider, "Historical results will be sent to your log destination: …"), *edit* turns them off; details read "Automations: On/Off" and the log destination | The CRUD's own rule is that edit diverges from create in every field; this adds the one it skips. No new report |
+| C4 #P3 + #P4 | **merge** | new `shared/reports/edit-warnings.spec.ts`, one test on an API-seeded report: a description-only edit saves with no prompt; an SQL edit prompts "Changing this report's **Query** will delete its previous results…"; unticking Store data prompts the generic copy and stores `discard_data: true`; re-ticking saves with no prompt | `EditQueryForm.tsx:588-627`'s `confirmChanges` / `showChangedSQLCopy` *is* the behaviour. That the results are actually deleted needs hosts with results, so that half is cut. Identical on both tiers → `shared/` |
+| C4 #P7 | **fold** | free + premium `reports/automations.spec.ts`: the existing test reads the list's cell "On", then turns automations off in the same modal → API `false`, cell "Off" | No serial mode needed: it's the same test and per-report state |
+| C4 #P13 | **cut** | — | The flow checked that a then-new osquery table shipped (story QA, not regression). Its live run is vacuous on simulations and would return no rows on our VMs (no Adobe plugins); the sidebar renders the bundled schema JSON |
+| C4 #P15 | **fold** | premium `save-as-new.spec.ts`: a third test copies into Workstations from the modal's Fleet dropdown, finds the copy listed there, deletes it itself | `deleteReportsMatching` and `cleanup-setup` don't reach fleet reports |
+| C4 #P28 | **fold** | premium `reports.spec.ts` "new-report defaults" also reads the Save modal: four platforms ticked, Observers can run unticked, "Every hour"; a free twin | QA Wolf's checks were vacuous; these read state. A small one |
+| C5 #15 | **reshaped** (decided, §2.1) | new `premium/reports/stored-results.spec.ts`: the durable gitops report `pw-host-report-results` holds a **fresh** stored result, and a report created in the UI with Store data on collects one from the macOS VM | The org-wide toggle stays untested: it has no confirmation to stop at, and a run crossing the hourly cleanup deletes every stored result. Andrey asked instead for what the toggle protects, results being stored, on a long-standing report and on a new one |
+| C6 #16 + #17 | **fold** | free + premium `vulnerability-automations.spec.ts`: the existing test goes on to turn it off → API `false` | Same test, so the existing `afterEach` restore covers it and no serial mode is needed |
+| C6 #20 + C8 #23 | **merge** | premium `package-scripts.spec.ts`, a second test: an API-uploaded `inertDeb('fleet-pw-…')`, all four editors set through Ace's API, saved through "Save changes?", read back through the API | A custom package, not a Fleet-maintained app: editing an FMA's script sets the sticky `install_script_edited` |
+| C6 #21 | **cut** | — | Types into Ace and never saves; tests the editor, not Fleet |
+| C6 #22 | **fold** | premium `package-scripts.spec.ts`'s existing UI upload sets a pre-install query and a post-install script on the add form | The test already compares all four editors against the stored package, but two of the four are empty strings; this makes all four comparisons real. `uploadPackage` gains optional Advanced options |
+| C8 #20 + #22 | **build** | move `premium/controls/custom-variables.spec.ts` → `shared/controls/` and add both | The Variables page differs only in its description on free (`Variables.tsx:49`), so free gains the two existing tests as well. Premium uploads to Workstations; free to Unassigned |
+
+Still true from the plan:
+
+- **Misdescribed:** C4 #P4's checkbox is **"Store data"** (checked = `!discard_data`); C4 #P7's cell can also read
+  "**Paused**" (interval 0); C5 #13 moved to [batch G](G-real-vms.md).
 - **Overlaps with [batch E](E-role-visibility.md)**: C3 #15 vs E's C3 #30 (a fleet's webhook, as team admin);
   C4 #P7 vs E's C7 #22 (report automations, as team admin); C4 #P15 vs E's P16 (Save as new, single-fleet user).
-  This batch owns the write as admin; E owns "this role gets the control". Agree it with whoever runs E.
+  This batch owns the write as admin; E owns "this role gets the control".
 
-## 2. The two decisions
+## 2. The three decisions
 
 ### 2.1 *Store report results* (C5 #15)
 
@@ -106,10 +112,24 @@ Specs that stand on stored results: `shared/hosts/host-reports-tab`, `host-run-s
 `premium/reports/report-label-targets`, and `premium/hosts/host-report-details`, which reads the durable
 `pw-host-report-results` (one scheduled interval, ~3.5 min, to come back).
 
-**Options for Andrey:** (a) cut; (b) **UI only (recommended)**: untick it, assert the help text and the
-confirmation (`ConfirmDataCollectionDisableModal`), **cancel**, assert nothing changed (API); (c) the full
-toggle in `shared/exclusive/`, restored inside the test, accepting that a run straddling the hourly tick wipes
-every report's results. With (c), `cleanup-setup` also needs a step that turns it back on, like script execution.
+**The plan's "UI only" option doesn't exist.** Unticking *Store report results* has no confirmation: the Advanced
+form opens `ConfirmDataCollectionDisableModal` only when the uptime or vulnerabilities datasets are being turned
+off (`Advanced.tsx:167-180,243`), and Save sends `discard_reports_data` straight away. The help text renders
+whether the box is ticked or not, so an untick-then-leave check would assert static copy.
+
+QA Wolf's flow turned it off for real: it read a host's Reports tab, turned storage off, and asserted that the tab
+hides its "Show reports that don't store results" switch and keeps the same report count, then turned storage
+back on.
+
+**Decided (Andrey, 2026-10-02): don't toggle it; test what it protects.** Two flows in
+`premium/reports/stored-results.spec.ts`: (1) the long-standing gitops report `pw-host-report-results` (VMs
+fleet, macOS, 300 s) holds a stored result **younger than two intervals**, so collection is still running, not
+just a row left over from weeks ago (`host-report-details` reads that row but never checks its age); (2) a
+report created through the UI on the VMs fleet, Store data on, collects a row from the macOS VM, with the
+interval cut to 60 s through the API as `report-label-targets` does. Premium only: free has no fleets, so no
+report survives `cleanup-setup` there, and a global report would land on ~300 simulations.
+
+The options were: cut, or the full toggle in `shared/exclusive/` with a `cleanup-setup` reset.
 
 ### 2.2 AI Autofill (C3 #27)
 
@@ -120,9 +140,27 @@ features are disabled in organization settings"). They call `POST /api/_version_
 empty SQL, then **proxies the SQL to `https://fleetdm.com/api/v1/get-human-interpretation-from-osquery-sql`**
 (30 s timeout; 422 on an upstream failure). The setting is Advanced › Features › "Generative AI".
 
-The answer is an LLM's (not deterministic) and depends on fleetdm.com answering from CI. **Options:** (a) cut;
-(b) stub the route with `page.route` and assert the description and resolution fill from the stub (wiring
-only); (c) call it for real and assert only that both fields became non-empty.
+The answer is an LLM's (not deterministic) and depends on fleetdm.com answering from CI. Probed 2026-10-02:
+premium has AI features on (`ai_features_disabled: false`), and `POST /autofill/policy` with
+`SELECT name, version FROM os_version;` returned both fields in 2.7 s. The Autofill buttons aren't tier-gated in
+the UI either (`SaveNewPolicyModal.tsx`), so a test goes in `shared/`.
+
+**Decided (Andrey, 2026-10-02): call it for real** and assert that both fields become non-empty. The other
+options were cut, or a `page.route` stub (wiring only: it can't fail unless the React handler breaks). A fleetdm.com outage turns it
+red, which the run reviewer would class as infra; that's the cost of the only variant that tests the feature.
+
+### 2.3 Which fleet a fleet's failing-policies webhook is tested on (C3 #15)
+
+Saving a fleet's policy automations replaces its `webhook_settings` and nulls its host-status webhook, and a
+save of the fleet's Settings tab turns its failing-policies webhook off
+([#54619](https://github.com/fleetdm/fleet/issues/54619), §3.1). `team-host-status-webhook.spec.ts` writes the
+host-status half on Workstations in parallel, so on Workstations the two specs break each other.
+
+**Decided (Andrey, 2026-10-02): (a).** The options were: (a) a throwaway `pw-*` fleet, created and deleted in the test through the API
+(`createFleet` / `deleteFleet`, the precedent is `historical-data-collection.spec.ts`), plus a `pw-*` fleet sweep
+in `cleanup.steps.ts`. That's the same call as [batch A](A-settings-users-labels.md)'s C7 #10 (§2.3 there), and
+batch A adds the sweep. (b) Workstations, moved into one serial describe with the
+host-status test. (c) Cut: the global webhook is covered, and the fleet one differs only in where it's stored.
 
 ## 3. Facts for the build
 
@@ -239,13 +277,14 @@ automations), `ReportEditPage` (`saveNew`, `saveExisting`, `openSaveAsNew`, `che
 `createFleetPolicy` (PR #78), `get/setFleetWebhookSettings`, `createReport`, `getSoftwarePackage`,
 `uploadSoftwarePackageBuffer`, `inertDeb`, `addFmaToFleet`, `deleteSoftwareTitle`, `uploadScript` / `deleteScript`.
 
-## Decisions to put to Andrey
+## Decisions (Andrey, 2026-10-02)
 
-1. ***Store report results*:** cut, UI only with cancel (recommended), or the full toggle in `shared/exclusive/`
-   plus a `cleanup-setup` reset (§2.1).
-2. **AI Autofill:** cut, a stubbed wiring check, or a live non-empty check (§2.2).
-3. **C3 #15:** a throwaway `pw-*` fleet (batch A's decision), or Workstations serialised with
-   `team-host-status-webhook` (§3.1).
+1. ***Store report results* (C5 #15):** don't toggle the org setting. Test what it protects instead, in two
+   flows: the long-standing gitops report keeps collecting, and a new report can still store results (§2.1).
+2. **AI Autofill (C3 #27):** live, asserting both fields fill (§2.2).
+3. **C3 #15:** a throwaway `pw-*` fleet. Batch A got the same approval for C7 #10 and owns the `pw-*` fleet sweep in
+   `cleanup.steps.ts`; this batch doesn't add a second one (§2.3).
+4. The review's cuts (C4 #P13, C6 #21) stand.
 
 ## Free coverage
 
@@ -280,4 +319,13 @@ already have it.
 
 ## What landed
 
-*Nothing yet.*
+Built on `playwright/qawolf-round3-batch-b`. Each slice was run on every tier it targets before it was
+committed.
+
+| slice | gaps | what |
+|---|---|---|
+| policies | C3 #4, #10, #11, #12, #15, #18, #27 | **free + premium `policy-automations.spec.ts`**: the serial describe's webhook test is now the lifecycle *enable → tick the seeded policy's Send webhook → turn off* (API: `policy_ids` holds the policy, and keeps it once off; the row's cell reads *Edit automation: Webhook*, then *Add automation*, since Fleet labels the cell from the webhook's state); the `afterEach` restores `policy_ids`. A test per tier for Ticket with no integration → *Add integration* → `/settings/integrations`. Premium: a fleet's failing-policies webhook on a throwaway `pw-fleet-webhook-*` fleet, opened by id, stored on the fleet and not in global config, and the modal reopening on it. **free + premium `sql-validation.spec.ts`**: the bad-SQL policy is saved, reopened with the exact SQL and the error, deleted in an `afterEach`. **premium `policies.spec.ts`**: a Workstations policy is listed there and not under VMs. **New `shared/policies/policy-autofill.spec.ts`**: Autofill, live; both fields fill. Premium 22/22, free 10/10 |
+| reports | C4 #P1, #P2, #P3, #P4, #P7, #P15, #P28, C5 #15 | **free + premium `reports.spec.ts`**: the CRUD's *create* turns automations on (API, details *Automations: On*, the log destination named from `logging.result.plugin`) and *edit* turns them off (the form's "will not be sent" copy, details *Off*); a report with a syntax error saved — the Save report modal ticks no platform for broken SQL, so the test ticks macOS — and reopened with its SQL and the error; the new-report defaults read in the Save report modal (four platforms, *Every hour*, observers unticked, automations off), cancelled. **free + premium `automations.spec.ts`**: on, the list's cell *On*, off, *Off* (seeded daily, so it isn't *Paused*). **premium `save-as-new.spec.ts`**: a copy into Workstations through the modal's Fleet field, found there, deleted by id. **New `shared/reports/edit-warnings.spec.ts`**: the four prompts of the plan's table, each save read back; every edit loads the edit page afresh, because the form refills from report state that survives client-side navigation and can overwrite an edit made right after *Edit report*. **New `premium/reports/stored-results.spec.ts`** (C5 #15 as decided): `pw-host-report-results`' latest result for the macOS VM is younger than 2 × 300 s + 120 s, and a UI-created report with Store data on collects the VM's row (interval cut to 60 s via the API). Premium 24/24, free 11/11 |
+| software | C6 #16, #17, #20, #22, C8 #23 | **free + premium `vulnerability-automations.spec.ts`**: after the enable round trip, the same modal turns it off; API `enable_vulnerabilities_webhook` false (polled: the previous save's toast can still be showing), the URL kept, the reopened modal off. **premium `package-scripts.spec.ts`**: the package is added with a pre-install query and a post-install script typed into the add form's Advanced options, both stored as typed, so the existing editor-vs-API comparison runs on four non-empty scripts; a second test rewrites all four on an API-uploaded `fleet-pw-pkg-scripts-*` package, saves through *Save changes?*, and reads each back through the API. Premium 7/7 and 5× |
+| variables | C8 #20, #22 | **`custom-variables.spec.ts` moved to `shared/controls/`**: the Variables page differs only in its description on free, so free gains the add/delete and name-validation tests. New: a script referencing `$FLEET_SECRET_<NAME>` is refused with *Couldn't add. Variable "…" doesn't exist.*, then the same modal uploads it once the variable exists; a variable a script uses is refused deletion, asserted by its and the script's names (the scope's wording is [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621), a row in `blocked-by-product-bugs.md`). Scripts go to Unassigned on both tiers; the `afterEach` deletes the script before the variable. Both tiers, 5× on premium |
+| cut | C4 #P13, C6 #21 | as reviewed (§1) |

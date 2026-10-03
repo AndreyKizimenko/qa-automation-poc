@@ -5,7 +5,7 @@ import { Toast } from '../components/Toast';
 
 /**
  * /settings/integrations — the Integrations section, with a left-side nav
- * listing integration categories. The default subpage is "Ticket destinations".
+ * listing integration categories. The default subpage is "Ticketing".
  * Premium-only IdP / SCIM / Calendars / etc. subpages are gated on license.
  *
  * The MDM subpage (`/settings/integrations/mdm`) hosts the macOS EULA
@@ -19,7 +19,7 @@ export class IntegrationsPage {
   readonly toast: Toast;
 
   /** Default subpage heading when landing on /settings/integrations. */
-  readonly ticketDestinationsHeading: Locator;
+  readonly ticketingHeading: Locator;
   readonly scimText: Locator;
 
   // MDM subpage — EULA section.
@@ -35,6 +35,9 @@ export class IntegrationsPage {
   readonly hostStatusWebhookToggle: Locator;
   readonly hostStatusDestinationUrl: Locator;
   readonly hostStatusSaveButton: Locator;
+  /** "Percentage of hosts" and "Number of days": rendered only while the webhook is enabled. */
+  readonly hostStatusPercentageField: Locator;
+  readonly hostStatusDaysField: Locator;
 
   // SSO subpage — end-user authentication (IdP) form. The "Fleet users" tab
   // has the same field labels, so everything is scoped to this section.
@@ -52,10 +55,7 @@ export class IntegrationsPage {
     this.uploader = new FileUploader(page);
     this.toast = new Toast(page);
 
-    this.ticketDestinationsHeading = page.getByRole('heading', {
-      name: 'Ticket destinations',
-      exact: true,
-    });
+    this.ticketingHeading = page.getByRole('heading', { name: 'Ticketing', exact: true });
     this.scimText = page.getByText(/SCIM/i);
 
     this.eulaHeading = page.getByRole('heading', {
@@ -86,6 +86,13 @@ export class IntegrationsPage {
     this.hostStatusWebhookToggle = page.getByRole('checkbox', { name: 'enableHostStatusWebhook' });
     this.hostStatusDestinationUrl = page.getByLabel('Destination URL');
     this.hostStatusSaveButton = page.getByRole('button', { name: 'Save', exact: true });
+    // Fleet's react-select v1 Dropdown: `getByLabel` doesn't reach its combobox
+    // and the wrapper has no role, so the wrapper class plus the label text is
+    // the handle. Inside it the current value is a selected `role=option`.
+    this.hostStatusPercentageField = page
+      .locator('.form-field--dropdown')
+      .filter({ hasText: 'Percentage of hosts' });
+    this.hostStatusDaysField = page.locator('.form-field--dropdown').filter({ hasText: 'Number of days' });
 
     // The end-user IdP form's root; the sibling "Fleet users" tab reuses the
     // same field labels, so scope every field/button to this section.
@@ -111,7 +118,7 @@ export class IntegrationsPage {
 
   async goto(): Promise<void> {
     await this.page.goto('/settings/integrations');
-    await expect(this.ticketDestinationsHeading).toBeVisible();
+    await expect(this.ticketingHeading).toBeVisible();
   }
 
   /** MDM subpage. Anchors on the EULA heading (present when ABM is configured). */
@@ -162,6 +169,22 @@ export class IntegrationsPage {
     const checked = (await this.hostStatusWebhookToggle.getAttribute('aria-checked')) === 'true';
     if (checked !== enabled) await this.hostStatusWebhookToggle.click();
     await expect(this.hostStatusWebhookToggle).toHaveAttribute('aria-checked', String(enabled));
+  }
+
+  /** The option a host-status dropdown currently shows ("5%", "3 days"). */
+  hostStatusValue(field: Locator): Locator {
+    return field.getByRole('option', { selected: true });
+  }
+
+  /**
+   * Picks `option` ("5%", "3 days") in one of the host-status dropdowns. The
+   * shown value opens the menu, which renders as a `listbox`; only one is open
+   * at a time.
+   */
+  async selectHostStatusOption(field: Locator, option: string): Promise<void> {
+    await this.hostStatusValue(field).click();
+    await this.page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click();
+    await expect(this.hostStatusValue(field)).toHaveText(option);
   }
 
   /** Saves the host-status-webhook card and waits for the success toast. */
