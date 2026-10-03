@@ -397,14 +397,15 @@ other:
    - ✅ *(UI)* **Library** heading visible.
 2. ☐ Click the script's name → the edit modal opens with the body loaded.
    - ✅ *(UI)* `.edit-script-modal` visible, `.ace_content` non-empty.
-3. ☐ Focus the editor, press **Ctrl/Cmd+A**, **Delete**, then type the whole source plus `# edited by playwright` character-by-character (`pressSequentially`).
+3. ☐ Replace the editor's text with the source plus `# edited by playwright`, through Ace's own API (`replaceEditorContent` → `setAceValue`; typing would let Ace auto-indent and close quotes).
+   - ✅ *(UI)* The editor shows exactly the new text (polled, through `normalizeScript`).
 4. ☐ Click **Save** → the **"Save changes?"** warning sub-modal appears → click **Save** again.
    - ✅ *(UI)* The warning sub-modal was visible (asserted before the second click).
    - ✅ *(UI)* Success toast *"Successfully saved script."*
    - ✅ *(UI)* The edit modal is hidden.
    - ✅ *(API)* `updated_script` activity with matching `script_name`, admin actor.
 5. ☐ Re-open the script and read the editor.
-   - ✅ *(UI)* The persisted body **contains** `# edited by playwright`.
+   - ✅ *(UI)* The persisted body **equals** the whole edited script (source plus `# edited by playwright`).
 6. ☐ Click **Cancel** → modal hidden.
 
 **Assessment**
@@ -412,8 +413,7 @@ other:
 - *Coverage gaps:* Cancel-without-saving (does the body stay unchanged?) is untested. No validation of oversize-on-edit, and no check that editing does **not** change the filename/platform tag.
 - *Redundancy:* Duplicated by **CTL-21**.
 - *Efficiency / smells:*
-  - The persistence assertion is `toContain(editAppend)` ([`library.spec.ts:99`](../../tests/e2e/premium/controls/scripts/library.spec.ts)), not equality — so if Ace's auto-indent / bracket-completion mangles the retyped body, the test still passes. A full-equality assertion (as CTL-07 uses) would be strictly better.
-  - `pressSequentially` retypes the entire file per keystroke-event; slowest step of the lifecycle. Typing only the appended line would be equivalent and much faster.
+  - The edit is written through Ace's API, so the test proves what Fleet stores and shows, not that a user can type a multi-line script into the editor.
 
 **Notes (Andrey)**
 ```
@@ -823,17 +823,17 @@ other:
 
 1. ☐ Go to `/controls/scripts/library` **via URL**.
 2. ☐ Click the script name → editor opens with content loaded.
-3. ☐ Select-all, delete, retype source + `# edited by playwright` (`pressSequentially`).
+3. ☐ Replace the editor's text with the source plus `# edited by playwright` through Ace's own API (`replaceEditorContent`).
 4. ☐ Click **Save** → **"Save changes?"** sub-modal → **Save**.
    - ✅ *(UI)* Sub-modal was visible; *"Successfully saved script."* toast; edit modal hidden.
    - ✅ *(API)* `updated_script` activity with matching `script_name`, admin actor.
 5. ☐ Re-open the script.
-   - ✅ *(UI)* Persisted body **contains** `# edited by playwright`.
+   - ✅ *(UI)* Persisted body **equals** the whole edited script.
 6. ☐ Click **Cancel** → modal hidden.
 
 **Assessment**
 - *Value:* Edit + save-confirmation flow on free.
-- *Coverage gaps:* Cancel-without-save untested; `toContain` rather than equality (Ace mangling would slip through).
+- *Coverage gaps:* Cancel-without-save untested.
 - *Redundancy:* Duplicate of **CTL-09**.
 - *Efficiency / smells:* Retypes the whole file; slowest free sub-test in the area.
 
@@ -935,7 +935,8 @@ other:
    - ✅ *(UI)* the **Run now** radio is checked (the default).
 6. ☐ Click **Run**.
    - ✅ *(UI)* success toast matching `/^Successfully ran script\./`; the modal closes.
-7. ☐ Click the success toast's **Show script activity** link (`RunScriptBatchModal.showScriptActivity()`).
+7. ☐ Click the success toast's **Show script activity** link (`RunScriptBatchModal.showScriptActivity()`; `runNow` cleared earlier toasts before running, so it's this run's).
+   - ✅ *(UI)* exactly one **Show script activity** link is on screen.
    - ✅ *(UI)* Controls → Scripts → **Batch progress**, with the **Started** tab `aria-selected`.
    - ✅ *(UI)* the batch's list item contains **`/ 3 hosts`** — the denominator; the numerator is still moving.
 8. ☐ *(wait — no user action)* ✅ *(API)* `GET /scripts/batch?fleet_id=<VMs>` finds this script's newest batch; `GET /scripts/batch/:id` polls `status` to **`finished`** (10s interval, **480s** budget). Fleet marks a batch finished from a **cron**, which lands **2–4 minutes after the last host reports** — the page doesn't live-update, so the spec waits on the API rather than watching it.
@@ -1424,7 +1425,7 @@ Balance is healthy — no test in this area validates purely through the API. Th
 
 1. Add a team discriminator to every `assertActivity` predicate in the two lifecycle specs (`d.team_id`/`team_name` alongside `profile_name`/`script_name`) — [`premium/.../configuration-profiles.spec.ts:72,90`](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts), [`premium/controls/scripts/library.spec.ts:70,95,108`](../../tests/e2e/premium/controls/scripts/library.spec.ts).
 2. Add the missing success-toast assertion to `ScriptsLibraryPage.deleteScript` so it matches `ConfigurationProfilesPage.deleteProfile` — [`ScriptsLibraryPage.ts:184`](../../pages/controls/ScriptsLibraryPage.ts).
-3. Make the edit assertion equality rather than `toContain`, and type only the appended line instead of retyping the whole file — [`library.spec.ts:93-99`](../../tests/e2e/premium/controls/scripts/library.spec.ts) and [`ScriptsLibraryPage.replaceEditorContent`](../../pages/controls/ScriptsLibraryPage.ts).
+3. ~~Make the edit assertion equality rather than `toContain`, and stop retyping the whole file~~ (done 2026-10-03: the edit is written through `setAceValue`, and the read-back compares the whole script).
 4. Build the oversize script in memory via `FileUploader.setFile({name,mimeType,buffer})` instead of writing ~500 KB to `os.tmpdir()` and leaving it — [`library.spec.ts:135`](../../tests/e2e/premium/controls/scripts/library.spec.ts).
 5. Give disk encryption a page object and click-through entry (`OsSettingsPage.diskEncryptionLink` already exists and is unused), and use the shared `Toast` component instead of a raw `getByRole('alert')` — [`disk-encryption.spec.ts`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts).
 

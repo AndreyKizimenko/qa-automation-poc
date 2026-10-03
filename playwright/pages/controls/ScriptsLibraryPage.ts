@@ -2,6 +2,8 @@ import { Page, Locator, Download, expect } from '@playwright/test';
 import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
 import { Navbar } from '../components/Navbar';
+import { setAceValue } from '../components/aceEditor';
+import { normalizeScript } from '../components/EditSoftwareModal';
 import { FileUploader } from '../components/FileUploader';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
@@ -40,7 +42,6 @@ export class ScriptsLibraryPage {
 
   readonly editModal: Locator;
   readonly editorContent: Locator;
-  readonly editorTextarea: Locator;
   readonly editSaveButton: Locator;
   readonly editCancelButton: Locator;
 
@@ -83,10 +84,8 @@ export class ScriptsLibraryPage {
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete' });
 
     this.editModal = page.locator('.edit-script-modal').first();
-    // Ace editor renders the visible code into `.ace_content` and routes
-    // keyboard input through a hidden `.ace_text-input` textarea.
+    // The Ace editor renders the visible code into `.ace_content`.
     this.editorContent = this.editModal.locator('.ace_content');
-    this.editorTextarea = this.editModal.locator('textarea.ace_text-input');
     this.editSaveButton = this.editModal.getByRole('button', { name: 'Save', exact: true });
     this.editCancelButton = this.editModal.getByRole('button', { name: 'Cancel' });
 
@@ -157,21 +156,18 @@ export class ScriptsLibraryPage {
   }
 
   /**
-   * Replaces the open editor's content with `newContent`. Sends a
-   * platform-aware Select-All then types the replacement; Ace consumes the
-   * input via the hidden textarea.
+   * Replaces the open editor's content with `newContent` through Ace's own API
+   * and checks the editor shows it. Typing would go through Ace's key handling,
+   * which auto-indents and closes quotes and brackets, so a multi-line script
+   * would be saved different from what was typed.
    */
   async replaceEditorContent(newContent: string): Promise<void> {
-    await this.editorTextarea.focus();
-    await this.page.keyboard.press('ControlOrMeta+A');
-    await this.page.keyboard.press('Delete');
-    await this.editorTextarea.pressSequentially(newContent);
+    await setAceValue(this.editorContent, newContent);
+    await expect.poll(async () => normalizeScript(await this.editorContent.innerText())).toBe(
+      normalizeScript(newContent),
+    );
   }
 
-  /**
-   * Full edit flow: open by name, replace content, save through the
-   * "Save changes?" warning modal, expect success toast.
-   */
   async editScript(name: string, newContent: string): Promise<void> {
     await this.openScript(name);
     await this.replaceEditorContent(newContent);

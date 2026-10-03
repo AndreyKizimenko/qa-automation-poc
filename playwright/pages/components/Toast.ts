@@ -35,10 +35,16 @@ export class Toast {
    * makes the next `expectSuccess` match only the card the next action raises.
    */
   async dismissAll(): Promise<void> {
-    for (const button of await this.dismissButton.all()) {
-      await button.click();
-    }
-    await expect(this.dismissButton).toHaveCount(0);
+    // Close the first card until none are left. Cards close and auto-dismiss
+    // while this runs, so a list of buttons taken up front would point past its
+    // end, and a click on a locator that matches nothing waits forever. A click
+    // that loses its card to the auto-dismiss times out quickly and is retried.
+    await expect(async () => {
+      if ((await this.dismissButton.count()) > 0) {
+        await this.dismissButton.first().click({ timeout: 1_000 });
+      }
+      await expect(this.dismissButton).toHaveCount(0, { timeout: 500 });
+    }).toPass({ timeout: 10_000 });
   }
 
   /**
