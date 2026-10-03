@@ -13,7 +13,14 @@ export interface PolicyRef {
  */
 export async function createPolicy(
   request: APIRequestContext,
-  opts: { name: string; query?: string; description?: string; resolution?: string },
+  opts: {
+    name: string;
+    query?: string;
+    description?: string;
+    resolution?: string;
+    /** Comma-separated `darwin` / `windows` / `linux` / `chrome`; omitted, the policy targets every platform. */
+    platform?: string;
+  },
 ): Promise<PolicyRef> {
   const res = await request.post(apiUrl('global/policies'), {
     headers: authHeaders(),
@@ -22,6 +29,7 @@ export async function createPolicy(
       query: opts.query ?? 'SELECT 1;',
       description: opts.description ?? '',
       resolution: opts.resolution ?? '',
+      ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
     },
   });
   if (!res.ok()) {
@@ -76,6 +84,61 @@ export async function listHostPolicyIds(request: APIRequestContext, hostId: numb
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expect(res, `Failed to read host ${hostId}`).toBeOK();
   return (((await res.json()).host?.policies ?? []) as Array<{ id: number }>).map((p) => p.id).sort((a, b) => a - b);
+}
+
+/** A global policy as Fleet stores it — the fields the specs read back. */
+export interface GlobalPolicy extends PolicyRef {
+  query: string;
+  /** Comma-separated platforms, `''` when the policy targets every platform. */
+  platform: string;
+}
+
+/** One global policy, read back after a UI write. */
+export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
+  const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
+  await expect(res, `Failed to read global policy ${id}`).toBeOK();
+  const { policy } = await res.json();
+  return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
+}
+
+/**
+ * What a host last answered for each policy it runs: `'pass'`, `'fail'`, or
+ * `''` until it has run the policy (hourly, or on a refetch). Only a policy
+ * with an answer gets the Policies tab's "View all hosts".
+ */
+export async function getHostPolicyResponses(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<Map<number, string>> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const policies = ((await res.json()).host?.policies ?? []) as Array<{ id: number; response: string }>;
+  return new Map(policies.map((p) => [p.id, p.response ?? '']));
+}
+
+/**
+ * The hosts Fleet lists for a policy and response — what a policy's
+ * "View all hosts" and the policies list's Pass / Fail links open. Read live,
+ * unlike the list's counts, which an hourly job refreshes.
+ */
+export async function listPolicyHosts(
+  request: APIRequestContext,
+  policyId: number,
+  response: 'passing' | 'failing',
+  fleetId?: number,
+): Promise<Array<{ id: number; displayName: string }>> {
+  const params: Record<string, string> = {
+    policy_id: String(policyId),
+    policy_response: response,
+    per_page: '1000',
+  };
+  if (fleetId !== undefined) params.fleet_id = String(fleetId);
+  const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
+  await expect(res, `Failed to list the hosts ${response} policy ${policyId}`).toBeOK();
+  return ((await res.json()).hosts as Array<{ id: number; display_name: string }>).map((h) => ({
+    id: h.id,
+    displayName: h.display_name,
+  }));
 }
 
 /** What a fleet policy's create or update can set — Fleet's own field names, snake_case. */

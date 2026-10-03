@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
+import { clickHoverAction } from '../components/clickHoverAction';
 
 /**
  * /software/vulnerabilities — the list of CVEs detected across the fleet.
@@ -86,6 +87,60 @@ export class VulnerabilitiesListPage {
     const links = this.table.table.locator('tbody tr td:first-child a');
     await expect(links.first()).toBeVisible();
     return (await links.allInnerTexts()).map((name) => name.trim());
+  }
+
+  /** One CVE's row on the current page, by its Vulnerability link. */
+  row(cve: string): Locator {
+    return this.table.table
+      .locator('tbody')
+      .getByRole('row')
+      .filter({ has: this.page.getByRole('link', { name: cve, exact: true }) });
+  }
+
+  /** A CVE row's Hosts count, as rendered (the hourly job's figure for the scope). */
+  async hostsCount(cve: string): Promise<number> {
+    const cell = await this.table.cellByColumn(this.row(cve), 'Hosts');
+    return Number((await cell.innerText()).trim().replace(/,/g, ''));
+  }
+
+  /** A CVE row's hover-only "View all hosts": the Hosts list filtered by the CVE. */
+  async viewAllHostsFor(cve: string): Promise<void> {
+    const row = this.row(cve);
+    await expect(row).toBeVisible();
+    await clickHoverAction(row, row.getByRole('button', { name: 'View all hosts' }));
+    await expect(this.page).toHaveURL(/\/hosts\/manage\?.*vulnerability=/);
+  }
+
+  /**
+   * For each CVE on the page, whether its Probability of exploit cell carries
+   * the CISA "exploited in the wild" icon. The icon is an unnamed image inside
+   * that cell (premium; `ProbabilityOfExploit` draws it only beside a score),
+   * so the column is found by its header once and read row by row.
+   */
+  async exploitMarks(): Promise<Map<string, boolean>> {
+    await this.table.waitForSettled();
+    const headers = (await this.table.table.locator('thead:not(.active-selection) th').allInnerTexts()).map((h) =>
+      h.trim(),
+    );
+    const column = headers.indexOf('Probability of exploit');
+    if (column < 0) throw new Error(`No "Probability of exploit" column in ${JSON.stringify(headers)}`);
+    const marks = new Map<string, boolean>();
+    for (const row of await this.table.table.locator('tbody').getByRole('row').all()) {
+      const cve = (await row.getByRole('link').first().innerText()).trim();
+      marks.set(cve, (await row.getByRole('cell').nth(column).getByRole('img').count()) > 0);
+    }
+    return marks;
+  }
+
+  /** The tooltip that hovering an exploit icon opens. */
+  get exploitTooltip(): Locator {
+    return this.page.getByRole('tooltip').filter({ hasText: 'actively exploited in the wild' });
+  }
+
+  /** Hovers one CVE's exploit icon, which opens {@link exploitTooltip}. */
+  async hoverExploitIcon(cve: string): Promise<void> {
+    const cell = await this.table.cellByColumn(this.row(cve), 'Probability of exploit');
+    await cell.getByRole('img').hover();
   }
 
   /** Click the first CVE in the table. Returns the clicked CVE identifier. */

@@ -333,6 +333,65 @@ export async function hostsOfferedTitle(
   return offered.sort((a, b) => a - b);
 }
 
+/** One row of the Vulnerabilities list, as Fleet's API returns it. */
+export interface ListedVulnerability {
+  cve: string;
+  /** Hosts affected in the list's scope; refreshed by Fleet's hourly vulnerabilities job. */
+  hostsCount: number;
+  cisaKnownExploit: boolean;
+  /** `null` when no EPSS score is known, which hides the exploit icon beside it. */
+  epssProbability: number | null;
+}
+
+/**
+ * The Vulnerabilities list (`GET /vulnerabilities`) for a scope: All fleets when
+ * `fleetId` is omitted, Unassigned at 0. `exploit` narrows it to CISA's known
+ * exploits (premium), `query` to a CVE.
+ */
+export async function listVulnerabilities(
+  request: APIRequestContext,
+  opts: { fleetId?: number; exploit?: boolean; query?: string; perPage?: number } = {},
+): Promise<ListedVulnerability[]> {
+  const params: Record<string, string> = { per_page: String(opts.perPage ?? 500) };
+  if (opts.fleetId !== undefined) params.fleet_id = String(opts.fleetId);
+  if (opts.exploit) params.exploit = 'true';
+  if (opts.query) params.query = opts.query;
+  const res = await request.get(apiUrl('vulnerabilities'), { headers: authHeaders(), params });
+  await expect(res, 'Failed to list vulnerabilities').toBeOK();
+  return (
+    ((await res.json()).vulnerabilities ?? []) as Array<{
+      cve: string;
+      hosts_count: number;
+      cisa_known_exploit?: boolean;
+      epss_probability?: number | null;
+    }>
+  ).map((v) => ({
+    cve: v.cve,
+    hostsCount: v.hosts_count,
+    cisaKnownExploit: !!v.cisa_known_exploit,
+    epssProbability: v.epss_probability ?? null,
+  }));
+}
+
+/**
+ * The hosts Fleet lists for a CVE (`/hosts?vulnerability=`), what a CVE row's
+ * "View all hosts" opens. Computed live, unlike the list's hourly counts.
+ */
+export async function listVulnerabilityHosts(
+  request: APIRequestContext,
+  cve: string,
+  fleetId?: number,
+): Promise<Array<{ id: number; displayName: string }>> {
+  const params: Record<string, string> = { vulnerability: cve, per_page: '1000' };
+  if (fleetId !== undefined) params.fleet_id = String(fleetId);
+  const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
+  await expect(res, `Failed to list the hosts affected by ${cve}`).toBeOK();
+  return ((await res.json()).hosts as Array<{ id: number; display_name: string }>).map((h) => ({
+    id: h.id,
+    displayName: h.display_name,
+  }));
+}
+
 /**
  * First CVE in `cves` that Fleet's CVE detail endpoint can actually render, or
  * null when none of them can.

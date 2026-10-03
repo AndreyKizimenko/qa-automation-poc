@@ -108,24 +108,47 @@ export class LabelsPage {
 
   /**
    * Search the manual-label host picker and add the first matching host,
-   * returning its display name. Before selection `.display_name__cell` belongs
-   * to the search-results table; after selection the host moves to the
-   * selected-hosts table (and the search clears). Verifying it landed in the
-   * selected table guards against saving a manual label with no hosts (the
-   * server rejects that with a "missing required parameter(s)" 422).
+   * returning its display name. The search results drop down under the box;
+   * a picked host moves to the selected-hosts table (and the search clears).
+   * Both tables hold `.display_name__cell`s once a host is selected (on the
+   * edit form, from the start), so the result is read inside the dropdown.
+   * Verifying it landed in the selected table guards against saving a manual
+   * label with no hosts (the server rejects that with a "missing required
+   * parameter(s)" 422).
    */
   async addHost(searchTerm: string): Promise<string> {
     await this.hostSearch.fill(searchTerm);
-    const firstResult = this.page.locator('.display_name__cell').first();
+    const firstResult = this.page.locator('.targets-input__hosts-search-dropdown .display_name__cell').first();
     await expect(firstResult).toBeVisible();
     const hostName = (await firstResult.innerText()).trim();
     await firstResult.click();
-    await expect(
-      this.page
-        .locator('.targets-input__hosts-selected-table .display_name__cell')
-        .filter({ hasText: hostName }),
-    ).toBeVisible();
+    await expect(this.selectedHost(hostName)).toBeVisible();
     return hostName;
+  }
+
+  /**
+   * A manual label's selected host on the add / edit form, by display name. The
+   * picker's tables come from TargetsInput, which gives them no accessible name,
+   * so the selected one is told apart by its wrapper class.
+   */
+  selectedHost(displayName: string): Locator {
+    return this.page
+      .locator('.targets-input__hosts-selected-table')
+      .getByRole('row')
+      .filter({ has: this.page.getByRole('cell', { name: displayName, exact: true }) });
+  }
+
+  /** The display names in the form's selected-hosts table. */
+  async selectedHostNames(): Promise<string[]> {
+    const cells = this.page.locator('.targets-input__hosts-selected-table tbody .display_name__cell');
+    return (await cells.allInnerTexts()).map((t) => t.trim());
+  }
+
+  /** Takes a host out of a manual label's form with its row's Remove button. */
+  async removeHost(displayName: string): Promise<void> {
+    const row = this.selectedHost(displayName);
+    await row.getByRole('button', { name: 'Remove' }).click();
+    await expect(row).toHaveCount(0);
   }
 
   async save(): Promise<void> {

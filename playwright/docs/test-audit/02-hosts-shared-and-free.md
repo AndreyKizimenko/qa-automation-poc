@@ -1,6 +1,6 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 13 files · **Test declarations:** 24 entries (22 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **27 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 3 `free/hosts` specs)
+**Specs covered:** 13 files · **Test declarations:** 25 entries (23 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **29 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 3 `free/hosts` specs)
 
 This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
@@ -50,6 +50,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-22 | `shared/hosts/host-run-script.spec.ts` | Run script › a `<interpreter>` script runs under `<interpreter>` (4 cases: zsh, bash, Python, PowerShell) | UI+API | ☐ |
 | HOST-23 | `shared/hosts/mdm-commands.spec.ts` | a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it | UI+API | ☐ |
 | HOST-24 | `free/hosts/host-idp-username.spec.ts` | Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field | UI | ☐ |
+| HOST-25 | `shared/hosts/host-reports-tab.spec.ts` | Host details — reports that don't store results show only with the toggle on | UI+API | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -174,6 +175,8 @@ other:
    - ✅ *(UI)* On macOS, the URL gains `macos_applications=false`.
 4. ☐ Read the Name-column links.
    - ✅ *(UI)* At least one software title is listed.
+   - ✅ *(UI)* The columns are **Name**, **Installed version**, **Type**, **Last opened**, **Vulnerabilities**, **File path**, **Hash** (round 1 C5 #12).
+   - ✅ *(UI)* "N items" is over 20 and the page shows 20 titles; **Next** shows 20 others, none from the first page; **Previous** shows the first page again.
    - ✅ *(derived guard)* A listed title exists that does **not** contain the first token of `names[0]`.
 5. ☐ Type the first token of the first title into **Search by name or vulnerability (CVE)**.
    - ✅ *(UI)* The searched title's Name link is still visible.
@@ -186,7 +189,7 @@ other:
 
 **Assessment**
 - *Value:* decent — covers three joins in one pass (host inventory renders, host-scoped software search hits the server, software-title → filtered-hosts-list deep link carries its filter).
-- *Coverage gaps:* the **Vulnerable** filter on the host's software tab is never applied here (`applyVulnerableFilter()` exists and is unused by this area); CVE search (the same input accepts a CVE) untested; the **Library** sub-tab untested from the host side; no assertion that the filtered hosts list actually contains the host we came from — which would be the real payoff of step 7; version/type/last-used columns unasserted.
+- *Coverage gaps:* the **Vulnerable** filter on the host's software tab is never applied here (`applyVulnerableFilter()` exists and is unused by this area); CVE search (the same input accepts a CVE) untested; the **Library** sub-tab untested from the host side; no assertion that the filtered hosts list actually contains the host we came from — which would be the real payoff of step 7; the columns are asserted as headers, not their cells (a simulation leaves "Last opened" empty).
 - *Redundancy:* the software-title → hosts-list pill hop overlaps the software area's own title-detail specs (see the software audit file); the host-side entry point is the unique part. Shares the file and the `showFullInventory()` call with HOST-17, but runs against a different (API-chosen, simulated) host, so the two never observe the same inventory.
 - *Efficiency / smells:* (a) the final pill assertion is weak — `toContainText(firstToken(titleName))` ([`host-software.spec.ts:56`](../../tests/e2e/shared/hosts/host-software.spec.ts)) accepts a partial name match, so a pill naming the *wrong* title with a shared first word passes; (b) `showFullInventory()`'s `if ((await trigger.count()) === 0) return;` ([`HostDetailsPage.ts:234`](../../pages/hosts/HostDetailsPage.ts)) is a deliberate but silent branch — *this* test still cannot tell you whether it ran the macOS or the non-macOS path (HOST-17 now pins the macOS branch, on the VM; the non-macOS branch remains unobserved on both tiers); (c) `rowOrEmpty()` in step 2 tolerates an empty table (the test still fails one step later at `names.length > 0`, so this is a diagnosability smell, not a silent pass); (d) the subject title is whatever sorts first for that host, so the test is not reproducible by hand without the API read.
 
@@ -276,7 +279,7 @@ other:
 
 **Assessment**
 - *Value:* moderate. The sort assertions are real (URL param **and** rendered order), and the marker scoping makes them robust under parallel workers. The "awaiting results" copy assertion is a nice product-behaviour check.
-- *Coverage gaps:* the **"don't store results" toggle is asserted at its default and never flipped** — its actual filtering behaviour is untested, which is the only interesting thing about it (and HOST-18 doesn't flip it either). The **Newest/Oldest results** sorts are now covered by HOST-18, in the same file — but only as a *partition* invariant, so the recency ordering itself is still unasserted. Card **Actions → View report for all hosts** never exercised; **Show details** is knowingly out of scope (needs a stored result). The unfiltered count is never reconciled with the number of cards. No empty-state path.
+- *Coverage gaps:* the **"don't store results" toggle** is only read at its default here; HOST-25 flips it. The **Newest/Oldest results** sorts are now covered by HOST-18, in the same file — but only as a *partition* invariant, so the recency ordering itself is still unasserted. Card **Actions → View report for all hosts** never exercised; **Show details** is knowingly out of scope (needs a stored result). The unfiltered count is never reconciled with the number of cards. No empty-state path.
 - *Redundancy:* overlaps `premium/hosts/host-report-details.spec.ts` (the stored-result drill) on tab entry; overlaps the reports area on report creation; and now overlaps HOST-18, which pays the same VM page load and tab entry again to drive the other two options of the same sort dropdown.
 - *Efficiency / smells:* (a) **uses the scarce `liveMacosHost` fixture for a display-name string** — this puts avoidable contention on the one real VM and couples an otherwise host-agnostic test to VM uptime; swap to `findOnlineHost(..., 'darwin')` or `findHostWithSoftware`. (b) `reportsCount` matching `/\d+ reports?/` is a shape check, not a value check — it would pass on `0 reports`. (c) `openReportsTab()`'s `.or(reportsEmptyState)` tolerates an empty tab; the later `toHaveCount(2)` is what saves the test.
 
@@ -1036,6 +1039,41 @@ other:
 - *Coverage gaps:* the modal is never closed; the Premium message's link is unchecked; only the global admin — whether a free **observer** is offered the button (it shouldn't be, by `canWriteEndUser`) is untested on free; the API refusal lives in [API-31](14-api-contracts.md), not here.
 - *Redundancy:* complements [MISC-20](13-labels-packs-dashboard-paywalls.md)'s page-level paywall sweep — this gate isn't a page, so it couldn't be a row in that table. Mirrors HOSTP-13's steps 3–4 with the inverted answer, which is the justified kind of tier duplication (like HOST-12/13/14).
 - *Efficiency / smells:* draws Windows slice 0 on free — the same host as API-31; `findSimulations`' slice list in `helpers/api/hosts.ts` records the shared read. Harmless while both only read or get refused; if API-31's gate ever regressed, its `PUT` would leave a username on this host and fail the `---` check here too. Direct-URL entry to the host, like the rest of the area's host-detail tests.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-25 · Host details — reports that don't store results show only with the toggle on
+
+- **File:** [`playwright/tests/e2e/shared/hosts/host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts)
+- **Grep:** `npx playwright test -g "reports that don't store results show only with the toggle on"`
+- **Project:** premium + free (shared) · **Mode:** UI+API (API setup only) · **Isolation:** standalone; the Mac VM (`liveMacosHost`) is only read
+- **Source:** QA Wolf `reports-reports-show-reports-that-have-no-results` (round 1 C5 #7 free, C5 #20 premium; round 3, batch C)
+- **Preconditions:** the org-wide **Store report results** is on (the toggle is hidden otherwise); the suite never turns it off.
+- **Data created:** two global reports, `pw-hostrpt-<ms>-<rand>-stores` and `…-discards` (Discard data on), deleted in the `finally`; cleanup wipes global reports too.
+
+**Flow**
+
+1. ☐ *(API)* Create the two reports.
+2. ☐ Open the Mac's **Reports** tab; search for the marker.
+   - ✅ *(UI)* **Show reports that don't store results** is off; the storing report is listed and the discarding one isn't.
+3. ☐ Turn the toggle on.
+   - ✅ *(UI)* It reads on; the URL has `show_dont_store=true`; both reports are listed.
+4. ☐ Turn it off again.
+   - ✅ *(UI)* It reads off; the storing report is listed and the discarding one isn't.
+
+**Assessment**
+- *Value:* the toggle's filtering, which HOST-06 only read at its default: off lists only reports that keep results (`discard_data = 0` with snapshot logging, `query_results.go`), on adds the rest. The storing sibling keeps every state a positive read of the same filtered list.
+- *Coverage gaps:* only Discard data; a report with a non-snapshot logging type (differential) is the other kind the toggle hides. QA Wolf's count (+1) isn't asserted: every sibling spec's global reports move it.
+- *Redundancy:* shares HOST-06's search and card locators.
+- *Efficiency / smells:* seconds. The two reports have no interval, so neither ever runs on the VM.
 
 **Notes (Andrey)**
 ```

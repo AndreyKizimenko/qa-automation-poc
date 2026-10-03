@@ -53,6 +53,12 @@ export class HostsListPage {
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
+  /** The Pass / Fail choice shown beside a policy's filter pill. */
+  readonly policyResponseValue: Locator;
+  /** Beside a custom label's pill, for a global user or the label's author. */
+  readonly editLabelButton: Locator;
+  readonly deleteLabelButton: Locator;
+  readonly deleteLabelModal: Locator;
   /** "N hosts" above the table — the list's total for the current filters. */
   readonly resultsCount: Locator;
 
@@ -122,6 +128,15 @@ export class HostsListPage {
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
     this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
+    // PoliciesFilter is Fleet's react-select v1 Dropdown: its combobox has no
+    // accessible name and the chosen option is a plain div, so the value is read
+    // by the wrapper's class.
+    this.policyResponseValue = page.locator('.policies-filter .dropdown__custom-value-label');
+    this.editLabelButton = page.getByRole('button', { name: 'Edit label' });
+    this.deleteLabelButton = page.getByRole('button', { name: 'Delete label' });
+    // DeleteLabelModal: Fleet's Modal renders a role-less title, so the shared
+    // container is scoped by it, as on the Labels page.
+    this.deleteLabelModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete label' });
     this.resultsCount = page.locator('.table-container__results-count');
 
     this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });
@@ -205,6 +220,42 @@ export class HostsListPage {
       .getByRole('checkbox');
   }
 
+  /**
+   * Searches the list (name, hostname, UUID, serial or IP) and waits for the
+   * filtered table. The page rewrites its URL from the filters its table last
+   * queried with, and a rewrite that lands just after a choice takes it back
+   * (it does once the first load settles), so the search is made again until
+   * the settled table still has its `query` param.
+   */
+  async searchFor(query: string): Promise<void> {
+    const held = () => new URL(this.page.url()).searchParams.get('query') === query;
+    await expect(async () => {
+      if (!held()) await this.search.fill(query);
+      await this.table.waitForSettled(15_000);
+      expect(held(), `the search for "${query}" didn't hold`).toBe(true);
+    }).toPass({ timeout: 45_000 });
+  }
+
+  /**
+   * Filters the list by a platform (the label filter's Platforms group) and a
+   * status, and waits until both hold. Like {@link searchFor}, each choice is
+   * made again until the settled table's URL still carries it: the platform's
+   * label route (`/hosts/manage/labels/<id>`) and `status=<status>`. Without
+   * that, a rewrite can drop both, and *Select all matching* then takes every
+   * host on the fleet.
+   */
+  async filterTo(opts: { platform: string; status: 'Online' | 'Offline' }): Promise<void> {
+    const onLabel = () => /\/hosts\/manage\/labels\/\d+/.test(new URL(this.page.url()).pathname);
+    const want = opts.status.toLowerCase();
+    const onStatus = () => new URL(this.page.url()).searchParams.get('status') === want;
+    await expect(async () => {
+      if (!onLabel()) await this.labelFilter.selectPlatform(opts.platform);
+      if (!onStatus()) await this.statusFilter.selectByName(opts.status);
+      await this.table.waitForSettled(15_000);
+      expect(onLabel() && onStatus(), `the ${opts.platform} / ${opts.status} filters didn't hold`).toBe(true);
+    }).toPass({ timeout: 60_000 });
+  }
+
   async selectAllOnPage(): Promise<void> {
     await this.selectAllOnPageCheckbox.click();
     await expect(this.selectionBar).toBeVisible();
@@ -227,9 +278,41 @@ export class HostsListPage {
     await expect(this.deleteModal).toBeHidden();
   }
 
-  /** A hosts-table column header by its visible name. */
-  columnHeader(name: string): Locator {
-    return this.table.table.getByRole('columnheader', { name });
+  /**
+   * Switches a policy filter between the hosts that pass it and those that fail
+   * it. The menu is react-select v1, whose options carry no role.
+   */
+  async selectPolicyResponse(response: 'Pass' | 'Fail'): Promise<void> {
+    await this.page.locator('.policies-filter .Select-control').click();
+    const option = this.page.locator('.policies-filter .Select-option', { hasText: response });
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect(this.policyResponseValue).toHaveText(response);
+  }
+
+  /** A host's link in the table, by its display name. */
+  hostLink(displayName: string): Locator {
+    return this.table.table.locator('tbody').getByRole('link', { name: displayName, exact: true });
+  }
+
+  /** The display names on the current page, in row order. */
+  async hostNames(): Promise<string[]> {
+    await this.table.waitForSettled();
+    const rows = this.table.table.locator('tbody').getByRole('row');
+    const names: string[] = [];
+    for (const row of await rows.all()) {
+      const link = row.getByRole('link').first();
+      if (await link.count()) names.push((await link.innerText()).trim());
+    }
+    return names;
+  }
+
+  /**
+   * A hosts-table column header by its visible name. `exact` where the name is
+   * part of another header's ("Fleet" in "Added to Fleet").
+   */
+  columnHeader(name: string, opts: { exact?: boolean } = {}): Locator {
+    return this.table.table.getByRole('columnheader', { name, exact: opts.exact });
   }
 
   /**

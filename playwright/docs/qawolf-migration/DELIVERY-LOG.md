@@ -111,6 +111,49 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch D — batch scripts
+
+9 gaps in batch script runs, all round 1 C8: scheduling for later, cancelling, an edit cancelling pending runs, the
+preview, the counts, the progress page. Reviewed and built on `playwright/qawolf-round3-batch-d`, on top of batch
+C's branch, and shipped with it in [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86)
+(2026-10-03): 4 built, 3 folded, 2 cut (C8 #11; C8 #18's during-run half). Detail and Andrey's decisions in
+[round-3/D-batch-scripts.md](round-3/D-batch-scripts.md#review-decisions-2026-10-03).
+
+**What the review changed.** A scheduled batch lists every targeted host as Pending until it starts, and
+cancelling it finishes it at once with every host under Canceled (probed live). That turned QA Wolf's racy "the
+Pending hosts move to Canceled" into a deterministic test. Batch scripts have no license check, and picking claimed
+simulations by id never reaches a VM, so the plan's premium-only spec became `shared/`, on both tiers. The review
+also found a Fleet bug, filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732): a batch
+whose script is edited while a host's run is still queued behind another activity never finishes, because that
+host stays Pending.
+
+| slice | what |
+|---|---|
+| schedule and cancel | new `shared/controls/scripts/batch-schedule-cancel.spec.ts` (both tiers, simulations on Unassigned, `findSimulations` linux 10–19 and darwin 10–39). A batch scheduled for tomorrow lists its 3 hosts under Pending; its script previews; **Cancel** → "Cancel script?" → the batch is finished and canceled with all 3 under Canceled (API and UI), Pending empty, "Canceled" under Finished, and the preview again. A script scheduled from the Hosts list (Schedule for later, Date / Time in UTC) is stored for the time typed, and Fleet's 2-minute worker starts it. Editing a script mid-run, through the "Save changes?" warning, cancels the runs not yet reported. `RunScriptBatchModal.pickScript` / `chooseSchedule` / `submitSchedule` / `showSchedule`, new `ScriptPreviewModal`, `ScriptBatchDetailsPage.showScript` / `openCancel` / `confirmCancel` / `tabHostCount`, `ScriptsLibraryPage.stageEdit` / `confirmEdit` / `goToBatchProgress`, `HostsListPage.searchFor`; `runScriptBatch`, `cancelScriptBatch`, `listBatchHostIds`, `getBatchSummary`'s `notBefore` / `batchCanceled`, `findScriptableSimulations`, `ListedHost.displayName` |
+| progress page | `premium/controls/scripts/batch-run.spec.ts` gains a describe of its own: Controls → Scripts → **Batch progress** on Workstations shows each tab's empty state. `ScriptsBatchProgressPage.heading` / `openTab` / `emptyState` / `learnMoreLink` / `teamDropdown` |
+| a flake fixed on the way | `batch-run`'s scale test chooses its macOS and Online filters through `HostsListPage.filterTo`, which remakes a choice until the settled table's URL still carries it. The Hosts page rewrites its URL from the filters its table last queried with; on 2026-10-03 a rewrite dropped both filters, *Select all matching* took all 200 hosts on Unassigned, and the modal's count check stopped the run. It stayed hidden until each tier also held offline simulations |
+
+## Round 3 · Batch C — server-side decisions, over simulations
+
+23 gaps in what Fleet decides on the server — which hosts a policy runs on or links to, what *Select all matching*
+transfers, who a label holds, which reports a host's tab lists — reviewed on `playwright/qawolf-round3-batch-c`
+(2026-10-03): 19 kept, 4 cut (C3 #29, C1 #11, C6 #26, and C3 #7's free twin). Detail and Andrey's decisions in
+[round-3/C-simulations.md](round-3/C-simulations.md#review-decisions-2026-10-03).
+
+**What the review changed.** Each tier also holds ~280–300 *offline* simulations, yesterday's set that host expiry
+deletes within a day and nothing else touches, so the *Select all matching* transfer (C1 #12) stages them on a
+throwaway fleet in the main project instead of going to `exclusive/` or being cut. The platform policy (C3 #3/#19)
+is one shared test of a global policy rather than an augment plus a free twin, and it reads back the platform the
+CRUD spec writes and never checks.
+
+| slice | what |
+|---|---|
+| policies | new `shared/policies/policy-hosts.spec.ts`: a policy saved with only macOS ticked is stored as `darwin` and listed on a macOS simulation, not on a Linux or a Windows one (both tiers); a host's Policies tab → **View all hosts** for a passing and a failing policy lands on the hosts with that answer, the two refetched simulations listed under it and not under the other (both tiers). New `premium/policies/policy-host-counts.spec.ts`: the VMs-fleet policy's Pass and Fail links list exactly the API's hosts. `createPolicy({ platform })`, `getGlobalPolicy`, `getHostPolicyResponses`, `listPolicyHosts`; `PolicyEditPage.saveNew({ platforms })`, `HostDetailsPage.viewAllHostsForPolicy`, `HostsListPage.policyResponseValue` / `selectPolicyResponse` / `hostLink` / `hostNames`, `PoliciesListPage.openHostCount` |
+| transfers | `bulk-transfer.spec.ts`: under the dashboard's Low disk space filter a full page selected offers no *Select all matching hosts* (the server would ignore that filter and move everything else matching). *Select all matching* clicked for the first time, on a throwaway `pw-transfer-*` fleet holding 51 staged offline simulations: "51 selected", transferred to Unassigned by filter behind a request guard that only lets a transfer scoped to that fleet through; every one moved. The QA-staged test reads each row's Fleet cell. `findOfflineSimulations`; `CLAUDE.md` › Test hosts gains the offline pool |
+| labels | the Manual label lifecycle (both tiers) runs from the Hosts list, as QA Wolf's did: two members, the list filtered by the label holds exactly them; the pill's *Edit label* swaps one (read back through the API and on the filtered list); the pill's *Delete label* deletes it. Both pill buttons were untested. `LabelFilter.selectLabel`, `LabelsPage.removeHost` / `selectedHostNames`, and `addHost` reads the search dropdown rather than the first host cell on the page |
+| host tabs | free's dashboard heads itself with the org name and its Hosts list has no Fleet column (unconditional). A host's Reports tab hides a Discard-data report until "Show reports that don't store results" is on (both tiers). A host's full inventory: its seven columns, and paging past 20 titles and back (both tiers). From a report's results, a host's link opens that host's results and Back returns to the host (premium). `createReport({ discardData })`, `HostDetailsPage.softwareColumnHeader` / `turnSoftwarePage`, `ReportDetailsPage.hostResultLink`, `HostsListPage.columnHeader(name, { exact })` |
+| vulnerabilities and Unassigned | the exploited filter's rows checked against the API's exploited list, each with its CISA icon wherever Fleet has a score to draw it beside, and the icon's tooltip (premium). A CVE's count on the VMs fleet and under All fleets each equal Fleet's figure for that scope, and its View all hosts lists exactly the fleet's affected hosts (premium); on free, the hosts it lists are ones it affects. A title row's View all hosts (both tiers). A package on Unassigned is offered in an Unassigned host's Library (premium). `listVulnerabilities`, `listVulnerabilityHosts`, `VulnerabilitiesListPage.exploitMarks` / `viewAllHostsFor`, `SoftwareTitlesPage.viewAllHostsForFirstTitle` |
+
 ## Round 3 · Batch B — policy, report and software forms
 
 24 gaps round 1 left in forms it opened and never finished. Each flow was reviewed against the spec beside it

@@ -66,6 +66,10 @@ regenerate both on every restart.
   that simulate orbit report script runs and installs they never performed: random output and exit code, and
   an install that fails ~5% of the time. So a green assertion against one proves nothing about the feature. A
   deleted simulation never comes back on its own.
+- **Each tier also holds ~300 offline simulations**: the set the perf daemons abandon at their daily refresh
+  (16:00 UTC), which host expiry deletes a day later. Every picker takes online hosts, so nothing reads them;
+  a spec that needs dozens of hosts to move (not to answer anything) draws them with `findOfflineSimulations`
+  and stages them on a throwaway `pw-*` fleet (`premium/hosts/bulk-transfer.spec.ts`).
 - **A simulation can answer what Fleet decides server-side** — which hosts a profile is listed for, which are
   offered a software title, which a policy or report targets — so a label-targeting spec moves two onto the VMs
   fleet as the "outside the label" hosts beside the real VM. Borrow with `findMdmSimulations` (only for

@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 36 (→ 87 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 38 (→ 90 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -102,6 +102,8 @@ locator ambiguous. The claims in force today:
 | SWL-34 | `premium/software/patch-policy.spec.ts` | a Windows app: Force patch offers no Notify, and the server refuses Notify and both flags at once | UI+API | ☐ |
 | SWL-35 | `premium/software/no-teams-views.spec.ts` | Unassigned sticks across Hosts, Controls, Software and Policies, and Reports falls back to All fleets | UI | ☐ |
 | SWL-36 | `premium/software/package-scripts.spec.ts` | editing all four Advanced options saves each of them | UI+API | ☐ |
+| SWL-37 | `shared/software/titles-table.spec.ts` | … › a title's View all hosts opens the hosts list filtered by it | UI | ☐ |
+| SWL-38 | `premium/software/no-teams-views.spec.ts` | a package added to Unassigned is offered in an Unassigned host's Library | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1631,6 +1633,67 @@ other:
   - Opens the modal from the expanded row's **Edit software** action, as SWL-31 in the same file does, not from the **All hosts** badge SWL-06's assessment calls fragile.
   - Writing through `env.editor.setValue` is the right call for asserting what Fleet stores, but it means no test proves a user can type a multi-line script into these editors.
   - Fast: a ~1 KB generated package uploaded through the API, no real installer, no progress modal.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWL-37 · Software • inventory table › a title's View all hosts opens the hosts list filtered by it
+
+- **File:** [`playwright/tests/e2e/shared/software/titles-table.spec.ts`](../../tests/e2e/shared/software/titles-table.spec.ts)
+- **Grep:** `npx playwright test -g "a title's View all hosts opens the hosts list"`
+- **Project:** premium **and** free (`shared/`) · **Scope:** Unassigned on premium (a no-op on free)
+- **Mode:** UI · **Isolation:** independent, read-only
+- **Source:** QA Wolf `software-vulnerabilities-view-all-hosts-from-software-with-vulnerabilities` (round 1 C6 #6; round 3, batch C)
+
+**Flow**
+
+1. ☐ Open **Software** (Unassigned on premium); hover the first title's row and click **View all hosts**.
+   - ✅ *(UI)* URL `/hosts/manage` with a numeric `software_title_id`; the pill contains the title's name; a host is listed.
+
+**Assessment**
+- *Value:* the titles list's own hand-off, which HOST-04 reaches only through a title's detail page.
+- *Coverage gaps:* the listed hosts aren't checked to have the title. QA Wolf took a row with vulnerabilities; the row doesn't change the hand-off, and the vulnerable filter is the suite's slowest query.
+- *Redundancy:* the pill overlaps HOST-04's last step.
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWL-38 · a package added to Unassigned is offered in an Unassigned host's Library
+
+- **File:** [`playwright/tests/e2e/premium/software/no-teams-views.spec.ts`](../../tests/e2e/premium/software/no-teams-views.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "offered in an Unassigned host's Library"`
+- **Project:** premium · **Scope:** Unassigned
+- **Mode:** UI+API · **Isolation:** independent; `findSimulations` linux 5, only read
+- **Source:** QA Wolf `no-teams-no-teams-add-software-for-user-on-no-teams` (round 1 C6 #27; round 3, batch C)
+- **Data created:** a per-run inert `.deb`, `fleet-pw-unassigned-<nonce>` (API upload to Unassigned), never installed, deleted in the `finally`; cleanup wipes Unassigned's software too. Premium's Unassigned holds no real VM.
+
+**Flow**
+
+1. ☐ *(API)* Upload the package to Unassigned.
+   - ✅ *(API)* the Linux simulation is offered it (`GET /hosts/:id/software?available_for_install=true`).
+2. ☐ Open the simulation → **Software** → **Library**; search for the package.
+   - ✅ *(UI)* its row is listed.
+
+**Assessment**
+- *Value:* "no fleet" is its own branch of Fleet's offer query (`team_id IS NULL`); the label-targeting specs cover only a fleet's (VMs).
+- *Coverage gaps:* the UI upload QA Wolf did (covered for Unassigned by SWL-31); a host on another fleet not being offered it.
+- *Redundancy:* the Library read is the same component LT's software case reads on the VM.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
