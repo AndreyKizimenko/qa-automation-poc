@@ -71,6 +71,15 @@ export class ReportDetailsPage {
     this.resultRows = container.locator('table tbody tr');
   }
 
+  /**
+   * A stored result's Host cell, which links to that host's results for this
+   * report (`/hosts/:id/reports/:reportId`). A host with several result rows
+   * links from each, so this is the first.
+   */
+  hostResultLink(hostName: string): Locator {
+    return this.resultRows.getByRole('link', { name: hostName, exact: true }).first();
+  }
+
   async goto(id: number, opts: { fleetId?: number } = {}): Promise<void> {
     const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
     await this.page.goto(`/reports/${id}${qs}`);

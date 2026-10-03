@@ -27,6 +27,10 @@
  *
  * If it goes missing, re-apply that file (see gitops/premium-fleetqa/README.md)
  * and let one interval elapse.
+ *
+ * The walk also runs the other way (round 1 C4 #P17): from the report's results
+ * across hosts, the Mac's Host link opens the same per-host page, and its
+ * "Back to host details" returns to the host.
  */
 import { test, expect } from '@fixtures';
 import { findReportByName, getHostReportLastFetched } from '@helpers/api';
@@ -97,5 +101,16 @@ test.describe('Premium • Hosts • host report results', () => {
     // Out to the report's own results, across every host that has run it.
     await expect(page).toHaveURL(new RegExp(`/reports/${report!.id}`));
     await expect(reportDetails.nameHeading).toContainText(REPORT_NAME);
+
+    // And back in from there (round 1 C4 #P17): each stored result names its
+    // host, linked to that host's results for this report.
+    await reportDetails.hostResultLink(liveMacosHost.displayName).click();
+    await hostQueryReport.waitForReady();
+    await expect(page).toHaveURL(new RegExp(`/hosts/${liveMacosHost.id}/reports/${report!.id}`));
+    await expect(hostQueryReport.hostHeading).toHaveText(liveMacosHost.displayName);
+    await expect(hostQueryReport.table.firstRow).toContainText('bar');
+
+    await hostQueryReport.backButton.click();
+    await expect(page).toHaveURL(new RegExp(`/hosts/${liveMacosHost.id}/details`));
   });
 });

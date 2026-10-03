@@ -8,11 +8,17 @@
  * host is chosen via the API (first host reporting software) so the test never
  * depends on a fragile "first host" pick.
  *
+ * The full inventory's columns and its paging are read on the way (round 1 C5
+ * #12); not its cells, which a simulation leaves partly empty ("Last opened").
+ *
  * The macOS `/Applications` view filter is covered separately at the bottom of
  * this file, and that one *does* need the real VM — see its own header.
  */
 import { test, expect } from '@fixtures';
 import { findHostWithSoftware } from '@helpers/api';
+
+// The full inventory's columns (`HostSoftwareTableConfig`), Name first.
+const INVENTORY_COLUMNS = ['Name', 'Installed version', 'Type', 'Last opened', 'Vulnerabilities', 'File path', 'Hash'];
 
 // First alphanumeric word of length >= 3 — a stable search token derived from a
 // software name (e.g. "Google Chrome.app" -> "Google").
@@ -41,6 +47,19 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
 
   const names = await hostDetails.softwareNames();
   expect(names.length, 'expected the host to list software titles').toBeGreaterThan(0);
+
+  // The full inventory's columns, and its paging: 20 titles a page, and a host
+  // chosen for reporting software reports far more than that (round 1 C5 #12).
+  for (const column of INVENTORY_COLUMNS) {
+    await expect(hostDetails.softwareColumnHeader(column), `the ${column} column`).toBeVisible();
+  }
+  expect(await hostDetails.softwareItemCount(), 'more titles than one page holds').toBeGreaterThan(20);
+  expect(names).toHaveLength(20);
+  await hostDetails.turnSoftwarePage('Next');
+  const secondPage = await hostDetails.softwareNames();
+  expect(secondPage.filter((n) => names.includes(n)), 'titles on both pages').toEqual([]);
+  await hostDetails.turnSoftwarePage('Previous');
+  await expect.poll(() => hostDetails.softwareNames()).toEqual(names);
 
   const name = names[0];
   const token = firstToken(name);

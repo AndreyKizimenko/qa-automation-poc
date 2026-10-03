@@ -404,10 +404,14 @@ other:
 8. ☐ Click **View report for all hosts**.
    - ✅ *(UI)* URL matches `/reports/<reportId>`.
    - ✅ *(UI)* the report-details `h1` contains the report name.
+9. ☐ In the report's results, click the Mac's **Host** cell (round 1 C4 #P17: the walk the other way).
+   - ✅ *(UI)* back on `/hosts/<hostId>/reports/<reportId>`, titled with the host, first row containing `bar`.
+10. ☐ Click **Back to host details**.
+   - ✅ *(UI)* URL `/hosts/<hostId>/details`.
 
 **Assessment**
 - *Value:* the only coverage of per-host stored query results and the host↔report navigation pair; catches a broken `Show details` gate, a mis-routed drill-down, or results that render empty. The cell-for-cell comparison is the strongest part: it ties two independent renderings of the same stored row together, so a card previewing a *different* row (or the wrong host's) fails here rather than passing a shape check.
-- *Coverage gaps:* the column headers are now asserted only *transitively* — `cellByColumn` throws on a header the card also previewed, so a column the card omits (anything past the first result's keys) is still unchecked, as are the row count and the page's "last fetched" line; the comparison covers the **first row only**, so a full report truncated to one row would pass; no negative case (a report *without* stored results must not offer **Show details**) — that's the other half of the `last_fetched` gate and would be cheap on a simulated host; no **Back to host details** round-trip; nothing asserts the card's **View full report** affordance for the rows the inline grid doesn't show.
+- *Coverage gaps:* the column headers are now asserted only *transitively* — `cellByColumn` throws on a header the card also previewed, so a column the card omits (anything past the first result's keys) is still unchecked, as are the row count and the page's "last fetched" line; the comparison covers the **first row only**, so a full report truncated to one row would pass; no negative case (a report *without* stored results must not offer **Show details**) — that's the other half of the `last_fetched` gate and would be cheap on a simulated host; the report → host direction and **Back to host details** are steps 9–10; nothing asserts the card's **View full report** affordance for the rows the inline grid doesn't show.
 - *Redundancy:* the Reports-tab search/sort surface is covered by [`shared/hosts/host-reports-tab.spec.ts`](../../tests/e2e/shared/hosts/host-reports-tab.spec.ts); this spec only re-uses the search to find its card.
 - *Efficiency / smells:*
   - The two API preconditions are guardrails rather than validations — good, they turn missing furniture into a clear message instead of a puzzling UI failure. Its dependency on hand-seeded furniture is the fragility to watch: a `cleanup.steps.ts` change that starts wiping fleet-scoped reports silently breaks this test.

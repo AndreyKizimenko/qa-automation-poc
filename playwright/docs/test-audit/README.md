@@ -61,14 +61,16 @@ files · ~350 test declarations · 4 projects**.
 > links on premium). Area **03**: HOSTP-17 (Low disk space withholds *Select all matching hosts*) and HOSTP-18 (*Select all
 > matching* transfers all 51 offline simulations staged on a throwaway fleet); HOSTP-01 reads its Fleet column. Area
 > **13**: the Manual label lifecycle (MISC-05…07) runs from the Hosts list — filtered by the label, edited (one member
-> swapped) and deleted from its pill.
+> swapped) and deleted from its pill, and MISC-31 checks free's dashboard and Hosts list for any fleet scope. Area **02**:
+> HOST-25 flips the host Reports tab's "don't store results" toggle; HOST-04 reads the Inventory's columns and pages it.
+> HOSTP-09 walks back from a report's results to the host.
 
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 25 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 18 | premium |
 | 04 | [Policies](04-policies.md) | 35 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
@@ -79,7 +81,7 @@ files · ~350 test declarations · 4 projects**.
 | 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 15 | premium, free |
 | 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 36 | premium, free |
 | 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 30 | premium, free |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 31 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
@@ -90,7 +92,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**498 entries** covering every test in the suite. An entry can expand into several
+**500 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (36 entries → 87 executions), area 11 (36 → 92), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

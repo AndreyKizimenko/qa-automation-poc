@@ -431,6 +431,21 @@ export class HostDetailsPage {
     return (await this.softwareNameLinks.allInnerTexts()).map((t) => t.trim());
   }
 
+  /** A Software-tab column header, by its exact name. */
+  softwareColumnHeader(name: string): Locator {
+    return this.softwareTable.getByRole('columnheader', { name, exact: true });
+  }
+
+  /**
+   * Turns the software table one page (20 rows), waiting for its first title to
+   * change: Fleet keeps the old page on screen until the next one arrives.
+   */
+  async turnSoftwarePage(direction: 'Next' | 'Previous'): Promise<void> {
+    const before = (await this.softwareNames())[0];
+    await this.softwareTable.getByRole('button', { name: direction, exact: true }).click();
+    await expect.poll(async () => (await this.softwareNames())[0]).not.toBe(before);
+  }
+
   /**
    * The Name-column link for one software title. Matched on the link's exact
    * accessible name so a title contained in a longer one — "Dropbox" inside

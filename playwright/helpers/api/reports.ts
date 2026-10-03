@@ -31,6 +31,12 @@ export async function createReport(
      * first stored row on a real VM in about a minute.
      */
     interval?: number;
+    /**
+     * The edit form's "Discard data": the report keeps no results. A host's
+     * Reports tab lists such a report only with "Show reports that don't store
+     * results" on. Omitted, the report stores results (Fleet's default).
+     */
+    discardData?: boolean;
   },
 ): Promise<ReportRef> {
   const res = await request.post(apiUrl('queries'), {
@@ -41,8 +47,9 @@ export async function createReport(
       description: opts.description ?? '',
       ...(opts.teamId !== undefined ? { team_id: opts.teamId } : {}),
       ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
-      ...(opts.interval !== undefined
-        ? { interval: opts.interval, logging: 'snapshot', discard_data: false }
+      ...(opts.interval !== undefined ? { interval: opts.interval, logging: 'snapshot' } : {}),
+      ...(opts.interval !== undefined || opts.discardData !== undefined
+        ? { discard_data: opts.discardData ?? false }
         : {}),
     },
   });

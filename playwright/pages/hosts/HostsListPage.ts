@@ -271,9 +271,12 @@ export class HostsListPage {
     return names;
   }
 
-  /** A hosts-table column header by its visible name. */
-  columnHeader(name: string): Locator {
-    return this.table.table.getByRole('columnheader', { name });
+  /**
+   * A hosts-table column header by its visible name. `exact` where the name is
+   * part of another header's ("Fleet" in "Added to Fleet").
+   */
+  columnHeader(name: string, opts: { exact?: boolean } = {}): Locator {
+    return this.table.table.getByRole('columnheader', { name, exact: opts.exact });
   }
 
   /**
