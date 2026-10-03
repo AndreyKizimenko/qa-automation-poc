@@ -7,7 +7,8 @@
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
+> **Branch from current `main`** (batches A and B merged with
+> [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82)).
 > **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [README §5](../round-2/README.md) (never lock a VM) and
 > [§9](../round-2/README.md#9-working-a-batch-since-d), `playwright/CLAUDE.md` (**Test hosts**, and the OS-update
@@ -20,6 +21,28 @@
 >
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
 > both instances run.
+>
+> **Since batches A and B (2026-10-03, re-checked against `main` da2aceb).** Neither built anything in this
+> batch's area. What applies here:
+>
+> - **[#54619](https://github.com/fleetdm/fleet/issues/54619) (a fleet's webhook saves wipe each other) doesn't
+>   reach this batch's saves.** The OS-updates form, and the Users form's Windows toggle, PATCH `/teams/:id`
+>   with `mdm` only, and Fleet rewrites a fleet's `webhook_settings` only when the payload carries it
+>   (`ee/server/service/teams.go:216-228`); the rest of setup experience and disk encryption save through their
+>   own endpoints. Never save Workstations' **Settings** tab: that's the path that turns its failing-policies
+>   webhook off.
+> - **Org settings › Advanced options saves several global keys as loaded**, among them `mdm.apple_server_url`,
+>   `apple_require_hardware_attestation` and `only_allow_apple_business_enrollment`, and
+>   `shared/settings/organization/advanced-options.spec.ts` asserts they come through unchanged. C9 #9's save
+>   posts only `mdm.macos_migration`, so it doesn't race it; nothing in this batch may change those three (§2.3).
+> - **Ace editors: `setAceValue`** (`pages/components/aceEditor.ts`) writes through Ace's API (C9 #4).
+> - **A toast doesn't prove a second save**: poll the stored state through the API (`expect.poll`) after each
+>   save in a round trip.
+> - **A timed-out test skips its `finally`**: restore in an `afterEach`, as *Traps* already says.
+> - **`--repeat-each` on a serial describe that writes global config needs `--workers=1`** (C9 #9).
+> - **Building beside another batch:** announce each instance run, and wait for a "go" before a run with
+>   dependencies: `cleanup-setup` resets Workstations' setup experience and clears its OS updates, which breaks
+>   an F run in flight.
 
 ## The gaps
 
@@ -117,9 +140,12 @@ Read every flow body. Known so far:
   `tests/cli/shared/get-read-only.spec.ts:43-48`). End-user migration (`EndUserMigrationSection.tsx`): slider
   Enabled / Disabled, radios `voluntary` / `forced` disabled unless enabled (`:189-211`), "Example payload"
   (`:239-245`; "An example request sent to your configured Webhook URL.", JSON across several lines, so parse it).
-  Save `PATCH /config {mdm: {macos_migration: {enable, mode, webhook_url}}}`, toast "Successfully updated end user
-  migration." Global, premium + ABM only, and no other spec reads it. Whether mode and URL persist with
-  `enable=false` is unverified.
+  Save `PATCH /config {mdm: {macos_migration: {enable, mode, webhook_url}}}`, nothing else
+  (`EndUserMigrationSection.tsx:105-113`), toast "Successfully updated end user migration." Global, premium + ABM
+  only, and no other spec reads it. Whether mode and URL persist with `enable=false` is unverified. The page's
+  Apple Business card only displays `only_allow_apple_business_enrollment`; never change it, `apple_server_url`
+  or `apple_require_hardware_attestation` from a main-project spec: the Advanced options save posts them as
+  loaded, and `shared/settings/organization/advanced-options.spec.ts` asserts they're unchanged.
 
 ### 2.4 Automatic enrollment (C7 #28)
 
@@ -143,7 +169,8 @@ the identity provider.").
   configuration", an Ace editor "Configuration", toast "<name> configuration updated." API `PATCH
   /software/titles/:id/app_store_app {fleet_id, configuration}`; only `managedConfiguration` and
   `workProfileWidgets` are allowed top-level keys (`server/fleet/android.go:329-366`). Reopening shows tab-indented
-  JSON, so compare parsed values; Ace auto-pairs brackets, so set the content through the editor's API.
+  JSON, so compare parsed values; Ace auto-pairs brackets, so set the content through the editor's API
+  (`setAceValue`, `pages/components/aceEditor.ts`).
 - **Web apps (C9 #3).** No UI creates one: `POST /api/v1/fleet/software/web_apps` (multipart `title`, `url`,
   optional square PNG icon of 512 px or more) returns an `app_store_id`, and the title is then added and removed
   like a Play app. **There is no delete** (`server/service/handler.go:959`), so every create is permanent in the
@@ -164,8 +191,9 @@ storing. Generate the fixture in the test, or commit a `test-data/apple/macos/se
 
 `SetupExperienceUsersPage`, `BootstrapPackagePage` (needs the Advanced options locators), `InstallSoftwarePage`,
 `RunScriptPage`, `DiskEncryptionPage` (`goto({ fleetId, platform })`), `OsUpdatesPage`, `IntegrationsPage`
-(`gotoMdm`, `gotoSsoEndUsers`), `SetupAssistantPage`, `SoftwareTitleDetailPage.runAction`; API (`helpers/api/mdm.ts`):
-`resetSetupExperience`, `resetMacosSetupToggles`, `get/deleteBootstrapPackage`, `clearSetupExperienceSoftware`;
+(`gotoMdm`, `gotoSsoEndUsers`), `SetupAssistantPage`, `SoftwareTitleDetailPage.runAction`, `setAceValue`; API
+(`helpers/api/mdm.ts`): `resetSetupExperience`, `resetMacosSetupToggles`, `getBootstrapMetadata` /
+`deleteBootstrapPackage`, `clearSetupExperienceSoftware`;
 (`fleets.ts`) `getFleetOsUpdates`, `clearFleetOsUpdates`, `setFleetMacosUpdates`; `getAppConfig` / `patchAppConfig`,
 `addAppStoreApp`, `deleteSoftwareTitle`, `listFleetHosts`.
 
@@ -184,7 +212,8 @@ covers for these pages.
 ## Traps this batch will hit
 
 - **The Workstations wipe doesn't reset** manual agent install, disk encryption, the BitLocker PIN,
-  `end_user_local_account_type`, the global macOS migration settings or end-user auth. Restore each in an
+  `end_user_local_account_type`, the global macOS migration settings or the global end-user authentication (IdP)
+  settings (the fleet's own end-user auth toggle *is* reset, by `resetMacosSetupToggles`). Restore each in an
   `afterEach`, and add a cleanup reset for any that would break other specs if stranded.
 - **The users, bootstrap-package, install-software and run-script specs all write Workstations' setup
   experience** in the main project at once. Augment the existing tests rather than adding parallel writers.

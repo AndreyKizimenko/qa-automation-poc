@@ -7,8 +7,8 @@
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
-> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
+> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [README §9](../round-2/README.md#9-working-a-batch-since-d),
 > `playwright/CLAUDE.md` (**Test hosts**: what a simulation can and can't answer, borrowing with
 > `findSimulations`), round 2's [E → What landed](../round-2/E-label-targeting.md#what-landed) (set membership over
@@ -22,8 +22,36 @@
 > **Two facts change how you write these** (§2): simulations **pass every policy** (only `SELECT 0;` fails),
 > and *Select all matching* only appears with 50+ rows selected.
 >
+> **Since batches A and B (2026-10-03).** The full list is in
+> [README §5](README.md#since-batches-a-and-b-2026-10-03). These apply here:
+>
+> - **Throwaway `pw-*` fleets are approved**: created and deleted in the test, deleted again in an `afterEach` that
+>   finds the fleet by name, and swept by cleanup on premium. Deleting a fleet returns its hosts to Unassigned
+>   (`ON DELETE SET NULL`, Fleet `server/datastore/mysql/teams.go:268-272`), so simulations staged on one come back
+>   with the sweep. That gives C1 #12 and C5 #10's search half a new option (decisions 1 and 5).
+> - **`pw-*` labels are swept on premium only**, inside the VMs-fleet step. On free a spec deletes its own and
+>   purges a dead run's leftovers up front, as `shared/labels/labels.spec.ts` does. That spec's Manual lifecycle
+>   holds **Linux slice 2** of `findSimulations` (a member, never moved); C9 #11 builds on it (§3.4).
+> - **An absence check passes on something that never rendered.** Prove the present half first: the selection bar
+>   reading "All hosts on this page are selected" before *Select all matching* is absent (C1 #10); the org-name
+>   heading before the fleet dropdown and the Fleet column are absent (C5 #1).
+> - **`DataTable.cellByColumn` takes the column index from the header**, which can re-render after the list
+>   changes. Read C5 #10's Fleet cells by content once the list shows VMs.
+> - **A second save's toast can be the first one's.** Read C9 #11's membership back through `listLabelHostIds`
+>   after each save.
+> - **The org-wide *Store report results* is never toggled** (batch B's decision), so the host Reports tab's
+>   toggle (C5 #7 / #20) is always shown.
+> - **Nothing here writes global config.** Undo a host move in an `afterEach` too: a timed-out test skips its
+>   `finally`, and only the VMs-fleet sweep returns borrowed simulations (none returns them from QA or
+>   Workstations).
+> - **Reuse:** `ReportDetailsPage.resultRows` (C4 #P17), `createFleetPolicy`'s `platform` and
+>   `labels_include_any` (§3.1, §3.3), `getHostDisplayName` for a `findSimulations` id, `deleteLabelsMatching`.
+> - **If another batch is built at the same time**, announce each run to its session. A run with dependencies
+>   waits for its "go": `cleanup-setup` wipes every global policy and report, which this batch's specs create.
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`
-> (`cmd/osquery-perf/agent.go` at the same commit), the build both instances run.
+> (`cmd/osquery-perf/agent.go` at the same commit), the build both instances run, and again on 2026-10-03 against
+> `main` (da2aceb) and the RC branch's head (ac3c0d6).
 
 ## The gaps
 
@@ -39,7 +67,7 @@
 | round 1 C1 #10 | "Select all matching" is withheld under a filter that can't be transferred by filter (the flow: Low disk space hosts); the label case is batch-run's scale test | `premium/hosts/bulk-transfer.spec.ts` | augment | `flows-Premium/hosts-attempt-to-bulk-transfer-all-hosts-with-filter-unhappy-path.flow.js` |
 | round 1 C1 #12 | transfer through "Select all matching" (needs 51+ hosts staged on a fleet nothing else uses) | review: `premium/exclusive/`, or cut (decision) | review | `flows-Premium/hosts-bulk-transfer-hosts.flow.js` |
 | round 1 C1 #11 | bulk delete with fleet / status / search filters and the counts across scopes (deleted simulations never come back; host-delete already covers a bulk delete) | review: likely cut, or one search-narrowed delete in host-delete | review | `flows-Premium/hosts-bulk-delete-hosts-with-3-filters-premium.flow.js` |
-| round 1 C5 #10 | the Hosts fleet dropdown switching the list to that fleet's hosts (its type-to-search needs 10+ fleets; there are 3) | `premium/hosts/…` a hosts-list spec: select VMs, every Fleet cell reads VMs | augment | `flows-Premium/dashboard-team-dropdowns-searchable-searching-and-selecting-a-valid-team-shows-proper-hosts.flow.js` |
+| round 1 C5 #10 | the Hosts fleet dropdown switching the list to that fleet's hosts (its type-to-search needs 10+ rows, All fleets and Unassigned included; the four standing fleets make 6) | `premium/hosts/…` a hosts-list spec: select VMs, every Fleet cell reads VMs | augment | `flows-Premium/dashboard-team-dropdowns-searchable-searching-and-selecting-a-valid-team-shows-proper-hosts.flow.js` |
 | round 1 C9 #11 | a manual label's host count, filter pill and host membership edits from the Hosts list | `shared/labels/labels.spec.ts` (moved by batch A) | augment | `flows-Premium/mdm-add-and-update-manual-labels-to-host.flow.js` |
 | round 1 C5 #1 | free dashboard: no fleet dropdown (the check can skip), and the hosts table's team column absent | `free/dashboard/historical-data-collection.spec.ts` | augment | `flows-Free/dashboard-teams-dropdowns-not-searchable-in-free.flow.js` |
 | round 1 C5 #7 | free: the host Reports tab's "Show reports that don't store results" toggle flipped, and a discard-data report appearing | `shared/hosts/host-reports-tab.spec.ts` | augment | `flows-Free/reports-reports-show-reports-that-have-no-results.flow.ts` |
@@ -68,8 +96,9 @@ Read every flow body. Known so far:
   simulations never come back, and `host-delete.spec.ts` already covers a bulk delete. At most, one
   search-narrowed delete of a staged host folded into `host-delete`.
 - **C1 #12: a decision** (§3.2): `exclusive/`, or cut.
-- **C5 #10: cut the search half.** The page's "Search fleets" box appears only with 10+ fleets
-  (`FleetsDropdown.tsx:63,185,357`); there are 3. Keep the cheap read: select VMs, every Fleet cell reads VMs.
+- **C5 #10: cut the search half.** The page's "Search fleets" box appears only with 10+ rows, and All fleets and
+  Unassigned count as rows (`FleetsDropdown.tsx:59-63,185,357`). Workstations, VMs, QA and Mobile make 6, more
+  only while a throwaway `pw-*` fleet exists. Keep the cheap read: select VMs, every Fleet cell reads VMs.
 - **C5 #7 / #20**: the toggle is **"Show reports that don't store results"**, not "no results".
 - **C4 #P17** reads the macOS VM's durable `pw-host-report-results` result: read-only, so no effect on the VM.
 - **C6 #1 has a data risk** (§3.5).
@@ -103,7 +132,7 @@ Read every flow body. Known so far:
 - **From the policies list:** columns "Pass" and "Fail", each an "N host(s)" link to the same URL
   (`PoliciesTableConfig.tsx:348-414`). They show `---` until counted, and **counts come from the hourly
   aggregation cron** (`cmd/fleet/cron.go:1506-1510`). Premium can read the durable VMs-fleet policy "Claude is
-  installed (macOS)" (`gitops/premium-fleetqa/fleets/vms.yml:81`). Read it only; it carries an install
+  installed (macOS)" (`gitops/premium-fleetqa/fleets/vms.yml:84`). Read it only; it carries an install
   automation. Free has no durable policy, so its twin either waits up to an hour or triggers a global cron:
   **never trigger the instance's crons from a test**. Ask Andrey; the likely answer is premium only plus the
   free paywall-free half (the host tab link, C3 #6).
@@ -112,7 +141,8 @@ Read every flow body. Known so far:
 - **Bounding the expected set:** on premium, target the policy at a manual label holding borrowed simulations,
   refetch them, and assert the filtered list equals that set. On free (no fleets, so label targeting is
   premium-only), assert your refetched simulations ⊆ the list: others run it on their hourly cycle.
-- `createPolicy` takes no platform, labels or fleet. Add options (after PR #78, `createFleetPolicy` exists).
+- `createPolicy` takes no platform, labels or fleet. Add options. `createFleetPolicy` (fleet policies only) already
+  takes `platform` and `labels_include_any`.
 
 ### 3.2 *Select all matching* and transfers (C1 #10, #12, C5 #10)
 
@@ -126,10 +156,13 @@ Read every flow body. Known so far:
 - **C1 #12, the transfer itself:** `POST /hosts/transfer/filter {fleet_id: dest, filters: {query, status,
   label_id, fleet_id: current}}` (`ManageHostsPage.tsx:1500-1557`); the server takes only those four keys
   (`server/service/hosts.go:4247-4300`). Toast: "Hosts successfully transferred to  <name>." (two spaces). It
-  needs 51+ hosts on a fleet **nothing else uses**, and there isn't one: QA must stay empty (`bulk-transfer`
-  asserts it), Workstations holds `host-delete`'s staged hosts, VMs has the real VMs. **Options:** cut, or
-  `premium/exclusive/`, staging 51 Windows simulations onto QA through the API and moving them back in the
-  `finally`, plus a sweep. Never Select all matching on Unassigned: it moves every matching simulation, and
+  needs 51+ hosts on a fleet **nothing else uses**, and no standing fleet is one: QA must stay empty
+  (`bulk-transfer` asserts it, and `host-transfer-permissions` moves Windows simulations through it), Workstations
+  holds `host-delete`'s staged hosts, VMs has the real VMs. **Options:** cut; `premium/exclusive/`, staging 51
+  Windows simulations onto QA through the API and moving them back in the `finally`, plus a sweep; or a throwaway
+  `pw-*` fleet, which nothing else uses and whose deletion returns its hosts to Unassigned, so the fleet sweep
+  doubles as the host sweep. Whether 51 online Windows simulations exist past the slices already claimed is
+  unverified. Never Select all matching on Unassigned: it moves every matching simulation, and
   `batch-run`'s scale test needs 50+ online macOS simulations there.
 - **C5 #10:** the Fleet column's header is "Fleet" (`team_name`).
 
@@ -146,22 +179,28 @@ absent for a linux and a windows simulation (`listHostPolicyIds`), with a free t
 
 - **C9 #11:** `LabelsPage.addHost` exists; a remove-host method and choosing a label by name in `LabelFilter`
   (it has `selectPlatform` / `selectFirstCustomLabel` only) don't. Membership only, so simulations are never
-  moved. Claim a new `findSimulations` slice. Labels survive cleanup; name them `pw-*` and remove them yourself.
+  moved. `shared/labels/labels.spec.ts`'s Manual lifecycle already creates a manual label holding Linux slice 2 of
+  `findSimulations` (one member), so the host count and the filter pill can be read there. The flow's edit
+  removes a member and adds another, which takes more hosts than that: claim the next free Linux slice (3 on).
+  `pw-*` labels are swept on premium only (the VMs-fleet cleanup step); on free nothing sweeps them, so the
+  lifecycle purges its own leftovers up front and deletes what it creates.
 - **C5 #1:** free renders `<h1>{org_name}</h1>` instead of the dropdown (`DashboardPage.tsx:888-906`) and drops
   the Fleet column (`HostTableConfig.tsx:839-852`; `hostsList.columnHeader('Fleet')`). The existing free test
   skips when hosts-online collection is off, so write an unconditional one rather than augmenting it.
 - **C5 #7 / #20:** the toggle is "Show reports that don't store results" (`HostReportsTab.tsx:220-231`,
   `?show_dont_store=true`, API `include_reports_dont_store_results=true`). Off, only `discard_data=0 AND
-  logging_type='snapshot'` reports are listed (`query_results.go:476-480`). It's hidden when the org-wide
-  "Store report results" is off. `createReport` can't set `discard_data` yet. Assert through a search marker; the
-  card count is shared.
+  logging_type='snapshot'` reports are listed (`query_results.go:545-549`). It's hidden when the org-wide
+  "Store report results" is off, which the suite never turns off. `createReport` can't set `discard_data` yet
+  (its `interval` option sends `discard_data: false`). Seeding it through the edit form instead meets the form's
+  refill (`ReportEditPage`). Assert through a search marker; the card count is shared.
 - **C5 #12:** columns "Name", "Installed version", "Type", "Last opened", "Vulnerabilities", "File path", "Hash";
   placeholder "Search by name or vulnerability (CVE)"; 20 a page. A Windows simulation has ~141 programs
   (8 pages); macOS opens on the Applications view. Don't assert "Last opened" is set on every row: simulations
   likely leave it empty.
 - **C4 #P17:** a report's Host cell links to the host's report page (`QueryReportTableConfig.tsx:71-79`):
-  host heading, "Back to host details", "View data for all hosts". `ReportDetailsPage` has no results-table
-  locator yet.
+  host heading, "Back to host details", "View data for all hosts". `ReportDetailsPage.resultRows` holds the
+  results table's rows (`premium/reports/stored-results.spec.ts` reads them); a row's Host link has no locator
+  yet.
 
 ### 3.5 Vulnerabilities and Unassigned (C6 #1, #3, #6, #7, #26, #27)
 
@@ -188,23 +227,30 @@ absent for a linux and a windows simulation (`listHostPolicyIds`), with a free t
 
 ## Reusable pieces
 
-- `helpers/api/hosts.ts`: `findSimulations` (claimed slices: linux 0–1, darwin 0–5, windows 0–1; all past
+- `helpers/api/hosts.ts`: `findSimulations` (claimed slices: linux 0–2, darwin 0–5, windows 0–1; all past
   `BORROW_SKIP` = 40), `findMdmSimulations`, `findSimulatedHostIds` (offsets in use: bulk-transfer darwin 0–2,
-  host-delete darwin 10/11/20 and windows 10, cli fleets darwin 30), `transferHosts`, `requestHostRefetch`,
-  `waitForNoPendingRefetch`, `listFleetHosts`, `requireRealHost`.
-- Labels: `createManualLabel`, `setManualLabelHosts`, `listLabelHostIds`, `deleteLabelById`. Policies:
-  `createPolicy`, `listHostPolicyIds`, `deleteFleetPolicies`. Reports: `createReport`.
+  host-transfer-permissions windows 0–2, host-delete darwin 10/11/20 and windows 10, cli fleets darwin 30),
+  `getHostDisplayName`, `transferHosts`, `requestHostRefetch`, `waitForNoPendingRefetch`, `listFleetHosts`,
+  `requireRealHost`.
+- Labels: `createManualLabel`, `setManualLabelHosts`, `listLabelHostIds`, `deleteLabelById`,
+  `deleteLabelsMatching`. Policies: `createPolicy`, `createFleetPolicy`, `listHostPolicyIds`,
+  `deleteFleetPolicies`. Reports: `createReport`. Fleets: `createFleet`, `deleteFleet`.
 - Page objects: `HostsListPage` (`filterPill`, `selectAllOnPage`, `selectAllMatchingButton`, `selectedCount`,
   `columnHeader`), `HostDetailsPage` (`openPoliciesTab`, `policyRow`, `dontStoreResultsToggle`,
-  `selectSoftwareView`), `VulnerabilitiesListPage`, `CveDetailPage.viewAllHostsFor`, `HostQueryReportPage`.
+  `selectSoftwareView`), `VulnerabilitiesListPage`, `CveDetailPage.viewAllHostsFor`, `HostQueryReportPage`,
+  `ReportDetailsPage.resultRows`.
 
 ## Decisions to put to Andrey
 
-1. **C1 #12:** cut, or an exclusive spec staging 51 simulations on QA (§3.2).
+1. **C1 #12:** cut, or an exclusive spec staging 51 simulations on QA (§3.2). *(new, from A/B learnings)* Or stage
+   them on a throwaway `pw-*` fleet, whose deletion (and the fleet sweep) returns them to Unassigned; and does that
+   variant still need `exclusive/`?
 2. **C1 #11:** cut, or one search-narrowed delete in `host-delete`.
 3. **The free twin of the policies list's host-count link** (C3 #7): it needs the hourly aggregation; premium
    only, or wait (§3.1)?
 4. **C6 #1:** how much of the exploit icon to assert, given Fleet's own data can leave it off (§3.5).
+5. *(new, from A/B learnings)* **C5 #10's search half:** cut as planned (§1), or reach the 10-row threshold with
+   four throwaway `pw-*` fleets? While they exist, every fleet dropdown other specs open shows the search box.
 
 ## Free coverage
 
@@ -219,7 +265,8 @@ for the vulnerability and Library rows.
 - **Never use failing SQL on the VMs fleet.** It runs two install policies, and simulations pass them, so
   nothing installs. Keep it that way.
 - **Never trigger the vulnerabilities or aggregation crons.** They're global, and other runs see the effect.
-- **Cleanup wipes global and Unassigned policies, reports and software. Labels survive it.**
+- **Cleanup wipes global and Unassigned policies, reports and software. `pw-*` labels are swept on premium only;
+  on free they survive it.**
 - **A shared count is never an assertion.** Assert set membership over the hosts you staged.
 
 ## Done when

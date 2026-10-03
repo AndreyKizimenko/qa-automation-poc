@@ -53,8 +53,8 @@ here** block, the gap table, the review to do first, facts for the build, the de
 
 | batch | theme | hosts | gaps | status |
 |---|---|---|---:|---|
-| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | built 2026-10-02 (16 built, 3 cut); [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81), merged into [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) for one branch run |
-| **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | built: 22, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A), awaiting its branch run |
+| **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | **merged** 2026-10-03: 16 built, 3 cut; [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81), shipped in [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) |
+| **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | **merged** 2026-10-03: 22 built, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A); branch run [37077445852](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37077445852) green, 0 flaky |
 | **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | ready for review |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | ready for review |
 | **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | ready for review |
@@ -65,8 +65,9 @@ here** block, the gap table, the review to do first, facts for the build, the de
 A–D need nothing that doesn't exist; E's per-role source read is done, so it's a design job; F works on
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
 Every batch file lists the decisions to put to Andrey **before** building: 25 across the round, most of them "cut,
-or build it this narrow way". Batches touch different surfaces and can run in any order, **but
-never two at once against the same instance.**
+or build it this narrow way". Batches touch different surfaces and can run in any order. **Two can be built at once**, each
+in its own worktree, **only if their instance runs are coordinated** (§5, "Since batches A and B"): every run
+announced, and no run with dependencies while the other session is mid-run.
 
 ## 4. How a batch runs
 
@@ -97,8 +98,8 @@ explicit:
 
 Round 2's §5 (never lock a VM; uploading a profile is delivering it), §6 (standing rules) and §9 (how much to
 run, which docs move, the VMs as they are) still hold. New since round 2's README was written. The first
-three arrive with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78)), so
-**branch from `main` after #78 has merged**; its `CLAUDE.md` carries them too:
+three arrived with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78)), and
+`CLAUDE.md` carries them; **branch from `main` at or after da2aceb** (batches A and B, below):
 
 - **A failed install *script* stalls orbit on that VM for up to 5 minutes** — its config loop backs off 1, 2, 4,
   then 5 min, delaying every install and script queued there (filed as
@@ -127,6 +128,45 @@ three arrive with batch G ([PR #78](https://github.com/AndreyKizimenko/qa-automa
   simulate orbit **do** report script runs and installs (exit 0 or 1 at random, within ~35 s), though nothing lands
   on a disk. Simulations also pass every scheduled policy except `SELECT 0;`. Batches C, D and G spell out what
   that means for them.
+
+### Since batches A and B (2026-10-03)
+
+A and B were built in parallel by two sessions and shipped together in
+[PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82). **Branch from `main` at or after da2aceb.**
+Their suite-wide rules are in `playwright/CLAUDE.md` and the `playwright-test-author` skill. Each later batch's
+▶ Start here block names the ones that apply to it. In short:
+
+- **Verify the plan's facts before building on them.** B's plan proposed a confirmation for *Store report
+  results* that doesn't exist, said a helper took a file path when it took content, and pointed at a page anchor
+  4.93 had renamed. Each batch file's facts were checked on 2026-10-03, but the review step is where the rest are
+  caught.
+- **Parallel batches coordinate their instance runs.**
+  - Each session works in its own `git worktree` (`.claude/worktrees/<batch>`).
+  - Before each run it messages the other session (`SendMessage`): "about to run <specs> on <tier>, ~N min", then
+    "done". Reply "busy" if you're mid-run.
+  - A run **with dependencies** waits for an explicit "go": its `cleanup-setup` wipes every global report and policy
+    and Unassigned's scripts, packages and profiles.
+- **One branch run for two PRs:** merge one batch's branch into the other's. The conflicts are only in shared
+  docs (DELIVERY-LOG, the test-audit README totals, this README and the INDEX). Recount the audit totals from the
+  area files, and renumber an audit ID both batches claimed. Have the other batch's session diff its files in the
+  merge against its last commit before the run.
+- **Global config written from two files races.** A serial describe serialises only within its file. Org settings
+  › Advanced's Save posts several subtrees as loaded (listed in the author skill); no main-project spec writes them.
+- **Restore in an `afterEach`, keyed to the test that changed something.** A timed-out test skips its `finally`.
+- **Logins are throttled** (10 a minute, one bucket): `withStaticUser`'s cached sessions in the browser, `apiLogin`
+  for API logins.
+- **Throwaway fleets are allowed** when named `pw-*`, deleted in the test and in an `afterEach` that finds the
+  fleet by name. Cleanup sweeps them on premium. `pw-*` labels are swept on premium only; on free a spec deletes
+  its own.
+- **UI traps that cost a run:**
+  - A second save's toast can be the first one's, so poll the API instead.
+  - The report edit form refills itself after *Edit report*.
+  - A column index read from a re-rendered header points at the wrong cell.
+  - An absence check on a menu that never opened passes.
+- **Decisions Andrey made in A and B that later batches inherit:**
+  - The org-wide *Store report results* setting is never toggled.
+  - Throwaway `pw-*` fleets are approved.
+  - AI Autofill is tested against the live service.
 
 ## 6. Decisions round 3 already carries
 

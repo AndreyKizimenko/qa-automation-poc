@@ -7,8 +7,8 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 
 > ## ▶ Start here
 >
-> **Branch from `main` after [PR #78](https://github.com/AndreyKizimenko/qa-automation-poc/pull/78) has merged.**
-> **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
+> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [G-out-of-band.md](../round-2/G-out-of-band.md) (the gitops-mode V1
 > work and its *Parked for V2* list) and [GITOPS-PLAN.md](../round-2/GITOPS-PLAN.md), `playwright/CLAUDE.md`
 > (the `gitops-mode` project), then this file.
@@ -18,8 +18,22 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 > global switch** that makes every mutating control read-only, so everything here runs in the `gitops-mode`
 > project: alone, one worker, no retries, after the exclusive step.
 >
+> **Since batches A and B (2026-10-03).** The full list is in
+> [README §5](README.md#since-batches-a-and-b-2026-10-03). These apply here:
+>
+> - **Variables have a helper and a sweep** (§2.3): `createVariable`, and the next run's `cleanup-setup` deletes
+>   any `PW_VAR_*` variable.
+> - **`EnrollSecretModal` acts on a secret by its value only.** For gated-state reads use
+>   `modal.rowControls(modal.rows.first())`, as `02` and `03` do. Never write the global enroll list: the
+>   simulations re-enroll with it, and `restoreGlobalEnrollSecrets` is the only write a spec makes there.
+> - **A toast doesn't prove a second save.** `ChangeManagementPage.save()` waits on a toast that stays up for
+>   seconds, so confirm each save through `getGitOpsMode` (`expect.poll`) (§2.4).
+> - **Restore in an `afterEach`**, keyed to the test that changed something; a timed-out test skips its `finally`.
+> - **If another batch is built at the same time**, a gitops-mode run needs its session's explicit "go": the flag
+>   makes every control its run clicks read-only.
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
-> both instances run.
+> both instances run, and again on 2026-10-03 against `main` (da2aceb) and the RC branch's head (ac3c0d6).
 
 ## The gaps
 
@@ -72,16 +86,20 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 ### 2.3 Variables' split gating
 
 "Add variable" is wrapped with no entity type (`GlobalVariables.tsx:138-194`); `Delete <name>` has no wrapper
-("Delete is allowed in GitOps mode", `GlobalVariablesTableConfig.tsx:86-101`). Seed a variable with `POST
-/api/v1/fleet/custom_variables {name, value}` (uppercase name; no helper yet), delete it in the spec: cleanup never
-sweeps variables. The `secrets` exception means **enroll** secrets; it doesn't unlock Add variable.
+("Delete is allowed in GitOps mode", `GlobalVariablesTableConfig.tsx:86-101`). Seed a variable with
+`createVariable(request, name, value)` (`helpers/api/variables.ts`), named `PW_VAR_<stamp>` like
+`shared/controls/custom-variables.spec.ts`'s, and delete it in an `afterEach` (`deleteVariablesMatching`). The
+gitops-mode invocation doesn't run `cleanup-setup`, so a leftover waits for the next run's `PW_VAR_*` sweep. The
+`secrets` exception means **enroll** secrets; it doesn't unlock Add variable.
 
 ### 2.4 The Change-management write flow
 
 - `IntegrationsPage/cards/ChangeManagement/ChangeManagement.tsx`: checkboxes Labels / Software / Enroll secrets; the
   URL input is disabled while the mode is off. Errors: "Git repository URL is required when GitOps mode is
   enabled", "Git repository URL must include protocol (e.g. https://)" (`:43-47`). Save sends the whole `gitops`
-  subtree (`:126-136`); toast "Successfully updated settings" (`:148`).
+  subtree (`:126-136`); toast "Successfully updated settings" (`:148`). `ChangeManagementPage.save()` waits on that
+  toast, which stays up for seconds: a second save in the same test can pass on the first one's, so read each
+  save back through `getGitOpsMode`.
 - Activities `enabled_gitops_exception` / `disabled_gitops_exception` and `enabled_gitops_mode` /
   `disabled_gitops_mode` (`server/fleet/activities.go:866-913`), logged on API flips too. Feed copy: "enabled the
   labels exception for GitOps." / "enabled GitOps mode in the UI." (`GlobalActivityItem.tsx:1164-1174`); neither is
@@ -105,19 +123,21 @@ global-only, so a seeded policy would run on the VMs. Use `createFleetPolicy` (P
 
 ## 3. The project's limits
 
-`workers: 1`, `fullyParallel: false`, `retries: 0` (`playwright.config.ts:274-288`); CI's step runs with
-`--global-timeout=900000` (`.github/workflows/playwright-premium.yml:148-152`). Today: 19 tests, about a minute
-on one worker (`01` 3 tests; `02` serial, ending with "Change management stays fully editable" at `:130`; `03`
-labels and secrets, one skipped for #48218; `zz-everything-is-back` 6 tests). About 10–12 new tests at 3–6 s each
-add roughly a minute; an `addFmaToFleet` seed would add 5–45 s, so prefer the "available" resolver.
+`workers: 1`, `fullyParallel: false`, `retries: 0` (`playwright.config.ts:284-302`); CI's step runs with
+`--global-timeout=900000` (`.github/workflows/playwright-premium.yml:150-154`). Today: 19 tests, about a minute
+on one worker (0.9 min in run 37077445852; `01` 3 tests; `02` serial, ending with "Change management stays fully
+editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everything-is-back` 6 tests). About
+10–12 new tests at 3–6 s each add roughly a minute; an `addFmaToFleet` seed would add 5–45 s, so prefer the
+"available" resolver.
 
 ## Reusable pieces
 
 `pages/components/gitopsMode.ts` (`expectGatedByGitOps`, `expectNotGatedByGitOps`, `expectGitOpsTooltip`),
-`helpers/api/gitops-mode.ts` (`withGitOpsMode`, `setGitOpsException`, `enableGitOpsMode`), `ChangeManagementPage`
-(`exceptionCheckbox`, `save`; no error locator yet), `DiskEncryptionPage`, `ConfigurationProfilesPage`,
-`VariablesPage`, `SoftwareTitleDetailPage`, `FleetMaintainedAppDetailPage.addSoftwareButton`, `latestActivityId` /
-`assertActivityAfter`.
+`helpers/api/gitops-mode.ts` (`withGitOpsMode`, `setGitOpsException`, `enableGitOpsMode`, `getGitOpsMode`),
+`ChangeManagementPage` (`exceptionCheckbox`, `save`; no error locator yet), `DiskEncryptionPage`,
+`ConfigurationProfilesPage`, `VariablesPage`, `EnrollSecretModal` (`goto(fleetId)`, `rowControls`),
+`SoftwareTitleDetailPage`, `FleetMaintainedAppDetailPage.addSoftwareButton`, `latestActivityId` /
+`assertActivityAfter`; API: `createVariable` / `deleteVariablesMatching`, `createFleetPolicy`, `uploadProfile`.
 
 ## Decisions to put to Andrey
 
@@ -129,7 +149,8 @@ add roughly a minute; an `addFmaToFleet` seed would add 5–45 s, so prefer the 
 
 - **`02-gated-surfaces` is serial with no retries.** Put new tests in new files numbered before `zz-`.
 - **`zz-everything-is-back` can't detect a leftover exception.** Your `afterEach` is the only guard.
-- **A concurrent `PATCH /config`** (another run, a person) can flip the flag mid-run: `gh run list` first.
+- **A concurrent `PATCH /config`** (another run, another batch's session, a person) can flip the flag mid-run:
+  `gh run list` first, and announce the run to any parallel session.
 - **Fleet's default exception set has `secrets: true`** (`server/fleet/app.go:1587`); the live value is
   unverified, so read it before asserting what an exception lifts.
 

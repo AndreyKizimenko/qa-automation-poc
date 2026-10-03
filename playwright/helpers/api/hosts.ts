@@ -239,6 +239,10 @@ export async function findOnlineHost(
  * so two mutating specs on the same platform must not be handed the same hosts —
  * each picks a slice and the offsets are kept distinct across specs.
  *
+ * Slices claimed: darwin 0–2 `bulk-transfer.spec.ts`, 10–11 and 20
+ * `host-delete.spec.ts`, 30 `tests/cli/premium/fleets.spec.ts`; windows 0–2
+ * `host-transfer-permissions.spec.ts`, 10 `host-delete.spec.ts`.
+ *
  * Pages the pool until `offset + count` hosts of the requested platform have
  * been collected, rather than reading the slice off one fixed-size page: the
  * `platform` param matches a *label group* that also returns other platforms,
