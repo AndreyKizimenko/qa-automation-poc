@@ -147,15 +147,16 @@ test.describe('Shared • Policies • policy hosts', () => {
 
         // Searched one at a time: every Linux simulation that ran the policy
         // on its own cycle is listed too, so neither is assured of page 1.
+        // `searchFor` repeats a search the page's own URL rewrite undoes.
         for (const name of names) {
-          await hostsList.search.fill(name);
+          await hostsList.searchFor(name);
           await expect(hostsList.hostLink(name), `${name} under ${label}`).toBeVisible();
         }
 
         await hostsList.selectPolicyResponse(other);
         await expect(hostsList.filterPill).toHaveAccessibleName(`hosts filtered by ${policy.name}`);
         for (const name of names) {
-          await hostsList.search.fill(name);
+          await hostsList.searchFor(name);
           await hostsList.table.waitForSettled();
           // A table that rendered (rows or its empty state) before the absence counts.
           await expect(hostsList.table.rowOrEmpty()).toBeVisible();
