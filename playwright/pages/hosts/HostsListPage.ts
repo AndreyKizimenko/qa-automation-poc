@@ -53,6 +53,8 @@ export class HostsListPage {
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
+  /** The Pass / Fail choice shown beside a policy's filter pill. */
+  readonly policyResponseValue: Locator;
   /** "N hosts" above the table — the list's total for the current filters. */
   readonly resultsCount: Locator;
 
@@ -122,6 +124,10 @@ export class HostsListPage {
     // role="status" with aria-label "hosts filtered by <label>" when the list
     // is scoped by a software title, OS, policy, etc.
     this.filterPill = page.getByRole('status', { name: /hosts filtered by/ });
+    // PoliciesFilter is Fleet's react-select v1 Dropdown: its combobox has no
+    // accessible name and the chosen option is a plain div, so the value is read
+    // by the wrapper's class.
+    this.policyResponseValue = page.locator('.policies-filter .dropdown__custom-value-label');
     this.resultsCount = page.locator('.table-container__results-count');
 
     this.editColumnsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit columns' });
@@ -225,6 +231,35 @@ export class HostsListPage {
   async confirmDelete(): Promise<void> {
     await this.deleteModal.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(this.deleteModal).toBeHidden();
+  }
+
+  /**
+   * Switches a policy filter between the hosts that pass it and those that fail
+   * it. The menu is react-select v1, whose options carry no role.
+   */
+  async selectPolicyResponse(response: 'Pass' | 'Fail'): Promise<void> {
+    await this.page.locator('.policies-filter .Select-control').click();
+    const option = this.page.locator('.policies-filter .Select-option', { hasText: response });
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect(this.policyResponseValue).toHaveText(response);
+  }
+
+  /** A host's link in the table, by its display name. */
+  hostLink(displayName: string): Locator {
+    return this.table.table.locator('tbody').getByRole('link', { name: displayName, exact: true });
+  }
+
+  /** The display names on the current page, in row order. */
+  async hostNames(): Promise<string[]> {
+    await this.table.waitForSettled();
+    const rows = this.table.table.locator('tbody').getByRole('row');
+    const names: string[] = [];
+    for (const row of await rows.all()) {
+      const link = row.getByRole('link').first();
+      if (await link.count()) names.push((await link.innerText()).trim());
+    }
+    return names;
   }
 
   /** A hosts-table column header by its visible name. */

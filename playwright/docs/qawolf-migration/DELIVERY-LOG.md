@@ -111,6 +111,23 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch C — server-side decisions, over simulations
+
+23 gaps in what Fleet decides on the server — which hosts a policy runs on or links to, what *Select all matching*
+transfers, who a label holds, which reports a host's tab lists — reviewed on `playwright/qawolf-round3-batch-c`
+(2026-10-03): 19 kept, 4 cut (C3 #29, C1 #11, C6 #26, and C3 #7's free twin). Detail and Andrey's decisions in
+[round-3/C-simulations.md](round-3/C-simulations.md#review-decisions-2026-10-03).
+
+**What the review changed.** Each tier also holds ~280–300 *offline* simulations, yesterday's set that host expiry
+deletes within a day and nothing else touches, so the *Select all matching* transfer (C1 #12) stages them on a
+throwaway fleet in the main project instead of going to `exclusive/` or being cut. The platform policy (C3 #3/#19)
+is one shared test of a global policy rather than an augment plus a free twin, and it reads back the platform the
+CRUD spec writes and never checks.
+
+| slice | what |
+|---|---|
+| policies | new `shared/policies/policy-hosts.spec.ts`: a policy saved with only macOS ticked is stored as `darwin` and listed on a macOS simulation, not on a Linux or a Windows one (both tiers); a host's Policies tab → **View all hosts** for a passing and a failing policy lands on the hosts with that answer, the two refetched simulations listed under it and not under the other (both tiers). New `premium/policies/policy-host-counts.spec.ts`: the VMs-fleet policy's Pass and Fail links list exactly the API's hosts. `createPolicy({ platform })`, `getGlobalPolicy`, `getHostPolicyResponses`, `listPolicyHosts`; `PolicyEditPage.saveNew({ platforms })`, `HostDetailsPage.viewAllHostsForPolicy`, `HostsListPage.policyResponseValue` / `selectPolicyResponse` / `hostLink` / `hostNames`, `PoliciesListPage.openHostCount` |
+
 ## Round 3 · Batch B — policy, report and software forms
 
 24 gaps round 1 left in forms it opened and never finished. Each flow was reviewed against the spec beside it

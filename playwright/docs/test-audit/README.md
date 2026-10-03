@@ -55,6 +55,11 @@ files · ~350 test declarations · 4 projects**.
 > Area **11**: CTL-13/14 move to `shared/` (free gains them), and CTL-35/36 add a script refused until its variable
 > exists and a variable refused deletion while a script uses it.
 
+> **Round 3 batch C added 2026-10-03** (`playwright/qawolf-round3-batch-c`): what Fleet decides server-side, over
+> simulations. Area **04**: POL-33 (a policy saved for macOS only runs on macOS hosts, both tiers), POL-34 (a host's
+> policy → the hosts that gave the same answer, both answers, both tiers) and POL-35 (the policies list's Pass / Fail
+> links on premium).
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
@@ -62,7 +67,7 @@ files · ~350 test declarations · 4 projects**.
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
 | 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 24 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 16 | premium |
-| 04 | [Policies](04-policies.md) | 32 | premium, free |
+| 04 | [Policies](04-policies.md) | 35 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 36 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 22 | premium, free |
@@ -82,7 +87,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**493 entries** covering every test in the suite. An entry can expand into several
+**496 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (36 entries → 87 executions), area 11 (36 → 92), area
 17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under

@@ -102,6 +102,22 @@ export class PoliciesListPage {
   }
 
   /**
+   * Opens the hosts behind a policy's Pass or Fail count: an "N hosts" link
+   * Fleet renders once its hourly job has counted the policy (`---` until then).
+   * The list is narrowed to the policy first, so a row past page 1 is reachable.
+   */
+  async openHostCount(policyName: string, column: 'Pass' | 'Fail'): Promise<void> {
+    await this.search.fill(policyName);
+    await this.table.waitForSettled();
+    const row = this.table.rowWith(policyName);
+    await expect(row).toHaveCount(1);
+    const link = (await this.table.cellByColumn(row, column)).getByRole('link', { name: /^\d+ hosts?$/ });
+    await expect(link).toBeVisible();
+    await link.click();
+    await expect(this.page).toHaveURL(/\/hosts\/manage\?.*policy_id=\d+/);
+  }
+
+  /**
    * Narrows the list to `policyName` and opens its Manage automations modal from
    * the row's Automations cell. Searching first keeps a row past the first page
    * reachable.

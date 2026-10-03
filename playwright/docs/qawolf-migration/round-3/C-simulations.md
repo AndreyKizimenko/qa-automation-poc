@@ -330,4 +330,10 @@ for the vulnerability and Library rows.
 
 ## What landed
 
-*Nothing yet.*
+Built on `playwright/qawolf-round3-batch-c`. Each slice was run on every tier it targets before it was
+committed.
+
+| slice | gaps | what |
+|---|---|---|
+| policies | C3 #3, #19, #6, #24, #26 | **New `shared/policies/policy-hosts.spec.ts`**: a policy created through the Save policy modal with only macOS ticked is stored as `darwin`, listed (API) on a macOS simulation and not on a Linux or Windows one, beside an untargeted sibling all three list, and shown on the macOS host's Policies tab but not the Linux host's. A passing (`SELECT 1;`) and a failing (`SELECT 0;`) Linux-only policy, two simulations refetched until they answer both; each row's **View all hosts** lands on `policy_id` + that answer, the pill and the Pass / Fail control match, both simulations are listed (searched by name), and neither is once the control is switched. **New `premium/policies/policy-host-counts.spec.ts`**: the VMs fleet's "Claude is installed (macOS)" Pass link carries `fleet_id`, and the hosts under Pass and then Fail equal a live API read. Premium 3/3 and 5×, free 2/2 |
+| cut | C3 #7 (free), C3 #29 | as reviewed |

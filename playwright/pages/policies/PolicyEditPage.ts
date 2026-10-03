@@ -26,14 +26,15 @@ export interface PolicyFormValues {
 
 /**
  * Fields collected by the "Save policy" modal that pops on Save for a
- * new policy. Platforms / target / critical are left at their modal
- * defaults (macOS, All hosts, not critical) — the smoke flow doesn't
- * need to exercise them at creation time.
+ * new policy. Target and critical are left at their modal defaults (All
+ * hosts, not critical); the platforms are too unless `platforms` names the
+ * exact set to leave ticked.
  */
 export interface SavePolicyValues {
   name: string;
   description: string;
   resolution: string;
+  platforms?: PolicyPlatform[];
 }
 
 /**
@@ -278,7 +279,7 @@ export class PolicyEditPage {
 
   /**
    * New-policy save flow: clicks Save → opens "Save policy" modal → fills
-   * name + description + resolution → submits → waits for the success
+   * name + description + resolution (and the platforms, when given) → submits → waits for the success
    * toast. Fleet redirects to `/policies/:id` (the results page) on
    * success; the parsed id is returned.
    */
@@ -288,6 +289,7 @@ export class PolicyEditPage {
     await this.saveNewNameInput.fill(values.name);
     await this.saveNewDescriptionInput.fill(values.description);
     await this.saveNewResolutionInput.fill(values.resolution);
+    if (values.platforms) await this.setPlatforms(values.platforms);
     if (target) {
       await this.saveNewTargets.chooseCustom();
       if (target.include) await this.saveNewTargets.include(target.include.labels, target.include.mode);

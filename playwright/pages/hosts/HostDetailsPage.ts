@@ -313,6 +313,18 @@ export class HostDetailsPage {
   }
 
   /**
+   * A policy row's "View all hosts" — on the Hosts list, the hosts that gave the
+   * same answer as this one. Fleet renders it only once the host has answered the
+   * policy, and shows it on row hover.
+   */
+  async viewAllHostsForPolicy(name: string): Promise<void> {
+    const row = this.policyRow(name);
+    await expect(row).toBeVisible();
+    await clickHoverAction(row, row.getByRole('button', { name: 'View all hosts' }));
+    await expect(this.page).toHaveURL(/\/hosts\/manage\?.*policy_id=\d+/);
+  }
+
+  /**
    * Resends one profile from its Controls row — offered on a Verified or Failed
    * row, and only rendered while the row is hovered. The button reads
    * "Resending..." until Fleet has queued it.
