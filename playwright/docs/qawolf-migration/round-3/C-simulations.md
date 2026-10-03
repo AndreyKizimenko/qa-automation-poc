@@ -332,7 +332,7 @@ All done 2026-10-03 except the last line, which is Andrey's:
   [test-audit](../../test-audit/README.md) entry per `test()` (POL-33…35, HOSTP-17/18, HOST-25, MISC-31, SWV-23/24,
   SWL-37/38, and the entries the augments changed), `helpers/README.md` (no new page object, so `pages/README.md`
   is unchanged), `CLAUDE.md` › Test hosts (the offline pool), this round's [README](README.md) and [INDEX](INDEX.md).
-- ☐ PR open, Andrey told it's ready for its branch run.
+- ✅ [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) open; Andrey told it's ready for its branch run.
 
 ## What landed
 
