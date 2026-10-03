@@ -203,9 +203,10 @@ test.describe('Labels • Manual label lifecycle', () => {
     await labelsPage.toast.expectSuccess('Label updated successfully.');
 
     const labelId = await getLabelId(request, editedName);
+    const byId = (a: number, b: number) => a - b;
     await expect
-      .poll(async () => [...(await listLabelHostIds(request, labelId))].sort())
-      .toEqual([hosts[0].id, hosts[2].id].sort());
+      .poll(async () => [...(await listLabelHostIds(request, labelId))].sort(byId))
+      .toEqual([hosts[0].id, hosts[2].id].sort(byId));
 
     await labelsPage.goto();
     const row = await labelsPage.locateRow(editedName);

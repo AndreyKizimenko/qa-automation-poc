@@ -104,7 +104,9 @@ test.describe('Premium • Hosts • host report results', () => {
 
     // And back in from there (round 1 C4 #P17): each stored result names its
     // host, linked to that host's results for this report.
-    await reportDetails.hostResultLink(liveMacosHost.displayName).click();
+    const macResult = reportDetails.hostResultLink(liveMacosHost.displayName);
+    await expect(macResult, 'the Mac among the hosts with a stored result').toBeVisible();
+    await macResult.click();
     await hostQueryReport.waitForReady();
     await expect(page).toHaveURL(new RegExp(`/hosts/${liveMacosHost.id}/reports/${report!.id}`));
     await expect(hostQueryReport.hostHeading).toHaveText(liveMacosHost.displayName);
