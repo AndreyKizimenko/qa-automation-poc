@@ -135,6 +135,14 @@ A change isn't done until the docs describing it are current, in the same commit
   it; never scan page 1. A name that is a prefix of a sibling's breaks strict mode.
 - **`Pagination.nextIfEnabled`** compares the first row's link text, or the whole row on a table without
   links. Use it rather than clicking Next.
+- **A column index read from the header goes stale when the table re-renders** (the reports list after its
+  Manage automations modal saves): `DataTable.cellByColumn` then lands on the neighbouring cell. Match the cell
+  by its content instead (`ReportsListPage.automationsCell`).
+- **An absence check on a menu passes when the menu never opened.** Assert one option that should be there
+  before asserting the one that shouldn't.
+- **The report edit form fills itself twice:** from report state that survives client-side navigation, then
+  again when its own fetch returns. An edit made right after *Edit report* can be overwritten and save nothing,
+  with no prompt. Load `/reports/:id/edit` with `gotoEdit()` and wait for the saved values, or use `fillAll()`.
 
 **Waiting**
 - **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
@@ -147,7 +155,8 @@ A change isn't done until the docs describing it are current, in the same commit
   filter, tab or page change.
 - **A toast doesn't prove the second save.** Fleet's toasts stay up for seconds, so after saving the same
   form twice, `toast.expectSuccess` can match the first one. Poll the stored state through the API
-  instead (`expect.poll`).
+  instead (`expect.poll`). A locator inside a toast (`toast.success.getByRole('link', …)`) also matches every
+  toast still on screen and breaks strict mode: `toast.dismissAll()` between two runs of the same action.
 - **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
@@ -162,10 +171,33 @@ A change isn't done until the docs describing it are current, in the same commit
 **Data and state**
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
-- **Snapshot and restore global config inside the test** (`getAppConfig` / `patchAppConfig` in
-  `helpers/api/config.ts`), not in a hook. A spec that flips a switch other specs depend on goes in
-  `tests/e2e/<tier>/exclusive/`, and so does one that needs a real VM's queue to itself: Fleet runs a policy
-  automation's scripts and installs below every user-requested activity, so beside the install specs they starve.
+- **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
+  `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not its hooks. Key the
+  restore to the test that changed something (a describe-level variable only that test sets), so a parallel
+  sibling's hook can't roll it back mid-flight.
+- **Two specs writing the same global key race.** A serial describe serialises only within its file, so a new
+  test that writes a key another spec writes joins that spec's serial describe (or goes in `exclusive/`).
+  Org settings › Advanced's Save posts `server_settings`, `smtp_settings`, `host_expiry_settings`,
+  `activity_expiry_settings`, `features.historical_data`, `mdm.apple_server_url` /
+  `apple_require_hardware_attestation` / `only_allow_apple_business_enrollment` and
+  `sso_settings.sso_server_url` as loaded. `shared/settings/organization/advanced-options.spec.ts` asserts
+  they're unchanged, so no main-project spec writes them.
+- **A fleet subtree Fleet replaces wholesale has one writer per fleet.** A fleet's enroll secrets and its
+  `webhook_settings` are saved whole, so two specs writing them on the same fleet undo each other's write through
+  their snapshot restores. Saving a fleet's policy automations or its Settings tab sends `webhook_settings` and
+  wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
+  Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
+  *role* write there needs a disposable `qa-test-*` user given that fleet.
+- A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
+  needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
+  user-requested activity, so beside the install specs they starve.
+- **Logins are throttled:** `POST /login` allows 10 a minute in one bucket shared by every user and worker. In
+  the browser, sign in through `withStaticUser`'s cached sessions; for an API-only login use `apiLogin`, which
+  waits out a 429.
+- **Some deletes take more with them.** Deleting a script deletes its batch runs (a foreign-key cascade), so a
+  spec reads a batch before it deletes the script. Deleting a fleet returns its hosts to Unassigned, so a
+  throwaway `pw-*` fleet is a staging area the fleet sweep cleans up after. Deleting a software title cancels
+  its pending installs and runs.
 - **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
   `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
 
