@@ -26,6 +26,13 @@
  * A batch reads "Completed" only once Fleet's batch cron has marked it finished,
  * a couple of minutes after the last host reported. The spec waits for that
  * through the API rather than watching the progress page.
+ *
+ * Separately, the progress page as a fleet with no batch history shows it:
+ * reached from Controls → Scripts' side nav, each tab's empty state. That's
+ * Workstations, where no spec runs a batch, and `cleanup-setup` deletes its
+ * scripts, which takes any batch with them. Free has no such fleet: its
+ * Unassigned holds `batch-schedule-cancel.spec.ts`'s batches while that runs.
+ * Scheduling and cancelling are `shared/controls/scripts/batch-schedule-cancel.spec.ts`.
  */
 import * as crypto from 'crypto';
 import { test, expect, HOST_RETRIES } from '@fixtures';
@@ -64,7 +71,6 @@ test.describe('Premium • Controls • Batch script run', () => {
     scriptBatchDetails,
     vmsFleetId,
     request,
-    page,
   }) => {
     const [mac, linux, windows] = await Promise.all(
       (['darwin', 'linux', 'windows'] as const).map((p) => requireRealHost(request, p)),
@@ -93,10 +99,18 @@ test.describe('Premium • Controls • Batch script run', () => {
       await expect(scriptsBatchProgress.batch(scriptName)).toContainText('/ 3 hosts');
 
       const batchId = await findBatchId(request, vmsFleetId, scriptName);
+
+      // The feed is read while this batch's activity is among the newest. After
+      // the minutes the batch takes to finish, the other workers' activity can
+      // bury it deeper than the feed walk reaches.
+      await dashboard.goto();
+      await dashboard.expectActivity(activityCopy.script.ranBatch({ name: scriptName, hostCount: 3 }));
+
       const summary = await waitForBatchFinished(request, batchId);
       expect(summary).toMatchObject({ targeted: 3, ran: 1, errored: 1, incompatible: 1, pending: 0, canceled: 0 });
 
-      await page.reload();
+      await scriptsBatchProgress.goto({ fleetId: vmsFleetId });
+      await scriptsBatchProgress.teamDropdown.selectByLabel('VMs');
       await scriptsBatchProgress.openFinishedTab();
       await expect(scriptsBatchProgress.batch(scriptName)).toContainText('Completed');
       await scriptsBatchProgress.batch(scriptName).click();
@@ -120,9 +134,6 @@ test.describe('Premium • Controls • Batch script run', () => {
         await scriptBatchDetails.openTab(status);
         await expect(scriptBatchDetails.emptyTab).toBeVisible();
       }
-
-      await dashboard.goto();
-      await dashboard.expectActivity(activityCopy.script.ranBatch({ name: scriptName, hostCount: 3 }));
     } finally {
       await deleteScript(request, scriptId);
     }
@@ -156,8 +167,7 @@ test.describe('Premium • Controls • Batch script run', () => {
       await dashboard.goto();
       await dashboard.navbar.goToHosts();
       await hostsList.teamDropdown.selectByLabel('Unassigned');
-      await hostsList.labelFilter.selectPlatform('macOS');
-      await hostsList.statusFilter.selectByName('Online');
+      await hostsList.filterTo({ platform: 'macOS', status: 'Online' });
       await hostsList.selectAllOnPage();
       await hostsList.selectAllMatchingButton.click();
       await hostsList.runScriptSelectedButton.click();
@@ -190,5 +200,36 @@ test.describe('Premium • Controls • Batch script run', () => {
     } finally {
       await deleteScript(request, scriptId);
     }
+  });
+});
+
+test.describe('Premium • Controls • Batch progress', () => {
+  test('a fleet with no batch runs shows each progress tab empty', async ({
+    dashboard,
+    controls,
+    scriptsLibrary,
+    scriptsBatchProgress,
+  }) => {
+    await dashboard.goto();
+    await dashboard.navbar.goToControls();
+    await controls.goToScripts();
+    await scriptsLibrary.teamDropdown.select('Workstations');
+    await scriptsLibrary.goToBatchProgress();
+
+    await expect(scriptsBatchProgress.heading).toBeVisible();
+    await expect(scriptsBatchProgress.teamDropdown.currentValue).toHaveText('Workstations');
+    await expect(scriptsBatchProgress.startedTab).toHaveAttribute('aria-selected', 'true');
+    const empty = [
+      { tab: 'Started', info: 'Scripts running on multiple hosts will appear here.' },
+      { tab: 'Scheduled', info: 'Scheduled scripts will appear here.' },
+      { tab: 'Finished', info: 'Completed or canceled batch scripts will appear here.' },
+    ] as const;
+    for (const { tab, info } of empty) {
+      await scriptsBatchProgress.openTab(tab);
+      await expect(scriptsBatchProgress.emptyState(tab)).toBeVisible();
+      await expect(scriptsBatchProgress.emptyStateInfo(info)).toBeVisible();
+    }
+    await scriptsBatchProgress.openTab('Started');
+    await expect(scriptsBatchProgress.learnMoreLink).toBeVisible();
   });
 });

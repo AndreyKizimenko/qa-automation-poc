@@ -20,7 +20,8 @@
  * is arbitrary.
  *
  * Grounded in frontend/pages/SoftwarePage's software-titles table config —
- * only Name and Hosts render a `sortable-header` button.
+ * only Name and Hosts render a `sortable-header` button — and its hover-only
+ * "View all hosts" (`SoftwareInventoryTableConfig`).
  */
 import { test, expect } from '@fixtures';
 
@@ -93,5 +94,26 @@ test.describe('Software • inventory table', () => {
     const descending = (await softwareTitles.columnValues('Hosts')).map(hostCount);
     expect(descending.every((n, i) => i === 0 || descending[i - 1] >= n)).toBe(true);
     expect(descending[0]).toBeGreaterThan(ascending[0]);
+  });
+
+  /**
+   * A title row's hover-only "View all hosts" hands off to the Hosts list
+   * filtered by that title (`software_title_id`), its pill naming it. QA Wolf
+   * took a row with vulnerabilities; which row doesn't change the hand-off, and
+   * the vulnerable filter is the slowest query the suite issues, so this takes
+   * the first. Round 1 C6 #6.
+   */
+  test("a title's View all hosts opens the hosts list filtered by it", async ({
+    softwareTitles,
+    hostsList,
+    page,
+  }) => {
+    await softwareTitles.goto();
+    await softwareTitles.teamDropdown.select('Unassigned');
+
+    const name = await softwareTitles.viewAllHostsForFirstTitle();
+    expect(new URL(page.url()).searchParams.get('software_title_id')).toMatch(/^\d+$/);
+    await expect(hostsList.filterPill).toContainText(name);
+    await expect(hostsList.table.firstRowWithLink).toBeVisible();
   });
 });

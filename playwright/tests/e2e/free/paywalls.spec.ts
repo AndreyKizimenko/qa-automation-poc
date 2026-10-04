@@ -1,5 +1,6 @@
 import { test, expect } from '@fixtures';
 import { IntegrationsPage } from '@pages';
+import { getAppConfig } from '@helpers/api';
 
 const PAYWALL_TEXT = /This feature is included in Fleet Premium/i;
 
@@ -58,5 +59,23 @@ test.describe('Free • paywall presence', () => {
   test('Settings — no Teams nav link', async ({ page }) => {
     await page.goto('/settings/organization/info');
     await expect(page.getByRole('link', { name: /^Teams$/ })).toHaveCount(0);
+  });
+
+  // Free has no fleets, so nothing is scoped to one: the dashboard heads itself
+  // with the organization's name where premium puts its fleet dropdown
+  // (`DashboardPage.renderDashboardHeader`), and the Hosts list has no Fleet
+  // column (`HostTableConfig`). Each absence follows the element that stands
+  // in its place. Round 1 C5 #1.
+  test('Dashboard and Hosts — no fleet dropdown, no Fleet column', async ({ dashboard, hostsList, request }) => {
+    const orgName = (await getAppConfig(request)).org_info?.org_name;
+    expect(orgName, 'the organization has a name').toBeTruthy();
+
+    await dashboard.goto();
+    await expect(dashboard.page.getByRole('heading', { level: 1, name: orgName, exact: true })).toBeVisible();
+    await expect(dashboard.teamDropdown.trigger).toHaveCount(0);
+
+    await dashboard.navbar.goToHosts();
+    await expect(hostsList.columnHeader('Host', { exact: true })).toBeVisible();
+    await expect(hostsList.columnHeader('Fleet', { exact: true })).toHaveCount(0);
   });
 });

@@ -1,6 +1,6 @@
 # Labels, packs, dashboard automations, free paywalls — test audit
 
-**Specs covered:** 11 files · **Entries:** 30 · **Test declarations:** 49 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
+**Specs covered:** 11 files · **Entries:** 31 · **Test declarations:** 50 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
 
 This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the **dashboard** itself — its platform filter, the "Hosts enrolled" chart, the historical chart card and the per-fleet switches that empty it, plus the **activity-feed automations** modal (the global `activities_webhook`) — and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits. The four dashboard specs are read-only apart from MISC-27, which is the only test in the suite that creates and deletes a fleet of its own — a sanctioned exception, for a reason worth reading before re-running it by hand.
 
@@ -13,8 +13,8 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-03 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › delete | UI | ☐ |
 | MISC-04 | `shared/labels/labels.spec.ts` | Labels • Dynamic label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
 | MISC-05 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › create | UI+API | ☐ |
-| MISC-06 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › edit | UI | ☐ |
-| MISC-07 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › delete | UI | ☐ |
+| MISC-06 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › edit from the Hosts list swaps a host | UI+API | ☐ |
+| MISC-07 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › delete from the Hosts list | UI | ☐ |
 | MISC-08 | `shared/labels/labels.spec.ts` | Labels • Manual label lifecycle › activity feed shows create → edit → delete | UI | ☐ |
 | MISC-09 | `premium/labels/sort-view.spec.ts` | the Name column sorts ascending by default and toggles to descending | UI | ☐ |
 | MISC-10 | `premium/labels/sort-view.spec.ts` | "View all hosts" lands on the Hosts list filtered by that label | UI | ☐ |
@@ -38,6 +38,7 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-28 | `free/dashboard/historical-data-collection.spec.ts` | the chart card offers one dataset and charts it | UI | ☐ |
 | MISC-29 | `free/dashboard/historical-data-collection.spec.ts` | Activity & data retention offers the hosts online switch and not the premium one | UI+API | ☐ |
 | MISC-30 | `shared/dashboard/activity-feed.spec.ts` | Dashboard • activity feed filters › search, type, date and sort narrow the feed to one actor's activities | UI+API | ☐ |
+| MISC-31 | `free/paywalls.spec.ts` | Dashboard and Hosts — no fleet dropdown, no Fleet column | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
@@ -108,7 +109,7 @@ other:
 **Assessment**
 - *Value:* the strongest assertion in the file — the edit form is verified to *load* existing values (name + description), not just accept new ones. The special-characters name then rides through the list, the delete toast (MISC-03) and the activity feed (MISC-04), which is QA Wolf's special-characters flow folded in rather than a lifecycle of its own.
 - *Coverage gaps:* the label's type and query are not re-asserted after edit; whether a Dynamic label can be converted to Manual (or vice versa) is untested; the edit form's platform field is never read back.
-- *Redundancy:* mirrored 1:1 by MISC-06.
+- *Redundancy:* none since MISC-06 edits from the Hosts list (the manual label's membership); the rename is the overlap.
 - *Efficiency / smells:* none material. The pre-populated-value assertions are exactly what similar CRUD specs in the suite usually omit — worth copying elsewhere.
 
 **Notes (Andrey)**
@@ -140,7 +141,7 @@ other:
 **Assessment**
 - *Value:* confirms the delete confirmation modal wires to a real delete and the toast names the label.
 - *Coverage gaps:* the modal's **Cancel** path is untested; label deletion's side effects (hosts losing the label, software/profile targeting that referenced it) are untested.
-- *Redundancy:* mirrored by MISC-07.
+- *Redundancy:* MISC-07 deletes from the Hosts list instead; only the paged absence check is shared.
 - *Efficiency / smells:* the absence check pages the whole list (`locateRow`), so it costs a page walk; it used to read page 1 only and could pass on a failed delete (FINDINGS #1, fixed 2026-10-02).
 
 **Notes (Andrey)**
@@ -190,31 +191,33 @@ other:
 - **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
 - **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › create"`
 - **Project:** premium **and** free · **Mode:** UI+API (API used for the host precondition only) · **Isolation:** serial step 1 of 4 in the second describe
-- **Preconditions:** `beforeAll` purges `pw-label-man*` labels via the API (same helper as MISC-01). `findSimulations(request, 'linux', 1, 2)` picks an online Linux **simulation** (slice 2, registered in `helpers/api/hosts.ts`) and `getHostDisplayName` reads its name; the test fails if the pool has none. Never a real VM: on free the VMs share the label's global scope. `pageHealth.disable()` — typing in the host picker makes Fleet log a benign 4xx (`Invalid usage: missing required parameter(s)`) to the console.
-- **Data created:** label `pw-label-man-<timestamp>` with one host member
+- **Source:** also QA Wolf `mdm-add-and-update-manual-labels-to-host` (round 1 C9 #11; round 3, batch C), whose lifecycle runs from the Hosts list
+- **Preconditions:** `beforeAll` purges `pw-label-man*` labels via the API (same helper as MISC-01). `findSimulations(request, 'linux', 3, 2)` picks three online Linux **simulations** (slices 2–4, registered in `helpers/api/hosts.ts`, never moved) and `getHostDisplayName` reads their names; the test fails if the pool has fewer. Never a real VM: on free the VMs share the label's global scope. `pageHealth.disable()` — typing in the host picker makes Fleet log a benign 4xx (`Invalid usage: missing required parameter(s)`) to the console.
+- **Data created:** label `pw-label-man-<timestamp>` with the first two simulations as members
 
 **Flow**
 
-1. ☐ *(API precondition)* Pick a Linux simulation and read its display name.
+1. ☐ *(API precondition)* Pick three Linux simulations and read their display names.
 2. ☐ Open `/labels/manage` via URL → click **Add label** → URL `/labels/new`.
 3. ☐ Click the **Manual** radio label.
    - ✅ *(UI)* The `Manual` radio is checked.
 4. ☐ Fill **Name** / **Description**.
-5. ☐ Type the host's display name into the host **search box**, then click the first result.
-   - ✅ *(UI)* First search result (`.display_name__cell`) is visible (`addHost`).
+5. ☐ For each of the first two hosts: type its display name into the host **search box**, then click the first result in the dropdown.
    - ✅ *(UI)* The host the picker selected is the one searched for (`addHost`'s return value).
-   - ✅ *(UI)* The clicked host now appears in the **selected-hosts** table (`.targets-input__hosts-selected-table`) — guards against saving a manual label with zero hosts, which the server rejects with a 422.
+   - ✅ *(UI)* It appears in the **selected-hosts** table — guards against saving a manual label with zero hosts, which the server rejects with a 422.
 6. ☐ Click **Save**.
-   - ✅ *(UI)* Success toast `Label added successfully.`
-   - ✅ *(UI)* URL back on `/labels/manage`.
+   - ✅ *(UI)* Success toast `Label added successfully.`; URL back on `/labels/manage`.
 7. ☐ Re-open the list, page to the row.
    - ✅ *(UI)* Row visible, contains the description, contains `Manual`.
+8. ☐ **Hosts** in the navbar → **Filter by platform or label** → type the label's name → pick it.
+   - ✅ *(UI)* URL `/hosts/manage/labels/<id>`; the pill is "hosts filtered by <name>".
+   - ✅ *(UI)* The list holds exactly the two members, by name.
 
 **Assessment**
-- *Value:* the only coverage of the manual-label host picker (search → select → selected table), which is a distinct Fleet component (`TargetsInput`) from the dynamic form.
-- *Coverage gaps:* **membership is never verified after save** — nothing asserts the label has 1 host (no Hosts-count column read, no "View all hosts" follow-through, no `GET /labels/:id/hosts`). ⚠️ unclear whether the labels table even has a host-count column. Also untested: removing a host from a manual label, adding several hosts, and the empty-selection 422 path the POM comment describes.
-- *Redundancy:* steps 2, 4, 6, 7 duplicate MISC-01 exactly.
-- *Efficiency / smells:* `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. `.display_name__cell` / `.targets-input__*` are raw class locators (documented in the POM, acceptable) but `.first()` on the search results is a tolerated shortcut.
+- *Value:* the manual-label host picker (search → select → selected table), a distinct Fleet component (`TargetsInput`), and what the label then does: the Hosts list filtered by it lists exactly its members.
+- *Coverage gaps:* the empty-selection 422 path the POM comment describes; the labels table's own host count.
+- *Redundancy:* steps 2, 4, 6, 7 duplicate MISC-01.
+- *Efficiency / smells:* `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. The picker's tables have no accessible names, so `.targets-input__hosts-search-dropdown` / `__hosts-selected-table` tell them apart (documented in the POM). The label filter is typed into: filling its "Filter labels by name..." box closes the menu.
 
 **Notes (Andrey)**
 ```
@@ -226,26 +229,31 @@ other:
 
 ---
 
-### MISC-06 · Labels • Manual label lifecycle › edit
+### MISC-06 · Labels • Manual label lifecycle › edit from the Hosts list swaps a host
 
 - **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › edit"`
-- **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 2 of 4
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › edit from the Hosts list"`
+- **Project:** premium **and** free · **Mode:** UI+API · **Isolation:** serial step 2 of 4 · `pageHealth.disable()` (the same host search as MISC-05)
 
-**Flow** — byte-for-byte the same as MISC-02, against the manual label.
+**Flow**
 
-1. ☐ Open `/labels/manage`; row **Actions** → **Edit**.
+1. ☐ Open `/hosts/manage`; filter by the label; click **Edit label** beside its pill.
    - ✅ *(UI)* URL `/labels/<id>`; **Name** and **Description** pre-populated with the created values.
-2. ☐ Overwrite both; click **Save**.
+   - ✅ *(UI)* The selected-hosts table holds exactly the two members.
+2. ☐ Overwrite Name and Description; click **Remove** on the second member; search for the third host and pick it; click **Save**.
+   - ✅ *(UI)* The removed row is gone; the added host is in the selected table.
    - ✅ *(UI)* Toast `Label updated successfully.`
-3. ☐ Re-open the list, page to the renamed row.
+   - ✅ *(API)* `GET /labels/:id/hosts` holds exactly the first and third hosts (polled: the toast can't prove what was stored).
+3. ☐ Re-open the Labels list, page to the renamed row.
    - ✅ *(UI)* Row visible with the edited description.
+4. ☐ **Hosts** → filter by the renamed label.
+   - ✅ *(UI)* The pill names it; the list holds exactly the first and third hosts.
 
 **Assessment**
-- *Value:* marginal beyond MISC-02 — the only manual-specific thing an edit could break (the host membership editor pre-loading the existing members) is not asserted.
-- *Coverage gaps:* the edit form's selected-hosts table is never checked for the host added in MISC-05; host add/remove on edit untested.
-- *Redundancy:* **direct duplicate of MISC-02.** Prime candidate for deletion or for being reduced to "edit form shows the existing host member".
-- *Efficiency / smells:* none beyond the duplication.
+- *Value:* the Hosts list's **Edit label** (otherwise untested), and the manual-only part of an edit: the form pre-loads the members, and a removal and an addition both persist and show on the filtered list. No longer a duplicate of MISC-02.
+- *Coverage gaps:* the Hosts list's Edit label for a role that isn't global or the label's author (it's hidden then) is batch E's.
+- *Redundancy:* rename + description edit still repeat MISC-02's.
+- *Efficiency / smells:* one API read, as the oracle for what the save stored.
 
 **Notes (Andrey)**
 ```
@@ -257,26 +265,27 @@ other:
 
 ---
 
-### MISC-07 · Labels • Manual label lifecycle › delete
+### MISC-07 · Labels • Manual label lifecycle › delete from the Hosts list
 
 - **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
-- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › delete"`
+- **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › delete from the Hosts list"`
 - **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 3 of 4 · lifecycle cleanup
 
-**Flow** — identical to MISC-03.
+**Flow**
 
-1. ☐ Row **Actions** → **Delete**.
+1. ☐ Open `/hosts/manage`; filter by the renamed label; click **Delete label** beside its pill.
    - ✅ *(UI)* `Delete label` modal visible.
 2. ☐ Confirm **Delete**.
-   - ✅ *(UI)* Toast `Successfully deleted <editedName>.`
-3. ☐ Re-open the list and page through it.
+   - ✅ *(UI)* Toast `Successfully deleted label.` (the Labels page's says the name; this one doesn't).
+   - ✅ *(UI)* Back on `/hosts/manage` with no label in the route and no pill.
+3. ☐ Open the Labels list and page through it.
    - ✅ *(UI)* `locateRow(editedName)` count 0 on every page.
 
 **Assessment**
-- *Value:* duplicate of MISC-03; adds nothing manual-specific.
-- *Coverage gaps:* deleting a manual label with members doesn't assert the member host loses the label.
-- *Redundancy:* **direct duplicate of MISC-03.**
-- *Efficiency / smells:* none beyond the duplication; the absence check pages the list, as MISC-03's does.
+- *Value:* the Hosts list's **Delete label** (otherwise untested) and where it leaves you; MISC-03 keeps the Labels page's delete.
+- *Coverage gaps:* the member hosts aren't re-read for losing the label.
+- *Redundancy:* the absence check is MISC-03's.
+- *Efficiency / smells:* none.
 
 **Notes (Andrey)**
 ```
@@ -1198,6 +1207,37 @@ other:
 - *Coverage gaps:* searching by **email** (the same prefix match), the type filter's own search box, multi-page results under a filter, and the 7-day / 30-day / 3- / 12-month ranges (identical "start date" arithmetic to Today's, but unexercised).
 - *Redundancy:* `expectActivities` reads the feed in many lifecycle specs, but never through a filter.
 - *Efficiency / smells:* "Yesterday" / "Today" use the browser's local midnight; a run that crosses it between the user's actions and the filter would fail (rare, and the failure says so). The type dropdown is reached by its `activity-type-select__*` classes (documented on `DashboardPage.selectActivityType`).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-31 · Free • paywall presence › Dashboard and Hosts — no fleet dropdown, no Fleet column
+
+- **File:** [`playwright/tests/e2e/free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "no fleet dropdown, no Fleet column"`
+- **Project:** free only · **Mode:** UI+API (the org name is read from `GET /config`) · **Isolation:** independent, read-only
+- **Source:** QA Wolf `dashboard-teams-dropdowns-not-searchable-in-free` (round 1 C5 #1; round 3, batch C)
+
+**Flow**
+
+1. ☐ *(API)* Read the organization's name.
+2. ☐ Open `/dashboard`.
+   - ✅ *(UI)* The `h1` is the organization's name, where premium puts its fleet dropdown; there is no fleet dropdown.
+3. ☐ **Hosts** in the navbar.
+   - ✅ *(UI)* The table has a **Host** column and no **Fleet** column (matched exactly: "Added to Fleet" is another column).
+
+**Assessment**
+- *Value:* free's two visible consequences of having no fleets, each absence asserted after the element that stands in its place, unlike MISC-21. Unconditional, where the historical-data test's dropdown check skips when collection is off.
+- *Coverage gaps:* the other fleet-scoped controls on free (Software, Policies, Reports pages) aren't checked.
+- *Redundancy:* the dropdown's absence is also in the free historical-data test, behind its skip.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```

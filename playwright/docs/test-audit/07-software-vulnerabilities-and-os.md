@@ -1,6 +1,6 @@
 # Software vulnerabilities, versions & OS — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 22 entries (31 runtime tests — three specs generate variants in a `for` loop) · **Projects:** premium / free
+**Specs covered:** 6 files · **Test declarations:** 24 entries (33 runtime tests — three specs generate variants in a `for` loop) · **Projects:** premium / free
 
 This area covers Fleet's Software section outside the install/library flows: the
 **Inventory** tab's `vulnerable=true` filter, its Vulnerabilities column and the
@@ -23,7 +23,7 @@ and skips when the instance has none.
 | SWV-02 | `premium/software/vulnerabilities.spec.ts` | Software Titles — vulnerable filter, pagination, and column checks | UI | ☐ |
 | SWV-03 | `premium/software/vulnerabilities.spec.ts` | `{macOS, Linux (deb), Windows}` — software titles → version → CVE detail flow † | UI | ☐ |
 | SWV-04 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — search narrows to a single CVE | UI | ☐ |
-| SWV-05 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — exploited-vulnerabilities filter | UI | ☐ |
+| SWV-05 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — exploited-vulnerabilities filter | UI+API | ☐ |
 | SWV-06 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities tab — list, pagination, and CVE detail flow | UI | ☐ |
 | SWV-07 | `premium/software/vulnerabilities.spec.ts` | `{macOS, Linux (deb), Windows}` host — vulnerable software → version → CVE flow † | UI | ☐ |
 | SWV-08 | `premium/software/vulnerability-automations.spec.ts` | Premium • Software • Vulnerability automations › enabling with a webhook URL persists, and turning it off keeps the URL | UI+API | ☐ |
@@ -41,6 +41,8 @@ and skips when the instance has none.
 | SWV-20 | `free/software/vulnerabilities.spec.ts` | Vulnerabilities — a CVE hands off to the hosts running each affected version † | UI | ☐ |
 | SWV-21 | `free/software/os.spec.ts` | OS tab — a row drills into that OS with matching version and counts | UI | ☐ |
 | SWV-22 | `free/software/os.spec.ts` | OS tab — sorting by Hosts reorders the list | UI | ☐ |
+| SWV-23 | `premium/software/vulnerabilities.spec.ts` | Vulnerabilities — a CVE's host count and hosts are its fleet's | UI+API | ☐ |
+| SWV-24 | `free/software/vulnerabilities.spec.ts` | Software vulnerabilities › Vulnerabilities — a CVE's View all hosts lists hosts it affects | UI+API | ☐ |
 
 † these seven entries resolve which CVE to open through `findRenderableCve`
 rather than clicking the top row — the standing workaround for
@@ -303,11 +305,12 @@ other:
 
 ### SWV-05 · Vulnerabilities tab — exploited-vulnerabilities filter
 
-- **File:** [`playwright/tests/e2e/premium/software/vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts) (L175)
+- **File:** [`playwright/tests/e2e/premium/software/vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "Vulnerabilities tab — exploited-vulnerabilities filter"`
 - **Project:** premium · **Scope:** Unassigned
-- **Mode:** UI · **Isolation:** independent
-- **Preconditions:** none beyond a populated Vulnerabilities tab
+- **Mode:** UI+API · **Isolation:** independent, read-only
+- **Source:** also QA Wolf `software-vulnerabilities-filter-by-exploited-vulnerabilities` (round 1 C6 #1; round 3, batch C)
+- **Preconditions:** CISA-exploited CVEs on Unassigned: the load fleet's templated inventory carries ~100 (96 on 2026-10-03), so an empty list fails.
 - **Data created:** none
 
 **Flow**
@@ -315,15 +318,18 @@ other:
 1. ☐ Open **Software → Inventory** (via URL), select **Unassigned**, click the **Vulnerabilities** tab.
    - ✅ *(UI)* URL `/software/vulnerabilities`, table has a row.
 2. ☐ In the exploited-vulnerabilities dropdown choose **Exploited vulnerabilities**.
-   - ✅ *(UI)* The option was visible before clicking, and the dropdown's rendered value becomes "Exploited vulnerabilities" — `selectExploitedFilter` ([`VulnerabilitiesListPage.ts:45`](../../pages/software/VulnerabilitiesListPage.ts)).
-   - ✅ *(UI)* URL contains `exploit=true`.
-   - ✅ *(UI)* Either a row **or** the empty state is visible.
+   - ✅ *(UI)* The dropdown's value becomes "Exploited vulnerabilities"; URL contains `exploit=true`; a CVE row is listed.
+3. ☐ *(API)* `GET /vulnerabilities?fleet_id=0&exploit=true`. Read each row on the page: its CVE, and whether its **Probability of exploit** cell carries the exploited icon.
+   - ✅ *(UI+API)* every listed CVE is in the API's exploited list and is `cisa_known_exploit`.
+   - ✅ *(UI+API)* a row has the icon exactly when the API gives it an EPSS score (`ProbabilityOfExploit` draws it only beside a score).
+4. ☐ Hover a row's icon.
+   - ✅ *(UI)* the tooltip names the Cybersecurity and Infrastructure Security Agency (CISA).
 
 **Assessment**
-- *Value:* thin — proves the premium exploited filter drives `exploit=true` and doesn't blank the page.
-- *Coverage gaps:* nothing verifies the filtered rows *are* exploited (no "Known exploit"/probability column assertion), that the row count shrank, or that switching back to **All vulnerabilities** restores the list. Severity / CVSS filters are not touched at all.
+- *Value:* the filter's provenance (what it lists is what CISA marks exploited) and the mark each row carries, on all 50 rows of page 1. Per-row expectations come from the API rather than "an icon on every row", because Fleet's own feeds can leave a known exploit unscored, and then it shows no icon.
+- *Coverage gaps:* only page 1; switching back to **All vulnerabilities** isn't asserted; the free tier's absent filter is not checked here.
 - *Redundancy:* none (premium-only feature).
-- *Efficiency / smells:* `rowOrEmpty()` is a visibility-only assertion that cannot fail meaningfully — the strongest signal in the test is the URL. Class-based react-select locators are documented as unavoidable.
+- *Efficiency / smells:* a few seconds; the exploit column's index is read from the header once, then each row's cell. The icon has no accessible name, so it is matched as the cell's image.
 
 **Notes (Andrey)**
 ```
@@ -1031,6 +1037,73 @@ Identical to SWV-17 with the scope step removed:
 - *Coverage gaps:* identical to SWV-17 — page-1 only, no third toggle. ~~The `not.toEqual` guard produced a **false failure** on an all-equal-count instance.~~ **Fixed 2026-09-28** in both tiers: the guard is conditional on the counts being distinguishable.
 - *Redundancy:* byte-identical to SWV-17 apart from the missing `teamDropdown.select('Unassigned')` line. Of the two OS entries free gained, this is the one whose tier-specific value is hardest to argue: unlike SWV-21 it asserts nothing free-specific, so it is pure mirror coverage.
 - *Efficiency / smells:* same O(rows × columns) `hostCounts()` scan; two sorted fetches per run.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWV-23 · Vulnerabilities — a CVE's host count and hosts are its fleet's
+
+- **File:** [`playwright/tests/e2e/premium/software/vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "host count and hosts are its fleet"`
+- **Project:** premium · **Scopes:** VMs, All fleets
+- **Mode:** UI+API · **Isolation:** independent, read-only
+- **Source:** QA Wolf `software-vulnerabilities-filter-vulnerabilities-by-team` (round 1 C6 #3) and `software-vulnerabilities-view-all-hosts-vulnerabilities` (C6 #7; round 3, batch C)
+- **Preconditions (API):** among the VMs fleet's first 20 CVEs, one whose count there differs from All fleets' (one the simulations on Unassigned share). Hosts are never moved to make one.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API)* Pick the CVE.
+2. ☐ Open `/dashboard` → **Software** → select **VMs** → **Vulnerabilities**; search for the CVE.
+   - ✅ *(UI)* one row; its **Hosts** equals the API's VMs-scoped count (re-read until they agree: both are the hourly job's).
+3. ☐ Select **All fleets**; search again.
+   - ✅ *(UI)* one row; its **Hosts** equals the API's All-fleets count, and differs from the VMs count.
+4. ☐ Select **VMs**, search, hover the row and click **View all hosts**.
+   - ✅ *(UI)* URL `/hosts/manage` with `vulnerability=<CVE>` and `fleet_id=<VMs>`; the pill shows the CVE.
+   - ✅ *(UI+API)* the listed hosts are exactly `GET /hosts?vulnerability=<CVE>&fleet_id=<VMs>`, by name, and there is at least one.
+
+**Assessment**
+- *Value:* per-fleet vulnerability counts (QA Wolf only asserted "different"; this asserts each equals Fleet's figure for that scope) and the CVE → hosts hand-off, with the hosts compared whole because the VMs fleet is small. QA Wolf's flow ran `fleetctl trigger --name vulnerabilities` first; this never triggers a global cron.
+- *Coverage gaps:* Unassigned's and Workstations' counts aren't read; the hand-off's list isn't compared with the count (one is live, the other hourly, so they needn't agree).
+- *Redundancy:* SWV-18 is the CVE detail page's hand-off (by software version); this is the list row's (by CVE).
+- *Efficiency / smells:* ~10 s. Up to 20 API reads to choose the CVE, usually one or two.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SWV-24 · Software vulnerabilities › Vulnerabilities — a CVE's View all hosts lists hosts it affects
+
+- **File:** [`playwright/tests/e2e/free/software/vulnerabilities.spec.ts`](../../tests/e2e/free/software/vulnerabilities.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "View all hosts lists hosts it affects"`
+- **Project:** free · **Mode:** UI+API · **Isolation:** independent, read-only (runs after the file's heavy `beforeAll`)
+- **Source:** QA Wolf `software-vulnerabilities-view-all-hosts-vulnerabilities` (round 1 C6 #7, its free half; round 3, batch C)
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Open **Software** → **Vulnerabilities**; take the first CVE; hover its row and click **View all hosts**.
+   - ✅ *(UI)* URL has `vulnerability=<CVE>`; the pill shows the CVE; a host is listed.
+   - ✅ *(UI+API)* every listed host is in `GET /hosts?vulnerability=<CVE>`.
+
+**Assessment**
+- *Value:* the hand-off on free, where it isn't gated.
+- *Coverage gaps:* containment only: free's one scope holds hundreds of affected hosts, more than a page.
+- *Redundancy:* SWV-23 is premium's, with a fleet.
+- *Efficiency / smells:* seconds, after the file's `beforeAll`.
 
 **Notes (Andrey)**
 ```

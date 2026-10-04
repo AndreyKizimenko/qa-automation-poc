@@ -48,6 +48,9 @@ export class ScriptsLibraryPage {
   readonly warningModal: Locator;
   readonly warningSaveButton: Locator;
 
+  /** The Scripts side nav's second page, beside Library. */
+  readonly batchProgressLink: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -93,6 +96,8 @@ export class ScriptsLibraryPage {
     // main edit modal by the `__warning` class suffix.
     this.warningModal = page.locator('.edit-script-modal__warning');
     this.warningSaveButton = this.warningModal.getByRole('button', { name: 'Save' });
+
+    this.batchProgressLink = page.getByRole('link', { name: 'Batch progress', exact: true });
   }
 
   /** `fleetId=0` targets "No team". Omit to use the current team. */
@@ -169,13 +174,33 @@ export class ScriptsLibraryPage {
   }
 
   async editScript(name: string, newContent: string): Promise<void> {
+    await this.stageEdit(name, newContent);
+    await this.confirmEdit();
+  }
+
+  /**
+   * Opens a script, replaces its content and clicks Save, stopping at the
+   * "Save changes?" warning, which says saving cancels the script's pending
+   * runs. {@link confirmEdit} saves.
+   */
+  async stageEdit(name: string, newContent: string): Promise<void> {
     await this.openScript(name);
     await this.replaceEditorContent(newContent);
     await this.editSaveButton.click();
     await expect(this.warningModal).toBeVisible();
+  }
+
+  /** Confirms the "Save changes?" warning and waits for the save to land. */
+  async confirmEdit(): Promise<void> {
     await this.warningSaveButton.click();
     await this.toast.expectSuccess('Successfully saved script.');
     await expect(this.editModal).toBeHidden();
+  }
+
+  /** Controls → Scripts' side nav → Batch progress. */
+  async goToBatchProgress(): Promise<void> {
+    await this.batchProgressLink.click();
+    await expect(this.page).toHaveURL(/\/controls\/scripts\/progress/);
   }
 
   /** Triggers a download for the script and returns the Download handle. */

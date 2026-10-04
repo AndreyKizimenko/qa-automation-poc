@@ -2,7 +2,9 @@
 
 **9 gaps → 1 new spec and 2 augments.** `Schedule for later` · `Cancel` · `Cancel-on-edit` · `Batch progress`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: built 2026-10-03; ships with batch C in [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86)**
+(planned 2026-10-01). The review's outcome is [Review decisions](#review-decisions-2026-10-03): 9 gaps → 4 built,
+3 folded, 2 cut; what was built is [What landed](#what-landed).
 
 > ## ▶ Start here
 >
@@ -63,6 +65,63 @@
 | round 1 C8 #11 | two batches under Started, an unrun script absent | `premium/controls/scripts/batch-run.spec.ts` | augment | `flows-Premium/scripts-correct-currently-running-scripts-are-displayed-on-the-started-tab-of-the-batch-script-progress.flow.js` |
 | round 1 C8 #12 | a pending host cancelled moves to the Canceled tab | `premium/controls/scripts/batch-schedule.spec.ts` | new | `flows-Premium/scripts-correct-hosts-are-displayed-under-each-tab-run-errored-pending-incompatible-canceled.flow.js` |
 | round 1 C8 #18 | tab counts during a run and after a cancel (after finishing only today) | `premium/controls/scripts/batch-run.spec.ts` | augment | `flows-Premium/scripts-status-counts-on-batch-script-details-page-tabs.flow.js` |
+
+## Review decisions (2026-10-03)
+
+Every flow body read; facts checked against Fleet `rc-minor-fleet-v4.93.0` (ac3c0d6; the instances run bc215a4,
+three dependency bumps later) and **probed live on premium** (a `pw-probe-*` script scheduled on three Unassigned
+simulations, cancelled, read back, deleted).
+
+| Gap | Decision | What gets built, and why |
+|---|---|---|
+| C8 #16 | **build** | Hosts → one claimed simulation → Run script → *Schedule for later* → Date / Time → Run; the toast and its *Show schedule* link; the Scheduled tab's row ("Will start …"); the stored `not_before` equals the UTC date and time typed (API), in place of the flow's tooltip, which renders in the browser's locale; then the batch **starts** (API poll, ≤ ~4 min: a time 1–2 min ahead plus the 2-minute worker) and the Started tab lists it. Waiting for the start is Q2 |
+| C8 #19 | **fold into #16** | The flow only toggles the radios and sees Date / Time appear, so that's what #16 asserts on the way. **The planned validation messages are dropped**: the flow never checks them (round 3 adds no scope), and Fleet is moving form validation to submit-only, so "Run disabled while incomplete" is the assertion most likely to go stale |
+| C8 #17 | **build** | Schedule for tomorrow on three claimed simulations → details → Cancel → "Cancel script?" → *Cancel script* → toast → the Finished row reads **Canceled**. Deterministic, and nothing runs |
+| C8 #12 | **fold into #17**, now deterministic | Probed: a scheduled batch lists **every** host under Pending, even one without orbit (incompatibility is decided at start). After the cancel, Canceled lists exactly those hosts and Pending is empty. That is the flow's own assertion ("the hosts Pending before the cancel are now under Canceled") without the race. Its first test duplicates `batch-run` test 1: cut |
+| C8 #18 | **fold the after-cancel half into #17; cut "during a run"** | After the cancel: the tab reads "Canceled 3", its header "3 hosts", Pending has no count and its empty state. The during-run half compares a tab's live count with the header's, which are two separate fetches of a moving number, polled up to 200 times until "Started 2 minutes ago": no stable assertion |
+| C8 #15 | **fold into #17** | *Show script* on the scheduled batch, then again once it's cancelled (Finished): name and content. It is the same button and modal in every state (`ScriptBatchDetailsPage.tsx:271-299`), so the Started state adds nothing. Screenshots dropped |
+| C8 #8 | **build, near-deterministic** (Q3) | Start the batch through the API on the claimed Linux orbit simulations with the Library already open, edit the script at once through the UI (the "Save changes?" modal and its copy), then: Canceled ≥ 1 in the UI and the API, canceled ⊆ targeted, the counts add up. **"The batch ends Completed" is dropped**: a 5-minute cron wait that `batch-run` already proves |
+| C8 #9 | **build, premium only** | Controls → Scripts → *Batch progress* sub-nav (`batch-run` enters only from the toast), and each tab's empty state on Workstations, which nothing runs a batch on. Free has no fleet that's empty for sure: its Unassigned holds this batch's own batches while the spec runs |
+| C8 #11 | **cut** | The Started tab listing a running batch is `batch-run` test 1's assertion; a second row exercises nothing new in the list; "the unrun script is absent" is vacuous, because only batches are listed; and it races the 5-minute completion cron |
+
+**Where it lands.** #16/#19, #17/#12/#18/#15 and #8 go in one new spec; #9 is a small read-only describe in
+`premium/controls/scripts/batch-run.spec.ts`, outside its VM timeout and retries. The new spec is
+`shared/controls/scripts/batch-schedule-cancel.spec.ts` if Q1 is "both tiers", else
+`premium/controls/scripts/batch-schedule-cancel.spec.ts`.
+
+**Facts the review corrected or added** (§2–§3 are otherwise accurate):
+
+- **A scheduled batch's hosts are all Pending** until it starts, whatever their orbit or platform, and a cancel
+  moves every one of them to Canceled (`canceled_host_count` = targeted, `status: finished`, `canceled: true`).
+- **Free has batch scripts.** No license check on the batch endpoints or in the batch UI; `GET /scripts/batch`
+  needs `fleet_id` (`fleet_id=0` for Unassigned) or answers 400 "Param team_id is required".
+- **The pool:** premium has 9 online Linux orbit simulations on Unassigned (of 28 Linux); free has 48.
+- **"Show script" opens Fleet's `ScriptDetailsModal`** (`pages/hosts/components/ScriptDetailsModal`,
+  `.script-details-modal`, `suppressSecondaryActions`). Its title is the script's **name** ("Script details" only while
+  loading), and its content sits under "Script content:". The suite has no page object for it.
+- **A batch fails outright if any targeted host has left the script's fleet** (`scripts.go:1197-1202`), so the spec
+  claims its simulations in the registry: one moved by another spec mid-test would fail the POST.
+- **Upload to Unassigned omits `fleet_id`** (`uploadScript` already does): `fleet_id=0` is refused.
+- **The slices (agreed with batch C, 2026-10-03):** `findSimulations` **linux 10–19** and **darwin 10–39** on both
+  tiers, filtered to orbit hosts on Unassigned; never moved, only scripted. Linux 10–12 take the cancelled scheduled
+  batch and the first orbit host in 13–19 the batch that fires. The edit-cancel batch takes the orbit hosts in
+  darwin 10–39 (about 15 per tier), not Linux ones. On these instances the built-in macOS label holds the *Ubuntu*
+  simulations, and `batch-run`'s scale test runs a batch on every online member on Unassigned, so a Linux host may
+  have a scale run queued ahead (#54732). Batch C holds linux 2–7, darwin 6–7 and windows 2–3, all below 10.
+  Registered in `helpers/api/hosts.ts`.
+
+**A Fleet bug, filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) (2026-10-03).**
+Reproduced on both QA instances, released since 4.74.0, and cancelling the stuck batch is the workaround. Editing a script cancels a host's batch run
+through `cancelHostUpcomingActivity`, which marks `host_script_results` canceled only if the run was already
+*activated*. A run still queued behind another activity on that host has no result row, and the batch isn't
+canceled, so `hosts.go`'s Pending filter (`hsr.host_id IS NULL AND ba.canceled = 0`) keeps counting that host
+Pending. **Repro on premium:** batch A, then batch B, on one Linux orbit simulation (B queued behind A), then
+`PATCH /scripts/{B}` at once. B's run left the host's upcoming queue, but batch B read `started`, Pending 1,
+Canceled 0, and the host listed under Pending, for 11 minutes and through two `batch_activity_completion_checker`
+ticks after A finished: **the batch never finishes**. No "canceled" activity was logged for the host either. On a
+real host the trigger is ordinary: any install or script queued ahead of the batch when the script is edited.
+No existing issue found (searched 2026-10-03; nearest is #54116, a different defect). It doesn't block this batch:
+#8's simulations have empty queues, so their runs are activated at once (see Traps).
 
 ## 1. Review first
 
@@ -167,8 +226,24 @@ cancel modal); `helpers/api/scripts.ts` (`uploadScript`, `deleteScript`, `getBat
 
 ## Decisions to put to Andrey
 
-1. **C8 #8 (edit cancels queued runs):** accept a ⊆ / ≥ 1 assertion over a ≤ 35 s window, or cut it.
-2. **C8 #18's "during a run" half:** drop it, or the same loose assertion.
+**Answered 2026-10-03: every recommendation taken.** Both tiers (`shared/`), so the "never run this batch on free"
+trap below is lifted for claimed simulations picked by id. #16 waits for the start. #8 is built. All five cuts
+are approved. The pending-forever lead was reproduced and filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732).
+
+Asked 2026-10-03, after the review above:
+
+1. **Tiers: both, or premium only?** The plan said premium only because free's VMs sit in Unassigned. But every
+   test here targets claimed **simulations by id** (never *Select all matching*), the picker refuses a
+   `kind: 'real'` host, and the scheduled-cancel test runs nothing. Free has the feature and 48 Linux orbit
+   simulations. Recommended: `shared/`, both tiers (free coverage is a standing goal).
+2. **C8 #16: wait for the scheduled batch to start** (~4 min of one worker per tier), or stop at Scheduled?
+   Recommended: wait. That the batch actually fires is the feature, and nothing else covers the 2-minute worker.
+3. **C8 #8: build or cut?** Built as above, it fails only if every claimed orbit simulation reports before the
+   edit lands. Each polls every 30 s and "runs" 0–4 s, so with an edit 10 s after the start that's about
+   (10/30)ⁿ: 1 in 60,000 on premium's ~10 hosts, 1 in 2,200 on free's ~7. Recommended: build.
+4. **The pending-forever lead:** check it now with a simulation repro (~10 min, no spec), or leave it?
+5. **Confirm the cuts:** C8 #11 entirely, C8 #18's during-run half, C8 #12's first test, #19's validation messages,
+   and #8's "ends Completed".
 
 ## Traps this batch will hit
 
@@ -176,10 +251,17 @@ cancel modal); `helpers/api/scripts.ts` (`uploadScript`, `deleteScript`, `getBat
   script deletes the batch (§3), so the cleanup projects' wipe of Unassigned's scripts already removes one a dead
   run left, and no batch sweep is needed. Only a run killed before its teardown leaves one that can fire at its
   time, on simulations only, before the next run's `cleanup-setup`.
-- **Never upload a batch script to the VMs fleet**, and never run this batch on free: one queue per VM, and the
-  free VMs sit in Unassigned.
+- **Never upload a batch script to the VMs fleet**, and on free never target hosts by filter (*Select all
+  matching*): one queue per VM, and the free VMs sit in Unassigned. Claimed simulations picked by id are safe on
+  both tiers (Andrey, 2026-10-03).
 - **A batch goes only with its script.** Use unique `pw-*` script names, assert over your own batch, never the
   list's first row, and delete the script only after the last assertion on its batch.
+- **#8's hosts must have nothing queued ahead of its batch.** A run still queued behind another activity when the
+  script is edited stays Pending forever (the bug above), and the batch never finishes. Keep #16's and #8's hosts
+  in disjoint parts of the slice, and assert Canceled ≥ 1 rather than "nothing left Pending".
+- **The Hosts table rewrites its URL with the default sort just after it loads** (batch C, 2026-10-03), so a
+  filter or search applied at once can be undone. #16 searches for its simulation there: wait for the table to
+  settle, then confirm it narrowed to exactly that host before checking it.
 - **Moving or selecting macOS simulations** shifts `batch-run`'s scale test. Use your own slice, other platforms
   where you can.
 
@@ -194,8 +276,37 @@ cancel modal); `helpers/api/scripts.ts` (`uploadScript`, `deleteScript`, `getBat
 - Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a
   [test-audit](../../test-audit/README.md) entry per `test()`, `pages/README.md` / `helpers/README.md`, and this
   round's [README](README.md) batch table and [INDEX](INDEX.md).
-- PR open, Andrey told it's ready for its branch run.
+- PR open, Andrey told it's ready for its branch run. **D ships in batch C's [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86)**
+  (Andrey, 2026-10-03): this branch is built on C's `e29c4fc`, and its commits go onto
+  `playwright/qawolf-round3-batch-c` at the end. C won't rebase or force-push, and messages the SHA of any fix it
+  pushes; merge it in before pushing. Then extend #86's title and body to cover D, point D's row in this round's
+  README at #86, and **recount the test-audit totals from the area files** (C left them at 504), not by adding to C's.
 
 ## What landed
 
-*Nothing yet.*
+| target | gaps | notes |
+|---|---|---|
+| `shared/controls/scripts/batch-schedule-cancel.spec.ts` (new, both tiers) | C8 #17, #12, #18, #15 | a batch scheduled for tomorrow on 3 claimed simulations: Pending 3 → **Cancel** → finished and canceled, all 3 under Canceled, "Canceled" under Finished; previewed before and after (CTL-37) |
+| same | C8 #16, #19 | Schedule for later from the Hosts list on one orbit simulation: the stored `not_before` is the UTC time typed, and the worker starts the batch (CTL-38; ~4 min of a worker) |
+| same | C8 #8 | an edit mid-run, through "Save changes?", cancels the runs not yet reported: ≥ 1 canceled, ⊆ targeted, counts add up, the Canceled tab lists them (CTL-39) |
+| `premium/controls/scripts/batch-run.spec.ts` (new describe) | C8 #9 | Controls → Scripts → **Batch progress** on Workstations: each tab's empty state (CTL-40) |
+| `premium/controls/scripts/batch-run.spec.ts` (scale test) | — | its filters go through `HostsListPage.filterTo`: a URL rewrite had dropped both, and *Select all matching* took all 200 hosts on Unassigned (caught by the modal's count check) |
+| cut | C8 #11; #18 during a run; #12's first test; #19's validation; #8's "ends Completed" | see [Review decisions](#review-decisions-2026-10-03) |
+
+**Changed from the plan:**
+- **One spec, `shared/`, not `premium/batch-schedule.spec.ts`:** free has the feature, and simulations picked by
+  id never reach its VMs.
+- **The preview modal isn't what §3 said.** From a batch, **Show script** opens Fleet's `ScriptDetailsModal`
+  titled "Script details" (never the script's name), with no footer: the header's ✕ closes it
+  (`ScriptPreviewModal`).
+- **Cancelling returns to Batch progress** on the tab the batch was listed under, with no `fleet_id` for an
+  Unassigned batch, so the spec reselects Unassigned there.
+- **The batch is started through the API in #8,** with the Library already open: the edit has to land within the
+  hosts' 30-second poll window.
+- **Filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)** (released since 4.74.0): an edit
+  while a host's run is still queued behind another activity leaves that host Pending, and the batch never
+  finishes.
+- **Filed [fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734)** after the branch run (released): a
+  run cancelled while a host is running it still records its result, and the host then shows under no tab. It made
+  the edit test flaky (failed twice in run 37149323584); the test now compares the Canceled tab with a live API
+  read. Both bugs have a row under *Worked around in the suite* in `docs/blocked-by-product-bugs.md`.

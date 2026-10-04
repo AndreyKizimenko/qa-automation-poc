@@ -3,7 +3,8 @@
 **23 gaps → about 10 specs, mostly augments, after 4–6 cuts.** `Policy ↔ hosts links` · `Platform targeting` ·
 `Transfers and Select all matching` · `Labels` · `Host tabs` · `Vulnerabilities` · `Unassigned views`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: built 2026-10-03** (planned 2026-10-01). 19 gaps kept, 4 cut; see
+[Review decisions](#review-decisions-2026-10-03) and [What landed](#what-landed).
 
 > ## ▶ Start here
 >
@@ -240,17 +241,62 @@ absent for a linux and a windows simulation (`listHostPolicyIds`), with a free t
   `selectSoftwareView`), `VulnerabilitiesListPage`, `CveDetailPage.viewAllHostsFor`, `HostQueryReportPage`,
   `ReportDetailsPage.resultRows`.
 
-## Decisions to put to Andrey
+## Review decisions (2026-10-03)
 
-1. **C1 #12:** cut, or an exclusive spec staging 51 simulations on QA (§3.2). *(new, from A/B learnings)* Or stage
-   them on a throwaway `pw-*` fleet, whose deletion (and the fleet sweep) returns them to Unassigned; and does that
-   variant still need `exclusive/`?
-2. **C1 #11:** cut, or one search-narrowed delete in `host-delete`.
-3. **The free twin of the policies list's host-count link** (C3 #7): it needs the hourly aggregation; premium
-   only, or wait (§3.1)?
-4. **C6 #1:** how much of the exploit icon to assert, given Fleet's own data can leave it off (§3.5).
-5. *(new, from A/B learnings)* **C5 #10's search half:** cut as planned (§1), or reach the 10-row threshold with
-   four throwaway `pw-*` fleets? While they exist, every fleet dropdown other specs open shows the search box.
+Every flow body, target spec and the Fleet components behind them were read, and both instances probed. Andrey
+took every recommendation below. **19 gaps kept (most folded into existing specs, one new spec file), 4 cut.**
+
+### Found at review
+
+- **The offline simulations are a free pool.** Each tier also holds ~280–300 *offline* simulation records:
+  yesterday's set, abandoned when the perf daemons restart at 16:00 UTC (`tools/perf-hosts/com.fleetqa.perf.refresh.plist`)
+  and deleted by host expiry (`host_expiry_window: 1`) a day later. Every picker (`findOnlineHost`,
+  `findSimulations`, `findSimulatedHostIds`) takes online hosts, so nothing else touches them. C1 #12 stages its
+  51 hosts from there, which removes the need for `exclusive/`.
+- **Low disk space matches ~676 hosts on premium's Unassigned** (2026-10-03), so C1 #10 keeps the flow's own filter:
+  a full page always fills.
+- **`policies.spec` sets a policy's platforms on edit but never reads them back**, though its comment says "a stuck
+  field surfaces at the post-save verification". The platform case (C3 #3/#19) creates its policy through the
+  UI's Target checkboxes and reads the stored `platform` back.
+- **The Hosts list's label pill carries "Edit label" and "Delete label"** (`HostsFilterBlock.tsx:190-255`), and
+  nothing tests them. C9 #11's flow uses exactly those, so the Manual lifecycle moves its edit and delete there
+  (the Dynamic lifecycle keeps the Labels page's row actions).
+- **The exploited list has 96 CVEs and none with a null EPSS** (premium, 2026-10-03), so the icon is assertable today;
+  the test still counts rows with an EPSS rather than assuming every row has one.
+- **"Select all matching" appears at exactly a full page** (`>= defaultPageSize`, `DataTable.tsx:527`), so 50 staged
+  hosts would raise it; 51 is what makes "all matching" differ from "this page".
+- **`host-delete` deletes four *online* simulations every run**, which come back only at the daily refresh. Moving it
+  to offline ones would stop the drain. Not this batch's: a follow-up.
+
+### Per gap
+
+| gap | decision | where and how |
+|---|---|---|
+| C3 #6, C3 #24 | **build**, both tiers | new `shared/policies/policy-hosts.spec.ts`: a passing (`SELECT 1;`) and a failing (`SELECT 0;`) global `pw-*` policy, two simulations refetched; on one's Policies tab each row's View all hosts lands on `policy_id` + its own response, the pill names the policy, and the refetched hosts are listed under their response and not the other (⊆, since other hosts answer on their hourly cycle) |
+| C3 #3, C3 #19 | **build as one shared test** | same file: a global policy created through the Save-policy modal with only macOS ticked; stored as `darwin`; listed for a darwin simulation, not for a linux or a windows one (API), and on the darwin host's Policies tab but not the linux host's, beside an untargeted sibling that both list. Replaces "augment `policy-label-targets` + a free twin": a global policy behaves the same on both tiers |
+| C3 #26 | **build**, premium | the policies list's Pass link for the durable VMs-fleet policy "Claude is installed (macOS)" (read only; it carries an install automation) → hosts filtered by it, equal to a live API read |
+| C3 #7 | **cut** (Andrey: premium only) | the list's counts come from the hourly aggregation and free has no policy that survives cleanup; free keeps the host-tab link (C3 #6) |
+| C3 #29 | **cut** | duplicates batch E's C3 #31 (team-admin fleet policy CRUD); the flow never sets a platform |
+| C1 #10 | **build** | `bulk-transfer.spec.ts`: under the Low disk space filter a full page selected ("All hosts on this page are selected") offers no *Select all matching* |
+| C1 #12 | **build** (Andrey: approved) | `bulk-transfer.spec.ts`: 51 offline Ubuntu simulations staged on a throwaway `pw-*` fleet → select the page → *Select all matching* ("51 selected") → Transfer to Unassigned. A `page.route` guard lets `POST /hosts/transfer/filter` through only when its filter is that fleet. API: all 51 unassigned. The `afterEach` deletes the fleet, which returns any staged host. Fails, not skips, when fewer than 51 offline simulations exist |
+| C1 #11 | **cut** (Andrey) | `host-delete` covers a bulk delete of a selection; the flow's three filters only decide which rows are on the page (the delete is still by id), and its counts across scopes read shared totals |
+| C5 #10 | **cut the search half; fold the rest** | search needs 10+ fleets (`FleetsDropdown.tsx:59-63`); `bulk-transfer`'s staged test also asserts every Fleet cell reads "QA". Dashboard → Hosts keeps the scope in `no-teams-views` already |
+| C9 #11 | **build** | `shared/labels/labels.spec.ts` Manual lifecycle: two members (Linux slices 2–3); the Hosts list filtered by the label shows exactly them; edit from the pill's "Edit label" swaps slice 3 for 4, read back through `listLabelHostIds` and the filtered list; delete from the pill's "Delete label" |
+| C5 #1 | **fold** | `free/paywalls.spec.ts` beside "no Teams nav link": the dashboard's heading is the org name and it has no fleet dropdown; the Hosts list has a Host column and no Fleet column. Unconditional |
+| C5 #7, C5 #20 | **build**, both tiers | `shared/hosts/host-reports-tab.spec.ts`: a `discard_data` report (`createReport` gains the option) is absent with "Show reports that don't store results" off, present on, absent again; read through the search marker |
+| C5 #12 | **fold** (low value, kept) | `shared/hosts/host-software.spec.ts`: the Inventory columns and one page forward. No per-row "Last opened" check: simulations leave it empty |
+| C4 #P17 | **fold** | `premium/hosts/host-report-details.spec.ts`: from the report's results, the Mac's Host link → its report page (heading, "Back to host details") → back |
+| C6 #1 | **build** | `premium/software/vulnerabilities.spec.ts`' exploited test: page 1's rows carry the exploit icon wherever the API gives an EPSS, every row the API returns is `cisa_known_exploit`, and the icon's tooltip names CISA |
+| C6 #3, C6 #7 | **build together** | premium `vulnerabilities.spec.ts`, VMs fleet scope: a CVE (chosen through the API) whose fleet count differs from All fleets' shows the API's fleet count; its View all hosts lands on `vulnerability=<CVE>&fleet_id=<VMs>`, and the list equals a live API read (a handful of hosts). Free twin of #7 in `free/software/vulnerabilities.spec.ts` (first page ⊆ the API's set) |
+| C6 #6 | **build, moved** | `shared/software/titles-table.spec.ts`, both tiers: a title row's View all hosts → `software_title_id` and a pill naming the title. The flow's "rows with vulnerabilities" isn't the behaviour, and would pull in the slow `vulnerable=true` query |
+| C6 #26 | **cut** | the CVE drill on Unassigned is `vulnerabilities.spec`'s "list, pagination, and CVE detail flow", the OS drill is `os.spec`'s "a row drills into that OS", and no *Add software* on Unassigned is `no-teams-views`; what's left ("N items" equals the rows after a search) is a count |
+| C6 #27 | **build** | `premium/software/no-teams-views.spec.ts`: a per-run `fleet-pw-*` `.deb` uploaded to Unassigned is in an Unassigned Linux simulation's Library (UI and API); never installed, deleted in the `finally` |
+
+### Simulations claimed
+
+`findSimulations`: linux 3–7 (label members 3–4 beside `labels.spec`'s existing 2, the Library read 5, policy
+refetches 6–7), darwin 6 and windows 2 (policy reads). None is moved. Batch D, built alongside, takes linux 10–39.
+C1 #12's 51 offline hosts come from `findOfflineSimulations`, outside `findSimulations`' pool.
 
 ## Free coverage
 
@@ -271,17 +317,33 @@ for the vulnerability and Library rows.
 
 ## Done when
 
-- Every row has a written review decision; the questions above have Andrey's answer.
-- The augments and new specs built, on every tier each targets, each moving back every simulation it borrowed
-  in its `finally` (and claimed in the registry in `helpers/api/hosts.ts`).
-- `npm run check` clean; each changed spec run with dependencies on its tiers, once headed, `--repeat-each=5` for
-  anything waiting on a refetch.
-- `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.
-- Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a
-  [test-audit](../../test-audit/README.md) entry per `test()`, `helpers/README.md` / `pages/README.md`, and this
-  round's [README](README.md) batch table and [INDEX](INDEX.md).
-- PR open, Andrey told it's ready for its branch run.
+All done 2026-10-03 except the last line, which is Andrey's:
+
+- ✅ Every row has a written review decision; the questions have Andrey's answers.
+- ✅ The augments and new specs built, on every tier each targets. No simulation is moved except C1 #12's 51
+  offline ones, which go back by filter and again with the throwaway fleet's deletion; the slices are claimed in
+  `helpers/api/hosts.ts`.
+- ✅ `npm run check` clean (0 errors). Each changed spec run with dependencies and headed on its tiers (premium 59
+  passed with 1 existing skip, free 56 passed); the refetch-dependent policy specs 5×, the other new tests 3–5×.
+- ✅ `playwright-test-reviewer` on the branch's diff: no blockers; a numeric sort for label membership and an assert
+  before the report's host link is clicked, both fixed. The free with-dependencies run then caught the Hosts
+  table's URL rewrite undoing a label choice, and `LabelFilter.selectLabel` retries until the route sticks.
+- ✅ Docs in the same commits: *What landed*, the [DELIVERY-LOG](../DELIVERY-LOG.md), a
+  [test-audit](../../test-audit/README.md) entry per `test()` (POL-33…35, HOSTP-17/18, HOST-25, MISC-31, SWV-23/24,
+  SWL-37/38, and the entries the augments changed), `helpers/README.md` (no new page object, so `pages/README.md`
+  is unchanged), `CLAUDE.md` › Test hosts (the offline pool), this round's [README](README.md) and [INDEX](INDEX.md).
+- ✅ [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) open; Andrey told it's ready for its branch run.
 
 ## What landed
 
-*Nothing yet.*
+Built on `playwright/qawolf-round3-batch-c`. Each slice was run on every tier it targets before it was
+committed.
+
+| slice | gaps | what |
+|---|---|---|
+| policies | C3 #3, #19, #6, #24, #26 | **New `shared/policies/policy-hosts.spec.ts`**: a policy created through the Save policy modal with only macOS ticked is stored as `darwin`, listed (API) on a macOS simulation and not on a Linux or Windows one, beside an untargeted sibling all three list, and shown on the macOS host's Policies tab but not the Linux host's. A passing (`SELECT 1;`) and a failing (`SELECT 0;`) Linux-only policy, two simulations refetched until they answer both; each row's **View all hosts** lands on `policy_id` + that answer, the pill and the Pass / Fail control match, both simulations are listed (searched by name), and neither is once the control is switched. **New `premium/policies/policy-host-counts.spec.ts`**: the VMs fleet's "Claude is installed (macOS)" Pass link carries `fleet_id`, and the hosts under Pass and then Fail equal a live API read. Premium 3/3 and 5×, free 2/2 |
+| transfers | C1 #10, #12, C5 #10 | **`premium/hosts/bulk-transfer.spec.ts`**: the dashboard's Low disk space card → a full page selected ("All hosts on this page are selected", "50 selected") and no *Select all matching hosts*. A new describe stages 51 offline Ubuntu simulations (`findOfflineSimulations`, newest abandoned set first) on a throwaway `pw-transfer-*` fleet; *Select all matching* reads "51 selected", Transfer → Unassigned, and a `page.route` guard passes `POST /hosts/transfer/filter` only when its filter is that fleet (one request, to `fleet_id: null`); API: the fleet is empty and all 51 are on Unassigned. The `afterEach` deletes the fleet by name. The QA-staged test also reads each row's Fleet cell (C5 #10). `CLAUDE.md` › Test hosts names the offline pool. Premium 5/5, the two new tests 5× |
+| labels | C9 #11 | **`shared/labels/labels.spec.ts` Manual lifecycle**, both tiers: created with two Linux simulations (slices 2–3); the Hosts list filtered by it (typed into the label filter, `LabelFilter.selectLabel`) holds exactly them; **edit from the Hosts list** (the pill's *Edit label*): the form shows both members, one is removed and slice 4 added, `listLabelHostIds` reads the new pair, and the filtered list holds it; **delete from the Hosts list** (the pill's *Delete label*): "Successfully deleted label.", back on the unfiltered list. The Dynamic lifecycle keeps the Labels page's Edit and Delete. `LabelsPage.addHost` now reads the search dropdown (the edit form's selected table holds the same cells), `selectedHost` / `selectedHostNames` / `removeHost`; `HostsListPage.editLabelButton` / `deleteLabelButton` / `deleteLabelModal`. Premium 12/12, free 8/8, the Manual describe 3× on one worker |
+| host tabs | C5 #1, #7, #20, #12, C4 #P17 | **`free/paywalls.spec.ts`**: the dashboard's `h1` is the org name and there is no fleet dropdown; the Hosts list has a Host column and no Fleet column (`columnHeader(name, { exact })`: "Added to Fleet" contains it). **`shared/hosts/host-reports-tab.spec.ts`**: a Discard-data report (`createReport({ discardData })`) beside a storing one, on the Mac's Reports tab: absent with the toggle off, listed with it on (`show_dont_store=true`), absent again. **`shared/hosts/host-software.spec.ts`**: the full inventory's seven columns, "N items" over 20, Next shows 20 other titles and Previous the first page again (`softwareColumnHeader`, `turnSoftwarePage`). **`premium/hosts/host-report-details.spec.ts`**: from the report's results the Mac's Host link opens its per-host page, and Back to host details lands on `/hosts/<id>/details` (`ReportDetailsPage.hostResultLink`). Premium 6/6, free 25/25 (with the paywall rows) |
+| vulnerabilities and Unassigned | C6 #1, #3, #6, #7, #27 | **premium `vulnerabilities.spec.ts`**: the exploited filter's rows are all in the API's exploited list and CISA-flagged, each carries the exploit icon exactly when the API gives it an EPSS score, and the icon's tooltip names CISA (`exploitMarks`, `hoverExploitIcon`). New: on the VMs fleet, a CVE (chosen through the API, counted differently under All fleets) shows the API's count in each scope, and its row's View all hosts lists exactly the API's hosts for it on that fleet. **free `vulnerabilities.spec.ts`**: a CVE's View all hosts lists hosts it affects (⊆ the API's). **`shared/software/titles-table.spec.ts`**: a title row's View all hosts → `software_title_id` and a pill naming it (both tiers). **`premium/software/no-teams-views.spec.ts`**: a per-run `fleet-pw-unassigned-*` `.deb` on Unassigned is offered to an Unassigned Linux simulation, in the API and its Library. `listVulnerabilities`, `listVulnerabilityHosts`; `VulnerabilitiesListPage.row` / `hostsCount` / `viewAllHostsFor`; `SoftwareTitlesPage.viewAllHostsForFirstTitle`. Premium 4/4 and the two vulnerability tests 3×, free 2/2 |
+| cut | C3 #7 (free), C3 #29, C1 #11, C5 #10's search, C6 #26 | as reviewed |

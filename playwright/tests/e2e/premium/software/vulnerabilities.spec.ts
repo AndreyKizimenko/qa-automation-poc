@@ -23,6 +23,8 @@ import {
   findVulnerableSoftwareBySources,
   findRenderableCve,
   hostVulnerableVersions,
+  listVulnerabilities,
+  listVulnerabilityHosts,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -204,20 +206,119 @@ test('Vulnerabilities tab — search narrows to a single CVE', async ({
   });
 });
 
+/**
+ * The exploited filter lists the CVEs CISA reports as exploited, and each row
+ * says so with an icon beside its Probability of exploit. Fleet draws the icon
+ * only beside a score (`ProbabilityOfExploit`: no EPSS, no icon), so the
+ * expectation per row comes from the API's `epss_probability` rather than
+ * "every row" — Fleet's own feeds can leave a known exploit unscored. The load
+ * fleet's templated inventory carries ~100 of them (96 on 2026-10-03).
+ * Round 1 C6 #1.
+ */
 test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
   softwareTitles,
   vulnerabilitiesList,
+  request,
   page,
 }) => {
   await softwareTitles.goto();
   await softwareTitles.teamDropdown.select('Unassigned');
   await softwareTitles.gotoVulnerabilitiesTab();
 
-  // Selecting the "Exploited" option drives the `exploit=true` query param and
-  // re-fetches; the filtered list may be empty, so assert row-or-empty.
   await vulnerabilitiesList.selectExploitedFilter('Exploited vulnerabilities');
   await expect(page).toHaveURL(/exploit=true/);
-  await expect(vulnerabilitiesList.table.rowOrEmpty()).toBeVisible();
+  await expect(vulnerabilitiesList.table.firstRowWithLink).toBeVisible();
+
+  const exploited = new Map(
+    (await listVulnerabilities(request, { fleetId: 0, exploit: true })).map((v) => [v.cve, v]),
+  );
+  const marks = await vulnerabilitiesList.exploitMarks();
+  expect(marks.size, 'CVEs listed under the filter').toBeGreaterThan(0);
+  for (const [cve, marked] of marks) {
+    const listed = exploited.get(cve);
+    expect(listed, `${cve} is one the API lists as exploited`).toBeDefined();
+    expect(listed!.cisaKnownExploit, `${cve} is a CISA known exploit`).toBe(true);
+    expect(marked, `${cve}'s exploit icon`).toBe(listed!.epssProbability !== null);
+  }
+
+  const marked = [...marks].find(([, hasIcon]) => hasIcon)?.[0];
+  expect(marked, 'a listed CVE with a score, so its icon renders').toBeDefined();
+  await vulnerabilitiesList.hoverExploitIcon(marked!);
+  await expect(vulnerabilitiesList.exploitTooltip).toContainText('Cybersecurity and Infrastructure Security Agency (CISA)');
+});
+
+/**
+ * A CVE's count and hosts are its fleet's. Round 1 C6 #3 (the count differs by
+ * fleet) and C6 #7 (a row's "View all hosts" → the Hosts list filtered by the
+ * CVE), on the VMs fleet: its hosts are the three real VMs plus whatever a
+ * label-targeting spec borrows for a minute, so the hosts behind a CVE are a
+ * set small enough to compare whole.
+ *
+ * The CVE is chosen through the API as one whose count on the VMs fleet differs
+ * from All fleets' — one the simulations on Unassigned share — rather than by
+ * moving hosts to make a difference. The counts are the hourly vulnerabilities
+ * job's, so each is compared with the API's figure for the same scope (re-read
+ * until they agree, in case the job runs between the two). The Hosts list is
+ * computed live, so it is compared with the live API host list, never with the
+ * count.
+ */
+test("Vulnerabilities — a CVE's host count and hosts are its fleet's", async ({
+  dashboard,
+  softwareTitles,
+  vulnerabilitiesList,
+  hostsList,
+  vmsFleetId,
+  request,
+  page,
+}) => {
+  let picked: { cve: string } | undefined;
+  for (const v of (await listVulnerabilities(request, { fleetId: vmsFleetId, perPage: 50 })).slice(0, 20)) {
+    if (v.hostsCount === 0) continue;
+    const all = (await listVulnerabilities(request, { query: v.cve })).find((a) => a.cve === v.cve);
+    if (all && all.hostsCount !== v.hostsCount) {
+      picked = { cve: v.cve };
+      break;
+    }
+  }
+  expect(picked, 'a CVE on the VMs fleet that hosts on Unassigned share').toBeDefined();
+  const { cve } = picked!;
+
+  const countIn = async (fleetId?: number) =>
+    (await listVulnerabilities(request, { fleetId, query: cve })).find((v) => v.cve === cve)?.hostsCount;
+  const expectRowCount = async (fleetId?: number) => {
+    await vulnerabilitiesList.search.fill(cve);
+    await expect(vulnerabilitiesList.row(cve)).toBeVisible();
+    await expect(vulnerabilitiesList.table.table.locator('tbody').getByRole('row')).toHaveCount(1);
+    await expect(async () => {
+      expect(await vulnerabilitiesList.hostsCount(cve)).toBe(await countIn(fleetId));
+    }).toPass({ timeout: 30_000 });
+    return vulnerabilitiesList.hostsCount(cve);
+  };
+
+  await dashboard.goto();
+  await dashboard.navbar.goToSoftware();
+  await softwareTitles.teamDropdown.selectByLabel('VMs');
+  await softwareTitles.gotoVulnerabilitiesTab();
+  const vmsCount = await expectRowCount(vmsFleetId);
+
+  await softwareTitles.teamDropdown.select('All fleets');
+  const allCount = await expectRowCount(undefined);
+  expect(allCount, 'All fleets counts the hosts outside the VMs fleet too').not.toBe(vmsCount);
+
+  await softwareTitles.teamDropdown.selectByLabel('VMs');
+  await vulnerabilitiesList.search.fill(cve);
+  await vulnerabilitiesList.viewAllHostsFor(cve);
+
+  const url = new URL(page.url());
+  expect(url.searchParams.get('vulnerability')).toBe(cve);
+  expect(url.searchParams.get('fleet_id')).toBe(String(vmsFleetId));
+  await expect(hostsList.filterPill).toContainText(cve);
+  await expect(hostsList.table.rowOrEmpty()).toBeVisible();
+  await expect(async () => {
+    const expected = (await listVulnerabilityHosts(request, cve, vmsFleetId)).map((h) => h.displayName).sort();
+    expect(expected.length, `hosts on the VMs fleet affected by ${cve}`).toBeGreaterThan(0);
+    expect((await hostsList.hostNames()).sort()).toEqual(expected);
+  }).toPass({ timeout: 30_000 });
 });
 
 test('Vulnerabilities tab — list, pagination, and CVE detail flow', async ({

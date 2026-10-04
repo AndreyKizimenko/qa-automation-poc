@@ -1,6 +1,6 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 8 files · **Test declarations:** 32 · **Projects:** premium / free / premium-exclusive
+**Specs covered:** 10 files · **Test declarations:** 35 · **Projects:** premium / free / premium-exclusive
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
@@ -18,8 +18,10 @@ the duplication is visible:
 - `sql-validation.spec.ts` — the policy form: platform compatibility, a policy with a
   syntax error saved and reopened, and save gating.
 
-Two more files: `shared/policies/policy-autofill.spec.ts` runs AI Autofill on both tiers
-(POL-32), and `premium/exclusive/policies/policy-automation-runs.spec.ts` runs a policy's
+Four more files: `shared/policies/policy-autofill.spec.ts` runs AI Autofill on both tiers
+(POL-32); `shared/policies/policy-hosts.spec.ts` covers which hosts a macOS-only policy runs on and a host's
+link to the hosts that gave the same answer (POL-33/34), and `premium/policies/policy-host-counts.spec.ts` the
+list's Pass / Fail links (POL-35); and `premium/exclusive/policies/policy-automation-runs.spec.ts` runs a policy's
 script automation on the Ubuntu VM (POL-27). `premium/policies/policy-label-targets.spec.ts`
 is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08).
 
@@ -59,6 +61,9 @@ is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08).
 | POL-30 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • a fleet's failing-policies webhook › enabling it at a fleet's scope stores it on that fleet, not in global config | UI+API | ☐ |
 | POL-31 | `premium/policies/policies.spec.ts` | Policies — fleet isolation › a fleet's policy is listed under its fleet and not under another | UI | ☐ |
 | POL-32 | `shared/policies/policy-autofill.spec.ts` | Shared • Policies • AI Autofill › Autofill writes a description and a resolution for the SQL | UI+API · **live fleetdm.com call** | ☐ |
+| POL-33 | `shared/policies/policy-hosts.spec.ts` | Shared • Policies • policy hosts › a policy saved for macOS only runs on macOS hosts | UI+API | ☐ |
+| POL-34 | `shared/policies/policy-hosts.spec.ts` | Shared • Policies • policy hosts › a host's policy links to the hosts that gave the same answer | UI+API | ☐ |
+| POL-35 | `premium/policies/policy-host-counts.spec.ts` | the Pass count opens exactly the hosts passing the policy, and Fail those failing it | UI+API | ☐ |
 
 ---
 
@@ -1218,6 +1223,120 @@ other:
 
 ---
 
+### POL-33 · Shared • Policies • policy hosts › a policy saved for macOS only runs on macOS hosts
+
+- **File:** [`playwright/tests/e2e/shared/policies/policy-hosts.spec.ts`](../../tests/e2e/shared/policies/policy-hosts.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a policy saved for macOS only"` (and `--project=free`)
+- **Project:** premium **and** free (`shared/`) · **Scopes:** All fleets on premium (a global policy; the dropdown select is a no-op on free)
+- **Mode:** UI+API · **Isolation:** independent; simulations are only read (`findSimulations` darwin 6, linux 6, windows 2), never moved
+- **Source:** QA Wolf `policies-global-maintainer-able-to-create-an-os-specific-policy` (round 1 C3 #3 free, C3 #19 premium; round 3, batch C)
+- **Preconditions (API):** an online, non-MDM simulation of each platform past the borrowing offset.
+- **Data created:** two global policies, `pw-policy-hosts-<nonce>-any` (API, every platform) and `…-macos` (UI); both deleted in the `finally` (cleanup wipes global policies too).
+
+**Flow**
+
+1. ☐ *(API)* Create `…-any`: `SELECT 1;`, no platform.
+2. ☐ Open `/dashboard` → **Policies** in the navbar → **All fleets** (premium) → **Add policy**; set the SQL to `SELECT 1;` → **Save**; in the **Save policy** modal fill the name and description, leave only **macOS** ticked, **Save**.
+   - ✅ *(UI)* toast "Policy created."; the URL is `/policies/:id`.
+3. ☐ *(API)* `GET /global/policies/:id`.
+   - ✅ *(API)* `platform` is `darwin`.
+4. ☐ *(API)* `GET /hosts/:id` for the three simulations.
+   - ✅ *(API)* the macOS simulation lists both policies; the Linux and Windows ones list `…-any` and not `…-macos`.
+5. ☐ Open the macOS simulation's **Policies** tab.
+   - ✅ *(UI)* the `…-macos` row is there (status `---`: no answer is needed for a policy to be listed).
+6. ☐ Open the Linux simulation's **Policies** tab.
+   - ✅ *(UI)* the `…-any` row is there and the `…-macos` row isn't.
+
+**Assessment**
+- *Value:* The server half of platform targeting (`FIND_IN_SET(<host platform>, p.platforms)`), which nothing else asserts, and the only place the Save policy modal's platform checkboxes are read back as stored. The CRUD spec (POL-03/04) ticks Windows + Linux on edit and never reads them.
+- *Coverage gaps:* One platform only, set at create; an edit that changes the platforms and a policy for several platforms aren't covered. ChromeOS has no host here. The policies list's "Targeted platforms" column isn't read.
+- *Redundancy:* QA Wolf's premium and free flows are the same flow, so they are one shared test; label targeting (LT-08) covers a fleet policy's other target.
+- *Efficiency / smells:* Seconds. The UI half proves the tab renders what the API lists, on two hosts; the API half covers the third platform without a third page load.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-34 · Shared • Policies • policy hosts › a host's policy links to the hosts that gave the same answer
+
+- **File:** [`playwright/tests/e2e/shared/policies/policy-hosts.spec.ts`](../../tests/e2e/shared/policies/policy-hosts.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a host's policy links"` (and `--project=free`)
+- **Project:** premium **and** free (`shared/`) · **Scopes:** none (a host's page; the link carries no fleet)
+- **Mode:** UI+API · **Timeout:** 240 s (two refetches, each answered within ~20 s) · **Isolation:** independent; `findSimulations` linux 6–7, refetched, never moved
+- **Source:** QA Wolf `policies-hosts-policies-table-links-to-all-hosts-filtered-by-selected-policy` (round 1 C3 #6 free, C3 #24 premium; round 3, batch C)
+- **Preconditions (API):** two online, non-MDM Linux simulations.
+- **Data created:** two global Linux-only policies, `pw-policy-hosts-<nonce>-pass` (`SELECT 1;`) and `…-fail` (`SELECT 0;`, the one query a simulation fails); deleted in the `finally`. Linux-only keeps the failing one off the macOS and Windows VMs; neither has an automation.
+
+**Flow**
+
+1. ☐ *(API)* Create both policies; for each simulation wait out any outstanding refetch, then request one.
+   - ✅ *(API)* both simulations answer `pass` and `fail` (polled, up to 180 s).
+2. ☐ For each policy in turn, open the first simulation's **Policies** tab, hover the policy's row and click **View all hosts**.
+   - ✅ *(UI)* the URL is `/hosts/manage` with `policy_id=<id>` and `policy_response=passing` (or `failing`).
+   - ✅ *(UI)* the pill is "hosts filtered by <policy>"; the Pass / Fail control reads **Pass** (or **Fail**).
+3. ☐ Search the list for each simulation by name.
+   - ✅ *(UI)* each is listed.
+4. ☐ Switch the control to the other answer and search for each simulation again.
+   - ✅ *(UI)* the pill still names the policy; the table renders and neither simulation is listed.
+
+**Assessment**
+- *Value:* The only coverage of a host's policy → hosts hand-off, and of the Hosts list filtered by a policy *and* an answer: the button's two URLs, the pill, the Pass / Fail control, and Fleet's live per-answer host query. Both answers are exercised, which QA Wolf's flow (the first row, whatever its answer) didn't.
+- *Coverage gaps:* Containment, not equality: every Linux simulation that runs the policy on its hourly cycle is listed too, so a list that wrongly added hosts with *no* answer would pass. The page's fleet context (`fleet_id`) is never set from a host page, so the link's fleet parameter is covered only by POL-35.
+- *Redundancy:* QA Wolf's premium and free flows were the same; one shared test. POL-35 reaches the same filtered list from the policies list.
+- *Efficiency / smells:* ~20–40 s, most of it the refetch. A refetch merges into one already outstanding, so it is waited out first (`waitForNoPendingRefetch`). The control is react-select v1 with no accessible name, so its value is read by class (`HostsListPage.policyResponseValue`).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-35 · the Pass count opens exactly the hosts passing the policy, and Fail those failing it
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-host-counts.spec.ts`](../../tests/e2e/premium/policies/policy-host-counts.spec.ts)
+- **Grep:** `npx playwright test --project=premium policy-host-counts`
+- **Project:** premium · **Scopes:** VMs
+- **Mode:** UI+API · **Isolation:** read-only
+- **Source:** QA Wolf `policies-policies-link-to-all-hosts-filtered-by-selected-policy` (round 1 C3 #26 premium; round 3, batch C). The free twin (C3 #7) was cut: the counts come from an hourly job, and free has no policy that survives cleanup.
+- **Preconditions (API):** the VMs fleet's gitops policy "Claude is installed (macOS)" (`gitops/premium-fleetqa/fleets/vms.yml`), which carries an install automation and is only read.
+- **Data created:** none.
+
+**Flow**
+
+1. ☐ Open `/dashboard` → **Policies** → select **VMs**; search for the policy; click its **Pass** cell's "N hosts" link.
+   - ✅ *(UI)* the URL is `/hosts/manage` with the policy's id, `policy_response=passing` and `fleet_id=<VMs>`.
+   - ✅ *(UI)* the pill is "hosts filtered by Claude is installed (macOS)"; the control reads **Pass**.
+2. ☐ Read the listed hosts.
+   - ✅ *(UI+API)* they are exactly `GET /hosts?policy_id&policy_response=passing&fleet_id`, by name, and there is at least one (the Mac VM keeps Claude installed).
+3. ☐ Switch the control to **Fail**.
+   - ✅ *(UI+API)* the table renders and lists exactly the API's failing hosts (usually none).
+
+**Assessment**
+- *Value:* The policies list's Pass / Fail links, which were untested, and the one place the link's `fleet_id` is asserted. Set equality is affordable because the VMs fleet holds a handful of hosts.
+- *Coverage gaps:* The count itself isn't compared with anything: it is the hourly job's snapshot, and the list is live. A policy created in the test can't be used, so the link of a brand-new policy (`---`) isn't covered.
+- *Redundancy:* The filtered list is POL-34's destination; this reaches it from the list.
+- *Efficiency / smells:* Seconds. Depends on a gitops-declared policy staying declared; a missing one fails with the re-apply instruction. Simulations the label-targeting specs borrow onto the VMs fleet can answer mid-test, so each comparison re-reads both sides until they agree.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1229,7 +1348,9 @@ other:
 | Delete policy | POL-05, POL-06 | Single row only — real multi-row bulk delete, select-all, modal count copy, cancel path untested |
 | Policy list: search | POL-01/03/05 (as a lookup mechanism) | Never asserted as a feature (no negative search, no result-count check) |
 | Policy list: sort, pagination, `automation_type` filter | — (only `tests/loadtest/policies.spec.ts`, timing-only) | Untested functionally |
-| Policy list: Passing/Failing host counts, inherited-policies section (team scope) | — | Untested |
+| Policy list: Passing/Failing host counts, inherited-policies section (team scope) | POL-35 (the Pass / Fail links of a VMs-fleet policy) | The counts themselves (an hourly snapshot) and the inherited-policies section untested |
+| Platform targeting: which hosts list a platform-scoped policy | POL-33 (macOS only, both tiers) | Several platforms, and a platform changed on edit |
+| A host's Policies tab → hosts with the same answer | POL-34 (both answers, both tiers) | Containment only: other hosts answer hourly |
 | Policy list: Automations column | POL-09/10 (**Add automation** ↔ **Edit automation: Webhook**), POL-25 (**Edit automations**, "2 automations") | Ticket and calendar summaries untested |
 | Policy details page | POL-01/03 (name/desc/resolution, **Show query**, button presence) | **Run policy** never clicked; passing/failing host tabs + host links untested; **Platforms** field never read (locator exists, unused) |
 | Team scoping of policies (premium) | POL-01/03/05 via the dropdown + `fleet_id`; POL-31 (a Workstations policy is absent under VMs) | Leakage checked in one direction only (Workstations → VMs), not under Unassigned; `Unassigned` scope not in `SCOPES` at all |
@@ -1277,4 +1398,4 @@ other:
 
 1. **Demote the 12 sql-validation entries.** Apart from POL-19/20's save and reopen, none issues a request; they test `PlatformCompatibility` / `PolicyForm` / `SaveNewPolicyModal` in isolation. Ideal home is Fleet's frontend unit tests; the pragmatic middle is to collapse the compatibility cases into one table-driven test per tier (or a single tier-agnostic `shared/policies/sql-validation.spec.ts`, since there is no tier branch) and keep the syntax-error + save-gating cases as one form-behaviour test. Saves ~8–10 browser sessions per nightly.
 2. **Make the premium automations spec earn its tier.** POL-25 (install software, run script and continuous on a Workstations policy) and POL-30 (a fleet's webhook) are premium's own; calendar events and conditional access are the premium workflows left untested. The scope-wide pair POL-09/23 runs on All fleets and asserts nothing premium, so free's copy could become the "webhook exists on free + premium workflows are absent" test.
-3. **Add a policy-results-page test.** Click **Run policy** on the details page and assert the plumbing (results panel, host counts refresh) — bounded by the simulated-host caveat that live runs ignore the SQL and return no results ~20% of the time, so assert structure, not rows. ⚠️ unclear from the source whether osquery-perf hosts report policy pass/fail results at all, which would decide whether the Passing/Failing columns can ever be asserted.
+3. **Add a policy-results-page test.** Click **Run policy** on the details page and assert the plumbing (results panel, host counts refresh) — bounded by the simulated-host caveat that live runs ignore the SQL and return no results ~20% of the time, so assert structure, not rows. They do: simulations pass every policy except `SELECT 0;` and answer on a refetch within ~20 s, which is what POL-34 runs on.
