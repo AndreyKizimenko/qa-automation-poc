@@ -55,8 +55,8 @@ here** block, the gap table, the review to do first, facts for the build, the de
 |---|---|---|---:|---|
 | **[A](A-settings-users-labels.md)** | Settings, users, labels, account — forms with nothing behind them | none | 19 | **merged** 2026-10-03: 16 built, 3 cut; [PR #81](https://github.com/AndreyKizimenko/qa-automation-poc/pull/81), shipped in [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) |
 | **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | **merged** 2026-10-03: 22 built, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A); branch run [37077445852](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37077445852) green, 0 flaky |
-| **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | **built** 2026-10-03: 19 kept, 4 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86), ready for its branch run |
-| **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | **built** 2026-10-03: 4 built, 3 folded, 2 cut; ships with C in [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86); filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) |
+| **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | **merged** 2026-10-04: 19 kept, 4 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch D); branch run [37149323584](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37149323584) green, C's tests all first-time passes |
+| **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | **merged** 2026-10-04: 4 built, 3 folded, 2 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch C); its 2 flaky retries in the branch run fixed; filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) and [#54734](https://github.com/fleetdm/fleet/issues/54734) |
 | **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | ready for review |
 | **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations | 10 | ready for review |
 | **[G](G-real-vms.md)** | Real VMs: live policies and reports, CSV export, side effects of installs and MDM commands, a host's Library | real VMs | 10 | ready for review |
@@ -66,8 +66,8 @@ A–D need nothing that doesn't exist; E's per-role source read is done, so it's
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
 Every batch file lists the decisions to put to Andrey **before** building: 25 across the round, most of them "cut,
 or build it this narrow way". Batches touch different surfaces and can run in any order. **Two can be built at once**, each
-in its own worktree, **only if their instance runs are coordinated** (§5, "Since batches A and B"): every run
-announced, and no run with dependencies while the other session is mid-run.
+in its own worktree, **only if their instance runs are coordinated** (§5, "Since batches A and B"; C and D, built
+that way, are the model): every run announced, and no run with dependencies while the other session is mid-run.
 
 ## 4. How a batch runs
 
@@ -167,6 +167,50 @@ Their suite-wide rules are in `playwright/CLAUDE.md` and the `playwright-test-au
   - The org-wide *Store report results* setting is never toggled.
   - Throwaway `pw-*` fleets are approved.
   - AI Autofill is tested against the live service.
+
+### Since batches C and D (2026-10-05)
+
+C and D were built in parallel and shipped together in
+[PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (D built on C's branch, so one branch run
+covered both); [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87) followed. **Branch from
+`main` at or after 61db6b0.** Each later batch's ▶ Start here block names the ones that apply to it. In short:
+
+- **The Hosts page rewrites its own URL.** It replaces the URL from the filters its table last queried with, so a
+  filter or search chosen just after the page loads can be silently undone (C lost a label filter; D's scale test
+  lost both its filters, and *Select all matching* took all 200 hosts on Unassigned). Use
+  `HostsListPage.searchFor`, `HostsListPage.filterTo` and `LabelFilter.selectLabel`, which remake a choice until
+  the settled table's URL still carries it, never a bare `search.fill` or filter click.
+- **Built-in platform labels hold the wrong hosts.** osquery-perf answers their queries, and on both instances the
+  built-in **macOS** label holds the *Ubuntu* simulations. Pick hosts by their `platform` field, never by
+  built-in-label membership. `batch-run`'s scale test batches every online macOS-label member on Unassigned:
+  moving Linux simulations off Unassigned shrinks its pool (it needs 50+), and a script or install run now on a
+  Linux simulation there can queue behind its batch.
+- **Offline simulations are a pool of their own.** Each tier holds ~300, yesterday's set, deleted by host expiry a
+  day later; no picker reads them. `findOfflineSimulations` stages dozens of hosts to *move* (not to answer
+  anything), as `bulk-transfer` does.
+- **More slices are claimed** (`findSimulations`, registry in `helpers/api/hosts.ts`): linux 2–7 (C) and 10–19
+  (D), darwin 6 (C) and 10–39 (D), windows 2 (C). The darwin pool past the 40-host skip ends around offset 35.
+- **Two script-queue bugs, both reachable on real hosts** (filed by D):
+  [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732): an edit while a host's run is still
+  *queued* behind another activity leaves that host Pending forever, and the batch never finishes;
+  [fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734): a run cancelled or edited while a host is
+  *running* it still records its result, and the host then shows under no tab. A test that edits or cancels
+  scripts needs hosts with nothing queued, and must not compare counts read before a running host reports.
+- **Simulations really "run" scripts**, about half of them (orbit): a random exit code within ~35 s. Batch scripts
+  have no license check, so free has them too.
+- **A dashboard activity check at the end of a long test can be buried** under the other workers' activity past
+  the feed walk's 15 pages (D's VM test flaked on it). Check the feed right after the action, or through the API
+  (`assertActivity`).
+- **Real-VM pickers say why a VM is missing** (PR #87): offline since when, or not MDM-enrolled;
+  `listOnlineHosts` throws on an API error instead of returning nothing. The real Macs went offline on both tiers
+  in the 2026-10-05 nightly (32 failures, infra): read that message before blaming a spec.
+- **Run cost:** the C+D branch run took premium 61.8 min (main project 45.6) against 58.8 for A+B, and free 15.8
+  against 12.8. Premium is worker-bound; every new wait adds to it.
+- **Decisions Andrey made in C and D that later batches inherit:**
+  - Free coverage on simulations is fine wherever hosts are picked by id: on free the real VMs sit in Unassigned,
+    so never select by filter there.
+  - A confirmed Fleet bug a test steers around gets a `TODO(fleetdm/fleet#N)` and a row under *Worked around in
+    the suite* in `docs/blocked-by-product-bugs.md`.
 
 ## 6. Decisions round 3 already carries
 

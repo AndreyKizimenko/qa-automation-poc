@@ -131,6 +131,11 @@ A change isn't done until the docs describing it are current, in the same commit
 - **Names change under state.** A tab's accessible name gains a count (*Controls 1* once a profile fails,
   *Policies 3*, *Upcoming 1*). A `FormField`'s label is replaced by its error text. Row actions are
   hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.
+- **The Hosts list rewrites its URL just after it loads** and can undo a filter or search chosen before that
+  (C and D each lost one, and *Select all matching* took the whole fleet): use `HostsListPage.searchFor` /
+  `filterTo` / `LabelFilter.selectLabel`, never a bare `search.fill` or filter click.
+- **Built-in platform labels are osquery-perf answers** (the macOS label holds the Ubuntu simulations): pick
+  hosts by `platform`, and never target a Platforms chip.
 - **Lists page at 20, and searches hit the server.** Act on a row after a search that narrows to exactly
   it; never scan page 1. A name that is a prefix of a sibling's breaks strict mode.
 - **`Pagination.nextIfEnabled`** compares the first row's link text, or the whole row on a table without

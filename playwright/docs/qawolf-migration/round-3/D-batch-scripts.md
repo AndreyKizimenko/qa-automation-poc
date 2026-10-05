@@ -107,7 +107,7 @@ simulations, cancelled, read back, deleted).
   batch and the first orbit host in 13–19 the batch that fires. The edit-cancel batch takes the orbit hosts in
   darwin 10–39 (about 15 per tier), not Linux ones. On these instances the built-in macOS label holds the *Ubuntu*
   simulations, and `batch-run`'s scale test runs a batch on every online member on Unassigned, so a Linux host may
-  have a scale run queued ahead (#54732). Batch C holds linux 2–7, darwin 6–7 and windows 2–3, all below 10.
+  have a scale run queued ahead (#54732). Batch C holds linux 2–7 (with `labels.spec`'s 2), darwin 6 and windows 2, all below 10.
   Registered in `helpers/api/hosts.ts`.
 
 **A Fleet bug, filed as [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) (2026-10-03).**
@@ -262,8 +262,9 @@ Asked 2026-10-03, after the review above:
 - **The Hosts table rewrites its URL with the default sort just after it loads** (batch C, 2026-10-03), so a
   filter or search applied at once can be undone. #16 searches for its simulation there: wait for the table to
   settle, then confirm it narrowed to exactly that host before checking it.
-- **Moving or selecting macOS simulations** shifts `batch-run`'s scale test. Use your own slice, other platforms
-  where you can.
+- **Moving Linux simulations off Unassigned** shifts `batch-run`'s scale test: it batches the built-in macOS label's
+  online members, which on these instances are the *Ubuntu* simulations (found while building, 2026-10-03). Use
+  your own slice.
 
 ## Done when
 

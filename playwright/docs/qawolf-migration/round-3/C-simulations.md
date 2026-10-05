@@ -306,8 +306,9 @@ for the vulnerability and Library rows.
 
 ## Traps this batch will hit
 
-- **Moving darwin simulations off Unassigned shifts `batch-run`'s scale test**: it needs 50+ online macOS hosts
-  there. Borrow from your own slice, and only what you need.
+- **Moving Linux simulations off Unassigned shifts `batch-run`'s scale test**: it needs 50+ online members of the
+  built-in macOS label there, which on these instances are the *Ubuntu* simulations (batch D found this,
+  2026-10-03). Borrow from your own slice, and only what you need.
 - **Never use failing SQL on the VMs fleet.** It runs two install policies, and simulations pass them, so
   nothing installs. Keep it that way.
 - **Never trigger the vulnerabilities or aggregation crons.** They're global, and other runs see the effect.
