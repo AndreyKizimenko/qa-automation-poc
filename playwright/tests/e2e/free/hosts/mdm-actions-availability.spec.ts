@@ -17,7 +17,7 @@
  * per-gate reasoning and why Linux needs no `kind` constraint.
  */
 import { test, expect } from '@fixtures';
-import { findOnlineHost } from '@helpers/api';
+import { findOnlineHost, requireRealHost } from '@helpers/api';
 
 const MDM_ACTIONS = ['Lock', 'Wipe', 'Turn off MDM'] as const;
 
@@ -59,11 +59,10 @@ test.describe('Free • Hosts • MDM action availability', () => {
       : 'offers none of Lock, Wipe or Turn off MDM';
 
     test(`${testCase.label} ${summary}`, async ({ hostDetails, request }) => {
-      const host = await findOnlineHost(
-        request,
-        testCase.platform,
-        testCase.realDevice ? { kind: 'real' } : {},
-      );
+      // A real device's absence fails with why: offline since when, or not enrolled.
+      const host = testCase.realDevice
+        ? await requireRealHost(request, testCase.platform)
+        : await findOnlineHost(request, testCase.platform);
       expect(host, `expected an online ${testCase.platform} host`).not.toBeNull();
 
       await hostDetails.goto(host!.id);

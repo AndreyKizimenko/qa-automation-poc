@@ -206,7 +206,7 @@ other:
 - **Grep:** `npx playwright test -g "a team admin is not offered Transfer on a host they administer"`
 - **Project:** premium · **Role:** `team-admin` (admin on **Workstations** + **VMs**)
 - **Mode:** UI · **Isolation:** parallel; read-only
-- **Preconditions:** the real, MDM-enrolled, online macOS VM (`liveMacosHost` worker fixture — `GET /hosts?status=online&platform=darwin&mdm_enrollment_status=enrolled`, first by display name; throws a setup error if none)
+- **Preconditions:** the real, online macOS VM (`liveMacosHost` worker fixture — `GET /hosts?status=online&platform=darwin`, the first by display name whose `hardware_model` matches `/virtual|qemu/i`; with none, it throws a setup error saying whether the VM is offline since its last check-in or not enrolled at all)
 - **Data created:** none
 
 **Flow**
@@ -512,8 +512,8 @@ other:
 
 **Flow** (per case)
 
-1. ☐ *(API setup)* `findOnlineHost(platform, …)` → `GET /hosts?status=online[&platform=…][&mdm_enrollment_status=enrolled]&per_page=100&order_key=display_name&order_direction=asc`, re-filtered client-side on the host's real platform, then one `GET /hosts/:id` per candidate for vitals.
-   - ✅ *(API)* a host was resolved (`not.toBeNull()`), so a downed VM fails loudly instead of skipping.
+1. ☐ *(API setup)* The macOS and Windows cases take the real VM through `requireRealHost(platform)`: `GET /hosts?status=online&platform=…&per_page=100&order_key=display_name&order_direction=asc`, re-filtered client-side on the host's real platform and on `hardware_model` (`/virtual|qemu/i`), then one `GET /hosts/:id` for vitals. The Ubuntu case takes any online Linux host through `findOnlineHost`.
+   - ✅ *(API)* a host was resolved, so a downed VM fails loudly instead of skipping; a missing real VM fails with why (offline since its last check-in, or not enrolled).
 2. ☐ Open `/hosts/:id` **via URL** → ✅ *(UI)* **Disk space available** visible.
 3. ☐ Click **Actions**.
    - ✅ *(UI)* at least one option rendered (`openActions` anchor) — this is what stops the absence assertions from passing on an unrendered menu.

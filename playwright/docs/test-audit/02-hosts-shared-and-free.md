@@ -472,12 +472,12 @@ other:
 - **File:** [`playwright/tests/e2e/free/hosts/mdm-actions-availability.spec.ts`](../../tests/e2e/free/hosts/mdm-actions-availability.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "macOS \(MDM-enrolled\) offers only Turn off MDM"`
 - **Project:** free only · **Mode:** UI · **Isolation:** standalone (one of three cases generated from a `CASES` array — separate `test()` per case, not a loop-around-describe)
-- **Preconditions:** **a real, online, MDM-enrolled macOS VM on the free instance** — resolved by `findOnlineHost(request, 'darwin', { kind: 'real' })`, i.e. `mdm_enrollment_status=enrolled`. Not the `liveMacosHost` fixture, but the same resolver and in practice the same machine. Apple MDM must be configured on the free instance and the device still enrolled/connected, or the expectation flips. Hard-fails (`not.toBeNull()`) rather than skipping when no such host exists.
+- **Preconditions:** **a real, online macOS VM on the free instance** — resolved by `requireRealHost(request, 'darwin')`, which picks by `hardware_model` (`/virtual|qemu/i`), not by MDM enrolment. Not the `liveMacosHost` fixture, but the same resolver and in practice the same machine. The VM must also be **MDM-enrolled**, with Apple MDM configured on the free instance, or the expectation flips; the resolver doesn't check that. Hard-fails rather than skipping when no such host exists, saying whether the VM is offline since its last check-in or not enrolled at all.
 - **Data created:** none. **Nothing destructive is ever clicked** — the test only opens the Actions menu.
 
 **Flow**
 
-1. ☐ *(API precondition)* Resolve an online real macOS host (`GET /hosts?status=online&platform=darwin&mdm_enrollment_status=enrolled`, re-filtered client-side on the host's own `platform`).
+1. ☐ *(API precondition)* Resolve the online real macOS host (`GET /hosts?status=online&platform=darwin`, re-filtered client-side on the host's own `platform` and on `hardware_model`).
    - ✅ *(API)* Such a host exists.
 2. ☐ Open `/hosts/:id` via URL, click **Actions**.
    - ✅ *(UI)* At least one option renders (`openActions()`).
