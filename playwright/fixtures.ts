@@ -20,6 +20,7 @@ import {
 import {
   findFleetByName,
   findOnlineHost,
+  missingRealHostReason,
   withApiRequest,
   type OnlineHostRef,
 } from './helpers/api';
@@ -282,10 +283,10 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
       findOnlineHost(request, 'darwin', { kind: 'real' }),
     );
     if (!host) {
+      const reason = await withApiRequest((request) => missingRealHostReason(request, 'darwin'));
       throw new Error(
-        `[liveMacosHost] no online, MDM-enrolled macOS VM on ${process.env.FLEET_URL}. ` +
-        `Real-device specs need one — check the QA macOS VM is powered on and still enrolled ` +
-        `(GET /api/v1/fleet/hosts?status=online&mdm_enrollment_status=enrolled).`,
+        `[liveMacosHost] no online macOS VM on ${process.env.FLEET_URL}: ${reason}. ` +
+        'Real-device specs need one; a VM is found by its hardware model, not by MDM enrolment.',
       );
     }
     await use(host);

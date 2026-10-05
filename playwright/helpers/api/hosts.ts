@@ -889,11 +889,49 @@ export async function requireRealHost(
   const host = await findOnlineHost(request, platform, { kind: 'real' });
   if (!host) {
     throw new Error(
-      `no online real ${platform} VM on ${process.env.FLEET_URL} — scripts, installs and MDM commands only ` +
-        `reach a real device. Check the ${platform} VM is powered on and enrolled.`,
+      `no online real ${platform} VM on ${process.env.FLEET_URL}: ${await missingRealHostReason(request, platform)}. ` +
+        'Scripts, installs and MDM commands only reach a real device.',
     );
   }
   return { ...host, fleetId: (await getHostFleetId(request, host.id)) ?? 0 };
+}
+
+/**
+ * Why no online real VM of a platform was found, for the error a real-device
+ * spec fails with. A real VM is told apart by its hardware model
+ * (`/virtual|qemu/i`, see {@link HostKind}), not by MDM enrolment, which a third
+ * of the simulations share. So this reads every host of the platform on
+ * virtualized hardware, online or not, and says which case it is: enrolled but
+ * offline since its last check-in (powered off, asleep, or its network down),
+ * online but its details didn't load, or not enrolled at all (deleted, or not
+ * re-enrolled since).
+ */
+export async function missingRealHostReason(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+): Promise<string> {
+  const perPage = 500;
+  const real: Array<{ id: number; display_name: string; status: string; seen_time: string }> = [];
+  for (let page = 0; page < 10; page++) {
+    const res = await request.get(apiUrl('hosts'), {
+      headers: authHeaders(),
+      params: { per_page: String(perPage), page: String(page) },
+    });
+    if (!res.ok()) return `the hosts list answered ${res.status()}, so whether one is enrolled is unknown`;
+    const batch = ((await res.json()).hosts ?? []) as Array<OnlineHost & { status: string; seen_time: string }>;
+    real.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && REAL_DEVICE_MODEL.test(h.hardware_model ?? '')));
+    if (batch.length < perPage) break;
+  }
+  if (real.length === 0) {
+    return `no ${platform} host on virtualized hardware is enrolled at all (deleted, or not re-enrolled since)`;
+  }
+  return real
+    .map((h) =>
+      h.status === 'online'
+        ? `"${h.display_name}" (id ${h.id}) is online, but its details didn't load`
+        : `"${h.display_name}" (id ${h.id}) is ${h.status}, last seen ${h.seen_time}`,
+    )
+    .join('; ');
 }
 
 /**
@@ -968,7 +1006,9 @@ async function listOnlineHosts(
       order_direction: direction,
     },
   });
-  if (!res.ok()) return [];
+  // A failed list throws rather than reading as "no host": every real-device
+  // spec would otherwise blame a VM for an API error.
+  await expect(res, 'Failed to list the online hosts').toBeOK();
   return ((await res.json()).hosts ?? []) as OnlineHost[];
 }
 

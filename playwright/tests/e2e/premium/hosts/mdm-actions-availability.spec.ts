@@ -26,7 +26,7 @@
  *     subject and no `kind` is required.
  */
 import { test, expect } from '@fixtures';
-import { findOnlineHost } from '@helpers/api';
+import { findOnlineHost, requireRealHost } from '@helpers/api';
 
 /** The three actions under test; every case asserts each one present or absent. */
 const MDM_ACTIONS = ['Lock', 'Wipe', 'Turn off MDM'] as const;
@@ -60,11 +60,10 @@ test.describe('Premium • Hosts • MDM action availability', () => {
       hostDetails,
       request,
     }) => {
-      const host = await findOnlineHost(
-        request,
-        testCase.platform,
-        testCase.realDevice ? { kind: 'real' } : {},
-      );
+      // A real device's absence fails with why: offline since when, or not enrolled.
+      const host = testCase.realDevice
+        ? await requireRealHost(request, testCase.platform)
+        : await findOnlineHost(request, testCase.platform);
       expect(host, `expected an online ${testCase.platform} host`).not.toBeNull();
 
       await hostDetails.goto(host!.id);
