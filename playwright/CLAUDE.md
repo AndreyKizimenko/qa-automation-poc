@@ -66,6 +66,12 @@ regenerate both on every restart.
   that simulate orbit report script runs and installs they never performed: random output and exit code, and
   an install that fails ~5% of the time. So a green assertion against one proves nothing about the feature. A
   deleted simulation never comes back on its own.
+- **Built-in platform labels hold whatever osquery-perf answers**, not hosts of that platform: on both
+  instances the built-in **macOS** label holds the *Ubuntu* simulations. Pick hosts by their `platform` field
+  (`findOnlineHost` and the simulation finders already do), never by built-in-label membership, and never target
+  a Platforms chip for a live run. `premium/controls/scripts/batch-run.spec.ts`' scale test batches every online
+  macOS-label member on Unassigned, so a script or install run now on a Linux simulation there can queue behind
+  it, and moving Linux simulations off Unassigned shrinks its pool (it needs 50+).
 - **Each tier also holds ~300 offline simulations**: the set the perf daemons abandon at their daily refresh
   (16:00 UTC), which host expiry deletes a day later. Every picker takes online hosts, so nothing reads them;
   a spec that needs dozens of hosts to move (not to answer anything) draws them with `findOfflineSimulations`
@@ -117,6 +123,10 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - We do **not** add `data-testid` to Fleet's React source. Class fallbacks require an inline comment explaining why no role/text alternative exists; legitimate fallbacks are catalogued in the `playwright-test-reviewer` skill.
 - No `page.waitForLoadState('networkidle')` — unreliable for SPAs that poll.
 - Each page object's `goto()` must anchor on a stable element so callers don't need their own readiness wait.
+- **The Hosts list rewrites its own URL** from the filters its table last queried with, so a filter or search
+  chosen just after the page loads can be silently undone, and *Select all matching* then takes every host on the
+  fleet. Choose them through `HostsListPage.searchFor`, `HostsListPage.filterTo` or `LabelFilter.selectLabel`,
+  which remake a choice until the settled table's URL still carries it.
 
 ## Imports + fixtures
 
@@ -256,7 +266,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
 | **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
 | **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. Test timeout 60 s unless a spec sets its own (VM specs do, up to 15 min); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`), premium's exclusive step at 60 (free's at 15) and the gitops-mode step at 15, reports included; the premium job's limit is 185, free's 120 |
-| **runtime** | premium ~42 min at 3 workers, free ~10 at 2 (2026-09-30, run 36649240469). Both are worker-bound to the last minute: premium's 123 test-minutes / 3. About 85 of those minutes wait on the real VMs, and three workers picking Linux installs at once cost ~13 of them to queue contention, so a 4th worker is worth ~31–34 min only while the Linux waits stay inside their budgets. `run_timeline.py` in the run-reviewer skill reconstructs this per worker |
+| **runtime** | premium's main project ~46 min at 3 workers (job 61.8 min with the exclusive and gitops-mode steps), free's job ~16 at 2 (2026-10-03, branch run 37149323584, after round 3's batches C and D); ~42 and ~10 on 2026-09-30 (run 36649240469). Both are worker-bound to the last minute: premium's 123 test-minutes / 3 on 2026-09-30. About 85 of those minutes wait on the real VMs, and three workers picking Linux installs at once cost ~13 of them to queue contention, so a 4th worker is worth ~31–34 min only while the Linux waits stay inside their budgets. `run_timeline.py` in the run-reviewer skill reconstructs this per worker |
 | **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report), six `gitops-verify-report-*` and two `gitops-nightly-cli-report-*` |
 | **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail |
 | **the instances' build** | both redeploy the 4.93 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |

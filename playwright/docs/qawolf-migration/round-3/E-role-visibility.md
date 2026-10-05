@@ -3,18 +3,19 @@
 **41 gaps → about 30 tests, in seven role matrices.** `Policies` · `Reports` · `Host details` · `Hosts list` ·
 `Labels` · `Scripts` · `Dashboard`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
 
 > ## ▶ Start here
 >
-> **Branch from current `main`** (batches A and B merged with
-> [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82)).
+> **Branch from `main` at or after 61db6b0** (batches C and D in
+> [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86); [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)).
 > **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5 (how a round-3 batch runs; rules new since round 2), round 2's
 > [README §9](../round-2/README.md#9-working-a-batch-since-d), `playwright/CLAUDE.md` (the cleanup pipeline;
 > the static users under **Env vars**; the login throttle under **API access**), then this file, then
 > [A](A-settings-users-labels.md)'s and [B](B-policy-report-software-forms.md)'s *What landed*, which built the
-> admin half of five of this batch's rows.
+> admin half of five of this batch's rows, and [C](C-simulations.md)'s (its labels slice: `LabelFilter.selectLabel`,
+> the Hosts list's label pill, `HostsListPage.hostLink` / `hostNames` / `columnHeader`).
 >
 > **What this batch is.** Round 1 merged QA Wolf's one flow per role per tier per page into role specs for
 > policies and reports. **Those specs were never written**, so the MERGE rows pointing at them counted as
@@ -26,7 +27,8 @@
 > the QA Wolf flows' text (which is often stale). Re-check a cell against the live page before you build it.
 >
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the
-> build both instances run.
+> build both instances run, again on 2026-10-03 against `main` (da2aceb), and on 2026-10-05 against `main`
+> (61db6b0) and the RC head both instances now run (c87f85c; nothing in this batch's areas changed).
 >
 > **Since batches A and B (2026-10-03, re-checked against `main` da2aceb).** What applies here:
 >
@@ -48,6 +50,28 @@
 > - **`--repeat-each` on a serial describe that writes global config needs `--workers=1`.**
 > - **Building beside another batch:** announce each instance run, and wait for a "go" before a run with
 >   dependencies (`cleanup-setup` wipes global reports and policies and Workstations' policies).
+>
+> **Since batches C and D (2026-10-05, re-checked against `main` 61db6b0).** The full list is in
+> [README §5](README.md#since-batches-c-and-d-2026-10-05). These apply here:
+>
+> - **The Hosts page rewrites its URL** and can undo a filter chosen just after load (C9 #15, C1 #6 / #21, the
+>   team-role Hosts cells). Filter and search through `HostsListPage.searchFor` / `filterTo` /
+>   `LabelFilter.selectLabel`. The filter's **"+" *Add label*** lives inside the open label menu: open it only
+>   after `table.waitForSettled()`, and assert its "Filter labels by name..." box before asserting *Add label*
+>   absent, or the absence passes on a menu a re-render closed. No page object has *Add label* yet. Open a
+>   host's details by id, never through a search.
+> - **The built-in macOS label holds the *Ubuntu* simulations** (finding 9, §6): never target it for a live run.
+> - **The Hosts list's label pill** has *Edit label* / *Delete label* (§2's new row); C drove them as admin, so
+>   C9 #15 needs only the role half.
+> - **`assertActivity` asserts the actor is the admin**, so it fails on every role write: read a role write's
+>   activity with `findActivity` and check its `actor_email` (Done when).
+> - **Workstations isn't reliably empty**: `host-delete`'s bulk test stages 2 simulations there and expects "2
+>   selected" (§5, decision 11).
+> - **A missing real VM now fails with why** (PR #87: offline since when, or not enrolled), and the Macs went
+>   offline in the 2026-10-05 nightly. A visibility cell needs any online host, not the Mac: take one from
+>   `listFleetHosts(vmsFleetId, { status: 'online' })`, so a downed Mac doesn't fail a matrix that runs nothing.
+> - **Slices:** E claims none. A borrowed host gets a registry entry in `helpers/api/hosts.ts`; `findSimulations`'
+>   darwin pool past the skip is taken (10–39 is D's).
 
 ## The gaps
 
@@ -109,7 +133,7 @@ Read every flow body; the INDEX row is the audit's summary of it. What the bodie
 | 6 | **Overlaps with other batches**: C3 #30 vs [B](B-policy-report-software-forms.md)'s C3 #15 (a fleet's failing-policies webhook); C7 #22 vs B's C4 #P7 (report automations off, the On/Off cell); C7 #21/#23 vs [A](A-settings-users-labels.md)'s C1 #19 (enroll secret add/copy/delete); P16 vs B's C4 #P15 (Save as new's fleet dropdown). A and B built the admin half of each: C3 #15 on a throwaway `pw-fleet-webhook-*` fleet (`premium/policies/policy-automations.spec.ts`); P7 on All fleets (free + premium `reports/automations.spec.ts`); C1 #19 on Workstations under a snapshot restore of its whole secret list (`premium/settings/enroll-secrets.spec.ts`); P15 into Workstations (`premium/reports/save-as-new.spec.ts`). | Decide which batch owns each write. The usual answer, and what B's plan says: the form batch (A/B) owns the write as admin; E owns only "this role gets the control". On Workstations, a role write of the enroll secrets or the fleet's webhook races a spec already writing there (§6). |
 | 7 | **Low-value CRUD.** P30 (team admin fleet-report CRUD) and C3 #21/#31/#32 (fleet policy CRUD as maintainer, team admin, ws-maintainer). Round 1 called them "~DUP of admin CRUD; only auth differs". | Likely cut P30, or reduce it to a visibility cell. Build **at most one** write test for policies that loops over the write roles. |
 | 8 | **P19 needs a fleet-scoped observer+, and none exists.** There's also no single-fleet team admin (`team-admin` holds two fleets), no team technician, and no human gitops user (only `api-global-gitops`), so a gitops UI column isn't possible. | Decision: provision a `ws-observer-plus` human (a one-shot manual step, password from 1Password, as `helpers/api/static-users.ts`'s header describes), or cut P19. |
-| 9 | **F3 and P12 run a live report against All hosts** (~300 simulations) and wait up to 180 s for "Report finished", then compare "% responded". A live run finishes only once every online targeted host has answered (`service_campaigns.go:195-197`, no timeout), and simulations answer with the same row whatever the SQL. | Target `liveMacosHost` or a label holding the VMs, and bound the wait. |
+| 9 | **F3 and P12 run a live report against All hosts** (~300 simulations) and wait up to 180 s for "Report finished", then compare "% responded". A live run finishes only once every online targeted host has answered (`service_campaigns.go:195-197`, no timeout), and simulations answer with the same row whatever the SQL. | Target `liveMacosHost` or the VMs fleet, and bound the wait. Never the built-in macOS label: on these instances it holds the ~100 Ubuntu simulations, and the run waits for every one. |
 | 10 | **`global-technician`** is in no row, but the human user exists. | A cheap extra column in every matrix. Ask whether it's wanted. |
 | 11 | **C3 #22 isn't a role property.** The automation-type filter's options depend on the scope, and are the same for every role (`ManagePoliciesPage.tsx:105-118,741-818`). | A scope check in a policies list spec (batch B's area), or cut. |
 | 12 | **Round 2 #49 / #50 have nothing to vary.** The platform cards aren't role-gated. | Cut, or replace with the cell that is gated: the Activity card shows for global roles, not team roles. `DashboardPage.activityHeading` / `activityFeedCard` exist (A's `shared/dashboard/activity-feed.spec.ts`, admin only). |
@@ -143,9 +167,10 @@ fleet (`HostActionsDropdown.tsx:87-96`). Re-check any cell against the live page
 | | *Export hosts* | everyone; disabled with no hosts | |
 | | **"+" *Add label*** (aria-label "Add label", in the label filter's heading) | GA, GM, GT, TA, TM | `:493-500`; `CustomLabelGroupHeading.tsx:68-76` |
 | **Host details** | *Transfer* | GA, GM, GT | `HostActionsDropdown/helpers.tsx` |
-| | *Delete*, *Lock*, *Wipe*, *Turn off MDM* | GA, GM, TA, TM | |
+| | *Delete*, *Lock*, *Wipe*, *Turn off MDM* | GA, GM, TA, TM | Lock / Wipe / Turn off MDM also need an MDM-enrolled host (`HostActionsDropdown/helpers.tsx:201-300`): anchor a negative cell on *Delete* |
 | | *Run script* | GA, GM, GT, TA, TM | |
-| | *Live report* | everyone; GO / TO's modal lists only `observer_can_run` reports and has **no create link** | `SelectReportModal.tsx:95-107` |
+| | *Live report* | everyone; GO / TO's modal lists only `observer_can_run` reports and has **no create link**. Disabled, not hidden, on an offline host | `SelectReportModal.tsx:95-107`; `helpers.tsx:771-775` |
+| **Hosts list, label pill** (a custom label chosen in the filter) | *Edit label*, *Delete label* | global roles except observers (GO+ included), or the label's author; never on a built-in label. For team roles that's narrower than the Labels page, which also allows a fleet label on their own fleet (`LabelsTableConfig.tsx:60-76`) | `HostsFilterBlock.tsx:203-255` |
 | **Labels** page | *Add label* | GA, GM, GT, TA, TM | `ManageLabelsPage.tsx:90-95` |
 | | *Edit* / *Delete* | GA, GM, GT on any label; TA / TM on a label **they authored**, or a team label on their fleet | `LabelsTableConfig.tsx:60-76` |
 | **Scripts** (Controls) | the Controls page | 403 for GO, GO+, TO | `router/index.tsx:670-671` |
@@ -261,8 +286,9 @@ cells), a Workstations report written by admin (the "someone else's report" cell
 Workstations report survives `cleanup-setup` and nothing sweeps it, so delete it yourself, by id, as
 `save-as-new.spec.ts` does with its fleet copy.
 
-**Helpers** (`helpers/api/policies.ts`, `reports.ts`): `createPolicy` is global-only; `createFleetPolicy`
-creates a fleet's. `createReport` has no `observer_can_run` option (add one). `getReport(request, id)` reads
+**Helpers** (`helpers/api/policies.ts`, `reports.ts`): `createPolicy` is global-only (it now takes `platform`);
+`createFleetPolicy` creates a fleet's. `createReport` has no `observer_can_run` option (add one; it gained
+`discardData`). `getReport(request, id)` reads
 any report, global or fleet, including `observerCanRun` and `automationsEnabled`. `deleteReportsMatching` lists
 global reports only; `listReports(request, fleetId)` and `findReportByName(request, name, fleetId)` read a
 fleet's.
@@ -270,8 +296,11 @@ fleet's.
 **Hosts.** Workstations has **no hosts**, so `ws-maintainer` and `ws-observer` can't open a host's page unless
 a simulation is staged onto Workstations and moved back (`host-delete.spec.ts` does that). `team-admin` sees
 the VMs fleet (`liveMacosHost`, plus borrowed simulations); global roles see the simulations in Unassigned.
-Leave the ws-* roles out of host details, and out of any hosts-list cell that needs a host; Export hosts may
-not render on an empty fleet (C7 #24).
+Leave the ws-* roles out of host details, and out of any hosts-list cell that needs a host. On a truly empty
+fleet *Export hosts* renders **disabled** and the label filter is disabled too (`ManagePage.tsx` → `ManageHostsPage.tsx:1905,1923-1929,1952`),
+but Workstations isn't reliably empty: `host-delete`'s bulk test stages 2 simulations there. Assert *Export hosts*
+visible, never its enabled state (C7 #24). Staging a host on Workstations for a ws-* cell would break that test
+(decision 11).
 
 ## 6. Writes and live runs
 
@@ -310,6 +339,18 @@ anything or touches a lock setting.
 8. **A `pw-` sweep for Workstations reports** *(new, from A/B learnings)*: nothing removes a Workstations report a
    killed run leaves (this batch's admin-written report; B's Save-as-new copy has the same gap). Add one to
    the Workstations step, by exact prefix like the VMs one, or rely on the `afterEach`?
+9. **C3 #31 can't be cut with decision 4** *(new, from C)*: C cut C3 #29 as a duplicate of it, so cutting C3 #31
+   leaves a team admin's fleet-policy create with no UI coverage anywhere. Recommended: the one looped write test
+   over GM / TA / TM on Workstations, read back with `getFleetPolicy`.
+10. **C9 #15 (decision 2), now leaning `global-observer`** *(new, from C)*: `ws-observer`'s fleet is empty, so its
+    label filter is disabled (reachable only by a direct `/hosts/manage/labels/<id>` URL). Recommended:
+    `global-observer`, as the flow does, asserting the pill has no *Edit label* / *Delete label*.
+11. **ws-* host cells stay out** *(new)*: staging a host on Workstations breaks `host-delete`'s bulk test ("2
+    selected") and would be deleted by it. Recommended: keep them out, as planned; the alternative is moving that
+    bulk case to a throwaway `pw-*` fleet first (a follow-up).
+12. **Free C7 #26 cells** *(new, from D)*: recommended yes (Free coverage).
+13. **The label pill's narrower team-role gating** (§2): by design (the UI is stricter than the API)? Recommended:
+    don't file it unless you want it raised.
 
 ## Free coverage
 
@@ -317,7 +358,9 @@ anything or touches a lock setting.
 goes in `shared/` only once the source read shows the page renders the same on both tiers. Policies and
 reports render a fleet picker and premium-only automation options on premium, so plan explicit `free/`
 siblings for those. Never branch with `if (isPremium)`. The rows that name free (C1 #6, C2 #3, C3 #5, C4 #F3)
-are the minimum, not the ceiling.
+are the minimum, not the ceiling. **C7 #26 has a free half** (D found free has scripts; the Controls route guard is
+the same on both tiers, `router/index.tsx:668-671`): a global maintainer uploads to Unassigned, a global observer
+gets the 403 (decision 12).
 
 ## Traps this batch will hit
 
@@ -350,7 +393,8 @@ are the minimum, not the ceiling.
 - One role-dimensioned spec per area (policies, reports, host details) plus the hosts-list, labels, scripts and
   dashboard cells, on every tier the role exists on.
 - Every write and live run is its own test, cleans up in an `afterEach`, and is confirmed through the API as the
-  signed-in role.
+  signed-in role. Check a role write's activity with `findActivity` and its `actor_email`, never `assertActivity`
+  (it requires the admin) or the dashboard feed; the Activity-card cell asserts the card, never an entry.
 - `npm run check` clean. Each spec run with dependencies on its tiers, and once headed. Anything with a live run
   `--repeat-each=5 --workers=2`.
 - `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.

@@ -3,12 +3,12 @@
 **5 gaps → about 10 tests in the `gitops-mode` project, in new files.** `Controls gated surfaces` · `The
 software exception` · `Variables` · `Change management` · `Policies, Reports, Software, OS settings`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
 
 > ## ▶ Start here
 >
-> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
-> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after 61db6b0** ([PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86),
+> batches C and D; [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [G-out-of-band.md](../round-2/G-out-of-band.md) (the gitops-mode V1
 > work and its *Parked for V2* list) and [GITOPS-PLAN.md](../round-2/GITOPS-PLAN.md), `playwright/CLAUDE.md`
 > (the `gitops-mode` project), then this file.
@@ -32,8 +32,24 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 > - **If another batch is built at the same time**, a gitops-mode run needs its session's explicit "go": the flag
 >   makes every control its run clicks read-only.
 >
+> **Since batches C and D (2026-10-05).** The full list is in
+> [README §5](README.md#since-batches-c-and-d-2026-10-05). H draws no hosts, so their host-picker, slice and
+> label-membership rules don't apply. These do:
+>
+> - **Running and cancelling batch scripts aren't gated** in gitops mode (§2.5): D's surfaces are operations, like
+>   Add hosts. A script row's Edit and Delete are gated; Download isn't.
+> - **The Hosts list's label pill** (*Edit label* / *Delete label*) is gated with `entityType="labels"`
+>   (`HostsFilterBlock.tsx:220-255`) and shows only for a custom label. Not in this batch (decision 3).
+> - **Check the exception activities through the API**, keyed to their `exception` detail: the project's own
+>   flips log the same types over and over and crowd the feed (§2.4).
+> - **Clear toasts between saves**: `changeManagement.toast.dismissAll()` before a second Save (§2.4).
+> - **Nothing declares the exceptions** (§2.4): gitops rejects `org_settings.gitops.exceptions` outright, so a
+>   cleanup step restores a pinned baseline, not "declared values" (decision 1).
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
-> both instances run, and again on 2026-10-03 against `main` (da2aceb) and the RC branch's head (ac3c0d6).
+> both instances run, again on 2026-10-03 against `main` (da2aceb) and the RC branch's head (ac3c0d6), and on
+> 2026-10-05 against `main` (61db6b0) and the RC head both instances now run (c87f85c, which has no frontend or
+> gitops changes since ac3c0d6; every Fleet line cited below re-checked).
 
 ## The gaps
 
@@ -55,7 +71,7 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
   empty repository URL (`server/service/appconfig.go:1265-1266`). Drop it. The UI's "Git repository URL is
   required when GitOps mode is enabled" is still assertable as a form error (§2.4).
 - **The Policies / Reports / Software / OS-settings row is breadth, not signal** (round 2 G said so,
-  `G-out-of-band.md:225-226`), and its software-title and OS-settings parts overlap the rows above. Build the
+  `G-out-of-band.md:279-280`), and its software-title and OS-settings parts overlap the rows above. Build the
   wrapped controls that differ from what's asserted; don't walk every page.
 - **The BitLocker PIN proves nothing about gating** (§2.1): it's disabled whenever Windows encryption is off.
 
@@ -68,8 +84,9 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
   assert its tooltip with `expectGatedByGitOps`.
 - **Configuration profiles:** "Add profile" (`ConfigurationProfiles.tsx:229-238,287,313`) and each `Delete <name>`
   (`ProfileListItem.tsx:239-255`) are wrapped; View, Edit and Download stay enabled.
-- **Seed on Workstations** with `uploadProfile(workstationsFleetId, inertMobileconfig(...))` (the inert pattern in
-  `helpers/profiles.ts`; Workstations has no real host), delete it in `afterAll`. **Never upload on Unassigned**:
+- **Seed on Workstations** with `uploadProfile(request, workstationsFleetId, inertMobileconfig(...))` (the inert
+  pattern in `helpers/profiles.ts`, whose names must match `/^pw-[a-z0-9-]+$/`; Workstations has no real host),
+  delete it in `afterAll`. **Never upload on Unassigned**:
   MDM-enrolled simulations sit there. Never click Save.
 
 ### 2.2 The `software` exception
@@ -103,18 +120,32 @@ gitops-mode invocation doesn't run `cleanup-setup`, so a leftover waits for the 
 - Activities `enabled_gitops_exception` / `disabled_gitops_exception` and `enabled_gitops_mode` /
   `disabled_gitops_mode` (`server/fleet/activities.go:866-913`), logged on API flips too. Feed copy: "enabled the
   labels exception for GitOps." / "enabled GitOps mode in the UI." (`GlobalActivityItem.tsx:1164-1174`); neither is
-  in `activity-copy.ts`. Identical activities from earlier flips are already in the feed: anchor on
-  `latestActivityId` / `assertActivityAfter`.
+  in `activity-copy.ts`. Identical activities from earlier flips are already in the feed, and every
+  `withGitOpsMode` flip adds more (`appconfig.go:1281-1283,1387-1389`): assert through
+  `assertActivityAfter(request, 'enabled_gitops_exception', before, (d) => d.exception === 'labels')` (the detail key
+  is `exception`, `server/fleet/activities.go:899-901`), and read feed copy only right after the save, by its text,
+  never by position.
+- **A second Save in the same test**: call `changeManagement.toast.dismissAll()` before it, then confirm the save
+  through `getGitOpsMode`.
 - **State the teardown doesn't restore.** `disableGitOpsMode` flips only the flag
   (`helpers/api/gitops-mode.ts:95-108`); only `withGitOpsMode`'s snapshot restores the exceptions and the URL. A
   killed run leaves a ticked exception, and **exceptions change what `fleetctl gitops` does** (a `labels`
   exception keeps labels the YAML omits), so a stuck one alters the nightly's gitops chain. And
   `01-indicator-and-links`'s `afterAll` restorer would re-apply its pre-run snapshot. So: tick **one exception
   only**, restore it in an `afterEach`, never type or blank the URL (QA Wolf blanked it), and add a cleanup step
-  that restores the exceptions to their declared values if a run dies.
+  that restores a **pinned baseline** if a run dies. Nothing declares the exceptions: gitops rejects
+  `org_settings.gitops.exceptions` (`pkg/spec/gitops.go:922-936`, "not supported via GitOps; set exceptions in the
+  Fleet UI"), `fleetctl` strips them (`server/service/client.go:751-757`), and no `gitops/*/default.yml` has a
+  `gitops:` block. Read the live values once at review and pin them (decision 1).
 - The disabled-Save check will go stale (form validation is moving to submit-only); assert the error copy.
 
 ### 2.5 Policies, Reports, Software-title, OS settings
+
+**Scripts:** Add script and Upload (`ScriptLibrary.tsx:206,231`) and a row's Edit and Delete
+(`ScriptListItem.tsx:104-134`, `EditScriptModal.tsx:197,213-219`) are gated; Download isn't. Running and cancelling
+aren't: the Hosts list's Run script on a selection (`ManageHostsPage.tsx:1987-2015`), the Run script modal and a
+batch's Cancel (`ScriptBatchDetailsPage.tsx:286-290`, hidden only once finished) have no gitops reference. They're
+operations, like Add hosts. Today's specs assert only Add script (`01:76-78`, `zz`).
 
 Policies: the list's checkboxes (`PoliciesTableConfig.tsx:469,497`) and the form's Save (`PolicyForm.tsx:826`) are
 wrapped. Reports: Save and Save as new (`EditQueryForm.tsx:826,845`); Live report isn't. `createPolicy` is
@@ -141,9 +172,17 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 
 ## Decisions to put to Andrey
 
-1. **Change management's write flow:** OK to tick and restore one exception, plus a cleanup step restoring the
-   declared exceptions after a dead run (§2.4)?
-2. **The breadth row** (§2.5): build only the wrapped controls not already asserted, or cut it.
+1. **Change management's write flow:** OK to tick and restore one exception, plus a cleanup step restoring a
+   **pinned baseline** after a dead run (§2.4)? Nothing declares the exceptions, so "declared values" can't be the
+   target. Recommended: pin `labels: false, software: false, secrets: <the live value>`, read once at review; that
+   also settles the `secrets` trap below.
+2. **The breadth row** (§2.5): build only the wrapped controls not already asserted, or cut it. *(From D:)* it could
+   take one over-gating check: Run script stays enabled on a Hosts-list selection, never clicked (open with
+   `HostsListPage.goto({ fleetId: 0 })` and `waitForSettled` before selecting). Recommended.
+3. **New surfaces C and D revealed** *(new; none is a QA Wolf gap, and round 3 adds no scope)*: script rows' Edit /
+   Delete (same wrapper as Add script), a batch's Cancel (needs a scheduled batch and a claimed slice), and the
+   Hosts-list label pill under the labels exception (the same entity `03` tests). Recommended: skip all three; note
+   the pill in GITOPS-PLAN as a V3 candidate.
 
 ## Traps this batch will hit
 
@@ -152,13 +191,14 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 - **A concurrent `PATCH /config`** (another run, another batch's session, a person) can flip the flag mid-run:
   `gh run list` first, and announce the run to any parallel session.
 - **Fleet's default exception set has `secrets: true`** (`server/fleet/app.go:1587`); the live value is
-  unverified, so read it before asserting what an exception lifts.
+  unverified, so read it at review, before asserting what an exception lifts, and pin it in the baseline
+  (decision 1).
 
 ## Done when
 
 - Every row has a written review decision; the questions above have Andrey's answer.
 - The new gitops-mode specs built, each restoring every exception and seeded item it touched, and the cleanup
-  step for exceptions in place if Andrey agreed to it.
+  step restoring the pinned exception baseline in place if Andrey agreed to it.
 - `npm run check` clean; `npm run test:gitops-mode` green twice (login, the specs, teardown), and once headed.
 - `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.
 - Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a

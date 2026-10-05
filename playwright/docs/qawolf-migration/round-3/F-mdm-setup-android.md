@@ -3,12 +3,12 @@
 **10 gaps → about 7 augments and 2 new specs.** `Setup experience` · `Disk encryption` · `OS updates` ·
 `MDM settings` · `Automatic enrollment` · `Android`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
 
 > ## ▶ Start here
 >
-> **Branch from current `main`** (batches A and B merged with
-> [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82)).
+> **Branch from `main` at or after 61db6b0** (batches C and D in
+> [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86); [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)).
 > **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [README §5](../round-2/README.md) (never lock a VM) and
 > [§9](../round-2/README.md#9-working-a-batch-since-d), `playwright/CLAUDE.md` (**Test hosts**, and the OS-update
@@ -20,7 +20,8 @@
 > breaks two main-project specs if it's left on.
 >
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
-> both instances run.
+> both instances run, again on 2026-10-03 against `main` (da2aceb), and on 2026-10-05 against `main` (61db6b0)
+> and the RC head both instances now run (c87f85c; none of this batch's cited files changed).
 >
 > **Since batches A and B (2026-10-03, re-checked against `main` da2aceb).** Neither built anything in this
 > batch's area. What applies here:
@@ -43,6 +44,20 @@
 > - **Building beside another batch:** announce each instance run, and wait for a "go" before a run with
 >   dependencies: `cleanup-setup` resets Workstations' setup experience and clears its OS updates, which breaks
 >   an F run in flight.
+>
+> **Since batches C and D (2026-10-05).** The full list is in
+> [README §5](README.md#since-batches-c-and-d-2026-10-05). Neither built anything in this batch's area, and F needs
+> no host, so their Hosts-list, slice and label rules don't apply, and neither does the Macs' 2026-10-05 outage.
+> What does:
+>
+> - **Clear toasts between saves**: `toast.dismissAll()` before each second save (C8 #6 / C9 #8 save IdP on, then
+>   off; C9 #6 saves encryption, then the PIN), so `expectSuccess` matches its own card.
+> - **A throwaway `pw-*` fleet is an option now** (approved for C, `bulk-transfer.spec.ts`): C8 #4 and C9 #6 could
+>   run there instead of Workstations (decision 4). Deleting a fleet doesn't delete its bootstrap package
+>   (`mdm_apple_bootstrap_packages` isn't in `teamRefs`, `server/datastore/mysql/teams.go:194-205`), so delete the
+>   package before the fleet, in the `afterEach`.
+> - **Workstations must hold no script batch**: `batch-run.spec.ts` reads its Batch progress tabs as empty (CTL-40).
+> - **The free tier has more of this batch than the plan said** (Free coverage, decision 5).
 
 ## The gaps
 
@@ -97,8 +112,11 @@ Read every flow body. Known so far:
 - **Why exclusive:** `install-software.spec.ts` and `run-script.spec.ts` run on Workstations in the main project,
   and this disables both. **Nothing resets it**: `resetMacosSetupToggles` sends only end-user auth and the managed
   local account (`helpers/api/mdm.ts:123-134`), and deleting the bootstrap package doesn't clear it on the server.
-  Add `macos_manual_agent_install: false` to `resetSetupExperience` (so `cleanup-setup` resets it) **before**
-  the first run. Unverified: this may explain round 2's "Install-software form disabled even with gitops off"
+  Add the reset to `resetSetupExperience` (so `cleanup-setup` resets it) **before** the first run, as its own
+  `PATCH /setup_experience {fleet_id, macos_manual_agent_install: false}`: added to `resetMacosSetupToggles'`
+  `PATCH /teams/:id` body it would be ignored, since `ModifyTeam` never reads it (only the setup-experience update
+  does, `ee/server/service/teams.go:2914`). Turning it off never hits the missing-bootstrap-package 422, and it's
+  safe inside `resetSetupExperience`'s `Promise.all`. Unverified: this may explain round 2's "Install-software form disabled even with gitops off"
   (#54169, closed as not reproducible).
 - Reuse `bootstrap-package.spec.ts`'s fixture (`test-data/apple/macos/bootstrap-package/dummy-bootstrap-package.pkg`).
   Nothing is delivered: a bootstrap package acts only at automatic enrollment.
@@ -203,11 +221,24 @@ storing. Generate the fixture in the test, or commit a `test-data/apple/macos/se
 2. **C8 #4:** OK to add `macos_manual_agent_install: false` to the cleanup reset and run the spec in
    `premium-exclusive` (§2.1)?
 3. **C7 #28:** confirm the cut of the IdP save (§2.4).
+4. **C8 #4 and C9 #6 on a throwaway `pw-*` fleet instead of Workstations?** *(new, from C)* Recommended: yes. C8 #4
+   could then stay in the main project (it would no longer disable Workstations' install-software and run-script
+   specs; the cleanup reset becomes a backstop), and C9 #6 would need no real-host guard or fleet-scoped restore.
+   Delete the bootstrap package before the fleet. C8 #6 / C9 #8 stay in `users.spec`, C7 #17 in `exclusive/`.
+5. **Free coverage** *(new)*: a read-only check of the Apple MDM card and its Apple Push Certificate fields on both
+   tiers (`shared/`, never Renew or Turn off), and a free paywall row for `/settings/integrations/sso/end-users`?
+   Recommended: yes.
 
 ## Free coverage
 
-Every row is premium-only. Free's check is the paywall, which `tests/e2e/free/paywalls.spec.ts:14-35` already
-covers for these pages.
+Most rows are premium-only, but not all, and the paywall list misses one page:
+
+- **C9 #9's Apple MDM card renders on free** (`MdmSettings.tsx:113-119`; only EULA and end-user migration are
+  premium-gated, `:137-149`), and free has Apple MDM on (`tests/cli/shared/get-read-only.spec.ts:43-48` reads
+  `mdm-apple` on both tiers). A read-only check of the card belongs in `shared/`.
+- **`/settings/integrations/sso/end-users`** (C7 #28's page) shows the premium message on free
+  (`EndUserAuthSection.tsx:128-129`), but it isn't in `PAYWALLED_PAGES` (`tests/e2e/free/paywalls.spec.ts:14-32`).
+- The rest is covered by the paywalls spec's existing rows.
 
 ## Traps this batch will hit
 
@@ -219,6 +250,8 @@ covers for these pages.
   experience** in the main project at once. Augment the existing tests rather than adding parallel writers.
 - **Every form here is gated in gitops mode**, so a run that overlaps the gitops-mode step sees them disabled.
 - **Never on the VMs fleet**: no OS-update setting, no disk encryption, no setup experience change there.
+- **Never run a library-script batch on Workstations**: `batch-run.spec.ts` asserts its Batch progress tabs are
+  empty (CTL-40).
 
 ## Done when
 

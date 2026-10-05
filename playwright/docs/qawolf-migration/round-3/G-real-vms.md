@@ -3,12 +3,12 @@
 **10 gaps → 1 new spec and about 5 augments, after folds.** `Live policies` · `Live reports and CSV` ·
 `Install side effects` · `MDM command feed` · `Script-only packages` · `A host's Library`
 
-**Status: ready for review** (planned 2026-10-01).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
 
 > ## ▶ Start here
 >
-> **Branch from `main` at or after da2aceb** ([PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82),
-> batches A and B). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after 61db6b0** ([PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86),
+> batches C and D; [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5 (**a failed install script stalls the VM**, fleetdm/fleet#54607), round 2's
 > [README §5](../round-2/README.md) and [§9](../round-2/README.md#9-working-a-batch-since-d), round 2's
 > [D → What landed](../round-2/D-host-execution.md#what-landed-and-what-changed-from-the-plan) (the durable VM
@@ -37,14 +37,40 @@
 >   row by `requireRealHost('darwin')` and its display name.
 > - **Nothing here writes global config**: no Org settings › Advanced key (`advanced-options.spec.ts` asserts
 >   they stay unchanged) and nothing on the global enroll list.
-> - **Run cost:** the premium branch run takes ~58 min (run 37077445852): the main project ~42 (3 workers,
->   worker-bound), the exclusive step ~15, gitops-mode ~1. R2 #72's Linux minutes land in the main project.
+> - **Run cost:** the premium branch run takes ~62 min (run 37149323584, after C and D): the main project ~46 (3
+>   workers, worker-bound, against a 100-min `globalTimeout`), the exclusive step ~14, gitops-mode ~1. R2 #72's
+>   Linux minutes land in the main project.
 > - **If another batch is built at the same time**, announce every VM run to its session and wait for its "go"
 >   before a run with dependencies: each VM has one queue.
 >
+> **Since batches C and D (2026-10-05).** The full list is in
+> [README §5](README.md#since-batches-c-and-d-2026-10-05). These apply here:
+>
+> - **A dashboard check at the end of a long test gets buried** under the other workers' activity (D's VM test
+>   flaked on it). Check through the API first (`assertActivity`), and read the feed right after the action
+>   (§2.4). `expectActivities` reloads the page, which clears the feed's type filter (React state).
+> - **The VMs can be offline, and the pickers now say so** (PR #87): resolve every VM a test needs with
+>   `requireRealHost` before building on it; the Macs dropped out of the 2026-10-05 nightly (~11:00–11:19 UTC,
+>   infra). A live run on a label of the three VMs finishes with two if one is offline, and reads the wrong
+>   percentage (§2.2).
+> - **Built-in platform labels hold the wrong hosts** (the macOS label holds the Ubuntu simulations): never target
+>   a Platforms chip (`ReportLivePage.targetChip` reaches them too; §2.2).
+> - **Two script-queue bugs, both reachable on the VMs**: [#54732](https://github.com/fleetdm/fleet/issues/54732)
+>   (an edit while a run is queued leaves it Pending forever) and [#54734](https://github.com/fleetdm/fleet/issues/54734)
+>   (a run cancelled while running still records its result). G edits no script, but its `afterEach` title delete
+>   is a cancel (§2.5).
+> - **Slices:** G claims none yet. Free today: `findSimulations` linux 8–9 and 20+, darwin 7–9, windows 3+
+>   (C holds linux 2–7, darwin 6, windows 2; D linux 10–19, darwin 10–39). C3 #28 and R2 #88 need theirs (§2.2,
+>   §2.5).
+> - **The Hosts page rewrites its URL**: only if a step reaches a host through the Hosts list, use
+>   `HostsListPage.searchFor`.
+> - **Reuse what C and D built:** `createPolicy({ platform })`, `hostsOfferedTitle`, `findScriptableSimulations`,
+>   `Toast.dismissAll`, and C6 #27's Unassigned Library read in `no-teams-views.spec.ts` (R2 #88).
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a), PR #78's branch, and Fleet
-> `rc-minor-fleet-v4.93.0`, the build both instances run, and again on 2026-10-03 against `main` (da2aceb) and
-> the RC branch's head (ac3c0d6).
+> `rc-minor-fleet-v4.93.0`, the build both instances run, again on 2026-10-03 against `main` (da2aceb) and the
+> RC branch's head (ac3c0d6), and on 2026-10-05 against `main` (61db6b0) and the RC head both instances now run
+> (c87f85c; `service_campaigns.go:196` and the other cited lines unchanged).
 
 ## The gaps
 
@@ -66,13 +92,19 @@
 Read every flow body. Known so far:
 
 - **C3 #28 and C3 #37 are tier-agnostic:** one new `shared/` spec for the live policy run.
-- **C4 #P14 is half stale.** 4.93's Reports list has no Unassigned scope (`ManageQueriesPage.tsx:117-118`), and
-  premium's Unassigned is simulations only, so all it can truthfully assert is scoping (every exported host is an
-  Unassigned host, no VM appears). Fold into C4 #P8, or cut.
+- **C4 #P14 is mostly current.** 4.93's Reports list has no Unassigned scope (`ManageQueriesPage.tsx:117-118`),
+  but the live target picker gives global users an **Unassigned** chip (`SelectTargets.tsx:600-605`), which is what
+  the flow clicks. Premium's Unassigned is simulations only, so what it can truthfully assert is scoping: every
+  result host is in `listFleetHosts(request, 0)` and no VM appears. Fold into C4 #P8 as a premium run on that chip,
+  stopped once rows land (decision 1).
 - **R2 #15: fold, don't build.** Assert it inside `software-lifecycle-on-host.spec.ts` (§2.3); other specs'
   refetch requests on the same VM could make a standalone test pass for the wrong reason.
-- **R2 #88 needs no VM.** Whether *Run* is offered is a server-side decision, so a Linux simulation in the
-  existing Unassigned spec shows it. Don't click it there.
+- **R2 #88 needs no VM, and C half-built it.** Whether *Run* is offered is a server-side decision. C6 #27
+  (`premium/software/no-teams-views.spec.ts:56-73`) shows a package on Unassigned offered in a Linux simulation's
+  Library; what's missing is the *Run* label for a script-only package. Cheapest: in `script-only-package.spec.ts`,
+  between its add and delete, read a claimed Linux simulation's Library row (linux 8), and add `'Run' | 'Rerun'`
+  to `LibraryInstallAction`. Whether a simulation without orbit is offered it is unverified; if not, take one from
+  `findScriptableSimulations`. Don't click it there (decision 5).
 - **C5 #13** (from batch B) is a host's Library tab, read-only on a VM.
 
 ## 2. Facts for the build
@@ -97,10 +129,14 @@ Read every flow body. Known so far:
   Today only the button's visibility is checked (`premium/policies/policies.spec.ts:63`).
 - **C3 #28:** the Host column sorts with `sortType: "caseInsensitive"` (`PolicyResultsTableConfig.tsx:42-56`),
   client-side, 20 a page; the default sort is Status. Simulations' random mixed-case hostnames
-  (`agent.go:2636-2645`) are valid evidence here.
+  (`agent.go:2636-2645`) are valid evidence here. Target a `pw-*` manual label of a claimed simulation slice
+  (`findSimulations('linux', 10, 20)`, linux 20–29, members never moved), **never a Platforms chip**: the built-in
+  labels hold simulations of every platform, and the macOS one the Ubuntu ones.
 - **C3 #37:** "(Yes: X%, No: Y%)" with "N host(s)" tooltips; the denominator is the hosts that answered
   (`PolicyResults.tsx:135-151`). Since simulations always pass, target a `pw-*` **manual label holding the three
   VMs** (premium VMs fleet; free Unassigned) with platform-dependent SQL, so one passes and two fail: Yes 33%, No 67%.
+  Resolve all three with `requireRealHost` before creating the label, and assert "3 hosts targeted (100% online)"
+  before Run: with one VM offline the run finishes on two and reads "Yes 50%", failing for the wrong reason.
   **Don't target the VMs fleet chip**: label specs borrow simulations onto it (the slice registries above
   `findMdmSimulations` and `findSimulations` in `helpers/api/hosts.ts`). A missing table lands in Errors, not Fail.
 - **C4 #F2 / #P8, All hosts and CSV.** `shared/hosts/host-live-query.spec.ts` runs a saved report against one
@@ -116,8 +152,11 @@ Read every flow body. Known so far:
 
 - `SaveHostSoftwareInstallResult` sets `refetch_requested` when an install's status is *installed*
   (`server/service/orbit.go:2425-2430`); an uninstall, when the activity status is *uninstalled* (`:1525-1530`).
-- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:684`) →
-  `waitForHostRefetch({ refetch: true })` → `POST hosts/:id/refetch`. So nothing proves Fleet asked.
+- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:743`) first waits
+  out a refetch Fleet already queued (`waitForNoPendingRefetch`, `:767`), then posts its own
+  (`waitForHostRefetch({ refetch: true })`, `:770`). So nothing proves Fleet asked. A no-refetch option may not be
+  needed: read `refetch_requested` right after `waitForHostSoftwareStatus`, then check that `detail_updated_at`
+  moves before the helper's own post.
 - **Fold into `software-lifecycle-on-host.spec.ts:80`** on the Mac's durable FMA (Itsycal, `helpers/vm-fixtures.ts:50`),
   left uninstalled: after the install result, assert `refetch_requested` is true, then that `detail_updated_at`
   advances **with no refetch request** (add a no-refetch option to `waitForSoftwareSettled`). Don't assert the UI
@@ -132,6 +171,15 @@ views and the modal, and the dashboard row **unfiltered** (`:133-136`). Add, in 
 `.command-details-modal`. Not tier-gated. `DashboardPage.selectActivityType('Ran custom MDM command')` sets the
 filter (batch A's `shared/dashboard/activity-feed.spec.ts` uses it); the feed shows only with no fleet selected.
 No extra VM time.
+
+**The existing unfiltered check is the pattern that flaked in D**: it reads the dashboard after an acknowledgement
+poll of up to 180 s (`mdm-commands.spec.ts:70-78`), by which time the other workers' activity can bury the row past
+the feed walk. And the type filter is React state (`ActivityFeed.tsx:179`), which `expectActivities`' reloads
+(`DashboardPage.ts:441-447`) clear. So: check the activity through the API first,
+`assertActivity(request, 'ran_custom_mdm_command', (d) => d.command_uuid === commandUuid)` (the details carry
+`command_uuid`, `server/fleet/activities.go:1032-1039`); then load the dashboard on All fleets, `selectActivityType`,
+and read `activityRows(...)` directly, never `expectActivity` after the filter. Replace the unfiltered end check with
+this (decision 3).
 
 ### 2.5 A script-only package run (R2 #72, #88)
 
@@ -148,6 +196,9 @@ No extra VM time.
   still queued, which would otherwise hold the Linux queue for the retry); the VMs sweep covers `^fleet-pw-`
   (`OWN_PACKAGE`, `setup/cleanup.steps.ts:195`). Assert Upcoming through `listUpcomingActivities`: the item can
   be picked up before the page loads.
+- **Never edit the package while its run is queued or running** (#54732, #54734), and key every activity and modal
+  assertion to the run's nonce title, so a dead attempt's late result can't decide the retry (#54734's shape;
+  unverified for installs).
 - `HostSoftwareLibrary` has no Run / Rerun action, and its `install()` expects the install toast;
   `activity-copy.ts` has no "ran" / "told Fleet to run" entries. Add them.
 
@@ -177,17 +228,28 @@ inventory specs. Read a VMs-fleet VM (`requireRealHost`), read-only: no VM time.
 `ReportEditPage.clickLiveReport` / `ReportDetailsPage.clickLiveReport`, `HostDetailsPage` (`openLibrary(title)`,
 which filters to one title; `showPastActivities` / `showUpcomingActivities`, `activityItem`, `mdmCommandDetailsModal`),
 `DashboardPage.selectActivityType`; the download pattern in `HostsListPage.exportHosts` and `export-csv.spec.ts:20`;
-API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy`, `createReport`, `getReport`, `requireRealHost`,
-`listFleetHosts`, `uploadSoftwarePackageBuffer`, `waitForHostSoftwareStatus`, `waitForNoPendingRefetch` (reads
-`refetch_requested`), `listUpcomingActivities`.
+API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy` (takes `platform`), `createReport`, `getReport`,
+`requireRealHost`, `listFleetHosts`, `uploadSoftwarePackageBuffer`, `waitForHostSoftwareStatus`,
+`waitForNoPendingRefetch` (reads `refetch_requested`), `listUpcomingActivities`, `assertActivity`,
+`hostsOfferedTitle`, `findScriptableSimulations`; `Toast.dismissAll`.
 
 ## Decisions to put to Andrey
 
-1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut.
-2. **R2 #72's Linux VM minutes** (§3): worth it, given the Linux queue is the floor?
+1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut. *(Updated from the C/D re-check:)* the Unassigned chip
+   still exists in the target picker, so the flow's step is current. Recommended: fold, as a premium run on that
+   chip, every result host in `listFleetHosts(0)`, no VM, Stop once rows land.
+2. **R2 #72's Linux VM minutes** (§3): worth it, given the Linux queue is the floor? *(C/D re-check:)* the main
+   project is ~46 min against a 100-min `globalTimeout`. Recommended: build, with `HOST_RETRIES`.
 3. *(new, from A/B learnings)* **R2 #69's type filter:** batch A's `shared/dashboard/activity-feed.spec.ts`
    proves the feed's type filter (on "Added report", both tiers). Filter by "Ran custom MDM command" as planned,
-   or narrow R2 #69 to the global row's command details modal?
+   or narrow R2 #69 to the global row's command details modal? *(C/D re-check:)* recommended: the API check, the
+   filtered row and the modal's command UUID, replacing the unfiltered end check (§2.4), which also removes the
+   buried-feed flake D hit.
+4. *(new, from C)* **C3 #37's policy is global**: `createPolicy` also runs it on schedule, so it fails on the
+   Windows and Linux VMs until the `afterEach` deletes it. It has no automation, so it's harmless, but it breaks
+   the letter of C's "never failing SQL on the VMs fleet". Recommended: global, with this written down.
+5. *(new, from C)* **R2 #88's home:** `script-only-package.spec.ts`, which needs no extra upload (§1).
+   Recommended.
 
 ## Free coverage
 
@@ -213,7 +275,8 @@ Library tab and the refetch row are premium specs today.
 - The live-policy spec and the augments built on every tier each targets; nothing left installed on a VM;
   every per-run package and label deleted.
 - `npm run check` clean; each changed spec run with dependencies on its tiers, once headed, and `--repeat-each=5
-  --workers=2` for anything on a VM.
+  --workers=2` for anything on a VM. Before any VM run, confirm the VMs are online: a failure now says why
+  (`helpers/api/hosts.ts`, PR #87), and an offline Mac is infra, not the test.
 - `playwright-test-reviewer` run on the branch's diff, findings fixed or answered.
 - Docs in the same commits: this file's *What landed*, a [DELIVERY-LOG](../DELIVERY-LOG.md) line, a
   [test-audit](../../test-audit/README.md) entry per `test()`, `helpers/README.md` / `pages/README.md`, any
