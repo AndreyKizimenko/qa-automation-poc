@@ -1,9 +1,10 @@
 # Batch E — Role-based UI visibility
 
-**41 gaps → about 30 tests, in seven role matrices.** `Policies` · `Reports` · `Host details` · `Hosts list` ·
-`Labels` · `Scripts` · `Dashboard`
+**41 gaps → 23 built, 11 folded, 7 cut; about 45 tests, mostly one per role.** `Policies` · `Reports` ·
+`Host details` · `Hosts list` · `Labels` · `Scripts`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
+**Status: reviewed 2026-10-05, building** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's
+learnings). Andrey's answers are in [Review decisions](#review-decisions-2026-10-05).
 
 > ## ▶ Start here
 >
@@ -19,8 +20,10 @@
 >
 > **What this batch is.** Round 1 merged QA Wolf's one flow per role per tier per page into role specs for
 > policies and reports. **Those specs were never written**, so the MERGE rows pointing at them counted as
-> covered and weren't. The API side is covered: `tests/api/role-access/**` proves allow and deny per endpoint.
-> What each role is **shown** isn't. You're building one matrix per area, with the role as a dimension,
+> covered and weren't. The API side is thinner than round 1 assumed: `tests/api/role-access/**` probes seven
+> endpoints with empty bodies (user, fleet, policy and report create; host and policy lists; config), and nothing
+> for live runs, report edits, labels, scripts or enroll secrets. Fleet's own `server/authz/policy_test.go`
+> covers the rego per object. What each role is **shown** is tested nowhere. You're building one matrix per area, with the role as a dimension,
 > instead of 41 flows.
 >
 > **Build every cell from §2**, which reads what each role is shown from Fleet's permission checks, not from
@@ -141,7 +144,8 @@ Read every flow body; the INDEX row is the audit's summary of it. What the bodie
 
 ## 2. What each role sees
 
-Read from Fleet's source at `rc-minor-fleet-v4.93.0` on 2026-10-01. Roles: GA / GM / GO / GO+ / GT are global
+Read from Fleet's source at `rc-minor-fleet-v4.93.0` on 2026-10-01, and re-checked row by row against c87f85c on
+2026-10-05 (24 rows held, 6 corrected below; TT, the fleet technician, has no static user and is left out). Roles: GA / GM / GO / GO+ / GT are global
 admin / maintainer / observer / observer+ / technician; TA / TM / TO / TO+ the fleet versions. **Team flags
 follow the `fleet_id` in the URL** (`useTeamIdParam.ts:510-527`); on host details they follow the host's own
 fleet (`HostActionsDropdown.tsx:87-96`). Re-check any cell against the live page before you build it.
@@ -154,17 +158,17 @@ fleet (`HostActionsDropdown.tsx:87-96`). Re-check any cell against the live page
 | | inherited rows | an "Inherited" tag, no checkbox | |
 | Policy details | *Edit* | GA, GM; TA / TM on their fleet's policies, **never inherited** | `PolicyDetailsPage.tsx:198-201` |
 | | *Run policy* | GA, GM, GT, GO+, TA, TM, TO+ (not GO, TO) | `:210-216` |
-| | `/policies/new` | 403 page for GO, GO+, GT, TO | `router/index.tsx:800` |
+| | `/policies/new` | 403 page for GO, GO+, GT, TO, TO+ | `router/index.tsx:800` |
 | **Reports** list | header button | "Add report" for GA, GM, TA, TM; "Live report" for GO+, TO+; nothing for GO, TO, GT | `ManageQueriesPage.tsx:299-304,464` |
 | | *Manage automations* | GA; TA on their fleet | `:132`, `:425` |
 | | row checkboxes | GA, GM, TA, TM; none on inherited rows, even for GA | |
 | Report details | *Edit report* | GA, GM; TA / TM on fleet reports, never inherited. **No authorship check** in the UI or the rego | `QueryDetailsPage.tsx:298-301` |
 | | *Live report* | GO / TO only when `observer_can_run`; always for the rest | `:286-293` |
-| Save as new | fleet dropdown | only with more than one fleet (ws-maintainer gets a Name-only modal) | `SaveAsNewQueryModal.tsx:197` |
-| Live target picker | fleets offered | global roles: Unassigned and every fleet; team roles: their fleets, no Unassigned; GO's fleet pills disabled without `observer_can_run` | `SelectTargets.tsx:546-584,601-607` |
+| Save as new | fleet dropdown | premium only: every global user (their list holds All fleets), and a fleet user who is admin or maintainer on 2+ fleets (so `team-admin` gets it; `ws-maintainer` gets a Name-only modal, and the copy takes the source report's fleet) | `SaveAsNewQueryModal.tsx:66-89,197` |
+| Live target picker | fleets offered | global roles: Unassigned and every fleet; team roles: their fleets, no Unassigned. Without `observer_can_run`, a plain GO has every fleet **and** Unassigned disabled, a plain TO their own fleets; GO+ / TO+ never | `SelectTargets.tsx:545-584,601-607` |
 | **Hosts list** | *Add hosts*, gear › *Enroll secrets* | GA, GM, TA, TM | `ManageHostsPage.tsx:248-249,2207` |
 | | gear › *Activity automations* | GA, TA | |
-| | *Export hosts* | everyone; disabled with no hosts | |
+| | *Export hosts* | everyone; disabled when the fleet has no hosts, **hidden** when a filter matches none | `:1923-1932` |
 | | **"+" *Add label*** (aria-label "Add label", in the label filter's heading) | GA, GM, GT, TA, TM | `:493-500`; `CustomLabelGroupHeading.tsx:68-76` |
 | **Host details** | *Transfer* | GA, GM, GT | `HostActionsDropdown/helpers.tsx` |
 | | *Delete*, *Lock*, *Wipe*, *Turn off MDM* | GA, GM, TA, TM | Lock / Wipe / Turn off MDM also need an MDM-enrolled host (`HostActionsDropdown/helpers.tsx:201-300`): anchor a negative cell on *Delete* |
@@ -173,13 +177,16 @@ fleet (`HostActionsDropdown.tsx:87-96`). Re-check any cell against the live page
 | **Hosts list, label pill** (a custom label chosen in the filter) | *Edit label*, *Delete label* | global roles except observers (GO+ included), or the label's author; never on a built-in label. For team roles that's narrower than the Labels page, which also allows a fleet label on their own fleet (`LabelsTableConfig.tsx:60-76`) | `HostsFilterBlock.tsx:203-255` |
 | **Labels** page | *Add label* | GA, GM, GT, TA, TM | `ManageLabelsPage.tsx:90-95` |
 | | *Edit* / *Delete* | GA, GM, GT on any label; TA / TM on a label **they authored**, or a team label on their fleet | `LabelsTableConfig.tsx:60-76` |
-| **Scripts** (Controls) | the Controls page | 403 for GO, GO+, TO | `router/index.tsx:670-671` |
+| **Scripts** (Controls) | the Controls page | 403 for GO, GO+, TO, TO+ (free too: no premium guard, free uses fleet id 0) | `router/index.tsx:668-711` |
 | | *Add script*, row actions | hidden for technicians | `ScriptLibrary.tsx` |
 | **Dashboard** | platform filter, Hosts / Software / MDM cards | **not role-gated** | `DashboardPage.tsx:941-958` |
-| | Activity card | global roles only | `:773` |
+| | Activity card | global roles only, and only on All fleets or Unassigned | `:773` |
 
-So C9 #14 holds: a team maintainer edits and deletes a label they wrote. `premium/labels/role-access.spec.ts`
-checks a gitops label, which no team role authored. The OS card's "Create new policy" that C7 #16 asserts no
+So C9 #14 holds: a team maintainer edits and deletes a label they wrote. A label made in the UI is always
+**global** (the create form sends no fleet; only the API or gitops makes a fleet label), so the team maintainer's
+Edit / Delete come from the authorship clause (`LabelsTableConfig.tsx:67-70`; `policy.rego:478-486`, the only
+place the rego checks authorship). `premium/labels/role-access.spec.ts` checks a gitops label, which no team role
+authored. The OS card's "Create new policy" that C7 #16 asserts no
 longer exists. Drop it.
 
 **Where the UI and the API disagree.** Reproduced on premium on 2026-10-02: three are Fleet bugs, now filed, and
@@ -304,53 +311,99 @@ visible, never its enabled state (C7 #24). Staging a host on Workstations for a 
 
 ## 6. Writes and live runs
 
-| write | rows | rule |
+Decided at review: a role writes only where the UI does something role-specific on the way to the server.
+Everything else is a visibility cell, because the form and the endpoint are the admin's (already covered) and
+Fleet's `server/authz/policy_test.go` covers the rego per object.
+
+| write / run | rows | how |
 |---|---|---|
-| fleet policy create / edit / delete | C3 #21, #31, #32 | one looped test at most (finding 7) |
-| a fleet's failing-policies webhook | C3 #30 | **not on Workstations**: a fleet's automations save replaces its whole `webhook_settings` ([#54619](https://github.com/fleetdm/fleet/issues/54619)), which `team-host-status-webhook.spec.ts` writes there as `team-admin`. B wrote it as admin on a throwaway `pw-*` fleet, but `team-admin` holds only Workstations and VMs, and the static users are never re-roled (decision 7). Nothing in cleanup resets a fleet's webhooks |
-| report Save as new | P16 | the modal's Fleet field is `ReportEditPage.saveAsNewFleetDropdown` (a `TeamDropdown` scoped to the modal); delete the copy by id in an `afterEach` |
-| fleet report edit / delete | P21, P26 | on a spec-created report, never a gitops one. Open it with `reportEdit.gotoEdit(id)` and wait for the saved values before editing: the form refills itself and can overwrite an edit. "Save changes?" shows only for an edit that deletes stored results (`saveExisting({ prompt })`) |
-| report automations toggle | C7 #22 | on a spec-owned report only: the flow **unchecks every report on the fleet** first, which would switch off the gitops reports' automations. `ReportsListPage.setReportAutomation(name, on)` touches one; seed the report with an interval, or the cell reads *Paused*; read the cell with `automationsCell(name)`, which matches by content (a column index goes stale when the table re-renders after the save) |
-| fleet enroll secret add / delete | C7 #21, #23 | never delete a secret the test didn't add; hosts enroll with the existing ones. `EnrollSecretModal.addGenerated` + `delete(value)`, and a `setTeamEnrollSecrets` snapshot restore in an `afterEach`: for a fleet the modal lists one query and saves from another, so waiting for rows doesn't guard the save. On Workstations it races `premium/settings/enroll-secrets.spec.ts`'s own restore (decision 3) |
-| script upload / delete on Workstations | C7 #26 | the Workstations wipe deletes its scripts; `ScriptsLibraryPage.uploadScript` takes a path or an in-memory `{ name, mimeType, buffer }` |
-| label create / edit / delete | C9 #14 | Dynamic, named `pw-*` (the flow picks Dynamic or Manual at random; Manual needs a host on the fleet); the VMs sweep removes `pw-` labels on premium |
-| live report, saved | F3, P12, P9 | on `liveMacosHost` or the VMs fleet, not All hosts |
-| live report, ad hoc | P18, P19, P23 | the same; **drop P23's `addHostsToTeam`** (it transfers hosts into fleets) |
+| fleet policy create | C3 #31, #32 | one test per role (`team-admin`, `ws-maintainer`) on Workstations: *Add policy* → save → read back with `getFleetPolicy`; an `afterEach` deletes it by id. No edit or delete: same form and endpoints as `policies.spec.ts` |
+| report Save as new | P16 | `ws-maintainer` from a gitops Workstations report's edit page (never saved): the Name-only modal, the copy renamed `pw-role-*` and found in Workstations through the API; deleted by id in an `afterEach`, and swept by the Workstations `pw-` report sweep |
+| label create / edit / delete | C9 #14 | `ws-maintainer`, a Dynamic `pw-role-*` label whose query no host matches; *Edit* / *Delete* appear on it (authorship); the edit read back through the API; an `afterEach` deletes it by name |
+| live report, saved | F3, P12 | global observer, on a spec-seeded global report with `observer_can_run`, against one online simulation picked by id (simulations always answer); never All hosts or a Platforms chip. The UI must send the report's id: ad-hoc SQL from an observer is refused (`campaigns.go:58-66`) |
+| live report, ad hoc | P18 | global observer+, from the list's *Live report*, the same target |
+| the #54623 check | (C3 #30's neighbour) | inside `policy-automations.spec.ts`'s serial describe, which owns the global failing-policies webhook; skipped with its `TODO` |
+| nothing written | C3 #21, #30, P9, P21, P23, P26, P30, C7 #21, #22, #23, #26 | the control's presence is the cell (Review decisions) |
 
-A live query on a real VM only reads, so it's safe there. Nothing in this batch delivers a profile, installs
-anything or touches a lock setting.
+Nothing in this batch delivers a profile, installs anything or touches a lock setting, and no host is moved.
 
-## Decisions to put to Andrey
+## Review decisions (2026-10-05)
 
-1. **P19:** provision a `ws-observer-plus` human user, or cut the row (finding 8).
-2. **C9 #15:** `ws-observer` or `global-observer` (finding 2).
-3. **Ownership of the overlapping writes** (finding 6). A and B have built the admin half of each, and B's plan
-   assumes E owns only "this role gets the control". For C7 #21 / #23, a role write on Workstations' enroll
-   secrets races A's snapshot restore there (§6).
-4. **P30 and the role CRUD rows** (finding 7): cut, or one looped write test.
-5. **A `global-technician` column** in each matrix (finding 10).
-6. **C3 #22, round 2 #49 / #50:** cut, or the replacement cells (findings 11, 12).
-7. **C3 #30's write** *(new, from A/B learnings)*: `team-admin` can't reach a throwaway `pw-*` fleet, and on
-   Workstations the save races `team-host-status-webhook.spec.ts` ([#54619](https://github.com/fleetdm/fleet/issues/54619)).
-   Options: the visibility cell only (team admin opens Manage automations on Workstations, sees *Webhooks or
-   tickets*, and cancels; B covers the save); a per-run `qa-test-*` user made admin of a `pw-*` fleet (one more
-   UI login under the throttle; `cleanup-setup` sweeps both); or the write on Workstations in one serial
-   describe with `team-host-status-webhook`'s test.
-8. **A `pw-` sweep for Workstations reports** *(new, from A/B learnings)*: nothing removes a Workstations report a
-   killed run leaves (this batch's admin-written report; B's Save-as-new copy has the same gap). Add one to
-   the Workstations step, by exact prefix like the VMs one, or rely on the `afterEach`?
-9. **C3 #31 can't be cut with decision 4** *(new, from C)*: C cut C3 #29 as a duplicate of it, so cutting C3 #31
-   leaves a team admin's fleet-policy create with no UI coverage anywhere. Recommended: the one looped write test
-   over GM / TA / TM on Workstations, read back with `getFleetPolicy`.
-10. **C9 #15 (decision 2), now leaning `global-observer`** *(new, from C)*: `ws-observer`'s fleet is empty, so its
-    label filter is disabled (reachable only by a direct `/hosts/manage/labels/<id>` URL). Recommended:
-    `global-observer`, as the flow does, asserting the pill has no *Edit label* / *Delete label*.
-11. **ws-* host cells stay out** *(new)*: staging a host on Workstations breaks `host-delete`'s bulk test ("2
-    selected") and would be deleted by it. Recommended: keep them out, as planned; the alternative is moving that
-    bulk case to a throwaway `pw-*` fleet first (a follow-up).
-12. **Free C7 #26 cells** *(new, from D)*: recommended yes (Free coverage).
-13. **The label pill's narrower team-role gating** (§2): by design (the UI is stricter than the API)? Recommended:
-    don't file it unless you want it raised.
+Reviewed by a new session (taking over the batch) against all 41 flow bodies, Fleet's frontend at c87f85c and the
+specs already in the suite. Andrey accepted every recommendation, with two additions: a global observer+ column
+where it differs, and all three filed bugs' checks written now (#54623's inside `policy-automations`).
+
+### Found at review
+
+- **The flows check less than their titles.** About a dozen checks can't fail: stale copy ("Add a policy", "Create
+  new query"), absence checks on a menu that never opened (C7 #16's Transfer / Delete, C3 #35's Save) or with no
+  anchor at all (C3 #5 / #23). Wrong users: P20 signs in as global admin, C7 #26 as a global maintainer, C9 #15 as
+  a global observer. P20, P23 and the team CTA flows move hosts into fleets and never move them back. No flow
+  asserts the role-dependent negatives, such as a team admin's target picker hiding Unassigned.
+- **The API probes are thinner than the plan said** (▶ Start here, corrected): seven endpoints, empty bodies.
+- **§2 held: 24 rows confirmed, 6 corrected in place** (TO+ on `/policies/new` and Controls, Save as new's fleet
+  field, the target picker's disabled pills, Export hosts hidden on an empty filter, the Activity card's scopes).
+  A team maintainer's UI-made label is global and authored by them.
+- **Gated controls §2 doesn't list**, none of them a gap: the Hosts list's row checkboxes (GA, GM, TA, TM, and GT
+  on premium; bulk Delete hidden from GT), the gear's *Custom host vitals* (GA, GM), Controls' tabs by role
+  (technicians see OS settings and Scripts only), *Reset policy* (as *Edit*).
+- **The global technician has the oddest gating of any role**: *Run* on a policy but no *Add policy*; *Transfer*
+  but no *Delete*; *Add label* and *Edit* / *Delete* on any label; *Run script*; no *Add script*; *Live report* on
+  a report but no list header button; and the host modal's create link that 403s (#54622). It gets a column in
+  every matrix.
+- **Every gitops Workstations report has `observer_can_run: true`**, so the fleet-observer cells read them;
+  the "without `observer_can_run`" cells use a spec-seeded global report.
+
+### Per gap
+
+| gap | decision | where and how |
+|---|---|---|
+| C3 #5 | **build**, free | `free/policies/role-access.spec.ts`, global observer: no *Add policy*, *Manage automations* or row checkbox (anchored on a seeded policy's row); details: no *Edit* / *Run*; `/policies/new` is a 403 |
+| C3 #23 | **build** | `premium/policies/role-access.spec.ts`, the same cell on All fleets and on Workstations |
+| C3 #20 | **build**, both tiers | global maintainer: *Add policy*, checkboxes, the Automations cell as a button, no *Manage automations*; details: *Edit*, *Run* |
+| C3 #33 | **fold** into C3 #32's role | `ws-maintainer` on Workstations: *Add policy*, own row's checkbox, no *Manage automations*; an inherited row has the tag and no checkbox; details: *Edit* on its own policy, none on an inherited one |
+| C3 #34, #35 | **build** | `ws-observer` on Workstations: none of *Add policy*, *Manage automations*, checkboxes; details: no *Edit*, no *Run*; `/policies/new` is a 403 |
+| C3 #30 | **fold**, no write | `team-admin` on Workstations opens *Manage automations*, sees the webhook option, cancels. B saves it as admin on a `pw-*` fleet; a role save on Workstations races `team-host-status-webhook` (#54619) |
+| C3 #31, #32 | **build**, create only | one write test per role (§6) |
+| C3 #21 | **cut** | a global maintainer's fleet-policy create runs the admin's code path, covered by `policies.spec.ts` on Workstations; the GM cell shows the control |
+| C3 #22 | **fold**, admin | `premium/policies/policy-automations.spec.ts`, outside its serial describe: the *Filter by automation* options on All fleets (no Calendar, Software, Scripts) and on Workstations (Software and Scripts offered). A scope property, not a role one |
+| — | **build**, skipped | #54624: global observer+ sees *Run* on an Unassigned policy. #54623: in `policy-automations`' serial describe |
+| F3 | **build**, free | `free/reports/role-access.spec.ts`: the global observer's cell (no header button, no checkboxes, no *Edit report*) and its live run (§6) |
+| P12 | **build** | `premium/reports/role-access.spec.ts`: the same, plus the target picker on an `observer_can_run` report (P11) |
+| P11 | **fold** into P12 | the picker offers Unassigned and every fleet, enabled |
+| P10 | **fold** into the GM cell | the picker offers Unassigned and every fleet |
+| P9 | **cut** | a global maintainer's run is the admin's run (`host-live-query`, `reports.spec`); the GM cell shows *Live report* |
+| P18 | **build** | global observer+: the list's header *Live report*, no *Add report*; details: *Live report* even without `observer_can_run`, no *Edit report*; the ad-hoc run (§6) |
+| P19 | **cut** | no fleet observer+ user; GO+ covers the ad-hoc run. A disposable `qa-test-*` observer+ would cost a login a run |
+| P22 | **fold** into the TA cell | `team-admin`'s picker offers exactly VMs and Workstations, no Unassigned |
+| P21 | **fold**, no write | `team-admin`: *Edit report* on a gitops Workstations report it didn't write (no authorship check in the UI or the rego) |
+| P24 | **fold** into P25 | its search and platform filter are `list-filters.spec.ts`'s |
+| P25 | **build** | `team-admin`: an inherited report has the tag, no checkbox and no *Edit report*; Save as new has a Fleet field (two fleets) |
+| P26 | **fold**, no write | `ws-maintainer`: *Edit report* on a gitops Workstations report, none on an inherited one |
+| P16 | **build** | `ws-maintainer`'s Save as new (§6) |
+| P23 | **cut** | the team admin's ad-hoc run is the admin's; its scoping is P22's cell; the flow moved hosts into fleets |
+| P30 | **cut** | report CRUD; the "schedule" is the report's interval. The TA cell shows *Add report* |
+| C7 #22 | **fold**, no write | `team-admin` opens the reports list's *Manage automations*, sees the fleet's reports, cancels. B's `automations.spec.ts` toggles as admin |
+| C2 #3 | **build**, free | `free/hosts/host-actions-role-access.spec.ts`, global maintainer: Actions offers *Live report*, *Delete*, *Run script* (no *Transfer* on free); the modal has the create link |
+| C2 #13 | **build** | `premium/hosts/host-actions-role-access.spec.ts`: the same, plus *Transfer* |
+| P20 | **fold** into the TA cell | `team-admin` on a VMs-fleet host (any status): *Live report*, *Delete*, *Run script*, no *Transfer*; the modal's create link |
+| C7 #16 | **build** | global observer: the menu opened and anchored on *Live report*; no *Transfer*, *Delete*, *Run script*; the modal lists no create link. The OS card's "Create new policy" no longer exists |
+| — | **build**, skipped | #54622: a global technician's modal has no create link |
+| C1 #6 | **augment** | `free/hosts/cta-visibility.spec.ts`: the label menu opened after `table.waitForSettled()`, its "Filter labels by name..." box asserted, then *Add label* present for admin, absent for observer |
+| C1 #21 | **augment** | `premium/hosts/cta-visibility.spec.ts`: the same for admin, maintainer and observer, plus a technician row (*Add label*; no *Add hosts*, no gear) |
+| C7 #21 | **augment**, no write | `team-admin` on VMs: *Add hosts*, gear → *Enroll secrets* (the modal opens, closed), *Activity automations*, *Add label* |
+| C7 #23 | **augment**, no write | `ws-maintainer`: *Add hosts*, gear → *Enroll secrets*. Not *Add label*: the filter is disabled while Workstations is empty |
+| C7 #24 | **augment** | `ws-observer`: *Export hosts* visible (never its enabled state), no *Add hosts*, no gear |
+| C7 #26 | **build**, no write, both tiers | `{premium,free}/controls/scripts/role-access.spec.ts`: global maintainer has *Add script*; global observer gets the Controls 403 (and no Controls nav link). Premium adds technician (the list, no *Add script*), observer+ and `ws-observer` (403), `ws-maintainer` (*Add script* on Workstations) |
+| C9 #14 | **augment** | `premium/labels/role-access.spec.ts`: `ws-maintainer`'s own label (§6) |
+| C9 #15 | **augment** | global observer (as the flow): a gitops label chosen with `LabelFilter.selectLabel`; the pill names it and has no *Edit label* / *Delete label*. Also `ws-observer` on the Labels page (no *Add label*, *View all hosts* only) and a technician row (*Add label*, *Edit* / *Delete* on a gitops label) |
+| round 2 #49, #50 | **cut** | nothing on the platform cards is role-gated; no Activity-card replacement |
+
+**Answers to the plan's questions:** P19 cut (1); C9 #15 global observer (2, 10); E owns only "this role gets
+the control" for every overlapping write (3, 7); P30 and C3 #21 cut, C3 #31 / #32 one create per role (4, 9);
+technician column everywhere, observer+ where it differs (5); C3 #22 folded, #49 / #50 cut (6); a `pw-` sweep
+for Workstations reports (8); ws-* roles stay out of host cells (11); free C7 #26 cells, without the upload (12);
+the label pill's gating not filed (13).
 
 ## Free coverage
 
@@ -359,8 +412,8 @@ goes in `shared/` only once the source read shows the page renders the same on b
 reports render a fleet picker and premium-only automation options on premium, so plan explicit `free/`
 siblings for those. Never branch with `if (isPremium)`. The rows that name free (C1 #6, C2 #3, C3 #5, C4 #F3)
 are the minimum, not the ceiling. **C7 #26 has a free half** (D found free has scripts; the Controls route guard is
-the same on both tiers, `router/index.tsx:668-671`): a global maintainer uploads to Unassigned, a global observer
-gets the 403 (decision 12).
+the same on both tiers, `router/index.tsx:668-711`): a global maintainer has *Add script*, a global observer gets
+the 403 (decision 12; no upload, per the write rule in §6).
 
 ## Traps this batch will hit
 
