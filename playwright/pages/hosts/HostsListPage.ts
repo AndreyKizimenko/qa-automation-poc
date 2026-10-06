@@ -50,6 +50,7 @@ export class HostsListPage {
   readonly addHostsButton: Locator;
   readonly hostsPageSettingsButton: Locator;
   readonly enrollSecretsOption: Locator;
+  readonly activityAutomationsOption: Locator;
   readonly editColumnsButton: Locator;
   readonly exportHostsButton: Locator;
   readonly filterPill: Locator;
@@ -122,6 +123,9 @@ export class HostsListPage {
     this.enrollSecretsOption = page
       .locator('.actions-dropdown__option')
       .filter({ hasText: 'Enroll secrets' });
+    this.activityAutomationsOption = page
+      .locator('.actions-dropdown__option')
+      .filter({ hasText: 'Activity automations' });
     this.editColumnsButton = page.getByRole('button', { name: /edit columns/i });
     this.exportHostsButton = page.getByRole('button', { name: 'Export hosts' });
     // FilterPill (frontend/.../ManageHostsPage/components/FilterPill) renders
@@ -156,7 +160,14 @@ export class HostsListPage {
     await expect(this.enrollSecrets.modal).toBeVisible();
   }
 
-  async goto(opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' } } = {}) {
+  /**
+   * `mayBeEmpty` is for a fleet that can hold no hosts (Workstations): Fleet then
+   * shows an empty screen in place of the table, so the page is anchored on
+   * Export hosts, which renders either way (disabled when there's nothing).
+   */
+  async goto(
+    opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' }; mayBeEmpty?: boolean } = {},
+  ) {
     const params = new URLSearchParams();
     if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.sort) {
@@ -165,7 +176,7 @@ export class HostsListPage {
     }
     const qs = params.toString();
     await this.page.goto(`/hosts/manage${qs ? '?' + qs : ''}`);
-    await expect(this.table.firstRowWithLink).toBeVisible();
+    await expect(opts.mayBeEmpty ? this.exportHostsButton : this.table.firstRowWithLink).toBeVisible();
   }
 
   /**

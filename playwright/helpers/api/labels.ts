@@ -45,6 +45,41 @@ export async function deleteLabelsWithPrefix(request: APIRequestContext, prefix:
   }
 }
 
+/** A label as Fleet stores it: what the role specs read back after a UI save. */
+export interface LabelDetails {
+  id: number;
+  name: string;
+  description: string;
+  /** Who created it; null for a built-in or gitops label. */
+  authorId: number | null;
+  /** The fleet a label is scoped to; null for a global one (every label made in the UI). */
+  fleetId: number | null;
+}
+
+/** A label by exact name, or null when there's none. */
+export async function findLabelByName(request: APIRequestContext, name: string): Promise<LabelDetails | null> {
+  const res = await request.get(apiUrl('labels'), { headers: authHeaders(), params: { per_page: '500' } });
+  await expect(res, 'Failed to list labels').toBeOK();
+  const label = (
+    (await res.json()).labels as Array<{
+      id: number;
+      name: string;
+      description?: string;
+      author_id?: number | null;
+      team_id?: number | null;
+      fleet_id?: number | null;
+    }>
+  ).find((l) => l.name === name);
+  if (!label) return null;
+  return {
+    id: label.id,
+    name: label.name,
+    description: label.description ?? '',
+    authorId: label.author_id ?? null,
+    fleetId: label.fleet_id ?? label.team_id ?? null,
+  };
+}
+
 /** A label's id by exact name, e.g. a built-in platform label ("macOS"). */
 export async function getLabelId(request: APIRequestContext, name: string): Promise<number> {
   const res = await request.get(apiUrl('labels'), { headers: authHeaders() });

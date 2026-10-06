@@ -1,6 +1,6 @@
 # Labels, packs, dashboard automations, free paywalls — test audit
 
-**Specs covered:** 11 files · **Entries:** 31 · **Test declarations:** 50 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
+**Specs covered:** 11 files · **Entries:** 35 · **Test declarations:** 54 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
 
 This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the **dashboard** itself — its platform filter, the "Hosts enrolled" chart, the historical chart card and the per-fleet switches that empty it, plus the **activity-feed automations** modal (the global `activities_webhook`) — and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits. The four dashboard specs are read-only apart from MISC-27, which is the only test in the suite that creates and deletes a fleet of its own — a sanctioned exception, for a reason worth reading before re-running it by hand.
 
@@ -39,6 +39,10 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-29 | `free/dashboard/historical-data-collection.spec.ts` | Activity & data retention offers the hosts online switch and not the premium one | UI+API | ☐ |
 | MISC-30 | `shared/dashboard/activity-feed.spec.ts` | Dashboard • activity feed filters › search, type, date and sort narrow the feed to one actor's activities | UI+API | ☐ |
 | MISC-31 | `free/paywalls.spec.ts` | Dashboard and Hosts — no fleet dropdown, no Fleet column | UI+API | ☐ |
+| MISC-32 | `premium/labels/role-access.spec.ts` | team observer cannot add labels and can only view hosts | UI | ☐ |
+| MISC-33 | `premium/labels/role-access.spec.ts` | global technician can add labels and edit or delete any label | UI | ☐ |
+| MISC-34 | `premium/labels/role-access.spec.ts` | team maintainer creates, edits and deletes a label of its own | UI+API | ☐ |
+| MISC-35 | `premium/labels/role-access.spec.ts` | global observer filters the Hosts list by a label, with no Edit or Delete on its pill | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
@@ -1238,6 +1242,129 @@ other:
 - *Coverage gaps:* the other fleet-scoped controls on free (Software, Policies, Reports pages) aren't checked.
 - *Redundancy:* the dropdown's absence is also in the free historical-data test, behind its skip.
 - *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-32 · Premium • Labels • role access › team observer cannot add labels and can only view hosts
+
+- **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "team observer cannot add labels"`
+- **Project:** premium · **Role:** `ws-observer` · **Mode:** UI · **Isolation:** read-only
+- **Source:** round 1 C7 #24's Add label half (round 3, batch E): on the Hosts list the label filter is disabled while Workstations has no hosts, so the Labels page carries it.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Log in as `ws-observer` → `/labels/manage`.
+   - ✅ *(UI)* no **Add label**.
+2. ☐ Open the gitops label "Debian-based Linux hosts"'s row actions.
+   - ✅ *(UI)* **View all hosts** (the anchor); no **Edit**, no **Delete**.
+
+**Assessment**
+- *Value:* MISC-11's cell for a fleet observer.
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-33 · Premium • Labels • role access › global technician can add labels and edit or delete any label
+
+- **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "global technician can add labels"`
+- **Project:** premium · **Role:** `global-technician` · **Mode:** UI · **Isolation:** read-only (the gitops label is never edited)
+- **Source:** round 3 batch E (the technician column)
+
+**Flow**
+
+1. ☐ Log in as `global-technician` → `/labels/manage`.
+   - ✅ *(UI)* **Add label** visible.
+2. ☐ Open "Debian-based Linux hosts"'s row actions.
+   - ✅ *(UI)* **View all hosts**, **Edit** and **Delete** (`hasEditPermission` admits GA, GM, GT on any label).
+
+**Assessment**
+- *Value:* the technician's label rights, which are wider than its other gating suggests.
+- *Coverage gaps:* the actions aren't taken.
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-34 · Premium • Labels • role access › team maintainer creates, edits and deletes a label of its own
+
+- **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "team maintainer creates, edits and deletes a label of its own"`
+- **Project:** premium · **Role:** `ws-maintainer` · **Mode:** UI+API · **Isolation:** its label is its own
+- **Source:** QA Wolf `new-labels-page-team-maintainer-can-create-edit-and-delete-own-labels` (round 1 C9 #14; round 3, batch E)
+- **Data created:** a Dynamic `pw-role-label-<nonce>`, deleted in the test; the `afterEach` deletes it by name if the test didn't, and the VMs-fleet sweep removes `pw-` labels after a dead run.
+
+**Flow**
+
+1. ☐ Log in as `ws-maintainer` → `/labels/manage` → **Add label** → **Dynamic** → name and description → **Save**.
+   - ✅ *(UI)* toast "Label added successfully."
+   - ✅ *(API)* the label is global (no fleet: the UI form sends none) and its author is `ws-maintainer`.
+2. ☐ Open its row actions.
+   - ✅ *(UI)* **View all hosts**, **Edit** and **Delete** — on a label the maintainer wrote (MISC-12: none on a gitops one).
+3. ☐ **Edit** → the description → **Save**.
+   - ✅ *(UI)* the form held the name; toast "Label updated successfully."
+   - ✅ *(API)* the description is stored (polled).
+4. ☐ **Delete** → confirm.
+   - ✅ *(UI)* toast "Successfully deleted pw-role-label-<nonce>."
+   - ✅ *(API)* the label is gone.
+
+**Assessment**
+- *Value:* authorship-based gating, the one place Fleet's rego checks who wrote something. The flow's random Dynamic-or-Manual choice is fixed on Dynamic: Manual needs a host on the maintainer's fleet, and Workstations has none.
+- *Coverage gaps:* a fleet label (made through the API or gitops) on the maintainer's own fleet isn't read.
+- *Efficiency / smells:* seconds. A Dynamic label's query runs on every host, as `labels.spec`'s does.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-35 · Premium • Labels • role access › global observer filters the Hosts list by a label, with no Edit or Delete on its pill
+
+- **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "global observer filters the Hosts list by a label"`
+- **Project:** premium · **Role:** `global-observer` · **Mode:** UI · **Isolation:** read-only
+- **Source:** QA Wolf `new-labels-page-team-observer-can-only-view-labels-and-filter-labels-on-hosts` (round 1 C9 #15; round 3, batch E). Titled "team observer" but signed in as the global observer, which is kept (`ws-observer`'s label filter is disabled while Workstations has no hosts).
+
+**Flow**
+
+1. ☐ Log in as `global-observer` → `/hosts/manage` → once the table settles, pick "Debian-based Linux hosts" in the label filter.
+   - ✅ *(UI)* the URL is the label's (`/hosts/manage/labels/<id>`); a host row; the pill reads "hosts filtered by Debian-based Linux hosts".
+   - ✅ *(UI)* no **Edit label**, no **Delete label** (`HostsFilterBlock` gives them to global roles but observers, or to the label's author).
+
+**Assessment**
+- *Value:* the observer's half of the pill's gating; C9 #11 (`labels.spec`) uses the pill's buttons as admin.
+- *Coverage gaps:* the hosts listed aren't compared with the label's members.
+- *Efficiency / smells:* seconds. Picking a label whose name has spaces needed `LabelFilter.selectLabel` to type only the first word: a space in an open react-select menu chooses the focused option.
 
 **Notes (Andrey)**
 ```

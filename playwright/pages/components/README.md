@@ -54,7 +54,7 @@ export class MyWidget {
 | `ContentList` | Profiles, Certs, Scripts, Variables | `<li>` lists with timestamps (not `<table>`) |
 | `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's link text changes (the whole row's text on a table with no links, like Labels) |
 | `FilterModal` | Software Titles, Host Details > Software | "Add filters" modal for vulnerable software + severity |
-| `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger) |
+| `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger). `openMenu()` waits for the menu's "Filter labels by name..." box (`searchBox`), beside which a role that may add labels gets `addLabelButton`; `selectLabel(name)` types the name up to its first space and picks the exact option |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
 | `TeamDropdown` | Most pages; Save as new's "Fleet" field | Team / fleet picker in the page header, or scoped to a container for the same dropdown as a form field |
 | `CommandPalette` | Every authenticated page (rendered by `CoreLayout`) | Fleet spotlight (⌘/Ctrl + K). cmdk supplies real roles — `dialog` / `combobox` / `listbox` / `option` / `group` — so rows and groups are role-addressed; only the Radix backdrop and the fleet chip fall back to classes. Resolves the platform modifier at runtime (Cmd on macOS, Ctrl on CI) |
