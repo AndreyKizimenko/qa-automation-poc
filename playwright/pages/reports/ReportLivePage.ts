@@ -30,6 +30,8 @@ export class ReportLivePage {
    * selected.
    */
   readonly targetsTotalCount: Locator;
+  /** "Target specific hosts": a host search whose results are picked by clicking a row. */
+  readonly hostSearch: Locator;
 
   // Run screen.
   readonly runningHeading: Locator;
@@ -57,6 +59,7 @@ export class ReportLivePage {
     this.cancelButton = page.getByRole('button', { name: 'Cancel', exact: true });
     this.targetRows = page.getByRole('table').locator('tbody').getByRole('row');
     this.targetsTotalCount = page.locator('.run-query-page__targets-total-count');
+    this.hostSearch = page.getByPlaceholder('Search name, user email, hostname, UUID, serial number, or IP address');
 
     this.runningHeading = page.getByRole('heading', { name: 'Running report', level: 1 });
     this.finishedHeading = page.getByRole('heading', { name: 'Report finished', level: 1 });
@@ -101,6 +104,22 @@ export class ReportLivePage {
     if ((await chip.getAttribute('data-selected')) === String(selected)) return;
     await chip.click();
     await expect(chip).toHaveAttribute('data-selected', String(selected));
+  }
+
+  /**
+   * Adds one host to the targets by searching for it and clicking its result. The
+   * results drop down in a table of their own beside the selected-hosts table,
+   * and only the dropdown wrapper's class tells the two apart.
+   */
+  async targetHost(displayName: string): Promise<void> {
+    await this.hostSearch.fill(displayName);
+    const result = this.page
+      .locator('.targets-input__hosts-search-dropdown')
+      .getByRole('row')
+      .filter({ hasText: displayName });
+    await expect(result).toHaveCount(1);
+    await result.click();
+    await expect(this.targetRows.filter({ hasText: displayName })).toHaveCount(1);
   }
 
   /** Starts the run; leaves the browser on the streaming results screen. */

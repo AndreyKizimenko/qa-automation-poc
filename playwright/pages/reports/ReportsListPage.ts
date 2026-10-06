@@ -23,6 +23,8 @@ export class ReportsListPage {
 
   readonly search: Locator;
   readonly addReportButton: Locator;
+  /** The header's button for an observer+, who may run reports but not save them. */
+  readonly liveReportButton: Locator;
 
   // Platform filter is Fleet's DropdownWrapper (react-select v5): the visible
   // trigger exposes no role, so it's scoped by its BEM container; each option
@@ -53,6 +55,7 @@ export class ReportsListPage {
     // comes first in the DOM, so take it to stay single-match on a list that
     // renders empty (or is still refetching over an empty render).
     this.addReportButton = page.getByRole('button', { name: /add report/i }).first();
+    this.liveReportButton = page.getByRole('button', { name: 'Live report', exact: true });
     this.platformFilter = page.locator('.queries-table__platform-dropdown .react-select__control');
 
     // Bulk-action bar appears once a row is selected; the trash-labelled
@@ -119,10 +122,27 @@ export class ReportsListPage {
     await expect(this.page).toHaveURL(/\/reports\/new/);
   }
 
-  /** Click a report's name link in the list to open its details page. */
+  /**
+   * Click a report's name link in the list to open its details page. On a
+   * fleet's list the link also holds a global report's "Inherited" tag, so it's
+   * matched from the start of its name up to a word boundary rather than whole.
+   */
   async openReport(name: string): Promise<void> {
-    await this.page.getByRole('link', { name, exact: true }).click();
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await this.page.getByRole('link', { name: new RegExp(`^${escaped}(?:\\s|$)`) }).click();
     await expect(this.page).toHaveURL(/\/reports\/\d+/);
+  }
+
+  /**
+   * Searches the list down to `name` and returns its row. The list pages at 20,
+   * so a row is read only once a search has left it alone on screen.
+   */
+  async narrowTo(name: string): Promise<Locator> {
+    await this.search.fill(name);
+    await this.table.waitForSettled();
+    const row = this.table.rowWith(name);
+    await expect(row).toHaveCount(1);
+    return row;
   }
 
   /** Type into the name search; callers assert on the filtered rows. */
