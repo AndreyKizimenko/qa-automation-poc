@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 38 (→ 90 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 39 (→ 92 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -13,15 +13,17 @@ persistence across the navbar, and role/scope gating on **Add software** and the
 **Automations** button.
 
 `library.spec.ts` is still the lifecycle workhorse: a double loop (2 scopes × 7
-add cases) around a serial `add → delete → activity feed` describe, i.e. 43 of
-the 87 runtime tests in this area. Around it sit two newer rings. The **shape**
+add cases) around a serial `add → delete → activity feed` describe — the Android
+case adds an `edit configuration` step between add and delete — i.e. 45 of
+the 92 runtime tests in this area. Around it sit two newer rings. The **shape**
 specs each seed one distinctly-named title and inspect one property of it
 (`script-only-package`, `package-scripts`, `custom-icons`, `display-name`,
 `version-pinning`). The **read-only** specs touch no state at all
 (`titles-table` on both tiers, `fleet-maintained-filters`, `role-access`,
-`add-software-validation`, `no-teams-views`). Two in-UI *edit* round-trips write
-something back: `edit-package.spec.ts` (Self-service) and the second
-`package-scripts` test (all four Advanced-options scripts).
+`add-software-validation`, `no-teams-views`). Three in-UI *edit* round-trips write
+something back: `edit-package.spec.ts` (Self-service), the second
+`package-scripts` test (all four Advanced-options scripts) and `library.spec.ts`'s
+Android *edit configuration* (a Play Store app's managed configuration).
 
 **Standing fact that shapes this whole area:** nothing here ever installs software
 on a host. The premium/free QA hosts are osquery-perf **simulations**, so an
@@ -104,6 +106,7 @@ locator ambiguous. The claims in force today:
 | SWL-36 | `premium/software/package-scripts.spec.ts` | editing all four Advanced options saves each of them | UI+API | ☐ |
 | SWL-37 | `shared/software/titles-table.spec.ts` | … › a title's View all hosts opens the hosts list filtered by it | UI | ☐ |
 | SWL-38 | `premium/software/no-teams-views.spec.ts` | a package added to Unassigned is offered in an Unassigned host's Library | UI+API | ☐ |
+| SWL-39 | `premium/software/library.spec.ts` | Software library lifecycle — Android › edit configuration | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -115,7 +118,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Unassigned) — Custom package — macOS › add"` (one describe per scope × case; see the case list below)
 - **Project:** premium · **Scopes:** Unassigned, Workstations
-- **Mode:** UI+API · **Isolation:** serial describe, step 1 of 3 (shares `titleName` / `titleId` / `packageName` with delete + activity feed) · `test.setTimeout(90_000)`
+- **Mode:** UI+API · **Isolation:** serial describe, step 1 of 3 — of 4 in the Android case, where SWL-39 edits the configuration before the delete (shares `titleName` / `titleId` / `packageName` with the later steps) · `test.setTimeout(90_000)`
 - **Cases (7, each × 2 scopes = 14 describes):**
   1. `custom` macOS — [`gh_2.92.0_macOS_universal.pkg`](../../test-data/apple/macos/software/) (**27 MB**)
   2. `custom` Windows — `npp.8.9.4.Installer.x64.msi` (7.7 MB)
@@ -209,7 +212,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Workstations) — FMA — 7-Zip (Windows) › delete"`
 - **Project:** premium · **Scopes:** Unassigned, Workstations · same 7 cases as SWL-01
-- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 3 — depends on `titleId` / `titleName` from SWL-01 (fails on a bare `-g "delete"` run)
+- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 3 (3 of 4 in the Android case) — depends on `titleId` / `titleName` from SWL-01 (fails on a bare `-g "delete"` run)
 - **Preconditions:** SWL-01 passed in the same worker
 - **Data created:** none — this *is* the cleanup step
 
@@ -254,7 +257,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Unassigned) — VPP — Bear (iOS) › activity feed shows add → delete"`
 - **Project:** premium · **Scopes:** Unassigned, Workstations · same 7 cases
-- **Mode:** UI · **Isolation:** serial describe, step 3 of 3 — needs `packageName` (custom/FMA) or `titleName` (VPP/Android) from SWL-01
+- **Mode:** UI · **Isolation:** serial describe, step 3 of 3 (4 of 4 in the Android case) — needs `packageName` (custom/FMA) or `titleName` (VPP/Android) from SWL-01
 - **Preconditions:** SWL-01 + SWL-02 passed in the same worker
 - **Data created:** none
 
@@ -268,7 +271,7 @@ other:
 
 **Assessment**
 - *Value:* the only place the rendered activity *copy* (verb + subject + scope suffix) is checked for software; the API-side `assertActivity` in SWL-01/02 would not catch a broken renderer or a wrong scope suffix. The asymmetric No-team suffix is a genuine product quirk this pins down.
-- *Coverage gaps:* the feed row is matched by text only — the actor avatar/name, the timestamp, and the click-through detail modal (which for software shows the install script / query) are not asserted. `edited_software` never appears here (there is no edit in this lifecycle).
+- *Coverage gaps:* the feed row is matched by text only — the actor avatar/name, the timestamp, and the click-through detail modal (which for software shows the install script / query) are not asserted. `edited_software` never appears here (the custom and FMA lifecycles have no edit), and the Android case's `edited_app_store_app` (SWL-39) is asserted through the API only — the feed check stays add → delete.
 - *Redundancy:* moderate against SWL-01/02's `assertActivity` — same two activities, different layer. Justified (contract vs. rendering), but the *existence* half is asserted twice.
 - *Efficiency / smells:* runs 14 times (2 scopes × 7 cases) to validate 4 distinct copy templates; the `custom` × 3 permutations produce identical matchers modulo the filename. `dashboard.expectActivities` can reload the dashboard 10× before failing, so a genuinely missing activity costs ~10 dashboard loads per case.
 
@@ -1705,6 +1708,51 @@ other:
 
 ---
 
+### SWL-39 · Software library lifecycle (Unassigned · Workstations) — Android › edit configuration
+
+- **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
+- **Grep:** `npx playwright test --project=premium library -g "Android — com.openai.chatgpt"` (both scopes' Android describes — the step needs SWL-01's title)
+- **Project:** premium · **Scopes:** Unassigned, Workstations · the `android` case only (`com.openai.chatgpt`): 1 declaration → **2 runtime tests**
+- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` / `titleName` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its fleet and the configuration it records.
+- **Source:** QA Wolf `android-android-software-and-configurations` (round 1 C9 #4; round 3, batch F)
+- **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
+- **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
+- **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the modal throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
+
+**Flow**
+
+1. ☐ *(API)* Read the stored configuration (`getAppStoreAppConfiguration` → `GET /software/titles/:id?fleet_id=` → `app_store_app.configuration`).
+2. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (`softwareTitleDetail.goto`) → **Actions** → **Edit configuration**.
+   - ✅ *(UI)* **Actions** is visible; the **Edit configuration** modal and its Ace editor are visible.
+3. ☐ Replace the editor's text with `{ "pwUnsupportedKey": true }` (through Ace's API, `setAceValue`) → **Save**.
+   - ✅ *(UI)* Error toast `Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.` — well-formed JSON that Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+   - ✅ *(UI)* The modal stays open.
+   - ✅ *(API)* The stored configuration is unchanged.
+4. ☐ Replace the text with `{"managedConfiguration":{"pw_setting":"pw-value"},"workProfileWidgets":"WORK_PROFILE_WIDGETS_ALLOWED"}` → **Save**.
+   - ✅ *(UI)* **Save** is enabled; success toast matching `configuration updated.`; the modal closes.
+   - ✅ *(API)* The stored configuration equals that object.
+   - ✅ *(API)* An `edited_app_store_app` activity newer than the save, for this title on this fleet, by the suite admin, whose recorded configuration carries both saved values — compared field by field, since Fleet records the keys in its own order (`latestActivityId` → `assertActivityAfter`).
+5. ☐ Reload → **Actions** → **Edit configuration**.
+   - ✅ *(UI)* The editor's text, parsed, equals the saved object. Fleet reopens it re-serialised (tab-indented), so it's compared parsed, and read through Ace's API (`getAceValue`): Ace renders only the visible lines.
+6. ☐ Close the modal with its ✕.
+   - ✅ *(UI)* The modal is hidden.
+
+**Assessment**
+- *Value:* the only coverage of an app's managed configuration: Fleet's top-level-key rule, what it stores, and the modal reopening what was stored, on both scopes. The refusal is checked at both layers (the toast, and nothing stored), and the activity is pinned to its fleet and payload, so the two scopes' parallel runs can't satisfy each other's assertion. It rides on SWL-01's title, so it costs no extra add.
+- *Coverage gaps:* JSON that doesn't parse (Save disabled client-side) isn't tried. Clearing a configuration back to none isn't covered. The iOS / iPadOS configuration (an XML `<dict>`, same modal) isn't: the VPP case (Bear) has no edit step. Values Fleet should refuse *inside* the two allowed keys aren't probed. The `edited_app_store_app` copy in the dashboard feed isn't checked — SWL-03 stays add → delete. A configuration reaching a device is out of reach (no Android host).
+- *Redundancy:* none.
+- *Efficiency / smells:* seconds. The modal's ✕ is reached by Fleet's `close-icon` test id (an icon-only button); the modal by its BEM root (no `role="dialog"`). The page-error ignore is one substring but suite-wide: any other flow that hits the same `worker-json.js` error passes too, until #54845 is fixed and the entry dropped.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1715,6 +1763,7 @@ other:
 | Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | Editing an FMA's scripts — SWL-36 drives the same modal and `PATCH` on a custom package instead, deliberately, since an edited FMA install script sets a sticky `install_script_edited` flag that auto-update carries forward; catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
 | Add Apple VPP app | SWL-01 (Bear, iOS) | macOS and iPadOS VPP platforms; the App Store *search* UI (`vppUiSearchNames` exists for it, unused); missing/expired VPP-token error path |
 | Add Managed Google Play app | SWL-01 (ChatGPT) | Invalid application-ID error path; no post-add catalog re-check (FMA and VPP both have one) |
+| App managed configuration (Actions → **Edit configuration**) | SWL-39 (Android, both scopes: an unsupported top-level key refused, a valid configuration stored, logged and reopened) | iOS / iPadOS XML configuration; unparseable JSON; clearing it; the edit in the dashboard feed; delivery to a device (no Android host) |
 | Library tab list | SWL-01, SWL-02, SWL-19 (it is a strict subset of Inventory), SWL-25/27 (a row renders the custom icon / display name) | Library's own columns (Version / Type / Hosts / Status), sorting and pagination — SWL-16–18 cover the **Inventory** table only; the **Self-service only** filter switch (`SoftwareLibraryPage.selfServiceSwitch`, still used by zero specs) |
 | Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, read against the API); SWL-36 (all four written in one save, read back through the API) | Edited scripts shown in a reopened modal (API-only read-back); clearing a script back to empty; categories; re-uploading a replacement installer; Cancel/discard on a dirty form. Label scope is `software-label-targets.spec.ts` ([area 22](22-label-targeting.md)) |
 | Delete installer | SWL-02, SWL-07 | Cancel path; per-version delete on a multi-package title; blocked-delete when referenced by Setup Experience (only covered incidentally in `install-software.spec.ts`) |
