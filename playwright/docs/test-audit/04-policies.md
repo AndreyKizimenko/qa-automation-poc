@@ -1,6 +1,6 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 10 files · **Test declarations:** 35 · **Projects:** premium / free / premium-exclusive
+**Specs covered:** 12 files · **Test declarations:** 41 · **Projects:** premium / free / premium-exclusive
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
@@ -23,7 +23,9 @@ Four more files: `shared/policies/policy-autofill.spec.ts` runs AI Autofill on b
 link to the hosts that gave the same answer (POL-33/34), and `premium/policies/policy-host-counts.spec.ts` the
 list's Pass / Fail links (POL-35); and `premium/exclusive/policies/policy-automation-runs.spec.ts` runs a policy's
 script automation on the Ubuntu VM (POL-27). `premium/policies/policy-label-targets.spec.ts`
-is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08).
+is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08). `role-access.spec.ts` on each tier
+is what each role is shown (POL-36…39); `policy-automations.spec.ts` also holds the fleet admin's #54623 check
+(POL-40, skipped) and the automation filter's options by scope (POL-41).
 
 ## Contents
 
@@ -64,6 +66,12 @@ is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08).
 | POL-33 | `shared/policies/policy-hosts.spec.ts` | Shared • Policies • policy hosts › a policy saved for macOS only runs on macOS hosts | UI+API | ☐ |
 | POL-34 | `shared/policies/policy-hosts.spec.ts` | Shared • Policies • policy hosts › a host's policy links to the hosts that gave the same answer | UI+API | ☐ |
 | POL-35 | `premium/policies/policy-host-counts.spec.ts` | the Pass count opens exactly the hosts passing the policy, and Fail those failing it | UI+API | ☐ |
+| POL-36 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › <role> is shown the policy controls its role grants (7 roles) | UI | ☐ |
+| POL-37 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › <team-admin \| ws-maintainer> creates a Workstations policy from the UI | UI+API | ☐ |
+| POL-38 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy *(skipped, #54624)* | UI | ☐ |
+| POL-39 | `free/policies/role-access.spec.ts` | Free • Policies • role access › <role> is shown the policy controls its role grants (2 roles) | UI | ☐ |
+| POL-40 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • automations › a fleet admin can't add an inherited policy to the global webhook *(skipped, #54623)* | UI+API | ☐ |
+| POL-41 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • the automation filter by scope › offers only the automation types the scope supports | UI | ☐ |
 
 ---
 
@@ -1337,6 +1345,203 @@ other:
 
 ---
 
+### POL-36 · Premium • Policies • role access › <role> is shown the policy controls its role grants
+
+- **File:** [`playwright/tests/e2e/premium/policies/role-access.spec.ts`](../../tests/e2e/premium/policies/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Premium • Policies • role access › .* is shown"`
+- **Project:** premium · **Variants (7):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on All fleets; `team-admin`, `ws-maintainer`, `ws-observer` on Workstations
+- **Mode:** UI · **Isolation:** one test per role, each signed in through `withStaticUser`'s cached session; read-only apart from its seeded policies
+- **Source:** QA Wolf role flows, round 1 C3 #20, #23, #30, #33, #34, #35 (round 3, batch E). Their checks were mostly stale copy ("Add a policy") or absences with nothing anchoring them; the cells come from Fleet's gating instead (`ManagePoliciesPage`, `PoliciesTableConfig`, `PolicyDetailsPage`, the router).
+- **Preconditions (API):** `POST /global/policies` seeds `pw-role-pol-global-<role>-<nonce>`; a team role also gets `POST /fleets/<Workstations>/policies` → `pw-role-pol-ws-<role>-<nonce>`.
+- **Data created:** the seeded policies, deleted in an `afterEach` (global by id; Workstations by name, so one stored before a failure is found). `cleanup-setup` drains both scopes too.
+
+**Flow**
+
+1. ☐ Sign in as the role → open `/policies/manage` on All fleets (global roles) or Workstations (team roles; `ws-*` have no fleet picker).
+   - ✅ *(UI)* `ws-*`: no fleet picker, the page title is "Workstations".
+2. ☐ Search the list down to the role's own policy (the global one for a global role, the Workstations one for a team role).
+   - ✅ *(UI)* exactly one row; its **Automations** cell is visible.
+   - ✅ *(UI)* GM, TA, TM: a row checkbox and an Automations cell that's a button. GO, GO+, GT, TO: neither.
+   - ✅ *(UI)* **Add policy** for GM, TA, TM only; **Manage automations** for TA only.
+3. ☐ *(TA only)* Click **Manage automations**, then Escape.
+   - ✅ *(UI)* the automations modal opens with its **Webhook** option, and closes. Nothing is saved (round 1 C3 #30; POL-30 saves it as admin on a throwaway fleet).
+4. ☐ *(team roles)* Search for the global policy.
+   - ✅ *(UI)* its row has the **Inherited** tag and no checkbox.
+   - ✅ *(UI)* opened, it shows **Show query**; **Run policy** for TA and TM, not TO; **Edit policy** for none of them.
+5. ☐ Open the role's own policy from the list.
+   - ✅ *(UI)* its name heading and **Show query**; **Run policy** for every role but GO and TO; **Edit policy** for GM, TA, TM.
+6. ☐ *(GO, GO+, GT, TO)* Open `/policies/new` (with Workstations' `fleet_id` for TO).
+   - ✅ *(UI)* the 403 page: "403", "Access denied."
+
+**Assessment**
+- *Value:* The first assertion of what each role is *shown* on Policies; the API probes only cover create. The technician and observer+ columns are the unusual ones (Run without Edit or Add policy). Every absence is anchored on the same screen's seeded row, Automations cell or Show query, so a page that never rendered can't pass.
+- *Coverage gaps:* The global roles never read a fleet's list (a global maintainer may edit inherited policies). TO+ has no static user. #54624 (GO+ on an Unassigned policy) is POL-38, skipped.
+- *Redundancy:* None; the admin's controls are POL-01's.
+- *Efficiency / smells:* A few seconds a role; one login per role per run through the session cache.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-37 · Premium • Policies • role access › <team-admin | ws-maintainer> creates a Workstations policy from the UI
+
+- **File:** [`playwright/tests/e2e/premium/policies/role-access.spec.ts`](../../tests/e2e/premium/policies/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "creates a Workstations policy from the UI"`
+- **Project:** premium · **Variants (2):** `team-admin`, `ws-maintainer` · **Scope:** Workstations
+- **Mode:** UI+API · **Isolation:** one test per role; its policy is its own
+- **Source:** round 1 C3 #31, #32 (round 3, batch E), create only. Edit and delete take the admin's form and endpoints (POL-03/05); a global maintainer's fleet create (C3 #21) runs the admin's code path and is cut.
+- **Data created:** `pw-role-pol-create-<role>-<nonce>` on Workstations, tracked by name before the save and deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ Sign in as the role → Policies on Workstations → **Add policy** → SQL `SELECT 1;` → **Save** → name it in the Save policy modal → **Save**.
+   - ✅ *(UI)* toast "Policy created."; the URL is the new policy's details page.
+2. ☐ *(API)* Read the policy back.
+   - ✅ *(API)* `GET /fleets/<Workstations>/policies/<id>`: the name, `team_id` = Workstations, `author_email` = the role's email; and it's in the fleet's list.
+
+**Assessment**
+- *Value:* A team role's save goes to the fleet's endpoint and is authored by that role. A team role's save touching something it can't write is a known bug class here (#54623).
+- *Coverage gaps:* No edit or delete as the role.
+- *Redundancy:* The form steps are POL-01's.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-38 · Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy *(skipped)*
+
+- **File:** [`playwright/tests/e2e/premium/policies/role-access.spec.ts`](../../tests/e2e/premium/policies/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Run policy on an Unassigned policy"`
+- **Project:** premium · **Scope:** Unassigned
+- **Mode:** UI · **Isolation:** skipped behind [fleetdm/fleet#54624](https://github.com/fleetdm/fleet/issues/54624) (`docs/blocked-by-product-bugs.md`)
+- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 5)
+- **Preconditions (API):** `POST /fleets/0/policies` seeds `pw-role-pol-unassigned-<nonce>`, deleted in the `afterEach`.
+
+**Flow**
+
+1. ☐ Sign in as `global-observer-plus` → Policies → **Unassigned** → search the policy → open it.
+   - ✅ *(UI)* **Show query** and **Run policy**; no **Edit policy**.
+
+**Assessment**
+- *Value:* Fleet's role table says observer+ runs every policy; the UI hides Run on Unassigned because `isObserverPlus` needs a non-zero fleet id. Run un-skipped on 2026-10-05, it failed on exactly that button.
+- *Coverage gaps:* None beyond the bug.
+- *Efficiency / smells:* Skipped: costs nothing until the fix ships.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-39 · Free • Policies • role access › <role> is shown the policy controls its role grants
+
+- **File:** [`playwright/tests/e2e/free/policies/role-access.spec.ts`](../../tests/e2e/free/policies/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Policies • role access"`
+- **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
+- **Mode:** UI · **Isolation:** one test per role through `withStaticUser`
+- **Source:** round 1 C3 #5, #20 (round 3, batch E)
+- **Data created:** `pw-role-pol-<role>-<nonce>` (global), deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ Sign in as the role → `/policies/manage` → search the policy.
+   - ✅ *(UI)* one row, its **Automations** cell visible; GM: a row checkbox, the cell a button, **Add policy**; GO: none of them; **Manage automations** for neither.
+2. ☐ Open the policy.
+   - ✅ *(UI)* name heading and **Show query**; **Run policy** and **Edit policy** for GM only.
+3. ☐ *(GO)* Open `/policies/new`.
+   - ✅ *(UI)* the 403 page.
+
+**Assessment**
+- *Value:* Free's half of POL-36; free has no picker or inherited rows, so it's an explicit sibling rather than `shared/`.
+- *Coverage gaps:* As POL-36's.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-40 · Premium • Policies • automations › a fleet admin can't add an inherited policy to the global webhook *(skipped)*
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-automations.spec.ts`](../../tests/e2e/premium/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a fleet admin can't add an inherited policy"`
+- **Project:** premium · **Scope:** Workstations, on the inherited global policy the describe seeds
+- **Mode:** UI+API · **Isolation:** skipped behind [fleetdm/fleet#54623](https://github.com/fleetdm/fleet/issues/54623). It sits in POL-09/23's serial describe because it needs the global failing-policies webhook on, which those tests own and restore in their `afterEach`.
+- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 3)
+
+**Flow**
+
+1. ☐ *(API)* `PATCH /config`: the global failing-policies webhook on, with a `pw` URL (restored after).
+2. ☐ Sign in as `team-admin` → Policies on Workstations → the inherited policy's **Automations** cell.
+   - ✅ *(UI)* "Manage automations for the <name> policy on All fleets."; the **Send webhook** checkbox is disabled.
+
+**Assessment**
+- *Value:* Today a fleet admin can tick it, and Save answers 403 with the modal left open and no error. Run un-skipped on 2026-10-05, the checkbox was enabled.
+- *Coverage gaps:* The failed save's missing error isn't asserted. It goes away with the fix.
+- *Efficiency / smells:* Skipped.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### POL-41 · Premium • Policies • the automation filter by scope › offers only the automation types the scope supports
+
+- **File:** [`playwright/tests/e2e/premium/policies/policy-automations.spec.ts`](../../tests/e2e/premium/policies/policy-automations.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "the automation filter by scope"`
+- **Project:** premium · **Scopes:** All fleets, Unassigned, Workstations (`test.step` each)
+- **Mode:** UI · **Isolation:** its own describe; read-only apart from its seeded policy
+- **Source:** QA Wolf `policies-global-maintainer-manage-automations-permissions-on-policy-page-premium` (round 1 C3 #22; round 3, batch E). The flow ran as a global maintainer, but the options follow the scope, not the role, so the admin reads them.
+- **Preconditions (API):** `POST /global/policies` seeds `pw-policy-filter-<nonce>`: the filter is disabled on a scope with no policies, and a global one is listed or inherited everywhere. Deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ For each scope: Policies → the scope → click **Filter by automation**.
+   - ✅ *(UI)* **All automations** is offered (the menu is open).
+   - ✅ *(UI)* All fleets: **Webhooks or tickets** only. Unassigned: every type but **Calendar**. Workstations: all seven (Software, Patch, Scripts, Profiles, Calendar, Conditional access, Webhooks or tickets).
+
+**Assessment**
+- *Value:* The filter's per-scope options (`getValidAutomationTypesForTeam`), which nothing tested; free only asserts the filter is absent (POL-26).
+- *Coverage gaps:* Choosing an option and the filtered list it gives aren't exercised.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -1364,6 +1569,8 @@ other:
 | AI Autofill (Save policy modal) | POL-32 (both tiers, live fleetdm.com call) | Only non-emptiness asserted; the Generative-AI-off path untested |
 | Free-tier paywalls for premium policy features | — (`tests/e2e/free/paywalls.spec.ts` has no policies entry) | Untested |
 | Activity-feed copy for policies | POL-07, POL-08 (+ regex unit test `tests/api/activity-copy.spec.ts`) | Order and count not asserted |
+| What each role is shown (list, details, `/policies/new`) | POL-36 (7 roles, premium), POL-39 (2, free); a team role's create POL-37; #54623 / #54624 skipped (POL-40, POL-38) | TO+ (no static user); a global role on a fleet's list |
+| Automation filter options by scope | POL-41 | Choosing an option and its filtered list |
 | Policy API contracts / roles / gitops | `tests/api/role-access/**`, `tests/api/gitops-verify/policies.spec.ts` | out of scope here |
 
 **Duplication**

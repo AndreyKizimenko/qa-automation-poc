@@ -105,10 +105,16 @@ function writeSession(key: StaticUserKey, state: StoredSession): void {
  * renders the dashboard first and redirects to /login only once `GET /me`
  * comes back 401. An expired session still reads as /dashboard at that moment,
  * so the caller would be handed a page that signs itself out mid-test.
+ *
+ * The cookie's own expiry is checked first. Fleet's server-side session can
+ * outlive it, and the browser drops an expired cookie before the first
+ * request, so a token the API still accepts would load the login page.
  */
 async function isSessionLive(session: StoredSession): Promise<boolean> {
-  const token = session.cookies?.find((c) => c.name.endsWith('token'))?.value;
-  if (!token) return false;
+  const cookie = session.cookies?.find((c) => c.name.endsWith('token'));
+  if (!cookie?.value) return false;
+  if (cookie.expires > 0 && cookie.expires * 1000 <= Date.now()) return false;
+  const token = cookie.value;
   return withApiRequest(async (request) => {
     const res = await request.get(apiUrl('me'), {
       headers: { Authorization: `Bearer ${token}` },

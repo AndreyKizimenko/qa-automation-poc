@@ -458,4 +458,8 @@ the 403 (decision 12; no upload, per the write rule in §6).
 
 ## What landed
 
-*Nothing yet.*
+| gaps | spec | what |
+|---|---|---|
+| C3 #5, #20, #23, #30, #31, #32, #33, #34, #35 | `premium/policies/role-access.spec.ts`, `free/policies/role-access.spec.ts` | One test per role: GM, GO, GO+, GT on All fleets, TA, TM, TO on Workstations (free: GM, GO). The seeded row's checkbox and Automations cell (button or text), *Add policy*, *Manage automations* (TA opens it and closes it), an inherited row's tag and no checkbox, the policy's *Run* / *Edit* from the list, and `/policies/new`'s 403. TA and TM each save a Workstations policy from the UI; the API reads back the fleet and the role as author. #54624 (GO+ on an Unassigned policy) skipped |
+| — | `premium/policies/policy-automations.spec.ts` | #54623: a fleet admin's *Send webhook* on an inherited policy should be disabled; skipped, inside the serial describe that owns the global webhook |
+| C3 #22 | `premium/policies/policy-automations.spec.ts` | the *Filter by automation* options by scope, as admin: All fleets only webhooks or tickets, Unassigned all but Calendar, Workstations all seven |

@@ -168,6 +168,10 @@ export interface FleetPolicy {
   id: number;
   name: string;
   query: string;
+  /** The fleet it belongs to; 0 for Unassigned. */
+  teamId: number;
+  /** Who created it — the signed-in user for a policy saved from the UI. */
+  authorEmail: string;
   platform: string;
   type: string;
   continuousAutomationsEnabled: boolean;
@@ -185,6 +189,8 @@ interface RawFleetPolicy {
   id: number;
   name: string;
   query: string;
+  team_id: number | null;
+  author_email?: string;
   platform?: string;
   type?: string;
   continuous_automations_enabled?: boolean;
@@ -200,6 +206,8 @@ function toFleetPolicy(p: RawFleetPolicy): FleetPolicy {
     id: p.id,
     name: p.name,
     query: p.query,
+    teamId: p.team_id ?? 0,
+    authorEmail: p.author_email ?? '',
     platform: p.platform ?? '',
     type: p.type ?? 'dynamic',
     continuousAutomationsEnabled: p.continuous_automations_enabled ?? false,

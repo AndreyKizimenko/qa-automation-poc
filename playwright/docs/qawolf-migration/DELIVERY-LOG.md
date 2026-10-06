@@ -111,6 +111,23 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch E — role-based UI visibility
+
+41 gaps in what each role is *shown*: round 1 merged QA Wolf's per-role flows into role specs that were never
+written. Reviewed and built on `playwright/qawolf-round3-batch-e` (2026-10-05): 23 built, 11 folded, 7 cut. Detail
+and Andrey's decisions in [round-3/E-role-visibility.md](round-3/E-role-visibility.md#review-decisions-2026-10-05).
+
+**What the review changed.** The flows asserted little that was role-specific (stale copy, absences on menus that
+never opened, the wrong user signed in), and the API probes they were said to back cover seven endpoints. So the
+cells come from Fleet's gating, one test per role, with every absence anchored on something the same role is shown.
+A role writes only where the UI path is its own; the rest are visibility cells. A global technician column runs
+through every matrix, and the three role bugs filed at planning have skipped checks, each run un-skipped once to see
+it fail for the filed reason.
+
+| slice | what |
+|---|---|
+| policies | new `premium/policies/role-access.spec.ts`: seven roles over the list (Add policy, Manage automations, row checkboxes, the Automations cell as a button or text, an inherited row's tag), a policy's Run / Edit, and the `/policies/new` 403; `team-admin` and `ws-maintainer` each save a Workstations policy from the UI, read back with the role as author; #54624 skipped. Free twin `free/policies/role-access.spec.ts` (GM, GO). `policy-automations.spec.ts` gains #54623's check (skipped, in the serial describe that owns the global webhook) and the automation filter's options by scope (C3 #22). New `AccessDenied` component; `PoliciesListPage.narrowTo` / `automationFilter` / `automationFilterOption`, `openPolicy` matching a name followed by its tags; `PolicyDetailsPage.goto` anchored on Show query; `FleetPolicy.teamId` / `authorEmail`. `withStaticUser` no longer reuses a session whose cookie has expired (the browser drops it while Fleet still accepts the token, so the page loaded signed out) |
+
 ## Round 3 · Batch D — batch scripts
 
 9 gaps in batch script runs, all round 1 C8: scheduling for later, cancelling, an edit cancelling pending runs, the

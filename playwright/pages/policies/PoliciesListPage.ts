@@ -24,6 +24,11 @@ export class PoliciesListPage {
 
   readonly search: Locator;
 
+  // Premium's "Filter by automation" (a react-select). Its options are read
+  // only after the control is clicked open.
+  readonly automationFilter: Locator;
+  readonly automationFilterOptions: Locator;
+
   readonly bulkDeleteButton: Locator;
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -62,6 +67,15 @@ export class PoliciesListPage {
     // renders empty (or is still refetching over an empty render).
     this.addPolicyButton = page.getByRole('button', { name: /add policy/i }).first();
     this.search = page.getByPlaceholder('Search by name');
+    // The named combobox is react-select's hidden dummy input, which never takes
+    // a click; the control around it is what opens the menu, and it has no role
+    // of its own, so it's the react-select control holding that input.
+    this.automationFilter = page
+      .locator('.react-select__control')
+      .filter({ has: page.getByRole('combobox', { name: 'Filter by automation' }) });
+    // DropdownWrapper stamps every option with the one test id Fleet emits; an
+    // option's text is its label followed by its help text.
+    this.automationFilterOptions = page.getByTestId('dropdown-option');
 
     this.bulkDeleteButton = page.getByRole('button', { name: 'Delete', exact: true });
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete policies' });
@@ -99,6 +113,24 @@ export class PoliciesListPage {
     return this.table
       .rowWith(policyName)
       .getByRole('button', { name: /^(Add automation|Edit automations?\b)/ });
+  }
+
+  /** An open automation filter's option, by its label (its help text follows it). */
+  automationFilterOption(label: string): Locator {
+    return this.automationFilterOptions.filter({ hasText: new RegExp(`^${label}`) });
+  }
+
+  /**
+   * Searches the list down to `policyName` and returns its row. The list pages at
+   * 20 and other specs add policies beside this one, so a row is read only once a
+   * search has left it alone on screen.
+   */
+  async narrowTo(policyName: string): Promise<Locator> {
+    await this.search.fill(policyName);
+    await this.table.waitForSettled();
+    const row = this.table.rowWith(policyName);
+    await expect(row).toHaveCount(1);
+    return row;
   }
 
   /**
@@ -191,9 +223,14 @@ export class PoliciesListPage {
     await expect(this.page).toHaveURL(/\/policies\/new/);
   }
 
-  /** Click a policy's name link in the list to open its details page. */
+  /**
+   * Click a policy's name link in the list to open its details page. The link
+   * also holds the name's tags ("Inherited" on a fleet's list, "Patch"), so it's
+   * matched from the start of its name up to a word boundary rather than whole.
+   */
   async openPolicy(name: string): Promise<void> {
-    await this.page.getByRole('link', { name, exact: true }).click();
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await this.page.getByRole('link', { name: new RegExp(`^${escaped}(?:\\s|$)`) }).click();
     await expect(this.page).toHaveURL(/\/policies\/\d+/);
   }
 
