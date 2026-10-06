@@ -1,12 +1,13 @@
 # Controls — setup experience — test audit
 
-**Specs covered:** 5 files · **Test declarations:** 8 · **Projects:** premium
+**Specs covered:** 5 files · **Test declarations:** 9 · **Projects:** premium
 
 `Controls › Setup experience` is the five-step wizard (`1. Users`, `2. Bootstrap package`,
 `3. Install software`, `4. Run script`, `5. Setup Assistant`) that authors what happens on a
 macOS host as it goes through Apple **ADE/DEP** enrolment. Every spec here is one file per
 wizard step, each wrapped in `for (const scope of ['Unassigned', 'Workstations'])`, so each
-entry below runs twice against two different `fleet_id`s.
+entry below runs twice against two different `fleet_id`s — except SETUP-09, which runs once,
+on a throwaway `pw-manual-agent-*` fleet of its own.
 
 > **The whole area is configuration-authoring only.** Nothing in this folder — and nothing
 > that *can* live in this folder — exercises the setup experience end to end. That requires a
@@ -25,17 +26,18 @@ entry below runs twice against two different `fleet_id`s.
 | SETUP-03 | `premium/controls/setup-experience/install-software.spec.ts` | Install software › `<case>` — appears in `<platform>` tab and saves selection (9 cases) | UI+API | ☐ |
 | SETUP-04 | `premium/controls/setup-experience/install-software.spec.ts` | Install software › macOS tab — pagination enables once more than 10 titles are listed | UI+API | ☐ |
 | SETUP-05 | `premium/controls/setup-experience/run-script.spec.ts` | Run script › upload → list → delete | UI | ☐ |
-| SETUP-06 | `premium/controls/setup-experience/setup-assistant.spec.ts` | Setup Assistant › default profile → upload replaces it → delete restores it | UI | ☐ |
-| SETUP-07 | `premium/controls/setup-experience/users.spec.ts` | Users › renders + IdP and hidden-admin toggles round-trip | UI | ☐ |
+| SETUP-06 | `premium/controls/setup-experience/setup-assistant.spec.ts` | Setup Assistant › default profile → upload replaces it → delete restores it → Apple refuses an unnamed one | UI | ☐ |
+| SETUP-07 | `premium/controls/setup-experience/users.spec.ts` | Users › renders + IdP, Lock end user info and hidden-admin settings round-trip | UI+API | ☐ |
 | SETUP-08 | `premium/controls/setup-experience/users.spec.ts` | Users › Lock end user info renders only when Require IdP is enabled | UI | ☐ |
+| SETUP-09 | `premium/controls/setup-experience/bootstrap-package.spec.ts` | Bootstrap package — install fleetd manually (throwaway fleet) › needs a package; while on, macOS setup software and the setup script are disabled and refused | UI+API | ☐ |
 
 Related, audited elsewhere: `tests/e2e/free/paywalls.spec.ts` asserts all six
 setup-experience URLs paywall on free; `tests/api/premium/max-request-file-sizes.spec.ts`
 covers the `POST /setup_experience/eula` body-size limit (the **EULA** step has no e2e spec at
 all); `tests/api/free/endpoints.spec.ts` probes `GET setup_experience/script` on free.
 
-**Shared entry sequence.** Every entry starts with the same four actions, written out once
-here and referenced as *"open the wizard"*:
+**Shared entry sequence.** Every entry but SETUP-09 (which opens its throwaway fleet by URL)
+starts with the same four actions, written out once here and referenced as *"open the wizard"*:
 
 1. ☐ Open the dashboard (`/dashboard`) — `dashboard.goto()` waits for the first summary card.
 2. ☐ Click **Controls** in the navbar — `navbar.goToControls()` asserts URL `/controls`.
@@ -75,7 +77,7 @@ here and referenced as *"open the wizard"*:
 
 **Assessment**
 - *Value:* solid. Catches a broken bootstrap upload/store/serve/delete path per scope, including content corruption on the server (the sha256 check) and the singleton-per-fleet contract.
-- *Coverage gaps:* the `BootstrapPackageTable` status summary (Status / Hosts columns + **View all hosts** link filtering by `macos_bootstrap_package`) renders above the list item and is never asserted — the POM even declares `statusTable` ([`BootstrapPackagePage.ts:27`](../../pages/controls/BootstrapPackagePage.ts)) and nothing uses it. No **Advanced options** → *Install Fleet's agent manually* coverage, including its enable rule (disabled when no package, or when setup-experience software/script exist). No negative uploads: wrong extension, unsigned `.pkg`, non-distribution `.pkg` all have dedicated client-side copy in `BootstrapPackageUploader/helpers.tsx` and none is exercised. No activity-feed assertion although `added_bootstrap_package` / `deleted_bootstrap_package` exist. Downloaded bytes are never compared to the fixture, and the delete's `Successfully deleted.` toast is not asserted.
+- *Coverage gaps:* the `BootstrapPackageTable` status summary (Status / Hosts columns + **View all hosts** link filtering by `macos_bootstrap_package`) renders above the list item and is never asserted — the POM even declares `statusTable` ([`BootstrapPackagePage.ts:27`](../../pages/controls/BootstrapPackagePage.ts)) and nothing uses it. **Advanced options** → *Install Fleet's agent (fleetd) manually* is SETUP-09's, on a throwaway fleet (the no-package half of its enable rule; the "setup software or a script already exists" half is untested). No negative uploads: wrong extension, unsigned `.pkg`, non-distribution `.pkg` all have dedicated client-side copy in `BootstrapPackageUploader/helpers.tsx` and none is exercised. No activity-feed assertion although `added_bootstrap_package` / `deleted_bootstrap_package` exist. Downloaded bytes are never compared to the fixture, and the delete's `Successfully deleted.` toast is not asserted.
 - *Redundancy:* none within this area.
 - *Efficiency / smells:* `downloadIcon` / `deleteIcon` are page-wide `getByTestId('download-icon')` / `('trash-icon')` ([`BootstrapPackagePage.ts:46-47`](../../pages/controls/BootstrapPackagePage.ts)) rather than scoped to `.bootstrap-package-list-item` — fine while one item exists, latent strict-mode breakage if the status table ever grows icons. Download assertion (`/\.pkg$/`) is the weakest possible form: it would pass on a zero-byte file, and asserting `=== PKG_FILE` costs nothing.
 
@@ -231,7 +233,7 @@ other:
 
 **Assessment**
 - *Value:* modest. Confirms the singleton `.sh` upload/list/delete path renders per scope.
-- *Coverage gaps:* **no API verification at all** — unlike SETUP-01 there is no `GET setup_experience/script` check of the stored name or contents, and `helpers/api/mdm.ts` has no getter to do it with (only `deleteSetupExperienceScript`). The card's **download** button is never clicked even though the POM declares `downloadIcon` — so the download path (API fetch + FileSaver) is untested. The `Script will run during setup:` copy is not asserted. The uploader's `disabled` + tooltip state when *Install Fleet's agent manually* is on is untested. Non-`.sh` rejection is untested. No activity assertion.
+- *Coverage gaps:* **no API verification at all** — unlike SETUP-01 there is no `GET setup_experience/script` check of the stored name or contents, and `helpers/api/mdm.ts` has no getter to do it with (only `deleteSetupExperienceScript`). The card's **download** button is never clicked even though the POM declares `downloadIcon` — so the download path (API fetch + FileSaver) is untested. The `Script will run during setup:` copy is not asserted. The uploader's disabled state while *Install Fleet's agent (fleetd) manually* is on is SETUP-09's (the **Upload** button only; its tooltip is unread). Non-`.sh` rejection is untested. No activity assertion.
 - *Redundancy:* structurally identical to SETUP-01 (upload → assert name → delete → assert empty) but weaker; the pair is a good candidate for one shared helper.
 - *Efficiency / smells:* the reset uses a UI `if (await runScript.listItem.isVisible().catch(() => false))` branch ([`run-script.spec.ts:37`](../../tests/e2e/premium/controls/setup-experience/run-script.spec.ts)) where the sibling spec uses a one-line API delete — swap it for `deleteSetupExperienceScript(request, fleetId)` and the branch (and its swallowed error) disappears. `emptyUploadButton = page.getByRole('button', { name: 'Upload' })` ([`RunScriptPage.ts:36`](../../pages/controls/RunScriptPage.ts)) is unscoped, as are the page-wide download/trash test-ids. `toContainText` rather than `toHaveText` on the name means a rename that appends junk would still pass.
 
@@ -245,12 +247,13 @@ other:
 
 ---
 
-### SETUP-06 · MDM • Setup Experience — Setup Assistant (Unassigned · Workstations) › default profile → upload replaces it → delete restores it
+### SETUP-06 · MDM • Setup Experience — Setup Assistant (Unassigned · Workstations) › default profile → upload replaces it → delete restores it → Apple refuses an unnamed one
 
 - **File:** [`playwright/tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts`](../../tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts)
 - **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts`
 - **Project:** premium · **Scopes:** Unassigned, Workstations
 - **Mode:** UI · **Isolation:** standalone, self-cleaning
+- **Source (step 6):** QA Wolf `configuration-profiles-uploading-bad-profile-shows-error-and-links-to-error-docs` (round 1 C9 #2; round 3, batch F)
 - **Preconditions:**
   - UI self-heal: `deleteIfCustomPresent()` removes a custom profile left by a crashed run.
   - **ABM dependency — yes, and it is load-bearing.** `SetupAssistant.tsx` gates on
@@ -261,7 +264,10 @@ other:
     expire annually — expect this to look like a mystery timeout when it does.
     (`FLEET_ABM_ORG_NAME` exists in `.env.premium.example` only for the `fleetctl gitops`
     apply; the suite itself never reads it.)
-- **Data created:** the fleet's automatic-enrollment profile (`automatic-enrollment.dep.json` — `profile_name` "Fleet's example automatic enrollment profile" plus a 16-item `skip_setup_items` list) — deleted in-test, backstopped by `deleteSetupAssistant` in cleanup
+  - **Step 6 reaches Apple.** Fleet validates a new profile by sending it to Apple's
+    DefineProfile API through one of its ABM tokens (any token, for a fleet no token names)
+    before storing it, so Apple's API has to answer and the token has to be one Apple accepts.
+- **Data created:** the fleet's automatic-enrollment profile (`automatic-enrollment.dep.json` — `profile_name` "Fleet's example automatic enrollment profile" plus a 16-item `skip_setup_items` list) — deleted in-test, backstopped by `deleteSetupAssistant` in cleanup. Step 6's profile, `pw-unnamed.dep.json` (the same fixture with `profile_name: ''`, built in memory), is refused and stored nowhere.
 
 **Flow**
 
@@ -278,12 +284,16 @@ other:
 5. ☐ Click the **trash** icon → **Delete**.
    - ✅ *(UI)* `Successfully deleted.` toast, custom card hidden, default card visible.
    - ✅ *(UI)* The profile name is back to `Default profile`.
+6. ☐ Choose `pw-unnamed.dep.json` in the uploader (`uploadExpectingRefusal` only sets the file; the uploader auto-submits).
+   - ✅ *(UI)* Error toast `Couldn't add. CONFIG_NAME_REQUIRED.` — Apple's code, relayed by Fleet.
+   - ✅ *(UI)* The toast's **Learn more** link has `href` `https://fleetdm.com/learn-more-about/dep-profile` and `target="_blank"` (Fleet's own guide, not Apple's page; the link isn't followed).
+   - ✅ *(UI)* The default card is still visible and the profile name still reads `Default profile` — nothing was stored.
 
 **Assessment**
-- *Value:* good. Covers the non-obvious "there is no empty state, the default card *is* the empty state" contract and the singleton replace/restore lifecycle. Rendering the custom card does prove the server stored and re-served the profile.
-- *Coverage gaps:* the custom card's name assertion is negative — Fleet renders `profile.name`, i.e. the uploaded file name, so `toHaveText('automatic-enrollment.dep.json')` is available and strictly better. The `uploaded X ago` timestamp is not asserted. **Advanced options → Release device manually** (`apple_enable_release_device_manually`, its own Save + `Successfully updated.` toast) is never opened — an untested setup-experience setting that materially changes DEP behaviour. The downloaded JSON is never parsed, so nothing checks that `skip_setup_items` survived the round-trip. No activity assertion despite `changed_macos_setup_assistant` / `deleted_macos_setup_assistant`. Non-`.json` and malformed-DEP-JSON rejection untested. The `Preview end user experience` link is not checked.
+- *Value:* good. Covers the non-obvious "there is no empty state, the default card *is* the empty state" contract and the singleton replace/restore lifecycle. Rendering the custom card does prove the server stored and re-served the profile. Step 6 adds the one server-side validation path in the area: Fleet asks Apple before storing, relays Apple's refusal code with a link to its guide, and keeps the default card.
+- *Coverage gaps:* the custom card's name assertion is negative — Fleet renders `profile.name`, i.e. the uploaded file name, so `toHaveText('automatic-enrollment.dep.json')` is available and strictly better. The `uploaded X ago` timestamp is not asserted. **Advanced options → Release device manually** (`apple_enable_release_device_manually`, its own Save + `Successfully updated.` toast) is never opened — an untested setup-experience setting that materially changes DEP behaviour. The downloaded JSON is never parsed, so nothing checks that `skip_setup_items` survived the round-trip. No activity assertion despite `changed_macos_setup_assistant` / `deleted_macos_setup_assistant`. Of the rejections, only Apple's refusal of an unnamed profile is covered: a non-`.json` file, JSON that doesn't parse, and any check Fleet makes before calling Apple are not. Step 6's "nothing stored" is read from the card only, with no API read of the fleet's setup assistant. The `Preview end user experience` link is not checked.
 - *Redundancy:* same upload/list/delete shape as SETUP-01 and SETUP-05.
-- *Efficiency / smells:* three class-based locators for the card variants are unavoidable (Fleet's `Card` has no role) and are documented in the POM. `deleteIfCustomPresent()` swallows with `.catch(() => false)`; an API `deleteSetupAssistant(request, fleetId)` precondition would be deterministic and cheaper, matching SETUP-01. Step 4's `/\.json$/` assertion is close to tautological — the filename is derived from the name we uploaded.
+- *Efficiency / smells:* three class-based locators for the card variants are unavoidable (Fleet's `Card` has no role) and are documented in the POM. `deleteIfCustomPresent()` swallows with `.catch(() => false)`; an API `deleteSetupAssistant(request, fleetId)` precondition would be deterministic and cheaper, matching SETUP-01. Step 4's `/\.json$/` assertion is close to tautological — the filename is derived from the name we uploaded. Step 6 is a live call to Apple per scope per run: an Apple outage, or a token Apple rejects, fails it with a different error toast that reads like a product regression.
 
 **Notes (Andrey)**
 ```
@@ -295,14 +305,15 @@ other:
 
 ---
 
-### SETUP-07 · MDM • Setup Experience — Users (Unassigned · Workstations) › renders + IdP and hidden-admin toggles round-trip
+### SETUP-07 · MDM • Setup Experience — Users (Unassigned · Workstations) › renders + IdP, Lock end user info and hidden-admin settings round-trip
 
 - **File:** [`playwright/tests/e2e/premium/controls/setup-experience/users.spec.ts`](../../tests/e2e/premium/controls/setup-experience/users.spec.ts)
-- **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/users.spec.ts -g "toggles round-trip"`
+- **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/users.spec.ts -g "settings round-trip"`
 - **Project:** premium · **Scopes:** Unassigned (writes global `/config`), Workstations (writes `/teams/:id`)
-- **Mode:** UI · **Isolation:** standalone but **mutates shared scope config**; it captures the initial toggle states and restores them with a third save. Runs in a non-serial describe alongside SETUP-08, which reads (but never saves) the same form.
-- **Preconditions:** the Users card is the one step that does **not** gate on MDM/ABM, but **Require IdP authentication** is `disabled` unless an end-user IdP is configured (`isIdPConfigured`: `entity_id` + `idp_name` + metadata). EUA is assumed pre-configured on the instance per `playwright/CLAUDE.md`; the spec never asserts it.
-- **Data created:** none, but it writes `enable_end_user_authentication`, `lock_end_user_info`, `enable_managed_local_account` and `end_user_local_account_type` on the scope. `resetMacosSetupToggles` in cleanup resets only the first and third.
+- **Mode:** UI+API · **Isolation:** **mutates shared scope config.** IdP is saved on and then off, whatever it started as (off is the resting state cleanup restores); the hidden admin is flipped and flipped back to its recorded state. A flag set just before the first save and cleared once the IdP-off save reads back keys an `afterEach` to this test: if it died with IdP on, `resetMacosSetupToggles` puts the scope back. The three saves share one test because turning IdP on queues Fleet's ABM profile job for the scope — split up, they'd race each other on the same fleet. Runs in a non-serial describe alongside SETUP-08, which never saves; under `fullyParallel` the two can run at the same time on different workers.
+- **Source:** QA Wolf `controls-controls-macos-setup-ui-validation` and `mac-os-accounts-allow-end-users-to-edit-their-macos-local-account-account-name-and-full-name` (round 1 C8 #6 and C9 #8; round 3, batch F)
+- **Preconditions:** the Users card is the one step that does **not** gate on MDM/ABM, but **Require IdP authentication** is `disabled` unless an end-user IdP is configured (`isIdPConfigured`: `entity_id` + `idp_name` + metadata). EUA is assumed pre-configured on the instance per `playwright/CLAUDE.md`; the spec never asserts it, and without it the first `setChecked` times out on a disabled checkbox.
+- **Data created:** none, but it writes `enable_end_user_authentication`, `lock_end_user_info`, `enable_managed_local_account` and `end_user_local_account_type` on the scope. `resetMacosSetupToggles` (cleanup, and this test's `afterEach`) sets the first and third to `false`; Fleet sets Lock to match an IdP change that doesn't name it, and refuses Lock without IdP.
 
 **Flow**
 
@@ -311,26 +322,38 @@ other:
    - ✅ *(UI)* Three local-account radios are **attached** (not visible — Fleet's custom radios hide the native input): **Admin**, **Standard**, **Skip (no account)**.
    - ✅ *(UI)* **Create hidden admin** and **Require IdP authentication** ARIA checkboxes are visible.
    - ✅ *(UI)* The `identity provider` link is visible.
-2. ☐ Record the current checked state of both toggles, then click **Require IdP authentication** and click **Save**.
-   - ✅ *(UI)* `Successfully updated.` toast — `SetupExperienceUsersPage.save()`.
-   - ✅ *(UI)* The IdP checkbox is now the inverse of its recorded state.
-3. ☐ Click **Create hidden admin**, click **Save**.
-   - ✅ *(UI)* `Successfully updated.` toast.
-   - ✅ *(UI)* The hidden-admin checkbox is now the inverse of its recorded state.
-4. ☐ Click both toggles back, click **Save**.
-   - ✅ *(UI)* Both checkboxes match their originally recorded states.
+   - ✅ *(UI)* **Preview end user experience** has `href` `https://fleetdm.com/learn-more-about/setup-experience/end-user-authentication` and `target="_blank"` — a link to Fleet's guide, not opened.
+2. ☐ Note whether **Create hidden admin** is checked. Tick **Require IdP authentication** (`setChecked(true)`, a no-op if it is already on).
+   - ✅ *(UI)* **Lock end user info** appears, checked — the form ticks it with IdP (`onEndUserAuthChange` in `UsersForm.tsx`).
+3. ☐ Click **Save**.
+   - ✅ *(UI)* `Successfully updated.` toast — `SetupExperienceUsersPage.save()`, which clears older toasts first.
+   - ✅ *(API)* `getMacosSetupSettings` (`GET /config` on Unassigned, `GET /teams/:id` on Workstations): `macos_setup.enable_end_user_authentication` and `lock_end_user_info` are both `true`.
+4. ☐ Reload the page; reselect the scope.
+   - ✅ *(UI)* **Require IdP authentication** and **Lock end user info** are both checked.
+5. ☐ Click **Create hidden admin**, click **Save**.
+   - ✅ *(UI)* Toast; the checkbox is the inverse of its noted state.
+   - ✅ *(API)* `enable_managed_local_account` is the inverse of the noted state.
+6. ☐ Untick **Require IdP authentication**.
+   - ✅ *(UI)* **Lock end user info** is hidden.
+7. ☐ Click **Create hidden admin** back, click **Save**.
+   - ✅ *(UI)* Toast.
+   - ✅ *(API)* `enable_end_user_authentication` and `lock_end_user_info` are both `false` — IdP off saves Lock off with it, which is what lets end users edit their macOS Account Name and Full Name again — and `enable_managed_local_account` is back at its noted state.
+8. ☐ Reload the page; reselect the scope.
+   - ✅ *(UI)* **Require IdP authentication** is unchecked, **Lock end user info** is hidden, and **Create hidden admin** is at its noted state.
 
 **Assessment**
-- *Value:* moderate — it proves the form renders its controls and that Save reaches the server without erroring. It does **not** prove persistence.
+- *Value:* the area's one real settings round trip. Every save is checked against what Fleet stored, and IdP + Lock are read back after a reload in both directions, including the pairing an end user actually feels: IdP off saves Lock off. That closes the finding this entry used to lead with (post-save assertions that re-read React state, so a server that dropped the field would pass). The Preview link's address pins where an admin is sent.
 - *Coverage gaps:*
-  - **The "round-trip" in the title is not a round-trip.** There is no `page.reload()` and no API read; the post-save assertions re-read React state that the click already changed, so a server that dropped the field entirely would still pass as long as it returned 200. Contrast SETUP-03, which reloads. One `page.reload()` (or `assertActivity` on `enabled_macos_setup_end_user_auth` / `disabled_macos_setup_end_user_auth`) closes this.
-  - The three local-account radios are asserted **attached and never clicked** — choosing Admin/Standard/Skip, the actual macOS local-account policy, is completely untested, as is the coupled rule that Standard/Skip force `Create hidden admin` on and disable it (`effectiveEnableManagedLocalAccount` in `LocalAccountSection.tsx`) with the "There must be at least one admin account on the host." tooltip.
+  - The three local-account radios are still **attached and never clicked** — choosing Admin/Standard/Skip, the actual macOS local-account policy, is untested, as is the coupled rule that Standard/Skip force `Create hidden admin` on and disable it (`effectiveEnableManagedLocalAccount` in `LocalAccountSection.tsx`) with the "There must be at least one admin account on the host." tooltip.
+  - **Lock off with IdP on** — the legal combination an admin picks to require IdP but let end users edit their name — is never saved, and the server's refusal of Lock without IdP isn't probed.
+  - The hidden admin's flipped value is read through the API but not after a reload; the reload in step 8 shows the restored value.
+  - No activity assertion, although Fleet logs `enabled_macos_setup_end_user_auth` / `disabled_macos_setup_end_user_auth`.
   - No coverage of the disabled + tooltip states when IdP is not configured or Apple MDM is off.
-- *Redundancy:* overlaps SETUP-08 on entry navigation and on the IdP checkbox itself; the two could be one test if SETUP-08's no-save property is preserved.
+- *Redundancy:* now contains SETUP-08's whole check — Lock appears with IdP on and is hidden with IdP off — plus the saves. SETUP-08's one distinct property is that it never saves.
 - *Efficiency / smells:*
-  - **Fragile precondition:** if `end_user_local_account_type` is anything other than `admin` on the scope, **Create hidden admin** is rendered disabled and force-checked, so step 3's click is a no-op and the assertion fails. Cleanup's `resetMacosSetupToggles` never resets `end_user_local_account_type`, and every Save from this very form writes it (defaulting to `admin` when the API returns none) — so the spec's own writes are what keep it green. Worth pinning explicitly.
-  - Silent extra writes: because `onEndUserAuthChange` mirrors EUA into `lockEndUserInfo`, each Save here also writes `lock_end_user_info`; the spec neither asserts nor documents that.
-  - `pageHealth` is the only guard against a failed save that returns 4xx, and 4xx is deliberately not flagged — so an error toast would only be caught by the missing `Successfully updated.` assertion, which is present. Fine.
+  - **Fragile precondition:** if `end_user_local_account_type` is anything other than `admin` on the scope, **Create hidden admin** is rendered disabled and force-checked, so step 5's click is a no-op and its API read fails. Cleanup's `resetMacosSetupToggles` never resets `end_user_local_account_type`, and every Save from this very form writes it (defaulting to `admin` when the API returns none) — so the spec's own writes are what keep it green. Worth pinning explicitly.
+  - It doesn't restore IdP to where it started: it ends with IdP off, as cleanup does. The `afterEach` reset likewise sets the hidden admin to `false`, not to its noted value.
+  - Each run queues Fleet's ABM profile job on both scopes (IdP on) — the instance-side cost of this coverage.
 
 **Notes (Andrey)**
 ```
@@ -348,7 +371,7 @@ other:
 - **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/users.spec.ts -g "Lock end user info renders only"`
 - **Project:** premium · **Scopes:** Unassigned, Workstations
 - **Mode:** UI · **Isolation:** clean — deliberately never clicks **Save**, so it leaves the scope's server config untouched and is safe next to SETUP-07
-- **Preconditions:** an IdP must be configured, otherwise **Require IdP authentication** is disabled and the clicks do nothing
+- **Preconditions:** an IdP must be configured, otherwise **Require IdP authentication** is disabled and the first click waits for it until the test times out
 - **Data created:** none
 
 **Flow**
@@ -362,10 +385,61 @@ other:
    - ✅ *(UI)* **Lock end user info** is hidden again.
 
 **Assessment**
-- *Value:* good value per second — a pure client-side conditional (`{endUserAuthEnabled && …}` in `EndUserAuthSection.tsx`) tested without touching server state. This is the pattern SETUP-07 should borrow for its show/hide concerns.
-- *Coverage gaps:* only visibility. Does not check that enabling IdP also **checks** Lock end user info by default (`onEndUserAuthChange` mirrors the value when Apple MDM is configured), does not check the help text or the disabled state when Apple MDM is off, and does not check that `lock_end_user_info: false` is what actually gets saved when IdP is off (`canLockEndUserInfo` in `UsersForm.tsx`).
-- *Redundancy:* duplicates SETUP-07's navigation and its IdP-checkbox interaction, minus the saves.
-- *Efficiency / smells:* the leading `if (isChecked) click()` normalisation is a legitimate precondition rather than a silent-pass branch, but note that whether it runs depends on whatever SETUP-07 last saved — so the two tests are ordering-coupled through server state even though neither declares a dependency.
+- *Value:* low now — a pure client-side conditional (`{endUserAuthEnabled && …}` in `EndUserAuthSection.tsx`) tested without touching server state, which SETUP-07 also asserts on its way through the saves.
+- *Coverage gaps:* only visibility. Does not check that enabling IdP also **checks** Lock end user info by default (`onEndUserAuthChange` mirrors the value when Apple MDM is configured), does not check the help text or the disabled state when Apple MDM is off, and does not check that `lock_end_user_info: false` is what actually gets saved when IdP is off (`canLockEndUserInfo` in `UsersForm.tsx`). SETUP-07 checks the default tick and both saved values.
+- *Redundancy:* contained in SETUP-07, which shows Lock with IdP on and hides it with IdP off, then saves each. Its only distinct property is that it never saves — a merge (or delete) candidate.
+- *Efficiency / smells:* the leading `if (isChecked) click()` normalisation is a legitimate precondition rather than a silent-pass branch. SETUP-07 now always finishes with IdP off (its `afterEach` resets a run that died with it on), so the branch runs only when this test loads the form inside SETUP-07's IdP-on window — the two can run at once under `fullyParallel`.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SETUP-09 · MDM • Bootstrap package — install fleetd manually (throwaway fleet) › needs a package; while on, macOS setup software and the setup script are disabled and refused
+
+- **File:** [`playwright/tests/e2e/premium/controls/setup-experience/bootstrap-package.spec.ts`](../../tests/e2e/premium/controls/setup-experience/bootstrap-package.spec.ts)
+- **Grep:** `npx playwright test --project=premium bootstrap-package -g "install fleetd manually"`
+- **Project:** premium (the main project, not `premium-exclusive`) · **Scope:** a throwaway fleet, `pw-manual-agent-<nonce>`, opened **by URL** (`bootstrapPackage.goto({ fleetId })`) rather than picked in the dropdown: its name is per-run (see `TeamDropdown.selectByLabel`). The subnav links keep the fleet.
+- **Mode:** UI+API · **Isolation:** its own describe; `test.setTimeout(90_000)`. Not on Unassigned or Workstations: while the option is on, that fleet's Install software (macOS) and Run script cards are disabled, which would break SETUP-03…05 running beside it. The test's last step deletes the fleet, and an `afterEach` deletes it again by name (tolerating a 404); `deleteFleet` deletes the fleet's bootstrap package first, because a fleet delete leaves it behind (`mdm_apple_bootstrap_packages` isn't among the tables it clears). The cleanup sweep of `pw-*` fleets removes one a killed run left, and `resetSetupExperience` also turns the option off on Unassigned and Workstations, as a backstop.
+- **Source:** QA Wolf `controls-controls-macos-setup-experience-check-install-fleetd-manually` (round 1 C8 #4; round 3, batch F)
+- **Preconditions (API):** `createFleet`; mid-flow, `uploadBootstrapPackage` (`POST /bootstrap`, `dummy-bootstrap-package.pkg`) and `uploadSoftwarePackage` of `fleet-playwright-install-1.0.0.pkg` (2 KB, inert — any macOS package will do; it only has to give Install software a row). Apple MDM + ABM configured, as for SETUP-01.
+- **Data created:** the fleet, its bootstrap package and the macOS package, all deleted with the fleet. The fleet holds no host, so nothing is ever delivered.
+
+**Flow**
+
+1. ☐ Open `/controls/setup-experience/bootstrap-package?fleet_id=<id>` via URL.
+   - ✅ *(UI)* `Bootstrap package` `<h2>` visible (the `goto` anchor); the Controls fleet dropdown reads the fleet's name.
+2. ☐ Click **Advanced options**.
+   - ✅ *(UI)* **Install Fleet's agent (fleetd) manually** is visible and **disabled** — the fleet has no package.
+   - ✅ *(API)* `PATCH /setup_experience` with `macos_manual_agent_install: true` → **422**, the body containing `first specify a macos_bootstrap_package`.
+3. ☐ *(API)* Upload the bootstrap package to the fleet; reload the page.
+   - ✅ *(UI)* The list item's name reads exactly `dummy-bootstrap-package.pkg`.
+4. ☐ **Advanced options** → tick **Install Fleet's agent (fleetd) manually** → the form's own **Save**.
+   - ✅ *(UI)* `Successfully updated.` toast (older toasts cleared first).
+   - ✅ *(API)* `macos_setup.manual_agent_install` is `true` (`getMacosSetupSettings` → `GET /teams/:id`).
+5. ☐ *(API)* Upload the macOS package. Click **3. Install software** → **macOS** tab.
+   - ✅ *(UI)* URL `/install-software/macos`; the package's row is listed.
+   - ✅ *(UI)* Its checkbox, **Cancel setup if software fails** and **Save** are all disabled.
+   - ✅ *(API)* `PUT /setup_experience/software` selecting it for macOS → **422**, the body containing `first disable macos_manual_agent_install`.
+6. ☐ Click **4. Run script**.
+   - ✅ *(UI)* The empty-state **Upload** button is disabled.
+7. ☐ Click **2. Bootstrap package** → **Advanced options** → untick the option → **Save**.
+   - ✅ *(UI)* `Successfully updated.` toast.
+   - ✅ *(API)* `manual_agent_install` is `false`.
+8. ☐ Click **3. Install software** → **macOS** tab.
+   - ✅ *(UI)* The package's checkbox and **Save** are enabled again.
+9. ☐ *(API)* Delete the fleet (its bootstrap package first).
+
+**Assessment**
+- *Value:* high for its cost. The only coverage of the manual-agent option, and the only test in the area of one card's setting gating others: a checkbox on **Bootstrap package** disables controls on **Install software** and **Run script**. The server's two refusals — the option without a package, and macOS setup software while it's on — are each asserted beside the disabled control that should prevent them, so a UI that stops disabling and a server that stops refusing fail separately. The throwaway fleet is what keeps it in the main project.
+- *Coverage gaps:* the other half of the option's enable rule — disabled while the fleet already has macOS setup software selected or a setup script — isn't exercised (the package is added after the option is on, and never selected). The setup script is refused only in the UI: no API upload is attempted while the option is on. Run script isn't re-checked after the option goes off. The disabled controls' explanations (tooltips) are unread. Deleting the bootstrap package while the option is on (which leaves it on, per `resetManualAgentInstall`) is untested. No activity assertion. What the option does to an ADE host — Fleet installing no fleetd — is manual-only (see below).
+- *Redundancy:* the bootstrap upload is SETUP-01's, here through the API on purpose; the Install software row check overlaps SETUP-03's step 4.
+- *Efficiency / smells:* seconds of real work — a fleet, a 19 KB and a 2 KB upload — inside a 90 s ceiling. The fleet shows in every fleet picker while it exists. `deleteFleet` deleting the bootstrap package first works around Fleet leaving an orphaned package behind a deleted fleet; not filed.
 
 **Notes (Andrey)**
 ```
@@ -403,6 +477,7 @@ all five.
 | **Require IdP authentication** end-user SSO screen during Setup Assistant, and **Lock end user info** actually locking Account Name / Full name | needs the real Setup Assistant + IdP |
 | EULA display during automatic enrollment | no e2e spec exists at all (only an API body-size test) |
 | `canceled_setup_experience` / failure and retry paths | needs a real enrolment to fail |
+| **Install Fleet's agent (fleetd) manually**: Fleet installs no fleetd, and the bootstrap package's own agent enrolls the host | needs a real DEP enrolment with a package that carries fleetd |
 
 A reasonable ask of this suite is therefore: **maximise assertion density on the authoring
 side** (every field, every gating rule, every negative upload, every activity) and accept that
@@ -413,20 +488,21 @@ which is the real gap — not the DEP part.
 
 | Feature / user flow | Covered by | Gap |
 |---|---|---|
-| Wizard subnav (5 numbered steps) | SETUP-01..08 (each clicks its own link) | step ordering/labels never asserted as a set |
+| Wizard subnav (5 numbered steps) | SETUP-01..09 (each clicks its own link) | step ordering/labels never asserted as a set |
 | Bootstrap package upload/list/download/delete | SETUP-01 | status table, negative uploads, activity feed, downloaded bytes |
-| Bootstrap *Install Fleet's agent manually* | — | whole setting, incl. its disable rule (no package / software / script present) |
+| Bootstrap *Install Fleet's agent (fleetd) manually* | SETUP-09 (throwaway fleet: disabled and refused without a package; saved on and off; disables and refuses macOS setup software, disables the setup script's **Upload**) | its disable rule when setup software or a script already exists; the setup script's API refusal; the disabled controls' tooltips |
 | Install software — platform tabs | SETUP-02, SETUP-03 | invalid-platform redirect to `macos` |
 | Install software — select + persist | SETUP-03 (9 kinds × 2 scopes) | multi-select, selected-count, `GET setup_experience/software` cross-check |
-| Install software — **Require all software** (macOS / Windows) | — | whole setting, incl. Windows-MDM gate |
+| Install software — **Require all software** (macOS / Windows) | — (SETUP-09 sees macOS's *Cancel setup if software fails* disabled while manual agent install is on) | saving it, either platform, incl. Windows-MDM gate |
 | Install software — pagination | SETUP-04 | selection persistence across pages (`persistSelectedRows`) |
-| Run script upload/list/delete | SETUP-05 | download button, API verification, manual-agent-install disable state |
+| Run script upload/list/delete | SETUP-05 | download button, API verification; the manual-agent-install disabled state is SETUP-09's |
 | Setup Assistant default ↔ custom lifecycle | SETUP-06 | exact profile name, JSON content round-trip, activity feed |
+| Setup Assistant — a profile Apple refuses | SETUP-06 step 6 (empty `profile_name` → `CONFIG_NAME_REQUIRED`, Learn more link, default card kept) | non-`.json` and unparseable files; an API read that nothing was stored |
 | Setup Assistant **Release device manually** | — | whole setting |
-| Users — controls render | SETUP-07 | disabled/tooltip states |
-| Users — IdP + hidden-admin save | SETUP-07 | actual persistence (no reload), local-account radios never clicked |
+| Users — controls render | SETUP-07 (incl. the Preview link's address) | disabled/tooltip states |
+| Users — IdP + Lock end user info + hidden-admin save | SETUP-07 (each save read back through the API; IdP and Lock after a reload, on and off) | Lock off with IdP on; the hidden admin's flipped value after a reload; activity feed |
 | Users — local account type (Admin/Standard/Skip) | — | whole setting + the forced-hidden-admin coupling |
-| Users — Lock end user info visibility | SETUP-08 | default-on behaviour, saved value |
+| Users — Lock end user info visibility | SETUP-08, SETUP-07 (ticked with IdP, saved on and off) | disabled state with Apple MDM off |
 | EULA step | — (API size test only) | whole step |
 | Free-tier paywall on all 6 URLs | `tests/e2e/free/paywalls.spec.ts` | — |
 | ABM / MDM-not-configured empty states | — | the `Additional configuration required` + **Turn on** path on 4 of 5 cards |
@@ -435,7 +511,7 @@ which is the real gap — not the DEP part.
 
 1. **SETUP-02 ⊂ SETUP-03.** The nine cases already click all six tabs and assert each URL. SETUP-02 adds nothing and sits at the head of a serial chain.
 2. **Upload → assert name → delete → assert empty** is written three times (SETUP-01, SETUP-05, SETUP-06) against three different singleton entities, with three different levels of rigour (SETUP-01 checks sha256, SETUP-05 checks nothing server-side, SETUP-06 checks a negative). Levelling them up to SETUP-01's standard is a bigger win than de-duplicating them.
-3. **SETUP-07 / SETUP-08** share navigation and the IdP checkbox; SETUP-08 is effectively SETUP-07's show/hide half with the saves removed.
+3. **SETUP-08 ⊂ SETUP-07.** SETUP-07 asserts the same show/hide (Lock with IdP on, hidden with IdP off) on its way through the saves; SETUP-08 adds only that it never saves.
 4. **Three VPP Canva cases** in SETUP-03 differ only by platform tab.
 5. **Reset-before-assert** is implemented three different ways: API pre-delete (SETUP-01), UI `if visible → delete` (SETUP-05), POM `deleteIfCustomPresent()` (SETUP-06).
 
@@ -444,14 +520,15 @@ which is the real gap — not the DEP part.
 Overall the balance is **good** — the browser is doing the validating almost everywhere, and
 API calls are mostly *setup*, which is the right shape.
 
-- SETUP-01's two `getBootstrapMetadata` assertions are the only API validations in the area and
-  they are justified: `sha256` is the one thing the UI cannot show, and 404-after-delete is a
-  cheap, unambiguous "it's really gone".
+- SETUP-01's two `getBootstrapMetadata` assertions are justified: `sha256` is the one thing the
+  UI cannot show, and 404-after-delete is a cheap, unambiguous "it's really gone".
 - SETUP-03's heavy API use is all precondition (creating titles) plus the final delete; its
   persistence check is a UI reload. Correct.
-- The real imbalance runs the other way: **SETUP-07 has no API or reload check at all**, so its
-  "round-trip" claim rests on a toast. That is the one place an API assertion (or a reload) is
-  genuinely missing rather than optional.
+- SETUP-07 reads every save back through `getMacosSetupSettings` and reloads after the IdP saves,
+  so its round trip is checked at both layers.
+- SETUP-09 pairs each disabled control with the server's own refusal (two 422s), and reads the
+  option back through the API after each save. The API calls there are the point, not shortcuts:
+  a disabled control can't show that the server would refuse what it prevents.
 - No spec in the area asserts the activity feed, even though Fleet emits
   `added_bootstrap_package`, `deleted_bootstrap_package`, `changed_macos_setup_assistant`,
   `deleted_macos_setup_assistant`, `edited_setup_experience_software`,
@@ -460,7 +537,7 @@ API calls are mostly *setup*, which is the right shape.
 
 ### Quick wins
 
-1. Add `await page.reload()` before the post-save assertions in SETUP-07 ([`users.spec.ts:42,46,51`](../../tests/e2e/premium/controls/setup-experience/users.spec.ts)) — today they assert client state and prove nothing about persistence.
+1. ~~Add `await page.reload()` before the post-save assertions in SETUP-07~~ (done 2026-10-05, round 3 batch F: each save is read back through the API, and the IdP saves after a reload).
 2. Delete SETUP-02 ([`install-software.spec.ts:87`](../../tests/e2e/premium/controls/setup-experience/install-software.spec.ts)); it is contained in SETUP-03 and heads a serial chain, so its flake cost is 10 skipped tests per scope.
 3. Replace SETUP-05's UI self-heal branch ([`run-script.spec.ts:37`](../../tests/e2e/premium/controls/setup-experience/run-script.spec.ts)) with `deleteSetupExperienceScript(request, fleetId)`, matching SETUP-01 — removes an `if` and a swallowed `catch`.
 4. Tighten two near-tautological download assertions: SETUP-01 `expect(dl.suggestedFilename()).toBe(PKG_FILE)` (and optionally sha256 the stream); SETUP-06 assert the custom card's profile name is exactly `automatic-enrollment.dep.json` instead of `not.toHaveText('Default profile')`.
@@ -474,11 +551,12 @@ API calls are mostly *setup*, which is the right shape.
    timeouts. A worker fixture that reads `GET /config` once and fails with
    "Apple ABM not connected on this instance" would turn a half-day triage into a one-line
    message, and would double as the assertion for the missing empty-state coverage.
-2. **Cover the three untested setup-experience settings, then trim SETUP-04.** *Release device
-   manually*, *Install Fleet's agent manually* (plus its cross-step disable rule), *Require all
-   software* (macOS + Windows) and the *local account type* radios are all real DEP-behaviour
-   knobs with zero automated coverage; SETUP-04 spends 22 server-side installer downloads on a
-   generic table widget. Reallocating that budget is a straight upgrade in regression value.
+2. **Cover the untested setup-experience settings, then trim SETUP-04.** *Release device
+   manually*, *Require all software* (macOS + Windows) and the *local account type* radios are
+   all real DEP-behaviour knobs with zero automated coverage (~~*Install Fleet's agent
+   manually*~~ is SETUP-09's since 2026-10-05, cross-card gating included); SETUP-04 spends 22
+   server-side installer downloads on a generic table widget. Reallocating that budget is a
+   straight upgrade in regression value.
 3. **Extract a shared singleton-entity lifecycle helper** for bootstrap package / setup script /
    setup assistant (API pre-delete → upload → assert exact name → assert server-side metadata →
    download and verify → delete → assert gone → assert activity). It would raise SETUP-05 and
