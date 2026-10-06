@@ -1,6 +1,6 @@
 # Labels, packs, dashboard automations, free paywalls — test audit
 
-**Specs covered:** 11 files · **Entries:** 35 · **Test declarations:** 54 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
+**Specs covered:** 12 files · **Entries:** 36 · **Test declarations:** 56 (loop-generated cases counted individually — the paywall loop contributes 17 of them, the Hosts-enrolled row sweep 3; each loop is documented as a single entry, MISC-20 and MISC-23) · **Projects:** premium / free (packs and the platform-cards spec run in both)
 
 This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, reachable only from the user menu), the deprecated **osquery Packs** feature (`/packs/manage`, no nav entry), the **dashboard** itself — its platform filter, the "Hosts enrolled" chart, the historical chart card and the per-fleet switches that empty it, plus the **activity-feed automations** modal (the global `activities_webhook`) — and the free tier's **paywall-presence** sweep. Labels carry two serial CRUD lifecycles (Dynamic + Manual) plus read-only sort/permission specs; packs is one serial CRUD lifecycle shared by both tiers; the paywall spec is a table-driven loop of direct-URL visits. The four dashboard specs are read-only apart from MISC-27, which is the only test in the suite that creates and deletes a fleet of its own — a sanctioned exception, for a reason worth reading before re-running it by hand.
 
@@ -43,6 +43,7 @@ This is the leftovers area: the dedicated **Labels** page (`/labels/manage`, rea
 | MISC-33 | `premium/labels/role-access.spec.ts` | global technician can add labels and edit or delete any label | UI | ☐ |
 | MISC-34 | `premium/labels/role-access.spec.ts` | team maintainer creates, edits and deletes a label of its own | UI+API | ☐ |
 | MISC-35 | `premium/labels/role-access.spec.ts` | global observer filters the Hosts list by a label, with no Edit or Delete on its pill | UI | ☐ |
+| MISC-36 | `free/labels/role-access.spec.ts` | Free • Labels • role access › <role> is shown the label controls its role grants (2 roles) | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
@@ -1365,6 +1366,37 @@ other:
 - *Value:* the observer's half of the pill's gating; C9 #11 (`labels.spec`) uses the pill's buttons as admin.
 - *Coverage gaps:* the hosts listed aren't compared with the label's members.
 - *Efficiency / smells:* seconds. Picking a label whose name has spaces needed `LabelFilter.selectLabel` to type only the first word: a space in an open react-select menu chooses the focused option.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### MISC-36 · Free • Labels • role access › <global-maintainer | global-observer> is shown the label controls its role grants
+
+- **File:** [`playwright/tests/e2e/free/labels/role-access.spec.ts`](../../tests/e2e/free/labels/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Labels • role access"`
+- **Project:** free · **Variants (2):** `global-maintainer`, `global-observer` · **Mode:** UI · **Isolation:** read-only
+- **Source:** round 1 C9 #15 and MISC-11's cell, on free (round 3, batch E): labels have no tier gate, and free declares the same gitops label.
+
+**Flow**
+
+1. ☐ Log in → `/labels/manage`.
+   - ✅ *(UI)* **Add label** for GM, not GO.
+2. ☐ Open "Debian-based Linux hosts"'s row actions.
+   - ✅ *(UI)* **View all hosts** (the anchor); **Edit** and **Delete** for GM only.
+3. ☐ `/hosts/manage` → once the table settles, pick the label in the filter.
+   - ✅ *(UI)* the pill reads "hosts filtered by Debian-based Linux hosts"; **Edit label** and **Delete label** for GM only.
+
+**Assessment**
+- *Value:* the label gating on free, where nothing role-related about labels was asserted.
+- *Coverage gaps:* the actions aren't taken (MISC-05…07 take them as admin).
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```

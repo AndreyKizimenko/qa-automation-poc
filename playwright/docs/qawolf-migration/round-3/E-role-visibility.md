@@ -3,8 +3,10 @@
 **41 gaps → 23 built, 11 folded, 7 cut; about 45 tests, mostly one per role.** `Policies` · `Reports` ·
 `Host details` · `Hosts list` · `Labels` · `Scripts`
 
-**Status: reviewed 2026-10-05, building** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's
-learnings). Andrey's answers are in [Review decisions](#review-decisions-2026-10-05).
+**Status: built 2026-10-05** (planned 2026-10-01; reviewed and built 2026-10-05). Andrey's answers are in
+[Review decisions](#review-decisions-2026-10-05); what each spec does is in [What landed](#what-landed). Verified:
+every changed spec with dependencies on its tiers (premium 100 passed / 3 skipped, free 44 + 9 passed), once headed,
+the new premium specs `--repeat-each=3` at 3 workers (135/135), the live runs `--repeat-each=5 --workers=2`.
 
 > ## ▶ Start here
 >
@@ -467,6 +469,6 @@ the 403 (decision 12; no upload, per the write rule in §6).
 | C4 #F3, #P10, #P11, #P12, #P16, #P18, #P21, #P22, #P24, #P25, #P26, C7 #22 | `premium/reports/role-access.spec.ts`, `free/reports/role-access.spec.ts` | One test per role (same seven; free: GM, GO): the header's *Add report* / *Live report* / nothing, *Manage automations* (TA opens it and closes it), row checkboxes, an inherited row, *Edit report* and *Live report* from the list (team roles on the gitops "Collect default browser on macOS", which no static user wrote), the target picker's fleets (global roles every scope; TA VMs and Workstations, no Unassigned; `ws-*` Workstations only), Save as new's Fleet field (GM, TA yes; TM, free no; cancelled), `/reports/new`'s 403. A global observer's picker on a fleet's report enables only that fleet. Writes: `ws-maintainer`'s Save as new lands in Workstations (API); a global observer runs a report it may run, and an observer+ runs ad-hoc SQL, each live on one online simulation (both tiers for the observer) |
 | C2 #3, C2 #13, C4 #P20, C7 #16 | `premium/hosts/host-actions-role-access.spec.ts`, `free/hosts/host-actions-role-access.spec.ts` | One test per role (GM, GO, GO+, GT on an Unassigned Linux simulation; TA on an online VMs-fleet host, a real VM when one is online; free: GM, GO): the open Actions menu's Run script / Transfer / Delete, anchored on Live report; the "Select a report" modal lists a report observers can't run, and links to creating one, for every role but a plain observer. #54622 (the technician's link) skipped |
 | C1 #6, C1 #21, C7 #21, #23, #24 | `premium/hosts/cta-visibility.spec.ts`, `free/hosts/cta-visibility.spec.ts` | The label filter's *Add label* (menu opened after the table settles, absences read between two checks of its search box), and on premium a role table: GT, TA on VMs, TM and TO on Workstations beside GA, GM, GO. The gear's items per role (Activity automations for admins only); Enroll secrets opened and closed, never saved |
-| C9 #14, C9 #15 | `premium/labels/role-access.spec.ts` | `ws-maintainer` creates a Dynamic label (global, authored by it — API), gets Edit and Delete on it, edits it (API) and deletes it. The global observer filters the Hosts list by a gitops label: the pill, no Edit label / Delete label. Plus `ws-observer` (no Add label, View all hosts only) and the technician (Add label; Edit and Delete on any label) |
+| C9 #14, C9 #15 | `premium/labels/role-access.spec.ts`, `free/labels/role-access.spec.ts` | `ws-maintainer` creates a Dynamic label (global, authored by it — API), gets Edit and Delete on it, edits it (API) and deletes it. The global observer filters the Hosts list by a gitops label: the pill, no Edit label / Delete label. Plus `ws-observer` (no Add label, View all hosts only) and the technician (Add label; Edit and Delete on any label). Free twin: GM and GO on the Labels page and the pill, read-only |
 | C7 #26 | `premium/controls/scripts/role-access.spec.ts`, `free/controls/scripts/role-access.spec.ts` | GM and TM get *Add script* and a script's Edit / Download / Delete, GT the list alone; GO, GO+ and TO get the Controls 403 (free: GM, GO). No upload |
 | C3 #21, C4 #P9, #P19, #P23, #P30, round 2 #49, #50 | — | cut, as reviewed |
