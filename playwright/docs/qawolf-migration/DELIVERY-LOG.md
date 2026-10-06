@@ -114,8 +114,8 @@ relies on the client-side platform filter.
 ## Round 3 · Batch F — MDM, setup experience and Android settings
 
 10 gaps in MDM and setup settings that round 1 only rendered: saved, reloaded and read back. Reviewed and built on
-`playwright/qawolf-round3-batch-f` (2026-10-05): 8 built or folded into specs that already exist, 2 cut (C7 #28's
-IdP tooltips, C9 #3's Android web apps). Detail and Andrey's decisions in
+`playwright/qawolf-round3-batch-f` (2026-10-05) and shipped with batch E in
+[PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89): 8 built or folded into specs that already exist, 2 cut (C7 #28's IdP tooltips, C9 #3's Android web apps). Detail and Andrey's decisions in
 [round-3/F-mdm-setup-android.md](round-3/F-mdm-setup-android.md#review-decisions-2026-10-05-andreys-answers-in-decisions).
 
 **What the review changed.** The two settings that would have disabled other specs (manual fleetd install) or needed

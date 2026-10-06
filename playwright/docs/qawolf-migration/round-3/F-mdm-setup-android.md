@@ -4,7 +4,7 @@
 `MDM settings` · `Automatic enrollment` · `Android`
 
 **Status: built** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings; reviewed and
-built 2026-10-05: 8 built or folded, 2 cut, see *Review decisions* and *What landed*).
+built 2026-10-05: 8 built or folded, 2 cut, see *Review decisions* and *What landed*; [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) with batch E).
 
 > ## ▶ Start here
 >
@@ -286,7 +286,7 @@ Most rows are premium-only, but not all, and the paywall list misses one page:
 
 ## What landed
 
-Built 2026-10-05 on `playwright/qawolf-round3-batch-f`, shipped with batch E in one PR.
+Built 2026-10-05 on `playwright/qawolf-round3-batch-f`, shipped with batch E in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89).
 
 | Gap | Landed in | What it asserts |
 |---|---|---|
@@ -315,3 +315,6 @@ from our config, and isn't filed.
 setup and teardown), `premium-exclusive` macos-updates (11/11), and free apple-mdm + paywalls (29 passed, 8
 premium-only cleanup steps skipped). The premium specs also ran once headed. `--repeat-each=3` passed on the two
 throwaway-fleet tests (3 workers) and on users / mdm / setup-assistant (1 worker, since they write shared config).
+The combined E + F branch run, [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242),
+was green: premium 651 passed, 0 failed, 4 flaky (none an E or F test: an FMA download 504 and a slow Users list),
+free 334 passed, 0 flaky.
