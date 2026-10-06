@@ -9,7 +9,9 @@
  *    back after a reload and through the API, mark the macOS tab configured, and
  *    clear again with "No updates enforced". (QA Wolf's flow never chose "Custom
  *    version" — it passed only because its own leftover setting kept the fleet in
- *    custom mode.)
+ *    custom mode.) While Workstations holds the setting, Unassigned's (the global
+ *    config) and the QA fleet's read back exactly as they did before the save: an
+ *    OS update target belongs to the fleet it's saved on.
  *  - the form **refuses** a missing or malformed version or deadline, saying why
  *    where Fleet says it — in place of the field's label — and saves nothing;
  *  - "Current versions" → **View all hosts** opens the hosts list filtered to that
@@ -39,6 +41,7 @@ import { test, expect } from '@fixtures';
 import {
   appleListedMacosVersions,
   clearFleetOsUpdates,
+  getAppConfig,
   getFleetOsUpdates,
   listHostsRunningOs,
 } from '@helpers/api';
@@ -57,14 +60,20 @@ test.describe('Premium • Controls • OS updates — macOS', () => {
     controls,
     osUpdates,
     workstationsFleetId,
+    qaFleetId,
     request,
     page,
   }) => {
     expect((await getFleetOsUpdates(request, workstationsFleetId)).macos, 'Workstations should enforce nothing to begin with').toEqual(
       NOTHING_ENFORCED,
     );
+    // Reads only: the other scopes are compared, never written.
+    const unassignedBefore = (await getAppConfig(request)).mdm?.macos_updates as { minimum_version?: string } | undefined;
+    const qaBefore = (await getFleetOsUpdates(request, qaFleetId)).macos;
     const [version] = await appleListedMacosVersions(request);
     expect(version, 'Apple lists no macOS versions').toBeTruthy();
+    // Neither already holds the version saved here, so a save that reached one would show.
+    expect([unassignedBefore?.minimum_version, qaBefore.minimumVersion]).not.toContain(version);
     const deadline = futureDeadline();
 
     try {
@@ -87,6 +96,8 @@ test.describe('Premium • Controls • OS updates — macOS', () => {
         deadlineDays: null,
       });
       await expect(osUpdates.platformConfigured('macOS')).toBeVisible();
+      expect((await getAppConfig(request)).mdm?.macos_updates, "Unassigned's macOS updates").toEqual(unassignedBefore);
+      expect((await getFleetOsUpdates(request, qaFleetId)).macos, "the QA fleet's macOS updates").toEqual(qaBefore);
 
       // It reads back after a reload.
       await page.reload();

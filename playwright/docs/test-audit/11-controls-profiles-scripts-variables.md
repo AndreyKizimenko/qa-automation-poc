@@ -1,9 +1,9 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 12 files · **Test declarations:** 40 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
+**Specs covered:** 12 files · **Test declarations:** 41 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
 
-Covers **Controls → OS settings** (custom configuration profiles, global disk-encryption
-enforcement), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
+Covers **Controls → OS settings** (custom configuration profiles, disk encryption — global, and a
+fleet's BitLocker PIN), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
 Controls → Scripts → Batch progress), the organization-wide **Script execution** switch, and
 **Controls → Variables → Global variables**. Every lifecycle spec follows the suite's serial-CRUD convention: one
 `test.describe.configure({ mode: 'serial' })` per (scope × OS) case, one sub-test per
@@ -18,7 +18,7 @@ premium scripts ×6 (2 scopes × macOS/Linux/Windows), free profiles ×2, free s
 shared custom-variables tests ×2 (once per tier). The 23 lifecycle-era entries (CTL-01…23) expand to
 **76 test executions** per full premium+free run; CTL-24/25 add 2 (premium only), CTL-26 adds 2 (once
 per exclusive project), CTL-27…34 add 8 (one run each), CTL-35/36 add 4 (both tiers), CTL-37…39 add 6 (both
-tiers) and CTL-40 adds 1 — **99** in all.
+tiers), CTL-40 adds 1 and CTL-41 adds 1 — **100** in all.
 
 CTL-24…26 are **not** serial-CRUD specs: each is a single standalone flow against real hosts (CTL-24,
 CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-variables.spec.ts`
@@ -33,7 +33,7 @@ CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-vari
 | CTL-03 | `premium/controls/os-settings/configuration-profiles.spec.ts` | configuration profiles (scope) — OS › delete | UI+API | ☐ |
 | CTL-04 | `premium/controls/os-settings/configuration-profiles.spec.ts` | configuration profiles (scope) — OS › activity feed shows upload → delete | UI | ☐ |
 | CTL-05 | `premium/controls/os-settings/configuration-profiles.spec.ts` | upload validation › rejects a signed .mobileconfig | UI | ☐ |
-| CTL-06 | `premium/controls/os-settings/disk-encryption.spec.ts` | toggling disk-encryption enforcement persists | UI+API | ☐ |
+| CTL-06 | `premium/controls/os-settings/disk-encryption.spec.ts` | the sidebar lands on the macOS tab and its enforcement toggle persists | UI | ☐ |
 | CTL-07 | `premium/controls/scripts/library.spec.ts` | Scripts library lifecycle (scope) — OS › upload | UI+API | ☐ |
 | CTL-08 | `premium/controls/scripts/library.spec.ts` | Scripts library lifecycle (scope) — OS › download matches source | UI | ☐ |
 | CTL-09 | `premium/controls/scripts/library.spec.ts` | Scripts library lifecycle (scope) — OS › edit | UI+API | ☐ |
@@ -68,6 +68,7 @@ CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-vari
 | CTL-38 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | a script scheduled from the Hosts list is stored for the UTC time typed, and starts then *(premium + free)* | UI+API | ☐ |
 | CTL-39 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | editing a script mid-run cancels the runs not yet reported *(premium + free)* | UI+API | ☐ |
 | CTL-40 | `premium/controls/scripts/batch-run.spec.ts` | Batch progress › a fleet with no batch runs shows each progress tab empty | UI | ☐ |
+| CTL-41 | `premium/controls/os-settings/disk-encryption.spec.ts` | BitLocker PIN (throwaway fleet) › a required BitLocker PIN saves with enforcement, and unticking enforcement clears it | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -270,35 +271,36 @@ other:
 
 ---
 
-### CTL-06 · Premium • Controls • disk encryption › toggling disk-encryption enforcement persists
+### CTL-06 · Premium • Controls • disk encryption › the sidebar lands on the macOS tab and its enforcement toggle persists
 
 - **File:** [`playwright/tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts)
-- **Grep:** `npx playwright test --project=premium -g "toggling disk-encryption enforcement persists"`
-- **Project:** premium · **Scopes:** global config only (no team dropdown involved)
-- **Mode:** UI+API · **Isolation:** standalone; `beforeEach` snapshots and `afterEach` restores the original value via the API, so it runs even on failure
+- **Grep:** `npx playwright test --project=premium disk-encryption -g "enforcement toggle persists"`
+- **Project:** premium · **Scope:** Unassigned, picked in the fleet dropdown after every navigation (the page restores the last-used fleet from localStorage). On Unassigned the disk-encryption settings are the global config.
+- **Mode:** UI · **Isolation:** first of three tests in a `mode: 'serial'` describe. The other two — "the Linux tab exposes key escrow only, and it persists" and "the Windows BitLocker PIN toggle unlocks only once enforcement is on" — have no entries in this audit yet. `beforeAll` snapshots every platform's setting (`getGlobalDiskEncryption`: macOS enforcement and escrow, Windows enforcement and PIN, Linux escrow) and `afterAll` writes them all back (`setGlobalDiskEncryption` → `POST /disk_encryption`), which runs even on failure. The restore is per-platform because the config's flat `mdm.enable_disk_encryption` is the AND of every platform's setting, and a write to it fans out to all of them.
 - **Preconditions:** none — config-only, no host required
-- **Data created:** none. Mutates `config.mdm.enable_disk_encryption` globally for the duration of the test
+- **Data created:** none. Flips Unassigned's macOS enforcement for the length of the describe; premium's Unassigned holds no real VM, so the FileVault payload reaches only simulations.
 
 **Flow**
 
-1. ☐ *(API precondition)* `GET /config` → remember `mdm.enable_disk_encryption` (`getAppConfig`).
-2. ☐ Open `/controls/os-settings/disk-encryption` **via URL** (no navbar click-through).
-   - ✅ *(UI)* The **Turn on disk encryption** checkbox is visible.
-3. ☐ Flip the checkbox to the opposite of the current value (`check()` or `uncheck()` depending on state), then click **Save**.
-   - ✅ *(UI)* A `role=alert` containing *"Successfully updated disk encryption enforcement."*
-4. ☐ Reload `/controls/os-settings/disk-encryption`.
-   - ✅ *(UI)* The checkbox is checked/unchecked to match the flipped value (`toBeChecked({ checked: !original })`).
-5. ☐ *(API teardown)* `PATCH /config` restores the original value (`setGlobalDiskEncryption`).
+1. ☐ *(API, `beforeAll`)* Snapshot the global disk-encryption settings.
+2. ☐ Dashboard → **Controls** → **OS settings** tab → **Disk encryption** in the sidebar → **Unassigned** in the fleet dropdown.
+   - ✅ *(UI)* URL `/controls/os-settings/disk-encryption/macos` and the **macOS** tab is `aria-selected` — the bare path resolves to macOS before the form renders.
+   - ✅ *(UI)* **Enable disk encryption** is visible.
+3. ☐ Set **Enable disk encryption** to the opposite of the snapshot (`setChecked`) → **Save**.
+   - ✅ *(UI)* Success toast `Successfully updated disk encryption settings.` (older toasts cleared first) — `DiskEncryptionPage.save()`.
+4. ☐ Open `/controls/os-settings/disk-encryption?fleet_id=0` by URL (lands on macOS again); reselect **Unassigned**.
+   - ✅ *(UI)* **Enable disk encryption** reads the flipped value.
+5. ☐ Click the **Linux** tab.
+   - ✅ *(UI)* URL `/linux`, tab selected; **Escrow recovery key with Fleet** still reads the snapshot's value — saving macOS left Linux alone.
+6. ☐ *(API, `afterAll`)* Restore every platform's setting.
 
 **Assessment**
-- *Value:* Catches a broken save/persist path on the disk-encryption card — the toggle silently not persisting is a plausible regression.
-- *Coverage gaps:* Large. No **team-scoped** disk-encryption toggle (premium's main use of the feature). No activity-feed assertion (`enabled_disk_encryption` / `disabled_disk_encryption`). No assertion of the aggregate status table (Verified / Action required / Enforcing / Removing / Failed) or of the escrowed-key flow (`View key` on a host). No host-level effect — impossible on simulated hosts, but a `liveMacosHost`-based check is theoretically available and unused. Free tier is paywall-only (`free/paywalls.spec.ts` asserts the Premium banner on `/controls/os-settings`, `/disk-encryption`).
+- *Value:* catches the macOS save not persisting, and a save on one tab writing another tab's setting — the per-platform split is what the step-5 check protects. Entering from the sidebar also pins the bare path's redirect to macOS.
+- *Coverage gaps:* the stored value is read only through the UI (no API read after the save). macOS's own **Escrow** checkbox is never touched. A fleet-scoped save exists only for Windows (CTL-41, on a throwaway fleet). No activity-feed assertion (`enabled_disk_encryption` / `disabled_disk_encryption`). No assertion of the aggregate status table (Verified / Action required / Enforcing / Removing / Failed) or of the escrowed-key flow (`View key` on a host). No host-level effect — impossible on simulated hosts. Free tier is paywall-only (`free/paywalls.spec.ts` asserts the Premium banner on `/controls/os-settings` and `/disk-encryption`).
 - *Redundancy:* none.
 - *Efficiency / smells:*
-  - The only spec in this area with **no page object** — raw `page.getByRole(...)` locators inline ([`disk-encryption.spec.ts:26,34,36`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts)). Should get a `DiskEncryptionPage` (or move onto `OsSettingsPage`).
-  - Uses a raw `getByRole('alert')` filter instead of the shared `Toast` component, so it doesn't distinguish success from error styling.
-  - Direct-URL entry contradicts the e2e convention (`OsSettingsPage.diskEncryptionLink` exists and is unused by any spec).
-  - The `if (original) uncheck else check` branch means the test exercises a different direction depending on instance state — on/off are not both covered in a single run.
+  - The direction depends on instance state (`!original.macosEnabled`), so one run covers turning enforcement on *or* off, not both.
+  - The serial describe makes the three tests share the snapshot; a failure here skips the Linux and Windows tests.
 
 **Notes (Andrey)**
 ```
@@ -1121,25 +1123,29 @@ other:
 - **Grep:** `npx playwright test --project=premium-exclusive macos-updates --no-deps`
 - **Project:** premium-exclusive (one worker, after the main project — it shares Workstations' OS update settings with CTL-31/32) · **Scope:** **Workstations**, which holds no hosts
 - **Mode:** UI+API · **Isolation:** `finally` clears Workstations' OS updates; so does the Workstations wipe in `setup/cleanup.steps.ts`
-- **Preconditions:** Workstations enforces nothing (asserted); Apple's software lookup feed is reachable (`appleListedMacosVersions` — the version is the oldest it lists, which Fleet accepts)
+- **Preconditions:** Workstations enforces nothing (asserted); Apple's software lookup feed is reachable (`appleListedMacosVersions` — the version is the oldest it lists, which Fleet accepts); neither Unassigned nor the QA fleet already holds that version (asserted; `qaFleetId` worker fixture)
+- **Source (the other-scopes check):** QA Wolf `settings-macos-updates-settings-setup-options-only-apply-at-team-level` (round 1 C7 #17; round 3, batch F)
 
 **Flow**
 
-1. ☐ Dashboard → **Controls** → **OS updates** → **Workstations** → **macOS** tab.
+1. ☐ *(API)* Snapshot Unassigned's macOS updates (`GET /config` → `mdm.macos_updates`) and the QA fleet's (`getFleetOsUpdates(qaFleetId)` → `GET /teams/:id`). Reads only: neither scope is written.
+   - ✅ *(API)* Neither holds the version this test is about to save, so a save that leaked into one would show.
+2. ☐ Dashboard → **Controls** → **OS updates** → **Workstations** → **macOS** tab.
    - ✅ *(UI)* Target reads **No updates enforced**; no Minimum version field.
-2. ☐ Target → **Custom version** → Minimum version (an Apple-listed version) → Deadline (60 days out, `YYYY-MM-DD`) → **Save**.
+3. ☐ Target → **Custom version** → Minimum version (an Apple-listed version) → Deadline (60 days out, `YYYY-MM-DD`) → **Save**.
    - ✅ *(UI)* *"Successfully updated."*; the tab reads **macOS** with a check.
    - ✅ *(API)* `mdm.macos_updates` holds that version and deadline.
-3. ☐ Reload.
+   - ✅ *(API)* Unassigned's `mdm.macos_updates` and the QA fleet's macOS updates equal their snapshots — read while Workstations still holds the setting (after the clear, the comparison would pass whatever Fleet did).
+4. ☐ Reload.
    - ✅ *(UI)* **Custom version**, and both values, read back.
    - ✅ *(UI)* End user experience: the heading, a **Learn more** link to `https://fleetdm.com/learn-more-about/os-updates` opening in a new tab, and the preview image.
-4. ☐ Target → **No updates enforced** → **Save**.
+5. ☐ Target → **No updates enforced** → **Save**.
    - ✅ *(UI)* *"Successfully updated."*; the check leaves the tab. *(API)* nothing enforced.
 
 **Assessment**
-- *Value:* Medium-high. QA Wolf's flow never chose "Custom version" (it passed on its own leftover); this sets and clears it, and replaces their preview screenshot with the link and image.
-- *Coverage gaps:* "Latest version" / Days after release, and iOS / iPadOS.
-- *Efficiency / smells:* seconds. Reads an external feed (Apple's) for a version Fleet will accept.
+- *Value:* Medium-high. QA Wolf's flow never chose "Custom version" (it passed on its own leftover); this sets and clears it, and replaces their preview screenshot with the link and image. It also pins that an OS update target belongs to the fleet it's saved on: two other scopes are compared while the setting is live, against a version neither held, so a save that also reached the global config or the QA fleet fails.
+- *Coverage gaps:* "Latest version" / Days after release, and iOS / iPadOS. The scope check reads two other scopes (Unassigned and QA), not every fleet, and only macOS; it's API-only, so neither scope's OS updates page is looked at.
+- *Efficiency / smells:* seconds. Reads an external feed (Apple's) for a version Fleet will accept. The two snapshots are plain reads of shared scopes, so they can't disturb a neighbour.
 
 **Notes (Andrey)**
 ```
@@ -1569,6 +1575,50 @@ steps to cut:
 other:
 ```
 
+---
+
+### CTL-41 · Premium • Controls • disk encryption — BitLocker PIN (throwaway fleet) › a required BitLocker PIN saves with enforcement, and unticking enforcement clears it
+
+- **File:** [`playwright/tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts)
+- **Grep:** `npx playwright test --project=premium disk-encryption -g "BitLocker PIN saves with enforcement"`
+- **Project:** premium · **Scope:** a throwaway fleet, `pw-bitlocker-<nonce>`, opened **by URL** (`diskEncryption.goto({ fleetId, platform: 'windows' })`) rather than picked in the dropdown: its name is per-run (see `TeamDropdown.selectByLabel`)
+- **Mode:** UI+API · **Isolation:** its own describe, outside CTL-06's serial one: on Unassigned the PIN would save Windows enforcement into the same global setting those tests snapshot and toggle. The fleet holds no host and needs no restore. The test's last step deletes it, and an `afterEach` deletes it again by name (tolerating a 404); the cleanup sweep of `pw-*` fleets removes one a killed run left.
+- **Source:** QA Wolf `bitlocker-require-bitlocker-pin-is-now-available-under-advanced-options-on-the-disk-encryption-tab-can-be-toggled-on-and-off` (round 1 C9 #6; round 3, batch F). Its copy ("Turn on disk encryption", "Advanced options") predates 4.93's per-platform tabs.
+- **Preconditions (API):** `createFleet`
+- **Data created:** the fleet, deleted by the test
+
+**Flow**
+
+1. ☐ *(API)* Create the fleet. Open `/controls/os-settings/disk-encryption/windows?fleet_id=<id>`.
+   - ✅ *(UI)* The **Disk encryption** heading; URL `/windows` with the **Windows** tab selected; the fleet dropdown reads the fleet's name.
+2. ☐ Tick **Enable disk encryption**, then **Require BitLocker PIN** → **Save**.
+   - ✅ *(UI)* Success toast `Successfully updated disk encryption settings.`
+   - ✅ *(API)* `GET /teams/:id` → `mdm.windows_settings` has `enable_disk_encryption: true` and `require_bitlocker_pin: true` (`getFleetWindowsDiskEncryption`).
+3. ☐ Reload the page.
+   - ✅ *(UI)* Still the Windows tab; both checkboxes are checked.
+4. ☐ Untick **Enable disk encryption**.
+   - ✅ *(UI)* **Require BitLocker PIN** unticks itself and is disabled — Fleet refuses a PIN without enforcement, so the form clears and locks it.
+5. ☐ Click **Save**.
+   - ✅ *(UI)* Success toast (older toasts cleared first, so it's this save's).
+   - ✅ *(API)* Both are `false` — the PIN is stored off with enforcement, not left behind.
+6. ☐ Reload the page.
+   - ✅ *(UI)* Both checkboxes are unchecked.
+7. ☐ *(API)* Delete the fleet.
+
+**Assessment**
+- *Value:* the suite's only save of the BitLocker PIN, and its only fleet-scoped disk-encryption save: both settings read back through the API and after a reload, on and off. Step 4 pins at the form the rule the server enforces (no PIN without enforcement), and step 5 that the PIN is cleared in storage too.
+- *Coverage gaps:* the server's own refusal of a PIN without enforcement isn't probed through the API. Enforcement saved on with the PIN off — unticking the PIN alone — is never saved. The fleet's macOS and Linux tabs aren't touched. No activity assertion. What a Windows host does with a required PIN is manual-only, and a hostless fleet sends nothing.
+- *Redundancy:* steps 1 and 4 contain the same spec's "the Windows BitLocker PIN toggle unlocks only once enforcement is on" (on Unassigned, never saved; no entry here yet), which now adds little beyond running on Unassigned.
+- *Efficiency / smells:* seconds; one fleet per run, shown in every fleet picker while it exists. Entering by URL is the per-run-fleet exception, not a shortcut.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ## Area observations
 
 **Coverage map**
@@ -1578,7 +1628,8 @@ other:
 | Custom configuration profile — upload / list / download / delete (.mobileconfig, .xml) | CTL-01…04, CTL-15…18 | No `.json` (Apple DDM / Android) profile; no label-scoped (include/exclude) profiles; platform tag & metadata columns unasserted; duplicate PayloadIdentifier conflict |
 | Profile upload rejection (signed) | CTL-05 | Malformed XML, wrong extension, oversize, invalid SyncML — all untested; no free mirror |
 | Profile **delivery status to hosts** (Verified / Verifying / Pending / Failed), host-details OS-settings section, resend/retry | — | **Entirely untested.** `OsSettingsPage.statusLinks` is only used by `tests/loadtest/controls.spec.ts`. Simulated hosts aren't MDM-enrolled, so this needs `liveMacosHost` |
-| Disk encryption — global toggle + persistence | CTL-06 | Team-scoped toggle, status aggregate table, key escrow / **View key**, activity feed, host-level enforcement |
+| Disk encryption — global toggle + persistence | CTL-06 (macOS enforcement, Unassigned; Linux untouched by it) — the spec's Linux-escrow and Windows PIN-gate tests have no entries yet | macOS escrow; an API read of the global save; status aggregate table, **View key**, activity feed, host-level enforcement |
+| Disk encryption — a fleet's BitLocker PIN | CTL-41 (throwaway fleet: enforcement + PIN saved, read back through the API and after a reload, cleared with enforcement) | the server's refusal of a PIN without enforcement; enforcement on with the PIN off; a fleet's macOS / Linux tabs |
 | Scripts library — upload / list / preview / download / edit / delete | CTL-07…11, CTL-19…23 | Platform tag unasserted; no duplicate-name, empty-file, or unusual-extension cases |
 | Script upload rejection (>500,000 chars) | CTL-12 | Exact-limit boundary (should pass) untested; no free mirror |
 | **Running a script on a host** + output / exit code | [HOST-19…22](02-hosts-shared-and-free.md) (area 02 — effect read back by a report, non-zero exit, timeout, four interpreters) | re-run untested; Pending/Upcoming never observed; the `*-create-marker` / `*-delete-marker` fixtures are still unreferenced (the specs build content at run time) |
@@ -1586,7 +1637,7 @@ other:
 | Organization-wide **Script execution** switch | CTL-26 (exclusive project) | queued scripts held while disabled (the reason it's exclusive) never observed; batch / policy-automation / setup-experience run paths not checked while disabled |
 | Custom variables — add / list / delete + name validation | CTL-13, CTL-14 (both tiers) | No value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables |
 | Custom variables in scripts — an unknown `$FLEET_SECRET_*` refused on upload, a referenced variable refused deletion | CTL-35, CTL-36 (both tiers; library scripts on Unassigned) | **Profiles** referencing a variable (both checks cover them); installer and setup-experience scripts; a script on a fleet, whose message names it; the scope wording in the delete refusal ([fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621)); the substituted value reaching a host |
-| OS updates (minimum version enforcement) | — | No functional e2e at all — `OsUpdatesPage` is used only by the loadtest spec and the free paywall list |
+| OS updates (minimum version enforcement) | CTL-28…30 (macOS on Workstations: save / persist / clear, the save staying on its fleet, validation, View all hosts), CTL-31/32 (refused beside a custom update profile, macOS and Windows) — all `premium-exclusive` | "Latest version" / Days after release; iOS / iPadOS; Windows beyond the conflict check |
 | Certificates / Passwords (OS settings sub-pages) | — | No functional e2e — `CertificatesPage` only in the loadtest spec |
 
 **Duplication**
@@ -1599,7 +1650,7 @@ other:
 
 **UI-vs-API balance**
 
-Balance is healthy — no test in this area validates purely through the API. The API is used in three legitimate roles: (a) activity-feed contract checks via `assertActivity`, which the dashboard tests then re-verify in rendered form; (b) config snapshot/restore in CTL-06 (`getAppConfig`/`setGlobalDiskEncryption` in `beforeEach`/`afterEach`) — exactly the right use, keeping the instance clean even on failure; (c) seeding and cleanup in the custom-variables tests — CTL-35/36 create their variable and script through the API (`createVariable`, `uploadScript`) so the browser is spent on the refusal under test, and the `afterEach` deletes the test's script before its variable (`deleteVariablesMatching` ignores Fleet's 409 for a variable still in use). The one substantive problem is precision, not placement: every `assertActivity` predicate in the profile and script specs matches on **name only** with no fleet/team discriminator, so the concurrently-running Unassigned and Workstations describes (separate describes → separate workers) can satisfy each other's assertion. Also note nothing verifies server state directly after a UI mutation (no `GET /configuration_profiles` or `GET /scripts` confirmation) — the UI list is the only source of truth, which is the correct default here.
+Balance is healthy — no test in this area validates purely through the API. The API is used in three legitimate roles: (a) activity-feed contract checks via `assertActivity`, which the dashboard tests then re-verify in rendered form; (b) config snapshot/restore in CTL-06 (`getGlobalDiskEncryption`/`setGlobalDiskEncryption` in `beforeAll`/`afterAll`, every platform) — exactly the right use, keeping the instance clean even on failure; CTL-41 needs none, on a throwaway fleet, and reads each save back through the API; (c) seeding and cleanup in the custom-variables tests — CTL-35/36 create their variable and script through the API (`createVariable`, `uploadScript`) so the browser is spent on the refusal under test, and the `afterEach` deletes the test's script before its variable (`deleteVariablesMatching` ignores Fleet's 409 for a variable still in use). The one substantive problem is precision, not placement: every `assertActivity` predicate in the profile and script specs matches on **name only** with no fleet/team discriminator, so the concurrently-running Unassigned and Workstations describes (separate describes → separate workers) can satisfy each other's assertion. Also note nothing verifies server state directly after a UI mutation (no `GET /configuration_profiles` or `GET /scripts` confirmation) — the UI list is the only source of truth, which is the correct default here.
 
 **Quick wins**
 
@@ -1607,7 +1658,7 @@ Balance is healthy — no test in this area validates purely through the API. Th
 2. Add the missing success-toast assertion to `ScriptsLibraryPage.deleteScript` so it matches `ConfigurationProfilesPage.deleteProfile` — [`ScriptsLibraryPage.ts:184`](../../pages/controls/ScriptsLibraryPage.ts).
 3. ~~Make the edit assertion equality rather than `toContain`, and stop retyping the whole file~~ (done 2026-10-03: the edit is written through `setAceValue`, and the read-back compares the whole script).
 4. Build the oversize script in memory via `FileUploader.setFile({name,mimeType,buffer})` instead of writing ~500 KB to `os.tmpdir()` and leaving it — [`library.spec.ts:135`](../../tests/e2e/premium/controls/scripts/library.spec.ts).
-5. Give disk encryption a page object and click-through entry (`OsSettingsPage.diskEncryptionLink` already exists and is unused), and use the shared `Toast` component instead of a raw `getByRole('alert')` — [`disk-encryption.spec.ts`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts).
+5. ~~Give disk encryption a page object and click-through entry, and use the shared `Toast` component instead of a raw `getByRole('alert')`~~ (done 2026-09-02: `DiskEncryptionPage`, entered from the OS settings sidebar, saving through `Toast.expectSuccess`) — [`disk-encryption.spec.ts`](../../tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts).
 
 **Bigger bets**
 
