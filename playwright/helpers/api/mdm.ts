@@ -1,4 +1,6 @@
-import { APIRequestContext, expect } from '@playwright/test';
+import { APIRequestContext, APIResponse, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 import { apiUrl, authHeaders } from './core';
 
 // ── Bootstrap package ────────────────────────────────────────────────────────
@@ -39,7 +41,96 @@ export async function deleteBootstrapPackage(
   await expect(res, `Failed to delete bootstrap for fleet ${fleetId}`).toBeOK();
 }
 
+/**
+ * Uploads a bootstrap package to a fleet, as the Bootstrap package card's
+ * uploader does. For a spec whose subject is what the package unlocks, not the
+ * upload itself (`bootstrap-package.spec.ts` drives that through the UI).
+ */
+export async function uploadBootstrapPackage(
+  request: APIRequestContext,
+  fleetId: number,
+  filePath: string,
+): Promise<void> {
+  const res = await request.post(apiUrl('bootstrap'), {
+    headers: authHeaders(),
+    multipart: {
+      package: {
+        name: path.basename(filePath),
+        mimeType: 'application/octet-stream',
+        buffer: fs.readFileSync(filePath),
+      },
+      fleet_id: String(fleetId),
+    },
+  });
+  await expect(res, `Failed to upload a bootstrap package to fleet ${fleetId}`).toBeOK();
+}
+
 // ── Setup Experience ─────────────────────────────────────────────────────────
+
+/** The `macos_setup` settings the Users and Bootstrap package cards save. */
+export interface MacosSetupSettings {
+  endUserAuthentication: boolean;
+  lockEndUserInfo: boolean;
+  /** "Create hidden admin" (`enable_managed_local_account`). */
+  managedLocalAccount: boolean;
+  manualAgentInstall: boolean;
+}
+
+/**
+ * A fleet's stored `mdm.macos_setup` settings: from `/config` for `fleetId` 0
+ * (Unassigned), from `/teams/:id` otherwise. What a setup-experience save is
+ * read back against.
+ */
+export async function getMacosSetupSettings(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<MacosSetupSettings> {
+  const res = await request.get(apiUrl(fleetId === 0 ? 'config' : `teams/${fleetId}`), {
+    headers: authHeaders(),
+  });
+  await expect(res, `Failed to read fleet ${fleetId}'s setup experience`).toBeOK();
+  const body = await res.json();
+  const setup = (fleetId === 0 ? body.mdm : body.team?.mdm)?.macos_setup ?? {};
+  return {
+    endUserAuthentication: setup.enable_end_user_authentication ?? false,
+    lockEndUserInfo: setup.lock_end_user_info ?? false,
+    managedLocalAccount: setup.enable_managed_local_account ?? false,
+    manualAgentInstall: setup.manual_agent_install ?? false,
+  };
+}
+
+/**
+ * `PATCH /setup_experience` for one fleet (`fleetId` 0 is Unassigned) — the
+ * endpoint every setup-experience card saves through, and the only one that
+ * reads `macos_manual_agent_install`. Returns the response, so a spec can assert
+ * a refusal as well as a write.
+ */
+export async function patchSetupExperience(
+  request: APIRequestContext,
+  fleetId: number,
+  settings: Record<string, unknown>,
+): Promise<APIResponse> {
+  return request.patch(apiUrl('setup_experience'), {
+    headers: authHeaders(),
+    data: { fleet_id: fleetId, ...settings },
+  });
+}
+
+/**
+ * Turns "Install Fleet's agent (fleetd) manually" off for a fleet. While it is
+ * on, the fleet's Install software (macOS) and Run script cards are disabled,
+ * and deleting the bootstrap package doesn't clear it. Turning it off never
+ * needs a package. Silent on 402 so the shared cleanup pipeline can call it on
+ * both tiers.
+ */
+export async function resetManualAgentInstall(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  const res = await patchSetupExperience(request, fleetId, { macos_manual_agent_install: false });
+  if (res.status() === 402) return;
+  if (!res.ok()) console.warn(`[manual agent install reset] fleet ${fleetId}: HTTP ${res.status()}`);
+}
 
 /**
  * Delete the setup-experience run-script for a fleet, if one exists.
@@ -172,12 +263,29 @@ export async function clearSetupExperienceSoftware(
 }
 
 /**
+ * Replaces a fleet's setup-experience software selection for one platform, as
+ * the Install software card's Save does. Returns the response, so a spec can
+ * assert a refusal as well as a write.
+ */
+export async function setSetupExperienceSoftware(
+  request: APIRequestContext,
+  fleetId: number,
+  platform: 'macos' | 'windows' | 'linux' | 'ios' | 'ipados' | 'android',
+  titleIds: number[],
+): Promise<APIResponse> {
+  return request.put(apiUrl('setup_experience/software'), {
+    headers: authHeaders(),
+    data: { software_title_ids: titleIds, fleet_id: fleetId, platform },
+  });
+}
+
+/**
  * One-shot reset of every setup-experience field a test can touch:
  * bootstrap package, setup-assistant DEP profile, setup-experience script,
- * the install-software selection, and the macos_setup toggles (EUA +
- * managed-local-account). Idempotent and safe to call when no state is
- * present. Intended for cleanup-setup / cleanup-teardown only — test bodies
- * still use the individual helpers for clearer per-test cleanup.
+ * the install-software selection, the macos_setup toggles (EUA +
+ * managed-local-account) and manual agent install. Idempotent and safe to call
+ * when no state is present. Intended for cleanup-setup / cleanup-teardown only —
+ * test bodies still use the individual helpers for clearer per-test cleanup.
  */
 export async function resetSetupExperience(
   request: APIRequestContext,
@@ -189,7 +297,23 @@ export async function resetSetupExperience(
     deleteSetupExperienceScript(request, fleetId),
     clearSetupExperienceSoftware(request, fleetId),
     resetMacosSetupToggles(request, fleetId),
+    resetManualAgentInstall(request, fleetId),
   ]);
+}
+
+/** The Apple Push Notification service certificate Fleet's Apple MDM runs on (`GET /mdm/apple`). */
+export interface AppleApnsInfo {
+  commonName: string;
+  /** ISO timestamp. */
+  renewDate: string;
+}
+
+/** Throws when Apple MDM isn't on. */
+export async function getAppleApnsInfo(request: APIRequestContext): Promise<AppleApnsInfo> {
+  const res = await request.get(apiUrl('mdm/apple'), { headers: authHeaders() });
+  await expect(res, 'Failed to read the Apple MDM push certificate').toBeOK();
+  const body = await res.json();
+  return { commonName: body.common_name, renewDate: body.renew_date };
 }
 
 // ── Configuration profiles ───────────────────────────────────────────────────

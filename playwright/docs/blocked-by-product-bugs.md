@@ -53,12 +53,12 @@ test — the flow keeps its coverage and only the console assertion is relaxed.
 Entries live in `DEFAULT_IGNORED_CONSOLE_ERRORS` in
 [helpers/console.ts](../helpers/console.ts) and follow the same rules as above:
 a filed issue, a `TODO(fleetdm/fleet#NNNNN)` at the entry, and a concrete
-unblock condition.
+unblock condition. An uncaught page exception is ignored the same way, in
+`DEFAULT_IGNORED_PAGE_ERRORS` in the same file.
 
 | Ignored substring | Affected flows | Scope | Fleet issue | Discovered | Unblock condition |
 |---|---|---|---|---|---|
-
-_None active._
+| `worker-json.js` (uncaught page exception) | a Play Store app's Actions → Edit configuration — [library.spec.ts](../tests/e2e/premium/software/library.spec.ts) (Android *edit configuration*) | premium; Unassigned and Workstations | [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) | 2026-10-05 (v4.93.0-rc; in 4.92.3) | Fleet serves `/assets/worker-json.js` or stops requesting it (`useWorker: false`): opening the modal throws no `importScripts` error. Then drop the entry. The configuration's save and read-back are asserted regardless |
 
 ### Notes
 

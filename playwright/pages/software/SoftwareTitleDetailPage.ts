@@ -6,6 +6,7 @@ import { SoftwareDeploySelector } from '../components/SoftwareDeploySelector';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
 import { EditSoftwareModal } from '../components/EditSoftwareModal';
 import { EditAppearanceModal } from '../components/EditAppearanceModal';
+import { EditConfigurationModal } from '../components/EditConfigurationModal';
 import { Toast } from '../components/Toast';
 import { VersionsModal } from '../components/VersionsModal';
 
@@ -38,6 +39,7 @@ export class SoftwareTitleDetailPage {
   readonly installerCard: SoftwareInstallerCard;
   readonly editSoftwareModal: EditSoftwareModal;
   readonly editAppearanceModal: EditAppearanceModal;
+  readonly editConfigurationModal: EditConfigurationModal;
   readonly versionsModal: VersionsModal;
   readonly toast: Toast;
   /**
@@ -87,6 +89,7 @@ export class SoftwareTitleDetailPage {
     this.installerCard = new SoftwareInstallerCard(page);
     this.editSoftwareModal = new EditSoftwareModal(page);
     this.editAppearanceModal = new EditAppearanceModal(page);
+    this.editConfigurationModal = new EditConfigurationModal(page);
     this.versionsModal = new VersionsModal(page);
     this.toast = new Toast(page);
     this.deployModal = page.locator('.deploy-modal');
@@ -156,6 +159,13 @@ export class SoftwareTitleDetailPage {
       await this.runAction('Edit appearance');
     }
     await this.editAppearanceModal.expectOpen();
+  }
+
+  /** Actions → Edit configuration. App Store and Play Store apps only. */
+  async openEditConfiguration(): Promise<void> {
+    await expect(this.actionsDropdown).toBeVisible();
+    await this.runAction('Edit configuration');
+    await this.editConfigurationModal.expectOpen();
   }
 
   /** Actions → Deploy. Fleet-maintained apps and app-store apps only; a custom package has no Actions menu. */

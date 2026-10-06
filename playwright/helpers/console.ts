@@ -30,16 +30,29 @@ export function monitorConsoleErrors(
   };
 }
 
+// Uncaught-exception substrings to ignore. Each one is a filed, cosmetic Fleet
+// defect whose flow still works; see docs/blocked-by-product-bugs.md.
+export const DEFAULT_IGNORED_PAGE_ERRORS = [
+  // TODO(fleetdm/fleet#54845): remove once Fleet serves Ace's JSON worker or
+  // stops asking for it. The app Edit configuration modal's JSON editor starts
+  // ace's worker from /assets/worker-json.js, which 404s, and the worker's
+  // importScripts throws. The editor still opens and saves.
+  'worker-json.js',
+];
+
 // Uncaught exceptions inside the page — a React render blowing up, an
 // unhandled rejection reaching the top level. Chromium does not report these
 // as console messages, so `monitorConsoleErrors` never sees them and a broken
 // render passes unless a spec assertion happens to trip over the consequence.
-export function monitorPageErrors(page: Page): { getErrors: () => string[] } {
+export function monitorPageErrors(
+  page: Page,
+  { ignore = DEFAULT_IGNORED_PAGE_ERRORS }: { ignore?: string[] } = {},
+): { getErrors: () => string[] } {
   const errors: string[] = [];
   page.on('pageerror', (error) => {
     errors.push(error.message);
   });
-  return { getErrors: () => errors };
+  return { getErrors: () => errors.filter((e) => !ignore.some((p) => e.includes(p))) };
 }
 
 // Server errors only — 4xx is normal app behaviour (auth probes, "no

@@ -292,6 +292,20 @@ export async function patchAppConfig(
   }
 }
 
+/** The global end user migration workflow (`mdm.macos_migration`), as Settings › Integrations › MDM saves it. */
+export interface MacosMigration {
+  enable: boolean;
+  /** `voluntary`, `forced`, or `''` when never set. */
+  mode: string;
+  webhook_url: string;
+}
+
+export async function getMacosMigration(request: APIRequestContext): Promise<MacosMigration> {
+  const migration = (await getAppConfig(request)).mdm?.macos_migration as MacosMigration | undefined;
+  if (!migration) throw new Error('[getMacosMigration] the config has no mdm.macos_migration');
+  return migration;
+}
+
 /**
  * Turns script execution back on (`server_settings.scripts_disabled: false`).
  * While it is off Fleet refuses every new script run and holds every queued one,
