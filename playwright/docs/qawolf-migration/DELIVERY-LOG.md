@@ -111,6 +111,30 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch F — MDM, setup experience and Android settings
+
+10 gaps in MDM and setup settings that round 1 only rendered: saved, reloaded and read back. Reviewed and built on
+`playwright/qawolf-round3-batch-f` (2026-10-05): 8 built or folded into specs that already exist, 2 cut (C7 #28's
+IdP tooltips, C9 #3's Android web apps). Detail and Andrey's decisions in
+[round-3/F-mdm-setup-android.md](round-3/F-mdm-setup-android.md#review-decisions-2026-10-05-andreys-answers-in-decisions).
+
+**What the review changed.** The two settings that would have disabled other specs (manual fleetd install) or needed
+a restore and a real-host guard (BitLocker PIN) run on throwaway `pw-*` fleets in the main project rather than on
+Workstations or in `exclusive/`. Deleting a fleet leaves its bootstrap package behind, so `deleteFleet` now deletes it
+first. C9 #8's flow turned out to be C8 #6's toggles again, so both fold into one round trip in `users.spec`. The
+web-app flow was cut entirely: Fleet can create an Android web app but never delete one, and the add path is the Play
+path `library.spec` covers. The free tier gained the Apple MDM page and an end-user SSO paywall row. The build found a
+Fleet bug, filed as [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845): Fleet doesn't serve Ace's
+`worker-json.js`, so the app Edit configuration modal throws an uncaught error (ignored narrowly in `pageHealth`).
+
+| slice | what |
+|---|---|
+| setup experience — Users | `users.spec`'s round trip (Unassigned, Workstations): Require IdP on ticks Lock end user info with it, both saved and read back through the API and after a reload; IdP off hides Lock and saves it off ("end users can edit"), read back the same way; the Preview end user experience link's address and new tab. An `afterEach` keyed to the test resets the toggles. `getMacosSetupSettings`, `SetupExperienceUsersPage.previewLink` |
+| setup experience — bootstrap and setup assistant | new describe in `bootstrap-package.spec` on a throwaway `pw-manual-agent-*` fleet: "Install Fleet's agent (fleetd) manually" is disabled and refused (422) without a package; with one it saves and reads back; while on, Install software's macOS row, "Cancel setup if software fails" and Save are disabled and Fleet refuses the selection (422), and Run script's Upload is disabled; off again, the row can be selected. `setup-assistant.spec`'s lifecycle ends with a profile Apple refuses (`profile_name` empty → "Couldn't add. CONFIG_NAME_REQUIRED.", Learn more to Fleet's guide), nothing stored. `uploadBootstrapPackage`, `patchSetupExperience`, `setSetupExperienceSoftware`, `resetManualAgentInstall` (now in `resetSetupExperience`), `deleteFleet` deletes the bootstrap package; `BootstrapPackagePage.openAdvancedOptions` / `manualAgentInstallCheckbox` / `saveAdvancedOptions`, `InstallSoftwarePage.rowCheckbox` / `cancelSetupIfSoftwareFailsCheckbox`, `SetupAssistantPage.uploadExpectingRefusal` / `refusalLearnMoreLink` |
+| disk encryption and OS updates | new describe in `disk-encryption.spec` on a throwaway `pw-bitlocker-*` fleet: Windows enforcement + Require BitLocker PIN saved and read back (API, reload); unticking enforcement unticks and locks the PIN, and both save off. `macos-updates.spec` (exclusive): while Workstations holds a minimum version, Unassigned's and the QA fleet's read back unchanged. `getFleetWindowsDiskEncryption`; `DiskEncryptionPage.save` clears older toasts |
+| MDM settings | new `shared/settings/apple-mdm.spec.ts` (both tiers, read-only): the Apple MDM card's Edit → the push certificate's common name, organization, MDM server URL and renew date, each against the API; Turn off MDM and Renew certificate present, never clicked. `mdm.spec` (premium): the migration mode and webhook URL save with the workflow **disabled**, read back and restored; the radios and URL are locked while it's off. The Example payload modal is cut (static copy). `getAppleApnsInfo`; `IntegrationsPage.openMdm` / `openAppleMdm` / `apnsValue` / migration members / `chooseMigrationMode` |
+| Android and free | `library.spec`'s Play Store lifecycle gains *edit configuration* (both scopes): a key Fleet doesn't support is refused and nothing changes; `managedConfiguration` + `workProfileWidgets` saved, read back through the API, logged as `edited_app_store_app`, and reopened. Free's paywall list gains Authentication (SSO) › End users. `getAppStoreAppConfiguration`, new `EditConfigurationModal`, `getAceValue`, `DEFAULT_IGNORED_PAGE_ERRORS` (one entry, `worker-json.js`, #54845) |
+
 ## Round 3 · Batch D — batch scripts
 
 9 gaps in batch script runs, all round 1 C8: scheduling for later, cancelling, an edit cancelling pending runs, the
