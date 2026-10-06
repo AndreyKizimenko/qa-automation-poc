@@ -135,6 +135,29 @@ Fleet bug, filed as [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issue
 | MDM settings | new `shared/settings/apple-mdm.spec.ts` (both tiers, read-only): the Apple MDM card's Edit → the push certificate's common name, organization, MDM server URL and renew date, each against the API; Turn off MDM and Renew certificate present, never clicked. `mdm.spec` (premium): the migration mode and webhook URL save with the workflow **disabled**, read back and restored; the radios and URL are locked while it's off. The Example payload modal is cut (static copy). `getAppleApnsInfo`; `IntegrationsPage.openMdm` / `openAppleMdm` / `apnsValue` / migration members / `chooseMigrationMode` |
 | Android and free | `library.spec`'s Play Store lifecycle gains *edit configuration* (both scopes): a key Fleet doesn't support is refused and nothing changes; `managedConfiguration` + `workProfileWidgets` saved, read back through the API, logged as `edited_app_store_app`, and reopened. Free's paywall list gains Authentication (SSO) › End users. `getAppStoreAppConfiguration`, new `EditConfigurationModal`, `getAceValue`, `DEFAULT_IGNORED_PAGE_ERRORS` (one entry, `worker-json.js`, #54845) |
 
+## Round 3 · Batch E — role-based UI visibility
+
+41 gaps in what each role is *shown*: round 1 merged QA Wolf's per-role flows into role specs that were never
+written. Reviewed and built on `playwright/qawolf-round3-batch-e` (2026-10-05): 23 built, 11 folded, 7 cut. Detail
+and Andrey's decisions in [round-3/E-role-visibility.md](round-3/E-role-visibility.md#review-decisions-2026-10-05).
+
+**What the review changed.** The flows asserted little that was role-specific (stale copy, absences on menus that
+never opened, the wrong user signed in), and the API probes they were said to back cover seven endpoints. So the
+cells come from Fleet's gating, one test per role, with every absence anchored on something the same role is shown.
+A role writes only where the UI path is its own; the rest are visibility cells. A global technician column runs
+through every matrix, and the three role bugs filed at planning have skipped checks, each run un-skipped once to see
+it fail for the filed reason.
+
+| slice | what |
+|---|---|
+| policies | new `premium/policies/role-access.spec.ts`: seven roles over the list (Add policy, Manage automations, row checkboxes, the Automations cell as a button or text, an inherited row's tag), a policy's Run / Edit, and the `/policies/new` 403; `team-admin` and `ws-maintainer` each save a Workstations policy from the UI, read back with the role as author; #54624 skipped. Free twin `free/policies/role-access.spec.ts` (GM, GO). `policy-automations.spec.ts` gains #54623's check (skipped, in the serial describe that owns the global webhook) and the automation filter's options by scope (C3 #22). New `AccessDenied` component; `PoliciesListPage.narrowTo` / `automationFilter` / `automationFilterOption`, `openPolicy` matching a name followed by its tags; `PolicyDetailsPage.goto` anchored on Show query; `FleetPolicy.teamId` / `authorEmail`. `withStaticUser` no longer reuses a session whose cookie has expired (the browser drops it while Fleet still accepts the token, so the page loaded signed out) |
+| reports | new `premium/reports/role-access.spec.ts`: seven roles over the list (header button, Manage automations, checkboxes, an inherited row), *Edit report* / *Live report* (team roles on a gitops Workstations report no static user wrote — there's no authorship check), the target picker's fleets, Save as new's Fleet field, the `/reports/new` 403; a global observer's picker per report scope; `ws-maintainer`'s Save as new landing in Workstations; one-host live runs by a global observer (a report it may run) and an observer+ (ad-hoc SQL). Free twin `free/reports/role-access.spec.ts` (GM, GO, and the observer's run). `createReport({ observerCanRun })`; `ReportsListPage.liveReportButton` / `narrowTo`, `openReport` matching a name followed by its tags; `ReportDetailsPage.goto` anchored on Show query; `ReportLivePage.hostSearch` / `targetHost`; `ReportEditPage.saveAsNewCancelButton`, `clickLiveReport` from an unsaved report. `cleanup-setup`'s Workstations step sweeps spec-saved reports by exact prefix (`pw-role-`, `Copy of playwright-saveasnew-`); its gitops reports stay |
+| host actions | new `premium/hosts/host-actions-role-access.spec.ts`: five roles over a host's open Actions menu (Run script, Transfer, Delete, anchored on Live report) and its Live report modal (a report observers can't run, and the create link, for all but a plain observer); #54622 skipped. Free twin (GM, GO) |
+| hosts list | `premium/hosts/cta-visibility.spec.ts` becomes a role table (GT, TA, TM, TO beside GA, GM, GO): Add hosts, the gear's per-role items, and the label filter's Add label. Free's gains Add label. `LabelFilter.openMenu` / `searchBox` / `addLabelButton`, and `selectLabel` typing only up to the first space (a space in an open react-select menu chooses the focused option); `HostsListPage.activityAutomationsOption`, `goto({ mayBeEmpty })` |
+| labels | `premium/labels/role-access.spec.ts`: a team maintainer's own label, made, edited and deleted (authorship gating, read back with its author); the global observer's label pill; a fleet observer and a technician on the Labels page. Free twin `free/labels/role-access.spec.ts` (GM, GO: the Labels page and the pill). `findLabelByName` |
+| scripts | new `premium/controls/scripts/role-access.spec.ts` (six roles: Add script and row actions, or the Controls 403) and its free twin (GM, GO) |
+
+
 ## Round 3 · Batch D — batch scripts
 
 9 gaps in batch script runs, all round 1 C8: scheduling for later, cancelling, an edit cancelling pending runs, the

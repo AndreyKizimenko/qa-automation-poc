@@ -35,6 +35,7 @@ export { VersionsModal, pinTargetLabel, pinTargetApiValue } from './components/V
 export type { PinTarget } from './components/VersionsModal';
 export { clickHoverAction } from './components/clickHoverAction';
 export { EnrollSecretModal } from './components/EnrollSecretModal';
+export { AccessDenied } from './components/AccessDenied';
 export {
   expectGatedByGitOps,
   expectNotGatedByGitOps,

@@ -37,6 +37,8 @@ export async function createReport(
      * results" on. Omitted, the report stores results (Fleet's default).
      */
     discardData?: boolean;
+    /** "Observers can run": a global or fleet observer may run it live. Fleet's default is off. */
+    observerCanRun?: boolean;
   },
 ): Promise<ReportRef> {
   const res = await request.post(apiUrl('queries'), {
@@ -47,6 +49,7 @@ export async function createReport(
       description: opts.description ?? '',
       ...(opts.teamId !== undefined ? { team_id: opts.teamId } : {}),
       ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
+      ...(opts.observerCanRun !== undefined ? { observer_can_run: opts.observerCanRun } : {}),
       ...(opts.interval !== undefined ? { interval: opts.interval, logging: 'snapshot' } : {}),
       ...(opts.interval !== undefined || opts.discardData !== undefined
         ? { discard_data: opts.discardData ?? false }

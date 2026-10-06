@@ -128,6 +128,7 @@ export class ReportEditPage {
   readonly saveAsNewModal: Locator;
   readonly saveAsNewNameInput: Locator;
   readonly saveAsNewSubmitButton: Locator;
+  readonly saveAsNewCancelButton: Locator;
   /** The modal's "Fleet" field (premium, and only when the user has more than one fleet to choose). */
   readonly saveAsNewFleetDropdown: TeamDropdown;
 
@@ -207,6 +208,7 @@ export class ReportEditPage {
     // <label htmlFor>, so target it by id within the modal.
     this.saveAsNewNameInput = this.saveAsNewModal.locator('#queryName');
     this.saveAsNewSubmitButton = this.saveAsNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveAsNewCancelButton = this.saveAsNewModal.getByRole('button', { name: 'Cancel', exact: true });
     this.saveAsNewFleetDropdown = new TeamDropdown(page, this.saveAsNewModal);
   }
 
@@ -373,10 +375,10 @@ export class ReportEditPage {
     await this.saveAsNewSubmitButton.click();
   }
 
-  /** Click "Live report" → navigates to `/reports/:id/live`. */
+  /** Click "Live report" → `/reports/:id/live`, or `/reports/new/live` from an unsaved report. */
   async clickLiveReport(): Promise<void> {
     await this.liveReportButton.click();
-    await this.page.waitForURL(/\/reports\/\d+\/live/);
+    await this.page.waitForURL(/\/reports\/(?:\d+|new)\/live/);
   }
 
   /**

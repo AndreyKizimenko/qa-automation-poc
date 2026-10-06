@@ -140,11 +140,18 @@ test('wipe Workstations team state', async ({ request }) => {
 
   // Clear Setup Experience before the software wipe (see the unassigned step).
   await resetSetupExperience(request, workstations.id);
+  // Its reports are gitops's, so only the ones specs save here go, by exact
+  // prefix: the role specs' Save-as-new copy and `save-as-new.spec`'s copy into
+  // this fleet, each deleted by its own test unless the test died first.
+  const reports = await listReports(request, workstations.id);
   await Promise.all([
     deleteAllTeamPolicies(request, workstations.id),
     deleteAllInstallSoftwareTitles(request, workstations.id),
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
+    ...reports
+      .filter((r) => r.name.startsWith('pw-role-') || r.name.startsWith('Copy of playwright-saveasnew-'))
+      .map((r) => deleteReport(request, r.id)),
   ]);
   // The OS updates specs enforce versions and deadlines here — the one fleet
   // with no real hosts to update — and clear them in a `finally` a timed-out

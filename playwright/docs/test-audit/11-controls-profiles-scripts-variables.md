@@ -1,6 +1,6 @@
 # Controls — profiles, disk encryption, scripts, variables — test audit
 
-**Specs covered:** 12 files · **Test declarations:** 41 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
+**Specs covered:** 14 files · **Test declarations:** 43 · **Projects:** premium / free, plus **premium-exclusive / free-exclusive** (CTL-26, CTL-28…32)
 
 Covers **Controls → OS settings** (custom configuration profiles, disk encryption — global, and a
 fleet's BitLocker PIN), **Controls → Scripts → Library**, **batch script runs** (hosts list → Run script →
@@ -69,6 +69,8 @@ CTL-26) or the simulation pool (CTL-25). Neither is `shared/controls/custom-vari
 | CTL-39 | `shared/controls/scripts/batch-schedule-cancel.spec.ts` | editing a script mid-run cancels the runs not yet reported *(premium + free)* | UI+API | ☐ |
 | CTL-40 | `premium/controls/scripts/batch-run.spec.ts` | Batch progress › a fleet with no batch runs shows each progress tab empty | UI | ☐ |
 | CTL-41 | `premium/controls/os-settings/disk-encryption.spec.ts` | BitLocker PIN (throwaway fleet) › a required BitLocker PIN saves with enforcement, and unticking enforcement clears it | UI+API | ☐ |
+| CTL-42 | `premium/controls/scripts/role-access.spec.ts` | Premium • Controls • Scripts • role access › <role> (6 roles) | UI | ☐ |
+| CTL-43 | `free/controls/scripts/role-access.spec.ts` | Free • Controls • Scripts • role access › <role> (2 roles) | UI | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1618,6 +1620,68 @@ missing validations:
 steps to cut:
 other:
 ```
+
+---
+
+### CTL-42 · Premium • Controls • Scripts • role access › <role> is shown the script library controls its role grants / is turned away from Controls
+
+- **File:** [`playwright/tests/e2e/premium/controls/scripts/role-access.spec.ts`](../../tests/e2e/premium/controls/scripts/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Premium • Controls • Scripts • role access"`
+- **Project:** premium · **Variants (6):** `global-maintainer`, `global-technician`, `ws-maintainer` (the library on Workstations); `global-observer`, `global-observer-plus`, `ws-observer` (turned away)
+- **Mode:** UI · **Isolation:** one test per role; read-only apart from its seeded script
+- **Source:** QA Wolf `settings-upload-script-as-maintainer-to-a-team-premium` (round 1 C7 #26; round 3, batch E). The upload itself takes the admin's form and endpoint, so it isn't repeated per role.
+- **Preconditions (API):** for the three library roles, `POST /scripts` puts `pw-role-script-<nonce>.sh` on Workstations; deleted in an `afterEach` (and by `cleanup-setup`'s Workstations wipe).
+
+**Flow**
+
+1. ☐ GM, GT, TM: log in → `/controls/scripts/library` on Workstations (GM and GT pick it in the dropdown).
+   - ✅ *(UI)* the seeded script's row.
+   - ✅ *(UI)* **Add script** and the row's **Edit**, **Download** and **Delete** for GM and TM; none of them for GT (`ScriptLibrary` hides them from technicians).
+2. ☐ GO, GO+, TO: open `/controls/scripts/library?fleet_id=<Workstations>`.
+   - ✅ *(UI)* the 403 page ("403", "Access denied.").
+
+**Assessment**
+- *Value:* the Controls guard (which keeps out observer+ too) and the technician's read-only library.
+- *Coverage gaps:* TA and TT aren't read (TA as TM; no fleet technician user).
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### CTL-43 · Free • Controls • Scripts • role access › global-maintainer is shown the script library controls / global-observer is turned away from Controls
+
+- **File:** [`playwright/tests/e2e/free/controls/scripts/role-access.spec.ts`](../../tests/e2e/free/controls/scripts/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Controls • Scripts • role access"`
+- **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
+- **Mode:** UI · **Isolation:** read-only apart from its seeded script; nothing is uploaded through the UI or run (the free real VMs share the library's scope)
+- **Source:** round 1 C7 #26's free half (round 3, batch E, decision 12)
+- **Preconditions (API):** `pw-role-script-<nonce>.sh` in the library, deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ GM: `/controls/scripts/library` → ✅ *(UI)* the script's row, **Add script**, and its **Edit**, **Download**, **Delete**.
+2. ☐ GO: `/controls/scripts/library` → ✅ *(UI)* the 403 page.
+
+**Assessment**
+- *Value:* free has scripts and the same route guard; CTL-42's free half.
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
 
 ## Area observations
 

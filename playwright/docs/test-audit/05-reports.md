@@ -1,6 +1,6 @@
 # Reports / queries — test audit
 
-**Specs covered:** 9 files · **Test declarations:** 28 · **Projects:** premium / free (RPT-26 runs in both)
+**Specs covered:** 11 files · **Test declarations:** 35 · **Projects:** premium / free (RPT-26 runs in both)
 
 Fleet's "Reports" are saved queries (`/reports/manage`, `/reports/new`, `/reports/:id`,
 `/reports/:id/edit`, `/reports/:id/live`; the REST API still calls them `queries`). The area
@@ -16,7 +16,8 @@ twice via a `for (const scope of ['All fleets', 'Workstations'])` loop; free mir
 the team dropdown. The reports the non-lifecycle specs need are seeded through
 `@helpers/api/reports`, and whatever they create, through the UI or the API, is deleted through
 it. `premium/reports/report-label-targets.spec.ts` is audited with label targeting, in
-[area 22](22-label-targeting.md) (LT-09).
+[area 22](22-label-targeting.md) (LT-09). `role-access.spec.ts` on each tier is what each role is shown, Save as new by a
+single-fleet maintainer, and an observer's and an observer+'s one-host live runs (RPT-29…35).
 
 **Standing environment note for this area:** apart from three real VMs per tier (macOS,
 Windows, Ubuntu; on the **VMs** fleet on premium), the ~300 online hosts on each QA instance are
@@ -58,6 +59,13 @@ real macOS VM stored, in RPT-27 / RPT-28.
 | RPT-26 | `shared/reports/edit-warnings.spec.ts` | Shared • Reports • edit warnings › an edit that would delete a report's stored results asks first, and one that wouldn't saves straight away | UI+API | ☐ |
 | RPT-27 | `premium/reports/stored-results.spec.ts` | Premium • Reports • stored results › the long-standing gitops report holds a fresh result from the macOS VM | UI+API · **real VM** | ☐ |
 | RPT-28 | `premium/reports/stored-results.spec.ts` | Premium • Reports • stored results › a report created with Store data on collects a result from the macOS VM | UI+API · **real VM** | ☐ |
+| RPT-29 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › <role> is shown the report controls its role grants (7 roles) | UI | ☐ |
+| RPT-30 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › global-observer may target every scope only for a report observers can run | UI | ☐ |
+| RPT-31 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › ws-maintainer saves a copy of a fleet report into Workstations, with no Fleet field | UI+API | ☐ |
+| RPT-32 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › global-observer runs a report observers can run, live, on one host | UI+API | ☐ |
+| RPT-33 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › global-observer-plus runs ad-hoc SQL live, on one host | UI | ☐ |
+| RPT-34 | `free/reports/role-access.spec.ts` | Free • Reports • role access › <global-maintainer \| global-observer> is shown the report controls its role grants | UI | ☐ |
+| RPT-35 | `free/reports/role-access.spec.ts` | Free • Reports • role access › global-observer runs a report observers can run, live, on one host | UI+API | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions
 via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -1581,6 +1589,234 @@ other:
   - VM-bound minutes on one worker; with `HOST_RETRIES` a failing run spends up to twice the 420-s
     timeout here.
   - The report page is opened by URL rather than through the list (step 2 already walked it).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-29 · Premium • Reports • role access › <role> is shown the report controls its role grants
+
+- **File:** [`playwright/tests/e2e/premium/reports/role-access.spec.ts`](../../tests/e2e/premium/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Premium • Reports • role access › .* is shown"`
+- **Project:** premium · **Variants (7):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on All fleets; `team-admin`, `ws-maintainer`, `ws-observer` on Workstations
+- **Mode:** UI · **Isolation:** one test per role through `withStaticUser`; read-only apart from its seeded report
+- **Source:** QA Wolf role flows, round 1 C4 #P9, #P10, #P21, #P22, #P24, #P25, #P26, C7 #22 (round 3, batch E). Their role checks were mostly stale copy ("Create new query") or absences on pages nothing proved had rendered.
+- **Preconditions (API):** `POST /queries` seeds a global `pw-role-rep-<role>-<nonce>` (hourly, so it isn't *Paused*). Team roles read the gitops report "Collect default browser on macOS" on Workstations (it has *Observers can run* on and no static user wrote it); the test fails with the re-apply instruction if it's missing. It is only ever read: its edit page is opened for Save as new, which is cancelled.
+- **Data created:** the global report, deleted in an `afterEach` by name.
+
+**Flow**
+
+1. ☐ Sign in as the role → `/reports/manage` on All fleets (global roles) or Workstations (team roles; `ws-*` have no picker).
+2. ☐ Search the list down to the role's report (the seeded one, or the gitops one for a team role).
+   - ✅ *(UI)* one row; a checkbox for GM, TA, TM only.
+   - ✅ *(UI)* the header's **Add report** for GM, TA, TM; **Live report** for GO+; neither for GO, GT, TO. **Manage automations** for TA only.
+3. ☐ *(TA)* **Manage automations** → Escape.
+   - ✅ *(UI)* the modal lists the fleet report's checkbox, and closes. Nothing is toggled (C7 #22; RPT-08 toggles as admin).
+4. ☐ *(team roles)* Search for the global report.
+   - ✅ *(UI)* **Inherited** tag, no checkbox; opened, no **Edit report** for any team role, **Live report** for TA and TM, not TO.
+5. ☐ Open the role's report from the list.
+   - ✅ *(UI)* name heading, **Show query**; **Edit report** for GM, TA, TM (TA and TM on a report no static user wrote: there's no authorship check); **Live report** for every role but GO (on the global report, which observers can't run). TO gets it on the gitops report, which they can.
+6. ☐ *(GM, GO+, GT, TA, TM, TO)* **Live report** → the target picker → back.
+   - ✅ *(UI)* global roles: **Unassigned**, **Workstations** and **VMs** chips, enabled. TA: **Workstations** and **VMs**, no **Unassigned** or **QA**. `ws-*`: **Workstations** only.
+7. ☐ *(GM, TA, TM)* **Edit report** → **Save as new** → **Cancel**.
+   - ✅ *(UI)* the form holds the report's name; the modal's name field, and a **Fleet** field for GM and TA (two or more fleets to save into), none for TM.
+8. ☐ *(GO, GT, TO)* Open `/reports/new` (with Workstations' `fleet_id` for TO).
+   - ✅ *(UI)* the 403 page.
+
+**Assessment**
+- *Value:* What each role is shown on Reports, for the first time; the technician and observer+ columns are the odd ones (Live report without Edit; GO+'s header button). The picker and Save-as-new cells are the role-dependent negatives no QA Wolf flow asserted.
+- *Coverage gaps:* TO+ has no static user. A global role's view of a fleet's list isn't read.
+- *Redundancy:* None; the admin's controls are RPT-01's.
+- *Efficiency / smells:* A few seconds a role. Opens a gitops report's edit page; nothing there is saved.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-30 · Premium • Reports • role access › global-observer may target every scope only for a report observers can run
+
+- **File:** [`playwright/tests/e2e/premium/reports/role-access.spec.ts`](../../tests/e2e/premium/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "may target every scope only for a report observers can run"`
+- **Project:** premium · **Scopes:** All fleets, then Workstations
+- **Mode:** UI · **Isolation:** read-only apart from its seeded report
+- **Source:** QA Wolf `queries-global-users-global-observer-able-to-select-teams-target-for-query-premium` (round 1 C4 #P11; round 3, batch E)
+- **Preconditions (API):** a global `pw-role-rep-ocr-<nonce>` with *Observers can run*; the gitops Workstations report.
+
+**Flow**
+
+1. ☐ Sign in as `global-observer` → Reports on All fleets → the seeded report → **Live report**.
+   - ✅ *(UI)* no **Edit report**; the **Unassigned**, **Workstations** and **VMs** chips are enabled.
+2. ☐ Reports on Workstations → "Collect default browser on macOS" → **Live report**.
+   - ✅ *(UI)* **Workstations** enabled; **VMs** and **Unassigned** disabled: a plain observer may aim a fleet's report only at its fleet (`SelectTargets`' `shouldDisableForObserver`).
+
+**Assessment**
+- *Value:* The observer's scoping in the picker, the role-dependent half QA Wolf never checked.
+- *Coverage gaps:* A fleet observer's picker (TO's own fleet enabled) is in RPT-29.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-31 · Premium • Reports • role access › ws-maintainer saves a copy of a fleet report into Workstations, with no Fleet field
+
+- **File:** [`playwright/tests/e2e/premium/reports/role-access.spec.ts`](../../tests/e2e/premium/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "ws-maintainer saves a copy"`
+- **Project:** premium · **Scope:** Workstations
+- **Mode:** UI+API · **Isolation:** its copy is its own
+- **Source:** QA Wolf `queries-global-users-save-as-new-query-user-with-access-to-just-one-team-can-only-save-queries-to-that-team` (round 1 C4 #P16; round 3, batch E)
+- **Data created:** `pw-role-rep-copy-<nonce>` on Workstations, deleted by id in an `afterEach` (and by name if the test failed before reading its id). A dead run's copy is swept by `cleanup-setup`'s Workstations `pw-` report sweep.
+
+**Flow**
+
+1. ☐ Sign in as `ws-maintainer` → Reports → "Collect default browser on macOS" → **Edit report** → **Save as new**.
+   - ✅ *(UI)* the form holds the report's name; the modal has no **Fleet** field.
+2. ☐ Name the copy `pw-role-rep-copy-<nonce>` → **Save**.
+   - ✅ *(UI)* toast "Successfully added report pw-role-rep-copy-<nonce>."; the URL is the copy's.
+   - ✅ *(API)* `GET /queries/<id>`: `fleet_id` = Workstations; and it's found by name on Workstations.
+
+**Assessment**
+- *Value:* A single-fleet maintainer's Save as new, which has no fleet to choose: the copy has to land in the source report's fleet, or the save is refused.
+- *Coverage gaps:* A copy of an inherited report can't be made by a team role (no Edit report there), so isn't tried.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-32 · Premium • Reports • role access › global-observer runs a report observers can run, live, on one host
+
+- **File:** [`playwright/tests/e2e/premium/reports/role-access.spec.ts`](../../tests/e2e/premium/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "global-observer runs a report observers can run"`
+- **Project:** premium · **Host:** the first online Linux simulation (`findOnlineHost(…, { kind: 'simulated' })`), only read
+- **Mode:** UI+API · **Isolation:** its report is its own; `test.setTimeout(180_000)`
+- **Source:** QA Wolf `queries-global-users-global-observer-can-only-select-and-run-a-query` (round 1 C4 #P12; round 3, batch E). The flow ran against All hosts (~300 simulations) and compared percentages; this targets one host.
+- **Preconditions (API):** a global `pw-role-rep-run-<nonce>` (`SELECT 'pw' AS role;`) with *Observers can run*.
+
+**Flow**
+
+1. ☐ Sign in as `global-observer` → Reports → the report.
+   - ✅ *(UI)* no **Edit report**, a **Live report**.
+2. ☐ **Live report** → search the host in **Target specific hosts** → click its row → **Run**.
+   - ✅ *(UI)* the host is in the selected-targets table.
+   - ✅ *(UI)* "Report finished" within 90 s; "1 host targeted", "100% responded".
+
+**Assessment**
+- *Value:* An observer may run only a report it's allowed to, and only by its id: Fleet refuses ad-hoc SQL from an observer (`campaigns.go`), so a UI that sent the SQL would fail here.
+- *Coverage gaps:* The rows aren't read: a simulation answers any SQL with the same canned row.
+- *Efficiency / smells:* Seconds on a simulation; bounded by Fleet's rest period otherwise.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-33 · Premium • Reports • role access › global-observer-plus runs ad-hoc SQL live, on one host
+
+- **File:** [`playwright/tests/e2e/premium/reports/role-access.spec.ts`](../../tests/e2e/premium/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "global-observer-plus runs ad-hoc SQL"`
+- **Project:** premium · **Host:** as RPT-32
+- **Mode:** UI · **Isolation:** creates nothing (an ad-hoc run isn't saved); `test.setTimeout(180_000)`
+- **Source:** QA Wolf `queries-observer-observer-global-can-create-and-run-a-live-query` (round 1 C4 #P18; round 3, batch E). Its fleet observer+ twin (P19) is cut: there's no such static user.
+
+**Flow**
+
+1. ☐ Sign in as `global-observer-plus` → Reports → the header's **Live report**.
+   - ✅ *(UI)* the new-report editor, with no **Save**.
+2. ☐ **Live report** → search the host → click its row → **Run**.
+   - ✅ *(UI)* "Report finished"; "1 host targeted", "100% responded".
+
+**Assessment**
+- *Value:* Observer+'s one write-shaped right: running SQL it wrote, without saving it.
+- *Coverage gaps:* As RPT-32.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-34 · Free • Reports • role access › global-maintainer / global-observer is shown the report controls its role grants
+
+- **File:** [`playwright/tests/e2e/free/reports/role-access.spec.ts`](../../tests/e2e/free/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Reports • role access › .* is shown"`
+- **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
+- **Mode:** UI · **Isolation:** one test per role; read-only apart from its seeded report
+- **Source:** round 1 C4 #F3 (round 3, batch E)
+- **Data created:** a global `pw-role-rep-<gm|go>-<nonce>`, deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ Sign in → `/reports/manage` → search the report.
+   - ✅ *(UI)* GM: a checkbox and **Add report**; GO: neither, nor **Live report**; **Manage automations** for neither.
+2. ☐ Open it.
+   - ✅ *(UI)* GM: **Live report**; **Edit report** → **Save as new**: a name field and no **Fleet** field (free has no fleets) → **Cancel**. GO: **Show query**, no **Edit report** or **Live report**.
+3. ☐ *(GO)* Open `/reports/new`.
+   - ✅ *(UI)* the 403 page.
+
+**Assessment**
+- *Value:* Free's half of RPT-29.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### RPT-35 · Free • Reports • role access › global-observer runs a report observers can run, live, on one host
+
+- **File:** [`playwright/tests/e2e/free/reports/role-access.spec.ts`](../../tests/e2e/free/reports/role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Reports • role access › global-observer runs"`
+- **Project:** free · **Host:** the first online Linux simulation, picked by name (on free the real VMs share Unassigned with them)
+- **Mode:** UI+API · **Isolation:** its report is its own; `test.setTimeout(180_000)`
+- **Source:** QA Wolf `queries-global-users-global-observer-can-only-select-and-run-a-query` (round 1 C4 #F3; round 3, batch E)
+
+**Flow**
+
+As RPT-32, on free: the report → **Live report** → the host → **Run** → "Report finished", "1 host targeted", "100% responded".
+
+**Assessment**
+- *Value:* RPT-32 on free.
+- *Efficiency / smells:* Seconds.
 
 **Notes (Andrey)**
 ```

@@ -57,7 +57,7 @@ here** block, the gap table, the review to do first, facts for the build, the de
 | **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | **merged** 2026-10-03: 22 built, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A); branch run [37077445852](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37077445852) green, 0 flaky |
 | **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | **merged** 2026-10-04: 19 kept, 4 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch D); branch run [37149323584](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37149323584) green, C's tests all first-time passes |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | **merged** 2026-10-04: 4 built, 3 folded, 2 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch C); its 2 flaky retries in the branch run fixed; filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) and [#54734](https://github.com/fleetdm/fleet/issues/54734) |
-| **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | ready for review |
+| **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | **built** 2026-10-05: 23 built, 11 folded, 7 cut, all recommendations accepted; branch `playwright/qawolf-round3-batch-e`, to ship with batch F in one PR |
 | **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations, throwaway `pw-*` fleets | 10 | **built** 2026-10-05: 8 built or folded, 2 cut; filed [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845); ships with batch E in one PR |
 | **[G](G-real-vms.md)** | Real VMs: live policies and reports, CSV export, side effects of installs and MDM commands, a host's Library | real VMs | 10 | ready for review |
 | **[H](H-gitops-mode-v2.md)** | gitops mode V2 — round 2's parked list | own project | 5 | ready for review |
@@ -211,6 +211,25 @@ covered both); [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pul
     so never select by filter there.
   - A confirmed Fleet bug a test steers around gets a `TODO(fleetdm/fleet#N)` and a row under *Worked around in
     the suite* in `docs/blocked-by-product-bugs.md`.
+
+### Since batch E (2026-10-05)
+
+E was built beside F and ships with it. What later batches inherit:
+
+- **A static user's cached session can be signed out in the browser** while Fleet still accepts its token: the
+  cookie expires first. `withStaticUser` now treats an expired cookie as a dead session. If role specs land on
+  `/login` locally, an old `.auth/static-*` cache was the cause.
+- **`LabelFilter.selectLabel` types a label's name only up to its first space.** A space in an open react-select
+  menu chooses the focused option, so a gitops label like "Debian-based Linux hosts" picked another label.
+- **An empty fleet's Hosts page repeats "Add hosts"** in its empty-state card; `HostsListPage.goto({ mayBeEmpty })`
+  anchors on Export hosts, which renders either way.
+- **`cleanup-setup` sweeps spec-saved Workstations reports by exact prefix** (`pw-role-`,
+  `Copy of playwright-saveasnew-`); gitops's reports there stay. A new per-run report on Workstations adds its prefix.
+- **Two of Workstations' five gitops reports are missing on premium** ("Collect XProtect reports", "Detect if Apple
+  Intelligence is enabled", gone before 2026-10-05 16:01 UTC, not by any spec): read "Collect default browser on
+  macOS", which the role specs check for first.
+- **A skipped check on a filed bug is run un-skipped once** to see it fail for the filed reason before it's skipped
+  (E's #54622, #54623, #54624).
 
 ## 6. Decisions round 3 already carries
 

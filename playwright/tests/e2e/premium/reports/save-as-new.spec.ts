@@ -7,8 +7,9 @@
  *
  * The base report is seeded via the API (global scope) and torn down — with
  * any global duplicate it spawns — after each test. A copy in a fleet is out of
- * `deleteReportsMatching`'s reach (it lists global reports) and `cleanup-setup`
- * leaves fleet reports alone, so that test deletes its copy by id. Grounded in
+ * `deleteReportsMatching`'s reach (it lists global reports), so that test
+ * deletes its copy by id; `cleanup-setup`'s Workstations step sweeps a copy a
+ * dead run left, by its `Copy of playwright-saveasnew-` prefix. Grounded in
  * frontend/pages/queries/edit/components/SaveAsNewQueryModal.
  */
 import { test, expect } from '@fixtures';

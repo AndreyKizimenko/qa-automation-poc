@@ -80,10 +80,15 @@ export class ReportDetailsPage {
     return this.resultRows.getByRole('link', { name: hostName, exact: true }).first();
   }
 
+  /**
+   * Anchors on "Show query", which every role gets; "Edit report" and "Live
+   * report" are role-gated, so neither can tell a loaded page from a withheld
+   * button.
+   */
   async goto(id: number, opts: { fleetId?: number } = {}): Promise<void> {
     const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
     await this.page.goto(`/reports/${id}${qs}`);
-    await expect(this.editButton).toBeVisible();
+    await expect(this.showQueryButton).toBeVisible();
   }
 
   /** Click "Edit report" → `/reports/:id/edit`. */
