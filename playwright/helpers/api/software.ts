@@ -397,6 +397,23 @@ export async function listVulnerabilities(
  * The hosts Fleet lists for a CVE (`/hosts?vulnerability=`), what a CVE row's
  * "View all hosts" opens. Computed live, unlike the list's hourly counts.
  */
+/**
+ * The CVEs of the software a host has installed, by Fleet's reading of its
+ * inventory (`GET /hosts/:id/software?vulnerable=true`), in the order Fleet lists
+ * the software. The host's own live answer, unlike a fleet's hourly CVE counts.
+ */
+export async function listHostCves(request: APIRequestContext, hostId: number): Promise<string[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { vulnerable: 'true', per_page: '100' },
+  });
+  await expect(res, `Failed to list the vulnerable software on host ${hostId}`).toBeOK();
+  const rows = ((await res.json()).software ?? []) as Array<{
+    installed_versions: Array<{ vulnerabilities: string[] | null }> | null;
+  }>;
+  return rows.flatMap((r) => (r.installed_versions ?? []).flatMap((v) => v.vulnerabilities ?? []));
+}
+
 export async function listVulnerabilityHosts(
   request: APIRequestContext,
   cve: string,

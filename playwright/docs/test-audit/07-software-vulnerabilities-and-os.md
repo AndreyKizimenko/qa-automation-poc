@@ -1055,7 +1055,7 @@ other:
 - **Project:** premium · **Scopes:** VMs, All fleets
 - **Mode:** UI+API · **Isolation:** independent, read-only
 - **Source:** QA Wolf `software-vulnerabilities-filter-vulnerabilities-by-team` (round 1 C6 #3) and `software-vulnerabilities-view-all-hosts-vulnerabilities` (C6 #7; round 3, batch C)
-- **Preconditions (API):** among the VMs fleet's first 20 CVEs, one whose count there differs from All fleets' (one the simulations on Unassigned share). Hosts are never moved to make one.
+- **Preconditions (API):** the real Linux VM online and on the VMs fleet; among its own first 20 CVEs (`GET /hosts/:id/software?vulnerable=true`), one counted on the VMs fleet whose count there differs from All fleets' (one the simulations on Unassigned share). Hosts are never moved to make one. The candidates come from the VM, not from the fleet's CVE list: that list is the hourly job's, and it can count a simulation a label spec had borrowed onto the fleet while the job ran — branch run 37667485374 picked such a CVE (`CVE-2006-10002`, a simulations-only `libxml-parser-perl`) and found no live host on the fleet, three attempts running.
 - **Data created:** none
 
 **Flow**
@@ -1073,7 +1073,7 @@ other:
 - *Value:* per-fleet vulnerability counts (QA Wolf only asserted "different"; this asserts each equals Fleet's figure for that scope) and the CVE → hosts hand-off, with the hosts compared whole because the VMs fleet is small. QA Wolf's flow ran `fleetctl trigger --name vulnerabilities` first; this never triggers a global cron.
 - *Coverage gaps:* Unassigned's and Workstations' counts aren't read; the hand-off's list isn't compared with the count (one is live, the other hourly, so they needn't agree).
 - *Redundancy:* SWV-18 is the CVE detail page's hand-off (by software version); this is the list row's (by CVE).
-- *Efficiency / smells:* ~10 s. Up to 20 API reads to choose the CVE, usually one or two.
+- *Efficiency / smells:* ~10 s. Up to 40 API reads to choose the CVE, usually two.
 
 **Notes (Andrey)**
 ```

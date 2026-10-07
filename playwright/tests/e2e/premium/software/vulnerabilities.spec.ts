@@ -23,8 +23,10 @@ import {
   findVulnerableSoftwareBySources,
   findRenderableCve,
   hostVulnerableVersions,
+  listHostCves,
   listVulnerabilities,
   listVulnerabilityHosts,
+  requireRealHost,
   type HostRef,
   type SoftwareTitleRef,
 } from '@helpers/api';
@@ -254,13 +256,17 @@ test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
  * label-targeting spec borrows for a minute, so the hosts behind a CVE are a
  * set small enough to compare whole.
  *
- * The CVE is chosen through the API as one whose count on the VMs fleet differs
- * from All fleets' — one the simulations on Unassigned share — rather than by
- * moving hosts to make a difference. The counts are the hourly vulnerabilities
- * job's, so each is compared with the API's figure for the same scope (re-read
- * until they agree, in case the job runs between the two). The Hosts list is
- * computed live, so it is compared with the live API host list, never with the
- * count.
+ * The CVE is chosen through the API as one of the real Linux VM's own whose
+ * count on the VMs fleet differs from All fleets' — one the simulations on
+ * Unassigned share — rather than by moving hosts to make a difference. It comes
+ * from the VM's own software, not from the fleet's CVE list: that list is the
+ * hourly vulnerabilities job's, and it also counts a simulation a label spec had
+ * borrowed onto the fleet while the job ran, so its CVE may have no live host on
+ * the fleet by the time the Hosts list is read. The real VM never leaves the
+ * fleet. The counts are the hourly job's, so each is compared with the API's
+ * figure for the same scope (re-read until they agree, in case the job runs
+ * between the two). The Hosts list is computed live, so it is compared with the
+ * live API host list, never with the count.
  */
 test("Vulnerabilities — a CVE's host count and hosts are its fleet's", async ({
   dashboard,
@@ -271,16 +277,21 @@ test("Vulnerabilities — a CVE's host count and hosts are its fleet's", async (
   request,
   page,
 }) => {
+  const linuxVm = await requireRealHost(request, 'linux');
+  expect(linuxVm.fleetId, `${linuxVm.displayName} is on the VMs fleet`).toBe(vmsFleetId);
   let picked: { cve: string } | undefined;
-  for (const v of (await listVulnerabilities(request, { fleetId: vmsFleetId, perPage: 50 })).slice(0, 20)) {
-    if (v.hostsCount === 0) continue;
-    const all = (await listVulnerabilities(request, { query: v.cve })).find((a) => a.cve === v.cve);
-    if (all && all.hostsCount !== v.hostsCount) {
-      picked = { cve: v.cve };
+  for (const candidate of (await listHostCves(request, linuxVm.id)).slice(0, 20)) {
+    const inVms = (await listVulnerabilities(request, { fleetId: vmsFleetId, query: candidate })).find(
+      (v) => v.cve === candidate,
+    );
+    if (!inVms?.hostsCount) continue;
+    const all = (await listVulnerabilities(request, { query: candidate })).find((a) => a.cve === candidate);
+    if (all && all.hostsCount !== inVms.hostsCount) {
+      picked = { cve: candidate };
       break;
     }
   }
-  expect(picked, 'a CVE on the VMs fleet that hosts on Unassigned share').toBeDefined();
+  expect(picked, `a CVE of ${linuxVm.displayName}'s that hosts on Unassigned share`).toBeDefined();
   const { cve } = picked!;
 
   const countIn = async (fleetId?: number) =>
