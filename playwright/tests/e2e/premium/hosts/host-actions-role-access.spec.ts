@@ -4,9 +4,8 @@
  * what its Live report modal — "Select a report" — lists and links to.
  *
  * The cells come from Fleet's gating (`HostActionsDropdown/helpers.tsx`,
- * `SelectReportModal`), not from the QA Wolf flows they replace (round 1 C2 #13,
- * C4 #P20, C7 #16), which checked Transfer and Delete with the menu closed, ran
- * as the wrong user, or only read the modal's description:
+ * `SelectReportModal`), each read with the menu open, as the role itself, and
+ * from the modal's list rather than its description:
  *   - Live report for every role (on a desktop host); Run script for GA, GM, GT,
  *     TA, TM; Transfer for global admins, maintainers and technicians (a team
  *     role moves hosts only through the API, by design); Delete for GA, GM, TA,

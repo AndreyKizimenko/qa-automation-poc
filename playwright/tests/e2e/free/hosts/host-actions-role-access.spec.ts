@@ -1,6 +1,6 @@
 /**
  * Free • Hosts • a host's Actions by role — the free half of
- * `premium/hosts/host-actions-role-access.spec.ts` (round 1 C2 #3), for the two
+ * `premium/hosts/host-actions-role-access.spec.ts`, for the two
  * non-admin roles free has. Free has no fleets, so no role is offered Transfer.
  *
  *   - global maintainer: Live report, Run script and Delete; the Live report

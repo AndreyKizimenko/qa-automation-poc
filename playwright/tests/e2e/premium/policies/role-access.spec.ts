@@ -4,9 +4,8 @@
  * Automations cell as a button or plain text) and a policy's details page
  * (Run policy, Edit policy), plus the 403 a role gets on `/policies/new`.
  *
- * The cells come from Fleet's gating, not from the QA Wolf flows they replace
- * (round 1 C3 #20, #23, #30, #33, #34, #35), whose checks were mostly stale copy
- * ("Add a policy") or absences on a page nothing proved had rendered:
+ * The cells come from Fleet's gating, and every absence is read on a page shown
+ * to have rendered:
  *   - `ManagePoliciesPage`: Add policy and row checkboxes for GA, GM, TA, TM;
  *     Manage automations for GA and TA; the Automations cell is a button only
  *     for a role that can open its modal (`PoliciesTableConfig`), and an
@@ -29,11 +28,11 @@
  * `cleanup-setup` drains global and Workstations policies anyway. Names are
  * `pw-role-*` and unique per test, and the list is searched down to each.
  *
- * The writes (C3 #31, #32) are one test per team role: a fleet policy saved
+ * The writes are one test per team role: a fleet policy saved
  * from the UI, read back with the role as its author. Editing and deleting
  * take the admin's form and endpoints (`policies.spec.ts`), so they aren't
- * repeated per role. A global maintainer's fleet create (C3 #21) runs the
- * admin's code path outright and is cut.
+ * repeated per role. A global maintainer's fleet create runs the admin's code
+ * path outright, so it isn't tested separately.
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '@fixtures';

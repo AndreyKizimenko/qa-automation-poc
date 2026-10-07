@@ -1,6 +1,6 @@
 /**
  * Free • Policies • what each role is shown — the free half of
- * `premium/policies/role-access.spec.ts` (round 1 C3 #5, #20), for the two
+ * `premium/policies/role-access.spec.ts`, for the two
  * non-admin roles free has. Free has no fleets, so there's no picker, no
  * inherited row and nothing team-scoped: the list holds the global policies.
  *
