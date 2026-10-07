@@ -30,10 +30,12 @@ on a host. The premium/free QA hosts are osquery-perf **simulations**, so an
 install/uninstall command has nothing to execute against, and the real macOS VM
 (`liveMacosHost`) is not used by any software spec. Every assertion is "the
 installer is in the library / catalog / activity feed", never "the bits landed on
-a machine". That is still true after the additions below — `script-only-package`
-uploads a shell script Fleet stores as an install script and never runs, and
-`package-scripts` downloads an installer instead of installing it and stores
-scripts nothing runs.
+a machine". That is still true after the additions below — `script-only-package`'s
+add-and-remove test (SWL-30) uploads a shell script Fleet stores as an install script
+and never runs, and `package-scripts` downloads an installer instead of installing it
+and stores scripts nothing runs. The same spec's second describe *does* run a
+script-only package, on the real Mac; it is audited with the other host-execution
+tests, as [area 21](21-software-on-hosts.md)'s SWH-17.
 
 **Durable precondition — the Fleet-maintained app shelf.** The premium instance's
 **QA** fleet carries a permanent shelf of 10 Fleet-maintained apps × macOS and

@@ -1,8 +1,12 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Toast } from './Toast';
 
-/** The Library row's install-side action. Which one Fleet offers is the contract the update spec asserts. */
-export type LibraryInstallAction = 'Install' | 'Reinstall' | 'Update' | 'Retry';
+/**
+ * The Library row's install-side action. Which one Fleet offers is the contract the
+ * update spec asserts. A script-only package (with no uninstall script) offers Run,
+ * then Rerun once it has run, and Retry after a failed run.
+ */
+export type LibraryInstallAction = 'Install' | 'Reinstall' | 'Update' | 'Retry' | 'Run' | 'Rerun';
 export type LibraryUninstallAction = 'Uninstall' | 'Retry uninstall';
 
 /**
@@ -106,6 +110,16 @@ export class HostSoftwareLibrary {
   async install(title: string, label: LibraryInstallAction = 'Install'): Promise<void> {
     await this.installAction(title, label).click();
     await this.toast.expectSuccess('Software is installing. To see details, go to Details > Activity.');
+  }
+
+  /**
+   * Clicks Run (or Rerun) on a script-only package and waits for Fleet to accept
+   * it. Running one is an install of the package, so it queues the same way and
+   * reaches the host on its next check-in.
+   */
+  async run(title: string, label: 'Run' | 'Rerun' = 'Run'): Promise<void> {
+    await this.installAction(title, label).click();
+    await this.toast.expectSuccess('Script is running. To see details, go to Details > Activity.');
   }
 
   async uninstall(title: string, label: LibraryUninstallAction = 'Uninstall'): Promise<void> {

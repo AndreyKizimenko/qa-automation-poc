@@ -654,7 +654,8 @@ export async function countHostLibraryTitles(request: APIRequestContext, hostId:
 /**
  * Waits for a host's install or uninstall of a title to reach `status`. A shared
  * VM works through one queue — scripts, installs, uninstalls — so the budget
- * covers another spec's work landing first.
+ * covers another spec's work landing first. `interval` is how often the status is
+ * read; shorten it only where what follows has to be read right after the result.
  */
 export async function waitForHostSoftwareStatus(
   request: APIRequestContext,
@@ -662,6 +663,7 @@ export async function waitForHostSoftwareStatus(
   titleId: number,
   status: HostSoftwareStatus,
   timeout = 300_000,
+  interval = 5_000,
 ): Promise<HostSoftwareState> {
   let state: HostSoftwareState | null = null;
   await expect
@@ -670,7 +672,7 @@ export async function waitForHostSoftwareStatus(
         state = await getHostSoftwareState(request, hostId, titleId);
         return state?.status;
       },
-      { message: `title ${titleId} never reached ${status} on host ${hostId}`, timeout, intervals: [5_000] },
+      { message: `title ${titleId} never reached ${status} on host ${hostId}`, timeout, intervals: [interval] },
     )
     .toBe(status);
   return state!;

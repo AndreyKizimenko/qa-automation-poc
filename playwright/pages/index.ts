@@ -13,7 +13,7 @@ export { UpdateEndUserModal } from './components/UpdateEndUserModal';
 export { RecoveryLockPasswordModal } from './components/RecoveryLockPasswordModal';
 export { HostSoftwareLibrary } from './components/HostSoftwareLibrary';
 export type { LibraryInstallAction, LibraryUninstallAction } from './components/HostSoftwareLibrary';
-export { InstallDetailsModal, UninstallDetailsModal } from './components/SoftwareActionDetailsModal';
+export { InstallDetailsModal, UninstallDetailsModal, ScriptPackageDetailsModal } from './components/SoftwareActionDetailsModal';
 export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';

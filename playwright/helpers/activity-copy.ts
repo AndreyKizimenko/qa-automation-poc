@@ -226,6 +226,8 @@ export const activityCopy = {
       new RegExp(`failed to uninstall ${esc(title)} on this host\\.`),
     toldToUninstall: ({ title }: { title: string }) =>
       new RegExp(`told Fleet to uninstall ${esc(title)} on this host\\.`),
+    /** A script-only package's run: `INSTALL_STATUS_PREDICATES.ran_script` — `ran <b>TITLE</b> on this host.` */
+    ranScriptPackage: ({ title }: { title: string }) => new RegExp(`\\bran ${esc(title)} on this host\\.`),
   },
 
   // VPP and Android app-store entries. The feed renders the title with a

@@ -4,7 +4,8 @@ import { Page, Locator, expect } from '@playwright/test';
  * The result of one software install or uninstall on a host — raised by the
  * host Library's Status button and by the matching Activity item. Fleet renders
  * each kind in its own modal (`SoftwareInstallDetailsModal`,
- * `SoftwareUninstallDetailsModal`) with the same layout: a status sentence naming
+ * `SoftwareUninstallDetailsModal`, and `SoftwareScriptDetailsModal` for a
+ * script-only package's run) with the same layout: a status sentence naming
  * the title, the package and the host, and a **Details** toggle that reveals the
  * script output the host reported.
  *
@@ -56,5 +57,16 @@ export class InstallDetailsModal extends SoftwareActionDetailsModal {
 export class UninstallDetailsModal extends SoftwareActionDetailsModal {
   constructor(page: Page) {
     super(page, 'software-uninstall-details-modal');
+  }
+}
+
+/**
+ * "Script details" for a script-only package's run: `Fleet ran <title> (<file>)
+ * on <host> (<when>).` Its Details toggle appears only when the script printed
+ * something, and reveals it as "Script output:".
+ */
+export class ScriptPackageDetailsModal extends SoftwareActionDetailsModal {
+  constructor(page: Page) {
+    super(page, 'software-script-details-modal');
   }
 }

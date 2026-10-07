@@ -9,7 +9,11 @@ import { MdmCommandDetailsModal } from '../components/MdmCommandDetailsModal';
 import { Navbar } from '../components/Navbar';
 import { RunScriptModal } from '../components/RunScriptModal';
 import { ScriptDetailsModal } from '../components/ScriptDetailsModal';
-import { InstallDetailsModal, UninstallDetailsModal } from '../components/SoftwareActionDetailsModal';
+import {
+  InstallDetailsModal,
+  ScriptPackageDetailsModal,
+  UninstallDetailsModal,
+} from '../components/SoftwareActionDetailsModal';
 import { SelectReportModal } from '../components/SelectReportModal';
 import { Toast } from '../components/Toast';
 import { TransferHostModal } from '../components/TransferHostModal';
@@ -51,6 +55,8 @@ export class HostDetailsPage {
   readonly library: HostSoftwareLibrary;
   readonly installDetailsModal: InstallDetailsModal;
   readonly uninstallDetailsModal: UninstallDetailsModal;
+  /** A script-only package's run, opened from its Past activity or the Library's "Ran" status. */
+  readonly scriptPackageDetailsModal: ScriptPackageDetailsModal;
   readonly toast: Toast;
   /** Confirmation raised by Actions → Delete; its own modal class. */
   readonly deleteModal: Locator;
@@ -193,6 +199,7 @@ export class HostDetailsPage {
     this.library = new HostSoftwareLibrary(page);
     this.installDetailsModal = new InstallDetailsModal(page);
     this.uninstallDetailsModal = new UninstallDetailsModal(page);
+    this.scriptPackageDetailsModal = new ScriptPackageDetailsModal(page);
     this.toast = new Toast(page);
     this.deleteModal = page.locator('.delete-host-modal');
 

@@ -1,6 +1,6 @@
 # Software on hosts — test audit
 
-**Specs covered:** 8 files · **Entries:** 13 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 22 (three parameterized loops collapsed into four entries — SWH-14's six durable fixtures, SWH-16's three VMs, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
+**Specs covered:** 9 files · **Entries:** 14 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 23 (three parameterized loops collapsed into four entries — SWH-14's six durable fixtures, SWH-16's three VMs, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
 This area covers Fleet **delivering software to a real device**: a package the VMs fleet keeps for the purpose,
 installed from the host's Library, followed until the host reports it back, then uninstalled and followed
@@ -234,6 +234,7 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 | SWH-11 | `premium/software/large-upload.spec.ts` | a package over the size limit is refused in the browser, before any upload | UI+API | ☐ |
 | SWH-12 | `premium/software/large-upload.spec.ts` | a large upload shows its progress and ends in success | UI | ☐ |
 | SWH-16 | `premium/software/host-library-tab.spec.ts` | on the {darwin, windows, linux} VM, counts what it offers and adds software on the {Fleet-maintained, Custom package} tab — **3 variants**, read-only | UI+API | ☐ |
+| SWH-17 | `premium/software/script-only-package.spec.ts` | runs on the macOS VM from its Library, and its output is in the run's details | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -301,6 +302,7 @@ installed version and the Inventory row for that state.
    - ✅ *(API)* The host's status for the title is `pending_install` immediately after the click.
 5. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, wait for "Last fetched" to move once on its own, then click **Refetch** and wait for it to move again — `waitForSoftwareSettled(…, 'installed', { inventoryName })` (`inventoryName` set only for the `.exe`).
    - ✅ *(API)* Status reaches `installed` (≤ 5 min).
+   - ✅ *(API, macOS Fleet-maintained app only)* The status is read every second, and at the moment it reaches `installed` the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asks for fresh vitals by itself once an install succeeds (round 2 #15; round 3, batch G). By hand: the host header's Refetch button reads **Fetching fresh vitals...** without anyone pressing it.
    - ✅ *(API)* No refetch outstanding (≤ 4 min), then `detail_updated_at` moves past a baseline taken after that (≤ 4 min, refetch requested).
    - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for an unlinked `.exe` the host's inventory by `7-Zip 26.01 (arm64)`. The test records which: **linked** iff the title now shows an installed version (only the `.exe` may lack one).
 6. ☐ Reload the host page → **Software** → **Library** → search the title.
@@ -321,7 +323,7 @@ installed version and the Inventory row for that state.
     - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
     - ✅ *(API)* The host's status for the title is `pending_uninstall`.
 11. ☐ Wait for the status to clear, then as step 5 — `waitForSoftwareSettled(…, null, { inventoryName })`.
-    - ✅ *(API)* Status clears to `null` (≤ 5 min); a post-status refetch lands; the inventory no longer lists it (the title's installed versions, or the host's inventory by `7-Zip 26.01 (arm64)`).
+    - ✅ *(API)* Status clears to `null` (≤ 5 min) — for the macOS Fleet-maintained app read every second, and at that moment the host has a refetch outstanding (Fleet's own, as in step 5); a post-status refetch lands; the inventory no longer lists it (the title's installed versions, or the host's inventory by `7-Zip 26.01 (arm64)`).
 12. ☐ Reload the host → **Software** → **Library** → search the title.
     - ✅ *(UI)* **Installed version** reads `---`.
     - ✅ *(UI)* The install-side button reads **Install**.
@@ -341,6 +343,7 @@ installed version and the Inventory row for that state.
   - **FMA uninstall and Windows FMA install are new coverage.** SWH-02 only ever installed Itsycal and removed it silently in a `finally`; nothing installed a Windows FMA.
   - **Durable titles make cleanup deterministic.** Fleet always knows whether each fixture is on its VM, so the preflight can put a dead run's install right by uninstalling it, instead of hoping the next run's pre-clean catches it before the title is deleted — and it runs again at `cleanup-teardown`, so a timed-out test (whose `finally` Playwright skips) is healed in the same run.
   - **Half the host round-trips.** SWH-01 + SWH-04 did two installs and two uninstalls per platform (one of each silently, in cleanup or setup); this does one of each, all asserted.
+  - **Fleet's own refetch after an install and an uninstall** is read on the macOS Fleet-maintained app (`refetch_requested` the moment the status settles, read every second). Every wait in the suite asks for a refetch itself, so without this nothing would notice Fleet ceasing to ask. Its limits: the flag records no author, and other specs request refetches on these VMs, so a pass can't be pinned on Fleet (a Fleet that stopped asking still fails whenever no other refetch happens to be outstanding); and any refetch's results landing clear it, so the read follows the result within a second, on one fixture, to keep that race to two reads a run. The UI's "Fetching fresh vitals" spinner isn't read: it gives up after 60 s, and a VM's refetch takes 70–120 s.
 - *Coverage gaps:*
   - **Adding and installing are no longer one flow.** A package uploaded through **Add software** reaching a device is now proved only by SWH-03 (`.deb`, via the Deploy policy); the fixtures here are added by gitops, and the UI add is SWL-01 on fleets with no real hosts. They share Fleet's installer store, so the risk is small, but the catalog **Add** → install path on one title (old SWH-02's `expectNotAddedFor` precondition) is gone.
   - **The library version is checked against the API's own reading**, not against the version the fixture is known to carry (`1.0.0` for the three inert packages). A Fleet parse that got the version wrong would be reported identically by the API and the UI and pass here.
@@ -898,6 +901,44 @@ other:
 - *Value:* The routing is a per-platform decision in the Library card (`onAddSoftware`) that nothing else exercises, and the count is the only check that the card's total is the server's.
 - *Coverage gaps:* The **All available / Self service** filter (no VMs-fleet title is self-service, so it would read an empty list), the search box, paging, and the iOS / Android branch (App Store tab), which needs a device the instances lack.
 - *Efficiency / smells:* Seconds each. The count comparison retries by reload rather than pinning the fleet's library, which other specs change during a run.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+### SWH-17 · Premium • Software • Script-only package run on a host › runs on the macOS VM from its Library, and its output is in the run's details
+
+- **File:** [`playwright/tests/e2e/premium/software/script-only-package.spec.ts`](../../tests/e2e/premium/software/script-only-package.spec.ts) (its second describe; the first, the add-and-remove round trip, is area 06's SWL-30)
+- **Grep:** `npx playwright test --project=premium script-only-package -g "runs on the macOS VM"`
+- **Project:** premium · **Host:** the real **macOS VM**, on the VMs fleet · **VM time:** one script run, ~1–2 min with the queue
+- **Mode:** UI+API · **Isolation:** its own describe; timeout **600 s**, `HOST_RETRIES`. The per-run title is deleted in an `afterEach` (which still runs on a timeout); deleting it cancels a run still queued. The VMs sweep removes a `fleet-pw-*` title a killed run left.
+- **Source:** QA Wolf `add-custom-package-that-only-contains-a-script` and `Add a .sh script as a software package` (round 2 #72 and #88; round 3, batch G). Run on the Mac rather than the Linux VM, whose install and script queue is the suite's busiest.
+- **Preconditions (API):** the Mac online (`requireRealHost`). `POST /software/package` puts `fleet-pw-script-<nonce>.sh` on the VMs fleet: `#!/bin/sh`, `echo "pw-script-package-ran-<nonce>"`, `exit 0` (a failing install script would back orbit off for minutes, fleetdm/fleet#54607). Fleet offers it to the Mac (`hostsOfferedTitle`).
+
+**Flow**
+
+1. ☐ Open the Mac's details → **Software** → **Library** → search `fleet-pw-script-<nonce>`.
+   - ✅ *(UI)* the row offers **Run** — not Install — and no **Uninstall** (a script-only package has no uninstall script). Round 2 #88.
+2. ☐ Click **Run**.
+   - ✅ *(UI)* toast **"Script is running. To see details, go to Details > Activity."**
+   - ✅ *(API)* the title's status is `pending_install`, and it is in the host's upcoming activities. (The Upcoming tab's "told Fleet to run …" isn't read in the UI: the Mac can pick it up before the page loads.)
+3. ☐ Wait for the run (≤ 5 min).
+   - ✅ *(API)* the status reaches `installed`.
+   - ✅ *(API)* an `installed_software` activity newer than the run's start, for this title and host, by the admin: `status` `installed`, `software_package` the file name, `source` `sh_packages`.
+4. ☐ Reload → **Activity** → **Past** → click **"… ran fleet-pw-script-<nonce> on this host."**
+   - ✅ *(UI)* **Script details** opens with **"Fleet ran fleet-pw-script-<nonce> (fleet-pw-script-<nonce>.sh) on <the Mac's display name>"**.
+   - Click **Details** → ✅ *(UI)* the script output holds `pw-script-package-ran-<nonce>`: the Mac ran this file. **Close**.
+5. ☐ Reload → **Software** → **Library** → search the title.
+   - ✅ *(UI)* its status reads **Ran**, and the action **Rerun**.
+
+**Assessment**
+- *Value:* The only run of a script-only package on a real host; a simulation with orbit reports a random result for a script it never ran. The marker in the output is what proves the Mac ran this file, and every check is keyed to the per-run title, so a late result from a dead attempt can't satisfy a retry.
+- *Coverage gaps:* A failed run (**Retry**, "failed to run") is left out on purpose: it would stall the Mac's queue (#54607), so it would belong in `exclusive/`. **Rerun**, self-service, a `.ps1` on Windows and a script package *with* an uninstall script (which Fleet treats as an ordinary install) aren't run.
+- *Efficiency / smells:* One script run on the Mac. Never edit the package while its run is queued or running (fleetdm/fleet#54732, #54734); the test doesn't.
 
 **Notes (Andrey)**
 ```
