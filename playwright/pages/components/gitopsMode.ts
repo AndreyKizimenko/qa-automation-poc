@@ -46,6 +46,11 @@ export interface GitOpsGateOptions {
    * whose own overlay intercepts pointer events.
    */
   hoverTarget?: Locator;
+  /**
+   * Hovered before `hoverTarget` on every attempt, for a control that renders
+   * only while its row is hovered (a profile row's actions).
+   */
+  reveal?: Locator;
   style?: GitOpsDisabledStyle;
 }
 
@@ -87,6 +92,13 @@ function reactSelectDisabled(control: Locator): Locator {
  * ships from two different components, and only one of them adds the
  * `gitops-mode-tooltip-wrapper__tip-text` class.
  *
+ * The tip opens when the pointer enters the control. A page still settling can
+ * move the control, or render it again, after the hover (a card above it
+ * finishes loading, a list replaces an empty state), which leaves the pointer
+ * over something else and no tip on screen. So each attempt steps away and
+ * hovers again until the tip opens; a control that never raises it still fails.
+ * `reveal`, when given, is hovered first on every attempt.
+ *
  * Leaves the pointer parked away from the control so the next call starts from
  * a clean slate — the tooltip only exists in the DOM while it is showing, and a
  * leftover one would let the next assertion pass without hovering anything.
@@ -95,12 +107,20 @@ export async function expectGitOpsTooltip(
   page: Page,
   hoverTarget: Locator,
   repoUrl: string,
+  opts: { reveal?: Locator } = {},
 ): Promise<void> {
   const tooltip = page.getByRole('tooltip').filter({ hasText: TOOLTIP_TEXT });
   await expect(tooltip).toHaveCount(0);
 
-  await hoverTarget.hover();
-  await expect(tooltip.first()).toBeVisible();
+  await expect(async () => {
+    // Away first, and no tip left from an earlier attempt: only one this
+    // attempt's hover raises can pass.
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toHaveCount(0, { timeout: 2_000 });
+    if (opts.reveal) await opts.reveal.hover({ timeout: 2_000 });
+    await hoverTarget.hover({ timeout: 2_000 });
+    await expect(tooltip.first()).toBeVisible({ timeout: 2_000 });
+  }, 'hovering the control raises the gitops tooltip').toPass({ timeout: 10_000 });
   // `new URL()` is how Fleet builds the href, and it normalises
   // "https://example.com" to "https://example.com/".
   await expect(tooltip.first().getByRole('link', { name: 'YAML' })).toHaveAttribute(
@@ -134,7 +154,7 @@ export async function expectGatedByGitOps(
     await expect(control).toBeDisabled();
   }
 
-  await expectGitOpsTooltip(page, opts.hoverTarget ?? wrapper, repoUrl);
+  await expectGitOpsTooltip(page, opts.hoverTarget ?? wrapper, repoUrl, { reveal: opts.reveal });
 }
 
 /**

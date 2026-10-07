@@ -96,10 +96,11 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
     await expectGatedByGitOps(profiles.addProfileButton, repoUrl);
 
     // The row's buttons render only while it's hovered, and each tooltip check
-    // ends by moving the pointer away, so every check starts with a hover.
+    // ends by moving the pointer away, so every check starts with a hover (and
+    // the tooltip check re-hovers the row on each of its attempts).
     const row = profiles.itemByName(name);
     await row.hover();
-    await expectGatedByGitOps(profiles.rowButton(name, 'Delete'), repoUrl);
+    await expectGatedByGitOps(profiles.rowButton(name, 'Delete'), repoUrl, { reveal: row });
     for (const action of ['View', 'Edit', 'Download'] as const) {
       await row.hover();
       await expectNotGatedByGitOps(profiles.rowButton(name, action));
