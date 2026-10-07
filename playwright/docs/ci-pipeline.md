@@ -82,6 +82,15 @@ beside another browser project in a single invocation, because side by side is e
 avoid. The order between the two steps does not matter; both put their lock back in their teardown, and
 `cleanup-setup` would anyway.
 
+**The gitops-mode exceptions are restored before every premium apply, not by the suite.** Unlike the mode flag,
+the exceptions act outside gitops mode: `fleetctl gitops` reads them on every apply, so a stuck `secrets: false`
+makes it delete every enroll secret (premium's YAML declares none) and a stuck `labels` or `software: true` makes
+it refuse the YAML. The gitops chain runs before the suite's `cleanup-setup`, so a restore there would come one
+apply too late. The gitops-mode teardown puts them back at the end of every gitops-mode step, and
+`.github/scripts/restore-gitops-exceptions.sh`, the first step of `gitops-premium.yml` and
+`gitops-premium-min.yml`, puts them back if that teardown never ran. Nothing can declare them, so the baseline is
+pinned in that script and in `GITOPS_EXCEPTIONS_BASELINE` (`helpers/api/gitops-mode.ts`).
+
 **Worker counts are measured, not guessed.** The count is per tier because the instances differ, and it is a
 CI-only number: locally the default is higher and the specs that touch a VM are run with `--workers=2`. The
 measurements that set the current numbers are in [*What bounds a run*](#what-bounds-a-run). A trial at another

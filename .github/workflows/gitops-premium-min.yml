@@ -38,6 +38,15 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # `fleetctl gitops` reads the gitops-mode exceptions even with the mode off,
+      # and a stuck one deletes or refuses what this config declares: the script says how.
+      - name: Restore the pinned gitops-mode exceptions
+        if: github.event_name != 'pull_request'
+        run: .github/scripts/restore-gitops-exceptions.sh
+        env:
+          FLEET_URL:       ${{ secrets.FLEET_PREMIUM_URL }}
+          FLEET_API_TOKEN: ${{ secrets.FLEET_PREMIUM_API_TOKEN }}
+
       - name: Apply latest configuration to Fleet
         uses: ./.github/gitops-action
         with:
