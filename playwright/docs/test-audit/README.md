@@ -93,14 +93,16 @@ files · ~350 test declarations · 4 projects**.
 > **Round 3 batch G added 2026-10-07** (`playwright/qawolf-round3-batch-g`): live runs and execution side effects on the
 > real VMs. Area **04**: POL-42 runs a policy live on the three VMs (Pass / Fail, Yes / No, the Host sort, its CSV), both
 > tiers. Area **05**: RPT-36 runs a report live on them and exports the results, both tiers. Area **02**: HOST-23 reads
-> its MDM command from the dashboard feed filtered to its type, and checks the row's modal for the command's UUID.
+> its MDM command from the dashboard feed filtered to its type, and checks the row's modal for the command's UUID; HOST-27
+> checks free's host Software tab has no Library. Area **21**: SWH-16 reads each premium VM's Library count and where its
+> Add software leads.
 
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 26 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 27 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 21 | premium |
 | 04 | [Policies](04-policies.md) | 42 | premium, free |
 | 05 | [Reports / queries](05-reports.md) | 36 | premium, free |
@@ -119,10 +121,10 @@ files · ~350 test declarations · 4 projects**.
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
 | 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
-| 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 13 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**539 entries** covering every test in the suite. An entry can expand into several
+**541 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
 17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under

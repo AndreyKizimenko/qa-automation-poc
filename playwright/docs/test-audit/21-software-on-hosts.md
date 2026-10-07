@@ -1,6 +1,6 @@
 # Software on hosts — test audit
 
-**Specs covered:** 7 files · **Entries:** 12 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 19 (two parameterized loops collapsed into three entries — SWH-14's six durable fixtures, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
+**Specs covered:** 8 files · **Entries:** 13 live + 3 retired stubs (SWH-01, SWH-02, SWH-04 — retired 2026-09-28) · **Runtime tests:** 22 (three parameterized loops collapsed into four entries — SWH-14's six durable fixtures, SWH-16's three VMs, and the Claude loop, which declares two tests per platform, SWH-09 and SWH-13 — every generated title listed; skips on a data-availability guard: SWH-10 always today, SWH-13's two tests on any day Claude is level with the library) · **Project:** premium
 
 This area covers Fleet **delivering software to a real device**: a package the VMs fleet keeps for the purpose,
 installed from the host's Library, followed until the host reports it back, then uninstalled and followed
@@ -233,6 +233,7 @@ name starts `fleet-pw-`, so if you do neither, the next premium run's sweep purg
 | SWH-10 | `premium/software/update-on-host.spec.ts` | Claude on the macOS VM: pinned back it is ahead, installed it is level, unpinned it updates — **skips** until a second Claude build is cached | UI+API | ☐ |
 | SWH-11 | `premium/software/large-upload.spec.ts` | a package over the size limit is refused in the browser, before any upload | UI+API | ☐ |
 | SWH-12 | `premium/software/large-upload.spec.ts` | a large upload shows its progress and ends in success | UI | ☐ |
+| SWH-16 | `premium/software/host-library-tab.spec.ts` | on the {darwin, windows, linux} VM, counts what it offers and adds software on the {Fleet-maintained, Custom package} tab — **3 variants**, read-only | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -865,6 +866,38 @@ other:
   - ~~⚠️ **It fails on a fast link.**~~ **Fixed 2026-09-28:** a reading that finds no readout returns 100 once the modal is gone (0 while it is still up), and the poll wants a reading above `min(first, 99)` — so a first reading of 100 %, or a modal that closes between readings, passes instead of timing out. Original finding: if the first reading was already 100 %, or the modal closed before a higher reading landed, `percent()`'s `innerText` on a detached `.file-details__progress-text` threw and the poll retried until its 120 s timeout — a *faster* instance or runner made it flakier.
   - ~~**`.file-details__progress-text` is a class locator with no comment justifying it.**~~ **Fixed 2026-09-28:** the readout is `SoftwareCustomPackagePage.progressPercent`, `progressModal.getByText(/^\d{1,3}%$/)` — reached by its text, scoped to the modal. Original finding: the class locator had no comment justifying it (the bar next to it is reached by title).
   - 100 MiB up through the browser to a 2 GB box while the rest of the suite runs in parallel: cheap as a test, not free as load.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+### SWH-16 · Premium • Software • a host's Library tab › on the {darwin, windows, linux} VM, counts what it offers and adds software on the {Fleet-maintained, Custom package} tab
+
+- **File:** [`playwright/tests/e2e/premium/software/host-library-tab.spec.ts`](../../tests/e2e/premium/software/host-library-tab.spec.ts)
+- **Grep:** `npx playwright test --project=premium host-library-tab` (three runtime tests: `on the darwin VM, … Fleet-maintained tab`, `on the windows VM, … Fleet-maintained tab`, `on the linux VM, … Custom package tab`)
+- **Project:** premium · **Host:** the real VM of the row's platform, on the **VMs** fleet · **Read-only:** no VM time, nothing added
+- **Mode:** UI+API · **Isolation:** one test per VM, independent
+- **Source:** QA Wolf `general-library-verify-tab-availability-and-content` (round 1 C5 #13; round 3, batch G), reshaped at review: the flow read the header's static pieces and walked every row's action buttons, which the update, uninstall and inventory specs already act on. Free's side is HOST-27.
+- **Preconditions:** the VM online (`requireRealHost`) and on the VMs fleet.
+
+**Flow**
+
+1. ☐ Open the VM's details (`/hosts/<id>`) → **Software** → **Library**.
+   - ✅ *(UI)* URL contains `/software/library`; the card's subheader reads **"Software available to be installed on this host"**.
+2. ☐ (Reload until a pair agrees, up to 60 s) Read the card's **"N items"**, and count the titles the host is offered (`GET /hosts/:id/software?available_for_install=true`).
+   - ✅ *(API)* the VM is offered at least one title.
+   - ✅ *(UI vs API)* **"N items"** equals that count. Other specs add and delete per-run `fleet-pw-*` packages on the VMs fleet meanwhile, so a pair read seconds apart can differ; a reload retries it.
+3. ☐ Click **Add software** in the card.
+   - ✅ *(UI)* macOS and Windows: the URL is `/software/add/fleet-maintained?fleet_id=<VMs>` and the **Fleet-maintained** tab is selected. Linux: `/software/add/package?fleet_id=<VMs>` and **Custom package** is selected.
+
+**Assessment**
+- *Value:* The routing is a per-platform decision in the Library card (`onAddSoftware`) that nothing else exercises, and the count is the only check that the card's total is the server's.
+- *Coverage gaps:* The **All available / Self service** filter (no VMs-fleet title is self-service, so it would read an empty list), the search box, paging, and the iOS / Android branch (App Store tab), which needs a device the instances lack.
+- *Efficiency / smells:* Seconds each. The count comparison retries by reload rather than pinning the fleet's library, which other specs change during a run.
 
 **Notes (Andrey)**
 ```

@@ -1,6 +1,6 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 14 files · **Test declarations:** 26 entries (24 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **31 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 4 `free/hosts` specs)
+**Specs covered:** 15 files · **Test declarations:** 27 entries (25 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **32 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 5 `free/hosts` specs)
 
 This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
@@ -52,6 +52,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-24 | `free/hosts/host-idp-username.spec.ts` | Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field | UI | ☐ |
 | HOST-25 | `shared/hosts/host-reports-tab.spec.ts` | Host details — reports that don't store results show only with the toggle on | UI+API | ☐ |
 | HOST-26 | `free/hosts/host-actions-role-access.spec.ts` | Free • Hosts • Actions by role › <role> is offered the host actions its role grants (2 roles) | UI | ☐ |
+| HOST-27 | `free/hosts/host-software-tab.spec.ts` | a host's Software tab is its inventory alone, with no Library | UI | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -1107,6 +1108,33 @@ other:
 **Assessment**
 - *Value:* free's half of HOSTP-20.
 - *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+### HOST-27 · Free • Hosts • a host's Software tab is its inventory alone, with no Library
+
+- **File:** [`playwright/tests/e2e/free/hosts/host-software-tab.spec.ts`](../../tests/e2e/free/hosts/host-software-tab.spec.ts)
+- **Grep:** `npx playwright test --project=free host-software-tab`
+- **Project:** free · **Host:** any online Linux simulation (`findOnlineHost(…, 'linux', { kind: 'simulated' })`), read only
+- **Mode:** UI · **Isolation:** standalone
+- **Source:** free's side of round 1 C5 #13 (round 3, batch G); premium's is SWH-16.
+
+**Flow**
+
+1. ☐ Open the host's details → **Software**.
+   - ✅ *(UI)* the inventory renders: rows or its empty state, and **Search by name or vulnerability (CVE)**.
+   - ✅ *(UI)* no **Library** tab and no **Inventory** tab: free's Software card has no sub-tabs (`showSoftwareLibraryTab = isPremiumTier`).
+
+**Assessment**
+- *Value:* The tier gate on the host Library, which no free spec read; the search box is the positive control that the tab rendered before the absences are checked.
+- *Coverage gaps:* None worth adding: free has nothing to install.
+- *Efficiency / smells:* Seconds.
 
 **Notes (Andrey)**
 ```

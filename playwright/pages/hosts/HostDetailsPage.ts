@@ -345,6 +345,14 @@ export class HostDetailsPage {
     await expect(this.softwareRowOrEmpty()).toBeVisible();
   }
 
+  /** Software → Library, unfiltered: waits for the card's item count. */
+  async openLibraryTab(): Promise<void> {
+    await this.softwareTab.click();
+    await this.libraryTab.click();
+    await expect(this.page).toHaveURL(/\/software\/library/);
+    await expect(this.library.itemCount).toBeVisible();
+  }
+
   /**
    * Software → Library, filtered to one title. Waits for that title's row: the
    * Library is server-searched, and a title just added to the host's fleet is

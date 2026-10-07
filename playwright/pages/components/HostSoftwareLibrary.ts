@@ -26,8 +26,16 @@ export class HostSoftwareLibrary {
   readonly search: Locator;
   readonly table: Locator;
   readonly rows: Locator;
-  /** "Add software" in the card header — adds an installer to the host's fleet. */
+  /**
+   * "Add software" in the card header — adds an installer to the host's fleet.
+   * Offered to admins and maintainers; it opens the Add software page for the
+   * host's fleet, on the tab that suits the host's platform.
+   */
   readonly addSoftwareButton: Locator;
+  /** The card's "Software available to be installed on this host" subheader. */
+  readonly subheader: Locator;
+  /** "N items" above the table: how many titles the Library offers the host, across every page. */
+  readonly itemCount: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -37,6 +45,8 @@ export class HostSoftwareLibrary {
     this.table = this.card.getByRole('table');
     this.rows = this.table.locator('tbody').getByRole('row');
     this.addSoftwareButton = this.card.getByRole('button', { name: 'Add software' });
+    this.subheader = this.card.getByText('Software available to be installed on this host', { exact: true });
+    this.itemCount = this.card.getByText(/^\d+ items?$/);
   }
 
   /** Filters the Library by title (server-side). */

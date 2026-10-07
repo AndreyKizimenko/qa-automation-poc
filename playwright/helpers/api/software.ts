@@ -638,6 +638,20 @@ export async function getHostSoftwareState(
 }
 
 /**
+ * How many titles a host's Library offers it — the `count` behind the Library
+ * card's "N items", from the same request the card makes
+ * (`available_for_install`).
+ */
+export async function countHostLibraryTitles(request: APIRequestContext, hostId: number): Promise<number> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { available_for_install: 'true', per_page: '1' },
+  });
+  await expect(res, `Failed to count the Library of host ${hostId}`).toBeOK();
+  return (await res.json()).count as number;
+}
+
+/**
  * Waits for a host's install or uninstall of a title to reach `status`. A shared
  * VM works through one queue — scripts, installs, uninstalls — so the budget
  * covers another spec's work landing first.
