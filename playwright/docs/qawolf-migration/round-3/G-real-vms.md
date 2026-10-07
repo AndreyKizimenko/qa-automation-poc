@@ -354,3 +354,20 @@ Built on `playwright/qawolf-round3-batch-g` from 2026-10-07.
 | R2 #15 | `premium/software/software-lifecycle-on-host.spec.ts`, the macOS Fleet-maintained app (Itsycal) | Its status read every second; the moment the install reaches `installed`, and the uninstall clears, the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asked for fresh vitals by itself. One fixture, read that closely, because any refetch landing on the VM clears the flag. The flag records no author either, so a pass can't be pinned on Fleet; a Fleet that stopped asking fails whenever no other refetch is outstanding. `getHostRefetchRequested`, `waitForHostSoftwareStatus`'s `interval`. |
 | R2 #72 + #88 | `premium/software/script-only-package.spec.ts`, its own describe on the Mac (600 s, `HOST_RETRIES`) | A per-run `fleet-pw-script-<nonce>.sh` (prints a marker, exits 0) on the VMs fleet: the Mac's Library offers **Run**, not Install, and no Uninstall (#88); Run's toast "Script is running…", then `pending_install` and the item in the host's upcoming activities (API); the run reaches `installed` with an `installed_software` activity by the admin (`source` `sh_packages`); the Past item "ran <title> on this host." opens "Script details" — "Fleet ran <title> (<file>) on <host>" — whose output holds the marker; the Library then reads Ran / Rerun. Deleted in an `afterEach`. `HostSoftwareLibrary.run`, `'Run' \| 'Rerun'` actions, `ScriptPackageDetailsModal`, `activityCopy.hostSoftware.ranScriptPackage`. |
 | C4 #P14 | — | Cut at review. |
+
+**No Fleet bug filed.** Two suite facts came out of the build: `assertActivity` checks the browser's admin as the
+actor, so an activity caused through `fleetctl` (R2 #69) is looked up with `findActivity` instead; and a live run
+started in the UI has no timeout, which `host-live-query.spec.ts`' comment had wrong.
+
+**Verified** against Fleet 8d05209 (`4.93.0-rc`), both instances. With dependencies: premium 46/46 (the changed
+specs, all six lifecycle fixtures, the setup and both cleanup projects), free 28 passed and 8 premium-only cleanup
+steps skipped. Headed on premium: 8/8. `--repeat-each=5 --workers=2`: premium 30/30 (live policy, live report, MDM
+feed, Library tab), free 20/20, and the script-only package run on the Mac 5/5. The Itsycal lifecycle repeated five
+times on one worker: 5/5 (20.7 min). Run with two workers it fails against itself (one copy uninstalls what the other
+just installed), so a fixture test is repeated on one worker; its refetch check passed in every copy either way. The
+first full lifecycle run read the refetch flag on all six fixtures, twelve reads, all true, before the check was
+narrowed to Itsycal. Nothing was left on the VMs fleet: only its durable titles, and no `pw-live-*` policy.
+
+**VM time added:** one script run on the Mac (~1–2 min with its queue), two refetch reads on the Mac (seconds), and
+the live runs' answers from the three VMs (seconds each, through osquery's distributed path, not the orbit queue).
+Nothing on the Linux VM's queue.

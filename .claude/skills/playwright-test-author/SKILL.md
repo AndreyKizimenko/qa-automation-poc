@@ -102,7 +102,9 @@ reason, so:
 - **Run once headed.** Headless on an idle machine hides render-order races that show up under load.
 - **`--repeat-each=5`** for anything timing-sensitive; **`--workers=2`** on anything touching the real VMs,
   since each VM works one queue and more workers stack it into timeouts; **`--output=<scratchpad>/<run>`**
-  so artifacts stay out of the repo.
+  so artifacts stay out of the repo. Repeat a test that owns a durable VM fixture
+  (`software-lifecycle-on-host`) on **one** worker: with two, `--repeat-each` runs it beside itself, and one copy
+  uninstalls the app the other just installed.
 - **`gh run list --limit 5` right before any run that touches the instances.** Two runs on one VM corrupt
   each other, and the nightly starts hours after its cron time.
 - On free, run what touches Unassigned knowing the real VMs are there.
