@@ -170,7 +170,12 @@ A change isn't done until the docs describing it are current, in the same commit
 - **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
-  it. A refetch also re-runs a host's policies immediately.
+  it. A refetch also re-runs a host's policies immediately. `refetch_requested` is one bit with no author:
+  any refetch's results landing clear it, so a read of it has to follow the moment it was set closely.
+- **A live report or policy run started in the UI has no timeout.** It finishes only once every online
+  targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
+  wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
+  Platforms chip or All hosts.
 - **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
   `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
   config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
@@ -183,6 +188,9 @@ A change isn't done until the docs describing it are current, in the same commit
   earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
   the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
   fields, never `JSON.stringify`.
+- **`assertActivity` expects the browser's admin as the actor.** An activity a spec causes through `fleetctl` or
+  an API helper is attributed to the API token's user instead: look it up with `findActivity` (or
+  `assertActivityAfter` with its `actor` left out) and match it by its content.
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
