@@ -39,7 +39,6 @@
  * and script specs wait on, so this costs the VMs seconds.
  *
  * Tier-agnostic: free and premium render the same picker, results and summary.
- * Round 1 C3 #37 and C3 #28.
  */
 import { test, expect } from '@fixtures';
 import { createPolicy, deletePolicies, requireRealHost } from '@helpers/api';

@@ -8,8 +8,7 @@
  *
  *   - global observer: no Add label, and only "View all hosts" in a label's row
  *     actions (`ManageLabelsPage` / `LabelsTableConfig`); on the Hosts list
- *     filtered by the label, the pill has no Edit label or Delete label
- *     (round 1 C9 #15).
+ *     filtered by the label, the pill has no Edit label or Delete label.
  *   - global maintainer: Add label, and Edit and Delete on any label; the pill
  *     carries both buttons.
  *

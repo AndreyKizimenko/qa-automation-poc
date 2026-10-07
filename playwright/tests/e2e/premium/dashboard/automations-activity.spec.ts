@@ -1,7 +1,6 @@
 /**
- * Premium • Dashboard • Activity-feed automations. C1 #8 (filed under hosts in
- * the audit, but it's the dashboard's "Manage automations" modal, not a host
- * webhook — reassigned here).
+ * Premium • Dashboard • Activity-feed automations: the dashboard's "Manage
+ * automations" modal.
  *
  * Enabling, editing and disabling the activity webhook each write their own
  * entry into the very feed the modal configures, so the spec drives all three

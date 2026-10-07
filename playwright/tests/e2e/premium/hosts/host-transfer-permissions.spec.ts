@@ -1,5 +1,5 @@
 /**
- * Premium • Hosts • Single-host transfer, by role. C1 #20/#22.
+ * Premium • Hosts • Single-host transfer, by role.
  *
  * From a host's details page: Actions → Transfer → pick a fleet. Global admins,
  * global maintainers and global technicians may all do this
@@ -16,7 +16,7 @@
  * Every case restores the host to Unassigned via the API — `cleanup.steps.ts`
  * does not move hosts, so a leaked transfer would persist on the instance.
  *
- * The team-admin case (C1 #27) is the negative: moving a host between fleets
+ * The team-admin case is the negative: moving a host between fleets
  * would move it out of that admin's own scope, so Fleet withholds the action
  * (`HostActionsDropdown/helpers.tsx` — `canTransferTeam` requires a *global*
  * role, while `canDeleteHost` admits team admins). It reads the real VM in the

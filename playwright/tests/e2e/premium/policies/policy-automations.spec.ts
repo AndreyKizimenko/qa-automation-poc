@@ -21,8 +21,8 @@
  *     subtree.
  *   - **One policy's** — a row's Automations cell opens that policy's own
  *     "Manage automations" modal (Fleet's ManageAutomationsModal, around
- *     PolicyAutomationsFields). QA Wolf's `manage-all-automations-for-a-given-policy-at-once`:
- *     Install software, Run script and Continuous saved together, all three
+ *     PolicyAutomationsFields): Install software, Run script and Continuous
+ *     saved together, all three
  *     stored, the row summarised as "2 automations", and the modal reopening on
  *     them. On **Workstations**, which has no hosts, with a script and a package
  *     made for the run — so nothing the automations point at ever runs. Whether
@@ -214,8 +214,7 @@ test.describe('Premium • Policies • automations', () => {
 });
 
 test.describe('Premium • Policies • the automation filter by scope', () => {
-  // Round 1 C3 #22. QA Wolf filed it under a global maintainer, but the options
-  // follow the scope, not the role (`getValidAutomationTypesForTeam` in
+  // The options follow the scope, not the role (`getValidAutomationTypesForTeam` in
   // ManagePoliciesPage), so the admin reads them: All fleets' policies take only
   // webhooks or tickets, Unassigned's everything but calendar events (a
   // fleet-only feature), a fleet's every type.

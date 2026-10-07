@@ -19,9 +19,7 @@
  * Windows test has no Notify to offer, and the server refuses it — and the two
  * patch flags together — whatever the UI does.
  *
- * QA Wolf's `patch-policy-fleet-maintained-apps` added 7-Zip to their VM fleet,
- * ticked Patch and checked that the policy existed. Here it's **Workstations**,
- * which has no hosts, so nothing is ever patched: what a patch policy is, is
+ * It runs on **Workstations**, which has no hosts, so nothing is ever patched: what a patch policy is, is
  * decided server-side. Not 7-Zip — `library.spec.ts` adds and deletes it on
  * Workstations, and on the VMs fleet it is a durable fixture. LocalSend and
  * KeePassXC are claimed by no other spec (see `custom-icons.spec.ts`'s header for

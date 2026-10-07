@@ -1,6 +1,6 @@
 /**
  * Free • Reports • what each role is shown — the free half of
- * `premium/reports/role-access.spec.ts` (round 1 C4 #F3), for the two non-admin
+ * `premium/reports/role-access.spec.ts`, for the two non-admin
  * roles free has. Free has no fleets, so there's no picker, no inherited row and
  * no Fleet field in Save as new.
  *

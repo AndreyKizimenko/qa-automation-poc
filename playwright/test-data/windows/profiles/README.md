@@ -4,7 +4,7 @@
 >
 > Uploading a profile is delivering it. On **free** there are no fleets, so Unassigned is where the
 > MDM-enrolled Windows VM is, and Fleet's profile reconciler sends it whatever profiles it finds, every 30 s. An
-> upload → delete lifecycle only races that tick; it doesn't avoid it. On premium the VMs fleet is the delivery target for batch E's specs by design.
+> upload → delete lifecycle only races that tick; it doesn't avoid it. On premium the VMs fleet is the delivery target for the label-targeting specs by design.
 >
 > So nothing in this folder may gate access to a host: no **DeviceLock** CSP (`DevicePasswordEnabled`,
 > `MaxInactivityTimeDeviceLock`, `MinDevicePasswordLength`, …), no account-lockout policy, nothing that disables

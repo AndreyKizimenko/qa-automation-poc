@@ -51,7 +51,7 @@ test.describe('Premium • Software • no-teams views (Unassigned)', () => {
    * Premium's Unassigned holds no real VM, so the host is a Linux simulation
    * (`findSimulations` linux 5), only read. The package is a per-run inert
    * `fleet-pw-*` `.deb`, never installed, deleted in the `finally`; cleanup
-   * wipes Unassigned's software too. Round 1 C6 #27.
+   * wipes Unassigned's software too.
    */
   test("a package added to Unassigned is offered in an Unassigned host's Library", async ({
     hostDetails,

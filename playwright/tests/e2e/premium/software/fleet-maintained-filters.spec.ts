@@ -8,8 +8,7 @@
  * with a cell per platform, but counts the platform-specific entries, so the
  * catalog reads "1,422 items" over fewer rows and a 3-row "zoom" search reads
  * "5 items". Counts are therefore cross-checked against the API's own count for
- * the same filters — the source flow's `expect(addCount).toEqual(searchedResults)`
- * only held by luck.
+ * the same filters; comparing a row count with "N items" would only hold by luck.
  *
  * **Cross-checking beats hard-coding.** The catalog grows with every Fleet
  * release, so the platform counts are compared against

@@ -131,7 +131,7 @@ What this means when auditing these entries:
 `GET /vulnerabilities/<cve>?fleet_id=<scope>`, and Fleet answers **204** when the CVE is
 known but no host in that fleet is affected — the same *"Vulnerability not detected"*
 screen. A fleet-scoped title page can list a version whose hosts were only passing
-through: batch E's label-targeting specs borrow simulations onto VMs, and Fleet's
+through: the label-targeting specs borrow simulations onto VMs, and Fleet's
 per-fleet software list keeps their version until its hourly refresh while the
 per-fleet vulnerability counts already don't. That failed the premium Linux host flow
 in PR #72's branch run on CVE-2026-61898 (enriched, 200 unscoped, 204 on VMs). So the
@@ -309,7 +309,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Vulnerabilities tab — exploited-vulnerabilities filter"`
 - **Project:** premium · **Scope:** Unassigned
 - **Mode:** UI+API · **Isolation:** independent, read-only
-- **Source:** also QA Wolf `software-vulnerabilities-filter-by-exploited-vulnerabilities` (round 1 C6 #1; round 3, batch C)
 - **Preconditions:** CISA-exploited CVEs on Unassigned: the load fleet's templated inventory carries ~100 (96 on 2026-10-03), so an empty list fails.
 - **Data created:** none
 
@@ -435,7 +434,6 @@ other:
 - **Mode:** UI+API · **Isolation:** mutates **global** app config; `beforeEach` snapshots `webhook_settings.vulnerabilities_webhook` via `GET /config` and `afterEach` restores it via `PATCH /config` (runs even on failure). Fleet merge-patches within `webhook_settings`, so sibling webhook specs running in parallel are unaffected.
 - **Preconditions:** global-admin session (default premium auth state)
 - **Data created:** app-config change only — reverted in `afterEach`
-- **Source:** QA Wolf round 1 C6 #17 (`software-disable-software-vulnerability-automation`) supplies the off half
 
 **Flow**
 
@@ -704,7 +702,6 @@ other:
 - **Mode:** UI+API · **Isolation:** mutates **global** app config; snapshot in `beforeEach`, restore in `afterEach`
 - **Preconditions:** admin session
 - **Data created:** app-config change only — reverted
-- **Source:** QA Wolf round 1 C6 #16 supplies the off half
 
 **Flow**
 
@@ -1054,7 +1051,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "host count and hosts are its fleet"`
 - **Project:** premium · **Scopes:** VMs, All fleets
 - **Mode:** UI+API · **Isolation:** independent, read-only
-- **Source:** QA Wolf `software-vulnerabilities-filter-vulnerabilities-by-team` (round 1 C6 #3) and `software-vulnerabilities-view-all-hosts-vulnerabilities` (C6 #7; round 3, batch C)
 - **Preconditions (API):** the real Linux VM online and on the VMs fleet; among its own first 20 CVEs (`GET /hosts/:id/software?vulnerable=true`), one counted on the VMs fleet whose count there differs from All fleets' (one the simulations on Unassigned share). Hosts are never moved to make one. The candidates come from the VM, not from the fleet's CVE list: that list is the hourly job's, and it can count a simulation a label spec had borrowed onto the fleet while the job ran — branch run 37667485374 picked such a CVE (`CVE-2006-10002`, a simulations-only `libxml-parser-perl`) and found no live host on the fleet, three attempts running.
 - **Data created:** none
 
@@ -1070,7 +1066,7 @@ other:
    - ✅ *(UI+API)* the listed hosts are exactly `GET /hosts?vulnerability=<CVE>&fleet_id=<VMs>`, by name, and there is at least one.
 
 **Assessment**
-- *Value:* per-fleet vulnerability counts (QA Wolf only asserted "different"; this asserts each equals Fleet's figure for that scope) and the CVE → hosts hand-off, with the hosts compared whole because the VMs fleet is small. QA Wolf's flow ran `fleetctl trigger --name vulnerabilities` first; this never triggers a global cron.
+- *Value:* per-fleet vulnerability counts (each asserted equal to Fleet's figure for that scope) and the CVE → hosts hand-off, with the hosts compared whole because the VMs fleet is small. It never triggers a global cron.
 - *Coverage gaps:* Unassigned's and Workstations' counts aren't read; the hand-off's list isn't compared with the count (one is live, the other hourly, so they needn't agree).
 - *Redundancy:* SWV-18 is the CVE detail page's hand-off (by software version); this is the list row's (by CVE).
 - *Efficiency / smells:* ~10 s. Up to 40 API reads to choose the CVE, usually two.
@@ -1090,7 +1086,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/software/vulnerabilities.spec.ts`](../../tests/e2e/free/software/vulnerabilities.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "View all hosts lists hosts it affects"`
 - **Project:** free · **Mode:** UI+API · **Isolation:** independent, read-only (runs after the file's heavy `beforeAll`)
-- **Source:** QA Wolf `software-vulnerabilities-view-all-hosts-vulnerabilities` (round 1 C6 #7, its free half; round 3, batch C)
 - **Data created:** none
 
 **Flow**

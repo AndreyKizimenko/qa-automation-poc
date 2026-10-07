@@ -392,7 +392,6 @@ other:
 - **Project:** premium · **Scopes:** All fleets only
 - **Mode:** UI+API · **Isolation:** **serial describe, step 1 of 2** — `test.describe.configure({ mode: 'serial' })` ([`policy-automations.spec.ts:62`](../../tests/e2e/premium/policies/policy-automations.spec.ts)); POL-23 is step 2, and a failure here skips it. Own `beforeEach` / `afterEach`, no shared closure state. Three `test.step`s, so a report names the stage that failed. **Mutates global app config** (`webhook_settings.failing_policies_webhook`, `policy_ids` included) — snapshot + restore, so it is not safe to run concurrently with another spec touching the same subtree.
 - **Why the describe is serial:** both tests snapshot and restore the **same global config key**. Run in parallel they raced — one test's `afterEach` restore landed between the other's save and its read-back, so the read-back saw the restored value and failed on correct product behaviour. ⚠️ **Not `--repeat-each`-safe:** serial mode orders tests *within one describe in one worker*, while `--repeat-each` produces copies Playwright may schedule in parallel workers, reinstating the race.
-- **Source:** QA Wolf `policies-global-admin-create-failing-policy-webhook` and `policies-disable-failing-policies-automation` (round 1 C3 #4 and #10; round 3, batch B)
 - **Preconditions (API):** `GET /config` snapshots the current failing-policies webhook — enabled flag, URL and `policy_ids`; `POST /global/policies` seeds `pw-policy-auto-<nonce>` with `SELECT 1;` so the **Manage automations** button is enabled (Fleet disables it when the scope has no policies). `SELECT 1;` passes on every host, so the webhook never has a failure to send.
 - **Data created:** one API-seeded global policy; the `afterEach` PATCHes the config subtree — enabled flag, URL and `policy_ids` — back to its snapshot, then deletes the policy via `POST /global/policies/delete`.
 
@@ -449,7 +448,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/policies/policy-automations.spec.ts`](../../tests/e2e/free/policies/policy-automations.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "the failing-policies webhook is enabled, sent for one policy, and turned off again"`
 - **Project:** free · **Mode:** UI+API · **Isolation:** **serial describe, step 1 of 2** ([`policy-automations.spec.ts:44`](../../tests/e2e/free/policies/policy-automations.spec.ts)); POL-24 is step 2 and is skipped if this fails. Three `test.step`s. Mutates global app config, `policy_ids` included, with snapshot/restore in `beforeEach`/`afterEach`. Serial for the same reason as POL-09 — two tests sharing one global config key raced, with one's restore landing between the other's save and read-back. ⚠️ **Not `--repeat-each`-safe** (serial orders within a describe in one worker; repeat-each copies can run in parallel workers)
-- **Source:** same QA Wolf flows as POL-09 (round 1 C3 #4 and #10; round 3, batch B)
 - **Preconditions (API):** `GET /config` snapshot (enabled flag, URL, `policy_ids`); `POST /global/policies` seeds `pw-policy-auto-<nonce>` (`SELECT 1;`, which passes everywhere) to enable the **Manage automations** button
 - **Data created:** one seeded policy; the `afterEach` restores the config subtree, `policy_ids` included, then deletes the policy through the API
 
@@ -720,7 +718,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/policies/sql-validation.spec.ts`](../../tests/e2e/premium/policies/sql-validation.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "a policy with a syntax error saves, and reopens with its SQL and the error"`
 - **Project:** premium · **Scope:** global (`/policies/new` with no `fleet_id`) · **Mode:** UI — the save and the reopen go through the server, but every assertion is on screen · **Isolation:** its own describe, with an `afterEach`; the file's other tests create nothing
-- **Source:** QA Wolf `policies-ability-to-save-policies-with-bad-sql-statements-to-allow-for-false-postiives` (round 1 C3 #11; round 3, batch B)
 - **Preconditions:** none
 - **Data created:** global policy `pw-policy-bad-sql-<nonce>` holding the broken SQL, with empty Description and Resolution and the Save policy modal's default platforms — deleted in the `afterEach` (`POST /global/policies/delete`). A saved global policy is scheduled on every host, so it must not outlive the test.
 
@@ -758,7 +755,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/policies/sql-validation.spec.ts`](../../tests/e2e/free/policies/sql-validation.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "a policy with a syntax error saves, and reopens with its SQL and the error"`
 - **Project:** free · **Mode:** UI (the save and the reopen go through the server; every assertion is on screen) · **Isolation:** its own describe, with an `afterEach`
-- **Source:** same QA Wolf flow as POL-19 (round 1 C3 #11; round 3, batch B)
 - **Preconditions:** none
 - **Data created:** global policy `pw-policy-bad-sql-<nonce>` with the broken SQL, deleted in the `afterEach`
 
@@ -941,7 +937,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "one policy's automations"`
 - **Project:** premium · **Scopes:** Workstations only — it has no hosts, so nothing the automations point at ever runs
 - **Mode:** UI+API · **Isolation:** its own describe, outside POL-09/23's serial one; touches no global config
-- **Source:** QA Wolf `policies/manage-all-automations-for-a-given-policy-at-once` (round 2, batch G)
 - **Preconditions (API):** a Workstations policy `pw-policy-automations-<nonce>` (`platform: linux`), a script `pw-policy-automations-<nonce>.sh` and a generated `.deb` titled `fleet-pw-policy-automations-<nonce>`, all on Workstations.
 - **Data created:** the three above, deleted in the `finally` — the policy first, since Fleet won't delete a title an install policy points at. The Workstations wipe in `cleanup.steps.ts` removes whatever a dead run leaves.
 
@@ -1009,7 +1004,6 @@ other:
 - **Grep:** `npx playwright test --project=premium-exclusive policy-automation-runs` (by file name: the exclusive project's `testDir` is `tests/e2e`)
 - **Project:** `premium-exclusive` — alone after the main project, since Fleet queues an automation's attempts below every user-requested activity and beside the install specs they starve · **Host:** the **Ubuntu VM** on the VMs fleet (`requireRealHost(request, 'linux')`) — scripts run only on real hosts, and the Macs have no `python3`
 - **Mode:** UI+API · **Timeout:** 20 min, CI `HOST_RETRIES` · **Isolation:** one test; everything it makes is per-run (`pw-auto-run-<nonce>`)
-- **Source:** QA Wolf `policies/script-run-retries-up-to-3-times-…`, `activity-feed/individual-activity-items-for-all-attempts-…`, `policies/enabling-continuous-…-retries-every-hour`, `python/run-python-script-with-policy-automation-on-macos-host` (round 2, batch G); also round 1's unbuilt C9 #17 (the Linux Python one)
 - **Preconditions (API):** a manual label holding only the Ubuntu VM; a Python script on the VMs fleet that prints `pw policy automation <nonce>: failing on purpose` and exits 3; a fleet policy `SELECT 1 WHERE 0 > 1;` (it can't pass), `platform: linux`, `labels_include_any` that label, `script_id` that script, continuous off.
 - **Data created:** the label, script and policy, deleted in an **`afterEach`** (policy first, any queued attempt cancelled) — it runs after a timeout, which a `finally` doesn't, and a continuous never-passing policy left behind would run its script on every refetch any spec asks of the VM. The VMs sweep removes `pw-*` policies, scripts and labels a killed run leaves, and the resting-state step cancels a queued `pw-*` script.
 
@@ -1029,7 +1023,7 @@ other:
 
 **Assessment**
 - *Value:* the only coverage of a policy's run-script automation actually running, of Fleet's retry ladder for it, and of continuous automations. The negative step is what makes the continuous step mean something: the same refetch with the setting off queues nothing.
-- *Coverage gaps:* the hourly cadence isn't asserted (it's osquery's policy update interval, a config value); a script that *passes* isn't run (cut as a DUP: it would only show that a success isn't retried); the retry stopping once the policy passes isn't exercised (the SQL can't pass); install-software automations and their own cap (10 failures per host and installer per 24 h) are SWH-15's.
+- *Coverage gaps:* the hourly cadence isn't asserted (it's osquery's policy update interval, a config value); a script that *passes* isn't run (it would only show that a success isn't retried); the retry stopping once the policy passes isn't exercised (the SQL can't pass); install-software automations and their own cap (10 failures per host and installer per 24 h) are SWH-15's.
 - *Efficiency:* six script runs and three refetches on the Ubuntu VM — **8.5 min** alone in `premium-exclusive` (the whole exclusive step 9.2 min); in the main project it took 10–13 min beside the install specs and, in CI, starved past its budget (Fleet queues an automation's attempts below every user-requested activity). The waits' worst-case budgets add up past the 20-min timeout, so a VM that's very slow shows as a timeout rather than at the slow wait; the `afterEach` makes that safe.
 
 **Notes (Andrey)**
@@ -1048,7 +1042,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "automations with no ticket integration"`
 - **Project:** premium · **Scopes:** All fleets only
 - **Mode:** UI+API · **Isolation:** its own describe, outside POL-09/23's serial one. It reads global config and never writes it: the switch and the radio are only changed in the form, and the test leaves through **Add integration** without saving.
-- **Source:** QA Wolf `policies-empty-automation-state-prompts-to-create-an-integration` (round 1 C3 #12; round 3, batch B)
 - **Preconditions (API):** `GET /config` → `integrations.jira` and `integrations.zendesk` are both empty, asserted first so a configured integration fails as that rather than as a missing button. The instances guarantee it: gitops doesn't declare `integrations`, so every apply clears them, and no spec adds one. `POST /global/policies` seeds `pw-policy-no-integration-<nonce>` so **Manage automations** is enabled.
 - **Data created:** the seeded global policy, deleted in the test's `finally`.
 
@@ -1068,7 +1061,7 @@ other:
    - ✅ *(UI)* The **Ticketing** heading is visible (`IntegrationsPage.ticketingHeading`).
 
 **Assessment**
-- *Value:* Pins the only Ticket state these instances can reach — no integration — with its copy and the link out to the page that fixes it. Cheap; the batch B plan rated it the lowest-value item in the batch.
+- *Value:* Pins the only Ticket state these instances can reach — no integration — with its copy and the link out to the page that fixes it. Cheap.
 - *Coverage gaps:* Never with an integration: picking a Jira or Zendesk integration and saving a ticket workflow is untested on both tiers (it needs a Jira or Zendesk sandbox). **Add integration** being disabled while the switch is off isn't asserted. The Integrations page is checked only for its heading.
 - *Redundancy:* POL-29 is the same test on free, byte-identical apart from the `teamDropdown.select('All fleets')` line, which is a no-op on free. `OtherWorkflowsModal` isn't tier-gated, so one `shared/` spec — as POL-32 is — would cover both tiers. Steps 2–3 enter the modal the way POL-09 does.
 - *Efficiency / smells:* A few seconds. The policy is deleted in a `finally` only; a timeout skips it, and `cleanup-teardown`'s global-policy wipe catches it. `selectTicketWorkflow` clicks the label filtered by the text "Ticket", which would also match any later label in the modal containing that word.
@@ -1088,7 +1081,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/policies/policy-automations.spec.ts`](../../tests/e2e/free/policies/policy-automations.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "automations with no ticket integration"`
 - **Project:** free · **Mode:** UI+API · **Isolation:** its own describe, outside POL-10/24's serial one; reads global config and never writes it
-- **Source:** same QA Wolf flow as POL-28 (round 1 C3 #12; round 3, batch B)
 - **Preconditions (API):** `GET /config` → no Jira and no Zendesk integration (asserted); `POST /global/policies` seeds `pw-policy-no-integration-<nonce>`
 - **Data created:** the seeded policy, deleted in the test's `finally`
 
@@ -1123,7 +1115,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a fleet's failing-policies webhook"`
 - **Project:** premium · **Scope:** a throwaway fleet, `pw-fleet-webhook-<nonce>`
 - **Mode:** UI+API · **Isolation:** its own describe; reads global config and never writes it. Not on Workstations: saving a fleet's policy automations replaces the fleet's whole `webhook_settings` ([fleetdm/fleet#54619](https://github.com/fleetdm/fleet/issues/54619)), so on Workstations it would wipe the host-status webhook that `team-host-status-webhook.spec.ts` (SET-07) writes there in parallel.
-- **Source:** QA Wolf `policies-global-admin-automates-team-policy-webhook-premium` (round 1 C3 #15; round 3, batch B)
 - **Preconditions (API):** `POST /fleets` creates `pw-fleet-webhook-<nonce>`; `POST /fleets/<id>/policies` seeds `pw-fleet-webhook-policy-<nonce>` (`SELECT 1;`, `platform: linux`) so **Manage automations** is enabled.
 - **Data created:** the fleet and its policy. The test's last step deletes the fleet (`DELETE /fleets/<id>`, which takes its policy with it); an `afterEach` deletes it again, tolerating a 404, for a body that failed or timed out.
 
@@ -1145,7 +1136,7 @@ other:
 - *Value:* The only coverage of a fleet's own failing-policies webhook — the half of the automations modal that saves through the fleet (`team.webhook_settings`) rather than global config. Reading both sides back catches a save routed to the wrong scope, and the reopen is the area's only rehydration check of the scope-wide modal.
 - *Coverage gaps:* Ticking a fleet policy for the webhook (the fleet's `policy_ids`) and turning it off aren't exercised; POL-09 covers both, globally only. #54619 is sidestepped, not pinned: the throwaway fleet has no host-status webhook for the save to wipe. The global negative check compares the URL alone, so a save that also flipped the global enabled flag would pass. The Ticket workflow at a fleet's scope is untested.
 - *Redundancy:* Steps 2–3 repeat POL-09's step 1 at a different scope. No free twin — fleets are premium-only.
-- *Efficiency / smells:* A fleet created and deleted per run, a few seconds. While it exists it shows in every fleet dropdown, as `historical-data-collection.spec.ts`'s fleet does. The spec's comment says `cleanup.steps.ts` sweeps `pw-*` fleets a dead run left, but `cleanup.steps.ts` has no such sweep — the batch B plan assigns it to round 3 batch A — so a run killed before the `afterEach` leaves the fleet behind until someone deletes it.
+- *Efficiency / smells:* A fleet created and deleted per run, a few seconds. While it exists it shows in every fleet dropdown, as `historical-data-collection.spec.ts`'s fleet does. A run killed before the `afterEach` leaves the fleet behind until `cleanup.steps.ts`'s `pw-*` fleet sweep removes it.
 
 **Notes (Andrey)**
 ```
@@ -1163,7 +1154,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Policies — fleet isolation"`
 - **Project:** premium · **Scopes:** Workstations, then VMs
 - **Mode:** UI · **Isolation:** its own describe, outside the CRUD scope loop; reading the VMs fleet's list changes nothing on it
-- **Source:** QA Wolf `policies-global-admin-creates-edits-and-deletes-team-policy-premium` (round 1 C3 #18; round 3, batch B) — its isolation half; POL-01…07 cover the CRUD
 - **Preconditions (API):** `POST /fleets/<Workstations>/policies` seeds `pw-policy-isolation-<nonce>` (`SELECT 1;`).
 - **Data created:** the seeded Workstations policy, deleted in the test's `finally` (`POST /fleets/<id>/policies/delete`); after a timeout, `cleanup-teardown`'s Workstations wipe removes it.
 
@@ -1198,7 +1188,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Shared • Policies • AI Autofill"` (and `--project=free`)
 - **Project:** premium **and** free (`shared/`) · **Scopes:** All fleets on premium (the dropdown select is a no-op on free)
 - **Mode:** UI+API · **live call to fleetdm.com** · **Timeout:** 90 s; each field waits up to 35 s, since Fleet gives fleetdm.com 30 s before it answers 422 (an answer usually takes ~3 s) · **Isolation:** independent; saves nothing and writes no config
-- **Source:** QA Wolf `policies-populate-policy-description-and-resolution-using-ai-macos` (round 1 C3 #27; round 3, batch B)
 - **Preconditions (API):** `GET /config` → `server_settings.ai_features_disabled === false`: Generative AI is on (Settings › Advanced › Features), which is Fleet's default and how both instances run. Asserted first, so a disabled setting fails as that rather than as an empty field.
 - **Data created:** none — the Save policy modal is cancelled. The SQL does leave the instance: Fleet forwards it to fleetdm.com.
 
@@ -1239,7 +1228,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a policy saved for macOS only"` (and `--project=free`)
 - **Project:** premium **and** free (`shared/`) · **Scopes:** All fleets on premium (a global policy; the dropdown select is a no-op on free)
 - **Mode:** UI+API · **Isolation:** independent; simulations are only read (`findSimulations` darwin 6, linux 6, windows 2), never moved
-- **Source:** QA Wolf `policies-global-maintainer-able-to-create-an-os-specific-policy` (round 1 C3 #3 free, C3 #19 premium; round 3, batch C)
 - **Preconditions (API):** an online, non-MDM simulation of each platform past the borrowing offset.
 - **Data created:** two global policies, `pw-policy-hosts-<nonce>-any` (API, every platform) and `…-macos` (UI); both deleted in the `finally` (cleanup wipes global policies too).
 
@@ -1260,7 +1248,7 @@ other:
 **Assessment**
 - *Value:* The server half of platform targeting (`FIND_IN_SET(<host platform>, p.platforms)`), which nothing else asserts, and the only place the Save policy modal's platform checkboxes are read back as stored. The CRUD spec (POL-03/04) ticks Windows + Linux on edit and never reads them.
 - *Coverage gaps:* One platform only, set at create; an edit that changes the platforms and a policy for several platforms aren't covered. ChromeOS has no host here. The policies list's "Targeted platforms" column isn't read.
-- *Redundancy:* QA Wolf's premium and free flows are the same flow, so they are one shared test; label targeting (LT-08) covers a fleet policy's other target.
+- *Redundancy:* premium and free behave the same, so it is one shared test; label targeting (LT-08) covers a fleet policy's other target.
 - *Efficiency / smells:* Seconds. The UI half proves the tab renders what the API lists, on two hosts; the API half covers the third platform without a third page load.
 
 **Notes (Andrey)**
@@ -1279,7 +1267,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a host's policy links"` (and `--project=free`)
 - **Project:** premium **and** free (`shared/`) · **Scopes:** none (a host's page; the link carries no fleet)
 - **Mode:** UI+API · **Timeout:** 240 s (two refetches, each answered within ~20 s) · **Isolation:** independent; `findSimulations` linux 6–7, refetched, never moved
-- **Source:** QA Wolf `policies-hosts-policies-table-links-to-all-hosts-filtered-by-selected-policy` (round 1 C3 #6 free, C3 #24 premium; round 3, batch C)
 - **Preconditions (API):** two online, non-MDM Linux simulations.
 - **Data created:** two global Linux-only policies, `pw-policy-hosts-<nonce>-pass` (`SELECT 1;`) and `…-fail` (`SELECT 0;`, the one query a simulation fails); deleted in the `finally`. Linux-only keeps the failing one off the macOS and Windows VMs; neither has an automation.
 
@@ -1296,9 +1283,9 @@ other:
    - ✅ *(UI)* the pill still names the policy; the table renders and neither simulation is listed.
 
 **Assessment**
-- *Value:* The only coverage of a host's policy → hosts hand-off, and of the Hosts list filtered by a policy *and* an answer: the button's two URLs, the pill, the Pass / Fail control, and Fleet's live per-answer host query. Both answers are exercised, which QA Wolf's flow (the first row, whatever its answer) didn't.
+- *Value:* The only coverage of a host's policy → hosts hand-off, and of the Hosts list filtered by a policy *and* an answer: the button's two URLs, the pill, the Pass / Fail control, and Fleet's live per-answer host query. Both answers are exercised, not just whatever the first row's is.
 - *Coverage gaps:* Containment, not equality: every Linux simulation that runs the policy on its hourly cycle is listed too, so a list that wrongly added hosts with *no* answer would pass. The page's fleet context (`fleet_id`) is never set from a host page, so the link's fleet parameter is covered only by POL-35.
-- *Redundancy:* QA Wolf's premium and free flows were the same; one shared test. POL-35 reaches the same filtered list from the policies list.
+- *Redundancy:* premium and free behave the same; one shared test. POL-35 reaches the same filtered list from the policies list.
 - *Efficiency / smells:* ~20–40 s, most of it the refetch. A refetch merges into one already outstanding, so it is waited out first (`waitForNoPendingRefetch`). The control is react-select v1 with no accessible name, so its value is read by class (`HostsListPage.policyResponseValue`).
 
 **Notes (Andrey)**
@@ -1317,7 +1304,6 @@ other:
 - **Grep:** `npx playwright test --project=premium policy-host-counts`
 - **Project:** premium · **Scopes:** VMs
 - **Mode:** UI+API · **Isolation:** read-only
-- **Source:** QA Wolf `policies-policies-link-to-all-hosts-filtered-by-selected-policy` (round 1 C3 #26 premium; round 3, batch C). The free twin (C3 #7) was cut: the counts come from an hourly job, and free has no policy that survives cleanup.
 - **Preconditions (API):** the VMs fleet's gitops policy "Claude is installed (macOS)" (`gitops/premium-fleetqa/fleets/vms.yml`), which carries an install automation and is only read.
 - **Data created:** none.
 
@@ -1333,7 +1319,7 @@ other:
 
 **Assessment**
 - *Value:* The policies list's Pass / Fail links, which were untested, and the one place the link's `fleet_id` is asserted. Set equality is affordable because the VMs fleet holds a handful of hosts.
-- *Coverage gaps:* The count itself isn't compared with anything: it is the hourly job's snapshot, and the list is live. A policy created in the test can't be used, so the link of a brand-new policy (`---`) isn't covered.
+- *Coverage gaps:* The count itself isn't compared with anything: it is the hourly job's snapshot, and the list is live. A policy created in the test can't be used, so the link of a brand-new policy (`---`) isn't covered. No free twin: the counts come from an hourly job, and free has no policy that survives cleanup.
 - *Redundancy:* The filtered list is POL-34's destination; this reaches it from the list.
 - *Efficiency / smells:* Seconds. Depends on a gitops-declared policy staying declared; a missing one fails with the re-apply instruction. Simulations the label-targeting specs borrow onto the VMs fleet can answer mid-test, so each comparison re-reads both sides until they agree.
 
@@ -1353,7 +1339,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Premium • Policies • role access › .* is shown"`
 - **Project:** premium · **Variants (7):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on All fleets; `team-admin`, `ws-maintainer`, `ws-observer` on Workstations
 - **Mode:** UI · **Isolation:** one test per role, each signed in through `withStaticUser`'s cached session; read-only apart from its seeded policies
-- **Source:** QA Wolf role flows, round 1 C3 #20, #23, #30, #33, #34, #35 (round 3, batch E). Their checks were mostly stale copy ("Add a policy") or absences with nothing anchoring them; the cells come from Fleet's gating instead (`ManagePoliciesPage`, `PoliciesTableConfig`, `PolicyDetailsPage`, the router).
 - **Preconditions (API):** `POST /global/policies` seeds `pw-role-pol-global-<role>-<nonce>`; a team role also gets `POST /fleets/<Workstations>/policies` → `pw-role-pol-ws-<role>-<nonce>`.
 - **Data created:** the seeded policies, deleted in an `afterEach` (global by id; Workstations by name, so one stored before a failure is found). `cleanup-setup` drains both scopes too.
 
@@ -1366,7 +1351,7 @@ other:
    - ✅ *(UI)* GM, TA, TM: a row checkbox and an Automations cell that's a button. GO, GO+, GT, TO: neither.
    - ✅ *(UI)* **Add policy** for GM, TA, TM only; **Manage automations** for TA only.
 3. ☐ *(TA only)* Click **Manage automations**, then Escape.
-   - ✅ *(UI)* the automations modal opens with its **Webhook** option, and closes. Nothing is saved (round 1 C3 #30; POL-30 saves it as admin on a throwaway fleet).
+   - ✅ *(UI)* the automations modal opens with its **Webhook** option, and closes. Nothing is saved (POL-30 saves it as admin on a throwaway fleet).
 4. ☐ *(team roles)* Search for the global policy.
    - ✅ *(UI)* its row has the **Inherited** tag and no checkbox.
    - ✅ *(UI)* opened, it shows **Show query**; **Run policy** for TA and TM, not TO; **Edit policy** for none of them.
@@ -1376,7 +1361,7 @@ other:
    - ✅ *(UI)* the 403 page: "403", "Access denied."
 
 **Assessment**
-- *Value:* The first assertion of what each role is *shown* on Policies; the API probes only cover create. The technician and observer+ columns are the unusual ones (Run without Edit or Add policy). Every absence is anchored on the same screen's seeded row, Automations cell or Show query, so a page that never rendered can't pass.
+- *Value:* The first assertion of what each role is *shown* on Policies; the API probes only cover create. The technician and observer+ columns are the unusual ones (Run without Edit or Add policy). Every absence is anchored on the same screen's seeded row, Automations cell or Show query, so a page that never rendered can't pass. The cells come from Fleet's gating (`ManagePoliciesPage`, `PoliciesTableConfig`, `PolicyDetailsPage`, the router).
 - *Coverage gaps:* The global roles never read a fleet's list (a global maintainer may edit inherited policies). TO+ has no static user. #54624 (GO+ on an Unassigned policy) is POL-38, skipped.
 - *Redundancy:* None; the admin's controls are POL-01's.
 - *Efficiency / smells:* A few seconds a role; one login per role per run through the session cache.
@@ -1397,7 +1382,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "creates a Workstations policy from the UI"`
 - **Project:** premium · **Variants (2):** `team-admin`, `ws-maintainer` · **Scope:** Workstations
 - **Mode:** UI+API · **Isolation:** one test per role; its policy is its own
-- **Source:** round 1 C3 #31, #32 (round 3, batch E), create only. Edit and delete take the admin's form and endpoints (POL-03/05); a global maintainer's fleet create (C3 #21) runs the admin's code path and is cut.
 - **Data created:** `pw-role-pol-create-<role>-<nonce>` on Workstations, tracked by name before the save and deleted in an `afterEach`.
 
 **Flow**
@@ -1409,7 +1393,7 @@ other:
 
 **Assessment**
 - *Value:* A team role's save goes to the fleet's endpoint and is authored by that role. A team role's save touching something it can't write is a known bug class here (#54623).
-- *Coverage gaps:* No edit or delete as the role.
+- *Coverage gaps:* No edit or delete as the role: they take the admin's form and endpoints (POL-03/05). A global maintainer's fleet create runs the admin's code path and isn't covered.
 - *Redundancy:* The form steps are POL-01's.
 - *Efficiency / smells:* Seconds.
 
@@ -1429,7 +1413,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Run policy on an Unassigned policy"`
 - **Project:** premium · **Scope:** Unassigned
 - **Mode:** UI · **Isolation:** skipped behind [fleetdm/fleet#54624](https://github.com/fleetdm/fleet/issues/54624) (`docs/blocked-by-product-bugs.md`)
-- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 5)
 - **Preconditions (API):** `POST /fleets/0/policies` seeds `pw-role-pol-unassigned-<nonce>`, deleted in the `afterEach`.
 
 **Flow**
@@ -1458,7 +1441,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "Free • Policies • role access"`
 - **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
 - **Mode:** UI · **Isolation:** one test per role through `withStaticUser`
-- **Source:** round 1 C3 #5, #20 (round 3, batch E)
 - **Data created:** `pw-role-pol-<role>-<nonce>` (global), deleted in an `afterEach`.
 
 **Flow**
@@ -1491,7 +1473,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a fleet admin can't add an inherited policy"`
 - **Project:** premium · **Scope:** Workstations, on the inherited global policy the describe seeds
 - **Mode:** UI+API · **Isolation:** skipped behind [fleetdm/fleet#54623](https://github.com/fleetdm/fleet/issues/54623). It sits in POL-09/23's serial describe because it needs the global failing-policies webhook on, which those tests own and restore in their `afterEach`.
-- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 3)
 
 **Flow**
 
@@ -1520,7 +1501,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "the automation filter by scope"`
 - **Project:** premium · **Scopes:** All fleets, Unassigned, Workstations (`test.step` each)
 - **Mode:** UI · **Isolation:** its own describe; read-only apart from its seeded policy
-- **Source:** QA Wolf `policies-global-maintainer-manage-automations-permissions-on-policy-page-premium` (round 1 C3 #22; round 3, batch E). The flow ran as a global maintainer, but the options follow the scope, not the role, so the admin reads them.
 - **Preconditions (API):** `POST /global/policies` seeds `pw-policy-filter-<nonce>`: the filter is disabled on a scope with no policies, and a global one is listed or inherited everywhere. Deleted in an `afterEach`.
 
 **Flow**
@@ -1530,7 +1510,7 @@ other:
    - ✅ *(UI)* All fleets: **Webhooks or tickets** only. Unassigned: every type but **Calendar**. Workstations: all seven (Software, Patch, Scripts, Profiles, Calendar, Conditional access, Webhooks or tickets).
 
 **Assessment**
-- *Value:* The filter's per-scope options (`getValidAutomationTypesForTeam`), which nothing tested; free only asserts the filter is absent (POL-26).
+- *Value:* The filter's per-scope options (`getValidAutomationTypesForTeam`), which nothing tested; free only asserts the filter is absent (POL-26). It runs as the admin: the options follow the scope, not the role.
 - *Coverage gaps:* Choosing an option and the filtered list it gives aren't exercised.
 - *Efficiency / smells:* Seconds.
 
@@ -1548,7 +1528,6 @@ other:
 - **Grep:** `npx playwright test --project=premium live-policy-run` (and `--project=free`)
 - **Project:** premium, free · **Hosts:** the macOS, Windows and Linux **real VMs** (VMs fleet on premium, Unassigned on free), picked by name
 - **Mode:** UI+API · **Isolation:** one test; its own policy, deleted in an `afterEach`
-- **Source:** QA Wolf `policies-verify-pass-fail-percentage-on-live-policy` and `policies-run-policy-and-verify-sort-is-case-insensitive` (round 1 C3 #37 and C3 #28; round 3, batch G). Both flows ran a random gitops policy on a random Platforms chip, which on these instances holds simulations that pass everything.
 - **Preconditions (API):** the three VMs online (`requireRealHost`); their names sort differently with and without case (checked first). `POST /global/policies` creates `pw-live-policy-<nonce>`, `SELECT 1 FROM os_version WHERE platform = 'darwin';` (a row on macOS only).
 
 **Flow**

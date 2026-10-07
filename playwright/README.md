@@ -47,20 +47,20 @@ They sit under their own comment header, and the suite never reads them.
 
 **3. Know what the suite expects to already exist**
 
-The suite does not provision its own instance. A handful of entities are standing
-preconditions — each fails loud with recreation instructions, but they're invisible
-if you're bringing up a fresh instance:
+The suite does not provision its own instance. These entities are standing
+preconditions: each spec that needs one fails loud with recreation instructions,
+but they're invisible if you're bringing up a fresh instance.
 
-- **Static users** (`api-*@fleetdm.com`, `team-admin@fleetdm.com`) for the role-access
-  and permission specs.
-- **The `Workstations` team** on premium, provisioned by gitops and never deleted by
-  the suite.
-- **A scheduled report on the `VMs` fleet** for the host-report spec.
-- **Online hosts** — a mix of real MDM-enrolled VMs and a simulated osquery-perf pool.
-- **Admin SSO and end-user auth (EUA)**, configured on the instance beforehand.
-
-See [docs/qawolf-migration/README.md](docs/qawolf-migration/README.md#standing-instance-preconditions)
-for the full table and how to recreate each one.
+| what | where | needed by | if missing |
+|---|---|---|---|
+| **Static users** (`api-*@fleetdm.com`, `team-admin@fleetdm.com`, the role users in `helpers/api/static-users.ts`) | both | the role-access and permission specs | recreate as that file's header says; a new human user comes back with `force_password_reset`, which `PATCH` can't clear |
+| **The `Workstations`, `VMs` and `QA` fleets**, declared in gitops | premium | most premium specs | re-apply [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) with `--context qa-premium`. The suite never creates, renames or deletes them |
+| Report **`pw-host-report-results`** on the **VMs** fleet (interval 300, `SELECT 'bar' AS foo`) | premium | `premium/hosts/host-report-details.spec.ts` | re-apply `fleets/vms.yml`, then allow ~3.5 min for one scheduled run. It lives on a fleet because `cleanup-setup` wipes global reports |
+| **Claude installed on the macOS and Windows VMs**, tracking latest, from the VMs fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
+| **Install/uninstall fixtures on the VMs fleet**: inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` and the other install specs | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` |
+| **Fleet-maintained app shelf on the QA fleet**: 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `fleets/qa.yml`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
+| **Online hosts**: three real VMs per tier (macOS, Windows, Ubuntu; MDM-enrolled where the platform allows) and ~300 osquery-perf simulations | both | every host-dependent spec | the VMs are rebuilt by hand; the simulations are [`../tools/perf-hosts/`](../tools/perf-hosts/README.md)' daemons. See CLAUDE.md › *Test hosts* |
+| **Admin SSO and end-user auth (EUA)**, configured on the instance | both | the SSO and setup-experience specs | configure on the instance; the suite doesn't provision them |
 
 **Loadtest only — provision the fleet first.** The `loadtest` project
 measures real page-load times against a high-scale team that has to
@@ -183,7 +183,6 @@ playwright/
 ├── test-data/                    # Static fixtures (.pkg/.msi/.deb/.sh) by platform
 ├── docs/
 │   ├── blocked-by-product-bugs.md  # Skips caused by confirmed Fleet defects, with unblock conditions
-│   ├── qawolf-migration/         # The QA Wolf → Playwright migration record + per-flow audit
 │   └── run-reviews/              # Per-run triage write-ups (gitignored — local only)
 ├── eslint.config.js              # Lint config
 ├── playwright.config.ts

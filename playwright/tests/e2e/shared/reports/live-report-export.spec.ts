@@ -12,8 +12,8 @@
  * canned row whatever the SQL, so a run against them proves nothing about the
  * results it shows or exports.
  *
- * **Why not "All hosts".** The flow this replaces ran on All hosts, which on both
- * tiers is ~300 simulations beside the three VMs. A simulation that drops offline
+ * **Why not "All hosts".** On both tiers All hosts is ~300 simulations beside the
+ * three VMs. A simulation that drops offline
  * mid-run keeps it from finishing, and their canned rows don't carry the query's
  * columns. The three VMs give a run that finishes, and a CSV whose every row is
  * known.
@@ -33,7 +33,6 @@
  * only once every online targeted host has answered, so the wait for it is bounded.
  *
  * Tier-agnostic: free and premium render the same picker, results and export.
- * Round 1 C4 #F2 and C4 #P8.
  */
 import { test, expect } from '@fixtures';
 import { createReport, deleteReportsMatching, getHostPlatform, requireRealHost } from '@helpers/api';

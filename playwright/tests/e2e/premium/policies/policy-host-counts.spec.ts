@@ -1,6 +1,6 @@
 /**
  * Premium • Policies • a policy's Pass and Fail counts open the hosts behind
- * them. Round 1 C3 #26.
+ * them.
  *
  * The list's "N hosts" counts come from an hourly job, so a policy made in the
  * test reads `---` for up to an hour. This reads the VMs fleet's durable

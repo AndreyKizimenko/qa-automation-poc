@@ -8,8 +8,7 @@
  * install a policy queued while the policy still fails for the host: 3 attempts
  * in all (`MaxPolicyAutomationRetries`; `shouldRetryPolicyAutomationSoftwareInstall`
  * in `server/service/orbit.go`), then *Failed* in the Library and "Fleet failed to
- * install …" in the Activity card. QA Wolf's
- * `software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation`.
+ * install …" in the Activity card.
  * A retry a policy queues is a different path from a direct install's
  * (`inventory-reflects-install.spec.ts`), and Fleet also counts these failures per
  * host and installer, giving up for 24 hours after 10

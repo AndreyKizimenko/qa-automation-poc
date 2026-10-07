@@ -2,7 +2,6 @@
  * Settings • Organization info • Custom logo. Shared: the logo cards render
  * identically on free and premium (`OrgSettingsPage/cards/Info` has no tier
  * gate), and the logo is the one piece of branding a free instance can change.
- * QA Wolf only ever ran it on premium, so this is new free coverage.
  *
  * Fleet stores one logo per theme and the top nav picks the one matching the
  * viewer's account theme, so theme is a dimension of this spec rather than two

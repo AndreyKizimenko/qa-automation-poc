@@ -2,9 +2,8 @@
  * Premium • Policies — a label-targeted fleet policy runs on exactly the hosts
  * its labels pick.
  *
- * QA Wolf's `policies-include-all`: a VMs-fleet policy targeted "Include all"
- * of two labels showed on the host with both and not on a host with one. Here
- * three policies side by side, created through the Save policy modal's target
+ * A VMs-fleet policy targeted "Include all" of two labels belongs to the host
+ * with both and not to a host with one. Three policies side by side, created through the Save policy modal's target
  * (the tabbed selector, which on a policy has Any / All on **both** tabs — a
  * profile's Exclude has none), asserted as set membership over hosts the test
  * controls: the macOS VM and two macOS simulations borrowed onto the fleet. a = VM + s1, b = VM + s2, c = s2:

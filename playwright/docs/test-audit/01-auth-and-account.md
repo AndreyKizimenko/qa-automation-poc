@@ -161,7 +161,7 @@ other:
    - ✅ *(UI)* The **Email** field is visible (the login form actually rendered, not just the route).
 
 **Assessment**
-- *Value:* Good — this is the front-end auth guard, and it's the only test of it. Added from the QA Wolf migration (flow #4 in [`qawolf-migration/audit/C10-auth-roles-api.md`](../qawolf-migration/audit/C10-auth-roles-api.md)).
+- *Value:* Good — this is the front-end auth guard, and it's the only test of it.
 - *Coverage gaps:* Only probes `/dashboard`. Doesn't check a deep protected route (`/settings/organization`, `/hosts/1`), and — more valuable — doesn't check the **redirect-back-after-login** behaviour (sign in from here → do you land on the originally requested page or on `/dashboard`?).
 - *Redundancy:* Logical inverse of AUTH-05; the two belong together.
 - *Efficiency / smells:* The `beforeEach` `loginPage.goto()` is wasted work for this test — it loads `/login` only to immediately `goto('/dashboard')`.
@@ -492,7 +492,7 @@ other:
 **Assessment**
 - *Value:* High. Real round-trip: UI rotation → server-side effect proven by a second real login. Well-isolated by construction and the file's header comment explains why.
 - *Coverage gaps:* Only the happy path. Untested: wrong **Original password** (error state), mismatched confirmation, a new password violating Fleet's policy (<12 chars / no digit / no symbol), reusing the current password, **Cancel** dismissing the modal, and — the most valuable missing assertion — that the **old password no longer works** and that other sessions for that user are invalidated.
-- *Redundancy:* Overlaps the free/premium `settings/users/edit` password work flagged in [`qawolf-migration/audit/C7-settings.md`](../qawolf-migration/audit/C7-settings.md) (admin-sets-another-user's-password), but from the self-service side — complementary, not duplicative. Re-covers login (AUTH-01) twice as scaffolding.
+- *Redundancy:* Overlaps the admin-sets-another-user's-password test ([USRF-28](09-users-free-and-shared.md)), but from the self-service side — complementary, not duplicative. Re-covers login (AUTH-01) twice as scaffolding.
 - *Efficiency / smells:* (a) `NEW_PASSWORD` is a module-level literal, so two concurrent tiers/workers rotate to the same value — harmless because the user is unique, but a `qaTestEmail`-style generator would be more honest. (b) `new MyAccountPage(page)` is constructed inline because there is no `myAccount` fixture — the same workaround appears in AUTH-15/16/17; the manual context makes it unavoidable *here*, but not in AUTH-15. (c) Reaches `/account` by URL rather than via the navbar **My account** menu item, so that link stays untested (see area observations). (d) Uses `loginAsAdmin` for a non-admin user — the helper name is misleading (`loginAs` would fit).
 
 **Notes (Andrey)**
@@ -526,8 +526,8 @@ other:
 
 **Assessment**
 - *Value:* Moderate. Asserts the mechanism (class + persistence) without screenshots, which is the right call — the suite keeps no visual baselines.
-- *Coverage gaps:* System and Light are AUTH-18's. Persistence is checked across a reload only; across a sign-out was considered and cut in round 3 batch A (2026-10-02): the preference is per-browser localStorage by design (`LogoutPage` clears only the session and token), so it would test browser storage, not Fleet. Nothing asserts a dark-mode page is actually legible (accepted — no baselines).
-- *Redundancy:* none in-suite; supersedes the two screenshot-heavy QA Wolf dark-mode flows.
+- *Coverage gaps:* System and Light are AUTH-18's. Persistence is checked across a reload only; across a sign-out was considered and cut: the preference is per-browser localStorage by design (`LogoutPage` clears only the session and token), so it would test browser storage, not Fleet. Nothing asserts a dark-mode page is actually legible (accepted — no baselines).
+- *Redundancy:* none in-suite.
 - *Efficiency / smells:* (a) `new MyAccountPage(page)` inline — no `myAccount` fixture. (b) Raw `page.locator('body')` and `label[for="theme-dark"]` in the spec/POM; the label selector is justified and commented, but the `dark-mode` body assertion would read better as `myAccount.expectDarkMode()`. (c) One-directional: a `for (const theme of ['Dark','Light'])` shape would cover the toggle back and leave the context clean.
 
 **Notes (Andrey)**
@@ -563,7 +563,7 @@ other:
 **Assessment**
 - *Value:* Moderate. The `Fleets`-row-absent check is a genuine free-tier paywall assertion; the email/name/role checks are a cheap per-role smoke test that the account page renders for non-admins.
 - *Coverage gaps:* Expected values come from the **checked-in catalog** ([`helpers/api/static-users.ts`](../../helpers/api/static-users.ts)), not from `GET /users/:id` — so the test proves "UI matches our constants", and a server-side role drift that also drifted the catalog would pass. Also unchecked: the **Position** field, the **Update** button (editing name/email/position is untested anywhere), **Get API token**, and whether **Change password** is offered to every role.
-- *Redundancy:* Structurally identical to AUTH-17 apart from `toBeHidden()` vs `toHaveText()` on `fleetsValue` and the role list — three of AUTH-17's seven roles are the same users. Also overlaps the role-access API specs ([`tests/api/role-access/free/global-roles.spec.ts`](../../tests/api/role-access/free/global-roles.spec.ts)), which prove the same roles from the permission side; the QA Wolf audit classed the equivalent flows as DUP of this file.
+- *Redundancy:* Structurally identical to AUTH-17 apart from `toBeHidden()` vs `toHaveText()` on `fleetsValue` and the role list — three of AUTH-17's seven roles are the same users. Also overlaps the role-access API specs ([`tests/api/role-access/free/global-roles.spec.ts`](../../tests/api/role-access/free/global-roles.spec.ts)), which prove the same roles from the permission side.
 - *Efficiency / smells:* (a) `new MyAccountPage(page)` inline (no fixture). (b) `/account` reached by URL, not via the navbar menu. (c) Three near-identical tests where the free-specific value is one assertion — a single role plus a dedicated "Fleets row is premium-only" test would carry almost the same signal.
 
 **Notes (Andrey)**
@@ -634,7 +634,7 @@ other:
    - ✅ *(UI)* The **Light** radio is checked and `<body>` has no `dark-mode` — the choice is stored and still wins.
 
 **Assessment**
-- *Value:* covers the behaviour the QA Wolf flow is named for ("Fleet automatically uses user preference") without its screenshots: System's live OS tracking, and that an explicit choice stops it. Picking Light under a dark OS is what makes the Light assertion able to fail.
+- *Value:* covers Fleet following the user's OS preference, without screenshots: System's live OS tracking, and that an explicit choice stops it. Picking Light under a dark OS is what makes the Light assertion able to fail.
 - *Coverage gaps:* Dark under a light OS isn't asserted to *pin* (AUTH-15 picks Dark under the default light OS and reloads, which comes close). The command palette's theme toggle isn't covered here. Nothing checks a page is legible in either theme (no visual baselines, by design).
 - *Redundancy:* none; AUTH-15 is Dark + reload only.
 - *Efficiency / smells:* `new MyAccountPage(page)` inline and raw `page.locator('body')`, as AUTH-15.
@@ -665,7 +665,7 @@ other:
    - ✅ *(UI)* The tooltip names **VMs**.
 
 **Assessment**
-- *Value:* the side panel's only multi-fleet rendering (`teamNames.length > 1` in `AccountSidePanel.tsx`), which QA Wolf's team-admin flow pointed at. AUTH-17 checks the `2 fleets` text; this checks which fleets it means.
+- *Value:* the side panel's only multi-fleet rendering (`teamNames.length > 1` in `AccountSidePanel.tsx`). AUTH-17 checks the `2 fleets` text; this checks which fleets it means.
 - *Coverage gaps:* names come from the catalog, not the API, as in AUTH-17.
 - *Redundancy:* none.
 - *Efficiency / smells:* one more browser login, mitigated by the session cache; the hover target is a class (documented on the POM method).
@@ -708,7 +708,7 @@ other:
 2. **AUTH-06 ⊇ AUTH-07 + AUTH-08.** Three tests, two distinct messages, no test asserting an error *clears* or that the *other* error is absent.
 3. **AUTH-02 ≡ AUTH-03** by assertion. Justified (message-parity is the security property) but undocumented as intentional.
 4. **AUTH-16 vs AUTH-17.** Same body; the free file's only unique assertion is `fleetsValue` hidden. Three of AUTH-16's roles duplicate AUTH-17's.
-5. **My Account vs role-access API specs.** `tests/api/role-access/{free,premium}/` prove role semantics; AUTH-16/17 prove the role *label*. The QA Wolf audit already classed those flows as DUP of these files.
+5. **My Account vs role-access API specs.** `tests/api/role-access/{free,premium}/` prove role semantics; AUTH-16/17 prove the role *label*.
 6. **Tier duplication.** 13 of 17 declarations run once per tier. Login/validation/logout/forgot-password are genuinely tier-agnostic, so the free pass adds ~nothing beyond instance-availability signal — but it doubles this area's spend from the shared login throttle.
 
 ### UI-vs-API balance

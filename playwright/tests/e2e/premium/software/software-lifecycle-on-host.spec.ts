@@ -55,7 +55,7 @@
  * it either, so a pass can't be pinned on Fleet alone; a Fleet that stopped asking
  * still fails whenever no other refetch happens to be outstanding. The UI's
  * "Fetching fresh vitals" spinner isn't asserted: it gives up after 60 s, and a
- * VM's refetch takes 70–120 s. Round 2 #15 (round 3, batch G).
+ * VM's refetch takes 70–120 s.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';

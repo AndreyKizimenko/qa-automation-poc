@@ -14,9 +14,8 @@
  *      package is added with a pre-install query and a post-install script
  *      typed into the add form's Advanced options (Fleet generates the install
  *      and uninstall scripts), both stored as typed, and the Edit modal's four
- *      editors are compared field by field against the stored package — the
- *      assertion QA Wolf's screenshot of the uninstall editor was standing in
- *      for. Ace drops blank lines from its text layer, so both sides go through
+ *      editors are compared field by field against the stored package, rather
+ *      than a screenshot of them. Ace drops blank lines from its text layer, so both sides go through
  *      `normalizeScript` before comparison.
  *   3. **Edited scripts are the ones stored.** All four editors rewritten in
  *      the Edit modal and saved through "Save changes?", then read back through

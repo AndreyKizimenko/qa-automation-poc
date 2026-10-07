@@ -37,9 +37,8 @@ every nightly premium run**, in both the baseline and the min pass (`.github/wor
 `gitops-premium-min.yml`), and the Playwright premium workflow shares the `premium-fleetqa-instance`
 concurrency group with the nightly apply, so an apply and a test run never overlap. Claude tracks latest (no
 `version:` pin), so Fleet's hourly `maintained_apps_auto_update` cron downloads each new build and keeps the
-previous one — the ingredient the update spec (SWH-09/10/13) needs. Design and rationale:
-[D-host-execution.md → The FMA fixture set](../qawolf-migration/round-2/D-host-execution.md#the-fma-fixture-set)
-and [→ Durable install/uninstall fixtures](../qawolf-migration/round-2/D-host-execution.md#durable-installuninstall-fixtures-2026-09-28-follow-up).
+previous one — the ingredient the update spec (SWH-09/10/13) needs. The source of truth for the durable VM
+software is `gitops/premium-fleetqa/fleets/vms.yml` and `helpers/vm-fixtures.ts`.
 Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`), and a gitops apply deletes whatever the file
 does not declare.
 
@@ -113,13 +112,13 @@ usually see **Upcoming** flash "told Fleet to install …" and empty again; that
   policy's does. Same activity type, two shapes — on the decision list, encoded in SWH-03.
 
 **8. Runtime.** These six specs are the bulk of the premium nightly's **~40 min** (39.6 min at CI's two
-workers on 2026-09-28, measured *before* the SWH-14 restructure, against a ~15 min nightly before batch D and
+workers on 2026-09-28, measured *before* the SWH-14 restructure, against a ~15 min nightly before these specs and
 a 120-min job limit — Playwright's CI `globalTimeout` stops the run at 100 min with its report); each test takes **3–10 min**, SWH-14's two round-trips at the top of that. CI retries
 twice, so a real failure here can cost half an hour.
 
 The two **large-upload** tests (SWH-11/12) are the exception to all of the above: they never touch a host,
 upload to **Workstations** (which `cleanup.steps.ts` wipes), and take seconds to a couple of minutes. The
-size limit they read is **per instance** — **10 GiB** on premium QA, not QA Wolf's 1 GiB — and it is enforced
+size limit they read is **per instance** — **10 GiB** on premium QA, not a fixed 1 GiB — and it is enforced
 **in the browser on file selection**; the over-limit file is **sparse** (`ftruncate` to limit + 1 byte), so
 it costs no disk and no time.
 
@@ -302,7 +301,7 @@ installed version and the Inventory row for that state.
    - ✅ *(API)* The host's status for the title is `pending_install` immediately after the click.
 5. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, wait for "Last fetched" to move once on its own, then click **Refetch** and wait for it to move again — `waitForSoftwareSettled(…, 'installed', { inventoryName })` (`inventoryName` set only for the `.exe`).
    - ✅ *(API)* Status reaches `installed` (≤ 5 min).
-   - ✅ *(API, macOS Fleet-maintained app only)* The status is read every second, and at the moment it reaches `installed` the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asks for fresh vitals by itself once an install succeeds (round 2 #15; round 3, batch G). By hand: the host header's Refetch button reads **Fetching fresh vitals...** without anyone pressing it.
+   - ✅ *(API, macOS Fleet-maintained app only)* The status is read every second, and at the moment it reaches `installed` the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asks for fresh vitals by itself once an install succeeds. By hand: the host header's Refetch button reads **Fetching fresh vitals...** without anyone pressing it.
    - ✅ *(API)* No refetch outstanding (≤ 4 min), then `detail_updated_at` moves past a baseline taken after that (≤ 4 min, refetch requested).
    - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for an unlinked `.exe` the host's inventory by `7-Zip 26.01 (arm64)`. The test records which: **linked** iff the title now shows an installed version (only the `.exe` may lack one).
 6. ☐ Reload the host page → **Software** → **Library** → search the title.
@@ -441,7 +440,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts`](../../tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts)
 - **Grep:** `npx playwright test --project=premium-exclusive deploy-install-retries` (by file name)
 - **Project:** `premium-exclusive` — alone after the main project: a policy's installs queue at priority 0, below every user-requested one, and each failed install script backs orbit off for 1, 2, 4… min (fleetdm/fleet#54607) · **Host:** the Ubuntu VM · **Timeout:** 15 min, CI `HOST_RETRIES`
-- **Mode:** UI+API · **Source:** QA Wolf `policies/software-installs-retry-up-to-3-times-when-triggered-by-a-policy-automation` (round 2, batch G)
+- **Mode:** UI+API
 - **Preconditions (API):** a per-run `fleet-pw-deploy-fails-<stamp>` `.deb` built for **amd64**, uploaded to the VMs fleet with Deploy (`automatic_install`) — the aarch64 VM's dpkg refuses it, so every attempt fails without touching the host, and the package never arriving keeps Fleet's `[Install software] … (deb)` policy failing.
 - **Data created:** the package and its policy, deleted in the `finally` (policy first, any queued attempt cancelled); the VMs sweep removes `[Install software] fleet-pw-*` policies and `fleet-pw-*` titles a dead run leaves.
 
@@ -821,7 +820,7 @@ other:
    - ✅ *(UI)* **Add software** is **disabled** — there is nothing to submit.
 
 **Assessment**
-- *Value:* pins that the limit is **per instance** (it reads the config instead of trusting QA Wolf's 1 GiB) and that the check happens **client-side on selection**. The sparse file is a genuinely good trick: a 10 GiB test input that costs no disk and no time, and because the browser rejects it, not a byte is read.
+- *Value:* pins that the limit is **per instance** (it reads the config instead of assuming 1 GiB) and that the check happens **client-side on selection**. The sparse file is a genuinely good trick: a 10 GiB test input that costs no disk and no time, and because the browser rejects it, not a byte is read.
 - *Coverage gaps:* the **server-side** enforcement is not tested — an API upload over the limit (or a file that lies about its size) is the enforcement layer, and a UI-only check over a permissive server is the shape worth worrying about. The boundary (exactly the limit, accepted) is not tested — impractical at 10 GiB through the browser, but cheap at the API.
 - *Redundancy:* none.
 - *Efficiency / smells:*
@@ -862,7 +861,7 @@ other:
 5. ☐ (No user action) `finally` — delete the title.
 
 **Assessment**
-- *Value:* the QA Wolf "progress indicator appears without timeout" flow, re-scoped sensibly: a real, valid package large enough for the bar to move, small enough not to be a load test, generated rather than committed. Asserting that the percentage *moves* is better than asserting it exists.
+- *Value:* the upload's progress indicator appearing without a timeout, scoped sensibly: a real, valid package large enough for the bar to move, small enough not to be a load test, generated rather than committed. Asserting that the percentage *moves* is better than asserting it exists.
 - *Coverage gaps:* nothing checks the resulting title (version, size, type) beyond the toast and redirect. Cancelling mid-upload is untested.
 - *Redundancy:* the add path is every custom-package upload in the suite; the progress half is unique.
 - *Efficiency / smells:*
@@ -884,7 +883,6 @@ other:
 - **Grep:** `npx playwright test --project=premium host-library-tab` (three runtime tests: `on the darwin VM, … Fleet-maintained tab`, `on the windows VM, … Fleet-maintained tab`, `on the linux VM, … Custom package tab`)
 - **Project:** premium · **Host:** the real VM of the row's platform, on the **VMs** fleet · **Read-only:** no VM time, nothing added
 - **Mode:** UI+API · **Isolation:** one test per VM, independent
-- **Source:** QA Wolf `general-library-verify-tab-availability-and-content` (round 1 C5 #13; round 3, batch G), reshaped at review: the flow read the header's static pieces and walked every row's action buttons, which the update, uninstall and inventory specs already act on. Free's side is HOST-27.
 - **Preconditions:** the VM online (`requireRealHost`) and on the VMs fleet.
 
 **Flow**
@@ -898,8 +896,8 @@ other:
    - ✅ *(UI)* macOS and Windows: the URL is `/software/add/fleet-maintained?fleet_id=<VMs>` and the **Fleet-maintained** tab is selected. Linux: `/software/add/package?fleet_id=<VMs>` and **Custom package** is selected.
 
 **Assessment**
-- *Value:* The routing is a per-platform decision in the Library card (`onAddSoftware`) that nothing else exercises, and the count is the only check that the card's total is the server's.
-- *Coverage gaps:* The **All available / Self service** filter (no VMs-fleet title is self-service, so it would read an empty list), the search box, paging, and the iOS / Android branch (App Store tab), which needs a device the instances lack.
+- *Value:* The routing is a per-platform decision in the Library card (`onAddSoftware`) that nothing else exercises, and the count is the only check that the card's total is the server's. Free's side is HOST-27.
+- *Coverage gaps:* The rows' action buttons aren't walked: the update, uninstall and inventory specs act on them. The **All available / Self service** filter (no VMs-fleet title is self-service, so it would read an empty list), the search box, paging, and the iOS / Android branch (App Store tab), which needs a device the instances lack.
 - *Efficiency / smells:* Seconds each. The count comparison retries by reload rather than pinning the fleet's library, which other specs change during a run.
 
 **Notes (Andrey)**
@@ -916,13 +914,12 @@ other:
 - **Grep:** `npx playwright test --project=premium script-only-package -g "runs on the macOS VM"`
 - **Project:** premium · **Host:** the real **macOS VM**, on the VMs fleet · **VM time:** one script run, ~1–2 min with the queue
 - **Mode:** UI+API · **Isolation:** its own describe; timeout **600 s**, `HOST_RETRIES`. The per-run title is deleted in an `afterEach` (which still runs on a timeout); deleting it cancels a run still queued. The VMs sweep removes a `fleet-pw-*` title a killed run left.
-- **Source:** QA Wolf `add-custom-package-that-only-contains-a-script` and `Add a .sh script as a software package` (round 2 #72 and #88; round 3, batch G). Run on the Mac rather than the Linux VM, whose install and script queue is the suite's busiest.
 - **Preconditions (API):** the Mac online (`requireRealHost`). `POST /software/package` puts `fleet-pw-script-<nonce>.sh` on the VMs fleet: `#!/bin/sh`, `echo "pw-script-package-ran-<nonce>"`, `exit 0` (a failing install script would back orbit off for minutes, fleetdm/fleet#54607). Fleet offers it to the Mac (`hostsOfferedTitle`).
 
 **Flow**
 
 1. ☐ Open the Mac's details → **Software** → **Library** → search `fleet-pw-script-<nonce>`.
-   - ✅ *(UI)* the row offers **Run** — not Install — and no **Uninstall** (a script-only package has no uninstall script). Round 2 #88.
+   - ✅ *(UI)* the row offers **Run** — not Install — and no **Uninstall** (a script-only package has no uninstall script).
 2. ☐ Click **Run**.
    - ✅ *(UI)* toast **"Script is running. To see details, go to Details > Activity."**
    - ✅ *(API)* the title's status is `pending_install`, and it is in the host's upcoming activities. (The Upcoming tab's "told Fleet to run …" isn't read in the UI: the Mac can pick it up before the page loads.)
@@ -938,7 +935,7 @@ other:
 **Assessment**
 - *Value:* The only run of a script-only package on a real host; a simulation with orbit reports a random result for a script it never ran. The marker in the output is what proves the Mac ran this file, and every check is keyed to the per-run title, so a late result from a dead attempt can't satisfy a retry.
 - *Coverage gaps:* A failed run (**Retry**, "failed to run") is left out on purpose: it would stall the Mac's queue (#54607), so it would belong in `exclusive/`. **Rerun**, self-service, a `.ps1` on Windows and a script package *with* an uninstall script (which Fleet treats as an ordinary install) aren't run.
-- *Efficiency / smells:* One script run on the Mac. Never edit the package while its run is queued or running (fleetdm/fleet#54732, #54734); the test doesn't.
+- *Efficiency / smells:* One script run on the Mac, rather than the Linux VM, whose install and script queue is the suite's busiest. Never edit the package while its run is queued or running (fleetdm/fleet#54732, #54734); the test doesn't.
 
 **Notes (Andrey)**
 ```

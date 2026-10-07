@@ -8,7 +8,7 @@
  * reaches one. The fixtures are the inert pair all the same (test-data/…/profiles
  * READMEs): the free copy of this spec delivers every upload to the VMs.
  *
- * The delivery case is QA Wolf's "upload and remove": a profile with the default
+ * The delivery case uploads and removes a profile with the default
  * target, **All hosts**, uploaded to the VMs fleet, verified on the real Mac and
  * read back on it, then deleted through the UI and gone from the device. Its
  * profile is generated inert with a name of its own, so the VMs sweep in
