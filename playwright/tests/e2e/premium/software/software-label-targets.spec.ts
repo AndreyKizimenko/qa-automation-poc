@@ -2,10 +2,7 @@
  * Premium • Software — a package scoped to labels is offered to exactly the
  * hosts they pick.
  *
- * QA Wolf's two flows scoped a Fleet-maintained app "Include all" / "Include
- * any" to labels and checked one Mac's Library had it and another's didn't
- * (the "any" flow checked the wrong host twice, so its negative never ran).
- * Here one package goes through all three scopes on the VMs fleet, and each is
+ * One package goes through all three scopes on the VMs fleet, and each is
  * asserted as set membership over hosts the test controls — the Ubuntu VM and
  * two Linux simulations borrowed onto the fleet (`findSimulations`):
  *
@@ -29,7 +26,7 @@
  * must stay unscoped. The package is an inert `fleet-pw-label-*` `.deb`
  * (`helpers/deb.ts`) — the cleanup sweep deletes a `fleet-pw-*` title a dead run
  * left, and purges the package from the Ubuntu VM. It is uninstalled in-test.
- * Linux rather than QA Wolf's macOS app because a `.deb` can be minted per run;
+ * Linux, because a `.deb` can be minted per run;
  * which hosts are offered a title doesn't depend on the platform.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';

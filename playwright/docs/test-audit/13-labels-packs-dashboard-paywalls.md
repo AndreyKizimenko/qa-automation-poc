@@ -97,7 +97,7 @@ other:
 - **Grep:** `npx playwright test -g "Labels • Dynamic label lifecycle › edit to a name"`
 - **Project:** premium **and** free · **Mode:** UI · **Isolation:** serial step 2 of 4 (depends on MISC-01)
 - **Preconditions:** the label from MISC-01 exists
-- **Data created:** renames the label to `<name> !@#$%^&*()_-+=` (round 3 batch A, C1 #14: a name with special characters)
+- **Data created:** renames the label to `<name> !@#$%^&*()_-+=` (a name with special characters)
 
 **Flow**
 
@@ -112,7 +112,7 @@ other:
    - ✅ *(UI)* Row for the edited name is visible, shows the special-characters name verbatim, and contains the edited description.
 
 **Assessment**
-- *Value:* the strongest assertion in the file — the edit form is verified to *load* existing values (name + description), not just accept new ones. The special-characters name then rides through the list, the delete toast (MISC-03) and the activity feed (MISC-04), which is QA Wolf's special-characters flow folded in rather than a lifecycle of its own.
+- *Value:* the strongest assertion in the file — the edit form is verified to *load* existing values (name + description), not just accept new ones. The special-characters name then rides through the list, the delete toast (MISC-03) and the activity feed (MISC-04), so special characters ride along rather than needing a lifecycle of their own.
 - *Coverage gaps:* the label's type and query are not re-asserted after edit; whether a Dynamic label can be converted to Manual (or vice versa) is untested; the edit form's platform field is never read back.
 - *Redundancy:* none since MISC-06 edits from the Hosts list (the manual label's membership); the rename is the overlap.
 - *Efficiency / smells:* none material. The pre-populated-value assertions are exactly what similar CRUD specs in the suite usually omit — worth copying elsewhere.
@@ -196,7 +196,6 @@ other:
 - **File:** [`playwright/tests/e2e/shared/labels/labels.spec.ts`](../../tests/e2e/shared/labels/labels.spec.ts)
 - **Grep:** `npx playwright test -g "Labels • Manual label lifecycle › create"`
 - **Project:** premium **and** free · **Mode:** UI+API (API used for the host precondition only) · **Isolation:** serial step 1 of 4 in the second describe
-- **Source:** also QA Wolf `mdm-add-and-update-manual-labels-to-host` (round 1 C9 #11; round 3, batch C), whose lifecycle runs from the Hosts list
 - **Preconditions:** `beforeAll` purges `pw-label-man*` labels via the API (same helper as MISC-01). `findSimulations(request, 'linux', 3, 2)` picks three online Linux **simulations** (slices 2–4, registered in `helpers/api/hosts.ts`, never moved) and `getHostDisplayName` reads their names; the test fails if the pool has fewer. Never a real VM: on free the VMs share the label's global scope. `pageHealth.disable()` — typing in the host picker makes Fleet log a benign 4xx (`Invalid usage: missing required parameter(s)`) to the console.
 - **Data created:** label `pw-label-man-<timestamp>` with the first two simulations as members
 
@@ -256,7 +255,7 @@ other:
 
 **Assessment**
 - *Value:* the Hosts list's **Edit label** (otherwise untested), and the manual-only part of an edit: the form pre-loads the members, and a removal and an addition both persist and show on the filtered list. No longer a duplicate of MISC-02.
-- *Coverage gaps:* the Hosts list's Edit label for a role that isn't global or the label's author (it's hidden then) is batch E's.
+- *Coverage gaps:* the Hosts list's Edit label for a role that isn't global or the label's author (it's hidden then) is the role-access entries' (MISC-32…36).
 - *Redundancy:* rename + description edit still repeat MISC-02's.
 - *Efficiency / smells:* one API read, as the oracle for what the save stored.
 
@@ -805,7 +804,7 @@ other:
 - **Preconditions:** the instance carries hosts on **macOS, Windows and Linux** (both osquery-perf pools do). ChromeOS / iOS / iPadOS / Android are deliberately left out of the case table — neither instance has hosts for them, so their rows render as inert text rather than links.
 - **Data created:** none
 
-> **The dashboard has no "platform cards" any more.** The name is the QA Wolf flow's, kept on the file. Fleet replaced that row of cards with the **Hosts enrolled** bar chart (`HostsEnrolledCard`), which is what MISC-23 clicks. What survives under the old name is the **Platform:** filter and the host-count cards it swaps in and out — this case.
+> **The dashboard has no "platform cards" any more.** The name is historical, kept on the file. Fleet replaced that row of cards with the **Hosts enrolled** bar chart (`HostsEnrolledCard`), which is what MISC-23 clicks. What survives under the old name is the **Platform:** filter and the host-count cards it swaps in and out — this case.
 
 **Flow**
 
@@ -1020,7 +1019,7 @@ other:
 >
 > **This is a sanctioned, documented exception to `playwright/CLAUDE.md`'s "do not create or delete teams from test bodies".** That rule exists to protect the gitops-provisioned Workstations fleet, which nothing may delete. A fleet that lives only between the top of this test and its `finally` is a different thing, and it is the only safe subject here. Do not "simplify" it onto a standing fleet.
 >
-> **The deployment-wide switches on Advanced options are read, never written.** They delete *every* fleet's history at once. The original QA Wolf flow flipped them as setup; this spec does not, and neither should a manual runner.
+> **The deployment-wide switches on Advanced options are read, never written.** They delete *every* fleet's history at once. This spec never flips them, and neither should a manual runner.
 
 > **⚠️ Polarity trap.** The checkboxes on a fleet's settings page are **disables** — ticked means "stopped collecting" — while the API field is their opposite (`features.historical_data.uptime: true` means "still collecting"), and the deployment-wide checkboxes on Advanced options are **enables** (see MISC-29). All of them render Fleet's `Checkbox`, whose accessible name is the `name` prop rather than the visible label, so the per-fleet *disable* and the deployment-wide *enable* **both resolve as `disableHostsActive`** while meaning opposite things. Read the helper name and the expected value, never the locator's name.
 
@@ -1129,7 +1128,7 @@ other:
    - ✅ *(UI)* At least one cell **with hosts** is visible (`chartCellsWithHosts`, matching `: N hosts` and excluding `No data`) — a grid of "No data" cells alone cannot tell a working query from a broken one.
 
 **Assessment**
-- *Value:* net-new free coverage of a surface QA Wolf only ever ran on premium, and the only place the free/premium *shape* difference on this card is pinned from the free side. The `chartCellsWithHosts` assertion makes it a real data check rather than a render check.
+- *Value:* free coverage of a surface otherwise tested only on premium, and the only place the free/premium *shape* difference on this card is pinned from the free side. The `chartCellsWithHosts` assertion makes it a real data check rather than a render check.
 - *Coverage gaps:* the filter modal is present-but-unopened here (MISC-26 covers the premium filter round-trip; free's is untested end to end); the disabled state is never *seen* on free — the case skips rather than asserting it, so free's "Data collection is disabled" panel and its "all fleets" wording have no coverage anywhere; no reload/persistence check.
 - *Redundancy:* mirrors MISC-24's controls assertions on the other tier. Per the suite's tier-separation convention this duplication is intended.
 - *Efficiency / smells:* **no `waitForResponse` at all** — and that is correct rather than an oversight: the 10–11 s trap is `/charts/cve`, which free does not offer, and `uptime` returns promptly. Worth knowing before somebody "harmonises" this file with the premium one. The skip gate costs a `GET /config` on every run.
@@ -1209,7 +1208,7 @@ other:
    - ✅ *(UI)* The three rows in reverse: logged in, created, deleted.
 
 **Assessment**
-- *Value:* the feed's four controls, each able to fail: the server-side search, the type and date query parameters, and the sort direction, all over rows the test made (QA Wolf's flow walked ten pages and picked a random actor). On both tiers.
+- *Value:* the feed's four controls, each able to fail: the server-side search, the type and date query parameters, and the sort direction, all over rows the test made. On both tiers.
 - *Coverage gaps:* searching by **email** (the same prefix match), the type filter's own search box, multi-page results under a filter, and the 7-day / 30-day / 3- / 12-month ranges (identical "start date" arithmetic to Today's, but unexercised).
 - *Redundancy:* `expectActivities` reads the feed in many lifecycle specs, but never through a filter.
 - *Efficiency / smells:* "Yesterday" / "Today" use the browser's local midnight; a run that crosses it between the user's actions and the filter would fail (rare, and the failure says so). The type dropdown is reached by its `activity-type-select__*` classes (documented on `DashboardPage.selectActivityType`).
@@ -1229,7 +1228,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "no fleet dropdown, no Fleet column"`
 - **Project:** free only · **Mode:** UI+API (the org name is read from `GET /config`) · **Isolation:** independent, read-only
-- **Source:** QA Wolf `dashboard-teams-dropdowns-not-searchable-in-free` (round 1 C5 #1; round 3, batch C)
 
 **Flow**
 
@@ -1260,7 +1258,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "team observer cannot add labels"`
 - **Project:** premium · **Role:** `ws-observer` · **Mode:** UI · **Isolation:** read-only
-- **Source:** round 1 C7 #24's Add label half (round 3, batch E): on the Hosts list the label filter is disabled while Workstations has no hosts, so the Labels page carries it.
 - **Data created:** none
 
 **Flow**
@@ -1271,7 +1268,7 @@ other:
    - ✅ *(UI)* **View all hosts** (the anchor); no **Edit**, no **Delete**.
 
 **Assessment**
-- *Value:* MISC-11's cell for a fleet observer.
+- *Value:* MISC-11's cell for a fleet observer, read on the Labels page: on the Hosts list the label filter is disabled while Workstations has no hosts.
 - *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
@@ -1289,7 +1286,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "global technician can add labels"`
 - **Project:** premium · **Role:** `global-technician` · **Mode:** UI · **Isolation:** read-only (the gitops label is never edited)
-- **Source:** round 3 batch E (the technician column)
 
 **Flow**
 
@@ -1318,7 +1314,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "team maintainer creates, edits and deletes a label of its own"`
 - **Project:** premium · **Role:** `ws-maintainer` · **Mode:** UI+API · **Isolation:** its label is its own
-- **Source:** QA Wolf `new-labels-page-team-maintainer-can-create-edit-and-delete-own-labels` (round 1 C9 #14; round 3, batch E)
 - **Data created:** a Dynamic `pw-role-label-<nonce>`, deleted in the test; the `afterEach` deletes it by name if the test didn't, and the VMs-fleet sweep removes `pw-` labels after a dead run.
 
 **Flow**
@@ -1336,7 +1331,7 @@ other:
    - ✅ *(API)* the label is gone.
 
 **Assessment**
-- *Value:* authorship-based gating, the one place Fleet's rego checks who wrote something. The flow's random Dynamic-or-Manual choice is fixed on Dynamic: Manual needs a host on the maintainer's fleet, and Workstations has none.
+- *Value:* authorship-based gating, the one place Fleet's rego checks who wrote something. It creates a Dynamic label: Manual needs a host on the maintainer's fleet, and Workstations has none.
 - *Coverage gaps:* a fleet label (made through the API or gitops) on the maintainer's own fleet isn't read.
 - *Efficiency / smells:* seconds. A Dynamic label's query runs on every host, as `labels.spec`'s does.
 
@@ -1355,7 +1350,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/labels/role-access.spec.ts`](../../tests/e2e/premium/labels/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "global observer filters the Hosts list by a label"`
 - **Project:** premium · **Role:** `global-observer` · **Mode:** UI · **Isolation:** read-only
-- **Source:** QA Wolf `new-labels-page-team-observer-can-only-view-labels-and-filter-labels-on-hosts` (round 1 C9 #15; round 3, batch E). Titled "team observer" but signed in as the global observer, which is kept (`ws-observer`'s label filter is disabled while Workstations has no hosts).
 
 **Flow**
 
@@ -1364,7 +1358,7 @@ other:
    - ✅ *(UI)* no **Edit label**, no **Delete label** (`HostsFilterBlock` gives them to global roles but observers, or to the label's author).
 
 **Assessment**
-- *Value:* the observer's half of the pill's gating; C9 #11 (`labels.spec`) uses the pill's buttons as admin.
+- *Value:* the observer's half of the pill's gating; `labels.spec` (MISC-05…07) uses the pill's buttons as admin. It signs in as the global observer: `ws-observer`'s label filter is disabled while Workstations has no hosts.
 - *Coverage gaps:* the hosts listed aren't compared with the label's members.
 - *Efficiency / smells:* seconds. Picking a label whose name has spaces needed `LabelFilter.selectLabel` to type only the first word: a space in an open react-select menu chooses the focused option.
 
@@ -1383,7 +1377,6 @@ other:
 - **File:** [`playwright/tests/e2e/free/labels/role-access.spec.ts`](../../tests/e2e/free/labels/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "Free • Labels • role access"`
 - **Project:** free · **Variants (2):** `global-maintainer`, `global-observer` · **Mode:** UI · **Isolation:** read-only
-- **Source:** round 1 C9 #15 and MISC-11's cell, on free (round 3, batch E): labels have no tier gate, and free declares the same gitops label.
 
 **Flow**
 
@@ -1395,7 +1388,7 @@ other:
    - ✅ *(UI)* the pill reads "hosts filtered by Debian-based Linux hosts"; **Edit label** and **Delete label** for GM only.
 
 **Assessment**
-- *Value:* the label gating on free, where nothing role-related about labels was asserted.
+- *Value:* the label gating on free, where nothing role-related about labels was asserted. Labels have no tier gate, and free declares the same gitops label.
 - *Coverage gaps:* the actions aren't taken (MISC-05…07 take them as admin).
 - *Efficiency / smells:* seconds.
 

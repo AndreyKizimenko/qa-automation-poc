@@ -1105,7 +1105,7 @@ other:
    - ✅ *(API)* The VM stops listing it; the domain reads empty on the device (≤ 2 min).
 
 **Assessment**
-- *Value:* High. QA Wolf's "upload and remove configuration profile": the one path — no target — the label-targeting specs don't take, proven on the device both ways.
+- *Value:* High. Uploading and removing a configuration profile with no target, the one path the label-targeting specs don't take, proven on the device both ways.
 - *Coverage gaps:* the transient Pending/Verifying status on the host isn't asserted in the UI (the VM moves through it in seconds).
 - *Redundancy:* the removal half overlaps LT-01's last step; kept because it's the untargeted profile.
 
@@ -1126,7 +1126,6 @@ other:
 - **Project:** premium-exclusive (one worker, after the main project — it shares Workstations' OS update settings with CTL-31/32) · **Scope:** **Workstations**, which holds no hosts
 - **Mode:** UI+API · **Isolation:** `finally` clears Workstations' OS updates; so does the Workstations wipe in `setup/cleanup.steps.ts`
 - **Preconditions:** Workstations enforces nothing (asserted); Apple's software lookup feed is reachable (`appleListedMacosVersions` — the version is the oldest it lists, which Fleet accepts); neither Unassigned nor the QA fleet already holds that version (asserted; `qaFleetId` worker fixture)
-- **Source (the other-scopes check):** QA Wolf `settings-macos-updates-settings-setup-options-only-apply-at-team-level` (round 1 C7 #17; round 3, batch F)
 
 **Flow**
 
@@ -1145,7 +1144,7 @@ other:
    - ✅ *(UI)* *"Successfully updated."*; the check leaves the tab. *(API)* nothing enforced.
 
 **Assessment**
-- *Value:* Medium-high. QA Wolf's flow never chose "Custom version" (it passed on its own leftover); this sets and clears it, and replaces their preview screenshot with the link and image. It also pins that an OS update target belongs to the fleet it's saved on: two other scopes are compared while the setting is live, against a version neither held, so a save that also reached the global config or the QA fleet fails.
+- *Value:* Medium-high. It sets "Custom version" and clears it again, and checks the preview's link and image rather than a screenshot. It also pins that an OS update target belongs to the fleet it's saved on: two other scopes are compared while the setting is live, against a version neither held, so a save that also reached the global config or the QA fleet fails.
 - *Coverage gaps:* "Latest version" / Days after release, and iOS / iPadOS. The scope check reads two other scopes (Unassigned and QA), not every fleet, and only macOS; it's API-only, so neither scope's OS updates page is looked at.
 - *Efficiency / smells:* seconds. Reads an external feed (Apple's) for a version Fleet will accept. The two snapshots are plain reads of shared scopes, so they can't disturb a neighbour.
 
@@ -1196,7 +1195,7 @@ other:
    - ✅ *(API)* Every host that filter returns reports exactly that OS (`os_version` = `<name> <version>`), and there's at least one.
 
 **Assessment**
-- *Value:* Medium. QA Wolf compared the table's count with the list's — a count on a shared list that drifts hourly; this checks the filter's membership instead.
+- *Value:* Medium. It checks the filter's membership rather than comparing the table's count with the list's, a count on a shared list that drifts hourly.
 - *Redundancy:* the Software → OS versions drill-down in `premium/software/os.spec.ts` is the same idea on another page.
 
 **Notes (Andrey)**
@@ -1229,7 +1228,7 @@ other:
    - ✅ *(API)* No minimum version was saved.
 
 **Assessment**
-- *Value:* High. QA Wolf tested one direction on their VMs fleet, with a deadline already in the past — on a fleet with real hosts that's an immediate forced update. Both directions here, on a fleet with none.
+- *Value:* High. Both directions, on a fleet with no hosts: with real hosts, a deadline already in the past would be an immediate forced update.
 
 **Notes (Andrey)**
 ```
@@ -1330,7 +1329,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a script that uses a variable is refused until the variable exists"` (or `--project=free`)
 - **Project:** premium, free (shared) · **Scope:** the variable is global; the script goes to **Unassigned** (`FLEET_ID = 0`), which on free is where the real VMs are — uploading a script doesn't run it
 - **Mode:** UI · **Isolation:** self-contained, per-run names; the `afterEach` deletes the test's script (exact name, `deleteAllScripts` with a filter) and **then** the variable — Fleet refuses to delete a variable a script still uses, and `deleteVariablesMatching` ignores the refusal
-- **Source:** QA Wolf round 1 C8 #20 (`secrets-scripts-with-a-secret-variable-can-only-be-uploaded-when-such-variable-exists`)
 - **Preconditions:** none. The refusal is a 422, which `pageHealth` doesn't flag.
 - **Data created:** the script `pw-secret-<nonce>.sh`, built in memory (`#!/bin/sh` / `echo "token: $FLEET_SECRET_PW_VAR_<NONCE>"`), on Unassigned, and the variable `PW_VAR_<NONCE>` (value `pw-secret-value`) — both removed by the `afterEach`. The Unassigned wipe catches a leftover script; nothing catches a leftover variable.
 
@@ -1372,7 +1370,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a variable a script uses can't be deleted"` (or `--project=free`)
 - **Project:** premium, free (shared) · **Scope:** the variable is global; the script is on **Unassigned**
 - **Mode:** UI+API · **Isolation:** as CTL-35 — the `afterEach` deletes the script, then the variable
-- **Source:** QA Wolf round 1 C8 #22 (`secrets-variable-that-is-referenced-by-a-script-can-not-be-deleted`)
 - **Preconditions (API):** the variable `PW_VAR_<NONCE>` (`createVariable`) and the script `pw-secret-<nonce>.sh` on Unassigned, which references `$FLEET_SECRET_PW_VAR_<NONCE>` (`uploadScript`)
 - **Data created:** those two, removed by the `afterEach`
 - **Worked around:** the scope part of the refusal is left open for [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621) — on Unassigned Fleet calls the scope `the "No team" team` (and a fleet a "team"). A `TODO(fleetdm/fleet#54621)` in the spec and a row in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) → *Worked around in the suite*.
@@ -1412,7 +1409,6 @@ other:
 - **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "a batch scheduled for tomorrow"` (or `--project=free`)
 - **Project:** premium, free (shared) · **Scope:** **Unassigned**: the script and three simulations from `findSimulations('linux', 3, 10)` (the spec's claimed slice), never the real VMs, which on free sit in Unassigned too
 - **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script, which deletes its batch (a foreign-key cascade), so a batch left by a timed-out test can't fire tomorrow
-- **Source:** QA Wolf round 1 C8 #17 (`scripts-script-execution-can-be-canceled-and-the-script-moves-to-the-correct-status`), with #12's second test, #18's after-cancel half and #15 folded in
 - **Preconditions (API):** the script `pw-batch-cancel-<nonce>.sh` on Unassigned (`uploadScript`), and a batch of it on the three hosts with `not_before` 24 hours ahead (`runScriptBatch`). Nothing ever runs.
 - **Data created:** the script and its batch, both removed by the `afterEach`; Fleet's `scheduled_script_batch` and `canceled_script_batch` activities (permanent)
 
@@ -1439,7 +1435,7 @@ other:
    - ✅ *(UI)* The same content.
 
 **Assessment**
-- *Value:* High. Cancelling a batch, made deterministic: a batch scheduled for tomorrow can't race a host to its result, and a cancelled scheduled batch finishes at once with every host under Canceled. That's QA Wolf's "the hosts Pending before the cancel are now under Canceled" assertion without the race. It also covers the cancel confirmation and toast, the Finished row's "Canceled", the counts after a cancel (tab names and headers agree), and the batch's script preview in two states. On both tiers.
+- *Value:* High. Cancelling a batch, made deterministic: a batch scheduled for tomorrow can't race a host to its result, and a cancelled scheduled batch finishes at once with every host under Canceled. That's "the hosts Pending before the cancel are now under Canceled" without the race. It also covers the cancel confirmation and toast, the Finished row's "Canceled", the counts after a cancel (tab names and headers agree), and the batch's script preview in two states. On both tiers.
 - *Coverage gaps:* cancelling a *started* batch, where only the hosts without a result move to Canceled, isn't covered: on simulations that's a 35-second race (and see CTL-39 for a cancel that does land mid-run). The preview in the **Started** state is the same button and modal, so it isn't repeated. The `canceled_script_batch` activity isn't asserted.
 - *Redundancy:* the details page's tab mechanics overlap CTL-24; incidental.
 - *Efficiency / smells:*
@@ -1463,7 +1459,6 @@ other:
 - **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "a script scheduled from the Hosts list"` (or `--project=free`)
 - **Project:** premium, free (shared) · **Scope:** **Unassigned**: one Linux orbit simulation from `findScriptableSimulations(request, 7, 13)`
 - **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script and its batch · **Timeout:** 7 min (up to 2 to the scheduled time, up to 2 more for Fleet's 2-minute `scheduled_batch_activities` worker)
-- **Source:** QA Wolf round 1 C8 #16 (`scripts-schedule-for-later-allows-the-user-to-customize-the-time-for-the-script-to-run`), with #19 (the Schedule radio and its Date / Time fields) folded in
 - **Preconditions (API):** the script `pw-batch-sched-<nonce>.sh` (`echo scheduled`) on Unassigned
 - **Data created:** the script and its batch, removed by the `afterEach`; the simulation "runs" it (a random exit code); Fleet's `scheduled_script_batch` activity
 
@@ -1487,7 +1482,7 @@ other:
 
 **Assessment**
 - *Value:* High. The schedule form end to end, including that the UTC fields are stored as typed (a time-zone slip is the bug this form invites), and that Fleet's worker actually starts the batch: a scheduled batch that never fires fails nowhere else. On both tiers.
-- *Coverage gaps:* the form's validation (a past date, a malformed time, Run disabled while incomplete) is cut: QA Wolf never checked it, and Fleet is moving validation to submit-only. The Scheduled row's tooltip (the scheduled time in the browser's locale) is replaced by the API's `not_before`. Scheduling through **Select all matching** (a filter rather than host ids) isn't covered. Where the started batch's host landed isn't asserted: a simulation's result is random.
+- *Coverage gaps:* the form's validation (a past date, a malformed time, Run disabled while incomplete) is cut: Fleet is moving validation to submit-only. The Scheduled row's tooltip (the scheduled time in the browser's locale) is replaced by the API's `not_before`. Scheduling through **Select all matching** (a filter rather than host ids) isn't covered. Where the started batch's host landed isn't asserted: a simulation's result is random.
 - *Redundancy:* the Hosts-list selection overlaps CTL-24's.
 - *Efficiency / smells:*
   - The longest test in the area apart from the VM ones: about 4 minutes of one worker per tier, spent waiting for Fleet's worker.
@@ -1510,7 +1505,6 @@ other:
 - **Grep:** `npx playwright test --project=premium batch-schedule-cancel -g "editing a script mid-run"` (or `--project=free`)
 - **Project:** premium, free (shared) · **Scope:** **Unassigned**: the macOS orbit simulations in `findScriptableSimulations(request, 'darwin', 30, 10)` that aren't in the built-in macOS label (about 15 per tier; at least 5 required)
 - **Mode:** UI+API · **Isolation:** per-run script name; the `afterEach` deletes the script and its batch
-- **Source:** QA Wolf round 1 C8 #8 (`controls-batch-run-scripts-on-hundreds-of-hosts-cancel-all-queued-scripts-if-they-were-modified`)
 - **Preconditions (API):** the script `pw-batch-edit-<nonce>.sh` (`echo before`) on Unassigned; the batch is started (`runScriptBatch`) only once the Library is open
 - **Data created:** the script and its batch, removed by the `afterEach`; the simulations that reported first "ran" it; Fleet's `ran_script_batch` and `updated_script` activities
 
@@ -1527,7 +1521,7 @@ other:
    - ✅ *(UI)* The tab is named "Canceled N" and lists exactly the hosts the API lists as canceled, read together, retried until they agree. A host that was *running* the script when the edit landed reports a few seconds later, and Fleet then counts it under Ran or Errored (listing it under neither), so the cancelled set can shrink after step 3: a comparison with step 3's count failed twice in branch run 37149323584. That's [fleetdm/fleet#54734](https://github.com/fleetdm/fleet/issues/54734) (filed 2026-10-03; `TODO` at the workaround and a row in `blocked-by-product-bugs.md`).
 
 **Assessment**
-- *Value:* Medium-high. That saving an edited script cancels *every* run that hasn't reported (none left Pending), which QA Wolf checked over hundreds of hosts, plus the warning that says so. On both tiers.
+- *Value:* Medium-high. That saving an edited script cancels *every* run that hasn't reported (none left Pending), plus the warning that says so. On both tiers.
 - *Coverage gaps:* near-deterministic, not deterministic: it fails only if every host reports before the edit lands. Each simulation polls every 30 s and "runs" for 0–4 s, and the edit lands a couple of seconds after the batch starts, so the odds are about (edit seconds / 30)ⁿ: negligible over ~15 hosts. A run still *queued* behind another activity when its script is edited isn't cancelled properly: it stays Pending and the batch never finishes ([fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)). The test's hosts have nothing queued, so it doesn't reach that. The batch's eventual "Completed" isn't awaited: that's the 5-minute completion check, which CTL-24/25 wait for. Deleting a script with pending runs isn't covered.
 - *Redundancy:* the library edit overlaps CTL-09/CTL-21's (`editScript` is the same path, split here at the warning).
 - *Efficiency / smells:*
@@ -1550,7 +1544,6 @@ other:
 - **Grep:** `npx playwright test --project=premium batch-run -g "each progress tab empty"`
 - **Project:** premium · **Scope:** **Workstations**: no spec runs a batch there, and `cleanup-setup` deletes its scripts, which takes any batch with them
 - **Mode:** UI · **Isolation:** read-only
-- **Source:** QA Wolf round 1 C8 #9 (`scripts-batch-script-progress-page-is-accessible-from-the-controls-greater-scripts-page`)
 - **Preconditions:** no batch on Workstations
 - **Data created:** none
 
@@ -1585,7 +1578,6 @@ other:
 - **Grep:** `npx playwright test --project=premium disk-encryption -g "BitLocker PIN saves with enforcement"`
 - **Project:** premium · **Scope:** a throwaway fleet, `pw-bitlocker-<nonce>`, opened **by URL** (`diskEncryption.goto({ fleetId, platform: 'windows' })`) rather than picked in the dropdown: its name is per-run (see `TeamDropdown.selectByLabel`)
 - **Mode:** UI+API · **Isolation:** its own describe, outside CTL-06's serial one: on Unassigned the PIN would save Windows enforcement into the same global setting those tests snapshot and toggle. The fleet holds no host and needs no restore. The test's last step deletes it, and an `afterEach` deletes it again by name (tolerating a 404); the cleanup sweep of `pw-*` fleets removes one a killed run left.
-- **Source:** QA Wolf `bitlocker-require-bitlocker-pin-is-now-available-under-advanced-options-on-the-disk-encryption-tab-can-be-toggled-on-and-off` (round 1 C9 #6; round 3, batch F). Its copy ("Turn on disk encryption", "Advanced options") predates 4.93's per-platform tabs.
 - **Preconditions (API):** `createFleet`
 - **Data created:** the fleet, deleted by the test
 
@@ -1629,7 +1621,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Premium • Controls • Scripts • role access"`
 - **Project:** premium · **Variants (6):** `global-maintainer`, `global-technician`, `ws-maintainer` (the library on Workstations); `global-observer`, `global-observer-plus`, `ws-observer` (turned away)
 - **Mode:** UI · **Isolation:** one test per role; read-only apart from its seeded script
-- **Source:** QA Wolf `settings-upload-script-as-maintainer-to-a-team-premium` (round 1 C7 #26; round 3, batch E). The upload itself takes the admin's form and endpoint, so it isn't repeated per role.
 - **Preconditions (API):** for the three library roles, `POST /scripts` puts `pw-role-script-<nonce>.sh` on Workstations; deleted in an `afterEach` (and by `cleanup-setup`'s Workstations wipe).
 
 **Flow**
@@ -1642,7 +1633,7 @@ other:
 
 **Assessment**
 - *Value:* the Controls guard (which keeps out observer+ too) and the technician's read-only library.
-- *Coverage gaps:* TA and TT aren't read (TA as TM; no fleet technician user).
+- *Coverage gaps:* TA and TT aren't read (TA as TM; no fleet technician user). The upload itself takes the admin's form and endpoint, so it isn't repeated per role.
 - *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
@@ -1661,7 +1652,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "Free • Controls • Scripts • role access"`
 - **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
 - **Mode:** UI · **Isolation:** read-only apart from its seeded script; nothing is uploaded through the UI or run (the free real VMs share the library's scope)
-- **Source:** round 1 C7 #26's free half (round 3, batch E, decision 12)
 - **Preconditions (API):** `pw-role-script-<nonce>.sh` in the library, deleted in an `afterEach`.
 
 **Flow**
@@ -1727,5 +1717,5 @@ Balance is healthy — no test in this area validates purely through the API. Th
 **Bigger bets**
 
 1. ~~**Make one script actually run.**~~ **Done** — HOST-19 (area 02) runs a script on the real macOS VM and reads its effect back through a scheduled report's `hash` row, rather than the marker fixtures; CTL-24/25 cover the **Batch progress** tabs and retire the orphaned `ScriptsBatchProgressPage`. What remains is the batch *schedule* and *cancel* paths.
-2. ~~**Assert profile delivery, not just library presence**~~ **Done** (batch E, 2026-09-29) — CTL-27 and CTL-33/34 here, and area 22 for label-targeted delivery; all on generated inert profiles, read back on the device. The original note: ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
+2. ~~**Assert profile delivery, not just library presence**~~ **Done** (2026-09-29) — CTL-27 and CTL-33/34 here, and area 22 for label-targeted delivery; all on generated inert profiles, read back on the device. The original note: ⚠️ **with an inert fixture, never the passcode or screen-lock profile**: either one deployed to a real VM locks it permanently (`playwright/CLAUDE.md` → *Never deploy a passcode profile to a real host*). Using `liveMacosHost`, upload a harmless preference-domain profile to the VMs fleet and assert the OS-settings status counters move (Pending → Verifying → Verified) and that the host-details OS settings section lists the profile — then delete and assert removal. Today "the profile exists in a list" is the whole contract.
 3. **Close the variables loop and trim the tier mirrors.** The script half is done — CTL-35 (an unknown `$FLEET_SECRET_*` refused, then accepted once the variable exists) and CTL-36 (a referenced variable refused deletion), on both tiers. Still open: the same two checks for a **profile** that references a variable. (`cleanup.steps.ts` sweeps `PW_VAR_*` variables after the Unassigned scripts.) In the same pass, drop the two free download mirrors (CTL-16, CTL-20) and collapse the per-OS activity-feed sub-tests to one per scope — roughly 12 of the 74 executions for no loss of signal.

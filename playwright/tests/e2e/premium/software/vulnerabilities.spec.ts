@@ -215,7 +215,6 @@ test('Vulnerabilities tab — search narrows to a single CVE', async ({
  * expectation per row comes from the API's `epss_probability` rather than
  * "every row" — Fleet's own feeds can leave a known exploit unscored. The load
  * fleet's templated inventory carries ~100 of them (96 on 2026-10-03).
- * Round 1 C6 #1.
  */
 test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
   softwareTitles,
@@ -250,9 +249,9 @@ test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
 });
 
 /**
- * A CVE's count and hosts are its fleet's. Round 1 C6 #3 (the count differs by
- * fleet) and C6 #7 (a row's "View all hosts" → the Hosts list filtered by the
- * CVE), on the VMs fleet: its hosts are the three real VMs plus whatever a
+ * A CVE's count and hosts are its fleet's: the count differs by fleet, and a
+ * row's "View all hosts" opens the Hosts list filtered by the CVE. On the VMs
+ * fleet: its hosts are the three real VMs plus whatever a
  * label-targeting spec borrows for a minute, so the hosts behind a CVE are a
  * set small enough to compare whole.
  *
@@ -430,10 +429,9 @@ for (const osKey of OS_KEYS) {
  * page for any it has no metadata for, with the newest match sorting first
  * (fleetdm/fleet#49913).
  *
- * The source flow instead summed every row's host count and compared it to
- * "Affected hosts", paging each row's hosts list to do it. That sum is not a
+ * Summing every row's host count and comparing it to "Affected hosts" is not a
  * contract — a host running two affected versions is counted once in the CVE
- * total and twice in the sum — so it is dropped rather than ported.
+ * total and twice in the sum — so it isn't asserted.
  */
 test('Vulnerabilities — a CVE hands off to the hosts running each affected version', async ({
   softwareTitles,

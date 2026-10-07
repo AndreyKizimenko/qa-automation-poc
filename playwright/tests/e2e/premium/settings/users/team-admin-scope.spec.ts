@@ -21,8 +21,8 @@
  *
  * The member is created by the team admin with a `qa-test-*` address, so the
  * cleanup project's user sweep removes it if this test dies before its
- * `finally`. QA Wolf's flow also signed in as the member to see the promoted
- * role at work; that's a forced password reset and two more logins against
+ * `finally`. Signing in as the member to see the promoted role at work would
+ * cost a forced password reset and two more logins against
  * Fleet's shared 10-per-minute login limit, to prove what the API read of the
  * member's fleet role already says.
  */

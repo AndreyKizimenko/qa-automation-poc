@@ -18,7 +18,7 @@
  *
  * Not repeated here: "Add software is disabled under All fleets, with a
  * tooltip" — `library.spec.ts` already owns that gate (its "Software —
- * add-software gating" describe), so the source flow it came from is covered.
+ * add-software gating" describe).
  *
  * Grounded in frontend/pages/SoftwarePage/components/forms/PackageForm
  * (ACCEPTED_EXTENSIONS, ADD_SOFTWARE_ERROR_PREFIX) and its unit tests.
@@ -33,7 +33,7 @@ interface RejectedFile {
 }
 
 const REJECTED: RejectedFile[] = [
-  // The source flow's case: an image picked by mistake.
+  // An image picked by mistake.
   { name: 'pw-not-an-installer.png', mimeType: 'image/png', reason: 'unsupported file extension: png' },
   // A plausible-looking macOS installer Fleet deliberately does not accept —
   // it trips the *uninstall*-script branch of the same validation.

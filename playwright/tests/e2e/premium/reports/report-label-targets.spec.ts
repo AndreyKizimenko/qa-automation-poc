@@ -2,9 +2,9 @@
  * Premium • Reports — a label-targeted fleet report runs on exactly the hosts
  * its labels pick, and only they store results.
  *
- * QA Wolf's `report-include-all`: a VMs-fleet report targeted "Include all" of
- * two labels, then "1 result" (a substring that "11 results" also matches) and
- * a link to the one host in both. Here two reports side by side, created
+ * A VMs-fleet report targeted "Include all" of two labels is listed for the
+ * one host in both, read as set membership rather than a "1 result" substring
+ * that "11 results" also matches. Two reports side by side, created
  * through the Save report modal's target — the dropdown variant; reports offer
  * Include any and Include all, no Exclude — over hosts the test controls: the
  * macOS VM and two macOS simulations borrowed onto the fleet (not MDM-enrolled:

@@ -7,7 +7,7 @@
  *
  * The spec seeds its own uniquely-named report via the API and deletes it, so it
  * stays isolated from siblings running in parallel. Identical on both tiers, so
- * it runs shared. C2 #1/#3/#8/#11/#13/#20.
+ * it runs shared.
  *
  * Runs against the real macOS VM (`liveMacosHost`): a real host runs the query's
  * actual SQL, so the run's results can be asserted on directly. The osquery-perf

@@ -8,8 +8,7 @@
  * host is chosen via the API (first host reporting software) so the test never
  * depends on a fragile "first host" pick.
  *
- * The full inventory's columns and its paging are read on the way (round 1 C5
- * #12); not its cells, which a simulation leaves partly empty ("Last opened").
+ * The full inventory's columns and its paging are read on the way; not its cells, which a simulation leaves partly empty ("Last opened").
  *
  * The macOS `/Applications` view filter is covered separately at the bottom of
  * this file, and that one *does* need the real VM — see its own header.
@@ -49,7 +48,7 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
   expect(names.length, 'expected the host to list software titles').toBeGreaterThan(0);
 
   // The full inventory's columns, and its paging: 20 titles a page, and a host
-  // chosen for reporting software reports far more than that (round 1 C5 #12).
+  // chosen for reporting software reports far more than that.
   for (const column of INVENTORY_COLUMNS) {
     await expect(hostDetails.softwareColumnHeader(column), `the ${column} column`).toBeVisible();
   }

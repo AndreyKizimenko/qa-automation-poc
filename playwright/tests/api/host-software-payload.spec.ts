@@ -12,7 +12,7 @@
  * **The comparison is structural, not deep.** The two calls are seconds apart
  * against a live host, so vitals like `detail_updated_at`, `seen_time` and
  * `percent_disk_space_available` legitimately differ between them; a deep
- * equality check (which the source flow used) would fail on a host that checked
+ * equality check would fail on a host that checked
  * in mid-test. What cannot legitimately differ is the host's identity or the
  * set of keys returned, so those are what is asserted.
  *

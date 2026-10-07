@@ -8,9 +8,9 @@
  * beside it, which is premium-only; that case lives in
  * `premium/software/titles-table.spec.ts`.
  *
- * **Only page one is compared.** The source flow paged the whole table and
- * diffed the collected values against a locally-sorted copy, which re-tests
- * MySQL's ordering over thousands of rows for minutes at a time. Fleet sorts on
+ * **Only page one is compared.** Paging the whole table and diffing it against
+ * a locally-sorted copy would re-test MySQL's ordering over thousands of rows
+ * for minutes at a time. Fleet sorts on
  * the server, so the contract is "the page Fleet returned is ordered" plus "the
  * order_key/order_direction I asked for is what it was asked for" — both
  * assertable on one page.
@@ -26,7 +26,7 @@
 import { test, expect } from '@fixtures';
 
 // The columns the inventory table renders, in order. A named list survives a
-// column being inserted; the source flow's nth(0)/nth(2)/nth(4) did not.
+// column being inserted; positional nth() lookups would not.
 const COLUMNS = ['Name', 'Version', 'Type', 'Vulnerabilities', 'Hosts'];
 
 // Fleet sorts on these two only; the rest render a plain header.
@@ -98,10 +98,9 @@ test.describe('Software • inventory table', () => {
 
   /**
    * A title row's hover-only "View all hosts" hands off to the Hosts list
-   * filtered by that title (`software_title_id`), its pill naming it. QA Wolf
-   * took a row with vulnerabilities; which row doesn't change the hand-off, and
-   * the vulnerable filter is the slowest query the suite issues, so this takes
-   * the first. Round 1 C6 #6.
+   * filtered by that title (`software_title_id`), its pill naming it. Which row
+   * doesn't change the hand-off, and the vulnerable filter is the slowest query
+   * the suite issues, so this takes the first.
    */
   test("a title's View all hosts opens the hosts list filtered by it", async ({
     softwareTitles,

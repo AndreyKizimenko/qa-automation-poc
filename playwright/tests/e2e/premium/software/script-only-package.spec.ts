@@ -33,8 +33,7 @@
  * run's nonce title, so a late result from a dead attempt can't satisfy a
  * retry. The title is deleted in an `afterEach`, which still runs when the test
  * times out, and deleting it cancels a run still queued; the VMs sweep in
- * cleanup removes a `fleet-pw-*` title a killed run left. Round 2 #72, with #88
- * folded in (round 3, batch G).
+ * cleanup removes a `fleet-pw-*` title a killed run left.
  */
 import * as fs from 'fs';
 import * as path from 'path';

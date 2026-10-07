@@ -1,8 +1,8 @@
 /**
  * Premium • Settings • A fleet's own host-status webhook, driven by that
- * fleet's team admin. C1 #16.
+ * fleet's team admin.
  *
- * Distinct from the global host-status webhook shipped in Batch 3
+ * Distinct from the global host-status webhook
  * (`tests/e2e/shared/settings/host-status-webhook.spec.ts`): this one lives on
  * the fleet and fires separately from the global one.
  *

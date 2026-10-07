@@ -101,8 +101,8 @@ test('wipe unassigned state', async ({ request }) => {
 });
 
 // A spec that needs a fleet of its own creates a throwaway `pw-*` one and deletes
-// it in an afterEach (`fleets-lifecycle`, `historical-data-collection`, batch B's
-// policy webhook). A run killed hard skips even that, and a stray fleet sits in
+// it in an afterEach (`fleets-lifecycle`, `historical-data-collection`, the fleet
+// failing-policies webhook in `policy-automations`). A run killed hard skips even that, and a stray fleet sits in
 // every fleet picker; this removes them. No standing fleet starts `pw-`. A
 // failure here only logs: a stray fleet is a nuisance, and failing cleanup-setup
 // over one would skip the whole run.

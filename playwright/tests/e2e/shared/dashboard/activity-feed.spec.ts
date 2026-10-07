@@ -17,8 +17,8 @@
  *   under Yesterday — vanishingly rare, and a failure would say so;
  * - "Sort by oldest" reverses newest-first.
  *
- * QA Wolf's flow walked ten pages of whatever was in the feed and picked a
- * random actor; this asserts set membership over rows the test made.
+ * It asserts set membership over rows the test made, never over whatever else
+ * is in the feed.
  *
  * Shared: the feed and its filters aren't tier-gated. On premium it shows only
  * with no fleet selected, so the dashboard is put on All fleets.

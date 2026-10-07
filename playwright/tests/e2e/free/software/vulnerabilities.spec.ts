@@ -291,7 +291,7 @@ test.describe('Software vulnerabilities', () => {
    * CVE (`vulnerability=`), and the hosts it lists are ones Fleet holds affected.
    * Free's one scope holds hundreds of them, so the page is checked to be a
    * subset of the API's live list rather than equal to it. Not premium-gated;
-   * premium's twin compares a fleet's whole set. Round 1 C6 #7.
+   * premium's twin compares a fleet's whole set.
    */
   test("Vulnerabilities — a CVE's View all hosts lists hosts it affects", async ({
     softwareTitles,

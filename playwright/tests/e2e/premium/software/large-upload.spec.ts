@@ -6,8 +6,8 @@
  *   - **Over the limit, the browser refuses before anything is sent.** The form
  *     compares the chosen file against the server's `max_software_package_size`
  *     on selection (`PackageForm.onFileSelect`) and raises "Couldn't add. The
- *     maximum file size is …" — no request is made. QA Wolf's copy says 1 GiB;
- *     the limit is configured per instance (premium QA's is 10 GiB), so the spec
+ *     maximum file size is …" — no request is made. The limit is configured per
+ *     instance (premium QA's is 10 GiB), so the spec
  *     reads it from the config instead of trusting a number.
  *   - **A large upload shows its progress and finishes.** The upload modal's
  *     progress bar climbs while the file is sent, and the upload ends in the

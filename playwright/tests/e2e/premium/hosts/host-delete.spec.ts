@@ -1,5 +1,5 @@
 /**
- * Premium • Hosts • Deleting hosts. C1 #11, C2 #12.
+ * Premium • Hosts • Deleting hosts.
  *
  * Destructive, so it only ever touches **simulated** hosts — `findSimulatedHostIds`
  * cannot return a real VM, and the platform is pinned to macOS/Windows because

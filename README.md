@@ -18,7 +18,7 @@ suite, and the GitHub Actions that wire them together.
 │   ├── premium-fleetqa-min/    # Trimmed variant — used by gitops-verify
 │   └── loadtest/               # Generator for the bulk loadtest team bundle (local-only)
 ├── playwright/                 # Playwright browser + API test suite
-│   └── docs/                   # Suite docs: blocked-by-product-bugs, QA Wolf migration record
+│   └── docs/                   # Suite docs: CI pipeline, blocked-by-product-bugs, test audit, long-term goals
 ├── tools/                      # Hand-run ops tooling — see tools/README.md
 │   ├── perf-hosts/             # osquery-perf launchd daemons keeping QA hosts online
 │   ├── windows-mdm-loadtest/   # Windows MDM profile fan-out + team-transfer drivers
@@ -27,10 +27,6 @@ suite, and the GitHub Actions that wire them together.
     ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
     └── workflows/              # CI workflows (see below)
 ```
-
-`qa-wolf/` is deliberately untracked — the source `*.flow.js` exports the
-Playwright suite was migrated from. It isn't runnable and isn't needed for
-anything here.
 
 **This repo is public.** Real instance URLs, enroll secrets, and API tokens
 never belong in it — they come from GitHub secrets in CI, and from gitignored

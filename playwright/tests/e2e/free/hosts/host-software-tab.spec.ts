@@ -8,8 +8,7 @@
  * tab rendered before the absences are read.
  *
  * Any online host shows it; a simulation is used, so no real VM is involved.
- * The premium side is `premium/software/host-library-tab`. Round 1 C5 #13 (round 3,
- * batch G).
+ * The premium side is `premium/software/host-library-tab`.
  */
 import { test, expect } from '@fixtures';
 import { findOnlineHost } from '@helpers/api';

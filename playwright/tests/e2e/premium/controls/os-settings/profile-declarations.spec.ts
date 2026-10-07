@@ -21,12 +21,11 @@
  *
  * The declarations are Apple's no-op test type,
  * `com.apple.configuration.management.test` (`inertDeclaration`): an `Echo`
- * string and nothing else. QA Wolf's flow used `macos-softwareupdate.json`, by
- * its name an OS-update declaration — never on the VMs fleet.
+ * string and nothing else. Never an OS-update declaration on the VMs fleet: it
+ * would make the real Mac download an update.
  *
- * QA Wolf's second declarations flow ("broken state declarations are not
- * applied") was a refused label delete; that's
- * `profile-broken-labels.spec.ts`'s declaration case.
+ * A declaration whose target label is deleted is `profile-broken-labels.spec.ts`'s
+ * declaration case: Fleet refuses the delete.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import {

@@ -1,15 +1,14 @@
 /**
  * Premium • Controls • OS updates — the macOS target.
  *
- * QA Wolf's `controls-macos-updates-ui-validation`: the "Current versions"
- * drill-down, a minimum version and deadline that save and persist, and the
- * End user experience preview — which they asserted with a screenshot. Here:
+ * The "Current versions" drill-down, a minimum version and deadline that save
+ * and persist, and the End user experience preview:
  *
  *  - **"Custom version"** reveals Minimum version and Deadline; both save, read
  *    back after a reload and through the API, mark the macOS tab configured, and
- *    clear again with "No updates enforced". (QA Wolf's flow never chose "Custom
- *    version" — it passed only because its own leftover setting kept the fleet in
- *    custom mode.) While Workstations holds the setting, Unassigned's (the global
+ *    clear again with "No updates enforced". The test chooses "Custom version"
+ *    itself rather than relying on a leftover setting to keep the fleet in custom
+ *    mode. While Workstations holds the setting, Unassigned's (the global
  *    config) and the QA fleet's read back exactly as they did before the save: an
  *    OS update target belongs to the fleet it's saved on.
  *  - the form **refuses** a missing or malformed version or deadline, saying why

@@ -3,7 +3,7 @@
 **Specs covered:** 7 files · **Entries:** 9 · **Runtime tests:** 12, one skipped (LT-03's four cases collapsed into one entry) · **Project:** premium
 
 This area covers Fleet deciding **which hosts** something reaches when it is scoped to labels — configuration
-profiles first (batch E of the QA Wolf round-2 migration; declarations, software, policies and reports follow)
+profiles first (then declarations, software, policies and reports)
 — and the host then doing it. Custom targets are premium-only: free renders no target, and delivers every
 profile to every host.
 
@@ -12,8 +12,8 @@ profile to every host.
 **1. The assertion is set membership.** A targeting test resolves the hosts it controls, gives them manual
 labels, and asserts the profile is listed on *exactly* the hosts its labels pick and on none of the others —
 never a count, and never over the whole fleet (an Exclude-only profile targets every other host there too,
-including simulations another spec has borrowed). QA Wolf's flows asserted `verifiedHostsCount >= 2` on a
-fleet-wide aggregate, which passes whether targeting worked or not.
+including simulations another spec has borrowed). A count like `verifiedHostsCount >= 2` on a fleet-wide
+aggregate passes whether targeting worked or not.
 
 **2. Two kinds of host, for two questions.** Each test runs on the **VMs** fleet with the platform's real VM
 and two MDM-enrolled **simulations** moved onto the fleet for the test (`findMdmSimulations`, from Unassigned;
@@ -109,7 +109,7 @@ run that timed out with 4 profiles, 4 simulations and 6 labels left behind.
    - ✅ *(API)* The VM stops listing it (≤ 3 min) and its domain reads empty on the device (≤ 2 min).
 
 **Assessment**
-- *Value:* High. Five QA Wolf flows (include-all + exclude, include-any + exclude, include-any on macOS, the macOS include/exclude trio, and the macOS half of upload-and-remove) in one test that can actually fail: an Include-all read as Include-any lists `…-all` on s1 and s2; a broken Exclude lists `…-any` on s2 and `…-exclude` on the VM; a target the modal didn't send fails step 3's stored scopes.
+- *Value:* High. Include all + exclude, include any + exclude, and exclude on macOS, plus upload-and-remove, in one test that can actually fail: an Include-all read as Include-any lists `…-all` on s1 and s2; a broken Exclude lists `…-any` on s2 and `…-exclude` on the VM; a target the modal didn't send fails step 3's stored scopes.
 - *Coverage gaps:* Include **all** + Exclude together is on Windows (LT-02), not here. "All hosts" (no target) delivery is the configuration-profiles augment's. Nothing checks the Details (status) modal's counts — they're fleet-wide aggregates other specs' simulations feed.
 - *Redundancy:* none within the suite.
 - *Efficiency / smells:* ~3 min, most of it the VM's verification. The simulations' own statuses are never asserted — only whether they list the profile.
@@ -154,8 +154,8 @@ other:
    - ✅ *(UI)* The VM's **Controls** tab has no row for it.
 
 **Assessment**
-- *Value:* High. Covers QA Wolf's Windows include/exclude trio — including the negative half it never checked — plus the **Edit** modal's re-targeting (new in 4.91), and proves an edit that excludes a host *removes* the profile from it, on the device.
-- *Coverage gaps:* Include **any** on Windows isn't exercised (QA Wolf didn't either); one Windows profile at a time means the modes can't run side by side.
+- *Value:* High. Covers Windows include/exclude, negative half included, plus the **Edit** modal's re-targeting (new in 4.91), and proves an edit that excludes a host *removes* the profile from it, on the device.
+- *Coverage gaps:* Include **any** on Windows isn't exercised; one Windows profile at a time means the modes can't run side by side.
 - *Redundancy:* none.
 - *Efficiency / smells:* the `finally` can't help a timed-out run; the cleanup sweep does.
 
@@ -178,10 +178,10 @@ other:
 - **Preconditions:** two online macOS simulations (`findSimulations(…, 'darwin', 2, 0)` — not MDM-enrolled; label membership doesn't need it) for the manual cases
 - **Data created:** a label `pw-bl-<nonce>` (manual with the two simulations, or dynamic with `SELECT 1 FROM osquery_info WHERE 1 = 0;`) and a generated profile `pw-bl-<nonce>-p` on Workstations targeting it (include any) — both deleted by the test itself, through the UI
 
-**Why this replaced three QA Wolf flows.** Those flows deleted a targeted label and asserted the profile then read
-as *broken* ("The configuration profile is broken.", "Label deleted") and wasn't applied to new hosts. Since Fleet
+**Why a refused delete, not a broken profile.** Deleting a targeted label used to leave the profile reading
+as *broken* ("The configuration profile is broken.", "Label deleted") and not applied to new hosts. Since Fleet
 4.87 `DeleteLabel` refuses the delete (422) for any label a profile *or declaration* targets, and 4.91 removed the
-Custom target modal those flows asserted. The broken state can't be reached through the product any more, so the
+Custom target modal that showed it. The broken state can't be reached through the product any more, so the
 refusal is what's left to guard.
 
 **Flow**
@@ -246,7 +246,7 @@ other:
    - ✅ *(API)* The VM stops listing it (≤ 3 min).
 
 **Assessment**
-- *Value:* High. Declarations keep their targeting in their own table and reach the Mac over DDM, not InstallProfile — a separate path from LT-01's. Covers QA Wolf's declarations include/exclude flow, including its "All hosts" step, with a negative half that can fail.
+- *Value:* High. Declarations keep their targeting in their own table and reach the Mac over DDM, not InstallProfile — a separate path from LT-01's. Covers a declaration's include/exclude, including the "All hosts" step, with a negative half that can fail.
 - *Coverage gaps:* no on-device read — osquery has no table for a test declaration, so *verified* (the device's report) is the host-side proof. Include **any** isn't exercised for declarations.
 - *Redundancy:* the modal's target controls are LT-01's; here they're the route, not the subject.
 - *Efficiency / smells:* ~1 min.
@@ -283,7 +283,7 @@ other:
    - ✅ *(UI)* Activity (MDM commands): *"The RemoveProfile command for pw-rt-<nonce>-p was acknowledged."*
 
 **Assessment**
-- *Value:* High. QA Wolf's "host activity shows the profile name and status" and "resend configuration profile" in one flow, on a real device: each command is tied to this profile by name and counted from the API, so a resend that silently didn't send fails.
+- *Value:* High. The host activity showing the profile's name and status, and resending the profile, in one test on a real device: each command is tied to this profile by name and counted from the API, so a resend that silently didn't send fails.
 - *Coverage gaps:* the fleet-wide Resend (the profile's Details modal → "Resend configuration profile" for every failed host) isn't exercised — it needs failed hosts, which LT-06 would give.
 - *Redundancy:* none.
 - *Efficiency / smells:* two refetches, ~5 min. The Activity card is checked for the newest item only (it pages, and other specs command the same Mac).
@@ -314,7 +314,7 @@ other:
    - ✅ *(UI)* *"The InstallProfile command for <name> failed."*
 
 **Assessment**
-- *Value:* high — QA Wolf's flow waited for "Failed" and asserted nothing about the retries; this counts them, and a failed control's count on the Controls tab ("Controls 1") is on the path.
+- *Value:* high — it counts the retries rather than only waiting for "Failed", and a failed control's count on the Controls tab ("Controls 1") is on the path.
 - *Cost:* ~2.5 min on the Mac — four InstallProfile commands a reconciler tick apart, then Failed.
 
 **Notes (Andrey)**
@@ -359,8 +359,8 @@ other:
    - ✅ *(API)* `labels_exclude_any` is a; only s2 offered.
 
 **Assessment**
-- *Value:* High. QA Wolf's two flows, both scopes plus Exclude, with a negative half that can fail (their "any" flow checked the in-scope host twice). The VM inside the scope really installs it.
-- *Coverage gaps:* Linux only — QA Wolf used a macOS Fleet-maintained app; a per-run `.deb` is the only package that can be minted per run, and which hosts are offered a title doesn't depend on the platform. Self-service and automatic install under a scope aren't exercised.
+- *Value:* High. Both scopes plus Exclude, with a negative half that can fail. The VM inside the scope really installs it.
+- *Coverage gaps:* Linux only: a per-run `.deb` is the only package that can be minted per run, and which hosts are offered a title doesn't depend on the platform. Self-service and automatic install under a scope aren't exercised.
 - *Efficiency / smells:* ~2.5 min, most of it the install and uninstall on the VM.
 
 **Notes (Andrey)**
@@ -398,7 +398,7 @@ other:
    - ✅ *(UI)* `…-all` and `…-any` are listed; `…-xall` isn't.
 
 **Assessment**
-- *Value:* High. QA Wolf's include-all flow, plus include-any + exclude, and **Exclude all** — a mode only policies have. Every one can fail on the matching bug.
+- *Value:* High. Include all, include any + exclude, and **Exclude all** — a mode only policies have. Every one can fail on the matching bug.
 - *Coverage gaps:* the policy's *result* on each host (pass / fail) isn't asserted — targeting is.
 
 **Notes (Andrey)**
@@ -431,7 +431,7 @@ other:
    - ✅ *(API)* The VM stores its row `{report: <name>}` (≤ 5 min); neither simulation stores one.
 
 **Assessment**
-- *Value:* High. QA Wolf's report include-all flow, which asserted a substring ("1 result" also matches "11 results") and a link. Here the scheduling decision per host, both modes, and the stored result on the one host in both labels.
+- *Value:* High. The scheduling decision per host, in both modes, and the stored result on the one host in both labels.
 - *Coverage gaps:* reports have no Exclude scope, so none is tested.
 
 **Notes (Andrey)**

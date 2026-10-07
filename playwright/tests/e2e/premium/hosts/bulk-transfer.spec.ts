@@ -1,8 +1,7 @@
 /**
- * Premium • Hosts • Bulk transfer between fleets. C1 #10/#12/#13(salvage)/#25.
+ * Premium • Hosts • Bulk transfer between fleets.
  *
- * QA Wolf's original created two throwaway fleets and moved 50 hosts between
- * them. Reworked to the gitops model: no fleet is created or deleted, the hosts
+ * Built for the gitops model: the standing fleets are never created or deleted, the hosts
  * are **simulated** ones (bulk work — the individual host is incidental, and a
  * real VM must never be shuffled around), and they're staged into the **QA**
  * fleet rather than Workstations because QA is the least-trafficked fleet and
@@ -34,9 +33,8 @@
  * specs that do mutate hosts should claim a different platform's simulations
  * (see `findSimulatedHostIds`) so the pools can't overlap.
  *
- * C1 #10 and #12 (round 3, batch C) are the withheld button and the transfer
- * by filter; C5 #10's "every listed host is on the selected fleet" is the first
- * test's Fleet column.
+ * The first test also reads the Fleet column: every listed host is on the
+ * selected fleet.
  */
 import { test, expect } from '@fixtures';
 import {
@@ -141,7 +139,7 @@ test.describe('Premium • Hosts • bulk transfer', () => {
     dashboard,
     hostsList,
   }) => {
-    // QA Wolf's filter: the dashboard's Low disk space card. It matches
+    // The dashboard's Low disk space card: a filter the server can't transfer by. It matches
     // hundreds of hosts, so a full page fills and the button would otherwise show.
     await dashboard.goto();
     await dashboard.hostCountCard('Low disk space hosts').click();

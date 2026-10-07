@@ -189,8 +189,7 @@ test.describe('Create regular user (premium)', () => {
 // Its own describe: the block above is serial, and a failure here must not
 // skip the create cases.
 test.describe('Create regular user (premium) — two-factor option', () => {
-  // Fleet MFA's checkbox — QA Wolf's three 2FA flows each open by asserting it
-  // starts unchecked. Its enabled state follows whether Fleet can send the
+  // Fleet MFA's checkbox starts unchecked. Its enabled state follows whether Fleet can send the
   // magic-link email, so the expectation reads that from the config rather
   // than assuming either way. Choosing Single sign-on hides it: Fleet refuses
   // MFA for SSO users, and the form keeps the two from being combined. The SSO

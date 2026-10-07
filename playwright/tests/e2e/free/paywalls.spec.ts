@@ -72,7 +72,7 @@ test.describe('Free • paywall presence', () => {
   // with the organization's name where premium puts its fleet dropdown
   // (`DashboardPage.renderDashboardHeader`), and the Hosts list has no Fleet
   // column (`HostTableConfig`). Each absence follows the element that stands
-  // in its place. Round 1 C5 #1.
+  // in its place.
   test('Dashboard and Hosts — no fleet dropdown, no Fleet column', async ({ dashboard, hostsList, request }) => {
     const orgName = (await getAppConfig(request)).org_info?.org_name;
     expect(orgName, 'the organization has a name').toBeTruthy();

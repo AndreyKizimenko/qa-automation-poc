@@ -20,7 +20,6 @@
  * What the Library's rows offer (Install, Update, Uninstall, Run) is covered where
  * it's acted on: the lifecycle, update, uninstall, inventory and script-only
  * package specs. The free tier has no Library tab (`free/hosts/host-software-tab`).
- * Round 1 C5 #13 (round 3, batch G).
  */
 import { test, expect } from '@fixtures';
 import { countHostLibraryTitles, requireRealHost } from '@helpers/api';

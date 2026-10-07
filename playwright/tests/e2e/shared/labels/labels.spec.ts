@@ -22,8 +22,8 @@
  *
  * The Manual label holds osquery-perf simulations (Linux slices 2–4 of
  * `findSimulations`, never moved), never a real VM: on free, the real VMs sit in
- * the same global scope the label does. Its lifecycle runs where QA Wolf's did,
- * from the Hosts list (round 1 C9 #11): filtered by the label, the list holds
+ * the same global scope the label does. Its lifecycle runs from the Hosts list:
+ * filtered by the label, the list holds
  * exactly its two hosts; the pill's **Edit label** opens the form, which swaps
  * one host for another; the list then holds the new pair; the pill's **Delete
  * label** deletes it. Membership is read back through the API after the save,

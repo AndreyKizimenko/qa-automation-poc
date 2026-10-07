@@ -24,8 +24,8 @@
  * asks for the card's own page size and default sort, so the comparison stays
  * row-for-row if a VM ever reports more certificates than one page holds.
  *
- * The source flow ended on a `toHaveScreenshot` of the table. That is dropped —
- * it fails on font rendering and never says what changed.
+ * No `toHaveScreenshot` of the table: it fails on font rendering and never says
+ * what changed.
  */
 import { test, expect } from '@fixtures';
 import { getHostCertificates } from '@helpers/api';
