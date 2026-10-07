@@ -30,6 +30,46 @@ three, across `premium/software/vulnerabilities.spec.ts`.
 
 ---
 
+## Coverage backlog
+
+Known gaps nobody has scheduled. Each row says where the test would go and what it needs.
+
+**Free coverage.** Behaviour free has too, tested only on premium today. Checked against the source (no
+`isPremiumTier`, no license gate) when each row was written.
+
+| Gap | What to do |
+|---|---|
+| Signed-profile upload refused | Lift the `configuration profile upload validation` describe out of `premium/controls/os-settings/configuration-profiles.spec.ts` into `shared/`: free has MDM on, and the describe sits outside the scope loop |
+| Script over 500,000 characters refused | Lift `premium/controls/scripts/library.spec.ts`' `upload validation` describe into `shared/`; `TeamDropdown.select` is already a no-op on free |
+| Activity-feed automations | Move `premium/dashboard/automations-activity.spec.ts` to `shared/`: `canEditActivityFeedAutomations` has no tier check. Confirm once that free's dashboard resolves to All fleets |
+| Reports list search and platform filter | Split `premium/reports/list-filters.spec.ts`: its search and platform cases to `shared/`; the "Inherited" case stays premium |
+| Vulnerabilities: search narrows to one CVE | Add to `free/software/vulnerabilities.spec.ts`. Low value, and the `vulnerable=true` query is the suite's slowest |
+| Request-size limits | Move `tests/api/premium/max-request-file-sizes.spec.ts` to `tests/api/`: no route carries a license check before the size middleware. Confirm the `commands/run` under-limit case on free once |
+| `fleetctl generate-gitops` argument errors | Move `rejects --dir and --key together` and `requires one of --dir or --key` to `tests/cli/shared/`: resolved client-side |
+| Dashboard chart card | A free sibling of `premium/dashboard/fleet-scoped-cards.spec.ts`: the plain "Hosts online" heading, the filter round-trip, and no dataset dropdown |
+| Host delete | A free sibling of `premium/hosts/host-delete.spec.ts` (bulk and from host details). Free has no fleet to stage hosts on, so select rows individually or narrow the list first |
+| Policy SQL compatibility | Add `macadmins extension table` and `common-table-expression names` to `free/policies/sql-validation.spec.ts` |
+| OS versions | Add the platform filter and the row's View all hosts to `free/software/os.spec.ts` |
+
+**Free paywalls.** Premium-only surfaces with nothing asserting their free shape.
+
+| Gap | What to do |
+|---|---|
+| Add software pages | Rows for `/software/add/package`, `/software/add/fleet-maintained` and `/software/add/app-store` in `free/paywalls.spec.ts`' `PAYWALLED_PAGES`: ten premium specs sit behind this gate |
+| Software › Library tab | Assert the Software page's sub-nav has no Library tab on free (`SoftwarePage.tsx`) |
+| Fleet Desktop settings | `/settings/organization/fleet-desktop` is a 403 page on free, and the nav has no Fleet Desktop item |
+| Exploited vulnerabilities | The option is disabled with the premium tooltip on free (`free/software/vulnerabilities.spec.ts`) |
+| Severity / CVSS filters | The software filters modal has no severity block on free (`free/software/vulnerabilities.spec.ts`) |
+
+**Suite chores**
+
+| What | Note |
+|---|---|
+| `premium/hosts/host-delete.spec.ts` deletes four **online** simulations a run | A deleted simulation never comes back on its own. Draw them from `findOfflineSimulations` instead, as `bulk-transfer.spec.ts` does |
+| `fleet-upgrade-preflight` watch list | Add `.gitops-mode-tooltip-wrapper`: every gitops-mode spec finds gated controls through that class, and a release that renames it breaks all of them |
+
+---
+
 ## Config workarounds
 
 | Where | Why | Revert when |
