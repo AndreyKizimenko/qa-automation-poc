@@ -306,6 +306,10 @@ baseline and wrote nothing. Documented in `CLAUDE.md`, `docs/ci-pipeline.md`, `g
 **Found on the way:** `02`'s enroll-secrets test failed once (run 1): its first hover can land on the empty state's
 *Add secret*, which the list replaces with another button elsewhere. `02` and `03` now wait for the first secret's
 row. Not a Fleet bug.
+The branch run ([37667485374](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37667485374), PR #92)
+failed GITOPS-24 once at *Add profile*'s tooltip: OS settings' status cards render a spinner and then the cards, so
+the content can shift after the one hover the check made. `expectGitOpsTooltip` now steps away and re-hovers until the
+tip opens (10 s), with a `reveal` hovered first for a row's actions. Not a Fleet bug.
 
 **Verified:** `npm run check` clean (the 19 warnings are `main`'s). `test:gitops-mode` with dependencies (login, the
 project, the teardown) three times on premium, each announced to batch G's session and run on its "go": run 1, every

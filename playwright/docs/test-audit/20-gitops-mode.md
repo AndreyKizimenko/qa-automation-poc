@@ -1088,7 +1088,7 @@ other:
 - *Value:* the QA Wolf flow's Delete check, plus the over-gating half it never had. Edit is left open *by design* (the modal is the only place to read a profile's targets), and the test proves the lock moved into the modal rather than vanished.
 - *Coverage gaps:* Apple only; a Windows or Android profile row renders the same component. The upload modal's own controls aren't reached (Add profile is gated before it opens).
 - *Redundancy:* none.
-- *Efficiency / smells:* the row's buttons render only while the row is hovered, and every tooltip check ends by moving the pointer away, so the test re-hovers before each check (four hovers).
+- *Efficiency / smells:* the row's buttons render only while the row is hovered, and every tooltip check ends by moving the pointer away, so the test re-hovers before each check (four hovers), and passes the row as the tooltip check's `reveal`. Branch run 37667485374 failed this test once at **Add profile**'s tooltip: the status cards above load after the page does, and the single hover was left over nothing. The tooltip check now retries its hover.
 
 **Notes (Andrey)**
 ```
@@ -1269,7 +1269,7 @@ other:
 2. **The gated/ungated mirror pairs.** GITOPS-03↔16, 05↔17, 06↔18, 09↔19. This is the design working as intended — one control per gating pattern, asserted in both directions — but it does mean eight of the nineteen premium tests are the same four pages twice.
 3. **GITOPS-08 vs GITOPS-12 step 3.** `addSecretButton` is asserted gated twice per run, in two files, under the same config.
 4. **GITOPS-07 vs GITOPS-13.** Same button on the same page; one asserts it gated, the other (skipped) would assert it un-gated under an exception.
-5. **The tooltip mechanics** (absent → hover → visible → `href` → move away → absent) run inside every one of the twelve `expectGatedByGitOps` calls. Correct and cheap, but a manual re-runner should know they are re-testing the same tooltip twelve times.
+5. **The tooltip mechanics** (absent → hover, stepped away from and retried until the tip opens, since a page still settling can move the control from under the pointer → visible → `href` → move away → absent) run inside every one of the twelve `expectGatedByGitOps` calls. Correct and cheap, but a manual re-runner should know they are re-testing the same tooltip twelve times.
 
 **UI-vs-API balance**
 
