@@ -92,7 +92,8 @@ files · ~350 test declarations · 4 projects**.
 
 > **Round 3 batch G added 2026-10-07** (`playwright/qawolf-round3-batch-g`): live runs and execution side effects on the
 > real VMs. Area **04**: POL-42 runs a policy live on the three VMs (Pass / Fail, Yes / No, the Host sort, its CSV), both
-> tiers. Area **05**: RPT-36 runs a report live on them and exports the results, both tiers.
+> tiers. Area **05**: RPT-36 runs a report live on them and exports the results, both tiers. Area **02**: HOST-23 reads
+> its MDM command from the dashboard feed filtered to its type, and checks the row's modal for the command's UUID.
 
 ## The area files
 

@@ -126,6 +126,7 @@ the chip.
 | slice | what |
 |---|---|
 | live runs on the three VMs | new `shared/policies/live-policy-run.spec.ts` and `shared/reports/live-report-export.spec.ts` (both tiers). A policy run live: each VM's Pass / Fail, "(Yes: 33%, No: 67%)" and its tooltips, the Host sort both ways, the yes / no CSV. A report run live: each VM's own `platform`, matched against Fleet's record, and a CSV holding exactly those rows. `PolicyLivePage` (a `ReportLivePage` of the policy kind), `ReportLivePage.exportResults` / `resultsCount` / `resultsColumnValues` / `resultsSortControl`, `helpers/csv.ts`, `getHostPlatform`. `host-live-query.spec.ts`' comment that a run times out at the rest period is corrected: a UI run has no timeout |
+| the MDM command in the global feed | `shared/hosts/mdm-commands.spec.ts`: the activity found by its command UUID through the API, then the dashboard filtered to "Ran custom MDM command" and the row's details modal checked for this command. It replaces an unfiltered end check that any earlier run's row satisfied, and that other workers' activity could bury during the acknowledgement wait (D's flake). `DashboardPage.mdmCommandDetailsModal` |
 
 ## Round 3 · Batch F — MDM, setup experience and Android settings
 

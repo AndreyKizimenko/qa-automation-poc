@@ -990,15 +990,17 @@ other:
    - ✅ *(UI)* the same payload + response UUID checks as step 4. **Close**.
 7. ☐ Click the **Upcoming** tab (switch still on).
    - ✅ *(UI)* no item matching `^The UserList command is pending\.` — acknowledged means no longer upcoming. (The *pending* state itself is never observed: the VM acknowledges within seconds, so the Upcoming item is not asserted positively anywhere.)
-8. ☐ Open the **Dashboard**.
-   - ✅ *(UI)* the feed has **"… ran UserList as a custom MDM command on `<host display name>`."** (`activityCopy.mdmCommand.ran`).
+8. ☐ *(API)* the activity log has a `ran_custom_mdm_command` activity whose `command_uuid` is this command's (`findActivity`; its actor is the API user `fleetctl` signs in as, so the admin-actor check of `assertActivity` doesn't apply).
+9. ☐ Open the **Dashboard** → activity type filter → **Ran custom MDM command** (round 2 #69; round 3, batch G).
+   - ✅ *(UI)* the filtered feed shows **"… ran UserList as a custom MDM command on `<host display name>`."** (`activityCopy.mdmCommand.ran`), read straight from the filtered feed (a reload would drop the filter).
+   - Click it → ✅ *(UI)* the `.command-details-modal` opens; its status line contains **"ran UserList as a custom MDM command on `<hostname>`."**; the same payload + response UUID checks as step 4. **Close**.
 
 **Assessment**
-- *Value:* high. The only test that sends an MDM command to a real device and reads the **device's answer** back — through the CLI, both Activity-card views, and the feed — with the host views pinned to the command by UUID. It also covers the **Show MDM commands** toggle, which nothing else touches. Choosing a read-only command is exactly right for a VM that can't be rebuilt.
+- *Value:* high. The only test that sends an MDM command to a real device and reads the **device's answer** back — through the CLI, both Activity-card views, and the feed filtered to its type — with every view pinned to the command by UUID. It also covers the **Show MDM commands** toggle, which nothing else touches. Choosing a read-only command is exactly right for a VM that can't be rebuilt.
 - *Coverage gaps:* the command is sent via **CLI only** — the UI has no custom-command sender, so that is inherent, but `POST /commands/run` and the `GET /commands/results` API are not asserted directly either; the **response body's content** (the user list itself) is never checked beyond the Acknowledged status — asserting it contains a known local username would prove the device actually *executed* UserList; no Error/NotNow response path; `fleetctl get mdm-commands` (the list view) untested; Windows MDM commands (SyncML) untested although the Windows VM is enrolled.
 - *Redundancy:* the CLI steps overlap area 19's `fleetctl mdm` coverage ([19-fleetctl-cli.md](19-fleetctl-cli.md)) — but those can't reach a real device's acknowledgement, so this is complementary.
 - *Efficiency / smells:*
-  - ⚠️ **The dashboard assertion (step 8) is not tied to this run.** Its sentence carries no UUID, and every run sends the same `UserList` to the same host, so any earlier run's activity within the feed's first 15 pages satisfies it. The host-card checks are pinned by UUID; this one is decorative. Clicking through to the details modal from the feed and re-running `carriesThisCommand` would fix it.
+  - The dashboard row is pinned by UUID too: the feed is filtered to the type, the newest row for a `UserList` on this host is opened, and its modal must carry this command. The filter keeps the row near the top however much the other workers logged during the acknowledgement wait, which is what an unfiltered feed walk lost in batch D.
   - Step 7 is an absence-only check against a tab whose contents aren't otherwise waited on — `showUpcomingActivities` asserts the tab is selected, not that its list rendered, so it can pass on a still-loading panel.
   - `CommandUUID` is matched by a regex over the payload textarea with `s` (dotall) — fine, but it depends on Fleet echoing the UUID into the rendered payload, which is Fleet's own injection, not what the test sent.
   - Direct-URL navigation to the host.
@@ -1176,7 +1178,7 @@ API use elsewhere is **precondition/setup only** (host resolution, report seedin
 6. Harden HOST-15's two row assertions ([`host-certificates.spec.ts:66-67`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)): guard the issuer against `''` before asserting it (`toContainText('')` always passes), and read **Scope** out of its own cell instead of matching `System`/`User` anywhere in the row. Both are one-line changes and both currently admit a silent pass.
 7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* Full-inventory result rather than from page 1, or assert first that the Applications view is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
 8. Give HOST-21's agent-options restore an `afterEach` twin ([`host-run-script.spec.ts:320`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)) — Playwright skips `finally` on a test timeout, and on free the stranded 60s cap is **global**. Alternatively have `cleanup-setup` drop a `script_execution_timeout` of 60 the way it re-enables script execution.
-9. Tie HOST-23's dashboard assertion to this run ([`mdm-commands.spec.ts:134`](../../tests/e2e/shared/hosts/mdm-commands.spec.ts)): click the feed item and run `carriesThisCommand()` on the modal it opens, as the host-card steps already do. Today any earlier run's `UserList` activity satisfies it.
+9. ~~Tie HOST-23's dashboard assertion to this run~~ — done in round 3 batch G: the feed is filtered to *Ran custom MDM command*, and the row's modal is checked for this command's UUID.
 
 **Bigger bets**
 
