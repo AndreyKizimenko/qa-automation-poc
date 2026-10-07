@@ -35,6 +35,12 @@ export class SetupAssistantPage {
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
 
+  /**
+   * The "Learn more" link Fleet appends to the error toast when Apple refuses a
+   * profile ("Couldn't add. <Apple's error code>. Learn more").
+   */
+  readonly refusalLearnMoreLink: Locator;
+
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
@@ -61,6 +67,8 @@ export class SetupAssistantPage {
     this.deleteModal = page.locator('.modal__modal_container')
       .filter({ hasText: 'Delete automatic enrollment profile' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
+
+    this.refusalLearnMoreLink = this.toast.error.getByRole('link', { name: 'Learn more' });
   }
 
   /** `fleetId=0` targets "No team". Omit to use the current fleet. */
@@ -79,6 +87,14 @@ export class SetupAssistantPage {
     await this.toast.expectSuccess('Successfully uploaded.');
     await expect(this.customCard).toBeVisible();
     await expect(this.defaultCard).toBeHidden();
+  }
+
+  /**
+   * Picks a profile Fleet is expected to refuse. Nothing is stored, so the
+   * card doesn't change; the caller asserts the error toast.
+   */
+  async uploadExpectingRefusal(file: Parameters<FileUploader['setFile']>[0]): Promise<void> {
+    await this.uploader.setFile(file);
   }
 
   /** Client-side FileSaver download — Playwright still captures the event. */

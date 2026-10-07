@@ -26,6 +26,13 @@ const PAYWALLED_PAGES: Array<{ name: string; url: string; heading?: string }> = 
   { name: 'Controls — Setup experience / Users', url: '/controls/setup-experience/users' },
   { name: 'Settings — Integrations / Calendars', url: '/settings/integrations/calendars' },
   { name: 'Settings — Integrations / Identity provider', url: '/settings/integrations/identity-provider' },
+  // The End users tab of Authentication (SSO); its Fleet users tab is free, so
+  // the one banner pins the tab as well as the card.
+  {
+    name: 'Settings — Integrations / Authentication (SSO) / End users',
+    url: '/settings/integrations/sso/end-users',
+    heading: 'Authentication (SSO)',
+  },
   { name: 'Settings — Integrations / Conditional access', url: '/settings/integrations/conditional-access' },
   { name: 'Settings — Integrations / Change management', url: '/settings/integrations/change-management' },
   { name: 'Settings — Integrations / Certificate authorities', url: '/settings/integrations/certificate-authorities' },

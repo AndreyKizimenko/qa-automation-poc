@@ -251,6 +251,26 @@ export async function getSoftwareTitle(
   return { id: t.id, name: t.name, source: t.source };
 }
 
+/**
+ * The managed configuration stored for an App Store or Play Store app on one
+ * fleet (`software_title.app_store_app.configuration`): a JSON object for
+ * Android, an XML string for iOS / iPadOS, null when none is set.
+ */
+export async function getAppStoreAppConfiguration(
+  request: APIRequestContext,
+  fleetId: number,
+  titleId: number,
+): Promise<unknown> {
+  const res = await request.get(apiUrl(`software/titles/${titleId}`), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId) },
+  });
+  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  const app = (await res.json()).software_title?.app_store_app;
+  if (!app) throw new Error(`Software title ${titleId} has no app store app on fleet ${fleetId}`);
+  return app.configuration ?? null;
+}
+
 export interface SoftwarePackageDetail {
   name: string;
   selfService: boolean;

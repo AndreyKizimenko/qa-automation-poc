@@ -24,6 +24,8 @@ export class SetupExperienceUsersPage {
   readonly localAccountStandardRadio: Locator;
   readonly localAccountSkipRadio: Locator;
   readonly idpLink: Locator;
+  /** External link to Fleet's end-user authentication guide; opens in a new tab. */
+  readonly previewLink: Locator;
   readonly saveButton: Locator;
 
   constructor(page: Page) {
@@ -41,6 +43,7 @@ export class SetupExperienceUsersPage {
     this.localAccountStandardRadio = page.getByRole('radio', { name: 'Standard' });
     this.localAccountSkipRadio = page.getByRole('radio', { name: 'Skip (no account)' });
     this.idpLink = page.getByRole('link', { name: /identity provider/i });
+    this.previewLink = page.getByRole('link', { name: 'Preview end user experience' });
     this.saveButton = page.getByRole('button', { name: 'Save' });
   }
 

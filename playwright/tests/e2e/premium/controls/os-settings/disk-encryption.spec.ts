@@ -14,15 +14,26 @@
  * config's flat `mdm.enable_disk_encryption` is the AND of every platform's
  * setting, and a write to it fans out to all of them.
  *
+ * The BitLocker PIN's save is tested apart from the rest, on a throwaway
+ * `pw-*` fleet: it saves Windows enforcement with it, and on Unassigned that is
+ * the same global setting the tests above snapshot and toggle. A fleet of its
+ * own holds no host, needs no restore, and is deleted in the test and again in
+ * an `afterEach`.
+ *
  * Grounded in frontend/pages/ManageControlsPage/OSSettings/cards/DiskEncryption.
  */
 import { test, expect } from '@fixtures';
 import {
+  createFleet,
+  deleteFleet,
+  findFleetByName,
+  getFleetWindowsDiskEncryption,
   getGlobalDiskEncryption,
   setGlobalDiskEncryption,
   withApiRequest,
   type DiskEncryptionSettings,
 } from '@helpers/api';
+import { runNonce } from '@helpers/profiles';
 
 test.describe('Premium • Controls • disk encryption', () => {
   test.describe.configure({ mode: 'serial' });
@@ -101,5 +112,58 @@ test.describe('Premium • Controls • disk encryption', () => {
 
     await diskEncryption.enforceCheckbox.setChecked(true);
     await expect(diskEncryption.bitlockerPinCheckbox).toBeEnabled();
+  });
+});
+
+test.describe('Premium • Controls • disk encryption — BitLocker PIN (throwaway fleet)', () => {
+  const fleetName = `pw-bitlocker-${runNonce()}`;
+
+  test.afterEach(async ({ request }) => {
+    const fleet = await findFleetByName(request, fleetName);
+    if (fleet) await deleteFleet(request, fleet.id, { ignoreMissing: true });
+  });
+
+  test('a required BitLocker PIN saves with enforcement, and unticking enforcement clears it', async ({
+    diskEncryption,
+    request,
+    page,
+  }) => {
+    const fleet = await createFleet(request, fleetName);
+
+    // Scoped by URL: the fleet's name is per-run, so it isn't picked from the
+    // dropdown (see `TeamDropdown.selectByLabel`).
+    await diskEncryption.goto({ fleetId: fleet.id, platform: 'windows' });
+    await expect(diskEncryption.teamDropdown.currentValue).toHaveText(fleet.name);
+
+    await diskEncryption.enforceCheckbox.setChecked(true);
+    await diskEncryption.bitlockerPinCheckbox.setChecked(true);
+    await diskEncryption.save();
+    expect(await getFleetWindowsDiskEncryption(request, fleet.id)).toEqual({
+      enabled: true,
+      bitlockerPinRequired: true,
+    });
+
+    await page.reload();
+    await diskEncryption.expectPlatform('windows');
+    await expect(diskEncryption.enforceCheckbox).toBeChecked();
+    await expect(diskEncryption.bitlockerPinCheckbox).toBeChecked();
+
+    // Fleet refuses a PIN without enforcement, so the form unticks the PIN with
+    // enforcement and locks it, and both save off.
+    await diskEncryption.enforceCheckbox.setChecked(false);
+    await expect(diskEncryption.bitlockerPinCheckbox).not.toBeChecked();
+    await expect(diskEncryption.bitlockerPinCheckbox).toBeDisabled();
+    await diskEncryption.save();
+    expect(await getFleetWindowsDiskEncryption(request, fleet.id)).toEqual({
+      enabled: false,
+      bitlockerPinRequired: false,
+    });
+
+    await page.reload();
+    await diskEncryption.expectPlatform('windows');
+    await expect(diskEncryption.enforceCheckbox).not.toBeChecked();
+    await expect(diskEncryption.bitlockerPinCheckbox).not.toBeChecked();
+
+    await deleteFleet(request, fleet.id);
   });
 });

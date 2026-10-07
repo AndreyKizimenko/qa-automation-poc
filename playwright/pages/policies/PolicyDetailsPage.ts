@@ -62,10 +62,15 @@ export class PolicyDetailsPage {
     this.queryModalCloseButton = this.queryModal.getByRole('button', { name: 'Close' });
   }
 
+  /**
+   * Anchors on "Show query", which every role gets; "Run policy" and "Edit
+   * policy" are role-gated, so neither can tell a loaded page from a withheld
+   * button.
+   */
   async goto(id: number, opts: { fleetId?: number } = {}): Promise<void> {
     const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
     await this.page.goto(`/policies/${id}${qs}`);
-    await expect(this.editButton).toBeVisible();
+    await expect(this.showQueryButton).toBeVisible();
   }
 
   /** Click "Edit policy" → `/policies/:id/edit`. */

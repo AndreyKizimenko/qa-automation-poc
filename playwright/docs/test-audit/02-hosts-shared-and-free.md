@@ -1,6 +1,6 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 13 files · **Test declarations:** 25 entries (23 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **29 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 3 `free/hosts` specs)
+**Specs covered:** 14 files · **Test declarations:** 26 entries (24 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **31 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 4 `free/hosts` specs)
 
 This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
@@ -51,6 +51,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-23 | `shared/hosts/mdm-commands.spec.ts` | a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it | UI+API | ☐ |
 | HOST-24 | `free/hosts/host-idp-username.spec.ts` | Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field | UI | ☐ |
 | HOST-25 | `shared/hosts/host-reports-tab.spec.ts` | Host details — reports that don't store results show only with the toggle on | UI+API | ☐ |
+| HOST-26 | `free/hosts/host-actions-role-access.spec.ts` | Free • Hosts • Actions by role › <role> is offered the host actions its role grants (2 roles) | UI | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -409,22 +410,22 @@ other:
 
 - **File:** [`playwright/tests/e2e/free/hosts/cta-visibility.spec.ts`](../../tests/e2e/free/hosts/cta-visibility.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "global admin sees Add hosts, Enroll secrets, and Export hosts"`
-- **Project:** free only · **Mode:** UI · **Isolation:** standalone; own browser context via `withStaticUser` (the shared admin storage state is untouched)
-- **Preconditions:** the pre-provisioned static user `global-admin@fleetdm.com` exists on the **free** instance and `FLEET_STATIC_USER_PASSWORD` is set; at least one host visible so `goto()` settles. `withStaticUser` reuses a cached session if valid, else logs in fresh and caches ([`helpers/auth.ts:105`](../../helpers/auth.ts)).
-- **Data created:** a cached session file for the static user
+- **Project:** free only · **Mode:** UI · **Isolation:** own context via `withStaticUser`; read-only
+- **Preconditions:** `global-admin@fleetdm.com` on the free instance; at least one host visible
+- **Data created:** none
 
 **Flow**
 
-1. ☐ Log in as **global-admin** in a fresh context (or reuse its cached session), open `/hosts/manage` via URL.
-   - ✅ *(UI)* **Add hosts** button visible.
-   - ✅ *(UI)* **Enroll secrets** button visible (exact-name match, so it can't be satisfied by the empty-state "Manage enroll secrets" link).
-   - ✅ *(UI)* **Export hosts** button visible.
+1. ☐ Log in as **global-admin** → `/hosts/manage` via URL.
+   - ✅ *(UI)* **Add hosts** and **Export hosts** visible; the gear holds **Enroll secrets** (Escape closes it).
+2. ☐ Once the table settles, open the label filter's menu.
+   - ✅ *(UI)* the "Filter labels by name..." box and the **Add label** "+" beside it.
 
 **Assessment**
-- *Value:* low as written — a global admin seeing the primary CTAs is the trivially-true case, and every other admin test in the suite would fail if it weren't. Its real function is to be the **control** for HOST-11.
-- *Coverage gaps:* free has more roles than admin/observer — **maintainer** and **observer+** are not covered here (the premium mirror does test maintainer); no check that the buttons *work* for the admin (HOST-09 covers Add hosts implicitly); no team-admin/team-maintainer dimension (n/a on free).
-- *Redundancy:* near-total with [`premium/hosts/cta-visibility.spec.ts`](../../tests/e2e/premium/hosts/cta-visibility.spec.ts), which asserts the identical three buttons for `global-admin` + `global-maintainer`. The expected answer does **not** differ by tier (these CTAs have no license gate), so this pair is duplication rather than a tier matrix — unlike HOST-12/13/14, where the premium/free split is load-bearing. Also note the observer title is byte-identical across the two files, so `-g` without `--project` hits both.
-- *Efficiency / smells:* pure visibility assertions (`toBeVisible`) with no interaction — the weakest assertion class. Enters by direct URL rather than clicking through the navbar (acceptable for a presence check, per the suite's own convention note). Merging this file's admin case into the premium spec's role loop and keeping only the *observer* case on free would lose nothing.
+- *Value:* the control for HOST-11: without it, a page that rendered no CTAs would pass HOST-11's absences.
+- *Coverage gaps:* the global maintainer isn't read on free (it is on premium, HOSTP-10).
+- *Redundancy:* the same cell as HOSTP-10's admin case; the expectation doesn't differ by tier.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -440,22 +441,22 @@ other:
 
 - **File:** [`playwright/tests/e2e/free/hosts/cta-visibility.spec.ts`](../../tests/e2e/free/hosts/cta-visibility.spec.ts)
 - **Grep:** `npx playwright test --project=free -g "global observer sees only Export hosts"`
-- **Project:** free only · **Mode:** UI · **Isolation:** standalone; own context via `withStaticUser`
-- **Preconditions:** static user `global-observer@fleetdm.com` on the free instance; at least one host visible to an observer.
-- **Data created:** a cached session file
+- **Project:** free only · **Mode:** UI · **Isolation:** own context via `withStaticUser`; read-only
+- **Source (Add label):** QA Wolf `hosts-global-observer-cant-see-and-click-cta-buttons-free` (round 1 C1 #6; round 3, batch E). The flow's own Add label check was unanchored.
+- **Data created:** none
 
 **Flow**
 
-1. ☐ Log in as **global-observer** in a fresh context, open `/hosts/manage` via URL.
-   - ✅ *(UI)* **Export hosts** button visible (no role gate).
-   - ✅ *(UI)* **Add hosts** button absent (`toHaveCount(0)`).
-   - ✅ *(UI)* **Enroll secrets** button absent (`toHaveCount(0)`).
+1. ☐ Log in as **global-observer** → `/hosts/manage` via URL.
+   - ✅ *(UI)* **Export hosts** visible; **Add hosts** and the gear absent (no gear item for an observer, so no gear).
+2. ☐ Once the table settles, open the label filter's menu.
+   - ✅ *(UI)* the search box; no **Add label**; the search box still showing afterwards, so the absence was read off an open menu.
 
 **Assessment**
-- *Value:* moderate — this is a real **negative-space** assertion and negative space is where RBAC regressions actually land (a gating change exposing enroll controls to an observer). The paired positive case (HOST-10) is what keeps it honest: without it, a page that failed to render *any* CTA would also pass the two `toHaveCount(0)` lines. Worth keeping the pair together for that reason. That said, UI-absence assertions are cheap-to-fool coverage: the buttons being hidden says nothing about whether the **API** would refuse an observer's enroll-secret read — that is `tests/api/role-access/free/global-roles.spec.ts`'s job, and it does not currently probe host/enroll-secret endpoints.
-- *Coverage gaps:* observer's host **Actions** menu on the detail page is not checked here (no Transfer/Delete/Run script absence); no observer+ / maintainer rows; no attempt to reach `/hosts/manage?manage_enroll_secrets=1` directly as an observer, which is the assertion that would prove the gate isn't merely cosmetic.
-- *Redundancy:* byte-identical test title and body to the observer case in [`premium/hosts/cta-visibility.spec.ts`](../../tests/e2e/premium/hosts/cta-visibility.spec.ts) — same expectation on both tiers.
-- *Efficiency / smells:* `toHaveCount(0)` on a `getByRole('button')` is the right shape for absence (it retries and doesn't pass on a slow render the way a bare `toBeHidden()` on a missing element can be misread). Direct-URL entry as above.
+- *Value:* the negative space, where role regressions land; HOST-10 keeps it honest.
+- *Coverage gaps:* the observer's host Actions are HOST-26.
+- *Redundancy:* the same cell as HOSTP-11 on premium.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -1074,6 +1075,36 @@ other:
 - *Coverage gaps:* only Discard data; a report with a non-snapshot logging type (differential) is the other kind the toggle hides. QA Wolf's count (+1) isn't asserted: every sibling spec's global reports move it.
 - *Redundancy:* shares HOST-06's search and card locators.
 - *Efficiency / smells:* seconds. The two reports have no interval, so neither ever runs on the VM.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOST-26 · Free • Hosts • Actions by role › <global-maintainer | global-observer> is offered the host actions its role grants
+
+- **File:** [`playwright/tests/e2e/free/hosts/host-actions-role-access.spec.ts`](../../tests/e2e/free/hosts/host-actions-role-access.spec.ts)
+- **Grep:** `npx playwright test --project=free -g "Free • Hosts • Actions by role"`
+- **Project:** free · **Variants (2):** `global-maintainer`, `global-observer` · **Host:** an online Linux simulation, by id (the free real VMs share Unassigned)
+- **Mode:** UI · **Isolation:** one test per role; nothing runs or moves
+- **Source:** QA Wolf `hosts-details-global-maintainer-able-to-custom-query-host` (round 1 C2 #3; round 3, batch E), which only read the modal's description
+- **Preconditions (API):** reports `pw-role-hostrep-<role>-<nonce>-observers` (*Observers can run*) and `…-others`, deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ Log in → the host's details → **Actions**.
+   - ✅ *(UI)* **Live report**; **Run script** and **Delete** for GM only; **Transfer** for neither (no fleets on free).
+2. ☐ **Live report** → filter by the marker.
+   - ✅ *(UI)* `…-observers` listed; `…-others` and the **create a report** link for GM only. **Close**.
+
+**Assessment**
+- *Value:* free's half of HOSTP-20.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```

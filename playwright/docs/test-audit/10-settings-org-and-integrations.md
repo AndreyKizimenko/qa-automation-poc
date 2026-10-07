@@ -1,16 +1,16 @@
 # Settings — org, integrations, webhooks, secrets — test audit
 
-**Specs covered:** 12 files · **Test declarations:** 15 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the four shared specs run in both)
+**Specs covered:** 13 files · **Test declarations:** 17 (the logo spec's 2 are loop-generated, one per theme) · **Projects:** premium / free (the five shared specs run in both)
 
 This area covers Fleet's **Settings** section: Organization info, Fleet Desktop, Advanced
 options, the organization logo, a fleet's own settings page, enroll secrets, and the
-Integrations subpages (MDM / EULA / end-user migration, SSO end-user authentication,
-host-status alerts). Almost every spec here writes **instance-wide config** — org name,
+Integrations subpages (MDM / the Apple push certificate page / EULA / end-user migration, SSO
+end-user authentication, host-status alerts). Almost every spec here writes **instance-wide config** — org name,
 SMTP domain, the org logo blob, global or fleet webhook settings, a team's enroll-secret
 list — so each one snapshots the affected subtree through the API and restores it in
 teardown (the logo spec restores in the test's own `finally`, not a hook — see SET-12).
 The read-only exceptions (Fleet Desktop presence, end-user migration URL validation, the
-fleet host-expiry derivation, the SSO form-gating case) mutate nothing.
+fleet host-expiry derivation, the SSO form-gating case, the Apple MDM details) mutate nothing.
 
 > **Blast-radius warning for a manual re-run.** Doing these by hand means you *are* the
 > teardown. Before touching anything, capture the current value (`GET /api/v1/fleet/config`,
@@ -37,6 +37,8 @@ fleet host-expiry derivation, the SSO form-gating case) mutate nothing.
 | SET-13 | `shared/settings/organization/custom-logo.spec.ts` | … › a dark-mode logo replaces the default and removing it restores it | UI+API | ☐ |
 | SET-14 | `shared/settings/enroll-secrets.spec.ts` | Settings • global enroll secrets › an admin adds, copies and deletes a global enroll secret, and the others stay | UI+API | ☐ |
 | SET-15 | `premium/settings/fleets-lifecycle.spec.ts` | Premium • Settings • fleet lifecycle › an admin adds, renames and deletes a fleet | UI+API | ☐ |
+| SET-16 | `premium/settings/integrations/mdm.spec.ts` | Premium • Settings • MDM end-user migration › a mode and webhook URL save with the workflow disabled, and read back | UI+API | ☐ |
+| SET-17 | `shared/settings/apple-mdm.spec.ts` | Shared • Settings • Apple MDM › the Apple MDM card opens the push certificate details Fleet holds | UI+API | ☐ |
 
 ---
 
@@ -359,26 +361,27 @@ other:
 - **File:** [`playwright/tests/e2e/premium/settings/integrations/mdm.spec.ts`](../../tests/e2e/premium/settings/integrations/mdm.spec.ts)
 - **Grep:** `npx playwright test -g "the migration webhook URL is validated client-side"`
 - **Project:** premium · **Scopes:** global
-- **Mode:** UI · **Isolation:** fully independent; nothing is saved, so nothing is mutated
-- **Preconditions:** **Apple Business Manager must be configured on the instance** — the End-user-migration section renders `null` otherwise, so the test hard-fails rather than skips. ABM is *not* provisioned by the suite: the ABM token is set up out of band (`FLEET_ABM_ORG_NAME` in `.env.premium.example` is read only by a local `fleetctl gitops` apply, never by the suite). An expired ABM token — they expire annually — turns this into an opaque "locator not found".
+- **Mode:** UI · **Isolation:** fully independent; nothing is saved, so nothing is mutated. Shares a (non-serial) describe with SET-16, whose `afterEach` restore runs only after SET-16 itself saved.
+- **Preconditions:** **Apple Business Manager must be configured on the instance** — the End-user-migration section renders `null` otherwise, and `gotoMdm()` anchors on the EULA heading, which also needs ABM, so the test hard-fails rather than skips. ABM is *not* provisioned by the suite: the ABM token is set up out of band (`FLEET_ABM_ORG_NAME` in `.env.premium.example` is read only by a local `fleetctl gitops` apply, never by the suite). An expired ABM token — they expire annually — turns this into an opaque "locator not found".
 - **Data created:** none. The workflow toggle is client-side state only and Save is never clicked.
 
 **Flow**
 
 1. ☐ Open **Settings → Integrations → MDM** (via URL `/settings/integrations/mdm`).
-   - ✅ *(UI)* Heading **End user migration workflow** visible inside the `.end-user-migration-section` card.
-2. ☐ Turn the workflow switch on if it isn't already (read `aria-checked`, click if needed — never saved).
+   - ✅ *(UI)* Heading **End user license agreement (EULA)** visible — `IntegrationsPage.gotoMdm()`.
+   - ✅ *(UI)* The **End user migration workflow** section is visible (`migrationSection`: the `<section>` holding that exact heading).
+2. ☐ Turn the workflow's switch on if it isn't already (`setMigrationEnabled(true)` reads `aria-checked` and clicks only if needed — never saved).
    - ✅ *(UI)* The switch reports `aria-checked="true"`.
 3. ☐ Type `not a url` into **Webhook URL**.
-   - ✅ *(UI)* Inline error **Must be a valid URL.** is visible.
+   - ✅ *(UI)* Inline error **Must be a valid URL.** is visible inside the section.
 4. ☐ Replace it with `https://example.com/pw-migration`.
-   - ✅ *(UI)* The **Must be a valid URL.** error is gone (count 0).
+   - ✅ *(UI)* The **Must be a valid URL.** error is gone (count 0, inside the section).
 
 **Assessment**
 - *Value:* the only client-side-validation test in this area; catches the URL validator being dropped from the migration form.
-- *Coverage gaps:* the workflow is never actually saved, so persistence, the `PATCH /config` path, and the "mode" radio (voluntary vs forced) are untested; no assertion that Save is disabled while the URL is invalid — arguably the more user-visible consequence than the inline message.
-- *Redundancy:* none. Free's counterpart is the paywall row `Settings — Integrations / MDM (ABM + Microsoft Entra cards)` in [`tests/e2e/free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts), which asserts two premium banners on the same URL.
-- *Efficiency / smells:* the worst POM hygiene in this area — the spec drives raw locators inline, which `tests/README.md` lists as an anti-pattern: `.end-user-migration-section` (`mdm.spec.ts:16`), an unnamed `getByRole('switch')` (`:20`), and `input[name="webhook_url"]` (`:26`). All three belong on `IntegrationsPage`, which already owns the MDM subpage. Also note this spec bypasses `integrationsPage.gotoMdm()` and so does not inherit its ABM-configured anchor.
+- *Coverage gaps:* no assertion that Save is disabled (or refused) while the URL is invalid — arguably the more user-visible consequence than the inline message. Saving is SET-16's, with the workflow disabled.
+- *Redundancy:* the section and switch overlap SET-16. Free has no counterpart: the free MDM page renders no migration section (`isPremiumTier &&` in `MdmSettings.tsx`), and its paywall test (MISC-20) checks three other cards.
+- *Efficiency / smells:* the section, switch and URL field live on `IntegrationsPage` now (`migrationSection`, `migrationSwitch`, `migrationWebhookUrl`). Two are documented fallbacks: the switch has no accessible name (it's the section's only one), and the **Webhook URL** label has no `htmlFor`, so the input is reached by `name="webhook_url"`.
 
 **Notes (Andrey)**
 ```
@@ -594,6 +597,8 @@ The reference table for a manual pass. "Restored?" describes what the automation
 | SET-13 | same for dark: `org_info.org_logo_url_dark_mode` **+ its alias** `org_logo_url` (the bare field) | same | same, with `mode=dark` | same, for dark-mode viewers |
 | SET-14 | **global** enroll-secret list (adds a marker, deletes it) | `GET /spec/enroll_secret` in `beforeEach` | `afterEach` → union restore (`restoreGlobalEnrollSecrets`: live − marker + any missing original; never empty) | A wrong-row delete would drop the secret the simulations re-enroll with; the union restore puts it back |
 | SET-15 | a throwaway `pw-fleet-<ms>` (created, renamed, deleted) | — | `afterEach` → `DELETE /fleets/<id>` (retried); cleanup sweep of `pw-*` fleets | A stranded fleet shows in every fleet picker until the next run's sweep |
+| SET-16 | global `mdm.macos_migration` (`enable: false`, the other mode, a per-run webhook URL) | `GET /config` at the top of the **test body** | `afterEach` → `PATCH /config` with the snapshot (only after SET-16) | A test mode and URL sit in a disabled workflow; never enabled, so no Mac is prompted. `cleanup.steps.ts` doesn't reset it |
+| SET-17 | nothing (read-only; **Turn off MDM** / **Renew certificate** never clicked) | — | — | — |
 
 ### SET-14 · Settings • global enroll secrets › an admin adds, copies and deletes a global enroll secret, and the others stay
 
@@ -671,6 +676,93 @@ other:
 
 ---
 
+### SET-16 · Premium • Settings • MDM end-user migration › a mode and webhook URL save with the workflow disabled, and read back
+
+- **File:** [`playwright/tests/e2e/premium/settings/integrations/mdm.spec.ts`](../../tests/e2e/premium/settings/integrations/mdm.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "a mode and webhook URL save with the workflow disabled"`
+- **Project:** premium · **Scopes:** global (`mdm.macos_migration`; premium only, and no other spec reads it)
+- **Mode:** UI+API · **Isolation:** shares a (non-serial) describe with SET-09. The test's first step snapshots `mdm.macos_migration` and hands it to the describe's `afterEach`, which writes it back — only after this test, the only one that sets it. The workflow is never saved **enabled**: enabled, Fleet Desktop starts prompting eligible Macs to migrate.
+- **Source:** QA Wolf `mdm-mobile-device-management-mdm-ui-validation` (round 1 C9 #9; round 3, batch F), its migration half. The Example payload modal and the two modes' descriptions were cut at review as static copy.
+- **Preconditions:** ABM configured, as for SET-09; `mdm.macos_migration` present in the config (`getMacosMigration` throws otherwise).
+- **Data created / mutated:** **global** `mdm.macos_migration` → `{ enable: false, mode: <the mode it didn't hold>, webhook_url: https://example.com/pw-migration-<ms> }`; restored by the `afterEach` (`PATCH /config` with the snapshot). Fleet validates the mode and URL only when the workflow is enabled, so the disabled save stores them as given.
+
+**Flow**
+
+1. ☐ *(API)* Snapshot `mdm.macos_migration` (`getMacosMigration` → `GET /config`). Choose the mode it doesn't hold (**Forced**, unless it already is) and a per-run URL, so only a working save can show them.
+2. ☐ Open **Settings → Integrations → MDM** (via URL).
+   - ✅ *(UI)* The **End user license agreement (EULA)** heading — the `gotoMdm()` anchor.
+3. ☐ Turn the workflow's switch off if it's on.
+   - ✅ *(UI)* `aria-checked="false"`; the **Voluntary** and **Forced** radios are disabled and **Webhook URL** is not editable.
+4. ☐ Turn the switch on.
+   - ✅ *(UI)* `aria-checked="true"`; the chosen mode's radio is enabled and **Webhook URL** is editable.
+5. ☐ Click the chosen mode's label, fill the per-run URL, turn the switch off again, click the section's **Save**.
+   - ✅ *(UI)* The chosen radio is checked (`chooseMigrationMode` clicks the `<label>`: the input is visually hidden).
+   - ✅ *(UI)* Toast `Successfully updated end user migration.` (older toasts cleared first).
+   - ✅ *(API)* `mdm.macos_migration` is exactly `{ enable: false, mode, webhook_url }`.
+6. ☐ Reload.
+   - ✅ *(UI)* The EULA heading; the switch reads `aria-checked="false"`; the chosen mode's radio is checked; **Webhook URL** holds the per-run URL.
+7. ☐ *(API, `afterEach`)* Write the snapshot back.
+
+**Assessment**
+- *Value:* the workflow's save path end to end without ever turning it on — the switch gating the form, the mode and URL stored exactly, and the form rebuilt from them after a reload. Values the config can't already hold mean a save that did nothing fails.
+- *Coverage gaps:* saving with the workflow **enabled** is out by design, and with it Fleet's server-side checks of the mode and URL (they run only then), so an invalid URL saved disabled is stored as given and nothing here would notice. What an enabled workflow does — Fleet Desktop's prompt, the webhook firing — is out of reach. Only the chosen mode's radio is checked as enabled while the switch is on. The Example payload modal and mode descriptions are cut.
+- *Redundancy:* the section and switch overlap SET-09.
+- *Efficiency / smells:* seconds. The restore runs in an `afterEach`, so a timed-out test still puts the snapshot back. The mode radio is reached through its `<label>`, then asserted on the radio itself — the right shape for Fleet's hidden inputs.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### SET-17 · Shared • Settings • Apple MDM › the Apple MDM card opens the push certificate details Fleet holds
+
+- **File:** [`playwright/tests/e2e/shared/settings/apple-mdm.spec.ts`](../../tests/e2e/shared/settings/apple-mdm.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "the Apple MDM card opens the push certificate details"` (or `--project=free`)
+- **Project:** premium **and** free (`shared/`) · **Scopes:** global
+- **Mode:** UI+API · **Isolation:** read-only. **Turn off MDM** and **Renew certificate** are asserted present and never clicked: one turns Apple MDM off for the whole instance, the other starts a certificate renewal.
+- **Source:** QA Wolf `mdm-mobile-device-management-mdm-ui-validation` (round 1 C9 #9; round 3, batch F), its Apple card. Shared because the card and the page aren't license-gated (`MdmSettings.tsx`: only the EULA and end user migration cards are premium).
+- **Preconditions (API):** Apple MDM on — `GET /mdm/apple` (`getAppleApnsInfo`, which fails otherwise) gives the certificate's `common_name` and `renew_date`; `GET /config` gives `org_info.org_name` and `server_settings.server_url`, both asserted non-empty.
+- **Data created:** none
+
+**Flow**
+
+1. ☐ *(API)* Read the push certificate and the config.
+   - ✅ *(API)* The organization has a name and the config names a server URL.
+2. ☐ Open **Settings → Integrations** (`/settings/integrations`, via URL) → **MDM** in the settings nav.
+   - ✅ *(UI)* The **Ticketing** heading (`IntegrationsPage.goto()`'s anchor), then the **Mobile device management (MDM)** `<h2>`.
+   - ✅ *(UI)* The Apple card — the section card reading `Apple (macOS, iOS, iPadOS) MDM turned on.` — is visible.
+3. ☐ Click the Apple card's **Edit**.
+   - ✅ *(UI)* URL `/settings/integrations/mdm/apple`; the **Apple Push Certificate Portal** `<h1>`.
+   - ✅ *(UI)* **Common name (CN)** equals the certificate's `common_name`.
+   - ✅ *(UI)* **Organization name** equals `org_info.org_name` *(API)* read beside it, re-read (with a page reload) until the two agree.
+   - ✅ *(UI)* **MDM server URL** is the configured `server_url` with `/mdm/apple/mdm` after one or more slashes. The page concatenates, and free's `server_url` ends in `/`, so free shows `…//mdm/apple/mdm`.
+   - ✅ *(UI)* **Renew date** equals `renew_date` formatted the way the page formats it (`readableDate`: the browser's locale, long month), computed inside the page so the browser's time zone decides the day on both sides.
+   - ✅ *(UI)* **Turn off MDM** and **Renew certificate** are visible.
+
+**Assessment**
+- *Value:* the only coverage of the Apple MDM page, on both tiers, and every value is checked against what it's built from rather than for presence: another certificate, a stale org name or a mangled server URL fails. An expired push certificate stops Apple MDM on the instance; this is the page an admin reads its renew date from.
+- *Coverage gaps:* the two actions are presence-only, by design. The renew date's warning states (a certificate near or past expiry) aren't reachable on a healthy instance. The other MDM cards' **Edit** pages (Windows, Android, Apple Business, VPP) aren't opened.
+- *Redundancy:* none. It's the first caller of `IntegrationsPage.goto()`.
+- *Efficiency / smells:*
+  - **Rename race, handled:** SET-01 / SET-02 (main project, the same tier) rename the org to `PW Org <ms>` until their `afterEach` puts it back, so the page and `GET /config` can briefly disagree. The organization-name check re-reads the config and reloads the page until they match (`toPass`, 30 s), rather than comparing with a value read before navigating.
+  - The server-URL regex that tolerates free's double slash would also pass a double slash on premium. Free's is a config artefact (its `server_url` ends in `/`), cosmetic and not filed.
+  - The values are reached by their `<dt>` text (`apnsValue(term)`): the page renders a bare `<dl>`, with no accessible names.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -685,12 +777,13 @@ other:
 | Host status alerts — global webhook | SET-06 | Disable round-trip; validation |
 | Host status alerts — fleet webhook | SET-07 | Negative role case (maintainer/observer cannot save); disable round-trip; URL validation |
 | Host expiry stacking + lock (fleet) | SET-08 | The ticked-and-locked branch never runs on QA instances (global expiry is intentionally off) |
-| MDM — end-user migration workflow | SET-09 (URL validation only) | Save/persistence; voluntary-vs-forced mode; Save gating on invalid URL |
+| MDM — end-user migration workflow | SET-09 (URL validation), SET-16 (mode + URL saved with the workflow off, read back through the API and after a reload; the form locked while off) | saving it enabled, and with it Fleet's checks of the mode and URL (out by design); Save gating on an invalid URL; the Example payload modal (cut) |
+| MDM — Apple push certificate details (APNs) | SET-17 (both tiers; common name, org, server URL and renew date, each against `GET /mdm/apple` / `GET /config`) | **Turn off MDM** / **Renew certificate** never clicked (by design); expiry warnings; the Windows, Android, Apple Business and VPP pages |
 | MDM — macOS EULA | SET-10 | Non-PDF / oversize rejection; view-EULA action; replace-in-place |
-| SSO — end-user authentication (IdP) | SET-11 (render + one gating case) | Entity-ID gating; Metadata-URL-or-Metadata either/or; save path; **Fleet users** tab |
-| Integrations — Ticketing (Jira / Zendesk) | the heading only, through the policies modal: POL-28/29 ([04](04-policies.md)) click **Add integration** in the Ticket workflow's empty state and assert `IntegrationsPage.ticketingHeading` on the page it opens | Adding, editing or deleting a Jira or Zendesk integration; `IntegrationsPage.goto()` (which waits on `ticketingHeading`) has no caller |
+| SSO — end-user authentication (IdP) | SET-11 (render + one gating case); free's paywall on the End users tab is a MISC-20 row ([13](13-labels-packs-dashboard-paywalls.md)) | Entity-ID gating; Metadata-URL-or-Metadata either/or; save path; **Fleet users** tab |
+| Integrations — Ticketing (Jira / Zendesk) | the heading only, through the policies modal: POL-28/29 ([04](04-policies.md)) click **Add integration** in the Ticket workflow's empty state and assert `IntegrationsPage.ticketingHeading` on the page it opens | Adding, editing or deleting a Jira or Zendesk integration. `IntegrationsPage.goto()` (which waits on `ticketingHeading`) is called only by SET-17, on its way to the MDM page |
 | Integrations — Calendars, Certificate authorities, Conditional access, Change management, IdP/SCIM | free paywall rows only ([`free/paywalls.spec.ts`](../../tests/e2e/free/paywalls.spec.ts)) | No premium functional coverage at all; `IntegrationsPage.scimText` is dead code |
-| ABM / VPP token upload, renewal, expiry warnings | **nothing** | Whole flow untested, yet SET-09 and SET-10 silently *depend* on ABM already being configured |
+| ABM / VPP token upload, renewal, expiry warnings | **nothing** | Whole flow untested, yet SET-09, SET-10 and SET-16 silently *depend* on ABM already being configured |
 
 **Duplication**
 
@@ -703,7 +796,8 @@ other:
 - **SET-06** used to prove persistence through `GET /config` alone; since 2026-10-02 it reloads the page and reads all four values back before the API check.
 - **SET-05** is API-only for "the secret joined the list". Justifiable for a credential (the server list is authoritative), but the modal's own list is never re-read, so a render regression passes.
 - **SET-04** is API-heavy *by design* — the whole point is comparing config subtrees, and it also does a UI reload check. Correct as is.
-- **SET-07 / SET-10** are the model: UI reload **and** API confirmation.
+- **SET-07 / SET-10 / SET-16** are the model: UI reload **and** API confirmation.
+- **SET-17** is read-only and checks each rendered value against the API it's built from (`GET /mdm/apple`, `GET /config`) — the API sets the expectation, the UI is what's tested.
 - **SET-08** derives its expectations from the API rather than from a fixture, which caps what it can catch to "UI disagrees with config".
 - **SET-03 / SET-09 / SET-11** are pure UI and mutate nothing — appropriate for presence and client-side validation.
 
@@ -711,12 +805,12 @@ other:
 
 1. Delete one of SET-01/SET-02 and move the survivor to `tests/e2e/shared/settings/organization/organization-info.spec.ts` — the form is tier-agnostic and the specs are byte-identical.
 2. ~~Add a reload + two UI value assertions to SET-06~~ (done 2026-10-02, with the percentage and days fields) ([`shared/settings/host-status-webhook.spec.ts:34`](../../tests/e2e/shared/settings/host-status-webhook.spec.ts)) so persistence isn't proven by `GET /config` alone.
-3. Move SET-09's three inline raw locators onto `IntegrationsPage` (`mdm.spec.ts:16,20,26`) and route it through `gotoMdm()` — removes the last spec-level class selectors in this area.
+3. ~~Move SET-09's three inline raw locators onto `IntegrationsPage` and route it through `gotoMdm()`~~ (done 2026-10-05, round 3 batch F: `migrationSection`, `migrationSwitch`, `migrationWebhookUrl`, `setMigrationEnabled`).
 4. Convert the `try/finally` restores in ~~SET-04~~ (done 2026-10-02) and SET-07 (`team-host-status-webhook.spec.ts:73`) to `afterEach` hooks (nesting SET-07's describe so SET-08 is unaffected) — `finally` can be abandoned on a hard timeout, and these two restores protect the enroll-secret/webhook state the suite leans on.
-5. Drop the dead `IntegrationsPage.goto()` / `scimText` members, or give them a spec (Ticketing is reached only through POL-28/29's **Add integration**, never through `goto()`).
+5. Drop the dead `IntegrationsPage.scimText` member, or give it a spec. (~~`goto()`~~ has a caller since 2026-10-05: SET-17 enters the MDM page through it.)
 
 **Bigger bets**
 
 1. **A settings-config guard fixture.** Every spec in this area hand-rolls snapshot + restore, in three different shapes (`beforeEach`/`afterEach`, `try/finally`, pre-clean + `afterEach`), and each one encodes a different merge-vs-replace rule (`/config` merges within `webhook_settings`; `/teams/:id` replaces it; enroll secrets replace the whole list). A `configGuard(['org_info', 'webhook_settings.host_status_webhook'])` fixture that snapshots on setup and restores in worker/test teardown would centralise those rules, survive timeouts, and make the mutation ledger above enforceable instead of documentary.
-2. **Make the ABM dependency explicit.** SET-09 and SET-10 fail with "locator not found" when the instance's ABM token lapses — a yearly certainty. A shared precondition that reads `mdm.apple_bm_enabled_and_configured` from `GET /config` and fails with a named message (or an ops alert on token expiry) turns an annual triage mystery into a one-line diagnosis. Same treatment for the premium SSO/EUA prerequisites behind SET-11.
+2. **Make the ABM dependency explicit.** SET-09, SET-10 and SET-16 fail with "locator not found" when the instance's ABM token lapses — a yearly certainty. A shared precondition that reads `mdm.apple_bm_enabled_and_configured` from `GET /config` and fails with a named message (or an ops alert on token expiry) turns an annual triage mystery into a one-line diagnosis. Same treatment for the premium SSO/EUA prerequisites behind SET-11.
 3. **Cover the Advanced card's functional fields on a disposable instance.** SET-04 can only ever assert non-interference, because the interesting fields (host expiry, retention, server URL) are too dangerous to write on a shared QA instance with simulated hosts. Those belong in a short-lived-instance job where enabling host expiry is harmless — which would also unlock SET-08's currently-dead ticked-and-locked branch.

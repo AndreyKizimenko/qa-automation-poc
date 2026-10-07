@@ -1,5 +1,6 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders, type FleetRef } from './core';
+import { deleteBootstrapPackage } from './mdm';
 import { compareVersions } from './software';
 
 /**
@@ -128,11 +129,17 @@ export async function createFleet(
   return { id: ref.id, name: ref.name };
 }
 
+/**
+ * Deletes a fleet, and its bootstrap package first: Fleet leaves a deleted
+ * fleet's bootstrap package behind (`mdm_apple_bootstrap_packages` isn't among
+ * the tables a fleet delete clears), stored against an id nothing can reach.
+ */
 export async function deleteFleet(
   request: APIRequestContext,
   id: number,
   opts: { ignoreMissing?: boolean } = {},
 ): Promise<void> {
+  await deleteBootstrapPackage(request, id);
   const res = await request.delete(apiUrl(`fleets/${id}`), {
     headers: authHeaders(),
   });
@@ -176,6 +183,26 @@ export interface AppleOsUpdates {
 export interface WindowsOsUpdates {
   deadlineDays: number | null;
   gracePeriodDays: number | null;
+}
+
+/** A fleet's Windows disk-encryption settings, as the Windows tab saves them. */
+export interface FleetWindowsDiskEncryption {
+  enabled: boolean;
+  bitlockerPinRequired: boolean;
+}
+
+/** Reads `mdm.windows_settings` from `/teams/:id`. Not for Unassigned (see `getGlobalDiskEncryption`). */
+export async function getFleetWindowsDiskEncryption(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<FleetWindowsDiskEncryption> {
+  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  const windows = (await res.json()).team?.mdm?.windows_settings ?? {};
+  return {
+    enabled: windows.enable_disk_encryption ?? false,
+    bitlockerPinRequired: windows.require_bitlocker_pin ?? false,
+  };
 }
 
 /** The OS update settings a fleet enforces. */

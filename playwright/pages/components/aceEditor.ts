@@ -20,3 +20,18 @@ export async function setAceValue(editor: Locator, text: string): Promise<void> 
     ace.setValue(value, 1);
   }, text);
 }
+
+/**
+ * Reads the whole text of the Ace editor `editor` belongs to, through the Ace
+ * instance rather than the DOM: Ace renders only the visible lines, and splits
+ * each into token spans.
+ */
+export async function getAceValue(editor: Locator): Promise<string> {
+  await expect(editor).toBeVisible();
+  return editor.evaluate((el) => {
+    const aceEl = el.closest('.ace_editor');
+    const ace = (aceEl as unknown as { env?: { editor?: { getValue: () => string } } } | null)?.env?.editor;
+    if (!ace) throw new Error('No Ace editor instance on this element');
+    return ace.getValue();
+  });
+}

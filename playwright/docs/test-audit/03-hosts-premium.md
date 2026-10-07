@@ -1,6 +1,6 @@
 # Hosts — premium — test audit
 
-**Specs covered:** 8 files · **Entries:** 18 (23 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
+**Specs covered:** 9 files · **Entries:** 21 (33 runtime `test()` declarations — three parameterized loops are collapsed into one entry each, with every generated title listed) · **Project:** premium
 
 Premium-only host flows: moving hosts between fleets (bulk and single-host, per role), deleting hosts (bulk, from host details, and as a team admin), drilling a report card into one host's stored results, the role/platform gating of the hosts-list CTAs and the host Actions menu, a host's **IdP username** (the host details **User** card, by UI and API, and its role gate), and the **Recovery Lock password** on the real Mac. All eight specs resolve their hosts through the API at runtime — never by name — because the premium QA instance is ~300 osquery-perf **simulations** plus three real VMs. Mutating specs draw disjoint slices of the simulated pool via `findSimulatedHostIds(platform, count, offset)` (transfer, delete) or `findSimulations(platform, count, offset)` (the IdP-username spec, which starts 40 hosts further in); read-only device-fidelity specs take the real VM via the `liveMacosHost` worker fixture. The Recovery Lock spec takes the same VM and **changes its state**.
 
@@ -21,7 +21,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-07 | `premium/hosts/host-delete.spec.ts` | delete by role › team admin can delete on a fleet they administer **(destructive)** | UI+API | ☐ |
 | HOSTP-08 | `premium/hosts/host-delete.spec.ts` | delete from host details › deletes the host and returns to the list **(destructive)** | UI+API | ☐ |
 | HOSTP-09 | `premium/hosts/host-report-details.spec.ts` | host report results › drills into this host and out to all hosts | UI+API | ☐ |
-| HOSTP-10 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › global-admin / global-maintainer see all three CTAs | UI | ☐ |
+| HOSTP-10 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › global-admin / global-maintainer see Add hosts, the gear's items and Add label | UI | ☐ |
 | HOSTP-11 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › global observer sees only Export hosts | UI | ☐ |
 | HOSTP-12 | `premium/hosts/mdm-actions-availability.spec.ts` | MDM action availability › macOS / Windows / Ubuntu matrix | UI | ☐ |
 | HOSTP-13 | `premium/hosts/host-idp-username.spec.ts` | IdP username › an admin adds an IdP username on the User card, then removes it | UI+API | ☐ |
@@ -30,6 +30,9 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
 | HOSTP-16 | `premium/hosts/recovery-lock.spec.ts` | Recovery Lock password › enforce on the VMs fleet, verify, view, rotate and clear on the Mac **(real macOS VM)** | UI+API | ☐ |
 | HOSTP-17 | `premium/hosts/bulk-transfer.spec.ts` | bulk transfer › a filter the server cannot transfer by withholds "Select all matching hosts" | UI | ☐ |
 | HOSTP-18 | `premium/hosts/bulk-transfer.spec.ts` | transfer every matching host › "Select all matching hosts" transfers every host the filter matches, not just the page | UI+API | ☐ |
+| HOSTP-19 | `premium/hosts/cta-visibility.spec.ts` | CTA visibility › technician and fleet roles (4 roles) | UI | ☐ |
+| HOSTP-20 | `premium/hosts/host-actions-role-access.spec.ts` | Actions by role › <role> is offered the host actions its role grants (5 roles) | UI | ☐ |
+| HOSTP-21 | `premium/hosts/host-actions-role-access.spec.ts` | Actions by role › global-technician is not offered "create a report" from a host *(skipped, #54622)* | UI | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions via API), **API**, **PERF**.
 
@@ -432,25 +435,24 @@ other:
 ### HOSTP-10 · Premium • Hosts • CTA visibility by role › global-admin / global-maintainer sees Add hosts, Enroll secrets, and Export hosts
 
 - **File:** [`playwright/tests/e2e/premium/hosts/cta-visibility.spec.ts`](../../tests/e2e/premium/hosts/cta-visibility.spec.ts)
-- **Grep:** `npx playwright test -g "sees Add hosts, Enroll secrets, and Export hosts"` (two runtime tests: `global-admin sees …`, `global-maintainer sees …`)
-- **Project:** premium · **Roles:** `global-admin`, `global-maintainer` · **Scope:** whatever the fresh context defaults to (no fleet dropdown selection — role gating isn't scope-dependent)
-- **Mode:** UI · **Isolation:** parallel; read-only
-- **Preconditions:** the two static users provisioned; at least one host visible to them
+- **Grep:** `npx playwright test --project=premium -g "sees Add hosts, Enroll secrets, and Export hosts"` (two runtime tests)
+- **Project:** premium · **Roles:** `global-admin`, `global-maintainer` · **Scope:** All fleets
+- **Mode:** UI · **Isolation:** one test per role through `withStaticUser`; read-only (Enroll secrets is opened and closed, never saved)
+- **Preconditions:** the two static users; at least one host visible to them
 - **Data created:** none
 
 **Flow**
 
-1. ☐ Log in as the role in a fresh context (cached session).
-2. ☐ Open `/hosts/manage` **via URL** → ✅ *(UI)* first row with a link visible (goto anchor — so the role must be able to see ≥1 host).
-3. ☐ ✅ *(UI)* **Add hosts** button visible.
-4. ☐ ✅ *(UI)* **Enroll secrets** button visible (matched exactly, so the empty-state "Manage enroll secrets" banner link can't satisfy it).
-5. ☐ ✅ *(UI)* **Export hosts** button visible.
+1. ☐ Log in as the role (cached session) → `/hosts/manage` via URL → ✅ *(UI)* a host row with a link.
+2. ☐ ✅ *(UI)* **Export hosts** and **Add hosts** visible.
+3. ☐ Open the **Hosts page settings** gear → ✅ *(UI)* **Enroll secrets**; **Activity automations** for the admin only. Click **Enroll secrets** → ✅ *(UI)* the modal opens; **Done** closes it.
+4. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* its "Filter labels by name..." box, and the **Add label** "+" beside it (round 1 C1 #21).
 
 **Assessment**
-- *Value:* smoke-level RBAC on the hosts-list header for the two write roles.
-- *Coverage gaps:* no fleet-scoped roles (`team-admin`, `ws-maintainer`, `ws-observer`) — the premium-specific dimension is entirely missing, which is odd for a premium-only spec; no `global-observer-plus` / `global-technician`; the CTAs are never clicked, so an enabled-but-broken modal passes.
-- *Redundancy:* near-duplicate of [`free/hosts/cta-visibility.spec.ts`](../../tests/e2e/free/hosts/cta-visibility.spec.ts) — the premium file's only delta is the extra `global-maintainer` case; HOSTP-11 is the same body with inverted expectations. Add-hosts modal behaviour is covered by [`shared/hosts/add-hosts-download.spec.ts`](../../tests/e2e/shared/hosts/add-hosts-download.spec.ts) and export by [`shared/hosts/export-csv.spec.ts`](../../tests/e2e/shared/hosts/export-csv.spec.ts).
-- *Efficiency / smells:* deviates from the suite rule of calling `teamDropdown.select(scope)` after a scope-aware `goto` — benign here (role gating is global), but it means the test asserts against whichever fleet localStorage remembers. Second-context console errors unmonitored (see HOSTP-04).
+- *Value:* the write roles' Hosts-list controls, now with the gear's per-role items and Add label.
+- *Coverage gaps:* the CTAs' own flows are elsewhere (`add-hosts-download`, `enroll-secrets`, `export-csv`). The gear's Custom host vitals isn't read.
+- *Redundancy:* the admin case mirrors HOST-10 on free; the expectation doesn't differ by tier.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -465,25 +467,22 @@ other:
 ### HOSTP-11 · Premium • Hosts • CTA visibility by role › global observer sees only Export hosts
 
 - **File:** [`playwright/tests/e2e/premium/hosts/cta-visibility.spec.ts`](../../tests/e2e/premium/hosts/cta-visibility.spec.ts)
-- **Grep:** `npx playwright test -g "global observer sees only Export hosts"`
-- **Project:** premium · **Role:** `global-observer`
-- **Mode:** UI · **Isolation:** parallel; read-only
-- **Preconditions:** `global-observer@fleetdm.com` provisioned; at least one host visible
+- **Grep:** `npx playwright test --project=premium -g "global observer sees only Export hosts"`
+- **Project:** premium · **Role:** `global-observer` · **Scope:** All fleets
+- **Mode:** UI · **Isolation:** read-only
 - **Data created:** none
 
 **Flow**
 
-1. ☐ Log in as `global-observer` in a fresh context.
-2. ☐ Open `/hosts/manage` **via URL** → ✅ *(UI)* first row with a link visible.
-3. ☐ ✅ *(UI)* **Export hosts** visible (no role gate).
-4. ☐ ✅ *(UI)* **Add hosts** count 0.
-5. ☐ ✅ *(UI)* **Enroll secrets** count 0.
+1. ☐ Log in as `global-observer` → `/hosts/manage` → ✅ *(UI)* a host row.
+2. ☐ ✅ *(UI)* **Export hosts** visible; **Add hosts** and the gear absent (an observer gets none of the gear's items, so no gear).
+3. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* the search box; no **Add label**; the search box still showing (so the absence was read off an open menu).
 
 **Assessment**
-- *Value:* the negative half of the CTA gating — catches a write CTA leaking to a read-only role.
-- *Coverage gaps:* doesn't assert the observer is also denied the row-selection bulk actions (Transfer / Delete), which is the more consequential leak on this page.
-- *Redundancy:* identical to the free mirror's observer case (`free/hosts/cta-visibility.spec.ts`); shares its whole body with HOSTP-10.
-- *Efficiency / smells:* same missing-`teamDropdown.select` and unmonitored-second-context notes as HOSTP-10.
+- *Value:* the negative half of the gating, Add label included.
+- *Coverage gaps:* the observer's host Actions menu is HOSTP-20.
+- *Redundancy:* the same cell as HOST-11 on free.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -820,6 +819,95 @@ other:
 - *Coverage gaps:* Only the fleet filter; a search or status filter combined with it, and a named destination, aren't covered. The guard stops a wrong request rather than reporting what the server would have done with it.
 - *Redundancy:* HOSTP-01 covers the by-id transfer of a selected page.
 - *Efficiency / smells:* ~10 s. The route guard is the safety property: a regression that dropped the fleet from the filter would otherwise move every offline simulation on the instance (still harmless, but not this test's to move).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-19 · Premium • Hosts • CTA visibility by role › technician and fleet roles (4 variants)
+
+- **File:** [`playwright/tests/e2e/premium/hosts/cta-visibility.spec.ts`](../../tests/e2e/premium/hosts/cta-visibility.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "CTA visibility by role › (global technician|team admin|team maintainer|team observer)"`
+- **Project:** premium · **Variants:** `global-technician` (All fleets), `team-admin` (VMs), `ws-maintainer`, `ws-observer` (Workstations, which may hold no hosts)
+- **Mode:** UI · **Isolation:** one test per role; read-only
+- **Source:** round 1 C7 #21, #23, #24 (round 3, batch E). The flows also added and deleted fleet enroll secrets and moved hosts into fleets; neither is done here (the admin's secrets are `premium/settings/enroll-secrets.spec.ts`, and a second writer would race its snapshot restore).
+- **Data created:** none
+
+**Flow**
+
+1. ☐ Log in as the role → `/hosts/manage` on its scope (VMs picked in the team admin's dropdown; the `ws-*` roles have none). On Workstations the page is anchored on **Export hosts**, which shows on an empty fleet too.
+2. ☐ ✅ *(UI)* **Export hosts** visible. **Add hosts** (the header's; an empty fleet's card repeats it) for TA and TM; none for GT and TO.
+3. ☐ TA, TM: open the gear → ✅ *(UI)* **Enroll secrets**; **Activity automations** for TA only. Click **Enroll secrets** → the modal opens and closes. GT, TO: ✅ *(UI)* no gear.
+4. ☐ GT, TA: open the label menu once the table settles → ✅ *(UI)* the search box and **Add label**. Not read for the `ws-*` roles: Fleet disables the label filter on a fleet with no hosts (their Add label is MISC-12 / MISC-32 on the Labels page).
+
+**Assessment**
+- *Value:* the premium dimension HOSTP-10/11 lacked: a technician (Add label without Add hosts or a gear) and the fleet roles on their own fleet.
+- *Coverage gaps:* the team admin's Workstations view isn't read (VMs is where it has hosts).
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-20 · Premium • Hosts • Actions by role › <role> is offered the host actions its role grants
+
+- **File:** [`playwright/tests/e2e/premium/hosts/host-actions-role-access.spec.ts`](../../tests/e2e/premium/hosts/host-actions-role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "Premium • Hosts • Actions by role › .* is offered"`
+- **Project:** premium · **Variants (5):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on an online Linux simulation (Unassigned); `team-admin` on an online VMs-fleet host (a real VM when one is online — simulations other specs borrow onto that fleet can leave mid-test)
+- **Mode:** UI · **Isolation:** one test per role; nothing runs or moves
+- **Source:** round 1 C2 #13, C4 #P20, C7 #16 (round 3, batch E). C7 #16 checked Transfer and Delete with the menu closed; P20 signed in as the global admin.
+- **Preconditions (API):** two global reports under one `pw-role-hostrep-<role>-<nonce>` marker: `…-observers` (*Observers can run*) and `…-others`. Deleted in an `afterEach`.
+
+**Flow**
+
+1. ☐ Log in as the role → the host's details by id → **Actions**.
+   - ✅ *(UI)* **Live report** (the anchor). **Run script** for GM, GT, TA; **Transfer** for GM, GT; **Delete** for GM, TA. None of the three for GO, GO+.
+2. ☐ **Live report** → the "Select a report" modal → filter by the marker.
+   - ✅ *(UI)* `…-observers` listed for everyone; `…-others` for every role but GO. The **create a report** link for GM, GO+, TA, not GO (the technician's is HOSTP-21). **Close**.
+
+**Assessment**
+- *Value:* the host's actions by role, read off an open menu, and the observer's report list, the role-dependent part of C2 #13 / C7 #16.
+- *Coverage gaps:* Lock / Wipe / Turn off MDM need an MDM-enrolled host. The `ws-*` roles are left out: Workstations has no hosts.
+- *Redundancy:* the team admin's no-Transfer is also in `host-transfer-permissions.spec.ts`.
+- *Efficiency / smells:* seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### HOSTP-21 · Premium • Hosts • Actions by role › global-technician is not offered "create a report" from a host *(skipped)*
+
+- **File:** [`playwright/tests/e2e/premium/hosts/host-actions-role-access.spec.ts`](../../tests/e2e/premium/hosts/host-actions-role-access.spec.ts)
+- **Grep:** `npx playwright test --project=premium -g "global-technician is not offered"`
+- **Project:** premium · **Mode:** UI · **Isolation:** skipped behind [fleetdm/fleet#54622](https://github.com/fleetdm/fleet/issues/54622)
+- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 2)
+
+**Flow**
+
+1. ☐ Log in as `global-technician` → an online Linux simulation → **Actions** → **Live report**.
+   - ✅ *(UI)* the modal's **Close**; no **create a report** link.
+
+**Assessment**
+- *Value:* the link leads a technician to a 403 (`/reports/new`). Run un-skipped on 2026-10-05, the link was there.
+- *Efficiency / smells:* skipped.
 
 **Notes (Andrey)**
 ```

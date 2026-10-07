@@ -34,6 +34,7 @@
  * AutomationsCell (toast "Successfully updated policy automations." for both).
  */
 import { test, expect } from '@fixtures';
+import { withStaticUser } from '@helpers/auth';
 import { inertDeb } from '@helpers/deb';
 import { runNonce } from '@helpers/profiles';
 import {
@@ -53,6 +54,7 @@ import {
   uploadSoftwarePackageBuffer,
   type FailingPoliciesWebhook,
 } from '@helpers/api';
+import { PoliciesListPage } from '@pages';
 
 test.describe('Premium • Policies • automations', () => {
   // Both cases drive the same global config key, and each restores it in
@@ -175,6 +177,93 @@ test.describe('Premium • Policies • automations', () => {
     release();
     await expect(policiesList.automationsModal).toBeHidden();
     await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+  });
+
+  // TODO(fleetdm/fleet#54623): on a fleet's list, a fleet admin can tick Send
+  // webhook on an inherited (All fleets) policy. That membership lives in global
+  // config, so Save answers 403 and the modal stays open with no error. Fleet's
+  // role table reserves All fleets policy automations for global admins, so the
+  // checkbox should be disabled for them. It needs the global webhook on, which
+  // the tests above own, hence this describe. Un-skip once the fix ships.
+  test.skip("a fleet admin can't add an inherited policy to the global webhook", async ({
+    browser,
+    request,
+    workstationsFleetId,
+  }) => {
+    await patchAppConfig(request, {
+      webhook_settings: {
+        failing_policies_webhook: {
+          enable_failing_policies_webhook: true,
+          destination_url: 'https://example.com/pw-policy-webhook-fleet-admin',
+          policy_ids: original.policy_ids ?? [],
+        },
+      },
+    });
+
+    await withStaticUser(browser, 'team-admin', async (page) => {
+      const list = new PoliciesListPage(page);
+      await list.goto({ fleetId: workstationsFleetId });
+      await list.teamDropdown.select('Workstations');
+      await list.openPolicyAutomations(policyName);
+      await expect(list.policyAutomationsModal).toContainText(
+        `Manage automations for the ${policyName} policy on All fleets.`,
+      );
+      await expect(list.policyAutomations.checkbox('ticket_webhook')).toBeDisabled();
+    });
+  });
+});
+
+test.describe('Premium • Policies • the automation filter by scope', () => {
+  // Round 1 C3 #22. QA Wolf filed it under a global maintainer, but the options
+  // follow the scope, not the role (`getValidAutomationTypesForTeam` in
+  // ManagePoliciesPage), so the admin reads them: All fleets' policies take only
+  // webhooks or tickets, Unassigned's everything but calendar events (a
+  // fleet-only feature), a fleet's every type.
+  const TYPES = [
+    'Software',
+    'Patch',
+    'Scripts',
+    'Profiles',
+    'Calendar',
+    'Conditional access',
+    'Webhooks or tickets',
+  ] as const;
+  const OFFERED: { scope: 'All fleets' | 'Unassigned' | 'Workstations'; types: readonly string[] }[] = [
+    { scope: 'All fleets', types: ['Webhooks or tickets'] },
+    { scope: 'Unassigned', types: TYPES.filter((t) => t !== 'Calendar') },
+    { scope: 'Workstations', types: TYPES },
+  ];
+
+  let policyId: number | undefined;
+
+  test.afterEach(async ({ request }) => {
+    if (policyId !== undefined) await deletePolicies(request, [policyId]);
+    policyId = undefined;
+  });
+
+  test('offers only the automation types the scope supports', async ({
+    policiesList,
+    request,
+    workstationsFleetId,
+  }) => {
+    // The filter is disabled on a scope with no policies; a global one is
+    // listed on All fleets and inherited by every other scope.
+    ({ id: policyId } = await createPolicy(request, { name: `pw-policy-filter-${runNonce()}` }));
+
+    for (const { scope, types } of OFFERED) {
+      await test.step(scope, async () => {
+        const fleetId = scope === 'All fleets' ? undefined : scope === 'Unassigned' ? 0 : workstationsFleetId;
+        await policiesList.goto({ fleetId });
+        await policiesList.teamDropdown.select(scope);
+        await policiesList.automationFilter.click();
+        // "All automations" first, so the absences below are read off an open menu.
+        await expect(policiesList.automationFilterOption('All automations')).toBeVisible();
+        for (const type of TYPES) {
+          await expect(policiesList.automationFilterOption(type)).toHaveCount(types.includes(type) ? 1 : 0);
+        }
+        await policiesList.page.keyboard.press('Escape');
+      });
+    }
   });
 });
 

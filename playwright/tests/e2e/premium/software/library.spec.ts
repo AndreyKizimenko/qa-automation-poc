@@ -1,11 +1,23 @@
 /**
  * Software library lifecycle — premium-only (all four Add Software paths
- * are paywalled on free). Runs once per (scope, case) cell. Software has
- * no in-UI edit step; the lifecycle is add + delete only.
+ * are paywalled on free). Runs once per (scope, case) cell. The lifecycle is
+ * add + delete, plus one edit for the Play Store case: its managed
+ * configuration, saved and read back.
+ *
+ * A Play Store app's configuration (Actions → Edit configuration) is JSON whose
+ * top-level keys Fleet limits to `managedConfiguration` and
+ * `workProfileWidgets` (`ValidateAndroidAppConfiguration`); the browser checks
+ * only that it parses. Premium holds no Android host, so a saved configuration
+ * reaches no device: what's tested is what Fleet stores and what it refuses.
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { assertActivity } from '@helpers/api';
+import {
+  assertActivity,
+  assertActivityAfter,
+  getAppStoreAppConfiguration,
+  latestActivityId,
+} from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope, VppPlatformLabel } from '@pages';
@@ -189,6 +201,59 @@ for (const scope of SCOPES) {
           await softwareAppStoreVpp.expectNotListed(c.appName, c.platform);
         }
       });
+
+      if (c.kind === 'android') {
+        test('edit configuration', async ({ softwareTitleDetail, workstationsFleetId, request, page }) => {
+          const fleetId = fleetIdFor(scope, workstationsFleetId);
+          const modal = softwareTitleDetail.editConfigurationModal;
+          const stored = await getAppStoreAppConfiguration(request, fleetId, titleId);
+
+          await softwareTitleDetail.goto({ titleId, fleetId });
+          await softwareTitleDetail.openEditConfiguration();
+
+          // Well-formed JSON with a key Fleet doesn't support: refused, and nothing changes.
+          await modal.fill('{ "pwUnsupportedKey": true }');
+          await modal.saveButton.click();
+          await softwareTitleDetail.toast.expectError(
+            'Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.',
+          );
+          await expect(modal.modal).toBeVisible();
+          expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(stored);
+
+          const configuration = {
+            managedConfiguration: { pw_setting: 'pw-value' },
+            workProfileWidgets: 'WORK_PROFILE_WIDGETS_ALLOWED',
+          };
+          await modal.fill(JSON.stringify(configuration));
+          const beforeSave = await latestActivityId(request);
+          await modal.save();
+          expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(configuration);
+          // The other scope's run edits the same title in parallel, so the
+          // activity is matched by its fleet and the configuration it records.
+          await assertActivityAfter(
+            request,
+            'edited_app_store_app',
+            beforeSave,
+            (d) => {
+              // Compared field by field: Fleet records the keys in its own order.
+              const recorded = d.configuration as Partial<typeof configuration> | undefined;
+              return (
+                d.software_title === titleName &&
+                d.fleet_id === fleetId &&
+                recorded?.workProfileWidgets === configuration.workProfileWidgets &&
+                recorded?.managedConfiguration?.pw_setting === configuration.managedConfiguration.pw_setting
+              );
+            },
+            { actor: process.env.FLEET_ADMIN_EMAIL },
+          );
+
+          // Fleet reopens it re-serialised (tab-indented), so it's compared parsed.
+          await page.reload();
+          await softwareTitleDetail.openEditConfiguration();
+          expect(JSON.parse(await modal.value())).toEqual(configuration);
+          await modal.close();
+        });
+      }
 
       test('delete', async ({
         softwareLibrary,

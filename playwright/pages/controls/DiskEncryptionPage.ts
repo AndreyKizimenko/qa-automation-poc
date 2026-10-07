@@ -79,9 +79,11 @@ export class DiskEncryptionPage {
 
   /**
    * Saves the current tab and waits for the success toast, so callers know the
-   * write landed before they reload.
+   * write landed before they reload. Older toasts are cleared first, so a second
+   * save in one test waits for its own.
    */
   async save(): Promise<void> {
+    await this.toast.dismissAll();
     await this.saveButton.click();
     await this.toast.expectSuccess('Successfully updated disk encryption settings.');
   }

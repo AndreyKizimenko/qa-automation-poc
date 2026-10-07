@@ -3,7 +3,8 @@
 **10 gaps → about 7 augments and 2 new specs.** `Setup experience` · `Disk encryption` · `OS updates` ·
 `MDM settings` · `Automatic enrollment` · `Android`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
+**Status: built** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings; reviewed and
+built 2026-10-05: 8 built or folded, 2 cut, see *Review decisions* and *What landed*; [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) with batch E).
 
 > ## ▶ Start here
 >
@@ -90,6 +91,24 @@ Read every flow body. Known so far:
   certificate" (§2.3).
 - **C9 #2 came from triage** ([TRIAGE.md](TRIAGE.md#moved-back-in-after-triage)): a bad setup-assistant profile
   is refused with Apple's error, which premium can produce today.
+
+### Review decisions (2026-10-05, Andrey's answers in *Decisions*)
+
+Every flow body read, against `main` 9d677f2 and Fleet c87f85c (the build both instances run).
+
+| Gap | Decision | Where | Why |
+|---|---|---|---|
+| C7 #17 | **fold** | `premium/exclusive/os-updates/macos-updates.spec.ts`, the save test | Snapshot Unassigned's and QA's macOS updates before the save, and compare them while Workstations still holds the setting (comparing after the clear would pass whatever Fleet did). The flow's disk-encryption and end-user-auth halves are C9 #6 and C8 #6. |
+| C7 #28 | **cut** | — | The flow's behaviour was saving the global IdP settings, which is cut (§2.4). What's left is four tooltip strings: copy that fails only when the copy changes. |
+| C8 #4 | **build** | `premium/controls/setup-experience/bootstrap-package.spec.ts`, its own describe, on a throwaway `pw-*` fleet | Cross-card gating (Install software's macOS rows and Save, Run script's uploader) and its 422s. On a `pw-*` fleet it stays in the main project. `resetSetupExperience` also turns it off, and the `pw-*` fleet sweep deletes a fleet's bootstrap package first. |
+| C8 #6 | **fold** | `premium/controls/setup-experience/users.spec.ts`, the round-trip test | Lock end user info joins the IdP save; the round trip reads back through the API and after a reload; the Preview link's `href` and `target`. The bootstrap-docs half was cut in round 1. |
+| C9 #8 | **fold** (with C8 #6) | same test | The flow is C8 #6's toggles again: IdP + Lock on, then IdP off. Its distinct behaviour is that turning IdP off saves Lock off too ("end users can edit"), read back through the API. |
+| C9 #6 | **build** | `premium/controls/os-settings/disk-encryption.spec.ts`, its own describe, on a throwaway `pw-*` fleet | Enforcement + PIN saved and read back, then unticking enforcement clears the PIN, saved and read back. A `pw-*` fleet needs no restore and holds no host. |
+| C9 #2 | **fold** | `premium/controls/setup-experience/setup-assistant.spec.ts`, the lifecycle | After the delete, a profile Apple refuses: the toast carries Apple's code and a Learn more link (now `fleetdm.com/learn-more-about/dep-profile`, not Apple's page), and the default card stays. |
+| C9 #9 | **build, narrowed** | `shared/settings/apple-mdm.spec.ts` (new, both tiers) + `premium/settings/integrations/mdm.spec.ts` | The Apple Push Certificate page, read-only, against `GET /mdm/apple`. Migration mode and webhook URL saved with `enable` false, read back, restored. **Cut:** the Example payload modal and the mode descriptions (static copy). |
+| C9 #3 | **cut** | — | Fleet can create an Android web app but never delete one, and the add/delete path is the Play-app path `library.spec.ts` already covers. |
+| C9 #4 | **fold** | `premium/software/library.spec.ts`, the Android lifecycle | An *edit configuration* step between add and delete: saved, read back, an unsupported key refused. No second Play app. |
+| free | **build** | the shared APNs spec above; a `PAYWALLED_PAGES` row for `/settings/integrations/sso/end-users` | Free has Apple MDM and the APNs page; the end-user SSO page shows the premium message on free but no row checks it. |
 
 ## 2. Facts for the build
 
@@ -215,19 +234,18 @@ storing. Generate the fixture in the test, or commit a `test-data/apple/macos/se
 (`fleets.ts`) `getFleetOsUpdates`, `clearFleetOsUpdates`, `setFleetMacosUpdates`; `getAppConfig` / `patchAppConfig`,
 `addAppStoreApp`, `deleteSoftwareTitle`, `listFleetHosts`.
 
-## Decisions to put to Andrey
+## Decisions (answered by Andrey, 2026-10-05)
 
-1. **C9 #3:** one permanent, pinned Android web app, or the banner only (§2.5).
-2. **C8 #4:** OK to add `macos_manual_agent_install: false` to the cleanup reset and run the spec in
-   `premium-exclusive` (§2.1)?
-3. **C7 #28:** confirm the cut of the IdP save (§2.4).
-4. **C8 #4 and C9 #6 on a throwaway `pw-*` fleet instead of Workstations?** *(new, from C)* Recommended: yes. C8 #4
-   could then stay in the main project (it would no longer disable Workstations' install-software and run-script
-   specs; the cleanup reset becomes a backstop), and C9 #6 would need no real-host guard or fleet-scoped restore.
-   Delete the bootstrap package before the fleet. C8 #6 / C9 #8 stay in `users.spec`, C7 #17 in `exclusive/`.
-5. **Free coverage** *(new)*: a read-only check of the Apple MDM card and its Apple Push Certificate fields on both
-   tiers (`shared/`, never Renew or Turn off), and a free paywall row for `/settings/integrations/sso/end-users`?
-   Recommended: yes.
+1. **C9 #3: cut entirely**, not even the Chrome banner. Fleet can create a web app but never delete one (§2.5).
+2. **C8 #4:** runs on a throwaway `pw-*` fleet in the main project (decision 4), so `macos_manual_agent_install:
+   false` in the cleanup reset is a backstop for Workstations and Unassigned, not a precondition.
+3. **C7 #28: cut**, tooltips included: the IdP save is unsafe (§2.4), and the tooltips alone are copy.
+4. **C8 #4 and C9 #6 on a throwaway `pw-*` fleet: yes.** Delete the bootstrap package before the fleet. C8 #6 /
+   C9 #8 stay in `users.spec`, C7 #17 in `exclusive/`.
+5. **Free coverage: yes.** A read-only Apple Push Certificate check on both tiers (`shared/`, never Renew or Turn
+   off), and a free paywall row for `/settings/integrations/sso/end-users`.
+6. **C9 #9 narrowed:** the APNs page plus a migration save with `enable` false; the Example payload modal and the
+   mode descriptions are cut.
 
 ## Free coverage
 
@@ -268,4 +286,35 @@ Most rows are premium-only, but not all, and the paywall list misses one page:
 
 ## What landed
 
-*Nothing yet.*
+Built 2026-10-05 on `playwright/qawolf-round3-batch-f`, shipped with batch E in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89).
+
+| Gap | Landed in | What it asserts |
+|---|---|---|
+| C7 #17 | `premium/exclusive/os-updates/macos-updates.spec.ts`, the save test | While Workstations holds a minimum version and deadline, Unassigned's (`GET /config`) and the QA fleet's macOS updates read back exactly as before the save; neither held the saved version, so a save that reached one would show. |
+| C8 #4 | `premium/controls/setup-experience/bootstrap-package.spec.ts`, new describe on a throwaway `pw-manual-agent-*` fleet | Without a package, "Install Fleet's agent (fleetd) manually" is disabled and the API refuses it (422). With one, it saves and reads back. While on, Install software's macOS row, "Cancel setup if software fails" and Save are disabled and the API refuses the selection (422); Run script's Upload is disabled. Off again, it reads back off and the row can be selected. |
+| C8 #6 + C9 #8 | `premium/controls/setup-experience/users.spec.ts`, the round trip (Unassigned, Workstations) | Require IdP on ticks Lock end user info with it; both saved, read back through the API and after a reload. IdP off hides Lock and saves it off (end users can edit their Account Name and Full Name), read back the same way. The Preview end user experience link's address and new tab. An `afterEach` keyed to the test resets the toggles. |
+| C9 #6 | `premium/controls/os-settings/disk-encryption.spec.ts`, new describe on a throwaway `pw-bitlocker-*` fleet | Windows enforcement + Require BitLocker PIN saved, read back through the API and after a reload; unticking enforcement unticks and locks the PIN, and both save off. |
+| C9 #2 | `premium/controls/setup-experience/setup-assistant.spec.ts`, the lifecycle | After the delete, the fixture with an empty `profile_name` is refused by Apple: "Couldn't add. CONFIG_NAME_REQUIRED." with a Learn more link to `fleetdm.com/learn-more-about/dep-profile` (new tab); the default card stays. |
+| C9 #9 | new `shared/settings/apple-mdm.spec.ts` (both tiers); `premium/settings/integrations/mdm.spec.ts` | The Apple MDM card's Edit → the push certificate's common name, organization, MDM server URL and renew date, each against the API; Turn off MDM and Renew certificate present, never clicked. A migration mode and webhook URL saved with the workflow disabled, read back through the API and after a reload, then restored; the radios and URL are locked while it's off. |
+| C9 #4 | `premium/software/library.spec.ts`, the Android lifecycle's *edit configuration* (Unassigned, Workstations) | A key Fleet doesn't support is refused ("Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.") and nothing changes; `managedConfiguration` + `workProfileWidgets` saved, read back through the API, logged as `edited_app_store_app`, and reopened as saved. |
+| free | `free/paywalls.spec.ts`; the shared Apple MDM spec above | Authentication (SSO) › End users shows the premium message. |
+| C7 #28, C9 #3 | — | Cut at review. |
+
+**Fleet bug filed:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845). Fleet doesn't serve Ace's
+`worker-json.js` (nor `worker-xml.js`), so the app Edit configuration modal throws an uncaught `importScripts` error.
+The editor still saves. `DEFAULT_IGNORED_PAGE_ERRORS` in `helpers/console.ts` ignores that one error, with a row in
+`docs/blocked-by-product-bugs.md`.
+
+**Also:** `deleteFleet` deletes the fleet's bootstrap package first, because a fleet delete leaves it behind.
+`resetSetupExperience` turns manual agent install off. Free's `server_url` ends in `/`, so its Apple MDM page shows
+`…//mdm/apple/mdm`: the page concatenates, Fleet accepts the slash, and the spec allows it. This is cosmetic, comes
+from our config, and isn't filed.
+
+**Verified** against `rc-minor-fleet-v4.93.0` (c87f85c). Every changed spec was run with dependencies: premium
+(users, setup-assistant, bootstrap-package, disk-encryption, mdm, apple-mdm, library's Android cases; 39/39 with
+setup and teardown), `premium-exclusive` macos-updates (11/11), and free apple-mdm + paywalls (29 passed, 8
+premium-only cleanup steps skipped). The premium specs also ran once headed. `--repeat-each=3` passed on the two
+throwaway-fleet tests (3 workers) and on users / mdm / setup-assistant (1 worker, since they write shared config).
+The combined E + F branch run, [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242),
+was green: premium 651 passed, 0 failed, 4 flaky (none an E or F test: an FMA download 504 and a slow Users list),
+free 334 passed, 0 flaky.

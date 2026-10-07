@@ -30,6 +30,8 @@ export class InstallSoftwarePage {
   readonly heading: Locator;
   readonly tabList: Locator;
   readonly saveButton: Locator;
+  /** macOS only: "Cancel setup if software fails" (`require_all_software_macos`). */
+  readonly cancelSetupIfSoftwareFailsCheckbox: Locator;
   readonly nextButton: Locator;
   readonly previousButton: Locator;
 
@@ -42,6 +44,9 @@ export class InstallSoftwarePage {
     this.heading = page.getByRole('heading', { name: 'Install software' });
     this.tabList = page.getByRole('tablist');
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
+    this.cancelSetupIfSoftwareFailsCheckbox = page.getByRole('checkbox', {
+      name: 'Cancel setup if software fails',
+    });
     this.nextButton = page.getByRole('button', { name: 'Next', exact: true });
     this.previousButton = page.getByRole('button', { name: 'Previous', exact: true });
   }
@@ -95,6 +100,11 @@ export class InstallSoftwarePage {
     const row = this.rowByName(name);
     await expect(row).toBeVisible();
     await row.getByRole('checkbox').first().click();
+  }
+
+  /** A row's selection checkbox: the first cell of the row. */
+  rowCheckbox(name: string): Locator {
+    return this.rowByName(name).getByRole('checkbox').first();
   }
 
   async expectSelected(name: string): Promise<void> {

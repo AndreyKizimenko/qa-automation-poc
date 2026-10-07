@@ -67,23 +67,46 @@ files · ~350 test declarations · 4 projects**.
 > the API and their CISA icon; SWV-23 (premium) and SWV-24 (free) a CVE's count and hosts by fleet. Area **06**: SWL-37
 > (a title's View all hosts, both tiers) and SWL-38 (a package on Unassigned in an Unassigned host's Library).
 
+> **Round 3 batch E added 2026-10-05** (`playwright/qawolf-round3-batch-e`): what each role is *shown*, one test per
+> role. Area **04**: POL-36…41 (the policies matrix on both tiers, a team role's fleet-policy create, #54623 and
+> #54624 skipped, the automation filter by scope). Area **05**: RPT-29…35 (the reports matrix, a global observer's
+> picker per report scope, a single-fleet maintainer's Save as new, one-host live runs by an observer and an
+> observer+). Area **03**: HOSTP-10/11 rewritten as a role table with HOSTP-19 (technician and fleet roles), HOSTP-20/21
+> (a host's Actions and Live report modal by role; #54622 skipped). Area **02**: HOST-10/11 gain Add label, HOST-26
+> (free host actions). Area **13**: MISC-32…36 (a fleet observer and a technician on Labels, a team maintainer's own
+> label, the observer's label pill, free's twin). Area **11**: CTL-42/43 (the script library or the Controls 403, by
+> role).
+
+> **Round 3 batch F added 2026-10-05** (`playwright/qawolf-round3-batch-f`): MDM and setup-experience settings saved and
+> read back, nothing delivered to a device. Area **12**: SETUP-07 rewritten — Require IdP and Lock end user info saved on
+> and off, each save read back through the API and the IdP ones after a reload, plus the hidden admin and the Preview
+> link; SETUP-06 ends on a profile Apple refuses (`CONFIG_NAME_REQUIRED`); SETUP-09 adds *Install Fleet's agent (fleetd)
+> manually* on a throwaway fleet (needs a package; while on, macOS setup software and the setup script are disabled and
+> refused). Area **11**: CTL-41 saves a required BitLocker PIN with enforcement on a throwaway fleet and clears it with
+> enforcement; CTL-28 checks Unassigned's and the QA fleet's macOS updates stay put while Workstations holds a target;
+> CTL-06 brought current (it described a test the spec no longer has). Area **10**: SET-16 saves the end-user migration
+> mode and webhook URL with the workflow off; SET-17 reads the Apple push certificate details on both tiers; SET-09 moves
+> onto `IntegrationsPage`. Area **06**: SWL-39 edits a Play Store app's managed configuration inside the Android
+> lifecycle (an unsupported key refused, a valid one stored and reopened; fleetdm/fleet#54845 ignored narrowly). Area
+> **13**: MISC-20 gains the Authentication (SSO) › End users row (19 cases).
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 25 | premium, free |
-| 03 | [Hosts — premium](03-hosts-premium.md) | 18 | premium |
-| 04 | [Policies](04-policies.md) | 35 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 28 | premium, free |
-| 06 | [Software library & packages](06-software-library.md) | 38 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 26 | premium, free |
+| 03 | [Hosts — premium](03-hosts-premium.md) | 21 | premium |
+| 04 | [Policies](04-policies.md) | 41 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 35 | premium, free |
+| 06 | [Software library & packages](06-software-library.md) | 39 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 24 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
 | 09 | [Settings › Users — free + shared](09-users-free-and-shared.md) | 28 | free, both |
-| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 15 | premium, free |
-| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 40 | premium, free |
-| 12 | [Controls — setup experience](12-controls-setup-experience.md) | 8 | premium |
-| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 31 | premium, free |
+| 10 | [Settings — org, integrations, webhooks, secrets](10-settings-org-and-integrations.md) | 17 | premium, free |
+| 11 | [Controls — profiles, disk encryption, scripts, variables](11-controls-profiles-scripts-variables.md) | 43 | premium, free |
+| 12 | [Controls — setup experience](12-controls-setup-experience.md) | 9 | premium |
+| 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 36 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
 | 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
@@ -94,10 +117,10 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**508 entries** covering every test in the suite. An entry can expand into several
+**537 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 06 (38 entries → 90 executions), area 11 (40 → 99), area
-17 (11 → 73), area 08 (34 → 43), area 13 (29 → 48). Specs under
+the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
+17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 
 Plus **[FINDINGS.md](FINDINGS.md)** — the cross-cutting analysis: quick wins,
