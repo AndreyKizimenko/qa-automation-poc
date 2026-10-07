@@ -3,7 +3,7 @@
 **10 gaps → 1 new spec and about 5 augments, after folds.** `Live policies` · `Live reports and CSV` ·
 `Install side effects` · `MDM command feed` · `Script-only packages` · `A host's Library`
 
-**Status: reviewed and being built** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings,
+**Status: built, in [PR #92](https://github.com/AndreyKizimenko/qa-automation-poc/pull/92) with batch H** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings,
 and 2026-10-07 against E and F's; reviewed 2026-10-07, Andrey's answers in *Decisions*). Built on
 `playwright/qawolf-round3-batch-g` beside batch H.
 
@@ -343,7 +343,7 @@ Library tab and the refetch row are premium specs today.
 
 ## What landed
 
-Built on `playwright/qawolf-round3-batch-g` from 2026-10-07.
+Built 2026-10-07 on `playwright/qawolf-round3-batch-g`; batch H merged in (`5f7ec7e`), and the two ship in [PR #92](https://github.com/AndreyKizimenko/qa-automation-poc/pull/92).
 
 | Gap | Landed in | What it asserts |
 |---|---|---|
