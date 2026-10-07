@@ -76,6 +76,26 @@ export async function countFleetMaintainedApps(
 }
 
 /**
+ * A Fleet-maintained app the fleet hasn't added yet: the first entry the
+ * catalog lists with `available=true`. Its details form offers *Add software*
+ * without the "already added" lock, so anything else that disables the button
+ * comes from elsewhere (gitops mode, say).
+ */
+export async function findAvailableFleetMaintainedApp(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<{ id: number; name: string; platform: string }> {
+  const res = await request.get(apiUrl('software/fleet_maintained_apps'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId), available: 'true', per_page: '1' },
+  });
+  await expect(res, 'Failed to list available Fleet-maintained apps').toBeOK();
+  const app = (((await res.json()).fleet_maintained_apps ?? []) as FmaListEntry[])[0];
+  if (!app) throw new Error(`Fleet ${fleetId} has already added every Fleet-maintained app`);
+  return { id: app.id, name: app.name, platform: app.platform };
+}
+
+/**
  * Adds a Fleet-Maintained App (by slug) to a fleet. Resolves the slug to
  * the FMA id, then POSTs to `software/fleet_maintained_apps`. Returns the
  * resulting `software_title_id`. The actual CDN fetch happens

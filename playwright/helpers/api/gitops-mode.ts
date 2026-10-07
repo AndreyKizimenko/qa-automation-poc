@@ -165,6 +165,8 @@ export async function setGitOpsException(
 /**
  * Snapshot the whole subtree, apply `next`, and hand back a restorer — the
  * shape `helpers/api/config.ts` already uses for org info and webhooks.
+ * Whatever `next` leaves out stays as found, each exception included, so a
+ * spec writes only the exceptions it needs.
  *
  * Call the restorer from a teardown hook so a failing assertion still puts the
  * instance back, exceptions and repository URL included.
@@ -176,7 +178,7 @@ export async function setGitOpsException(
  */
 export async function withGitOpsMode(
   request: APIRequestContext,
-  next: Partial<GitOpsModeConfig>,
+  next: Partial<Omit<GitOpsModeConfig, 'exceptions'>> & { exceptions?: Partial<GitOpsExceptions> },
 ): Promise<() => Promise<void>> {
   const before = await getGitOpsMode(request);
   await setGitOpsMode(request, {
