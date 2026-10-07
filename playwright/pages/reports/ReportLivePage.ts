@@ -97,6 +97,9 @@ export class ReportLivePage {
     this.noResultsState = page.getByText('No results returned');
     this.runSummary = page.locator('.live-results-heading__information');
     this.exportResultsButton = page.getByRole('button', { name: 'Export results' });
+    // The results screen's root (`QueryResults` / `PolicyResults`, both
+    // "query-results") is a role-less div; scoping to it keeps the count from
+    // matching the picker's or the heading's host counts.
     this.resultsCount = page.locator('.query-results').getByText(/^[\d,]+ results?$/);
   }
 
@@ -162,9 +165,10 @@ export class ReportLivePage {
    * stopped re-rendering.
    */
   async resultsColumnValues(column: string): Promise<string[]> {
+    await expect(this.resultsHeader).toBeVisible();
     const headers = (await this.resultsHeader.locator('th').allInnerTexts()).map((h) => h.trim());
     const index = headers.indexOf(column);
-    expect(index, `no "${column}" column among ${JSON.stringify(headers)}`).toBeGreaterThanOrEqual(0);
+    if (index < 0) throw new Error(`the results have no "${column}" column (got ${headers.join(', ')})`);
     const cells = await this.resultsRows.locator(`td:nth-child(${index + 1})`).allInnerTexts();
     return cells.map((c) => c.trim());
   }

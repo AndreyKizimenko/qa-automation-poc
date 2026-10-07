@@ -35,6 +35,7 @@ export class PolicyLivePage extends ReportLivePage {
 
   /** The tooltip a hovered share raises, matched by its exact text. */
   shareTooltip(text: string): Locator {
-    return this.page.getByRole('tooltip').filter({ hasText: new RegExp(`^${text}$`) });
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return this.page.getByRole('tooltip').filter({ hasText: new RegExp(`^${escaped}$`) });
   }
 }
