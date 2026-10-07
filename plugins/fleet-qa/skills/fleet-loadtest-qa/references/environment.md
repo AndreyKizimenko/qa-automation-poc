@@ -53,6 +53,8 @@ pool in every run's notes; switch to 10 only for a strict comparison with older 
   `cmd/osquery-perf/agent.go`); any other query re-rolls pass/fail with `policy_pass_prob` (0.5) on every report, so
   every run rewrites `policy_membership` for every host — far more churn than a real fleet. Use `SELECT 1`/`SELECT 0`
   when you need stable results (a known failing population for automations), random queries for worst-case churn.
+- New policies are due on every host's next check-in, so applying many at once makes a synchronized wave (500
+  random-flip policies: writer 334 AAS and healthz timeouts within 7–20 min at pool 20); the hourly repeat is milder.
 - Reports: a newly added report runs on **every host at the same moment** (no splay on first run), then on its interval.
   Real fleets spread out; treat the first-run burst as a worst case, not the steady state.
 - fleetd refreshes the osquery config every 60 s (`--config_refresh=60`), and osquery-perf does too: config generation

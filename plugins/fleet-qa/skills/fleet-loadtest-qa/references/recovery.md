@@ -23,8 +23,10 @@ Don't scale ECS services, restart osquery-perf, or redeploy as part of a recover
    - Reports: ≤ 10 IDs per `POST /api/latest/fleet/reports/delete`. Deleting a report deletes its per-host stats in a
      background, unbatched statement; under load it can fail with a lock timeout and leave the stats behind forever
      (#55016), and big batches 422 from deadlocks with stats ingestion. With traffic cut, deletes are clean.
-   - Policies: 1–5 per `POST /api/latest/fleet/fleets/<id>/policies/delete`. Deleting a policy cascades its
-     `policy_membership` rows (~100k each) in one statement (#54215).
+   - Policies: one per `POST /api/latest/fleet/fleets/<id>/policies/delete`, paced on healthz. Deleting a policy
+     cascades its `policy_membership` rows (~100k each) in one statement (#54215). While hosts are still writing
+     results for those policies, a 5-policy delete took ~4 min and deadlocked with hosts' `host_issues` recompute;
+     one at a time between waves took 3–5 s. If you can't cut traffic, wait out the wave, then delete.
    - Settings you changed (webhooks, automations): turn them off first — it's cheaper than deleting.
 4. **Ramp traffic back:** `LT=<lt> scripts/ramp-up.sh 10 25 50 100` (holds each level 8 min, steps back at 70 %
    memory or lost tasks, retries twice). ~35–45 min total. The reconnect wave (detail/software refresh, buffered-log
