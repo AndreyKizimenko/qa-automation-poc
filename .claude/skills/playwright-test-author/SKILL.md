@@ -202,6 +202,10 @@ A change isn't done until the docs describing it are current, in the same commit
   wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
   Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
   *role* write there needs a disposable `qa-test-*` user given that fleet.
+- **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
+  premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
+  enroll secret. Only the `gitops-mode` project writes them, it restores them in an `afterEach`, and its
+  teardown and every premium apply put back `GITOPS_EXCEPTIONS_BASELINE`. Never tick Enroll secrets in a UI test.
 - A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
   user-requested activity, so beside the install specs they starve.

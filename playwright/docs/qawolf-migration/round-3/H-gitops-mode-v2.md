@@ -3,8 +3,9 @@
 **5 gaps → about 10 tests in the `gitops-mode` project, in new files.** `Controls gated surfaces` · `The
 software exception` · `Variables` · `Change management` · `Policies, Reports, Software, OS settings`
 
-**Status: reviewed 2026-10-07, building** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's
-learnings, and 2026-10-07 against E and F's; every recommendation accepted, see *Review decisions* and *Decisions*).
+**Status: built 2026-10-07, ships with batch G** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's
+learnings, and 2026-10-07 against E and F's; reviewed and built 2026-10-07: 7 tests, every recommendation accepted,
+see *Review decisions*, *Decisions* and *What landed*).
 
 > ## ▶ Start here
 >
@@ -280,4 +281,39 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 
 ## What landed
 
-*Nothing yet.*
+Built 2026-10-07 on `playwright/qawolf-round3-batch-h` (from `main` 8b3a437), beside batch G; the two ship in
+one PR. Seven tests in the `gitops-mode` project (the project goes from 19 to 26), one CI step, and the teardown.
+
+| Gap | Test | Where |
+|---|---|---|
+| round 2 #57 | Disk encryption — enforcement is locked and Save is gated | `04-controls-and-reports.spec.ts` (GITOPS-23) |
+| round 2 #57 | Configuration profiles — Add and Delete are gated, View, Edit and Download stay open (and Edit's *Update profile* gated; an inert `pw-gitops-*` profile on Workstations, deleted in an `afterEach`) | `04-controls-and-reports.spec.ts` (GITOPS-24) |
+| Variables | Variables — Add variable is gated, Delete stays open (a `PW_VAR_GITOPS_*` variable, deleted in an `afterEach`) | `04-controls-and-reports.spec.ts` (GITOPS-25) |
+| breadth row | Reports — Save and Save as new are gated, Live report stays open (on "Collect default browser on macOS") | `04-controls-and-reports.spec.ts` (GITOPS-26) |
+| software exception | software — the exception unlocks the Fleet-maintained app form | `03-exceptions.spec.ts` (GITOPS-22) |
+| Change management | turning gitops mode off keeps the exceptions and the repository URL | `05-change-management.spec.ts` (GITOPS-27) |
+| Change management | ticking the labels exception saves only that exception and unlocks labels without a reload | `05-change-management.spec.ts` (GITOPS-28) |
+
+**The pinned exception baseline** (decision 1): `GITOPS_EXCEPTIONS_BASELINE` and `resetGitOpsMode` in
+`helpers/api/gitops-mode.ts`; the gitops-mode teardown restores and asserts it; and
+`.github/scripts/restore-gitops-exceptions.sh` runs first in `gitops-premium.yml` and `gitops-premium-min.yml`
+(writes only on drift, reads it back, warns when it restored anything). Run against premium at rest: it found the
+baseline and wrote nothing. Documented in `CLAUDE.md`, `docs/ci-pipeline.md`, `gitops/premium-fleetqa/README.md`.
+
+**Helpers and page objects:** `findAvailableFleetMaintainedApp`; `FleetMaintainedAppDetailPage.goto`,
+`ConfigurationProfilesPage.rowButton`, `VariablesPage.deleteButton`; `withGitOpsMode` takes a partial exception set.
+
+**Found on the way:** `02`'s enroll-secrets test failed once (run 1): its first hover can land on the empty state's
+*Add secret*, which the list replaces with another button elsewhere. `02` and `03` now wait for the first secret's
+row. Not a Fleet bug.
+
+**Verified:** `npm run check` clean (the 19 warnings are `main`'s). `test:gitops-mode` with dependencies (login, the
+project, the teardown) three times on premium, each announced to batch G's session and run on its "go": run 1, every
+new test green and `02`'s enroll-secrets test red as above; after the fix, green twice (27 passed, 1 skipped for
+#48218), the second one headed. After the runs, the instance read back at rest (mode off, the baseline exceptions)
+with no `pw-gitops-*` profile or `PW_VAR_GITOPS_*` variable left. `playwright-test-reviewer` on the branch: one
+finding (a comment that misstated the enroll-secret race), fixed.
+
+**Docs:** this file's review, a [DELIVERY-LOG](../DELIVERY-LOG.md) entry, test-audit area **20** (GITOPS-22…28, and
+its teardown, safety-note and observations brought current), [GITOPS-PLAN §12](../round-2/GITOPS-PLAN.md) (V2, the
+third state dropped, V3 candidates), this round's README and INDEX.

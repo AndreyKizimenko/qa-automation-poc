@@ -291,7 +291,8 @@ area) and the two areas whose representative control can't live on the list page
   require `gitops_mode_enabled && repository_url` `[src]`, so an empty URL produces a *different*
   gating set from a populated one. That's a real third state — but the Change-management form
   validates the URL as required, so reaching it needs an API write. One assertion, listed as a
-  stretch in §6.
+  stretch in §6. **Dropped in V2 (§12): unreachable.** The server refuses to turn gitops mode on with
+  an empty URL (`server/service/appconfig.go:1265-1266`), so the API write fails too.
 
 ---
 
@@ -783,3 +784,44 @@ verifier, not a beneficiary.
 8. **Stale numbers in DECISIONS §5.** 93 files → **88**; 23 `entityType` call sites → **21** props
    plus **15** direct hook calls with an entity argument (36 total). The per-area table in DECISIONS is
    otherwise accurate. Worth a one-line correction there when this ships.
+
+---
+
+## 12. V2 — round 3 batch H (2026-10-07)
+
+V1's *Parked for V2* list ([G-out-of-band.md](G-out-of-band.md)), built in round 3's batch H
+([round-3/H-gitops-mode-v2.md](../round-3/H-gitops-mode-v2.md), which holds the review and Andrey's
+decisions). Checked against Fleet `4.93.0-rc` 8d05209.
+
+**Built.** `03` gains the `software` exception on the Fleet-maintained app form (an app the fleet hasn't
+added, from `available=true`, since the form also locks *Add software* for an added one). `04` asserts
+Controls and Reports, each gated control beside one that must stay open: disk encryption's checkbox and
+Save; a profile row's Delete against View / Edit / Download, and Edit's *Update profile*; *Add variable*
+against *Delete <name>*; a report's Save and Save as new against Live report. `05` drives the
+Change-management form: the mode turned off (the URL and exceptions survive, the navbar catches up
+without a reload) and the Labels exception ticked (only that key changes, labels unlock after a
+client-side route change). The empty-URL third state (§5.3) is dropped as unreachable.
+
+**Corrected.** §8.1's software-exception bug was withdrawn (#54169, not reproducible); the second
+blocker was a seeding need. The BitLocker PIN shares `isPlatformFormDisabled` with the enforcement
+checkbox, so it isn't asserted separately. An app store app's Edit configuration is gated in the
+Actions menu (`SoftwareDetailsSummary.tsx`), not a bypass.
+
+**Learned: the exceptions outlive the mode.** `fleetctl gitops` reads `config.gitops.exceptions` on every
+apply, gitops mode on or off (`server/service/client.go`): an entity not excepted whose key the YAML
+omits is deleted, and an excepted entity whose key the YAML carries is refused. Premium's YAML declares
+no `secrets:`, so a stuck `secrets: false` (which `02` and `03` run with) would make the next apply
+delete every enroll secret. The instance is pinned at `labels: false, software: false, secrets: true`
+(`GITOPS_EXCEPTIONS_BASELINE`), restored by the gitops-mode teardown and, before every premium apply,
+by `.github/scripts/restore-gitops-exceptions.sh` — `cleanup-setup` runs after the nightly's gitops
+chain, too late to guard it. §9.2's "neither touches the exceptions" no longer holds for the teardown.
+
+**V3 candidates** (none is a QA Wolf gap; round 3 added no scope):
+- Script rows' Edit / Delete (the same wrapper as Add script), and a batch's Cancel, which isn't gated
+  (an operation, like Add hosts) and needs a scheduled batch to assert.
+- The Hosts list's label pill (*Edit label* / *Delete label*, `entityType="labels"`), for custom labels.
+- The forms round 3's batch F saves: setup experience (bootstrap package's manual agent install, Install
+  software's rows and *Cancel setup if software fails*) and the MDM migration settings.
+- The rest of the `software` exception's surfaces: the Library accordion's *Delete this version*, the
+  title's Actions menu, the VPP and Play forms.
+- Turning gitops mode *on* through the UI (it needs the URL typed, which no spec does).

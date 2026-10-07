@@ -265,7 +265,8 @@ the over-gating half and the Change-management escape hatch), `03-exceptions` (t
 axes), and `zz-everything-is-back`. Plus a free-tier premium-gate spec, which the plan had ruled out — the
 paywall on Change management is assertable as *replacing* the form, not merely sitting above it.
 
-**Parked for V2, deliberately:**
+**Parked for V2, deliberately** (built in round 3's batch H, 2026-10-07, except the breadth row, cut to one
+Reports pair: [GITOPS-PLAN §12](GITOPS-PLAN.md#12-v2--round-3-batch-h-2026-10-07)):
 
 - **The `software` exception.** Both surfaces the plan probed are blocked by product bugs (setup-experience
   Install-software is unsavable while excepted; the Software-title Library accordion needs a seeded installer),
