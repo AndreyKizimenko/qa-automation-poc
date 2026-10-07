@@ -3,8 +3,9 @@
 **5 gaps → about 10 tests in the `gitops-mode` project, in new files.** `Controls gated surfaces` · `The
 software exception` · `Variables` · `Change management` · `Policies, Reports, Software, OS settings`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings, and
-2026-10-07 against E and F's).
+**Status: built 2026-10-07, ships with batch G** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's
+learnings, and 2026-10-07 against E and F's; reviewed and built 2026-10-07: 7 tests, every recommendation accepted,
+see *Review decisions*, *Decisions* and *What landed*).
 
 > ## ▶ Start here
 >
@@ -100,16 +101,44 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 - **The Policies / Reports / Software / OS-settings row is breadth, not signal** (round 2 G said so,
   `G-out-of-band.md:279-280`), and its software-title and OS-settings parts overlap the rows above. Build the
   wrapped controls that differ from what's asserted; don't walk every page.
-- **An app store app's Edit configuration may be a gitops-mode bypass** *(found 2026-10-07, unverified live)*.
-  `EditConfigurationModal.tsx` has no gitops reference, and neither has the title's Actions menu
-  (`SoftwareSummaryCard`), while its siblings Edit software, Edit appearance and Schedule auto updates each check
-  the flag; and gitops YAML declares `app_store_apps[].configuration` (`docs/Configuration/yaml-files.md:702`). Probe
-  it at review: a Play app on Workstations (`addAppStoreApp`, not one another spec uses), gitops mode on, Actions →
-  Edit configuration, is Save enabled? If it is, it's the #54168 pattern: put it to Andrey as a finding before
-  anything is filed, and assert the intended state behind a skip if he files it. Never click Save.
-- **The BitLocker PIN proves nothing about gating** (§2.1): it's disabled whenever Windows encryption is off —
-  on Workstations. On a throwaway fleet with Windows encryption on, it's enabled until gitops mode disables it, so
-  there it proves gating (§2.1, decision 4).
+- **An app store app's Edit configuration is not a gitops-mode bypass** *(checked at review, 2026-10-07)*. The
+  Actions menu is built in `SoftwareDetailsSummary.tsx`, not `SoftwareSummaryCard` (which only passes the handler
+  down), and `buildActionOptions` disables "Edit configuration" in gitops mode with the gitops tip, through
+  `useGitOpsMode("software")` (`:108-114`, `:222`). `EditConfigurationModal` needs no check of its own: nothing else
+  opens it. Nothing to probe or file.
+- **The BitLocker PIN adds nothing to the enforcement checkbox** *(checked at review)*. Its disabled state is
+  `isPlatformFormDisabled("windows") || !windowsEnabled` (`DiskEncryption.tsx:423-426`), the same
+  `isPlatformFormDisabled` (`:150-151`) that disables "Enable disk encryption" one line above. Asserting the
+  checkbox proves the gitops branch; a throwaway fleet with Windows encryption on would prove it again. Cut
+  (decision 4).
+- **A stuck exception changes what `fleetctl gitops` does, with the mode on or off** *(found at review; read from
+  Fleet's source at 8d05209, not reproduced)*. `client.go:2258-2300` and `:2593-2610` read
+  `config.gitops.exceptions` whatever `gitops_mode_enabled` says: an entity that is **not** excepted and whose key
+  the YAML omits is deleted, and an excepted entity whose key the YAML carries is refused. Premium's YAML has no
+  `secrets:` key (`gitops/premium-fleetqa-min/default.yml:35`, enroll secrets are the UI's), declares `labels:` in
+  `default.yml`, and `software:` in `qa.yml` and `vms.yml`. So a stuck `labels` or `software: true` turns the gitops
+  chain red, and a stuck **`secrets: false` deletes every global and fleet enroll secret**, which the simulations
+  re-enroll with. `02` and `03` already run with `secrets: false`; the teardown and `cleanup-setup` only turn the
+  flag off, and `cleanup-setup` runs after the next nightly's gitops chain anyway. Decision 1 pins a baseline and
+  restores it in the teardown and at the head of every premium gitops apply.
+
+### Review decisions (2026-10-07, Andrey's answers in *Decisions*)
+
+Every cited Fleet line re-read at 8d05209 (the build both instances run); the QA Wolf flow body
+(`gitops-mode-gated-areas-of-the-ui-controls.spec.ts`) read; the surfaces probed live with the mode off. Live
+exceptions on premium: `labels: false, software: false, secrets: true`.
+
+| Gap | Decision | Where | Why |
+|---|---|---|---|
+| round 2 #57 | **build, trimmed** | `premium/gitops-mode/04-controls-and-reports.spec.ts` | Disk encryption's checkbox reads the flag directly and its Save goes through the wrapper, a pattern V1 doesn't cover. Configuration profiles: Add profile, and on one inert `pw-` profile seeded on Workstations, its Delete gated while View, Edit and Download stay open, and Edit's *Update profile* gated (the modal is the only place to read a profile's targets, so Fleet leaves Edit open). **BitLocker PIN cut** (§1). |
+| software exception | **build, one surface** | `03-exceptions.spec.ts` | The Fleet-maintained app form's *Add software* on Workstations, for an app the fleet hasn't added: gated, then unlocked by the exception. The Library accordion's *Delete this version* is dropped: the same wrapper and `entityType`, and with the exception on, a stray click on the VMs fleet's durable FMA deletes a fixture. |
+| Variables | **build** | `04-controls-and-reports.spec.ts` | *Add variable* gated, *Delete <name>* open, on a seeded `PW_VAR_*` variable: the over-gating detector round 2 parked. |
+| Change management | **build, reshaped** | `05-change-management.spec.ts` (new) | Two UI saves. **The way out:** turning the mode off in the UI keeps the exceptions and the URL, logs `disabled_gitops_mode`, and the navbar marker goes without a reload. **One exception:** ticking *Labels* saves only that exception, logs `enabled_gitops_exception` with `exception: labels`, and the new-label form opens unlocked after client-side navigation (the save updates `AppContext`). Labels, because a stuck labels exception fails loudly; secrets is never written from the UI. **Cut:** "Git repository URL is required": copy only, the server refuses an empty URL anyway (`appconfig.go:1265-1266`), and validation is moving to submit-only. |
+| breadth row | **cut, one pair kept** | `04-controls-and-reports.spec.ts` | A gitops report on Workstations ("Collect default browser on macOS", in the full and min configs): *Save* and *Save as new* gated, *Live report* open. No seed and no hosts, so it replaces the Run-script-on-a-selection idea. The rest repeats V1's patterns. |
+| decision 3, and F's gated forms | **skip** | GITOPS-PLAN, as V3 candidates | None is a QA Wolf gap: script rows' Edit / Delete, a batch's Cancel, the Hosts-list label pill, F's setup-experience and MDM-settings forms. |
+
+**Free coverage:** none new. Gitops mode is premium-only, and free's Change management paywall is already a
+`PAYWALLED_PAGES` row (`free/paywalls.spec.ts:37`).
 
 ## 2. Facts for the build
 
@@ -213,23 +242,21 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 `SoftwareTitleDetailPage`, `FleetMaintainedAppDetailPage.addSoftwareButton`, `latestActivityId` /
 `assertActivityAfter`; API: `createVariable` / `deleteVariablesMatching`, `createFleetPolicy`, `uploadProfile`.
 
-## Decisions to put to Andrey
+## Decisions (answered by Andrey, 2026-10-07)
 
-1. **Change management's write flow:** OK to tick and restore one exception, plus a cleanup step restoring a
-   **pinned baseline** after a dead run (§2.4)? Nothing declares the exceptions, so "declared values" can't be the
-   target. Recommended: pin `labels: false, software: false, secrets: <the live value>`, read once at review; that
-   also settles the `secrets` trap below.
-2. **The breadth row** (§2.5): build only the wrapped controls not already asserted, or cut it. *(From D:)* it could
-   take one over-gating check: Run script stays enabled on a Hosts-list selection, never clicked (open with
-   `HostsListPage.goto({ fleetId: 0 })` and `waitForSettled` before selecting). Recommended.
-3. **New surfaces C and D revealed** *(new; none is a QA Wolf gap, and round 3 adds no scope)*: script rows' Edit /
-   Delete (same wrapper as Add script), a batch's Cancel (needs a scheduled batch and a claimed slice), and the
-   Hosts-list label pill under the labels exception (the same entity `03` tests). Recommended: skip all three; note
-   the pill in GITOPS-PLAN as a V3 candidate.
-
-4. *(new, from F)* **The BitLocker PIN on a throwaway fleet** (§2.1): seed a `pw-*` fleet with Windows encryption on
-   through the API, so the PIN's disabled state comes from gitops mode alone, rather than asserting it on Workstations
-   where it's disabled anyway. Adds a fleet create and delete (~1 s) and a small helper. Recommended.
+1. **The pinned exception baseline is `labels: false, software: false, secrets: true`** (the live values, read at
+   review), restored in two places: the `gitops-mode-teardown` project (mode off and the baseline, after every run
+   of the project), and a step at the head of every premium gitops apply (`gitops-premium.yml`,
+   `gitops-premium-min.yml`) that puts the exceptions back before `fleetctl gitops` reads them (§1: the next
+   nightly's chain runs before `cleanup-setup`). The workflow change means H's branch run is dispatched with
+   `--ref <branch>`.
+2. **Change management: the way out and one exception.** Turn the mode off through the UI, and tick *Labels*; never
+   *Enroll secrets*. The URL-required copy is cut.
+3. **The breadth row is cut**, except the report pair (*Save* / *Save as new* gated, *Live report* open) on a gitops
+   Workstations report. No Run script check.
+4. **The Controls row is trimmed, no BitLocker PIN** (§1): encryption checkbox and Save, Add profile, and one inert
+   profile on Workstations for its row's Delete / Edit / *Update profile*.
+5. **Decision 3's surfaces and F's gated forms are skipped**, and recorded in GITOPS-PLAN as V3 candidates.
 
 ## Traps this batch will hit
 
@@ -237,9 +264,8 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 - **`zz-everything-is-back` can't detect a leftover exception.** Your `afterEach` is the only guard.
 - **A concurrent `PATCH /config`** (another run, another batch's session, a person) can flip the flag mid-run:
   `gh run list` first, and announce the run to any parallel session.
-- **Fleet's default exception set has `secrets: true`** (`server/fleet/app.go:1587`); the live value is
-  unverified, so read it at review, before asserting what an exception lifts, and pin it in the baseline
-  (decision 1).
+- **Fleet's default exception set has `secrets: true`** (`server/fleet/app.go:1587`), and so has premium (read at
+  review): that value is load-bearing, because premium's YAML has no `secrets:` key (§1). Nothing in H writes it.
 
 ## Done when
 
@@ -255,4 +281,39 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
 
 ## What landed
 
-*Nothing yet.*
+Built 2026-10-07 on `playwright/qawolf-round3-batch-h` (from `main` 8b3a437), beside batch G; the two ship in
+one PR. Seven tests in the `gitops-mode` project (the project goes from 19 to 26), one CI step, and the teardown.
+
+| Gap | Test | Where |
+|---|---|---|
+| round 2 #57 | Disk encryption — enforcement is locked and Save is gated | `04-controls-and-reports.spec.ts` (GITOPS-23) |
+| round 2 #57 | Configuration profiles — Add and Delete are gated, View, Edit and Download stay open (and Edit's *Update profile* gated; an inert `pw-gitops-*` profile on Workstations, deleted in an `afterEach`) | `04-controls-and-reports.spec.ts` (GITOPS-24) |
+| Variables | Variables — Add variable is gated, Delete stays open (a `PW_VAR_GITOPS_*` variable, deleted in an `afterEach`) | `04-controls-and-reports.spec.ts` (GITOPS-25) |
+| breadth row | Reports — Save and Save as new are gated, Live report stays open (on "Collect default browser on macOS") | `04-controls-and-reports.spec.ts` (GITOPS-26) |
+| software exception | software — the exception unlocks the Fleet-maintained app form | `03-exceptions.spec.ts` (GITOPS-22) |
+| Change management | turning gitops mode off keeps the exceptions and the repository URL | `05-change-management.spec.ts` (GITOPS-27) |
+| Change management | ticking the labels exception saves only that exception and unlocks labels without a reload | `05-change-management.spec.ts` (GITOPS-28) |
+
+**The pinned exception baseline** (decision 1): `GITOPS_EXCEPTIONS_BASELINE` and `resetGitOpsMode` in
+`helpers/api/gitops-mode.ts`; the gitops-mode teardown restores and asserts it; and
+`.github/scripts/restore-gitops-exceptions.sh` runs first in `gitops-premium.yml` and `gitops-premium-min.yml`
+(writes only on drift, reads it back, warns when it restored anything). Run against premium at rest: it found the
+baseline and wrote nothing. Documented in `CLAUDE.md`, `docs/ci-pipeline.md`, `gitops/premium-fleetqa/README.md`.
+
+**Helpers and page objects:** `findAvailableFleetMaintainedApp`; `FleetMaintainedAppDetailPage.goto`,
+`ConfigurationProfilesPage.rowButton`, `VariablesPage.deleteButton`; `withGitOpsMode` takes a partial exception set.
+
+**Found on the way:** `02`'s enroll-secrets test failed once (run 1): its first hover can land on the empty state's
+*Add secret*, which the list replaces with another button elsewhere. `02` and `03` now wait for the first secret's
+row. Not a Fleet bug.
+
+**Verified:** `npm run check` clean (the 19 warnings are `main`'s). `test:gitops-mode` with dependencies (login, the
+project, the teardown) three times on premium, each announced to batch G's session and run on its "go": run 1, every
+new test green and `02`'s enroll-secrets test red as above; after the fix, green twice (27 passed, 1 skipped for
+#48218), the second one headed. After the runs, the instance read back at rest (mode off, the baseline exceptions)
+with no `pw-gitops-*` profile or `PW_VAR_GITOPS_*` variable left. `playwright-test-reviewer` on the branch: one
+finding (a comment that misstated the enroll-secret race), fixed.
+
+**Docs:** this file's review, a [DELIVERY-LOG](../DELIVERY-LOG.md) entry, test-audit area **20** (GITOPS-22…28, and
+its teardown, safety-note and observations brought current), [GITOPS-PLAN §12](../round-2/GITOPS-PLAN.md) (V2, the
+third state dropped, V3 candidates), this round's README and INDEX.

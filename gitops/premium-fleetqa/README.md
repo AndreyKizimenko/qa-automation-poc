@@ -139,4 +139,10 @@ at Fleet's default, every install/uninstall fixture uninstalled. It never delete
 
 **Bringing VMs under gitops deleted what it didn't declare** on the first apply (2026-09-28): a `Fail` policy
 that ran `HelloWorld.sh` as its automation, and `HelloWorld.sh` itself. Neither was used by any spec. The enroll
-secret and the report survived — a fleet file with no `secrets:` key leaves the fleet's secrets alone.
+secret and the report survived — a fleet file with no `secrets:` key leaves the fleet's secrets alone, **but
+only while the instance's `secrets` gitops-mode exception is on**. `fleetctl gitops` reads
+`config.gitops.exceptions` whether or not gitops mode is enabled: with `secrets` not excepted, a missing
+`secrets:` key deletes every enroll secret, and with `labels` or `software` excepted, the `labels:` /
+`software:` keys these files carry are refused. Nothing can declare the exceptions, so the instance is pinned at
+`labels: false, software: false, secrets: true`: every premium apply restores that first
+(`.github/scripts/restore-gitops-exceptions.sh`), and so does the suite's gitops-mode teardown.

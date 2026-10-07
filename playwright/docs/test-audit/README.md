@@ -96,7 +96,13 @@ files · ~350 test declarations · 4 projects**.
 > its MDM command from the dashboard feed filtered to its type, and checks the row's modal for the command's UUID; HOST-27
 > checks free's host Software tab has no Library. Area **21**: SWH-16 reads each premium VM's Library count and where its
 > Add software leads; SWH-17 runs a script-only package on the Mac (Run, its output, Ran / Rerun); SWH-14 reads Fleet's own
-> refetch after each install and uninstall.
+> refetch after the Mac's Fleet-maintained app installs and uninstalls.
+
+> **Round 3 batch H added 2026-10-07** (`playwright/qawolf-round3-batch-h`): gitops mode V2, round 2's parked list.
+> Area **20**: GITOPS-22 (the `software` exception on the Fleet-maintained app form), GITOPS-23…26 (disk encryption,
+> a profile row and its Edit modal, Variables' split, a report's saves beside Live report, each with what stays open),
+> GITOPS-27/28 (the Change-management form turns the mode off, and excepts labels, through the UI). GITOPS-08/12 wait
+> for the secret list before hovering Add secret. The teardown now restores the pinned exceptions as well as the flag.
 
 ## The area files
 
@@ -121,11 +127,11 @@ files · ~350 test declarations · 4 projects**.
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 12 (per spec file) | loadtest + loadtest-api (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
-| 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
+| 20 | [GitOps mode](20-gitops-mode.md) | 28 | gitops-mode, free |
 | 21 | [Software on hosts](21-software-on-hosts.md) | 14 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**542 entries** covering every test in the suite. An entry can expand into several
+**549 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
 17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under

@@ -23,6 +23,17 @@ export class FleetMaintainedAppDetailPage {
   }
 
   /**
+   * Opens one app's details form, scoped to `fleetId` as the catalog's links
+   * scope it. Anchors on *Add software*, which renders whether it's enabled,
+   * gated by gitops mode, or locked because the fleet already has the app.
+   */
+  async goto(appId: number, opts: { fleetId?: number } = {}): Promise<void> {
+    const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
+    await this.page.goto(`/software/add/fleet-maintained/${appId}${qs}`);
+    await expect(this.addSoftwareButton).toBeVisible();
+  }
+
+  /**
    * Confirms the add and waits for Fleet's server-side CDN fetch to finish.
    * The "Uploading software…" message may not appear at all when the package
    * is cached server-side; when it does, a typical fetch clears in a few

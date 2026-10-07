@@ -114,7 +114,7 @@ relies on the client-side platform filter.
 ## Round 3 · Batch G — real VMs: live runs and execution side effects
 
 10 gaps that only a real VM can show, or that read a real VM's data. Reviewed and built on
-`playwright/qawolf-round3-batch-g` (2026-10-07), beside batch H. Detail and Andrey's decisions in
+`playwright/qawolf-round3-batch-g` (2026-10-07), beside batch H, and shipped with it. Detail and Andrey's decisions in
 [round-3/G-real-vms.md](round-3/G-real-vms.md#review-decisions-2026-10-07-andreys-answers-in-decisions).
 
 **What the review changed.** The three VMs' names mix case on both tiers, so one run on them proves the live policy's
@@ -130,6 +130,30 @@ the chip.
 | a host's Library tab | new `premium/software/host-library-tab.spec.ts`: on each premium VM, the item count against the API and **Add software** routed by platform (Fleet-maintained for macOS and Windows, Custom package for Linux, with the VMs fleet); new `free/hosts/host-software-tab.spec.ts`: free's Software tab has no Library. Reshaped at review from a static read of the header and every row's buttons |
 | Fleet's own refetch | `premium/software/software-lifecycle-on-host.spec.ts`: after the Mac's Fleet-maintained app installs and uninstalls, the host has a refetch outstanding the moment the status settles (read every second: any refetch landing on the VM clears the flag). Every wait in the suite asks for one itself, so nothing would notice Fleet ceasing to; the flag records no author, a limit written into the spec. `getHostRefetchRequested` |
 | a script-only package run on the Mac | `premium/software/script-only-package.spec.ts`, a describe of its own: a per-run package offered as **Run** (no Install, no Uninstall), run from the Mac's Library, recorded as `installed_software` from `sh_packages`, its Past item opening "Script details" with the script's marker in the output, then Ran / Rerun. On the Mac rather than the busier Linux VM. `HostSoftwareLibrary.run`, `ScriptPackageDetailsModal`, `activityCopy.hostSoftware.ranScriptPackage` |
+
+## Round 3 · Batch H — gitops mode V2
+
+Round 2's gitops-mode *Parked for V2* list: 5 gaps → 7 tests in the `gitops-mode` project. Reviewed and built on
+`playwright/qawolf-round3-batch-h` (2026-10-07), beside batch G, and shipped with it. Detail and Andrey's decisions in
+[round-3/H-gitops-mode-v2.md](round-3/H-gitops-mode-v2.md#review-decisions-2026-10-07-andreys-answers-in-decisions).
+
+**What the review changed.** It found that the exceptions act outside gitops mode: `fleetctl gitops` reads them on
+every apply, and premium's YAML declares no `secrets:`, so a `secrets: false` left by a killed gitops-mode run (`02` and
+`03` run with it) would make the next apply delete every enroll secret. The instance is now pinned at `labels: false,
+software: false, secrets: true`, restored by the teardown and by a step before every premium apply
+(`cleanup-setup` runs after the nightly's gitops chain, too late). Two plan claims fell at review: an app store app's
+Edit configuration is gated (in the Actions menu, not the summary card), and the BitLocker PIN shares the enforcement
+checkbox's `isPlatformFormDisabled`, so it was cut. The breadth row kept one pair (a report's saves beside Live report),
+the software exception one surface, and Change management became two UI saves (the mode off, the Labels exception) with
+Enroll secrets never touched. The empty-URL third state was dropped: the server refuses it.
+
+| slice | what |
+|---|---|
+| the exception baseline | `GITOPS_EXCEPTIONS_BASELINE`, `resetGitOpsMode`; the teardown restores and asserts it; `.github/scripts/restore-gitops-exceptions.sh` first in `gitops-premium.yml` and `gitops-premium-min.yml` (writes only on drift, reads back, warns). `CLAUDE.md`, `ci-pipeline.md`, the premium gitops README |
+| Controls and Reports | new `04-controls-and-reports.spec.ts`: disk encryption's checkbox and Save; a profile row's Delete gated, View / Edit / Download open, Edit's *Update profile* gated (an inert `pw-gitops-*` profile on Workstations); *Add variable* gated beside *Delete <name>* (a `PW_VAR_GITOPS_*` variable); a gitops report's Save and Save as new gated beside Live report. `ConfigurationProfilesPage.rowButton`, `VariablesPage.deleteButton` |
+| the software exception | `03-exceptions`: the Fleet-maintained app form's *Add software*, gated, then unlocked by the exception, for an app Workstations hasn't added. `findAvailableFleetMaintainedApp`, `FleetMaintainedAppDetailPage.goto` |
+| Change management | new `05-change-management.spec.ts`: the form turns the mode off (the URL and exceptions survive, `disabled_gitops_mode`, the navbar marker goes without a reload) and excepts labels (only that key, `enabled_gitops_exception` for labels, the new-label form unlocked after a client-side route change). `withGitOpsMode` takes a partial exception set |
+| a flake fixed | `02` and `03` wait for the enroll-secret list before hovering *Add secret*: the empty state's button is another element, replaced when the list arrives |
 
 ## Round 3 · Batch F — MDM, setup experience and Android settings
 

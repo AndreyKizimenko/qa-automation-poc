@@ -76,9 +76,14 @@ export class VariablesPage {
     await this.toast.expectSuccess('Variable created.');
   }
 
+  /** A variable's per-row trash action, named after the variable. */
+  deleteButton(name: string): Locator {
+    return this.page.getByRole('button', { name: `Delete ${name}` });
+  }
+
   /** Delete a variable via its per-row trash action + the confirm modal. */
   async deleteVariable(name: string): Promise<void> {
-    await this.page.getByRole('button', { name: `Delete ${name}` }).click();
+    await this.deleteButton(name).click();
     await expect(this.deleteModal).toBeVisible();
     await this.deleteConfirmButton.click();
     await expect(this.deleteModal).toBeHidden();
