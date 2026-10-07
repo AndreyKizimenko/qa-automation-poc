@@ -3,12 +3,13 @@
 **10 gaps → 1 new spec and about 5 augments, after folds.** `Live policies` · `Live reports and CSV` ·
 `Install side effects` · `MDM command feed` · `Script-only packages` · `A host's Library`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings, and
+2026-10-07 against E and F's).
 
 > ## ▶ Start here
 >
-> **Branch from `main` at or after 61db6b0** ([PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86),
-> batches C and D; [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after 68c8846** ([PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89),
+> batches E and F; [PR #90](https://github.com/AndreyKizimenko/qa-automation-poc/pull/90)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5 (**a failed install script stalls the VM**, fleetdm/fleet#54607), round 2's
 > [README §5](../round-2/README.md) and [§9](../round-2/README.md#9-working-a-batch-since-d), round 2's
 > [D → What landed](../round-2/D-host-execution.md#what-landed-and-what-changed-from-the-plan) (the durable VM
@@ -37,7 +38,7 @@
 >   row by `requireRealHost('darwin')` and its display name.
 > - **Nothing here writes global config**: no Org settings › Advanced key (`advanced-options.spec.ts` asserts
 >   they stay unchanged) and nothing on the global enroll list.
-> - **Run cost:** the premium branch run takes ~62 min (run 37149323584, after C and D): the main project ~46 (3
+> - **Run cost:** the premium branch run takes ~63.5 min (run 37395809242, after E and F): the main project ~47 (3
 >   workers, worker-bound, against a 100-min `globalTimeout`), the exclusive step ~14, gitops-mode ~1. R2 #72's
 >   Linux minutes land in the main project.
 > - **If another batch is built at the same time**, announce every VM run to its session and wait for its "go"
@@ -60,17 +61,40 @@
 >   (a run cancelled while running still records its result). G edits no script, but its `afterEach` title delete
 >   is a cancel (§2.5).
 > - **Slices:** G claims none yet. Free today: `findSimulations` linux 8–9 and 20+, darwin 7–9, windows 3+
->   (C holds linux 2–7, darwin 6, windows 2; D linux 10–19, darwin 10–39). C3 #28 and R2 #88 need theirs (§2.2,
+>   (C holds linux 2–7, darwin 6, windows 2; D linux 10–19, darwin 10–39; E and F claimed none: E's live runs take
+>   `findOnlineHost(…, 'linux', { kind: 'simulated' })` and move nothing). C3 #28 and R2 #88 need theirs (§2.2,
 >   §2.5).
 > - **The Hosts page rewrites its URL**: only if a step reaches a host through the Hosts list, use
 >   `HostsListPage.searchFor`.
 > - **Reuse what C and D built:** `createPolicy({ platform })`, `hostsOfferedTitle`, `findScriptableSimulations`,
 >   `Toast.dismissAll`, and C6 #27's Unassigned Library read in `no-teams-views.spec.ts` (R2 #88).
 >
+> **Since batches E and F (2026-10-07).** The full lists are in [README §5](README.md#since-batch-e-2026-10-05)
+> and [§5 › Since batch F](README.md#since-batch-f-2026-10-07). These apply here:
+>
+> - **The instances run 8d05209** (built 2026-10-06). No Fleet file this plan cites changed. Two things that did:
+>   an unchanged stored report result's `last_fetched` now moves only once it's 50 minutes old (fleetdm/fleet#54897;
+>   G's live runs read no stored results, but a step that reuses `stored-results.spec.ts`' row read takes its
+>   bound), and `fleetctl gitops` no longer blocks queued script runs and installs.
+> - **Reuse what E built for live runs:** `ReportLivePage.hostSearch` and `targetHost(displayName)` target one host
+>   by search (E's one-host runs by an observer and an observer+, `premium/reports/role-access.spec.ts`);
+>   `ReportsListPage.liveReportButton` / `narrowTo(name)`; `createReport({ observerCanRun })`.
+>   `ReportLivePage.finishedHeading` still reads only "Report finished" (§2.2).
+> - **Key R2 #72's activity checks to this attempt** (§2.5): `latestActivityId` before the Run, then
+>   `assertActivityAfter` matching the nonce title and the host id. Fleet records JSON details with its own key
+>   order, so compare fields.
+> - **If another batch is built at the same time**, the two ship in one PR with one branch run (README › Since
+>   batch F). A gitops-mode run (H) makes every control G clicks read-only, so neither starts a run while the other
+>   is mid-run.
+> - **Triaging G's branch run:** if `gh run download` stalls, fetch the report zip with `curl` (README › Since
+>   batch F). Expect the premium job to grow by R2 #72's Linux minutes; E and F's run took 63.5 min.
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a), PR #78's branch, and Fleet
 > `rc-minor-fleet-v4.93.0`, the build both instances run, again on 2026-10-03 against `main` (da2aceb) and the
-> RC branch's head (ac3c0d6), and on 2026-10-05 against `main` (61db6b0) and the RC head both instances now run
-> (c87f85c; `service_campaigns.go:196` and the other cited lines unchanged).
+> RC branch's head (ac3c0d6), on 2026-10-05 against `main` (61db6b0) and the RC head both instances ran then
+> (c87f85c; `service_campaigns.go:196` and the other cited lines unchanged), and on 2026-10-07 against `main`
+> (68c8846) and the build both instances run now (8d05209: no cited Fleet file changed; the suite lines in
+> `helpers/api/software.ts`, `setup/cleanup.steps.ts` and `DashboardPage.ts` moved and are updated below).
 
 ## The gaps
 
@@ -152,9 +176,9 @@ Read every flow body. Known so far:
 
 - `SaveHostSoftwareInstallResult` sets `refetch_requested` when an install's status is *installed*
   (`server/service/orbit.go:2425-2430`); an uninstall, when the activity status is *uninstalled* (`:1525-1530`).
-- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:743`) first waits
-  out a refetch Fleet already queued (`waitForNoPendingRefetch`, `:767`), then posts its own
-  (`waitForHostRefetch({ refetch: true })`, `:770`). So nothing proves Fleet asked. A no-refetch option may not be
+- Today every wait asks for a refetch itself: `waitForSoftwareSettled` (`helpers/api/software.ts:763`) first waits
+  out a refetch Fleet already queued (`waitForNoPendingRefetch`, `:787`), then posts its own
+  (`waitForHostRefetch({ refetch: true })`, `:790`). So nothing proves Fleet asked. A no-refetch option may not be
   needed: read `refetch_requested` right after `waitForHostSoftwareStatus`, then check that `detail_updated_at`
   moves before the helper's own post.
 - **Fold into `software-lifecycle-on-host.spec.ts:80`** on the Mac's durable FMA (Itsycal, `helpers/vm-fixtures.ts:50`),
@@ -175,7 +199,7 @@ No extra VM time.
 **The existing unfiltered check is the pattern that flaked in D**: it reads the dashboard after an acknowledgement
 poll of up to 180 s (`mdm-commands.spec.ts:70-78`), by which time the other workers' activity can bury the row past
 the feed walk. And the type filter is React state (`ActivityFeed.tsx:179`), which `expectActivities`' reloads
-(`DashboardPage.ts:441-447`) clear. So: check the activity through the API first,
+(`DashboardPage.ts:443-448`) clear. So: check the activity through the API first,
 `assertActivity(request, 'ran_custom_mdm_command', (d) => d.command_uuid === commandUuid)` (the details carry
 `command_uuid`, `server/fleet/activities.go:1032-1039`); then load the dashboard on All fleets, `selectActivityType`,
 and read `activityRows(...)` directly, never `expectActivity` after the filter. Replace the unfiltered end check with
@@ -194,7 +218,7 @@ this (decision 3).
   per-run `fleet-pw-script-<nonce>.sh` to the VMs fleet that **echoes and exits 0** (a failure would trip
   fleetdm/fleet#54607), run it on the Linux VM, delete it in an `afterEach` (deleting the title cancels a run
   still queued, which would otherwise hold the Linux queue for the retry); the VMs sweep covers `^fleet-pw-`
-  (`OWN_PACKAGE`, `setup/cleanup.steps.ts:195`). Assert Upcoming through `listUpcomingActivities`: the item can
+  (`OWN_PACKAGE`, `setup/cleanup.steps.ts:202`). Assert Upcoming through `listUpcomingActivities`: the item can
   be picked up before the page loads.
 - **Never edit the package while its run is queued or running** (#54732, #54734), and key every activity and modal
   assertion to the run's nonce title, so a dead attempt's late result can't decide the retry (#54734's shape;
@@ -224,14 +248,15 @@ inventory specs. Read a VMs-fleet VM (`requireRealHost`), read-only: no VM time.
 
 ## Reusable pieces
 
-`ReportLivePage` (`targetChip`, `run`, `stopButton`, `resultsRows`, `runSummary`), `PolicyDetailsPage.runButton`,
+`ReportLivePage` (`targetChip`, `hostSearch`, `targetHost`, `run`, `stopButton`, `resultsRows`, `runSummary`), `PolicyDetailsPage.runButton`,
 `ReportEditPage.clickLiveReport` / `ReportDetailsPage.clickLiveReport`, `HostDetailsPage` (`openLibrary(title)`,
 which filters to one title; `showPastActivities` / `showUpcomingActivities`, `activityItem`, `mdmCommandDetailsModal`),
 `DashboardPage.selectActivityType`; the download pattern in `HostsListPage.exportHosts` and `export-csv.spec.ts:20`;
 API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy` (takes `platform`), `createReport`, `getReport`,
 `requireRealHost`, `listFleetHosts`, `uploadSoftwarePackageBuffer`, `waitForHostSoftwareStatus`,
 `waitForNoPendingRefetch` (reads `refetch_requested`), `listUpcomingActivities`, `assertActivity`,
-`hostsOfferedTitle`, `findScriptableSimulations`; `Toast.dismissAll`.
+`hostsOfferedTitle`, `findScriptableSimulations`, `latestActivityId` / `assertActivityAfter`; `Toast.dismissAll`;
+`ReportsListPage.liveReportButton` / `narrowTo`, `createReport({ observerCanRun })`.
 
 ## Decisions to put to Andrey
 
@@ -239,7 +264,7 @@ API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy` (takes `platfor
    still exists in the target picker, so the flow's step is current. Recommended: fold, as a premium run on that
    chip, every result host in `listFleetHosts(0)`, no VM, Stop once rows land.
 2. **R2 #72's Linux VM minutes** (§3): worth it, given the Linux queue is the floor? *(C/D re-check:)* the main
-   project is ~46 min against a 100-min `globalTimeout`. Recommended: build, with `HOST_RETRIES`.
+   project is ~46 min against a 100-min `globalTimeout` (~47 after E and F). Recommended: build, with `HOST_RETRIES`.
 3. *(new, from A/B learnings)* **R2 #69's type filter:** batch A's `shared/dashboard/activity-feed.spec.ts`
    proves the feed's type filter (on "Added report", both tiers). Filter by "Ran custom MDM command" as planned,
    or narrow R2 #69 to the global row's command details modal? *(C/D re-check:)* recommended: the API check, the

@@ -3,12 +3,13 @@
 **5 gaps → about 10 tests in the `gitops-mode` project, in new files.** `Controls gated surfaces` · `The
 software exception` · `Variables` · `Change management` · `Policies, Reports, Software, OS settings`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings).
+**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings, and
+2026-10-07 against E and F's).
 
 > ## ▶ Start here
 >
-> **Branch from `main` at or after 61db6b0** ([PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86),
-> batches C and D; [PR #87](https://github.com/AndreyKizimenko/qa-automation-poc/pull/87)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
+> **Branch from `main` at or after 68c8846** ([PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89),
+> batches E and F; [PR #90](https://github.com/AndreyKizimenko/qa-automation-poc/pull/90)). **Invoke the `playwright-test-author` skill first** (Skill tool) and follow it. Then read, in order:
 > [README.md](README.md) §4–§5, round 2's [G-out-of-band.md](../round-2/G-out-of-band.md) (the gitops-mode V1
 > work and its *Parked for V2* list) and [GITOPS-PLAN.md](../round-2/GITOPS-PLAN.md), `playwright/CLAUDE.md`
 > (the `gitops-mode` project), then this file.
@@ -46,10 +47,36 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 > - **Nothing declares the exceptions** (§2.4): gitops rejects `org_settings.gitops.exceptions` outright, so a
 >   cleanup step restores a pinned baseline, not "declared values" (decision 1).
 >
+> **Since batches E and F (2026-10-07).** The full lists are in [README §5](README.md#since-batch-e-2026-10-05)
+> and [§5 › Since batch F](README.md#since-batch-f-2026-10-07). H draws no hosts and no static users. These apply:
+>
+> - **The BitLocker PIN can prove gating** on a throwaway `pw-*` fleet with Windows encryption on (§2.1,
+>   decision 4). Scope a throwaway fleet by URL, never `TeamDropdown.selectByLabel`; `deleteFleet` takes its
+>   bootstrap package with it.
+> - **A report seeded on Workstations** (§2.5's Reports row) isn't swept by name: `cleanup-setup` deletes Workstations
+>   reports only by exact prefix (`pw-role-`, `Copy of playwright-saveasnew-`), and this project runs no
+>   `cleanup-setup`. Delete it in an `afterEach` and add its prefix to that sweep, or read a gitops report.
+>   Workstations holds three of its five between runs (every gitops chain ends on the min config); "Collect default
+>   browser on macOS" is in both.
+> - **An app store app's Edit configuration looks ungated** (§1). Opening it throws Fleet's missing-Ace-worker
+>   error ([#54845](https://github.com/fleetdm/fleet/issues/54845)), which `pageHealth` ignores by name
+>   (`DEFAULT_IGNORED_PAGE_ERRORS`), so a probe of its Save is safe to write.
+> - **Root a `filter({ has })` locator at the page**, never at a scoped locator, whenever H scopes a control to a
+>   card or a modal (README › Since batch F).
+> - **The setup-experience and MDM-settings forms F saves are gitops-gated**, with page-object members F added
+>   (`BootstrapPackagePage.manualAgentInstallCheckbox`, `InstallSoftwarePage.rowCheckbox` /
+>   `cancelSetupIfSoftwareFailsCheckbox`, `IntegrationsPage`'s migration form). None is an H gap and round 3 adds no
+>   scope: note them in GITOPS-PLAN as V3 candidates, beside decision 3's.
+> - **Reuse what E built:** `PoliciesListPage.narrowTo` and `ReportsListPage.narrowTo` (a row by name, tags and
+>   all), `ReportsListPage.liveReportButton`, the `AccessDenied` component.
+> - **If built beside G**, every gitops-mode run makes G's controls read-only: announce it and wait for G's "go",
+>   and ship in one PR with one branch run (README › Since batch F).
+>
 > Facts below were checked on 2026-10-01 against `main` (d55846a) and Fleet `rc-minor-fleet-v4.93.0`, the build
 > both instances run, again on 2026-10-03 against `main` (da2aceb) and the RC branch's head (ac3c0d6), and on
-> 2026-10-05 against `main` (61db6b0) and the RC head both instances now run (c87f85c, which has no frontend or
-> gitops changes since ac3c0d6; every Fleet line cited below re-checked).
+> 2026-10-05 against `main` (61db6b0) and the RC head both instances ran then (c87f85c, which has no frontend or
+> gitops changes since ac3c0d6; every Fleet line cited below re-checked), and on 2026-10-07 against `main` (68c8846)
+> and the build both instances run now (8d05209: no frontend change, and no cited Fleet or suite line moved).
 
 ## The gaps
 
@@ -73,7 +100,16 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
 - **The Policies / Reports / Software / OS-settings row is breadth, not signal** (round 2 G said so,
   `G-out-of-band.md:279-280`), and its software-title and OS-settings parts overlap the rows above. Build the
   wrapped controls that differ from what's asserted; don't walk every page.
-- **The BitLocker PIN proves nothing about gating** (§2.1): it's disabled whenever Windows encryption is off.
+- **An app store app's Edit configuration may be a gitops-mode bypass** *(found 2026-10-07, unverified live)*.
+  `EditConfigurationModal.tsx` has no gitops reference, and neither has the title's Actions menu
+  (`SoftwareSummaryCard`), while its siblings Edit software, Edit appearance and Schedule auto updates each check
+  the flag; and gitops YAML declares `app_store_apps[].configuration` (`docs/Configuration/yaml-files.md:702`). Probe
+  it at review: a Play app on Workstations (`addAppStoreApp`, not one another spec uses), gitops mode on, Actions →
+  Edit configuration, is Save enabled? If it is, it's the #54168 pattern: put it to Andrey as a finding before
+  anything is filed, and assert the intended state behind a skip if he files it. Never click Save.
+- **The BitLocker PIN proves nothing about gating** (§2.1): it's disabled whenever Windows encryption is off —
+  on Workstations. On a throwaway fleet with Windows encryption on, it's enabled until gitops mode disables it, so
+  there it proves gating (§2.1, decision 4).
 
 ## 2. Facts for the build
 
@@ -88,6 +124,13 @@ software exception` · `Variables` · `Change management` · `Policies, Reports,
   pattern in `helpers/profiles.ts`, whose names must match `/^pw-[a-z0-9-]+$/`; Workstations has no real host),
   delete it in `afterAll`. **Never upload on Unassigned**:
   MDM-enrolled simulations sit there. Never click Save.
+- **The BitLocker PIN on a throwaway fleet** (decision 4). F's `premium/controls/os-settings/disk-encryption.spec.ts`
+  (CTL-41) shows the PIN enabled once Windows enforcement is on, on a `pw-*` fleet. Seed one with enforcement on
+  through the API (`POST /disk_encryption` with `fleet_id` and `windows_settings.enable_disk_encryption: true`; a
+  `setFleetDiskEncryption` helper is needed, F added only `getFleetWindowsDiskEncryption`), open its Windows tab by
+  URL (`diskEncryption.goto({ fleetId, platform: 'windows' })`), and assert both checkboxes `toBeDisabled()` with
+  enforcement still checked. Gitops mode gates the UI only, so the API seed works with the flag on. Delete the fleet
+  in an `afterEach`; the next run's `cleanup-setup` sweeps a leftover `pw-*` fleet (this project runs none).
 
 ### 2.2 The `software` exception
 
@@ -156,7 +199,7 @@ global-only, so a seeded policy would run on the VMs. Use `createFleetPolicy` (P
 
 `workers: 1`, `fullyParallel: false`, `retries: 0` (`playwright.config.ts:284-302`); CI's step runs with
 `--global-timeout=900000` (`.github/workflows/playwright-premium.yml:150-154`). Today: 19 tests, about a minute
-on one worker (0.9 min in run 37077445852; `01` 3 tests; `02` serial, ending with "Change management stays fully
+on one worker (0.9 min in run 37077445852, 1.0 in 37395809242; `01` 3 tests; `02` serial, ending with "Change management stays fully
 editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everything-is-back` 6 tests). About
 10–12 new tests at 3–6 s each add roughly a minute; an `addFmaToFleet` seed would add 5–45 s, so prefer the
 "available" resolver.
@@ -183,6 +226,10 @@ editable" at `:132`; `03` labels and secrets, one skipped for #48218; `zz-everyt
    Delete (same wrapper as Add script), a batch's Cancel (needs a scheduled batch and a claimed slice), and the
    Hosts-list label pill under the labels exception (the same entity `03` tests). Recommended: skip all three; note
    the pill in GITOPS-PLAN as a V3 candidate.
+
+4. *(new, from F)* **The BitLocker PIN on a throwaway fleet** (§2.1): seed a `pw-*` fleet with Windows encryption on
+   through the API, so the PIN's disabled state comes from gitops mode alone, rather than asserting it on Workstations
+   where it's disabled anyway. Adds a fleet create and delete (~1 s) and a small helper. Recommended.
 
 ## Traps this batch will hit
 
