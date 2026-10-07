@@ -1,7 +1,7 @@
 # Local setup — `~/.claude/fleet-qa.local.md`
 
 The Fleet QA skills (the `fleet-qa` plugin: `fleet-bug-qa`, `fleet-story-qa`, `fleet-quickwin-qa`,
-`fleet-bug-retest` and `fleet-bug-file`) are shared, and they run in whatever repo you're in. What differs
+`fleet-bug-retest`, `fleet-bug-file` and `fleet-loadtest-qa`) are shared, and they run in whatever repo you're in. What differs
 per engineer goes in one file in your home folder: **`~/.claude/fleet-qa.local.md`**. That covers which
 instances are which, where the Fleet checkout and the QA workspace live, how the servers run, and where
 Playwright is. It belongs to you, not to any repo, so there's nothing to gitignore.
@@ -65,6 +65,11 @@ versions live (`scripts/env_check.sh`) before relying on them.
 <!-- Real (non-API-only) users with fleetctl contexts. Never delete them, and never log out in the UI
      as them: that deletes the token. -->
 - `<context>`: <role> on fleet <name> (id <n>), on <instance>
+
+## Load test (fleet-loadtest-qa)
+- **Instance:** `LT=<workspace name, e.g. fleet-493loadtest-3>`, fleetctl context `<loadtest>`, region us-east-2, AWS SSO profile <name>
+- **Current shape:** <build/tag, pool size, hosts and platforms, notable data left on it> (update after each redeploy)
+- **State folder:** `~/.fleet-loadtest/<LT>/` (saved ALB action for ramp.sh, maintenance/ramp logs)
 
 ## Extras
 <!-- Anything instance-specific the skills should know: a gateway, a CA name, a device kept for tests. -->
