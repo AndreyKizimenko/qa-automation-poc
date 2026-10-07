@@ -1,6 +1,5 @@
 /**
  * Premium • Hosts • Drilling a report card into this host's stored results.
- * C2 #24 — the last of the hosts-details flows.
  *
  * A report card only offers **Show details** once the report has a stored result
  * for that host (`HostReportCard.tsx` gates it on `last_fetched`), which needs a
@@ -28,9 +27,14 @@
  * If it goes missing, re-apply that file (see gitops/premium-fleetqa/README.md)
  * and let one interval elapse.
  *
- * The walk also runs the other way (round 1 C4 #P17): from the report's results
- * across hosts, the Mac's Host link opens the same per-host page, and its
- * "Back to host details" returns to the host.
+ * The walk also runs the other way: from the report's results across hosts, the
+ * Mac's Host link opens the same per-host page, and its "Back to host details"
+ * returns to the host.
+ *
+ * Not covered: the card's "N additional results not shown" banner. It needs more
+ * than one stored row for the host, `pw-host-report-results` returns one, and a
+ * seeded multi-row report would cost about 3.5 minutes a run. Free has no twin,
+ * because it has no fleet to keep a durable report on.
  */
 import { test, expect } from '@fixtures';
 import { findReportByName, getHostReportLastFetched } from '@helpers/api';
@@ -102,7 +106,7 @@ test.describe('Premium • Hosts • host report results', () => {
     await expect(page).toHaveURL(new RegExp(`/reports/${report!.id}`));
     await expect(reportDetails.nameHeading).toContainText(REPORT_NAME);
 
-    // And back in from there (round 1 C4 #P17): each stored result names its
+    // And back in from there: each stored result names its
     // host, linked to that host's results for this report.
     const macResult = reportDetails.hostResultLink(liveMacosHost.displayName);
     await expect(macResult, 'the Mac among the hosts with a stored result').toBeVisible();

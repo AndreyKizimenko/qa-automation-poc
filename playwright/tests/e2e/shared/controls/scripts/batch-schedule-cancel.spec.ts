@@ -1,8 +1,7 @@
 /**
  * Shared • Controls • a batch script run scheduled, cancelled, and cut short by
- * an edit. Round 1 C8 #16/#19 (Schedule for later), #17 (cancel), #12 and #18
- * (the hosts and counts after a cancel), #15 (preview a batch's script) and #8
- * (editing a script cancels its pending runs).
+ * an edit: Schedule for later, Cancel, the hosts and counts after a cancel,
+ * previewing a batch's script, and an edit cancelling the runs not yet reported.
  *
  * Both tiers: batch scripts carry no license check, and every batch here targets
  * osquery-perf simulations on Unassigned picked by id from this spec's claimed
@@ -15,7 +14,7 @@
  *  - **Scheduled, then cancelled** (linux 10–12; nothing runs). A batch scheduled for
  *    tomorrow lists every targeted host under Pending (incompatibility is only
  *    decided at start), and cancelling it finishes it at once with all of them
- *    under Canceled: the flows' "the hosts that were Pending are now Canceled",
+ *    under Canceled ("the hosts that were Pending are now Canceled"),
  *    without racing a host to its result. Its script is previewed while
  *    scheduled and again once finished, the same button and modal Fleet shows
  *    in every state. Scheduled through the API: the schedule form is the next
@@ -41,7 +40,9 @@
  *    "Completed" is the 5-minute completion check, which `batch-run.spec.ts`
  *    already waits for. A run still queued behind another activity when its
  *    script is edited stays Pending forever (fleetdm/fleet#54732), which is why
- *    nothing may be queued ahead.
+ *    nothing may be queued ahead. An edit cancels only runs that are queued or
+ *    sent with no result yet: a *scheduled* batch that hasn't started is left
+ *    alone, and runs the new content when it fires.
  *
  * Each test removes its script in an `afterEach`, which deletes its batches
  * with it (a foreign-key cascade): a scheduled batch left by a timed-out test

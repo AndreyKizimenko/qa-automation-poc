@@ -3,10 +3,13 @@
  *
  * The safe half of the Lock/Wipe coverage: it asserts the **permission surface**
  * — that Lock, Wipe and Turn off MDM appear (or don't) for the right platform and
- * tier — without ever firing one. Actually locking or wiping a QA VM is a one-way
- * door with no re-provisioning automation, so those stay uncovered on purpose
- * (see docs/qawolf-migration/PARITY.md §6). This spec closes the RBAC/gating half
- * of that gap.
+ * tier — without ever firing one. Locking or wiping a real QA VM is a one-way
+ * door with no re-provisioning automation (even a Mac's lock can't be undone
+ * through the API: unlocking needs the PIN Fleet shows after the lock), so the
+ * commands are never fired on a real VM. `tests/cli/premium/mdm-lock-lifecycle`
+ * locks and unlocks a simulated host instead; firing them on a real one needs a
+ * sacrificial, re-enrollable VM (`docs/long-term-goals.md`). This spec covers the
+ * permission half.
  *
  * **It only ever opens the Actions menu. Nothing here clicks a destructive item.**
  *
