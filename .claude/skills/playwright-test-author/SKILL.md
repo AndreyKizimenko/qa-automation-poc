@@ -1,6 +1,6 @@
 ---
 name: playwright-test-author
-description: Write, extend or fix tests in Fleet's Playwright QA suite (`playwright/` in qa-automation) — new specs, augments to existing ones, page objects, component objects, API helpers, fixtures and test data, and QA Wolf migration batches. Use it before adding or changing anything under `playwright/tests`, `pages`, `helpers`, `setup` or `test-data`, including "write a test for…", "port this QA Wolf flow", "work batch F", "add free coverage for…", "augment the policies spec", "create a page object", "fix this test-bug from the run review" — even when the request doesn't say "Playwright". It carries the suite's safety rules for the real VMs, how to verify without disrupting the shared instances, and which docs move with the code.
+description: Write, extend or fix tests in Fleet's Playwright QA suite (`playwright/` in qa-automation) — new specs, augments to existing ones, page objects, component objects, API helpers, fixtures and test data. Use it before adding or changing anything under `playwright/tests`, `pages`, `helpers`, `setup` or `test-data`, including "write a test for…", "add free coverage for…", "augment the policies spec", "create a page object", "fix this test-bug from the run review" — even when the request doesn't say "Playwright". It carries the suite's safety rules for the real VMs, how to verify without disrupting the shared instances, and which docs move with the code.
 ---
 
 # Writing tests for Fleet's QA suite
@@ -39,6 +39,20 @@ Each has happened, or nearly happened, and none can be undone from a test.
 - **Changing what other specs stand on:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`), renaming a fleet gitops declares (VMs, Workstations), gitops
   config, static users (their tokens can't be re-minted).
+- **Saving the Fleet web address or the global end-user authentication (IdP) settings.** Either save re-syncs
+  every fleet's DEP profile with Apple Business Manager, and `server_url` also feeds the Apple MDM URL (while
+  `apple_server_url` is empty), Windows MDM discovery, the Android callback and the SSO ACS URL. No test saves
+  either.
+- **Anything Fleet can't undo.** An Android web app can be created and never deleted, so a gap that needs one
+  is cut, not pinned as a durable fixture. Editing a durable Fleet-maintained app's install script sets
+  `install_script_edited`, which auto-update carries forward, so the scripts of the QA shelf's and the VMs
+  fleet's apps are never edited. The org-wide *Store report results* setting has no confirmation, and turning
+  it off across the hourly cleanup deletes every stored result: it's never toggled. When the flow itself is
+  one-way (Lock, Wipe), assert its permission surface instead and say so in the header
+  (`mdm-actions-availability.spec.ts`).
+- **Triggering Fleet's crons** (`POST /trigger`, `fleetctl trigger`: vulnerabilities, aggregation, the
+  batch-activity checker). They're global, and every other run on the instance sees the effect: wait for the
+  cron, or read the API.
 - **Starting a full suite run.** Andrey dispatches `QA — Branch run`. Your runs are scoped (below), and
   never while something else is using the instances (`gh run list --limit 5`).
 
@@ -47,20 +61,23 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
 ## How the work goes
 
 1. **Know what exists.** Open every spec you're augmenting before writing anything; titles lie. Check
-   `pages/README.md` and `helpers/README.md` before writing a helper that already exists. On a migration
-   batch, the batch file's *Start here* block and `docs/qawolf-migration/round-2/README.md` §9 come first.
-2. **Ground it in the product, not in the screen.** Probe the live page with the Playwright MCP
-   (`browser_snapshot` shows the accessibility tree `getByRole` will target). Read the React component in
+   `pages/README.md` and `helpers/README.md` before writing a helper that already exists. A plan's or an
+   issue's facts are claims: check them against the source before building on them.
+2. **Ground it in the product, not in the screen.** Probe the live page: the Playwright MCP's
+   `browser_snapshot` shows the accessibility tree `getByRole` will target. To drive a signed-in page, write a
+   local script that loads `.auth/<tier>-admin.json` into Playwright, never `browser_run_code_unsafe`: the MCP
+   echoes the code it runs, session cookie included. Read the React component in
    `~/repositories/fleet/frontend/` for roles, names and conditional rendering. Read `docs/REST API/rest-api.md`
    before writing an API helper; the UI says reports and fleets where the API still says queries and teams.
    For claims about behaviour (tier gating, retries, what a setting does), read the server code in
    `~/repositories/fleet/server/` and `ee/`. An hour of reading has repeatedly replaced a day of guessing.
-3. **Decide the tiers: free coverage is a standing goal.** QA Wolf's suite was almost all premium, so
-   free coverage has to be found. Check the component (`isPremiumTier`) and the server (`premium:"true"`
+3. **Decide the tiers: free coverage is a standing goal.** Coverage tends to start premium-only, so free
+   coverage has to be looked for. Check the component (`isPremiumTier`) and the server (`premium:"true"`
    struct tags, license checks) for what free has. Use `tests/e2e/shared/` when the behaviour is identical,
    an explicit `free/` sibling when it differs, and never one spec with `if (isPremium)`. A premium-only
    surface often gives free a check anyway: the paywall (`tests/e2e/free/paywalls.spec.ts`), an absent
-   control, or the API's 402.
+   control, or the API's 402. Within a tier, one spec per area carries the role (and the platform) as a
+   dimension of its cases, not one file per role × platform.
 4. **Decide the hosts.** What Fleet decides **server-side** (which hosts a profile, title, policy or report
    reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
    (installs, runs, verifies, reports inventory) only a real VM can answer: `findOnlineHost(request,
@@ -72,15 +89,17 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    before creating a new one, and turn a widget two pages share into a component object in
    `pages/components/`.
 6. **Assert what can fail.** Set membership over hosts you control, never a count on a shared list
-   (QA Wolf's `toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a
-   UI write happened. Scope every assertion to records you created.
+   (`toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a UI write
+   happened. Scope every assertion to records you created. Assert text or a value, never `toHaveScreenshot`
+   for behaviour; when a snapshot can't be avoided, the header says why.
 7. **Give everything you create a home.** Remove it in the test's `finally`. Playwright skips the `finally`
    when a test times out, so anything that could survive on the VMs fleet also needs a home in
    `setup/cleanup.steps.ts`: the VMs sweep for things Fleet stores by name, the resting-state step for state
    on a host. Name per-run things `pw-*` (packages `fleet-pw-*`) so the sweep recognises them, and never
    give a durable thing those prefixes.
 8. **Verify, scoped** (next section).
-9. **Update the docs in the same commit** (the table below).
+9. **Build in slices, and update the docs in the same commit** (the table below): one concern per commit,
+   each green on the instance, so a failure points at one change.
 10. **Review your own work** with `playwright-test-reviewer` on the branch's diff, fix what it finds or
     write down why not, then open the PR and tell Andrey it's ready for its branch run.
 
@@ -102,10 +121,18 @@ reason, so:
 - **Run once headed.** Headless on an idle machine hides render-order races that show up under load.
 - **`--repeat-each=5`** for anything timing-sensitive; **`--workers=2`** on anything touching the real VMs,
   since each VM works one queue and more workers stack it into timeouts; **`--output=<scratchpad>/<run>`**
-  so artifacts stay out of the repo.
+  so artifacts stay out of the repo. A test that can't run beside a copy of itself says so in its header and is
+  repeated on **one** worker: `software-lifecycle-on-host` owns a durable VM fixture, so with two workers
+  `--repeat-each` runs it beside itself, and one copy uninstalls the app the other just installed.
 - **`gh run list --limit 5` right before any run that touches the instances.** Two runs on one VM corrupt
   each other, and the nightly starts hours after its cron time.
-- On free, run what touches Unassigned knowing the real VMs are there.
+- **On free the real VMs sit in Unassigned.** Pick simulations there by id, never by a filter or *Select all*,
+  and run what touches Unassigned knowing the VMs are there.
+- **Another session may be using the same instances or checkout.** Each session works in its own
+  `git worktree` and stages by file, never `git add -A`. Announce every run to the others ("about to run
+  <specs> on <tier>, ~N min", then "done"). A run **with dependencies** waits for their explicit go: its
+  `cleanup-setup` wipes global reports and policies and Unassigned's scripts, packages and profiles. So does a
+  `gitops-mode` run, which makes every control read-only.
 
 ## Docs move with the code
 
@@ -114,12 +141,11 @@ A change isn't done until the docs describing it are current, in the same commit
 | you changed | update |
 |---|---|
 | a `test()` | its `docs/test-audit/` area entry (steps a person would perform, validations tagged *(UI)* / *(API)*, an honest assessment) and the audit README's index and counts |
-| a migration batch's spec | the batch file's *What landed*, and a `docs/qawolf-migration/DELIVERY-LOG.md` line |
 | a helper or page object | `helpers/README.md` / `pages/README.md` |
 | a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
 | gitops | the fleet file's header and `gitops/premium-fleetqa/README.md`; apply it, and say so in the PR |
 | a rule every spec should follow | `playwright/CLAUDE.md`, and this skill or the reviewer's |
-| a skip owed to a Fleet bug | a row in `docs/blocked-by-product-bugs.md` and `TODO(fleetdm/fleet#N)` on the skip (file the bug first; only when Andrey agrees it's one) |
+| a skip owed to a Fleet bug | a row in `docs/blocked-by-product-bugs.md` and `TODO(fleetdm/fleet#N)` on the skip. Search Fleet's issues for it first, and file only when Andrey agrees it's a bug; run the test un-skipped once to see it fail for the filed reason |
 | an env-gated or deferred skip | a `TODO.md` row |
 
 ## Fleet traps the suite has already paid for
@@ -132,7 +158,7 @@ A change isn't done until the docs describing it are current, in the same commit
   *Policies 3*, *Upcoming 1*). A `FormField`'s label is replaced by its error text. Row actions are
   hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.
 - **The Hosts list rewrites its URL just after it loads** and can undo a filter or search chosen before that
-  (C and D each lost one, and *Select all matching* took the whole fleet): use `HostsListPage.searchFor` /
+  (a label filter and a search have each been lost, and *Select all matching* once took a whole fleet): use `HostsListPage.searchFor` /
   `filterTo` / `LabelFilter.selectLabel`, never a bare `search.fill` or filter click.
 - **Built-in platform labels are osquery-perf answers** (the macOS label holds the Ubuntu simulations): pick
   hosts by `platform`, and never target a Platforms chip.
@@ -167,10 +193,22 @@ A change isn't done until the docs describing it are current, in the same commit
   form twice, `toast.expectSuccess` can match the first one. Poll the stored state through the API
   instead (`expect.poll`). A locator inside a toast (`toast.success.getByRole('link', …)`) also matches every
   toast still on screen and breaks strict mode: `toast.dismissAll()` between two runs of the same action.
+- **A closed modal doesn't mean its save landed.** Reopening it straight away can load the pre-save state, and
+  saving again then reverts the edit: confirm the write through the API before reopening.
+- **An activity check at the end of a long test can be buried** past the dashboard feed walk's 15 pages by
+  the other workers' activity: check right after the action, or through the API (`assertActivity`).
 - **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
-  it. A refetch also re-runs a host's policies immediately.
+  it. A refetch also re-runs a host's policies immediately. `refetch_requested` is one bit with no author:
+  any refetch's results landing clear it, so a read of it has to follow the moment it was set closely.
+  **A host mid-refetch answers no live query** until the refetch lands (about a minute on a VM): osquery reports
+  a batch only once every query in it has run, and a refetch's batch is Fleet's detail queries. `queryHost` waits
+  out a pending refetch before asking; a UI live run just waits, so bound it to cover one.
+- **A live report or policy run started in the UI has no timeout.** It finishes only once every online
+  targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
+  wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
+  Platforms chip or All hosts.
 - **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
   `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
   config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
@@ -183,12 +221,21 @@ A change isn't done until the docs describing it are current, in the same commit
   earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
   the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
   fields, never `JSON.stringify`.
+- **`assertActivity` expects the browser's admin as the actor.** An activity a spec causes through `fleetctl` or
+  an API helper is attributed to the API token's user instead: look it up with `findActivity` (or
+  `assertActivityAfter` with its `actor` left out) and match it by its content.
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
   `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not its hooks. Key the
   restore to the test that changed something (a describe-level variable only that test sets), so a parallel
-  sibling's hook can't roll it back mid-flight.
+  sibling's hook can't roll it back mid-flight. Restore only the keys you changed: `PATCH /config` refuses some
+  whole snapshotted subtrees with a 400 (`smtp_settings.configured` is read-only).
+- **A report created in the UI runs hourly on every host in scope** (it defaults to *Every hour* on all four
+  platforms, and automations need an interval): keep its SQL benign and delete it. Never untick all
+  automations on Workstations, whose gitops reports carry them.
+- **`organization-info.spec.ts` renames the organization for a few seconds** on both tiers. A spec that compares
+  the page's org name with the config re-reads both until they agree (`shared/settings/apple-mdm.spec.ts`).
 - **Two specs writing the same global key race.** A serial describe serialises only within its file, so a new
   test that writes a key another spec writes joins that spec's serial describe (or goes in `exclusive/`).
   Org settings › Advanced's Save posts `server_settings`, `smtp_settings`, `host_expiry_settings`,
@@ -202,6 +249,10 @@ A change isn't done until the docs describing it are current, in the same commit
   wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
   Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
   *role* write there needs a disposable `qa-test-*` user given that fleet.
+- **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
+  premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
+  enroll secret. Only the `gitops-mode` project writes them, it restores them in an `afterEach`, and its
+  teardown and every premium apply put back `GITOPS_EXCEPTIONS_BASELINE`. Never tick Enroll secrets in a UI test.
 - A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
   user-requested activity, so beside the install specs they starve.

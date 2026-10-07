@@ -1,6 +1,7 @@
 /**
  * Premium • Settings • Fleet Desktop. The Fleet Desktop org-settings section is
- * premium-only (free is redirected away). Presence check: the section renders
+ * premium-only (on free the page is a 403 and the nav has no entry for it).
+ * Presence check: the section renders
  * with its "Custom transparency URL" field. No mutation.
  *
  * Grounded in frontend/pages/admin/OrgSettingsPage/cards/FleetDesktop (returns

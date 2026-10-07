@@ -7,7 +7,7 @@
  *
  * The spec seeds its own uniquely-named report via the API and deletes it, so it
  * stays isolated from siblings running in parallel. Identical on both tiers, so
- * it runs shared. C2 #1/#3/#8/#11/#13/#20.
+ * it runs shared.
  *
  * Runs against the real macOS VM (`liveMacosHost`): a real host runs the query's
  * actual SQL, so the run's results can be asserted on directly. The osquery-perf
@@ -27,11 +27,10 @@ test('Host details — runs a saved report live against the host', async ({
   request,
   page,
 }) => {
-  // The live-run wait below is bounded by Fleet's rest period rather than by the
-  // host, so it alone can use most of the 60s project default — and the cleanup
-  // in `finally` then runs against a context Playwright is already tearing down,
-  // which surfaces as "Target page, context or browser has been closed" from the
-  // delete helper instead of the timeout that caused it.
+  // The live-run wait below can use most of the 60s project default on its own —
+  // and the cleanup in `finally` then runs against a context Playwright is already
+  // tearing down, which surfaces as "Target page, context or browser has been
+  // closed" from the delete helper instead of the timeout that caused it.
   test.setTimeout(180_000);
 
   const marker = `pw-hostlq-${Date.now()}-${rand()}`;
@@ -60,8 +59,9 @@ test('Host details — runs a saved report live against the host', async ({
 
     await reportLive.run();
 
-    // The host answers on its distributed interval; Fleet closes the campaign at
-    // FLEET_LIVE_QUERY_REST_PERIOD (25s by default) even if it never does.
+    // The host answers on its distributed interval. A run started in the UI ends
+    // only once every online targeted host has answered — it has no timeout of
+    // its own — so this wait is what bounds it.
     await expect(reportLive.finishedHeading).toBeVisible({ timeout: 90_000 });
     await expect(reportLive.runSummary).toContainText('1 host targeted');
     await expect(reportLive.runSummary).toContainText('100% responded');

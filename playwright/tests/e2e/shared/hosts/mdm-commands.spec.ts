@@ -7,7 +7,17 @@
  *   - `fleetctl get mdm-command-results` — the host acknowledged it;
  *   - the host's Activity card — the activity, and with "Show MDM commands" on,
  *     the command itself, each opening the request and the host's response;
- *   - the dashboard activity feed.
+ *   - the activity log, through the API, keyed to the command's UUID;
+ *   - the dashboard activity feed filtered to "Ran custom MDM command", whose
+ *     row opens the same request and response.
+ *
+ * **The feed is read filtered, and right away.** The acknowledgement can take
+ * minutes, and by then the other workers' activities can push an unfiltered row
+ * past the pages a feed walk reads. Narrowed to custom MDM commands, this run's
+ * row is near the top. The filter lives in the page's React state, so the row is
+ * read from the filtered feed as rendered: a reload (which `expectActivity` does
+ * while it waits) would drop the filter. The API check first proves the activity
+ * exists, so the feed is never waited on for it.
  *
  * Every view is tied to *this* command by its UUID, which fleetctl prints and
  * the request payload carries, so an identical command sent by an earlier run
@@ -27,8 +37,9 @@
 import * as fs from 'fs';
 import { test, expect } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { getHostMdmIdentity, requireRealHost } from '@helpers/api';
+import { findActivity, getHostMdmIdentity, requireRealHost } from '@helpers/api';
 import { fleetctl, output } from '@helpers/fleetctl';
+import type { MdmCommandDetailsModal } from '@pages';
 
 const REQUEST_TYPE = 'UserList';
 
@@ -81,11 +92,11 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
   expect(results).toMatch(new RegExp(`HOSTNAME:\\s*\\n\\s*${hostname.replace(/\./g, '\\.')}\\b`));
 
   const details = hostDetails.mdmCommandDetailsModal;
-  const carriesThisCommand = async () => {
-    await expect(details.requestPayload).toHaveValue(
+  const carriesThisCommand = async (modal: MdmCommandDetailsModal = details) => {
+    await expect(modal.requestPayload).toHaveValue(
       new RegExp(`<string>${REQUEST_TYPE}</string>.*<key>CommandUUID</key><string>${commandUuid}</string>`, 's'),
     );
-    await expect(details.response).toHaveValue(
+    await expect(modal.response).toHaveValue(
       new RegExp(`<string>${commandUuid}</string>\\s*<key>Status</key>\\s*<string>Acknowledged</string>`),
     );
   };
@@ -130,8 +141,25 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
     hostDetails.activityItem(new RegExp(`^The ${REQUEST_TYPE} command is pending\\.`)),
   ).toHaveCount(0);
 
+  // The global feed, filtered to this activity type. The newest row for a UserList
+  // on this host is this run's, and the modal's UUID check proves it. The activity
+  // is looked up by its command UUID first; its actor is the API user fleetctl
+  // signs in as, not the browser's admin.
+  expect(
+    await findActivity(request, 'ran_custom_mdm_command', (d) => d.command_uuid === commandUuid),
+    `no ran_custom_mdm_command activity for ${commandUuid}`,
+  ).toBeDefined();
   await dashboard.goto();
-  await dashboard.expectActivity(
-    activityCopy.mdmCommand.ran({ requestType: REQUEST_TYPE, host: host.displayName }),
+  await dashboard.selectActivityType('Ran custom MDM command');
+  const feedRow = dashboard
+    .activityRows(activityCopy.mdmCommand.ran({ requestType: REQUEST_TYPE, host: host.displayName }))
+    .first();
+  await expect(feedRow).toBeVisible();
+  await feedRow.click();
+  await dashboard.mdmCommandDetailsModal.expectOpen();
+  await expect(dashboard.mdmCommandDetailsModal.statusMessage).toContainText(
+    `ran ${REQUEST_TYPE} as a custom MDM command on ${hostname}.`,
   );
+  await carriesThisCommand(dashboard.mdmCommandDetailsModal);
+  await dashboard.mdmCommandDetailsModal.close();
 });

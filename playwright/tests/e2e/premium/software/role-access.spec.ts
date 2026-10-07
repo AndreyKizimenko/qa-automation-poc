@@ -4,11 +4,9 @@
  * table renders its full column set regardless of role, and which write
  * affordance ("Add software") their role earns.
  *
- * One spec with role as a dimension replaces four near-identical source flows,
- * and the columns are a **named list** rather than positional indexes — the
- * originals asserted `nth(0)`, `nth(1)`, `nth(2)`, `nth(4)` and skipped index 3
- * without explanation, so inserting a column would have silently re-pointed
- * every assertion.
+ * Role is a dimension of one spec, and the columns are a **named list** rather
+ * than positional indexes: with `nth()` lookups, inserting a column would
+ * silently re-point every assertion.
  *
  * Each role's scope is chosen for what it can prove:
  *   - the two global roles sweep every fleet from the "All fleets" aggregate,

@@ -46,10 +46,6 @@ __pycache__/
 # is checked in.
 gitops/loadtest/generated/
 
-# Source QA Wolf *.flow.js exports (flows-Free/, flows-Premium/). Kept for
-# reference during the migration; not runnable and not part of the suite.
-qa-wolf/
-
 # QA ops tooling (tools/) is checked in. What must never be:
 #
 # Real instance URLs + enroll secrets. The committed launchd plists are

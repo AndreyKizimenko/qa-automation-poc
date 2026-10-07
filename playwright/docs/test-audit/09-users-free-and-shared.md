@@ -980,7 +980,7 @@ other:
    - ✅ *(API)* The token from step 1: `GET /me` turns 401 (polled) — Fleet ends the user's sessions when an admin changes the password.
 
 **Assessment**
-- *Value:* the only test of an admin setting someone else's password, on both tiers, proven where it matters — at login — rather than by a UI landing (round 1's note on C7 #1 / #8). Also the second proof, after USRF-26, that Fleet revokes sessions.
+- *Value:* the only test of an admin setting someone else's password, on both tiers, proven where it matters — at login — rather than by a UI landing. Also the second proof, after USRF-26, that Fleet revokes sessions.
 - *Coverage gaps:* the password policy's refusal (too short, no symbol) on the edit form isn't exercised; nor is switching the user to SSO, which clears the password. Not driven by a non-admin.
 - *Redundancy:* the session-revocation half overlaps USRF-26 (Reset sessions), through a different trigger.
 - *Efficiency / smells:* the user is created through the API (it's a precondition, not the feature); the old password comes from the env, so the test can't run without `FLEET_TEST_USER_PASSWORD`.

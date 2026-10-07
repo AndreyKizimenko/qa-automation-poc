@@ -11,6 +11,11 @@
  * checked in the API and in the activity log, and the host's Activity card
  * shows the per-host ones.
  *
+ * *Show Recovery Lock password* renders only while enforcement is on for the
+ * host's fleet or a password already exists (`canShowRecoveryLockPassword`), so a
+ * check of its permission alone can't fail. The setting has no license check on
+ * the server: only the premium-only cron keeps it off the free Mac.
+ *
  * **Why this is safe on the VM (approved by Andrey, 2026-09-29).** Recovery
  * Lock only guards entry to macOS Recovery: it doesn't touch login, SSH or the
  * MDM channel. The password is escrowed in Fleet, and turning enforcement off

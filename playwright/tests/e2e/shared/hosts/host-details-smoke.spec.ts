@@ -10,7 +10,6 @@
  * fleet: these assert on genuine reported vitals — real local user accounts and
  * real agent versions — which the simulations only approximate. All three behave
  * identically on both tiers, so this runs shared rather than duplicated per tier.
- * C2 #7/#10/#17/#19/#22.
  */
 import { test, expect } from '@fixtures';
 import { getHostDetailUpdatedAt, waitForHostRefetch } from '@helpers/api';

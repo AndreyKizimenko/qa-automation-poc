@@ -17,8 +17,7 @@
  *     hosts", as a global observer does;
  *   - a global technician can add labels and gets Edit and Delete on any label.
  *
- * Two more cells read what authorship and the Hosts list add (round 1 C9 #14,
- * #15; round 3, batch E):
+ * Two more cells read what authorship and the Hosts list add:
  *   - a team maintainer's own label: a label made in the UI is always global
  *     (the form sends no fleet), and `hasEditPermission` admits its author, so
  *     ws-maintainer gets Edit and Delete on it and edits and deletes it — the
@@ -27,9 +26,11 @@
  *     the VMs-fleet sweep removes `pw-` labels after a dead run.
  *   - a global observer filters the Hosts list by a gitops label: the pill names
  *     it, with no Edit label or Delete label (`HostsFilterBlock` gives those to
- *     global roles but observers, or the label's author). QA Wolf's flow was
- *     titled "team observer" but signed in as the global observer; ws-observer's
- *     label filter is disabled while Workstations has no hosts.
+ *     global roles but observers, or the label's author). The global observer
+ *     reads it because ws-observer's label filter is disabled while
+ *     Workstations has no hosts. For team roles the pill is narrower than the
+ *     Labels page, which also allows a fleet label on their own fleet
+ *     (`LabelsTableConfig`); not filed.
  */
 import { test, expect } from '@fixtures';
 import { withStaticUser } from '@helpers/auth';

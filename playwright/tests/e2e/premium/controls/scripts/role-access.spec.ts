@@ -1,14 +1,12 @@
 /**
- * Premium • Controls • Scripts • what each role is shown (round 1 C7 #26; round
- * 3, batch E). The Controls area is a 403 for the observers — plain, observer+
+ * Premium • Controls • Scripts • what each role is shown. The Controls area is a 403 for the observers — plain, observer+
  * and a fleet's (`router/index.tsx`, `AuthAnyMaintainerAdminTechnicianRoutes`).
  * Inside it, the script library offers "Add script" and each script's Edit /
  * Download / Delete to every role that reaches it except a technician, who
  * gets the list alone (`ScriptLibrary`, `ScriptListItem`).
  *
- * QA Wolf's flow uploaded a script to a fleet as a global maintainer. The upload
- * takes the admin's form and endpoint (`scripts.spec.ts`), so the role's cell is
- * the control, not a second upload.
+ * A global maintainer's upload takes the admin's form and endpoint
+ * (`scripts.spec.ts`), so the role's cell is the control, not a second upload.
  *
  * Every role reads Workstations, where the spec puts one `pw-role-*` script
  * through the API, so a role's missing row actions are read off a row it can see.

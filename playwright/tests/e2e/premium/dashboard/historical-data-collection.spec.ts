@@ -22,8 +22,8 @@
  * does. Do not "simplify" this onto Workstations, VMs or any other fleet the
  * instance keeps.
  *
- * **The deployment-wide switches are read, never written.** QA Wolf's flow
- * flipped those as setup; they delete every fleet's history at once, including
+ * **The deployment-wide switches are read, never written.** Flipping them
+ * deletes every fleet's history at once, including
  * the 30 days of VMs-fleet history `fleet-scoped-cards.spec` plots in parallel
  * with this one. So this spec requires global collection to be on and skips if
  * it isn't — which is also the only state in which the per-fleet checkboxes are

@@ -253,7 +253,6 @@ other:
 - **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts`
 - **Project:** premium · **Scopes:** Unassigned, Workstations
 - **Mode:** UI · **Isolation:** standalone, self-cleaning
-- **Source (step 6):** QA Wolf `configuration-profiles-uploading-bad-profile-shows-error-and-links-to-error-docs` (round 1 C9 #2; round 3, batch F)
 - **Preconditions:**
   - UI self-heal: `deleteIfCustomPresent()` removes a custom profile left by a crashed run.
   - **ABM dependency — yes, and it is load-bearing.** `SetupAssistant.tsx` gates on
@@ -311,7 +310,6 @@ other:
 - **Grep:** `npx playwright test tests/e2e/premium/controls/setup-experience/users.spec.ts -g "settings round-trip"`
 - **Project:** premium · **Scopes:** Unassigned (writes global `/config`), Workstations (writes `/teams/:id`)
 - **Mode:** UI+API · **Isolation:** **mutates shared scope config.** IdP is saved on and then off, whatever it started as (off is the resting state cleanup restores); the hidden admin is flipped and flipped back to its recorded state. A flag set just before the first save and cleared once the IdP-off save reads back keys an `afterEach` to this test: if it died with IdP on, `resetMacosSetupToggles` puts the scope back. The three saves share one test because turning IdP on queues Fleet's ABM profile job for the scope — split up, they'd race each other on the same fleet. Runs in a non-serial describe alongside SETUP-08, which never saves; under `fullyParallel` the two can run at the same time on different workers.
-- **Source:** QA Wolf `controls-controls-macos-setup-ui-validation` and `mac-os-accounts-allow-end-users-to-edit-their-macos-local-account-account-name-and-full-name` (round 1 C8 #6 and C9 #8; round 3, batch F)
 - **Preconditions:** the Users card is the one step that does **not** gate on MDM/ABM, but **Require IdP authentication** is `disabled` unless an end-user IdP is configured (`isIdPConfigured`: `entity_id` + `idp_name` + metadata). EUA is assumed pre-configured on the instance per `playwright/CLAUDE.md`; the spec never asserts it, and without it the first `setChecked` times out on a disabled checkbox.
 - **Data created:** none, but it writes `enable_end_user_authentication`, `lock_end_user_info`, `enable_managed_local_account` and `end_user_local_account_type` on the scope. `resetMacosSetupToggles` (cleanup, and this test's `afterEach`) sets the first and third to `false`; Fleet sets Lock to match an IdP change that doesn't name it, and refuses Lock without IdP.
 
@@ -406,7 +404,6 @@ other:
 - **Grep:** `npx playwright test --project=premium bootstrap-package -g "install fleetd manually"`
 - **Project:** premium (the main project, not `premium-exclusive`) · **Scope:** a throwaway fleet, `pw-manual-agent-<nonce>`, opened **by URL** (`bootstrapPackage.goto({ fleetId })`) rather than picked in the dropdown: its name is per-run (see `TeamDropdown.selectByLabel`). The subnav links keep the fleet.
 - **Mode:** UI+API · **Isolation:** its own describe; `test.setTimeout(90_000)`. Not on Unassigned or Workstations: while the option is on, that fleet's Install software (macOS) and Run script cards are disabled, which would break SETUP-03…05 running beside it. The test's last step deletes the fleet, and an `afterEach` deletes it again by name (tolerating a 404); `deleteFleet` deletes the fleet's bootstrap package first, because a fleet delete leaves it behind (`mdm_apple_bootstrap_packages` isn't among the tables it clears). The cleanup sweep of `pw-*` fleets removes one a killed run left, and `resetSetupExperience` also turns the option off on Unassigned and Workstations, as a backstop.
-- **Source:** QA Wolf `controls-controls-macos-setup-experience-check-install-fleetd-manually` (round 1 C8 #4; round 3, batch F)
 - **Preconditions (API):** `createFleet`; mid-flow, `uploadBootstrapPackage` (`POST /bootstrap`, `dummy-bootstrap-package.pkg`) and `uploadSoftwarePackage` of `fleet-playwright-install-1.0.0.pkg` (2 KB, inert — any macOS package will do; it only has to give Install software a row). Apple MDM + ABM configured, as for SETUP-01.
 - **Data created:** the fleet, its bootstrap package and the macOS package, all deleted with the fleet. The fleet holds no host, so nothing is ever delivered.
 
@@ -537,7 +534,7 @@ API calls are mostly *setup*, which is the right shape.
 
 ### Quick wins
 
-1. ~~Add `await page.reload()` before the post-save assertions in SETUP-07~~ (done 2026-10-05, round 3 batch F: each save is read back through the API, and the IdP saves after a reload).
+1. ~~Add `await page.reload()` before the post-save assertions in SETUP-07~~ (done 2026-10-05: each save is read back through the API, and the IdP saves after a reload).
 2. Delete SETUP-02 ([`install-software.spec.ts:87`](../../tests/e2e/premium/controls/setup-experience/install-software.spec.ts)); it is contained in SETUP-03 and heads a serial chain, so its flake cost is 10 skipped tests per scope.
 3. Replace SETUP-05's UI self-heal branch ([`run-script.spec.ts:37`](../../tests/e2e/premium/controls/setup-experience/run-script.spec.ts)) with `deleteSetupExperienceScript(request, fleetId)`, matching SETUP-01 — removes an `if` and a swallowed `catch`.
 4. Tighten two near-tautological download assertions: SETUP-01 `expect(dl.suggestedFilename()).toBe(PKG_FILE)` (and optionally sha256 the stream); SETUP-06 assert the custom card's profile name is exactly `automatic-enrollment.dep.json` instead of `not.toHaveText('Default profile')`.

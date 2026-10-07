@@ -263,11 +263,9 @@ Keep `perf-hosts.env` out of git — it's gitignored, and `install.sh` refuses t
 install a plist that still has an unsubstituted placeholder, so there's no path
 where a real secret silently ends up in a committed file.
 
-## How this serves the migration
+## What the Playwright suite depends on
 
-This unblocks the host-dependent specs (see
-`playwright/docs/qawolf-migration/README.md` → "Keeping the host population
-online"), which need online hosts. Once these daemons are up and each
-instance shows online hosts, the next agent can build the `liveMacosHost`
-fixture and the host-execution specs. The Playwright fixtures resolve the host
-by API at run time, so they tolerate host IDs changing across a reboot/refresh.
+The host-dependent specs need these hosts online (see `playwright/CLAUDE.md` ›
+*Test hosts*). The Playwright fixtures resolve hosts by API at run time, so they
+tolerate host IDs changing across a reboot or refresh; a deleted simulation never
+comes back on its own.

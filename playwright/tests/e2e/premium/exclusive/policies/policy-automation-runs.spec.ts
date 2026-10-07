@@ -17,11 +17,14 @@
  *      modal, every failing result fires the automation
  *      (`processScriptsForNewlyFailingPolicies`, `server/service/osquery.go`) and
  *      restarts the attempt count, so the next refetch brings a fresh run of 3.
- *      Without the restart it would be one.
+ *      Without the restart it would be one. Only a script re-fires on every
+ *      failing result: an install that *succeeded* goes on an hourly cooldown
+ *      (`continuousAutomationOnCooldown`), which stops an install → refetch →
+ *      re-run loop.
  *
- * QA Wolf's flows — the two 3-attempt ones, the "retries every hour" one and
- * the Python-on-a-Mac one — read hours of accumulated history; the hour is only
- * osquery's policy update interval, and a refetch delivers a result at once.
+ * Nothing here reads hours of accumulated history: the hour in "retries every
+ * hour" is only osquery's policy update interval, and a refetch delivers a result
+ * at once.
  * Python runs on the Ubuntu VM because the Macs have no Command Line Tools.
  *
  * **Why `exclusive/`.** Fleet queues what a policy automation runs at priority

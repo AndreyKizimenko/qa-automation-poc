@@ -1,5 +1,8 @@
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, Locator, Download, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+
+/** Which live run the page belongs to: a report's or a policy's. */
+export type LiveRunKind = 'report' | 'policy';
 
 /**
  * `/reports/:id/live` — the live-run flow for a saved report. Two screens share
@@ -8,16 +11,23 @@ import { Navbar } from '../components/Navbar';
  *  1. **Select targets** — host/label/fleet picker. Reached with a host already
  *     selected when the run was started from a host's Actions → Live report.
  *  2. **Run** — opened by "Run". Streams results over a websocket, so the
- *     heading goes "Running report" → "Report finished" once every targeted host
- *     has answered or the campaign times out.
+ *     heading goes "Running report" → "Report finished" once every online
+ *     targeted host has answered. Nothing else ends the run: a host that stays
+ *     online without answering keeps it running until someone presses Stop, so
+ *     a spec bounds its wait on the finished heading.
  *
  * A host that answers may return rows, no rows, or an error, so a spec asserting
  * a completed run should key on the finished heading and the responded count,
  * and treat `resultsRows` / `noResultsState` as alternatives.
+ *
+ * A policy's live run (`/policies/:id/live`) renders the same two screens with
+ * its own heading copy and target-count class; `PolicyLivePage` builds this
+ * page object for that kind and adds the policy's Yes / No summary.
  */
 export class ReportLivePage {
   readonly page: Page;
   readonly navbar: Navbar;
+  readonly kind: LiveRunKind;
 
   readonly heading: Locator;
   readonly runButton: Locator;
@@ -49,20 +59,31 @@ export class ReportLivePage {
    * renders it as role-less spans, so it's scoped by the component's own class.
    */
   readonly runSummary: Locator;
+  /** "Export results": downloads the results table as a CSV. */
+  readonly exportResultsButton: Locator;
+  /** The "N result(s)" count above the results table. */
+  readonly resultsCount: Locator;
+  /** The results table's header row. */
+  readonly resultsHeader: Locator;
 
-  constructor(page: Page) {
+  constructor(page: Page, kind: LiveRunKind = 'report') {
     this.page = page;
     this.navbar = new Navbar(page);
+    this.kind = kind;
 
     this.heading = page.getByRole('heading', { name: 'Select targets', level: 1 });
     this.runButton = page.getByRole('button', { name: 'Run', exact: true });
     this.cancelButton = page.getByRole('button', { name: 'Cancel', exact: true });
     this.targetRows = page.getByRole('table').locator('tbody').getByRole('row');
-    this.targetsTotalCount = page.locator('.run-query-page__targets-total-count');
+    // The picker takes its page's base class, so the count's class differs by kind.
+    this.targetsTotalCount = page.locator(
+      kind === 'report' ? '.run-query-page__targets-total-count' : '.live-policy-page__targets-total-count',
+    );
     this.hostSearch = page.getByPlaceholder('Search name, user email, hostname, UUID, serial number, or IP address');
 
-    this.runningHeading = page.getByRole('heading', { name: 'Running report', level: 1 });
-    this.finishedHeading = page.getByRole('heading', { name: 'Report finished', level: 1 });
+    const kindLabel = kind === 'report' ? 'Report' : 'Policy';
+    this.runningHeading = page.getByRole('heading', { name: `Running ${kind}`, level: 1 });
+    this.finishedHeading = page.getByRole('heading', { name: `${kindLabel} finished`, level: 1 });
     this.stopButton = page.getByRole('button', { name: 'Stop', exact: true });
     this.closeButton = page.getByRole('button', { name: 'Close', exact: true });
     this.runAgainButton = page.getByRole('button', { name: 'Run again' });
@@ -70,13 +91,16 @@ export class ReportLivePage {
     this.errorsTab = page.getByRole('tab', { name: 'Errors' });
     // The results table only exists once rows have streamed in; scoped to the
     // results container so it can't match the targets table.
-    this.resultsRows = page
-      .locator('.query-results__results-table-container')
-      .getByRole('table')
-      .locator('tbody')
-      .getByRole('row');
+    const resultsTable = page.locator('.query-results__results-table-container').getByRole('table');
+    this.resultsRows = resultsTable.locator('tbody').getByRole('row');
+    this.resultsHeader = resultsTable.locator('thead');
     this.noResultsState = page.getByText('No results returned');
     this.runSummary = page.locator('.live-results-heading__information');
+    this.exportResultsButton = page.getByRole('button', { name: 'Export results' });
+    // The results screen's root (`QueryResults` / `PolicyResults`, both
+    // "query-results") is a role-less div; scoping to it keeps the count from
+    // matching the picker's or the heading's host counts.
+    this.resultsCount = page.locator('.query-results').getByText(/^[\d,]+ results?$/);
   }
 
   async waitForReady(): Promise<void> {
@@ -125,5 +149,33 @@ export class ReportLivePage {
   /** Starts the run; leaves the browser on the streaming results screen. */
   async run(): Promise<void> {
     await this.runButton.click();
+  }
+
+  /**
+   * A results column's sort control. A sortable header renders as a button named
+   * after the column; the live tables sort in the browser, with no request.
+   */
+  resultsSortControl(column: string): Locator {
+    return this.resultsHeader.getByRole('button', { name: column, exact: true });
+  }
+
+  /**
+   * One results column's cell text, row by row as rendered. The column is found
+   * by its header's position, read once the run has finished and the table has
+   * stopped re-rendering.
+   */
+  async resultsColumnValues(column: string): Promise<string[]> {
+    await expect(this.resultsHeader).toBeVisible();
+    const headers = (await this.resultsHeader.locator('th').allInnerTexts()).map((h) => h.trim());
+    const index = headers.indexOf(column);
+    if (index < 0) throw new Error(`the results have no "${column}" column (got ${headers.join(', ')})`);
+    const cells = await this.resultsRows.locator(`td:nth-child(${index + 1})`).allInnerTexts();
+    return cells.map((c) => c.trim());
+  }
+
+  /** Clicks "Export results" and returns the CSV download. */
+  async exportResults(): Promise<Download> {
+    const [download] = await Promise.all([this.page.waitForEvent('download'), this.exportResultsButton.click()]);
+    return download;
   }
 }

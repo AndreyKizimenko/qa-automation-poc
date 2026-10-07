@@ -12,93 +12,17 @@ those notes into spec changes.
 Written 2026-07-29 against `main` @ `a420f1c`. Suite at that commit: **113 spec
 files · ~350 test declarations · 4 projects**.
 
-> **Brought current 2026-09-28** against `main` @ `45ecf28`: **158 spec files · 549 test
-> declarations · 5 projects · 83 page objects**. The QA Wolf round-2 specs (batches A–C and the
-> new `gitops-mode` project) are audited — see area **20** and the round-2 additions throughout.
-> The migration record is in [../qawolf-migration/round-2/](../qawolf-migration/round-2/).
->
-> **Batch D added 2026-09-28** (`playwright/qawolf-round2-batch-d`): **167 spec files · ~573 test
-> declarations · 7 projects · 90 page objects**. Execution on the real VMs — scripts, MDM commands,
-> software install / uninstall / update, batch runs — is audited in areas **02**, **11**, **14** and the new
-> area **21**.
->
-> **Area 21 restructured 2026-09-28** (`playwright/vms-durable-fixtures`): the install and uninstall loops
-> and the catalog-add FMA install (SWH-01/02/04, now retired stubs) became one test per durable VMs-fleet
-> fixture, SWH-14 in `software-lifecycle-on-host.spec.ts` — 6 spec files, 18 runtime tests in the area.
-
-> **Batch E added 2026-09-29** (`playwright/qawolf-round2-batch-e`): label targeting — which hosts a profile,
-> declaration, software title, policy or report reaches — is audited in the new area **22** (LT-01…09), and
-> profile delivery, OS updates and the free delivery spec in area **11** (CTL-27…34). The profile lifecycle
-> entries (CTL-01…05, 15…18) moved onto inert fixtures: on free, those uploads reach the real VMs.
-
-> **Batch F added 2026-09-29** (`playwright/qawolf-round2-batch-f`): a host's IdP username (area **03** HOSTP-13…15,
-> free **02** HOST-24, free API refusal **14** API-31); Recovery Lock on the real Mac (**03** HOSTP-16); a team admin's own-fleet scope and the Fleet MFA form rules (**08** USRP-32…34, free API refusal **14** API-32).
-> Updated: HOSTP-04 (technician), USRF-05/09 (no MFA checkbox on free), MISC-20 (card headings, Host names row).
-
-> **Batch G (retries half) added 2026-10-01** (`playwright/qawolf-round2-batch-g`): a policy's own automations modal
-> — Install software, Run script and Continuous saved from the row, and free's webhook-only twin (area **04**
-> POL-25…26); patch policies for Fleet-maintained apps, every option's stored flags (area **06** SWL-33…34); on the
-> Ubuntu VM, a policy's failing script tried 3 times and re-run by continuous automations (**04** POL-27), and a
-> Deploy whose install fails, tried 3 times (**21** SWH-15).
-
-> **Round 3 batch B added 2026-10-02** (`playwright/qawolf-round3-batch-b`): area **04** POL-09/10 rewritten
-> as the failing-policies webhook's whole life (enabled, sent for one policy, turned off), and POL-19/20 as a policy with
-> a syntax error saved and reopened. Added POL-28…32: Ticket with no integration on both tiers, a fleet's own webhook on
-> a throwaway fleet, fleet isolation, and AI Autofill's live call to fleetdm.com on both tiers.
-> Area **05**: the Reports CRUD turns automations on at create and off at edit (RPT-01/03/14/16); RPT-06 saves its
-> broken SQL and reopens it, RPT-07 reads the Save report modal's defaults, and RPT-08/19 turn automations on and off
-> again with the list's cell read in between. Added RPT-23…28: free twins of RPT-06/07, Save as new into another fleet,
-> the edit form's "Save changes?" warnings on both tiers, and stored results from the real macOS VM, for the
-> long-standing gitops report and a new one (the org-wide *Store report results* toggle stays untested by decision).
-> Area **06**: SWL-31 adds its package with a pre-install query and post-install script from the add form; SWL-36 edits
-> all four Advanced options and reads them back. Area **07**: SWV-08/15 turn the vulnerability automation off again.
-> Area **11**: CTL-13/14 move to `shared/` (free gains them), and CTL-35/36 add a script refused until its variable
-> exists and a variable refused deletion while a script uses it.
-
-> **Round 3 batch C added 2026-10-03** (`playwright/qawolf-round3-batch-c`): what Fleet decides server-side, over
-> simulations. Area **04**: POL-33 (a policy saved for macOS only runs on macOS hosts, both tiers), POL-34 (a host's
-> policy → the hosts that gave the same answer, both answers, both tiers) and POL-35 (the policies list's Pass / Fail
-> links on premium). Area **03**: HOSTP-17 (Low disk space withholds *Select all matching hosts*) and HOSTP-18 (*Select all
-> matching* transfers all 51 offline simulations staged on a throwaway fleet); HOSTP-01 reads its Fleet column. Area
-> **13**: the Manual label lifecycle (MISC-05…07) runs from the Hosts list — filtered by the label, edited (one member
-> swapped) and deleted from its pill, and MISC-31 checks free's dashboard and Hosts list for any fleet scope. Area **02**:
-> HOST-25 flips the host Reports tab's "don't store results" toggle; HOST-04 reads the Inventory's columns and pages it.
-> HOSTP-09 walks back from a report's results to the host. Area **07**: SWV-05 checks the exploited filter's rows against
-> the API and their CISA icon; SWV-23 (premium) and SWV-24 (free) a CVE's count and hosts by fleet. Area **06**: SWL-37
-> (a title's View all hosts, both tiers) and SWL-38 (a package on Unassigned in an Unassigned host's Library).
-
-> **Round 3 batch E added 2026-10-05** (`playwright/qawolf-round3-batch-e`): what each role is *shown*, one test per
-> role. Area **04**: POL-36…41 (the policies matrix on both tiers, a team role's fleet-policy create, #54623 and
-> #54624 skipped, the automation filter by scope). Area **05**: RPT-29…35 (the reports matrix, a global observer's
-> picker per report scope, a single-fleet maintainer's Save as new, one-host live runs by an observer and an
-> observer+). Area **03**: HOSTP-10/11 rewritten as a role table with HOSTP-19 (technician and fleet roles), HOSTP-20/21
-> (a host's Actions and Live report modal by role; #54622 skipped). Area **02**: HOST-10/11 gain Add label, HOST-26
-> (free host actions). Area **13**: MISC-32…36 (a fleet observer and a technician on Labels, a team maintainer's own
-> label, the observer's label pill, free's twin). Area **11**: CTL-42/43 (the script library or the Controls 403, by
-> role).
-
-> **Round 3 batch F added 2026-10-05** (`playwright/qawolf-round3-batch-f`): MDM and setup-experience settings saved and
-> read back, nothing delivered to a device. Area **12**: SETUP-07 rewritten — Require IdP and Lock end user info saved on
-> and off, each save read back through the API and the IdP ones after a reload, plus the hidden admin and the Preview
-> link; SETUP-06 ends on a profile Apple refuses (`CONFIG_NAME_REQUIRED`); SETUP-09 adds *Install Fleet's agent (fleetd)
-> manually* on a throwaway fleet (needs a package; while on, macOS setup software and the setup script are disabled and
-> refused). Area **11**: CTL-41 saves a required BitLocker PIN with enforcement on a throwaway fleet and clears it with
-> enforcement; CTL-28 checks Unassigned's and the QA fleet's macOS updates stay put while Workstations holds a target;
-> CTL-06 brought current (it described a test the spec no longer has). Area **10**: SET-16 saves the end-user migration
-> mode and webhook URL with the workflow off; SET-17 reads the Apple push certificate details on both tiers; SET-09 moves
-> onto `IntegrationsPage`. Area **06**: SWL-39 edits a Play Store app's managed configuration inside the Android
-> lifecycle (an unsupported key refused, a valid one stored and reopened; fleetdm/fleet#54845 ignored narrowly). Area
-> **13**: MISC-20 gains the Authentication (SSO) › End users row (19 cases).
+> Brought current with the suite through 2026-10-07.
 
 ## The area files
 
 | # | Area | Entries | Project(s) |
 |---|---|---|---|
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
-| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 26 | premium, free |
+| 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 27 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 21 | premium |
-| 04 | [Policies](04-policies.md) | 41 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 35 | premium, free |
+| 04 | [Policies](04-policies.md) | 42 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 36 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 39 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 24 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
@@ -113,11 +37,11 @@ files · ~350 test declarations · 4 projects**.
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 12 (per spec file) | loadtest + loadtest-api (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |
-| 20 | [GitOps mode](20-gitops-mode.md) | 21 | gitops-mode, free |
-| 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
+| 20 | [GitOps mode](20-gitops-mode.md) | 28 | gitops-mode, free |
+| 21 | [Software on hosts](21-software-on-hosts.md) | 14 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**537 entries** covering every test in the suite. An entry can expand into several
+**549 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
 17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under
@@ -222,7 +146,7 @@ Some things belong in the repo's existing records rather than in a Notes block:
 
 ## Things the audit's own conclusions should absorb
 
-Findings from round 2 that change how existing entries should be judged, not just what to add:
+Findings since the audit was written that change how existing entries should be judged, not just what to add:
 
 - **The dashboard has no platform cards any more.** Fleet replaced them with the "Hosts enrolled" bar chart
   (`HostsEnrolledCard`, `role="button"` named `"<platform> hosts"`). Any audit entry describing platform cards
@@ -255,5 +179,5 @@ Findings from round 2 that change how existing entries should be judged, not jus
   on, no `script_execution_timeout` override, the suite's own queued items cancelled, and on premium every
   durable fixture uninstalled. An entry that assumes a dead run leaves a fixture installed for the next run is
   judging a hazard the preflight now removes.
-- **The premium nightly is ~40 min** at CI's two workers (from ~15 before batch D), against a 120-min job limit.
+- **The premium nightly is ~40 min** at CI's two workers (from ~15 before the VM-execution specs), against a 120-min job limit.
   In CI Playwright stops the run at 100 min (`globalTimeout`) and still writes the report. An entry whose verdict is "expand" on a VM-bound spec should price the minutes.

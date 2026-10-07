@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from './components/Navbar';
 import { TeamDropdown } from './components/TeamDropdown';
+import { MdmCommandDetailsModal } from './components/MdmCommandDetailsModal';
 
 /**
  * /dashboard — the Fleet dashboard, with platform-specific variants:
@@ -104,6 +105,12 @@ export class DashboardPage {
   /** Prefix match on the actor's name or email; the server does the filtering. */
   readonly activitySearch: Locator;
   readonly activityEmptyState: Locator;
+  /**
+   * A custom MDM command's details, raised by clicking its "ran … as a custom MDM
+   * command on HOST." row: the request, the host's answer, and a status line
+   * naming the actor, the command and the host's MDM hostname.
+   */
+  readonly mdmCommandDetailsModal: MdmCommandDetailsModal;
 
   // "Manage automations" — streams the activity feed to a destination URL.
   readonly automationsButton: Locator;
@@ -196,6 +203,7 @@ export class DashboardPage {
       name: "Search activities by user's name or email",
     });
     this.activityEmptyState = this.activityFeedCard.getByText('No activities match the current criteria');
+    this.mdmCommandDetailsModal = new MdmCommandDetailsModal(page);
 
     this.automationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     // The modal class is on both the container and its inner form div, so the

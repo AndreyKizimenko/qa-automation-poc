@@ -1,6 +1,6 @@
 /**
  * Free • Controls • Scripts • what each role is shown — the free half of
- * `premium/controls/scripts/role-access.spec.ts` (round 1 C7 #26). Free has
+ * `premium/controls/scripts/role-access.spec.ts`. Free has
  * scripts, and the same route guard: a global maintainer gets the library with
  * "Add script" and each script's Edit / Download / Delete; a global observer
  * gets the 403 page on Controls.

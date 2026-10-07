@@ -59,7 +59,7 @@ Premium-only host flows: moving hosts between fleets (bulk and single-host, per 
    - ✅ *(UI)* the dropdown's current value reads exactly `QA` (`TeamDropdown.selectByLabel`).
    - ✅ *(UI)* first row with a link still visible (re-asserted in the spec).
 5. ☐ Read the list, then tick the table header's select-all checkbox.
-   - ✅ *(UI)* exactly 3 rows, each with a **Fleet** cell reading `QA` (round 1 C5 #10: the list under a fleet is that fleet's hosts).
+   - ✅ *(UI)* exactly 3 rows, each with a **Fleet** cell reading `QA` (the list under a fleet is that fleet's hosts).
    - ✅ *(UI)* the bulk-select bar (`thead.active-selection`) is visible (`selectAllOnPage`).
    - ✅ *(UI)* the tally reads `3 selected`.
    - ✅ *(UI)* **Select all matching hosts** is **hidden** — only a *full* page offers widening.
@@ -165,7 +165,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/hosts/host-transfer-permissions.spec.ts`](../../tests/e2e/premium/hosts/host-transfer-permissions.spec.ts)
 - **Grep:** `npx playwright test -g "can transfer a host to another fleet"` (three runtime tests: `a global admin can transfer a host to another fleet`, `a global maintainer can transfer a host to another fleet`, `a global technician can transfer a host to another fleet`)
-- **Project:** premium · **Roles:** `global-admin` (host index 0), `global-maintainer` (host index 1), `global-technician` (host index 2; QA Wolf's `technician-role-can-transfer-hosts-between-fleets`, round 2 batch F) · **Destination:** the **QA** fleet
+- **Project:** premium · **Roles:** `global-admin` (host index 0), `global-maintainer` (host index 1), `global-technician` (host index 2) · **Destination:** the **QA** fleet
 - **Mode:** UI+API · **Isolation:** parallel; each role claims its own host by index; `finally` restores
 - **Preconditions:** static users `global-admin@fleetdm.com` / `global-maintainer@fleetdm.com` / `global-technician@fleetdm.com` provisioned with `FLEET_STATIC_USER_PASSWORD`; ≥3 online simulated **Windows** hosts; QA fleet exists
 - **Data created:** none permanent — one simulated Windows host moves to QA and back to Unassigned per role
@@ -407,7 +407,7 @@ other:
 8. ☐ Click **View report for all hosts**.
    - ✅ *(UI)* URL matches `/reports/<reportId>`.
    - ✅ *(UI)* the report-details `h1` contains the report name.
-9. ☐ In the report's results, click the Mac's **Host** cell (round 1 C4 #P17: the walk the other way).
+9. ☐ In the report's results, click the Mac's **Host** cell (the walk the other way).
    - ✅ *(UI)* back on `/hosts/<hostId>/reports/<reportId>`, titled with the host, first row containing `bar`.
 10. ☐ Click **Back to host details**.
    - ✅ *(UI)* URL `/hosts/<hostId>/details`.
@@ -446,7 +446,7 @@ other:
 1. ☐ Log in as the role (cached session) → `/hosts/manage` via URL → ✅ *(UI)* a host row with a link.
 2. ☐ ✅ *(UI)* **Export hosts** and **Add hosts** visible.
 3. ☐ Open the **Hosts page settings** gear → ✅ *(UI)* **Enroll secrets**; **Activity automations** for the admin only. Click **Enroll secrets** → ✅ *(UI)* the modal opens; **Done** closes it.
-4. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* its "Filter labels by name..." box, and the **Add label** "+" beside it (round 1 C1 #21).
+4. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* its "Filter labels by name..." box, and the **Add label** "+" beside it.
 
 **Assessment**
 - *Value:* the write roles' Hosts-list controls, now with the gear's per-role items and Add label.
@@ -519,7 +519,7 @@ other:
 4. ☐ For each of **Lock**, **Wipe**, **Turn off MDM**: ✅ *(UI)* the option's count is 1 (offered) or 0 (withheld) per the matrix, with a per-action failure message.
 
 **Assessment**
-- *Value:* the safe half of Lock/Wipe coverage — the permission/gating surface, asserted without firing a one-way action on a QA VM (no re-provisioning automation exists; see `docs/qawolf-migration/PARITY.md` §6). Encodes two counter-intuitive gates: Turn off MDM is Apple-only, and Lock/Wipe need no MDM on Linux. Answering the audit question directly: it asserts **presence/absence, not disabled states** — Fleet omits unavailable actions from the menu rather than disabling them — and simulated hosts can't be used for the macOS/Windows cases at all, because both gates require real MDM enrollment.
+- *Value:* the safe half of Lock/Wipe coverage — the permission/gating surface, asserted without firing a one-way action on a QA VM (no re-provisioning automation exists, so Lock and Wipe are never fired on a real VM). Encodes two counter-intuitive gates: Turn off MDM is Apple-only, and Lock/Wipe need no MDM on Linux. Answering the audit question directly: it asserts **presence/absence, not disabled states** — Fleet omits unavailable actions from the menu rather than disabling them — and simulated hosts can't be used for the macOS/Windows cases at all, because both gates require real MDM enrollment.
 - *Coverage gaps:* **no role dimension** — the file's docstring says it "closes the RBAC/gating half" of the Lock/Wipe gap, but all three cases run as the suite admin, so only platform × tier is asserted. Whether a global observer / team admin / maintainer is offered Lock or Wipe is untested. Also untested: **Unlock** (offered on a locked host), an MDM-enrolled-but-*disconnected* Apple host, and the actions' behaviour (deliberately, and correctly, out of scope).
 - *Redundancy:* [`free/hosts/mdm-actions-availability.spec.ts`](../../tests/e2e/free/hosts/mdm-actions-availability.spec.ts) is the same body with an inverted matrix (Lock/Wipe premium-gated, Turn off MDM not) — the pair is the paywall assertion, so the duplication is justified. Mechanically overlaps HOSTP-05 (open Actions, count options).
 - *Efficiency / smells:* the macOS case re-resolves what the `liveMacosHost` worker fixture already resolves once per worker — using the fixture would drop a paged host list plus per-candidate vitals calls. The Linux case is a flake vector: `listOnlineHosts` omits the `platform` param for linux (there is no linux label group) and `findOnlineHost` scans only the alphabetically-first **100** online hosts of *any* platform ([`helpers/api/hosts.ts:303`](../../helpers/api/hosts.ts), `maxScan = 100`), so a pool skewed toward macOS/Windows names yields `null` and fails setup.
@@ -762,7 +762,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "withholds"`
 - **Project:** premium · **Scope:** All fleets (the dashboard's default)
 - **Mode:** UI · **Isolation:** parallel; mutates nothing
-- **Source:** QA Wolf `hosts-attempt-to-bulk-transfer-all-hosts-with-filter-unhappy-path` (round 1 C1 #10; round 3, batch C)
 - **Preconditions:** more than a page (50) of hosts with under 32 GB free; ~680 on premium (2026-10-03), most of the load fleet.
 - **Data created:** none
 
@@ -796,7 +795,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "transfers every host the filter matches"`
 - **Project:** premium · **Scope:** a throwaway `pw-transfer-<nonce>` fleet → Unassigned
 - **Mode:** UI+API · **Isolation:** parallel; its own fleet and an offline pool nothing else uses. The `afterEach` deletes the fleet by name, which returns any host still on it to Unassigned; the cleanup projects sweep a fleet a killed run left.
-- **Source:** QA Wolf `hosts-bulk-transfer-hosts` (round 1 C1 #12; round 3, batch C). QA Wolf moved 50 hosts between two throwaway fleets and back; one fleet and 51 hosts make "all matching" differ from "this page".
 - **Preconditions (API):** 51 **offline** Linux simulations on Unassigned (`findOfflineSimulations`, the most recently seen first). The perf daemons abandon their set of ~300 at the daily refresh (16:00 UTC), and host expiry deletes it a day later, so ~100 Ubuntu ones are always offline and no other picker reads them. Fewer fails with that explanation.
 - **Data created:** the fleet (deleted in the test and in the `afterEach`). The 51 hosts end on Unassigned, where they started.
 
@@ -815,7 +813,7 @@ other:
 6. ☐ *(API, `finally`)* Delete the fleet.
 
 **Assessment**
-- *Value:* The only coverage of `POST /hosts/transfer/filter` from the UI, and of what "Select all matching" actually does: the count it shows and the request it sends. Without the offline pool this needed `exclusive/` or a cut; with it, it costs seconds and touches nothing another spec reads.
+- *Value:* The only coverage of `POST /hosts/transfer/filter` from the UI, and of what "Select all matching" actually does: the count it shows and the request it sends; 51 hosts, one more than a page, make "all matching" differ from "this page". Without the offline pool this needed `exclusive/` or a cut; with it, it costs seconds and touches nothing another spec reads.
 - *Coverage gaps:* Only the fleet filter; a search or status filter combined with it, and a named destination, aren't covered. The guard stops a wrong request rather than reporting what the server would have done with it.
 - *Redundancy:* HOSTP-01 covers the by-id transfer of a selected page.
 - *Efficiency / smells:* ~10 s. The route guard is the safety property: a regression that dropped the fleet from the filter would otherwise move every offline simulation on the instance (still harmless, but not this test's to move).
@@ -836,7 +834,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "CTA visibility by role › (global technician|team admin|team maintainer|team observer)"`
 - **Project:** premium · **Variants:** `global-technician` (All fleets), `team-admin` (VMs), `ws-maintainer`, `ws-observer` (Workstations, which may hold no hosts)
 - **Mode:** UI · **Isolation:** one test per role; read-only
-- **Source:** round 1 C7 #21, #23, #24 (round 3, batch E). The flows also added and deleted fleet enroll secrets and moved hosts into fleets; neither is done here (the admin's secrets are `premium/settings/enroll-secrets.spec.ts`, and a second writer would race its snapshot restore).
 - **Data created:** none
 
 **Flow**
@@ -848,7 +845,7 @@ other:
 
 **Assessment**
 - *Value:* the premium dimension HOSTP-10/11 lacked: a technician (Add label without Add hosts or a gear) and the fleet roles on their own fleet.
-- *Coverage gaps:* the team admin's Workstations view isn't read (VMs is where it has hosts).
+- *Coverage gaps:* the team admin's Workstations view isn't read (VMs is where it has hosts). No fleet enroll secret is added or deleted and no host is moved: the admin's secrets are `premium/settings/enroll-secrets.spec.ts`, and a second writer would race its snapshot restore.
 - *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
@@ -867,7 +864,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Premium • Hosts • Actions by role › .* is offered"`
 - **Project:** premium · **Variants (5):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on an online Linux simulation (Unassigned); `team-admin` on an online VMs-fleet host (a real VM when one is online — simulations other specs borrow onto that fleet can leave mid-test)
 - **Mode:** UI · **Isolation:** one test per role; nothing runs or moves
-- **Source:** round 1 C2 #13, C4 #P20, C7 #16 (round 3, batch E). C7 #16 checked Transfer and Delete with the menu closed; P20 signed in as the global admin.
 - **Preconditions (API):** two global reports under one `pw-role-hostrep-<role>-<nonce>` marker: `…-observers` (*Observers can run*) and `…-others`. Deleted in an `afterEach`.
 
 **Flow**
@@ -878,7 +874,7 @@ other:
    - ✅ *(UI)* `…-observers` listed for everyone; `…-others` for every role but GO. The **create a report** link for GM, GO+, TA, not GO (the technician's is HOSTP-21). **Close**.
 
 **Assessment**
-- *Value:* the host's actions by role, read off an open menu, and the observer's report list, the role-dependent part of C2 #13 / C7 #16.
+- *Value:* the host's actions by role, read off an open menu, and the observer's report list.
 - *Coverage gaps:* Lock / Wipe / Turn off MDM need an MDM-enrolled host. The `ws-*` roles are left out: Workstations has no hosts.
 - *Redundancy:* the team admin's no-Transfer is also in `host-transfer-permissions.spec.ts`.
 - *Efficiency / smells:* seconds.
@@ -898,7 +894,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/hosts/host-actions-role-access.spec.ts`](../../tests/e2e/premium/hosts/host-actions-role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "global-technician is not offered"`
 - **Project:** premium · **Mode:** UI · **Isolation:** skipped behind [fleetdm/fleet#54622](https://github.com/fleetdm/fleet/issues/54622)
-- **Source:** round 3 batch E planning (§2's UI-vs-API disagreements, item 2)
 
 **Flow**
 

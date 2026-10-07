@@ -29,6 +29,17 @@ export async function getHostDisplayName(request: APIRequestContext, hostId: num
   return (await res.json()).host.display_name as string;
 }
 
+/**
+ * A host's platform as Fleet records it — osquery's `os_version.platform`
+ * (`darwin`, `windows`, `ubuntu`, …), which is what a live query of that column
+ * returns on a real host.
+ */
+export async function getHostPlatform(request: APIRequestContext, hostId: number): Promise<string> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (await res.json()).host.platform as string;
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,
@@ -672,15 +683,24 @@ export async function waitForNoPendingRefetch(
   timeout = 240_000,
 ): Promise<void> {
   await expect
-    .poll(
-      async () => {
-        const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-        await expect(res, `Failed to read host ${hostId}`).toBeOK();
-        return (await res.json()).host?.refetch_requested ?? false;
-      },
-      { message: `host ${hostId} kept a refetch outstanding`, timeout, intervals: [5_000] },
-    )
+    .poll(() => getHostRefetchRequested(request, hostId), {
+      message: `host ${hostId} kept a refetch outstanding`,
+      timeout,
+      intervals: [5_000],
+    })
     .toBe(false);
+}
+
+/**
+ * Whether the host has a refetch outstanding (`refetch_requested`). Fleet sets
+ * it when someone asks for a refetch and, on its own, when an install or an
+ * uninstall succeeds; it clears it when the collection's results land. The flag
+ * doesn't say who set it.
+ */
+export async function getHostRefetchRequested(request: APIRequestContext, hostId: number): Promise<boolean> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (await res.json()).host?.refetch_requested ?? false;
 }
 
 /**

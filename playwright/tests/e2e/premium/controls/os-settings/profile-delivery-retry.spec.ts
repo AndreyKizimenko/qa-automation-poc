@@ -3,7 +3,7 @@
  * the commands that carry it, a resend, and what Fleet does when the host
  * refuses it.
  *
- * Three QA Wolf flows, on the real macOS VM:
+ * Three cases, on the real macOS VM:
  *
  *  - the host's Activity card, with "Show MDM commands" on, names the profile in
  *    the InstallProfile that delivered it and the RemoveProfile that took it
@@ -12,8 +12,8 @@
  *    second InstallProfile, acknowledged, and back to verified;
  *  - a profile the Mac refuses is retried — Fleet sends it once and then
  *    `MaxAppleProfileRetries` (3) more times (`server/mdm/mdm.go`) — and then
- *    reads **Failed**. QA Wolf's flow only waited for "Failed" and asserted
- *    nothing about the retries.
+ *    reads **Failed**; the retries themselves are counted, not only the end
+ *    state.
  *
  * Each profile targets a manual label holding only the VM, so no borrowed
  * simulation on the fleet gets it. The inert one is `inertMobileconfig`; the

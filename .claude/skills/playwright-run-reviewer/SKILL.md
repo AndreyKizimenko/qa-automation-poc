@@ -45,6 +45,18 @@ first. **Never triage just the first line of a chained run as "the run"** — pa
 each suite, plus the report of any job that went red. For extra context on a job
 (trigger, timing, which step failed), `gh run view <id> --log-failed` is cheap.
 
+If `gh run download` (or `gh run watch`) stalls while the API still answers, fetch each
+report's zip directly and poll the run's status instead:
+
+```bash
+gh api repos/<owner/repo>/actions/runs/<id>/artifacts --jq '.artifacts[] | [.id, .name] | @tsv'
+curl -L -H "Authorization: Bearer $(gh auth token)" -o <name>.zip \
+  https://api.github.com/repos/<owner/repo>/actions/artifacts/<artifact-id>/zip
+gh run view <id> --json status
+```
+
+That zip endpoint 404s now and then, which is why the script doesn't use it first: retry it.
+
 Then extract a compact, triage-ready summary:
 
 ```bash

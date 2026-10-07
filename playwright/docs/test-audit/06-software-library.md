@@ -30,10 +30,12 @@ on a host. The premium/free QA hosts are osquery-perf **simulations**, so an
 install/uninstall command has nothing to execute against, and the real macOS VM
 (`liveMacosHost`) is not used by any software spec. Every assertion is "the
 installer is in the library / catalog / activity feed", never "the bits landed on
-a machine". That is still true after the additions below — `script-only-package`
-uploads a shell script Fleet stores as an install script and never runs, and
-`package-scripts` downloads an installer instead of installing it and stores
-scripts nothing runs.
+a machine". That is still true after the additions below — `script-only-package`'s
+add-and-remove test (SWL-30) uploads a shell script Fleet stores as an install script
+and never runs, and `package-scripts` downloads an installer instead of installing it
+and stores scripts nothing runs. The same spec's second describe *does* run a
+script-only package, on the real Mac; it is audited with the other host-execution
+tests, as [area 21](21-software-on-hosts.md)'s SWH-17.
 
 **Durable precondition — the Fleet-maintained app shelf.** The premium instance's
 **QA** fleet carries a permanent shelf of 10 Fleet-maintained apps × macOS and
@@ -488,7 +490,7 @@ other:
 
 **Assessment**
 - *Value:* guards the real bug class this came from — the scope dropdown silently resetting to "All fleets" when moving between software sub-tabs.
-- *Coverage gaps:* the `rowOrEmpty()` assertions accept an **empty table**, so the spec's own docstring claim that these tabs "all render data" under Unassigned is not actually enforced. The item-count-equals-row-count integrity check and section-header checks that motivated this spec ([`C6-software.md` flow 26](../qawolf-migration/audit/C6-software.md)) were not implemented. The **Library** tab is not included in the scope-persistence sweep even though it is the tab this area is about. `fleet_id` is never read back off the URL.
+- *Coverage gaps:* the `rowOrEmpty()` assertions accept an **empty table**, so the spec's own docstring claim that these tabs "all render data" under Unassigned is not actually enforced. The item-count-equals-row-count integrity check and section-header checks were not implemented. The **Library** tab is not included in the scope-persistence sweep even though it is the tab this area is about. `fleet_id` is never read back off the URL.
 - *Redundancy:* the OS-tab and Vulnerabilities-tab "renders data" halves overlap [`os.spec.ts`](../../tests/e2e/premium/software/os.spec.ts) and [`vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts); the unique content is the dropdown-persistence assertion after each tab click.
 - *Efficiency / smells:* `gotoOsTab()` / `gotoVulnerabilitiesTab()` already assert `firstRow` visible, then the spec immediately asserts the weaker `rowOrEmpty()` — the stronger assertion is inside the POM and the weaker one in the spec, which reads backwards.
 
@@ -641,7 +643,7 @@ other:
 - *Value:* the role half of the gate, now swept across each role's *own* picker rather than a fixed matrix — so a team admin is checked on the fleets they actually administer, and a single-fleet user on the one view they have. The `scopes: []` case is the genuinely new coverage: it proves the button is absent on the page shape where there is no scope to pick at all.
 - *Coverage gaps:* **`ws-observer` is not covered here** although the sibling [`role-access.spec.ts`](../../tests/e2e/premium/software/role-access.spec.ts) (SWL-20) does cover it — the two role lists on the same page have drifted (5 there, 4 here). `global-observer-plus` and `global-technician` are in neither. Nothing checks that these roles can still *read* the software list beyond `goto()`'s `rowOrEmpty`, and the button's absence is never confirmed on the **Library** tab.
 - *Redundancy:* SWL-15 is the free mirror minus the scope sweep; the picker-opening half now overlaps SWL-20, which logs in the same way, on the same page, to assert the same picker.
-- *Efficiency / smells:* three dropdown round-trips per global role to re-assert a role-only gate — the spec's own comment concedes the gate is not team-gated and keeps the sweep to honour the original QA Wolf coverage. `scopes: []` reads as "no scopes" at the call site when it means "no picker". No `pageHealth` coverage (see SWL-11).
+- *Efficiency / smells:* three dropdown round-trips per global role to re-assert a role-only gate — the spec's own comment concedes the gate is not team-gated and keeps the sweep anyway. `scopes: []` reads as "no scopes" at the call site when it means "no picker". No `pageHealth` coverage (see SWL-11).
 
 **Notes (Andrey)**
 ```
@@ -743,7 +745,7 @@ other:
    - ✅ *(UI)* **Version**, **Type** and **Vulnerabilities** expose none (`toHaveCount(0)`). Fleet renders a sortable header as `<button class="sortable-header">` and a non-sortable one as a plain div, so a zero count *is* "this column can't be sorted".
 
 **Assessment**
-- *Value:* one cheap, deterministic contract on the table shell, asserted on both tiers by folder placement rather than by a duplicated free spec. The named column list survives a column being inserted — the QA Wolf flow it replaced asserted `nth(0)/nth(2)/nth(4)`, which would have silently re-pointed.
+- *Value:* one cheap, deterministic contract on the table shell, asserted on both tiers by folder placement rather than by a duplicated free spec. The named column list survives a column being inserted, where positional `nth(0)/nth(2)/nth(4)` checks would silently re-point.
 - *Coverage gaps:* column *contents* are never asserted (no `---` rendering for a title with no vulnerabilities, no version formatting, no Type vocabulary); the **Library** tab's own columns (Version / Type / Hosts / Status) are covered by nothing in this area; the Filter modal and the "show versions" switch (`SoftwareTitlesPage.showVersionsSwitch`, modelled) are untouched; on free this is the only software-table assertion of any kind.
 - *Redundancy:* the same five-name `COLUMNS` list is re-declared and re-asserted in [`role-access.spec.ts`](../../tests/e2e/premium/software/role-access.spec.ts) (SWL-20, for three of its five roles). Two copies can drift.
 - *Efficiency / smells:* `goto()` + `teamDropdown.select()` are copy-pasted across all three tests in the file instead of a `beforeEach`.
@@ -782,7 +784,7 @@ other:
    - ✅ *(UI)* The descending page's first name differs from the ascending page's first name — a sort control that flipped the URL without re-querying would otherwise satisfy both order checks.
 
 **Assessment**
-- *Value:* proves Fleet's *server-side* ordering on the page it returned, plus that the control actually re-fetched. The deliberate scope reduction is the point: the source flow paged the whole table and diffed it against a locally-sorted copy, i.e. re-tested MySQL's collation over thousands of rows for minutes. The contract here is "the page Fleet returned is ordered" + "the order it was asked for is the order in the URL".
+- *Value:* proves Fleet's *server-side* ordering on the page it returned, plus that the control actually re-fetched. The deliberate scope reduction is the point: paging the whole table and diffing it against a locally-sorted copy would re-test MySQL's collation over thousands of rows for minutes. The contract here is "the page Fleet returned is ordered" + "the order it was asked for is the order in the URL".
 - *Coverage gaps:* only page one, so a server that orders each page independently would pass; the two directions are never checked to be exact reverses; no sort on the **Library** tab; pagination is never entered; the sort is not asserted to survive a scope change or a search.
 - *Redundancy:* none.
 - *Efficiency / smells:* `expect(descending[0]).not.toBe(ascending[0])` is a change-detector — it fails legitimately (though improbably) when the alphabetically first and last titles tie case-insensitively.
@@ -916,7 +918,7 @@ other:
 7. ✅ *(UI)* **Add software** is visible for the maintainer/admin roles and has count 0 for the two observers.
 
 **Assessment**
-- *Value:* the only role matrix over the Software area's *read* view, and the only place three distinct picker shapes are pinned at once — global (aggregate + every fleet), team-admin (a subset with no aggregate), single-fleet (no picker, fleet name as `<h1>`). The `team-admin` exact-list assertion is the strongest: it is what would catch a fleet the user doesn't administer leaking into the picker. One spec with role as a dimension replaces four near-identical source flows.
+- *Value:* the only role matrix over the Software area's *read* view, and the only place three distinct picker shapes are pinned at once — global (aggregate + every fleet), team-admin (a subset with no aggregate), single-fleet (no picker, fleet name as `<h1>`). The `team-admin` exact-list assertion is the strongest: it is what would catch a fleet the user doesn't administer leaking into the picker. Role is a dimension of one spec rather than four near-identical tests.
 - *Coverage gaps:* `global-observer-plus` and `global-technician` exist as static users and are not covered; there is no *negative* scope probe (team-admin navigating to `?fleet_id=<a fleet they don't administer>` — that lives in `tests/api/role-access/premium/`, at the endpoint layer, not the UI); the Library / OS / Vulnerabilities tabs and the title-detail page are not role-checked at all; `canAddSoftware` is asserted as button presence only and never followed into the add form, so nothing proves an observer can't reach `/software/add/package` by URL.
 - *Redundancy:* `COLUMNS` duplicates SWL-16's list; the picker sweep overlaps SWL-13 in the sibling `manage-automations-access.spec.ts` — same login mechanism, same page, different button. The two specs' role lists have **drifted**: five roles here, four there.
 - *Efficiency / smells:*
@@ -949,12 +951,12 @@ other:
 1. ☐ Open `/software/add/fleet-maintained?fleet_id=0` via URL.
    - ✅ *(UI)* The **Add software** `<h1>` is visible (15 s) and the **Fleet-maintained** tab is `aria-selected` (15 s) — `expectLoaded()`. The generous waits are for Fleet's large Add-software JS bundle on the shared instance (fleetdm/fleet#45682).
 2. ☐ Read the "**N items**" summary.
-   - ✅ *(API)* It equals `GET /software/fleet_maintained_apps?fleet_id=0&per_page=1` → `count` — `countFleetMaintainedApps()`. **The count is per platform *entry*, not per row:** the table groups an app's macOS and Windows cells into one row while the count stays per-platform, so a 3-row "zoom" search reads "5 items". (The source flow's `expect(addCount).toEqual(searchedResults)` only held by luck.)
+   - ✅ *(API)* It equals `GET /software/fleet_maintained_apps?fleet_id=0&per_page=1` → `count` — `countFleetMaintainedApps()`. **The count is per platform *entry*, not per row:** the table groups an app's macOS and Windows cells into one row while the count stays per-platform, so a 3-row "zoom" search reads "5 items". (A count compared with the row count would only hold by luck.)
 3. ☐ Pick **macOS** in the platform filter (Fleet's react-select `DropdownWrapper`; options carry `data-testid="dropdown-option"`).
    - ✅ *(UI)* The filter's single-value reads `macOS`, and the item count has changed — `selectPlatform()` settles on the count rather than on the click, because the filter is server-side (`platform=` on the apps request).
    - ✅ *(API)* The new count equals the API's count for `platform=darwin`.
    - ✅ *(UI)* It is smaller than the unfiltered total.
-   - ✅ *(UI)* **No** rendered macOS cell shows `---` (`platformColumnCells('macOS')` = `td:nth-child(2)` on every row). A `---` cell is an app not offered on that platform, and none may survive the filter — this replaces the source flow's per-row loop over 900+ paged rows.
+   - ✅ *(UI)* **No** rendered macOS cell shows `---` (`platformColumnCells('macOS')` = `td:nth-child(2)` on every row). A `---` cell is an app not offered on that platform, and none may survive the filter — rather than a per-row loop over 900+ paged rows.
 4. ☐ Pick **Windows**.
    - ✅ *(API)* count equals the API's `platform=windows` count; ✅ *(UI)* smaller than the total; ✅ *(UI)* different from the macOS count; ✅ *(UI)* no `---` in the Windows column.
 5. ☐ Pick **All platforms**.
@@ -1074,7 +1076,7 @@ other:
 **Assessment**
 - *Value:* the only negative path in the entire add flow, and the three-part assertion (toast reason + uploader unchanged + button still disabled) is what proves "refused in the browser" rather than "uploaded then rejected". Cheap: no upload, no cleanup.
 - *Coverage gaps:* no **server-side** rejection case (a valid extension with a corrupt payload); no oversized-file path; no duplicate-add rejection; the unused `.exe`, `.rpm` and `.tar.gz` fixtures in `test-data/` would each be a one-line case here; no negative path on the FMA / VPP / Android tabs (an invalid Android application ID is the obvious one). Also untested: that the form is still usable afterwards — a valid file staged *after* a rejection.
-- *Redundancy:* none. The header explicitly hands the "Add software disabled under All fleets" half of the source flow to SWL-04.
+- *Redundancy:* none. The header explicitly hands the "Add software disabled under All fleets" half to SWL-04.
 - *Efficiency / smells:* the test title's extension is derived from the fixture name, so renaming a case silently renames the test and its grep.
 
 **Notes (Andrey)**
@@ -1131,7 +1133,7 @@ other:
 10. ☐ *(Teardown, API)* Delete the title.
 
 **Assessment**
-- *Value:* a complete three-state lifecycle (none → custom → replaced → none) asserted at **both** layers on every transition — the rendered `<img>` and the stored `icon_url` — so a failure says which half broke. That pair is what replaced QA Wolf's seven per-step screenshots, and the list-row check in step 7 is what proves the icon travels beyond the detail page.
+- *Value:* a complete three-state lifecycle (none → custom → replaced → none) asserted at **both** layers on every transition — the rendered `<img>` and the stored `icon_url` — so a failure says which half broke. That pair replaces per-step screenshots, and the list-row check in step 7 is what proves the icon travels beyond the detail page.
 - *Coverage gaps:* the **replace** step never proves the bytes changed — both fixtures satisfy "a custom-icon img is visible", so Fleet keeping the old icon would pass (comparing `icon_url` before/after, or fetching the blob, would close it); the Self-service preview is checked as an element, never against the actual end-user Self-service page; no Cancel/discard path; no check that a neighbouring title's icon is unaffected; the icon is never asserted on the **Inventory** tab or on a host's software list.
 - *Redundancy:* steps 2–3 (dashboard → navbar → scope → Library → search → row link) are copy-pasted verbatim into SWL-26 and SWL-27, and near-verbatim (plus a Type-cell filter) into SWL-28/29.
 - *Efficiency / smells:*
@@ -1409,7 +1411,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "the installer downloads byte-identical and Advanced options shows its stored scripts"`
 - **Project:** premium · **Scope:** Unassigned (`FLEET_ID = 0`)
 - **Mode:** UI+API · **Isolation:** independent; `test.setTimeout(90_000)`; API delete in `finally`
-- **Source:** QA Wolf round 1 C6 #22 (`software-add-software-on-team-level`) supplies the add form's Advanced options
 - **Preconditions:** premium license. Fixture [`test-data/linux/software/fleet-playwright-pkg_1.0.0_amd64.deb`](../../test-data/linux/software/fleet-playwright-pkg_1.0.0_amd64.deb) — an inert **662-byte** generated Debian package (one marker file under `/usr/share/fleet-playwright-pkg/`, no maintainer scripts), rebuilt deterministically by `make-deb.py` to sha256 `bf7b4fba…0931a6d5`. It exists so the **title name `fleet-playwright-pkg` is unique across the suite** — every real `.deb` in `test-data/` shares a title with another spec's fixture ("step-cli", "Sublime Text"), and a premium title can hold several packages, so two specs uploading to the same title on the same fleet leave the accordion with two rows and every row-scoped locator ambiguous. A `.deb` in particular because Fleet generates **both** an install and an uninstall script for it, and both are short enough for Ace to render whole (Ace virtualises long documents, so a real installer's scripts would only be partly in the DOM).
 - **Data created:** the title `fleet-playwright-pkg` on `fleet_id=0`, carrying the pre-install query `SELECT 1;` and a two-line post-install script (`echo "pw: post-install ran"`) — deleted through the UI inside the test. Nothing installs it, so neither ever runs.
 
@@ -1431,7 +1432,7 @@ other:
    - ✅ *(UI)* The **Edit package** modal (that title for a premium multi-package title; "Edit software" otherwise) is open with its Self-service switch visible — `expectOpen()`.
 6. ☐ Expand **Advanced options** (idempotent — skipped if the editors already render).
    - ✅ *(UI)* The install- and uninstall-script Ace editors are visible.
-7. ✅ *(UI vs API)* Each of the four editors' rendered code equals the corresponding stored script, field by field: **install**, **uninstall**, **pre-install query**, **post-install**. All four are non-empty — Fleet generated the first two, step 2 wrote the other two. Both sides go through `normalizeScript()` (trailing whitespace stripped, blank lines dropped) because Ace renders one element per line and drops blank lines from its text layer, so `innerText` is never byte-identical to what Fleet stored. This is the assertion QA Wolf's screenshot of the uninstall editor was standing in for.
+7. ✅ *(UI vs API)* Each of the four editors' rendered code equals the corresponding stored script, field by field: **install**, **uninstall**, **pre-install query**, **post-install**. All four are non-empty — Fleet generated the first two, step 2 wrote the other two. Both sides go through `normalizeScript()` (trailing whitespace stripped, blank lines dropped) because Ace renders one element per line and drops blank lines from its text layer, so `innerText` is never byte-identical to what Fleet stored.
 8. ✅ *(UI)* The install script contains `$INSTALLER_PATH` and the uninstall script contains `fleet-playwright-pkg` — a generated `.deb` install script drives apt against `$INSTALLER_PATH` and the uninstall purges the package by the name read off the control file. These keep the two generated-script comparisons in step 7 from passing on two matching **empty** strings if Fleet ever stopped generating scripts; step 3's API check does the same for the other two.
 9. ☐ Click **Cancel**. ✅ *(UI)* the modal is hidden.
 10. ☐ Delete from the accordion row (expand → **Delete this version** → confirm).
@@ -1500,7 +1501,6 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/patch-policy.spec.ts`](../../tests/e2e/premium/software/patch-policy.spec.ts)
 - **Grep:** `npx playwright test --project=premium patch-policy -g "macOS"`
 - **Project:** premium · **Scope:** Workstations (no hosts — nothing is ever patched) · **Mode:** UI+API
-- **Source:** QA Wolf `policies/patch-policy-fleet-maintained-apps` (round 2, batch G)
 - **Preconditions (API):** LocalSend (`localsend/darwin`, claimed by no other spec) added to Workstations.
 - **Data created:** the title and its patch policy, deleted in the `finally` (policy first); the Workstations wipe removes what a dead run leaves.
 
@@ -1589,8 +1589,8 @@ other:
    - ✅ *(UI)* Opened, it lists **Workstations** (so the menu is really open) and no **Unassigned** (`ManageQueriesPage`: `includeNoTeam: false`).
 
 **Assessment**
-- *Value:* the Unassigned half of SWL-32 (QA Wolf's "switching tabs doesn't switch to All teams" flow, C6 #28): a scope that resets on navigation would make every Unassigned-scoped flow quietly operate on the aggregate.
-- *Coverage gaps:* the Dashboard (no Unassigned either) isn't visited; returning from Reports to Hosts isn't asserted (QA Wolf's flow shows it stays on All fleets).
+- *Value:* the Unassigned half of SWL-32: a scope that resets on navigation would make every Unassigned-scoped flow quietly operate on the aggregate.
+- *Coverage gaps:* the Dashboard (no Unassigned either) isn't visited; returning from Reports to Hosts isn't asserted (it stays on All fleets).
 - *Redundancy:* SWL-09 checks Unassigned across Software's own tabs; this crosses areas.
 - *Efficiency / smells:* like SWL-32, a navbar test living in `premium/software/` — see recommendation 4.
 
@@ -1602,7 +1602,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "editing all four Advanced options saves each of them"`
 - **Project:** premium · **Scope:** Unassigned (`FLEET_ID = 0`)
 - **Mode:** UI+API · **Isolation:** independent; a per-run package; API delete in `finally`; default 60 s timeout
-- **Source:** QA Wolf round 1 C6 #20 (`software-add-software-edit-and-save-all-scripts-and-queries-for-fleet-maintained-software`) and C8 #23 (`packages-edit-packages-edit-advanced-attributes`) — the same modal and the same `PATCH`, so one test. C6 #20 edited a Fleet-maintained app; this edits a custom package, because editing an FMA's install script sets a sticky `install_script_edited` flag that auto-update carries forward. C6 #21 (each field in isolation, never saved) was cut.
 - **Preconditions (API):** a generated inert `.deb` — `inertDeb('fleet-pw-pkg-scripts-<nonce>', '1.0.0')`, uploaded to Unassigned as `fleet-pw-pkg-scripts-<nonce>_1.0.0_all.deb` with `uploadSoftwarePackageBuffer`, so Fleet generates its install and uninstall scripts. Per-run because a save that edits an installer cancels the title's pending installs, and under `fullyParallel` no other test may share the title.
 - **Data created:** that title, deleted through the API in `finally`; the Unassigned software wipe in `cleanup-setup` / `cleanup-teardown` removes one a dead run leaves.
 
@@ -1629,7 +1628,7 @@ other:
 
 **Assessment**
 - *Value:* the only test that writes scripts through Fleet's Edit modal and proves Fleet stored them — all four editors in one save, each read back. It closes the largest Edit-modal gap in the area (SWL-06 exercises only Self-service), and with SWL-31 covers scripts set both at add time and on edit.
-- *Coverage gaps:* the read-back is API-only — the reopened modal is never checked (the spec header cites stale config in a reopened modal, the same unfiled defect SWL-06 routes around), so a modal that saves correctly but then shows the old scripts would pass; the pending-install cancellation the confirmation warns about is never observed, since nothing is pending; the toast is a substring regex rather than the full `Successfully edited <name>.`; no activity-feed assertion for the edit (SWL-08 has one for the Self-service edit); no clearing of a field back to empty, and no Cancel/discard of a dirty form; no Fleet-maintained title (deliberate — see Source); nothing proves Fleet would *run* the edited scripts, since nothing installs the package.
+- *Coverage gaps:* the read-back is API-only — the reopened modal is never checked (the spec header cites stale config in a reopened modal, the same unfiled defect SWL-06 routes around), so a modal that saves correctly but then shows the old scripts would pass; the pending-install cancellation the confirmation warns about is never observed, since nothing is pending; the toast is a substring regex rather than the full `Successfully edited <name>.`; no activity-feed assertion for the edit (SWL-08 has one for the Self-service edit); no clearing of a field back to empty, and no Cancel/discard of a dirty form; no Fleet-maintained title (deliberate: editing an FMA's install script sets a sticky `install_script_edited` flag that auto-update carries forward); nothing proves Fleet would *run* the edited scripts, since nothing installs the package.
 - *Redundancy:* none — SWL-31 reads the four scripts but never writes them through Edit, and SWL-06 writes only Self-service.
 - *Efficiency / smells:*
   - Enters by direct URL to the title page rather than dashboard → Software → Library → title, against the click-through convention in `playwright/CLAUDE.md`. Cheap and stable, but it skips the route a user takes.
@@ -1653,7 +1652,6 @@ other:
 - **Grep:** `npx playwright test -g "a title's View all hosts opens the hosts list"`
 - **Project:** premium **and** free (`shared/`) · **Scope:** Unassigned on premium (a no-op on free)
 - **Mode:** UI · **Isolation:** independent, read-only
-- **Source:** QA Wolf `software-vulnerabilities-view-all-hosts-from-software-with-vulnerabilities` (round 1 C6 #6; round 3, batch C)
 
 **Flow**
 
@@ -1662,7 +1660,7 @@ other:
 
 **Assessment**
 - *Value:* the titles list's own hand-off, which HOST-04 reaches only through a title's detail page.
-- *Coverage gaps:* the listed hosts aren't checked to have the title. QA Wolf took a row with vulnerabilities; the row doesn't change the hand-off, and the vulnerable filter is the suite's slowest query.
+- *Coverage gaps:* the listed hosts aren't checked to have the title. The row isn't one with vulnerabilities: the row doesn't change the hand-off, and the vulnerable filter is the suite's slowest query.
 - *Redundancy:* the pill overlaps HOST-04's last step.
 - *Efficiency / smells:* seconds.
 
@@ -1682,7 +1680,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "offered in an Unassigned host's Library"`
 - **Project:** premium · **Scope:** Unassigned
 - **Mode:** UI+API · **Isolation:** independent; `findSimulations` linux 5, only read
-- **Source:** QA Wolf `no-teams-no-teams-add-software-for-user-on-no-teams` (round 1 C6 #27; round 3, batch C)
 - **Data created:** a per-run inert `.deb`, `fleet-pw-unassigned-<nonce>` (API upload to Unassigned), never installed, deleted in the `finally`; cleanup wipes Unassigned's software too. Premium's Unassigned holds no real VM.
 
 **Flow**
@@ -1694,7 +1691,7 @@ other:
 
 **Assessment**
 - *Value:* "no fleet" is its own branch of Fleet's offer query (`team_id IS NULL`); the label-targeting specs cover only a fleet's (VMs).
-- *Coverage gaps:* the UI upload QA Wolf did (covered for Unassigned by SWL-31); a host on another fleet not being offered it.
+- *Coverage gaps:* the UI upload (covered for Unassigned by SWL-31); a host on another fleet not being offered it.
 - *Redundancy:* the Library read is the same component LT's software case reads on the VM.
 - *Efficiency / smells:* seconds.
 
@@ -1714,7 +1711,6 @@ other:
 - **Grep:** `npx playwright test --project=premium library -g "Android — com.openai.chatgpt"` (both scopes' Android describes — the step needs SWL-01's title)
 - **Project:** premium · **Scopes:** Unassigned, Workstations · the `android` case only (`com.openai.chatgpt`): 1 declaration → **2 runtime tests**
 - **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` / `titleName` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its fleet and the configuration it records.
-- **Source:** QA Wolf `android-android-software-and-configurations` (round 1 C9 #4; round 3, batch F)
 - **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
 - **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
 - **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the modal throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
@@ -1823,7 +1819,7 @@ other:
 **Bigger bets**
 
 1. **Collapse `edit-package.spec` into `library.spec` as an eighth case.** Add an `edit` sub-test that runs only for `custom` cases (or only for one designated case), reusing the already-uploaded installer. Removes one 16 MB upload per run and ~3 duplicated sub-tests, and gets the edit round-trip covered on **Workstations** as well as Unassigned — which is where the `edited … on the <fleet> fleet` activity suffix currently has no coverage at all. Then invest the freed budget in the Edit-modal fields nothing exercises yet — categories and installer replacement (the four scripts are SWL-36's).
-2. **Own the "software is never installed anywhere" gap explicitly.** Either (a) build one host-backed install spec against `liveMacosHost` — upload a small `.pkg`, install from the host's Software tab, assert pending → installed and the `installed_software` activity, then uninstall — accepting that it is a single-host serial test; or (b) write it down as a permanent boundary in `TODO.md` so nobody assumes the library specs cover installation. Today the suite silently reads as if add-to-library were the whole feature. `install_software` policy automation ([`C6-software.md` flow 25](../qawolf-migration/audit/C6-software.md)) sits behind the same decision.
+2. **Own the "software is never installed anywhere" gap explicitly.** Either (a) build one host-backed install spec against `liveMacosHost` — upload a small `.pkg`, install from the host's Software tab, assert pending → installed and the `installed_software` activity, then uninstall — accepting that it is a single-host serial test; or (b) write it down as a permanent boundary in `TODO.md` so nobody assumes the library specs cover installation. Today the suite silently reads as if add-to-library were the whole feature. `install_software` policy automation sits behind the same decision.
 3. **A `disposableFmaTitle` fixture.** SWL-25, SWL-26 and SWL-27 each pay a real CDN fetch and a 90 s budget to reach a title-detail page, and each must hand-pick a slug no other spec has claimed — which is why this file now needs a claims table. A worker- or test-scoped fixture that seeds one FMA title, yields `{ titleId, titleName }` and deletes it in teardown would collapse three seeds into one mechanism, make the claim implicit, and give SWL-31/SWL-30 somewhere to put their `finally`-block bookkeeping. The same fixture would let SWL-26 (a purely *client-side* validator) stop adding an app at all if it were pointed at any existing title.
 4. **Decide who owns SWL-32.** It is a navbar + team-dropdown test living in `premium/software/no-teams-views.spec.ts`, asserting nothing about software. Either move it to a shared navigation spec, or rename the file to what it now covers (scope behaviour) and move SWL-09/10's software-specific halves out.
 5. **Rebalance the (scope × case) matrix instead of running the full cross-product.** The scope axis exercises Fleet's `fleet_id` plumbing and the case axis exercises four different add pipelines; running all 7 × 2 × 3 = 42 tests every night mostly re-verifies that a `.pkg` and a `.msi` take the same three clicks. A matrix of "every case once on Unassigned + one representative case (plus FMA, which has the scope-sensitive catalog state) on Workstations" keeps the distinct coverage at roughly half the runtime, freeing the budget for the Library-tab columns, filters, and pagination that nothing currently touches.

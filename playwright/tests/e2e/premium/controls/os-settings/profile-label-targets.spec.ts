@@ -5,9 +5,8 @@
  * A profile's target (Custom → Include any / all, Exclude) decides which hosts in
  * its fleet Fleet sends it to. The only honest way to test that is **set
  * membership** over hosts whose labels the test controls: this profile is listed
- * on exactly these hosts and none of the others. QA Wolf's flows asserted
- * `verifiedHostsCount >= 2` on a fleet-wide aggregate, which passes whether
- * targeting worked or not.
+ * on exactly these hosts and none of the others. A count on a fleet-wide
+ * aggregate (`verifiedHostsCount >= 2`) passes whether targeting worked or not.
  *
  * **The hosts.** Each test works on the VMs fleet with the platform's real VM and
  * two MDM-enrolled simulations borrowed onto the fleet for the test

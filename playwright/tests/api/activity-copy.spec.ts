@@ -80,6 +80,10 @@ test.describe('activityCopy', () => {
       .test(`admin told Fleet to install ${title} on this host.`)).toBe(true);
     // An uninstall's sentence contains "installed"; the install matcher must not take it.
     expect(activityCopy.hostSoftware.installed({ title }).test(`admin uninstalled ${title} on this host.`)).toBe(false);
+    // A script-only package's run reads "ran"; its Upcoming item ("told Fleet to run") must not match.
+    expect(activityCopy.hostSoftware.ranScriptPackage({ title }).test(`admin ran ${title} on this host.`)).toBe(true);
+    expect(activityCopy.hostSoftware.ranScriptPackage({ title })
+      .test(`admin told Fleet to run ${title} on this host.`)).toBe(false);
   });
 
   test('label.* — "a label" on create, "the label" on edit/delete', () => {

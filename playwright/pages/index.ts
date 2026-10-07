@@ -13,7 +13,7 @@ export { UpdateEndUserModal } from './components/UpdateEndUserModal';
 export { RecoveryLockPasswordModal } from './components/RecoveryLockPasswordModal';
 export { HostSoftwareLibrary } from './components/HostSoftwareLibrary';
 export type { LibraryInstallAction, LibraryUninstallAction } from './components/HostSoftwareLibrary';
-export { InstallDetailsModal, UninstallDetailsModal } from './components/SoftwareActionDetailsModal';
+export { InstallDetailsModal, UninstallDetailsModal, ScriptPackageDetailsModal } from './components/SoftwareActionDetailsModal';
 export { FilterModal } from './components/FilterModal';
 export { Pagination } from './components/Pagination';
 export { TeamDropdown } from './components/TeamDropdown';
@@ -119,6 +119,7 @@ export type {
 export { ReportDetailsPage } from './reports/ReportDetailsPage';
 export type { ReportDetailsValues } from './reports/ReportDetailsPage';
 export { ReportLivePage } from './reports/ReportLivePage';
+export type { LiveRunKind } from './reports/ReportLivePage';
 
 // Policies
 export { PoliciesListPage } from './policies/PoliciesListPage';
@@ -132,6 +133,7 @@ export type {
 } from './policies/PolicyEditPage';
 export { PolicyDetailsPage } from './policies/PolicyDetailsPage';
 export type { PolicyDetailsValues } from './policies/PolicyDetailsPage';
+export { PolicyLivePage } from './policies/PolicyLivePage';
 
 // Labels
 export { LabelsPage } from './labels/LabelsPage';

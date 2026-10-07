@@ -15,7 +15,6 @@
  * Every assertion is made against this test's own two reports, reached by
  * searching for its marker: other specs seed global reports, and those apply to
  * this host too, so the unfiltered list and count are shared mutable state.
- * C2 #5/#15/#23; the "don't store results" toggle is round 1 C5 #7/#20.
  */
 import { test, expect } from '@fixtures';
 import { createReport, deleteReportsMatching } from '@helpers/api';
@@ -70,11 +69,10 @@ test('Host details — reports tab lists the host reports, searches, and sorts',
  * reports that keep their results (`discard_data = 0` with snapshot logging, in
  * Fleet's `query_results.go`); on, it adds the rest. A report saved with Discard
  * data is the one the toggle reveals, and a storing sibling under the same
- * marker shows the list stayed filtered and populated in both states. QA Wolf
- * read the tab's count, which every sibling spec's global reports also move, so
- * this reads the marker's cards. The toggle exists only while the org-wide
+ * marker shows the list stayed filtered and populated in both states. It reads
+ * the marker's cards, not the tab's count, which every sibling spec's global
+ * reports also move. The toggle exists only while the org-wide
  * "Store report results" is on, which the suite never turns off.
- * Round 1 C5 #7 (free) and C5 #20 (premium).
  */
 test("Host details — reports that don't store results show only with the toggle on", async ({
   hostDetails,

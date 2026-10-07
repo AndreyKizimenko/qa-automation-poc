@@ -4,7 +4,7 @@
  * say why each is safe to deliver to a real VM. Every profile the suite uploads
  * reaches a VM sooner or later, so nothing here may ever carry a payload that
  * gates access to a host. Each generator is a payload Andrey approved for the
- * VMs (batch E): a preference domain nothing reads, Game DVR off, Apple's no-op
+ * VMs: a preference domain nothing reads, Game DVR off, Apple's no-op
  * test declaration, and one meant to be refused — **except the two at the end**,
  * which force OS updates and are for fleets without real hosts only.
  *

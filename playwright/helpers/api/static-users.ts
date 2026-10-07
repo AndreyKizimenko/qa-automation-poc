@@ -8,6 +8,12 @@
  * `.env.<suite>` as `FLEET_STATIC_TOKEN_<KEY-UPPER>` — key with `-` →
  * `_` and uppercased).
  *
+ * A human user created this way comes back with `force_password_reset: true`,
+ * and `PATCH /users/:id` can't clear it: sign in as the user, call
+ * `perform_required_password_reset` with a throwaway password, then
+ * `change_password` back to `FLEET_STATIC_USER_PASSWORD`. `team-admin` is an
+ * admin of both Workstations and VMs on premium.
+ *
  * Emails sit outside {@link QA_TEST_EMAIL_RE} from `users.ts`, so the
  * `deleteAllQaTestUsers` cleanup never touches them. They are
  * deliberately descriptive and identical between free and premium so

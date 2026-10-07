@@ -159,6 +159,16 @@ Each of these looked like something else at first.
 - **`Error 1114 … The table '/tmp/#sql…' is full`** — MySQL's TempTable ceiling,
   under concurrent `vulnerable=true` software-titles queries → `infra-env`. A
   discovery helper that turns that 500 into `null` turns it into a silent skip.
+- **A real-VM spec fails with the host picker's own message.** `requireRealHost` and
+  `liveMacosHost` say why there's no host: offline since when, online but unreadable, or
+  not MDM-enrolled. Read it before blaming the spec. Both Macs dropped together on
+  2026-09-20 and again on 2026-10-05 (32 failures in one nightly) → `infra-env`; check
+  the host's `seen_time`, then re-run once it's back.
+- **A tooltip that never appeared on a settled page.** The hover landed, then the page
+  re-rendered or shifted (a card above loading after the rest) and left the pointer over
+  nothing: no tooltip in the snapshot, the page complete, green locally → `flaky`. The
+  gitops tooltip check re-hovers until the tip opens for exactly this reason; a hover
+  assertion elsewhere needs the same.
 - **VM-spec timeouts that grow with concurrency** — installs or scripts waiting in a
   real VM's single queue behind other specs' work → `flaky` or `infra-env`, not a
   product defect. Check what else the VM was running in the host's Activity.

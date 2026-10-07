@@ -2,10 +2,10 @@
  * Premium • Controls • Configuration profiles — a label a profile targets can't
  * be deleted.
  *
- * QA Wolf's three "broken label" flows deleted a label a profile targeted, then
- * asserted the profile showed as broken ("The configuration profile is broken."
- * and "Label deleted", in a Custom target modal) and wasn't applied to new
- * hosts. Fleet has since made that state unreachable through the product:
+ * A profile whose target label was deleted used to show as broken ("The
+ * configuration profile is broken." and "Label deleted", in a Custom target
+ * modal) and wasn't applied to new hosts. Fleet has since made that state
+ * unreachable through the product:
  *
  *  - since 4.87, `DeleteLabel` (`server/datastore/mysql/labels.go`) refuses to
  *    delete a label any configuration profile *or declaration* targets — a 422

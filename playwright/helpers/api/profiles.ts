@@ -19,6 +19,7 @@
  */
 import { APIRequestContext, expect } from '@playwright/test';
 import { apiUrl, authHeaders } from './core';
+import { waitForNoPendingRefetch } from './hosts';
 import type { GeneratedProfile } from '../profiles';
 
 /** Label scopes, by label name. `includeAll` and `includeAny` can't be combined. */
@@ -210,10 +211,16 @@ export async function waitForHostProfileGone(
  * Runs `sql` on one host now and returns its rows (`POST /hosts/:id/query`). Only
  * a real VM's answer means anything — a simulation ignores the SQL.
  *
- * Fleet waits a fixed while for the host to answer and reports "timeout waiting
- * for results" when it doesn't — which a real VM busy with other specs' refetches
- * and installs sometimes doesn't. That one error is retried (the server already
- * waited, so no pause is needed); any other is thrown.
+ * Fleet waits 25 s (`FLEET_LIVE_QUERY_REST_PERIOD`) for the host to answer and
+ * reports "timeout waiting for results" when it doesn't. A host that is running a
+ * refetch can't: osquery reports a batch of queries only once all of them have
+ * run, and a refetch's batch carries Fleet's detail queries, which take a VM about
+ * a minute. Measured on the premium Mac (2026-10-07): idle, a query answers in
+ * ~10 s; with a refetch outstanding, every query timed out until it landed. Other
+ * specs ask for refetches on the VMs all run, sometimes back to back. So each
+ * attempt first waits out the host's outstanding refetch (`refetch_requested`
+ * stays set until its results land), and a timeout — a refetch requested after
+ * that check — is retried the same way. Any other error is thrown.
  */
 export async function queryHost(
   request: APIRequestContext,
@@ -223,6 +230,7 @@ export async function queryHost(
 ): Promise<Array<Record<string, string>>> {
   let lastError = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    await waitForNoPendingRefetch(request, hostId, 180_000);
     const res = await request.post(apiUrl(`hosts/${hostId}/query`), {
       headers: authHeaders(),
       data: { query: sql },

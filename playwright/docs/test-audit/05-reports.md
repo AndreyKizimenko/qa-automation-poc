@@ -1,6 +1,6 @@
 # Reports / queries — test audit
 
-**Specs covered:** 11 files · **Test declarations:** 35 · **Projects:** premium / free (RPT-26 runs in both)
+**Specs covered:** 12 files · **Test declarations:** 36 · **Projects:** premium / free (RPT-26 runs in both)
 
 Fleet's "Reports" are saved queries (`/reports/manage`, `/reports/new`, `/reports/:id`,
 `/reports/:id/edit`, `/reports/:id/live`; the REST API still calls them `queries`). The area
@@ -18,13 +18,14 @@ the team dropdown. The reports the non-lifecycle specs need are seeded through
 it. `premium/reports/report-label-targets.spec.ts` is audited with label targeting, in
 [area 22](22-label-targeting.md) (LT-09). `role-access.spec.ts` on each tier is what each role is shown, Save as new by a
 single-fleet maintainer, and an observer's and an observer+'s one-host live runs (RPT-29…35).
+`shared/reports/live-report-export.spec.ts` runs a report live on the three real VMs and exports the results (RPT-36).
 
 **Standing environment note for this area:** apart from three real VMs per tier (macOS,
 Windows, Ubuntu; on the **VMs** fleet on premium), the ~300 online hosts on each QA instance are
 osquery-perf simulations, which answer a live query with a canned row whatever its SQL. Nothing
-in this area asserts live-query *results*; only the real-host spec
+in this area asserts live-query *results* on simulations; the real-host specs
 [`shared/hosts/host-live-query.spec.ts`](../../tests/e2e/shared/hosts/host-live-query.spec.ts)
-can, and it does. See RPT-02 / RPT-15. The results this area does read are *scheduled* ones the
+(one Mac) and RPT-36 (all three VMs, and their CSV) do. See RPT-02 / RPT-15. The results this area does read are *scheduled* ones the
 real macOS VM stored, in RPT-27 / RPT-28.
 
 ## Contents
@@ -66,6 +67,7 @@ real macOS VM stored, in RPT-27 / RPT-28.
 | RPT-33 | `premium/reports/role-access.spec.ts` | Premium • Reports • role access › global-observer-plus runs ad-hoc SQL live, on one host | UI | ☐ |
 | RPT-34 | `free/reports/role-access.spec.ts` | Free • Reports • role access › <global-maintainer \| global-observer> is shown the report controls its role grants | UI | ☐ |
 | RPT-35 | `free/reports/role-access.spec.ts` | Free • Reports • role access › global-observer runs a report observers can run, live, on one host | UI+API | ☐ |
+| RPT-36 | `shared/reports/live-report-export.spec.ts` | Reports • run live on the real VMs › returns each VM's own answer and exports exactly those rows to CSV | UI+API · **real VMs** | ☐ |
 
 `Mode`: **UI** (all validation through the browser), **UI+API** (browser flow, some assertions
 via API), **API** (no meaningful UI validation), **PERF** (timing).
@@ -96,9 +98,6 @@ place.
   objects, and `reportId`, which this step sets from `saveNew()` and RPT-03 uses for its API
   read. RPT-02/03/04 reach the report by name through the list. A failure here cascades:
   Playwright skips the rest of the serial describe.
-- **Source:** the automations steps are QA Wolf
-  `queries-global-users-ability-to-set-created-queries-to-send-historical-results-to-log-destination-on-query-creation-and-query-editing`
-  (round 1 C4 #P2; round 3, batch B)
 - **Preconditions:** no global reports (`cleanup-setup`); `workstationsFleetId` worker fixture
   resolved from the API; the config names a result log plugin (`logging.result.plugin`, read by
   `resultLogPlugin()`, which throws when there is none).
@@ -263,8 +262,6 @@ other:
 - **Mode:** UI+API · **Isolation:** serial describe, step 3 of 5 — reads `reportName` and
   `reportId`, writes the live report over to `editedName`; RPT-04 and RPT-05 depend on that rename
   having happened.
-- **Source:** the automations steps are QA Wolf's flow cited under RPT-01 (round 1 C4 #P2; round
-  3, batch B)
 - **Preconditions:** RPT-01 created the report, automations on.
 - **Data created:** none new; the existing report is renamed to `<name>-edited`, its automations
   turned off, its interval set to 15 minutes and its platforms to Windows + Linux.
@@ -443,8 +440,6 @@ other:
 - **Project:** premium · **Scope:** global (`/reports/new` with no `fleet_id`), outside the scope loop
 - **Mode:** UI — the save and the reopen go through the server, but every assertion is on screen ·
   **Isolation:** its own describe, with an `afterEach` that deletes the report by id.
-- **Source:** QA Wolf `queries-global-users-ability-to-save-invalid-queries` (round 1 C4 #P1; round
-  3, batch B)
 - **Preconditions:** none.
 - **Data created:** global report `pw-report-bad-sql-<nonce>` holding the broken SQL — platform
   macOS, interval **Never** (so no host runs it), **Observers can run** off, empty description —
@@ -508,8 +503,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "starts from the default osquery_info query, and the Save report modal from its defaults"`
 - **Project:** premium · **Scope:** global (`/reports/new` with no `fleet_id`)
 - **Mode:** UI · **Isolation:** fully independent; nothing saved — the modal is cancelled.
-- **Source:** QA Wolf `schedule-global-admin-can-create-edit-and-remove-teams-scheduled-query-premium`
-  (round 1 C4 #P28; round 3, batch B) — its new-report defaults
 - **Preconditions:** none.
 - **Data created:** none.
 
@@ -560,8 +553,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a report's automations are turned on, then off again, and the list says so"`
 - **Project:** premium · **Scopes:** All fleets only
 - **Mode:** UI+API · **Isolation:** self-contained; `beforeEach` seeds, `afterEach` deletes.
-- **Source:** QA Wolf `queries-global-users-global-admin-can-update-managed-automations-premium`
-  (round 1 C4 #P7; round 3, batch B) — the off direction and the list's cell
 - **Preconditions:** `beforeEach` *(API)* `POST /queries` creates a global report
   `pw-report-auto-<timestamp>-<rand>` with SQL `SELECT 1;`, an empty description, a daily interval
   (86 400 s), snapshot logging and Store data on. The interval is what lets the list read **On**
@@ -831,8 +822,6 @@ other:
 - **Project:** free · **Scopes:** n/a (no team dropdown on free)
 - **Mode:** UI+API · **Isolation:** serial describe, step 1 of 5; shares `reportName` /
   `editedName` / `created` / `edited` / `reportId` with the other four via closure.
-- **Source:** the automations steps are QA Wolf's flow cited under RPT-01 (round 1 C4 #P2; round
-  3, batch B)
 - **Preconditions:** no global reports (`cleanup-setup` also gates the free project); the config
   names a result log plugin (`logging.result.plugin`).
 - **Data created:** global report `playwright-report-<timestamp>`, automations on, every 30
@@ -926,8 +915,6 @@ other:
   sub-test needs its siblings)
 - **Project:** free · **Mode:** UI+API · **Isolation:** serial describe, step 3 of 5 — reads
   `reportId`, renames the report to `editedName`, which RPT-17/RPT-18 depend on.
-- **Source:** the automations steps are QA Wolf's flow cited under RPT-01 (round 1 C4 #P2; round
-  3, batch B)
 - **Preconditions:** RPT-14 created the report, automations on.
 - **Data created:** none new; the report is renamed, its automations turned off.
 
@@ -1053,7 +1040,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "a report's automations are turned on, then off again, and the list says so"`
 - **Project:** free · **Mode:** UI+API · **Isolation:** self-contained; `beforeEach` seeds,
   `afterEach` deletes by marker.
-- **Source:** same QA Wolf flow as RPT-08 (round 1 C4 #P7; round 3, batch B)
 - **Preconditions:** *(API)* `POST /queries` creates `pw-report-auto-<ts>-<rand>` (`SELECT 1;`,
   daily interval, snapshot logging, Store data on — the interval lets the list read **On** rather
   than **Paused**).
@@ -1221,7 +1207,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "a report with a syntax error saves, and reopens with its SQL and the error"`
 - **Project:** free · **Mode:** UI (the save and the reopen go through the server; every assertion
   is on screen) · **Isolation:** its own describe, with an `afterEach` that deletes the report by id
-- **Source:** same QA Wolf flow as RPT-06 (round 1 C4 #P1; round 3, batch B)
 - **Preconditions:** none.
 - **Data created:** global report `pw-report-bad-sql-<nonce>` with the broken SQL, platform macOS,
   interval **Never** — so no host runs it, the free VMs included — deleted in the `afterEach`.
@@ -1260,7 +1245,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "starts from the default osquery_info query, and the Save report modal from its defaults"`
 - **Project:** free · **Mode:** UI · **Isolation:** fully independent; nothing saved — the modal is
   cancelled.
-- **Source:** same QA Wolf flow as RPT-07 (round 1 C4 #P28; round 3, batch B)
 - **Preconditions:** none.
 - **Data created:** none.
 
@@ -1301,8 +1285,6 @@ other:
   report, and the `afterEach` also deletes the Workstations copy by id (`fleetCopyId`):
   `deleteReportsMatching` lists global reports only, and `cleanup-setup` leaves Workstations'
   reports alone.
-- **Source:** QA Wolf `queries-global-users-save-an-existing-query-as-new-query-admin-user` (round
-  1 C4 #P15; round 3, batch B)
 - **Preconditions:** *(API)* the seeded global `playwright-saveasnew-<ts>-<rand>` (`SELECT 1;`, no
   interval); an admin with more than one fleet to choose, since Fleet shows the modal's **Fleet**
   field only then; `workstationsFleetId` worker fixture.
@@ -1367,9 +1349,6 @@ other:
   select is a no-op on free)
 - **Mode:** UI+API · **Isolation:** independent; four `test.step`s on one report, so a report names
   the step that failed; the `afterEach` deletes the report by id.
-- **Source:** QA Wolf `queries-global-users-edit-and-save-query-verify-query-report-removed-reset`
-  and `queries-global-users-enable-and-disable-discard-data-query-option` (round 1 C4 #P3 and #P4;
-  round 3, batch B)
 - **Preconditions:** none beyond the seed.
 - **Data created:** global report `pw-report-edit-warnings-<nonce>`, seeded through the API with
   `SELECT 1;` and no interval, so no host ever runs it. Its description, SQL and Store data are
@@ -1469,11 +1448,6 @@ other:
   (`requireRealHost(…, 'darwin')`)
 - **Mode:** UI+API · **real VM**, read-only · **Isolation:** independent; nothing written. The
   describe retries `HOST_RETRIES` times (1 in CI, 0 locally); default 60 s timeout.
-- **Source:** QA Wolf `reports-reports-disable-stored-reports-setting` (round 1 C5 #15; round 3,
-  batch B), reshaped. Andrey decided (2026-10-02) not to toggle the org-wide *Store report
-  results* setting: turning it off has no confirmation, and a run that crosses Fleet's hourly
-  cleanup with it off deletes every stored result on the instance. This test and RPT-28 check what
-  the setting protects instead.
 - **Preconditions:** the macOS VM online and on the VMs fleet (asserted). `pw-host-report-results`
   declared on the VMs fleet by gitops
   ([`vms.yml`](../../../gitops/premium-fleetqa/fleets/vms.yml): `SELECT 'bar' AS foo;`, darwin,
@@ -1510,7 +1484,9 @@ other:
 - *Coverage gaps:* the age is read through the API; the report page's own timestamp isn't read,
   and the UI row can't tell fresh from stale, since the SQL returns `bar` every time. Only the
   macOS VM is checked (the report targets darwin). The org setting itself — its **Store report
-  results** checkbox, and what turning it off does — is untested by decision.
+  results** checkbox, and what turning it off does — is untested by decision (2026-10-02): turning
+  it off has no confirmation, and a run that crosses Fleet's hourly cleanup with it off deletes every
+  stored result on the instance. This test and RPT-28 check what the setting protects instead.
 - *Redundancy:* overlaps HOSTP-09 (same report, VM and `bar`). HOSTP-09 reads it through the
   host's Reports tab and the per-host page; this test through the report's own page, plus the age.
 - *Efficiency / smells:*
@@ -1542,8 +1518,6 @@ other:
 - **Mode:** UI+API · **real VM** · **Timeout:** 420 s; the poll waits up to 300 s ·
   **Isolation:** independent; the describe retries `HOST_RETRIES` times; `try/finally` deletes
   the report. No `afterEach`.
-- **Source:** same QA Wolf flow and decision as RPT-27 (round 1 C5 #15, reshaped; round 3,
-  batch B)
 - **Preconditions:** the macOS VM online and on the VMs fleet (asserted).
 - **Data created:** VMs-fleet report `pw-stored-results-<nonce>` (`SELECT '<name>' AS stored;`,
   macOS, Store data on), run every 60 s on the fleet's macOS hosts while it exists; deleted in the
@@ -1611,7 +1585,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "Premium • Reports • role access › .* is shown"`
 - **Project:** premium · **Variants (7):** `global-maintainer`, `global-observer`, `global-observer-plus`, `global-technician` on All fleets; `team-admin`, `ws-maintainer`, `ws-observer` on Workstations
 - **Mode:** UI · **Isolation:** one test per role through `withStaticUser`; read-only apart from its seeded report
-- **Source:** QA Wolf role flows, round 1 C4 #P9, #P10, #P21, #P22, #P24, #P25, #P26, C7 #22 (round 3, batch E). Their role checks were mostly stale copy ("Create new query") or absences on pages nothing proved had rendered.
 - **Preconditions (API):** `POST /queries` seeds a global `pw-role-rep-<role>-<nonce>` (hourly, so it isn't *Paused*). Team roles read the gitops report "Collect default browser on macOS" on Workstations (it has *Observers can run* on and no static user wrote it); the test fails with the re-apply instruction if it's missing. It is only ever read: its edit page is opened for Save as new, which is cancelled.
 - **Data created:** the global report, deleted in an `afterEach` by name.
 
@@ -1622,7 +1595,7 @@ other:
    - ✅ *(UI)* one row; a checkbox for GM, TA, TM only.
    - ✅ *(UI)* the header's **Add report** for GM, TA, TM; **Live report** for GO+; neither for GO, GT, TO. **Manage automations** for TA only.
 3. ☐ *(TA)* **Manage automations** → Escape.
-   - ✅ *(UI)* the modal lists the fleet report's checkbox, and closes. Nothing is toggled (C7 #22; RPT-08 toggles as admin).
+   - ✅ *(UI)* the modal lists the fleet report's checkbox, and closes. Nothing is toggled (RPT-08 toggles as admin).
 4. ☐ *(team roles)* Search for the global report.
    - ✅ *(UI)* **Inherited** tag, no checkbox; opened, no **Edit report** for any team role, **Live report** for TA and TM, not TO.
 5. ☐ Open the role's report from the list.
@@ -1635,7 +1608,7 @@ other:
    - ✅ *(UI)* the 403 page.
 
 **Assessment**
-- *Value:* What each role is shown on Reports, for the first time; the technician and observer+ columns are the odd ones (Live report without Edit; GO+'s header button). The picker and Save-as-new cells are the role-dependent negatives no QA Wolf flow asserted.
+- *Value:* What each role is shown on Reports, for the first time; the technician and observer+ columns are the odd ones (Live report without Edit; GO+'s header button). The picker and Save-as-new cells are the role-dependent negatives.
 - *Coverage gaps:* TO+ has no static user. A global role's view of a fleet's list isn't read.
 - *Redundancy:* None; the admin's controls are RPT-01's.
 - *Efficiency / smells:* A few seconds a role. Opens a gitops report's edit page; nothing there is saved.
@@ -1656,7 +1629,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "may target every scope only for a report observers can run"`
 - **Project:** premium · **Scopes:** All fleets, then Workstations
 - **Mode:** UI · **Isolation:** read-only apart from its seeded report
-- **Source:** QA Wolf `queries-global-users-global-observer-able-to-select-teams-target-for-query-premium` (round 1 C4 #P11; round 3, batch E)
 - **Preconditions (API):** a global `pw-role-rep-ocr-<nonce>` with *Observers can run*; the gitops Workstations report.
 
 **Flow**
@@ -1667,7 +1639,7 @@ other:
    - ✅ *(UI)* **Workstations** enabled; **VMs** and **Unassigned** disabled: a plain observer may aim a fleet's report only at its fleet (`SelectTargets`' `shouldDisableForObserver`).
 
 **Assessment**
-- *Value:* The observer's scoping in the picker, the role-dependent half QA Wolf never checked.
+- *Value:* The observer's scoping in the picker, its role-dependent half.
 - *Coverage gaps:* A fleet observer's picker (TO's own fleet enabled) is in RPT-29.
 - *Efficiency / smells:* Seconds.
 
@@ -1687,7 +1659,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "ws-maintainer saves a copy"`
 - **Project:** premium · **Scope:** Workstations
 - **Mode:** UI+API · **Isolation:** its copy is its own
-- **Source:** QA Wolf `queries-global-users-save-as-new-query-user-with-access-to-just-one-team-can-only-save-queries-to-that-team` (round 1 C4 #P16; round 3, batch E)
 - **Data created:** `pw-role-rep-copy-<nonce>` on Workstations, deleted by id in an `afterEach` (and by name if the test failed before reading its id). A dead run's copy is swept by `cleanup-setup`'s Workstations `pw-` report sweep.
 
 **Flow**
@@ -1719,7 +1690,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "global-observer runs a report observers can run"`
 - **Project:** premium · **Host:** the first online Linux simulation (`findOnlineHost(…, { kind: 'simulated' })`), only read
 - **Mode:** UI+API · **Isolation:** its report is its own; `test.setTimeout(180_000)`
-- **Source:** QA Wolf `queries-global-users-global-observer-can-only-select-and-run-a-query` (round 1 C4 #P12; round 3, batch E). The flow ran against All hosts (~300 simulations) and compared percentages; this targets one host.
 - **Preconditions (API):** a global `pw-role-rep-run-<nonce>` (`SELECT 'pw' AS role;`) with *Observers can run*.
 
 **Flow**
@@ -1751,7 +1721,6 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "global-observer-plus runs ad-hoc SQL"`
 - **Project:** premium · **Host:** as RPT-32
 - **Mode:** UI · **Isolation:** creates nothing (an ad-hoc run isn't saved); `test.setTimeout(180_000)`
-- **Source:** QA Wolf `queries-observer-observer-global-can-create-and-run-a-live-query` (round 1 C4 #P18; round 3, batch E). Its fleet observer+ twin (P19) is cut: there's no such static user.
 
 **Flow**
 
@@ -1762,7 +1731,7 @@ other:
 
 **Assessment**
 - *Value:* Observer+'s one write-shaped right: running SQL it wrote, without saving it.
-- *Coverage gaps:* As RPT-32.
+- *Coverage gaps:* As RPT-32. A fleet observer+ has no static user, so isn't tried.
 - *Efficiency / smells:* Seconds.
 
 **Notes (Andrey)**
@@ -1781,7 +1750,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "Free • Reports • role access › .* is shown"`
 - **Project:** free · **Variants (2):** `global-maintainer`, `global-observer`
 - **Mode:** UI · **Isolation:** one test per role; read-only apart from its seeded report
-- **Source:** round 1 C4 #F3 (round 3, batch E)
 - **Data created:** a global `pw-role-rep-<gm|go>-<nonce>`, deleted in an `afterEach`.
 
 **Flow**
@@ -1813,7 +1781,6 @@ other:
 - **Grep:** `npx playwright test --project=free -g "Free • Reports • role access › global-observer runs"`
 - **Project:** free · **Host:** the first online Linux simulation, picked by name (on free the real VMs share Unassigned with them)
 - **Mode:** UI+API · **Isolation:** its report is its own; `test.setTimeout(180_000)`
-- **Source:** QA Wolf `queries-global-users-global-observer-can-only-select-and-run-a-query` (round 1 C4 #F3; round 3, batch E)
 
 **Flow**
 
@@ -1822,6 +1789,39 @@ As RPT-32, on free: the report → **Live report** → the host → **Run** → 
 **Assessment**
 - *Value:* RPT-32 on free.
 - *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+### RPT-36 · Reports • run live on the real VMs › returns each VM's own answer and exports exactly those rows to CSV
+
+- **File:** [`playwright/tests/e2e/shared/reports/live-report-export.spec.ts`](../../tests/e2e/shared/reports/live-report-export.spec.ts)
+- **Grep:** `npx playwright test --project=premium live-report-export` (and `--project=free`)
+- **Project:** premium, free · **Hosts:** the macOS, Windows and Linux **real VMs**, picked by name
+- **Mode:** UI+API · **Isolation:** one test; its own report, deleted in an `afterEach`
+- **Preconditions (API):** the three VMs online (`requireRealHost`); each VM's `platform` read from `GET /hosts/:id` as the expected answer. `POST /queries` creates `pw-live-report-<nonce>`, `SELECT platform FROM os_version;`, never scheduled.
+
+**Flow**
+
+1. ☐ Dashboard → **Reports** → **All fleets** → search the report → open it → **Live report**.
+   - ✅ *(UI)* URL `/reports/:id/live`.
+2. ☐ On **Select targets**, search each VM by name and click its result.
+   - ✅ *(UI)* three hosts in the selected table; "3 hosts targeted (100% online)".
+3. ☐ **Run**.
+   - ✅ *(UI)* "Report finished" (bounded at 150 s); "3 hosts targeted", "100% responded"; "3 results".
+   - ✅ *(UI vs API)* each row's **Host** and **platform** match the VM and the platform Fleet recorded for it (`darwin`, `windows`, `ubuntu`).
+4. ☐ **Export results**.
+   - ✅ *(UI)* the file is `<report> - Results (MM-dd-yy hh-mm-ss).csv`; its columns are `host_display_name`, `platform`, and its rows are exactly the three VMs with their platforms.
+
+**Assessment**
+- *Value:* The first check of a live report's export, and of a live run's rows across all three platforms; host-live-query covers one Mac and a constant.
+- *Coverage gaps:* The **All hosts** chip (a run there can't finish reliably on simulations, whose canned rows ignore the SQL; the Unassigned chip is RPT-29/30's, offered or withheld by role and scope), the Errors tab and **Export errors**, the results table's column filters (the export writes the filtered rows), **Stop**, **Run again**.
+- *Efficiency / smells:* ~20 s; live queries use osquery's distributed path, not the VMs' install and script queue.
 
 **Notes (Andrey)**
 ```
@@ -1852,6 +1852,7 @@ other:
 | Per-report automations | RPT-08, RPT-19 (on → off in **Manage automations**, the list's On/Off cell); RPT-01/03, RPT-14/16 (the form's slider, the details page) | the **Paused** state; other reports untouched by a save; results reaching the log destination; a fleet report's automations; the global log-destination config |
 | Save as new | RPT-12/13, RPT-20/21; RPT-25 (into Workstations through the modal's **Fleet** field) | proof the duplicate is a *new* id; SQL/description carry-over; the **Fleet** field's options (never Unassigned); copying out of a fleet |
 | Live report — navigation | RPT-02, RPT-15 (**navigation only — never clicks Run**) | see the row below; real-result coverage lives only in [`shared/hosts/host-live-query.spec.ts`](../../tests/e2e/shared/hosts/host-live-query.spec.ts) against `liveMacosHost` |
+| Live report — run, results and export | RPT-36 (three real VMs, both tiers: finished heading, responded count, each VM's row, the CSV), plus RPT-32/33/35 and host-live-query (one host) | Stop / Run again / Close, the Errors tab and Export errors, the results' column filters |
 | Live report — target picker | RPT-22 (**fleet chip only**, premium) | **Run** still never clicked: *Running* → *Report finished*, `N targeted / P% responded`, Stop / Run again / Close and the Errors tab remain untested. Within the picker: the selected-targets table is never read, the host count is matched as `\d+` rather than reconciled against `GET /hosts?fleet_id=`, and **All hosts** / platform / label / individual-host targets and multi-select are untested (no free counterpart, so platform + label targeting is uncovered on both tiers) |
 | SQL validation | RPT-06, RPT-23 (a report with a syntax error saves and reopens with its SQL and warning) | the error clearing on corrected SQL; broken SQL saved from an edit |
 | Reports list pagination / sorting / column set | — | untested (only `tests/loadtest/reports.spec.ts` touches the list at scale, for timing) |

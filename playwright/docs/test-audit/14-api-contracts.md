@@ -108,7 +108,7 @@ Consumer map (who breaks if a builder is wrong):
 | `script.*` | [premium/controls/scripts/library](../../tests/e2e/premium/controls/scripts/library.spec.ts), [free/…/library](../../tests/e2e/free/controls/scripts/library.spec.ts) | Unassigned, Workstations |
 | `script.ran` / `ranOnThisHost` / `ranBatch` | [shared/hosts/host-run-script](../../tests/e2e/shared/hosts/host-run-script.spec.ts), [premium/controls/scripts/batch-run](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts) | n/a (host / host count) |
 | `mdmCommand.*` | [shared/hosts/mdm-commands](../../tests/e2e/shared/hosts/mdm-commands.spec.ts) | n/a |
-| `hostSoftware.*` | [premium/software/software-lifecycle-on-host](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts), [premium/software/install-on-host](../../tests/e2e/premium/software/install-on-host.spec.ts), [premium/software/uninstall-from-host](../../tests/e2e/premium/software/uninstall-from-host.spec.ts) | n/a — `failedToInstall`, `toldToInstall`, `toldToUninstall` have no consumer |
+| `hostSoftware.*` | [premium/software/software-lifecycle-on-host](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts), [premium/software/install-on-host](../../tests/e2e/premium/software/install-on-host.spec.ts), [premium/software/uninstall-from-host](../../tests/e2e/premium/software/uninstall-from-host.spec.ts), [premium/software/script-only-package](../../tests/e2e/premium/software/script-only-package.spec.ts) (`ranScriptPackage`) | n/a — `failedToInstall`, `toldToInstall`, `toldToUninstall` have no consumer |
 | `software.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts), [premium/software/edit-package](../../tests/e2e/premium/software/edit-package.spec.ts) | Unassigned, Workstations |
 | `appStoreApp.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts) | Unassigned, Workstations |
 | `configurationProfile.*` | [premium](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts) + [free os-settings](../../tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts) | Unassigned, Workstations (free: none) |
@@ -1066,7 +1066,7 @@ explicitly, and it is the one placement decision in this area that is unambiguou
 - *Coverage gaps:* one host, chosen by whatever sorts first with software — a platform-specific difference in what `exclude_software` drops would be invisible. Only `/hosts/identifier/:identifier` is covered; `GET /hosts/:id` takes the same parameter and is not tested with it. No `exclude_software=false` case (the explicit-negative should behave as the default). No assertion that the trimmed response is actually *smaller* — the stated motivation is payload size and nothing measures it, which one `Content-Length` comparison would fix. Nothing checks `software_updated_at` or the `software` key's *type* (an empty array vs `null` are both accepted by `?.length ?? 0`).
 - *Redundancy:* none anywhere in the suite — no e2e or gitops-verify spec touches this parameter.
 - *Efficiency / smells:*
-  - **The structural-not-deep comparison is the right call and is documented as such.** The two payloads are fetched seconds apart from a live host, so `detail_updated_at`, `seen_time` and `percent_disk_space_available` legitimately differ; the source QA Wolf flow used deep equality and would fail on any host that checked in mid-test. Worth preserving that reasoning if anyone tries to "strengthen" this back to `toEqual`.
+  - **The structural-not-deep comparison is the right call and is documented as such.** The two payloads are fetched seconds apart from a live host, so `detail_updated_at`, `seen_time` and `percent_disk_space_available` legitimately differ; deep equality would fail on any host that checked in mid-test. Worth preserving that reasoning if anyone tries to "strengthen" this back to `toEqual`.
   - `findHostWithSoftware` scans up to 50 hosts with one extra request each — up to 51 requests before the test starts, and it returns `null` (→ skip) on **any** non-OK response rather than failing. Same silent-skip shape flagged for `findHostByPlatform` in area 07.
   - `@fixtures` import → an unused Chromium launch, the fifth spec in this area to pay for one.
   - The host is drawn from the **ascending** display-name ordering, which is where the read-only pickers all draw from — so it can collide with a host another spec is mutating from the same end only if that spec ignores the documented offset convention.
@@ -1163,12 +1163,13 @@ other:
 
 **Flow**
 
-1. ☐ Build four of the six host-software builders for `title: 'fleet-pw (x64)'` and test each against an **actor-prefixed** literal (`admin …`) — the builders deliberately leave the actor out, since an admin's run names the admin and an automatic one names Fleet.
+1. ☐ Build five of the seven host-software builders for `title: 'fleet-pw (x64)'` and test each against an **actor-prefixed** literal (`admin …`) — the builders deliberately leave the actor out, since an admin's run names the admin and an automatic one names Fleet.
    - ✅ *(UNIT)* `installed` → `admin installed fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `uninstalled` → `admin uninstalled fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `failedToUninstall` → `admin failed to uninstall fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `toldToInstall` → `admin told Fleet to install fleet-pw (x64) on this host.` — the **Upcoming**-tab wording.
    - ✅ *(UNIT)* **negative:** `installed` does **not** match `admin uninstalled fleet-pw (x64) on this host.` — an uninstall's sentence *contains* "installed", and the builder's leading `\b` is what keeps the install matcher from taking it.
+   - ✅ *(UNIT)* `ranScriptPackage` → `admin ran fleet-pw (x64) on this host.` (a script-only package's run), and **not** `admin told Fleet to run fleet-pw (x64) on this host.` (its Upcoming item).
 
 **Assessment**
 - *Value:* good — the negative case is the one that matters for this family (substring collision between install/uninstall), and it copies API-14's pattern. The `(x64)` title exercises `esc()` on a real-looking package title.

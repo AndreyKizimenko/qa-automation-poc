@@ -9,6 +9,11 @@
  *     as a toast), and the same upload goes through once it does;
  *   - a variable a script references can't be deleted (409), the error naming
  *     the script.
+ * The two checks don't cover the same ground. The upload check covers library,
+ * installer and setup-experience scripts and profiles, but not pre-install
+ * queries; the delete refusal scans library scripts, profiles and host-name
+ * templates, but not installer or setup-experience scripts, so a variable that
+ * only an installer script uses can be deleted.
  * The scripts go to Unassigned, which on free is where the real VMs are:
  * uploading a script doesn't run it.
  *

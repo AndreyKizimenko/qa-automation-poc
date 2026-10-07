@@ -32,6 +32,8 @@ overlap: an apply deletes whatever its files don't declare, including a running 
 
 Either fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
 
+From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, and no longer blocks a host's queued script runs and installs while it applies.
+
 ### `--context qa-premium` is not optional
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
@@ -102,6 +104,7 @@ The flag is opt-in and off by default, so the command above is safe as written.
 
 - No `self_service` and no `setup_experience`. QA is the target fleet for the host-transfer specs (`premium/hosts/bulk-transfer.spec.ts`, `premium/hosts/host-transfer-permissions.spec.ts`), and an install-on-enroll flag would start real work on hosts those specs move in.
 - No `version:` pin. A literal pin stops the hourly cron from downloading anything new (`ee/server/service/maintained_apps_auto_update.go`), which defeats the whole point of the shelf.
+- An exact `version:` on any durable app is a re-provisioning trap: the version must already be cached on the fleet when the file is applied, and a fresh instance caches only the newest build. A caret pin would survive a rebuild; add one only when a spec needs it.
 - Removing an app resets its accumulated version history to zero the next time it's added back. Add freely; remove only with a reason.
 - **Watch the installer size.** premium-fleetqa is a 2 GB Render box, and Docker Desktop for Windows (~1.7 GB) 502'd it mid-apply — taking the instance down for every other spec running at the time. Zed replaced it. Nothing on this list should need more than a few hundred MB.
 - Applying this file downloads all 20 installers on a fresh instance and runs for many minutes. **A software batch is all-or-nothing** — a 502 on the last app discards every download before it, so an interrupted apply starts over from zero. On a fresh instance, apply the macOS half first and widen to the full list once those are in storage; a re-run then reports `skipped downloading the software package (already in storage)` for everything it already has.
@@ -139,4 +142,10 @@ at Fleet's default, every install/uninstall fixture uninstalled. It never delete
 
 **Bringing VMs under gitops deleted what it didn't declare** on the first apply (2026-09-28): a `Fail` policy
 that ran `HelloWorld.sh` as its automation, and `HelloWorld.sh` itself. Neither was used by any spec. The enroll
-secret and the report survived — a fleet file with no `secrets:` key leaves the fleet's secrets alone.
+secret and the report survived — a fleet file with no `secrets:` key leaves the fleet's secrets alone, **but
+only while the instance's `secrets` gitops-mode exception is on**. `fleetctl gitops` reads
+`config.gitops.exceptions` whether or not gitops mode is enabled: with `secrets` not excepted, a missing
+`secrets:` key deletes every enroll secret, and with `labels` or `software` excepted, the `labels:` /
+`software:` keys these files carry are refused. Nothing can declare the exceptions, so the instance is pinned at
+`labels: false, software: false, secrets: true`: every premium apply restores that first
+(`.github/scripts/restore-gitops-exceptions.sh`), and so does the suite's gitops-mode teardown.

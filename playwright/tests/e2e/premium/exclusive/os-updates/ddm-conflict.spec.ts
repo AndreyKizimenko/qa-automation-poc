@@ -2,11 +2,10 @@
  * Premium • Controls • OS updates — Fleet's OS update settings and a custom OS
  * update profile can't both be in force on one fleet.
  *
- * Two QA Wolf flows (macOS and Windows), both one direction: with OS updates
- * set, uploading a custom update profile is refused. This spec asserts that
- * direction and the other one they didn't test — with the custom profile in
- * place, setting OS updates is refused — each through the UI a person would
- * use, with Fleet's own copy (`server/fleet/mdm.go`):
+ * Both directions, on macOS and Windows: with OS updates set, uploading a
+ * custom update profile is refused, and with the custom profile in place,
+ * setting OS updates is refused — each through the UI a person would use, with
+ * Fleet's own copy (`server/fleet/mdm.go`):
  *
  *  - upload refused: "Couldn't add profile. OS updates are already configured.
  *    Remove the OS updates settings first." — and nothing is added;

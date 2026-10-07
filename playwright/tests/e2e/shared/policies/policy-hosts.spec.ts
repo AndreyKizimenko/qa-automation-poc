@@ -1,7 +1,7 @@
 /**
- * Shared • Policies • which hosts a policy runs on, and the hosts behind a
- * host's answer. Round 1 C3 #3/#19 (a policy for one platform) and C3 #6/#24 (a
- * host's Policies tab → "View all hosts").
+ * Shared • Policies • which hosts a policy runs on (a policy for one platform),
+ * and the hosts behind a host's answer (a host's Policies tab → "View all
+ * hosts").
  *
  * Both are Fleet's server-side decisions, so osquery-perf simulations answer
  * them as well as a VM, and global policies make the two tiers identical:

@@ -2,7 +2,7 @@
  * Free • Controls • Configuration profiles — a profile and a declaration reach
  * the real Mac, and leave it again.
  *
- * The free half of batch E. Free has no label targets — every profile goes to
+ * Free has no label targets — every profile goes to
  * every MDM host — but delivery itself, the commands that carry it, Resend and
  * removal are all free features, and premium's specs
  * (`profile-delivery-retry`, `profile-declarations`, `configuration-profiles`)

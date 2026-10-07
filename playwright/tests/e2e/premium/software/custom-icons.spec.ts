@@ -12,8 +12,7 @@
  *   2. the client-side validation gate (`EditIconModal.onFileSelect`), which
  *      rejects a file before any request leaves the browser.
  *
- * **Why the assertions are what they are.** QA Wolf compared seven screenshots
- * per step. Fleet renders a custom icon by fetching the blob and swapping in an
+ * **Why the assertions are what they are, and not screenshots.** Fleet renders a custom icon by fetching the blob and swapping in an
  * `<img class="software-icon__software-img">`; the built-in fallback renders a
  * different element entirely. So the presence of that element *is* the
  * user-visible "custom icon in effect" signal, and `icon_url` flipping to an

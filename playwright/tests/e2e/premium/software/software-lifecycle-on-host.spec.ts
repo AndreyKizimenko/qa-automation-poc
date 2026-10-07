@@ -42,13 +42,29 @@
  * is picked up within seconds of being queued, often before the page that would
  * show it has loaded. The queued state is asserted through the API, which
  * reports `pending_install` / `pending_uninstall` the moment the click lands.
+ *
+ * **Fleet refetches by itself.** Once an install or uninstall succeeds, Fleet
+ * asks the host for fresh vitals (`refetch_requested`), so its inventory catches
+ * up without anyone pressing Refetch. The macOS Fleet-maintained app's test reads
+ * that flag the moment each half's status settles, before the inventory wait
+ * posts a refetch of its own. Its status is read every second there, because the
+ * flag is a single bit: any refetch's results landing on the VM clear it, and other
+ * specs' refetches land there all run, so the read has to follow the result
+ * closely. One fixture is enough, since the server path is the same for every
+ * package, and it keeps that race to two reads a run. The flag doesn't say who set
+ * it either, so a pass can't be pinned on Fleet alone; a Fleet that stopped asking
+ * still fails whenever no other refetch happens to be outstanding. The UI's
+ * "Fetching fresh vitals" spinner isn't asserted: it gives up after 60 s, and a
+ * VM's refetch takes 70–120 s.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import {
+  getHostRefetchRequested,
   getHostSoftwareState,
   listHostActivities,
   requireRealHost,
+  waitForHostSoftwareStatus,
   waitForSoftwareSettled,
 } from '@helpers/api';
 import type { APIRequestContext } from '@playwright/test';
@@ -69,6 +85,31 @@ async function newestActivityAt(request: APIRequestContext, hostId: number, type
     (a) => a.type === type && a.details.software_title === title,
   );
   return match ? Date.parse(match.createdAt) : 0;
+}
+
+/** The fixture whose test reads Fleet's own refetch after its install and uninstall. */
+const REFETCH_CHECKED_FIXTURE = 'macOS Fleet-maintained app';
+
+/**
+ * Waits for the status, read every second, then checks the host has a refetch
+ * outstanding. Fleet sets `refetch_requested` in the same request that records a
+ * successful install or uninstall, so the poll covers only the gap between that
+ * status read and the flag's write.
+ */
+async function expectRefetchQueued(
+  request: APIRequestContext,
+  hostId: number,
+  titleId: number,
+  status: 'installed' | null,
+) {
+  await waitForHostSoftwareStatus(request, hostId, titleId, status, 300_000, 1_000);
+  await expect
+    .poll(() => getHostRefetchRequested(request, hostId), {
+      message: `Fleet queued no vitals refetch after the ${status ? 'install' : 'uninstall'}`,
+      timeout: 15_000,
+      intervals: [1_000],
+    })
+    .toBe(true);
 }
 
 test.describe('Premium • Software • Install and uninstall on host', () => {
@@ -104,6 +145,7 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
 
           await library.install(title.name);
           expect((await getHostSoftwareState(request, host.id, title.titleId))?.status).toBe('pending_install');
+          if (fixture.label === REFETCH_CHECKED_FIXTURE) await expectRefetchQueued(request, host.id, title.titleId, 'installed');
           const installed = await waitForSoftwareSettled(request, host.id, title.titleId, 'installed', {
             inventoryName: unlinkedName,
           });
@@ -148,6 +190,7 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
           await hostDetails.openLibrary(title.name);
           await library.uninstall(title.name);
           expect((await getHostSoftwareState(request, host.id, title.titleId))?.status).toBe('pending_uninstall');
+          if (fixture.label === REFETCH_CHECKED_FIXTURE) await expectRefetchQueued(request, host.id, title.titleId, null);
           await waitForSoftwareSettled(request, host.id, title.titleId, null, { inventoryName: unlinkedName });
 
           await hostDetails.goto(host.id);
