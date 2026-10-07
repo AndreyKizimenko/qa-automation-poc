@@ -11,10 +11,16 @@
  *   - **A long-standing report keeps collecting.** `pw-host-report-results` is
  *     declared by gitops on the VMs fleet (`gitops/premium-fleetqa/fleets/vms.yml`:
  *     macOS, every 300 s, Store data on) and nothing in the suite deletes it, so
- *     it has been answering across nightly redeploys and upgrades. Its stored
- *     result for the macOS VM must be younger than two intervals: a row is not
- *     enough, since a stale one would survive collection silently stopping.
- *     (`host-report-details.spec.ts` reads the same row but not its age.)
+ *     it has been answering across nightly redeploys and upgrades. A row is not
+ *     enough, since a stale one would survive collection silently stopping, so
+ *     its stored result for the macOS VM must be under an hour old. Not two
+ *     intervals: the report's answer never changes, and Fleet rewrites a host's
+ *     stored rows only when they change. An unchanged result moves
+ *     `last_fetched` only once that is 50 minutes old (fleetdm/fleet#54897), so
+ *     a VM that is collecting reads up to ~56 minutes old. That unchanged-result
+ *     path is what this test covers; the new report below covers the write of a
+ *     changed one. (`host-report-details.spec.ts` reads the same row but not
+ *     its age.)
  *   - **A new report can still store results.** Created through the UI on the
  *     VMs fleet with Store data on, it collects the macOS VM's row, read through
  *     the API and on the report page. The UI's shortest schedule is 5 minutes, so
@@ -42,6 +48,11 @@ import { runNonce } from '@helpers/profiles';
 
 const DURABLE_REPORT = 'pw-host-report-results';
 
+// How old a stored result's `last_fetched` gets before Fleet refreshes it for a
+// result that hasn't changed (`queryResultsLastFetchedRefreshAge` in Fleet's
+// server/service/query_report_writes.go).
+const LAST_FETCHED_REFRESH_AGE_S = 50 * 60;
+
 test.describe('Premium • Reports • stored results', () => {
   test.describe.configure({ retries: HOST_RETRIES });
 
@@ -68,15 +79,18 @@ test.describe('Premium • Reports • stored results', () => {
     const report = await getReport(request, ref!.id);
     expect(report.discardData, `${DURABLE_REPORT} stores its results`).toBe(false);
 
-    // osquery runs it at fixed points of its interval, so a host that's
-    // collecting has stored a row within the last interval; two, plus a couple
-    // of minutes for delivery, leaves room for a run that's just due.
+    // The report's answer never changes, so Fleet moves `last_fetched` only at
+    // the first run after it turns 50 minutes old, and a 1-minute cron writes
+    // it. On top of the refresh age, two intervals plus a couple of minutes
+    // leaves room for a run that's just due, its delivery and the cron.
     const lastFetched = await getHostReportLastFetched(request, vm.id, DURABLE_REPORT);
     expect(lastFetched, `the macOS VM has stored a result for ${DURABLE_REPORT}`).not.toBeNull();
     const ageSeconds = Math.round((Date.now() - Date.parse(lastFetched!)) / 1000);
-    expect(ageSeconds, `its latest result is ${ageSeconds}s old (interval ${report.interval}s)`).toBeLessThan(
-      2 * report.interval + 120,
-    );
+    expect(
+      ageSeconds,
+      `its latest result is ${ageSeconds}s old (interval ${report.interval}s; ` +
+        `Fleet refreshes an unchanged result at ${LAST_FETCHED_REFRESH_AGE_S}s)`,
+    ).toBeLessThan(LAST_FETCHED_REFRESH_AGE_S + 2 * report.interval + 120);
 
     await dashboard.goto();
     await dashboard.navbar.goToReports();

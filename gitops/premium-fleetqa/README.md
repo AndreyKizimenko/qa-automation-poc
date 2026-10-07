@@ -115,8 +115,9 @@ Consumed by `playwright/tests/e2e/premium/software/version-pinning.spec.ts`, whi
 the fixtures that have to exist before a test starts:
 
 - **`pw-host-report-results`**, a 5-minute report on the macOS VM, so it always holds a stored result for
-  `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`, and a fresh one for
-  `playwright/tests/e2e/premium/reports/stored-results.spec.ts`.
+  `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`, and one refreshed within the hour for
+  `playwright/tests/e2e/premium/reports/stored-results.spec.ts` (its answer never changes, so Fleet moves its
+  `last_fetched` only once that is 50 minutes old, not on every run).
 - **Claude, kept installed** on the macOS and Windows VMs and tracking latest, the durable subject of
   `playwright/tests/e2e/premium/software/update-on-host.spec.ts`. Its Fleet-maintained entries carry no pin,
   so the hourly auto-update cron caches each new build and keeps the previous one; two "Claude is installed"
