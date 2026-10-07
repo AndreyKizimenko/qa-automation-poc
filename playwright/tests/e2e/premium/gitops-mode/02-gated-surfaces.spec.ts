@@ -117,8 +117,9 @@ test.describe('Premium • gitops mode — gated surfaces', () => {
   }) => {
     const modal = new EnrollSecretModal(page);
     await modal.goto(workstationsFleetId);
-    // The modal shows its empty state, with an Add secret of its own, until the
-    // list arrives and replaces it: a hover on that one raises no tooltip.
+    // Until the list arrives the modal shows its empty state, whose Add secret is
+    // another button in another place: a hover that lands on it is left over
+    // nothing once the list replaces it, and no tooltip appears.
     await expect(modal.rows.first()).toBeVisible();
 
     // Gating is per control type, not per secret, so the first row speaks for all.

@@ -95,8 +95,9 @@ test.describe('Premium • gitops mode — exceptions', () => {
   }) => {
     const modal = new EnrollSecretModal(page);
 
-    // The modal shows its empty state, with an Add secret of its own, until the
-    // list arrives and replaces it, so each check waits for the list first.
+    // Until the list arrives the modal shows its empty state, whose Add secret is
+    // another button in another place, so each check waits for the list first
+    // (see 02's enroll-secrets test).
     await modal.goto(workstationsFleetId);
     await expect(modal.rows.first()).toBeVisible();
     await expectGatedByGitOps(modal.addSecretButton, repoUrl);

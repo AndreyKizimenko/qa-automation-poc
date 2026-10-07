@@ -479,7 +479,7 @@ other:
 **Flow**
 
 1. ☐ Open `/hosts/manage?fleet_id=<workstationsFleetId>&manage_enroll_secrets=1` via URL — `EnrollSecretModal.goto()`. This entry point has **no gitops gate of its own**, which is the only reason the modal is reachable at all while the mode is on (the documented button on the fleet settings page is gated — see GITOPS-07 and GITOPS-13).
-   - ✅ *(UI)* The `.enroll-secret-modal` container is visible, then the first secret's row. The modal shows its empty state, with an **Add secret** of its own, until the list arrives and replaces it, and a hover on that one raises no tooltip.
+   - ✅ *(UI)* The `.enroll-secret-modal` container is visible, then the first secret's row. Until the list arrives the modal shows its empty state, whose **Add secret** is another button in another place; a hover that lands on it is left over nothing once the list replaces it, and no tooltip appears.
 2. ☐ For each of **Add secret**, **Edit enroll secret**, **Delete enroll secret** — `expectGatedByGitOps`, pattern **A**:
    - ✅ *(UI)* One gitops wrapper each; disabled; "Manage in YAML" tooltip on hover with the `YAML` → `repository_url` link.
 3. ☐ For each of **Copy to clipboard**, **Show secret**, **Done** — `expectNotGatedByGitOps`:
