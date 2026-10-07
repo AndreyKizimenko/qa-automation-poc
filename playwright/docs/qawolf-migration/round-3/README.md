@@ -57,8 +57,8 @@ here** block, the gap table, the review to do first, facts for the build, the de
 | **[B](B-policy-report-software-forms.md)** | Policy, report and software forms: automations, saves, report settings, Advanced options, secrets in scripts | none (one macOS VM check) | 24 | **merged** 2026-10-03: 22 built, 2 cut; [PR #82](https://github.com/AndreyKizimenko/qa-automation-poc/pull/82) (with batch A); branch run [37077445852](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37077445852) green, 0 flaky |
 | **[C](C-simulations.md)** | What Fleet decides server-side, over simulations: policy ↔ hosts links, transfers, label membership, vulnerability filters, Unassigned views | simulations | 23 | **merged** 2026-10-04: 19 kept, 4 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch D); branch run [37149323584](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37149323584) green, C's tests all first-time passes |
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | **merged** 2026-10-04: 4 built, 3 folded, 2 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch C); its 2 flaky retries in the branch run fixed; filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) and [#54734](https://github.com/fleetdm/fleet/issues/54734) |
-| **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | **built** 2026-10-05: 23 built, 11 folded, 7 cut, all recommendations accepted; shipped with batch F in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
-| **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations, throwaway `pw-*` fleets | 10 | **built** 2026-10-05: 8 built or folded, 2 cut; filed [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845); [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) (with batch E); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
+| **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | **merged** 2026-10-07: 23 built, 11 folded, 7 cut, all recommendations accepted; shipped with batch F in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
+| **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations, throwaway `pw-*` fleets | 10 | **merged** 2026-10-07: 8 built or folded, 2 cut; filed [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845); [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) (with batch E); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
 | **[G](G-real-vms.md)** | Real VMs: live policies and reports, CSV export, side effects of installs and MDM commands, a host's Library | real VMs | 10 | ready for review |
 | **[H](H-gitops-mode-v2.md)** | gitops mode V2 — round 2's parked list | own project | 5 | ready for review |
 
@@ -66,8 +66,9 @@ A–D need nothing that doesn't exist; E's per-role source read is done, so it's
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
 Every batch file lists the decisions to put to Andrey **before** building: 25 across the round, most of them "cut,
 or build it this narrow way". Batches touch different surfaces and can run in any order. **Two can be built at once**, each
-in its own worktree, **only if their instance runs are coordinated** (§5, "Since batches A and B"; C and D, built
-that way, are the model): every run announced, and no run with dependencies while the other session is mid-run.
+in its own worktree, **only if their instance runs are coordinated** (§5, "Since batches A and B"; C and D, then E
+and F, built that way, are the model): every run announced, and no run with dependencies while the other session is
+mid-run. They ship in one PR with one branch run (§5, "Since batch F").
 
 ## 4. How a batch runs
 
@@ -225,11 +226,55 @@ E was built beside F and ships with it. What later batches inherit:
   anchors on Export hosts, which renders either way.
 - **`cleanup-setup` sweeps spec-saved Workstations reports by exact prefix** (`pw-role-`,
   `Copy of playwright-saveasnew-`); gitops's reports there stay. A new per-run report on Workstations adds its prefix.
-- **Two of Workstations' five gitops reports are missing on premium** ("Collect XProtect reports", "Detect if Apple
-  Intelligence is enabled", gone before 2026-10-05 16:01 UTC, not by any spec): read "Collect default browser on
-  macOS", which the role specs check for first.
+- **Workstations holds three of its five gitops reports between runs, by design.** Every gitops chain (nightly and
+  branch run) ends on the **min** config, which declares "3 of 5" and drops "Collect XProtect reports" and "Detect if
+  Apple Intelligence is enabled" (`gitops/premium-fleetqa-min/fleets/workstations.yml:55`). Read "Collect default
+  browser on macOS", which both configs declare and the role specs check for first.
 - **A skipped check on a filed bug is run un-skipped once** to see it fail for the filed reason before it's skipped
   (E's #54622, #54623, #54624).
+
+### Since batch F (2026-10-07)
+
+F was built beside E, and the two shipped together in
+[PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) (branch run
+[37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green);
+[PR #90](https://github.com/AndreyKizimenko/qa-automation-poc/pull/90) followed. **Branch from `main` at or after
+68c8846.** What later batches inherit:
+
+- **The instances run `4.93.0-rc` 8d05209 (built 2026-10-06)**, five commits past c87f85c. None touches a file G or H
+  cites; two change what the suite can read:
+  - A stored report result that hasn't changed is no longer rewritten: its `last_fetched` moves only once it's 50
+    minutes old (fleetdm/fleet#54897; PR #90 widened `stored-results.spec.ts`' bound). Requests over
+    `osquery_max_concurrent_query_report_writes` (20) skip storing altogether.
+  - `fleetctl gitops` skips unchanged scripts and software, and no longer blocks queued script runs and installs.
+- **An uncaught page error owed to a filed, cosmetic Fleet defect** goes in `DEFAULT_IGNORED_PAGE_ERRORS`
+  (`helpers/console.ts`) with its `TODO(fleetdm/fleet#N)` and a row under *Ignored console errors* in
+  `blocked-by-product-bugs.md`, never `pageHealth.disable()`. Its one entry, `worker-json.js`, is
+  [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845): Fleet doesn't serve Ace's JSON or XML
+  worker, so an app's Edit configuration modal throws in its worker.
+- **A throwaway `pw-*` fleet is scoped by URL** (`<page>.goto({ fleetId })`, then check the dropdown reads its
+  name), not picked with `TeamDropdown.selectByLabel`. `deleteFleet` deletes the fleet's bootstrap package first:
+  a fleet delete leaves it behind.
+- **Root a `filter({ has })` locator at the page.** One built from a scoped locator (`section.getByRole(…)`) looks
+  for that scope inside each candidate, matches nothing, and the click waits out the test's timeout.
+- **Key an activity check to what this test did** when the other scope's copy of the test, another spec or an
+  earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching the
+  fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare fields,
+  never `JSON.stringify`.
+- **`organization-info.spec.ts` renames the organization for a few seconds** on both tiers. A spec that compares
+  the page's org name with the config re-reads both until they agree, as `shared/settings/apple-mdm.spec.ts` does.
+- **Run cost after E and F** (37395809242): the premium job 63.5 min, its main project 47.3 at 3 workers (+1.7 on C
+  and D), still worker-bound to the last minute; free 14.5. Four retries, none in E or F: an FMA installer
+  download that 504'd (`apparency`) and a Users list slow for ~20 s.
+- **Two batches, one PR**, as E and F did it: the batch that finishes last merges the other's branch into its own
+  and resolves the shared-doc conflicts (recount the audit totals from the area files' Contents tables); the other
+  session diffs its own files in the merge before the push; fixes after the merge come as a branch off the merge
+  commit, so the PR branch keeps one writer.
+- **Triaging a branch run:** if `gh run download` or `gh run watch` stalls (both did on 2026-10-06, while the API
+  answered instantly), fetch each report's zip with `curl -L -H "Authorization: Bearer $(gh auth token)"` from
+  `https://api.github.com/repos/<repo>/actions/artifacts/<id>/zip`, and poll `gh run view <id> --json status`.
+- **Decisions Andrey made in F that later batches inherit:** a gap whose action Fleet can't undo (an Android web
+  app is created and never deleted) is cut, not pinned as a durable fixture; tooltip copy alone isn't worth a test.
 
 ## 6. Decisions round 3 already carries
 

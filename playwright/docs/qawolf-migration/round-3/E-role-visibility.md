@@ -3,7 +3,7 @@
 **41 gaps → 23 built, 11 folded, 7 cut; about 45 tests, mostly one per role.** `Policies` · `Reports` ·
 `Host details` · `Hosts list` · `Labels` · `Scripts`
 
-**Status: built 2026-10-05** (planned 2026-10-01; reviewed and built 2026-10-05). Andrey's answers are in
+**Status: merged 2026-10-07** in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) with batch F (planned 2026-10-01; reviewed and built 2026-10-05). Andrey's answers are in
 [Review decisions](#review-decisions-2026-10-05); what each spec does is in [What landed](#what-landed). Verified:
 every changed spec with dependencies on its tiers (premium 100 passed / 3 skipped, free 44 + 9 passed), once headed,
 the new premium specs `--repeat-each=3` at 3 workers (135/135), the live runs `--repeat-each=5 --workers=2`.
@@ -282,9 +282,10 @@ added to that list. Throwaway `pw-*` fleets are swept too.
 
 **Durable, read-only:**
 
-- **Workstations reports**: five gitops reports (`collect-default-browser`, `collect-santa-denied-logs`,
-  `collect-xprotect-reports`, `detect-apns-certificate`, `detect-apple-intelligence`), authored by no static
-  user. Good for "*Edit* shown on a report you didn't write". **Never save or delete them**: gitops owns them.
+- **Workstations reports**: five gitops reports in the full config (`collect-default-browser`,
+  `collect-santa-denied-logs`, `collect-xprotect-reports`, `detect-apns-certificate`, `detect-apple-intelligence`),
+  authored by no static user. Between runs it holds only the min config's three (every gitops chain ends on min,
+  which drops `collect-xprotect-reports` and `detect-apple-intelligence`); `collect-default-browser` is in both. Good for "*Edit* shown on a report you didn't write". **Never save or delete them**: gitops owns them.
 - **VMs fleet**: report `pw-host-report-results` (gitops; `premium/reports/stored-results.spec.ts` asserts it
   keeps collecting, and no sweep touches it); policies "Claude is installed (macOS/Windows)". Those carry
   `install_software` automations, so read them, never touch them.

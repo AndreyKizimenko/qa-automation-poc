@@ -148,6 +148,11 @@ A change isn't done until the docs describing it are current, in the same commit
 - **The report edit form fills itself twice:** from report state that survives client-side navigation, then
   again when its own fetch returns. An edit made right after *Edit report* can be overwritten and save nothing,
   with no prompt. Load `/reports/:id/edit` with `gotoEdit()` and wait for the saved values, or use `fillAll()`.
+- **Root a `filter({ has })` locator at the page.** One built from a scoped locator (`section.getByRole(…)`)
+  looks for that scope inside each candidate and matches nothing, so the click waits out the test's timeout.
+  `filter({ has: this.page.getByRole(…) })` is relative to each candidate, as intended.
+- **Fleet's radio inputs are visually hidden** behind a styled control: click the `<label>` that wraps the
+  radio, then assert the radio is checked (`TargetLabelSelector`, `IntegrationsPage.chooseMigrationMode`).
 
 **Waiting**
 - **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
@@ -174,6 +179,10 @@ A change isn't done until the docs describing it are current, in the same commit
   timeout, and keep every wait inside it.
 
 **Data and state**
+- **Key an activity check to what this test did** when the other scope's copy of the test, another spec or an
+  earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
+  the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
+  fields, never `JSON.stringify`.
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /

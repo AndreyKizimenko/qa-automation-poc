@@ -3,7 +3,7 @@
 **10 gaps → about 7 augments and 2 new specs.** `Setup experience` · `Disk encryption` · `OS updates` ·
 `MDM settings` · `Automatic enrollment` · `Android`
 
-**Status: built** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings; reviewed and
+**Status: merged 2026-10-07** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings; reviewed and
 built 2026-10-05: 8 built or folded, 2 cut, see *Review decisions* and *What landed*; [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) with batch E).
 
 > ## ▶ Start here
