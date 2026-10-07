@@ -368,6 +368,14 @@ just installed), so a fixture test is repeated on one worker; its refetch check 
 first full lifecycle run read the refetch flag on all six fixtures, twelve reads, all true, before the check was
 narrowed to Itsycal. Nothing was left on the VMs fleet: only its durable titles, and no `pw-live-*` policy.
 
+**Branch run [37667485374](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37667485374)** (on
+4c09abf, with H): every gitops job green on both tiers; free 337 passed, 0 failed; premium 665 passed, 2 failed, 1
+flaky, job 62.1 min (main project ~43.8, against 47.3 on E + F's run). No G test failed or retried. The two failures
+were fixed on the branch: batch C's CVE-by-fleet test picked a CVE only a simulation borrowed onto the VMs fleet had
+when the hourly job counted, so the live host list was empty (now picked from the real Linux VM's own CVEs; 5/5
+locally); and H's gitops tooltip check lost one hover to a layout shift (H's re-hover fix). The flake was the Mac's
+live query timing out under the profile specs' load, as on 2026-09-30.
+
 **VM time added:** one script run on the Mac (~1–2 min with its queue), two refetch reads on the Mac (seconds), and
 the live runs' answers from the three VMs (seconds each, through osquery's distributed path, not the orbit queue).
 Nothing on the Linux VM's queue.
