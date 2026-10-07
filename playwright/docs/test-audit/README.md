@@ -90,6 +90,10 @@ files · ~350 test declarations · 4 projects**.
 > lifecycle (an unsupported key refused, a valid one stored and reopened; fleetdm/fleet#54845 ignored narrowly). Area
 > **13**: MISC-20 gains the Authentication (SSO) › End users row (19 cases).
 
+> **Round 3 batch G added 2026-10-07** (`playwright/qawolf-round3-batch-g`): live runs and execution side effects on the
+> real VMs. Area **04**: POL-42 runs a policy live on the three VMs (Pass / Fail, Yes / No, the Host sort, its CSV), both
+> tiers. Area **05**: RPT-36 runs a report live on them and exports the results, both tiers.
+
 ## The area files
 
 | # | Area | Entries | Project(s) |
@@ -97,8 +101,8 @@ files · ~350 test declarations · 4 projects**.
 | 01 | [Auth & account](01-auth-and-account.md) | 19 | premium, free |
 | 02 | [Hosts — shared + free](02-hosts-shared-and-free.md) | 26 | premium, free |
 | 03 | [Hosts — premium](03-hosts-premium.md) | 21 | premium |
-| 04 | [Policies](04-policies.md) | 41 | premium, free |
-| 05 | [Reports / queries](05-reports.md) | 35 | premium, free |
+| 04 | [Policies](04-policies.md) | 42 | premium, free |
+| 05 | [Reports / queries](05-reports.md) | 36 | premium, free |
 | 06 | [Software library & packages](06-software-library.md) | 39 | premium, free |
 | 07 | [Software vulnerabilities, versions & OS](07-software-vulnerabilities-and-os.md) | 24 | premium, free |
 | 08 | [Settings › Users — premium](08-users-premium.md) | 34 | premium |
@@ -117,7 +121,7 @@ files · ~350 test declarations · 4 projects**.
 | 21 | [Software on hosts](21-software-on-hosts.md) | 12 (+ 3 retired stubs) | premium |
 | 22 | [Label targeting](22-label-targeting.md) | 9 | premium |
 
-**537 entries** covering every test in the suite. An entry can expand into several
+**539 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
 the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
 17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under

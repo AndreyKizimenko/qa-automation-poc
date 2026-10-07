@@ -28,7 +28,7 @@ pages/
 │                       #   Passwords (Recovery Lock), scripts, variables, and the
 │                       #   setup-experience pages
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
-├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage
+├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage, PolicyLivePage (a ReportLivePage for a policy's run, plus its Yes / No summary)
 ├── labels/             # LabelsPage
 ├── packs/              # PacksListPage, PackEditPage
 └── settings/           # Organization info/advanced, Integrations, TeamSettings,

@@ -71,6 +71,7 @@ import {
   PoliciesListPage,
   PolicyEditPage,
   PolicyDetailsPage,
+  PolicyLivePage,
   LabelsPage,
   PacksListPage,
   PackEditPage,
@@ -211,6 +212,7 @@ type FleetFixtures = {
   policiesList: PoliciesListPage;
   policyEdit: PolicyEditPage;
   policyDetails: PolicyDetailsPage;
+  policyLive: PolicyLivePage;
 
   // Labels + Packs
   labelsPage: LabelsPage;
@@ -479,6 +481,9 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
   }, { box: true }],
   policyDetails: [async ({ page }, use) => {
     await use(new PolicyDetailsPage(page));
+  }, { box: true }],
+  policyLive: [async ({ page }, use) => {
+    await use(new PolicyLivePage(page));
   }, { box: true }],
 
   // Labels + Packs

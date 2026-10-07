@@ -111,6 +111,22 @@ relies on the client-side platform filter.
 **Firing Lock or Wipe.** Rationale, the residual risk, and the full asserted matrix:
 [`PARITY.md` §6](PARITY.md#6-lock-and-wipe-gated-not-ignored).
 
+## Round 3 · Batch G — real VMs: live runs and execution side effects
+
+10 gaps that only a real VM can show, or that read a real VM's data. Reviewed and built on
+`playwright/qawolf-round3-batch-g` (2026-10-07), beside batch H. Detail and Andrey's decisions in
+[round-3/G-real-vms.md](round-3/G-real-vms.md#review-decisions-2026-10-07-andreys-answers-in-decisions).
+
+**What the review changed.** The three VMs' names mix case on both tiers, so one run on them proves the live policy's
+case-insensitive Host sort with no simulations; picking them by host search left no label to clean up. The live
+report and its CSV moved from All hosts (~300 simulations that ignore the SQL and can keep a run from finishing) to
+the three VMs, so every exported row is known. The Unassigned-chip flow was cut: batch E's role specs already prove
+the chip.
+
+| slice | what |
+|---|---|
+| live runs on the three VMs | new `shared/policies/live-policy-run.spec.ts` and `shared/reports/live-report-export.spec.ts` (both tiers). A policy run live: each VM's Pass / Fail, "(Yes: 33%, No: 67%)" and its tooltips, the Host sort both ways, the yes / no CSV. A report run live: each VM's own `platform`, matched against Fleet's record, and a CSV holding exactly those rows. `PolicyLivePage` (a `ReportLivePage` of the policy kind), `ReportLivePage.exportResults` / `resultsCount` / `resultsColumnValues` / `resultsSortControl`, `helpers/csv.ts`, `getHostPlatform`. `host-live-query.spec.ts`' comment that a run times out at the rest period is corrected: a UI run has no timeout |
+
 ## Round 3 · Batch F — MDM, setup experience and Android settings
 
 10 gaps in MDM and setup settings that round 1 only rendered: saved, reloaded and read back. Reviewed and built on

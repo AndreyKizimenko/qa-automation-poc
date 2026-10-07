@@ -3,8 +3,9 @@
 **10 gaps → 1 new spec and about 5 augments, after folds.** `Live policies` · `Live reports and CSV` ·
 `Install side effects` · `MDM command feed` · `Script-only packages` · `A host's Library`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings, and
-2026-10-07 against E and F's).
+**Status: reviewed and being built** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings,
+and 2026-10-07 against E and F's; reviewed 2026-10-07, Andrey's answers in *Decisions*). Built on
+`playwright/qawolf-round3-batch-g` beside batch H.
 
 > ## ▶ Start here
 >
@@ -130,6 +131,27 @@ Read every flow body. Known so far:
   to `LibraryInstallAction`. Whether a simulation without orbit is offered it is unverified; if not, take one from
   `findScriptableSimulations`. Don't click it there (decision 5).
 - **C5 #13** (from batch B) is a host's Library tab, read-only on a VM.
+
+### Review decisions (2026-10-07, Andrey's answers in *Decisions*)
+
+Every flow body read, against `main` 8b3a437 and Fleet 8d05209 (the build both instances run).
+
+| Gap | Decision | Where | Why |
+|---|---|---|---|
+| C3 #37 | **build** | new `shared/policies/live-policy-run.spec.ts` | Nothing in the suite runs a policy live. The three VMs, picked by host search (E's `targetHost`), with SQL only the Mac passes: Yes 33%, No 67%, tooltips "1 host" / "2 hosts", each row's Pass / Fail. No `pw-*` label: nothing to delete, nothing left on free. |
+| C3 #28 | **fold** into C3 #37 | same test | The VM names mix case on both tiers (`WIN-…`, `macos-…`, `ubuntu-…`), so the same run proves the case-insensitive Host sort. No simulations, no slice. |
+| C4 #F2, #P8 | **build, reshaped** | new `shared/reports/live-report-export.spec.ts` | A live report's export is untested anywhere. On the three VMs, not All hosts: All hosts is ~300 simulations whose canned rows ignore the SQL, and one that drops offline keeps the run from finishing; the flow's only check there ("responded % = online %") is the flaky part. The CSV is parsed: one row per VM with its own platform. |
+| C4 #P14 | **cut** | — | E's `premium/reports/role-access.spec.ts` already proves the Unassigned chip, offered or withheld by role and scope (RPT-29/30). What's left is a scope check over premium's Unassigned, which is simulations only and races the specs that move simulations on and off it. |
+| C5 #13 | **build, reshaped** | premium host-Library spec + a free twin | The header's static copy is low value. What the tab decides: "N items" matches the API, and **Add software** routes by the host's platform (macOS and Windows → Fleet-maintained, Linux → Custom package) with the host's fleet. Free has no Library tab, and nothing checks that. The Self-service filter is skipped: no VMs-fleet title is self-service. |
+| R2 #15 | **fold** | `premium/software/software-lifecycle-on-host.spec.ts` | `refetch_requested` read the moment each install or uninstall settles. Its limit: the flag has no author, and other specs ask for refetches on the same VMs, so a `true` can't be attributed; a Fleet that stopped asking would still fail most runs. The plan's no-refetch helper option has the same blind spot and is dropped. |
+| R2 #69 | **build** as planned | `shared/hosts/mdm-commands.spec.ts` | The activity through the API first, then the dashboard filtered to "Ran custom MDM command", the row, and its details modal by command UUID. It replaces the unfiltered end check, the buried-feed pattern that flaked in D. |
+| R2 #72 | **build, on the Mac** | `premium/software/script-only-package.spec.ts`, its own describe | A real host running a script-only package, which a simulation only fakes. On the Mac, not Linux: the Linux VM's orbit queue carries ~8 specs and sets the suite's floor, the Mac's ~4. |
+| R2 #88 | **fold** into R2 #72 | same test | R2 #72 clicks **Run** in the VM's Library, which is R2 #88's check. No simulation, no slice. |
+
+Two facts the review corrected: a live run started in the UI has no timeout at all (`FLEET_LIVE_QUERY_REST_PERIOD`
+bounds only the synchronous REST endpoint, so `host-live-query.spec.ts`' comment saying otherwise is wrong), and C's
+"never failing SQL on the VMs fleet" protects that fleet's two install policies, so a global policy with no automation
+failing on the VMs triggers nothing.
 
 ## 2. Facts for the build
 
@@ -258,7 +280,18 @@ API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy` (takes `platfor
 `hostsOfferedTitle`, `findScriptableSimulations`, `latestActivityId` / `assertActivityAfter`; `Toast.dismissAll`;
 `ReportsListPage.liveReportButton` / `narrowTo`, `createReport({ observerCanRun })`.
 
-## Decisions to put to Andrey
+## Decisions (answered by Andrey, 2026-10-07)
+
+All four review recommendations accepted:
+
+1. **C4 #P14: cut.**
+2. **C4 #F2 / #P8 on the three VMs**, not All hosts.
+3. **C5 #13 reshaped:** the item count and Add software's routing per VM, and a free twin.
+4. **R2 #72 on the Mac**, with R2 #88 folded in.
+
+The plan's own recommendations below stand for R2 #69 (decision 3) and the global policy (decision 4).
+
+### The plan's questions, as written before the review
 
 1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut. *(Updated from the C/D re-check:)* the Unassigned chip
    still exists in the target picker, so the flow's step is current. Recommended: fold, as a premium run on that
@@ -310,4 +343,10 @@ Library tab and the refetch row are premium specs today.
 
 ## What landed
 
-*Nothing yet.*
+Built on `playwright/qawolf-round3-batch-g` from 2026-10-07.
+
+| Gap | Landed in | What it asserts |
+|---|---|---|
+| C3 #37 + C3 #28 | new `shared/policies/live-policy-run.spec.ts` (both tiers) | Policies → the policy → Run policy → the three VMs by host search, "3 hosts targeted (100% online)" → "Policy finished", 100% responded, 3 results. The Mac Pass, Windows and Linux Fail; "(Yes: 33%, No: 67%)" with tooltips "1 host" / "2 hosts"; the Host column ascending `macos-…`, `ubuntu-…`, `WIN-…` and the reverse (the names are checked to sort differently with case first); Export results is `<name> - Results (…).csv` with `host,status` and `yes` / `no` per VM. `PolicyLivePage`, a `ReportLivePage` of the policy kind. |
+| C4 #F2 + #P8 | new `shared/reports/live-report-export.spec.ts` (both tiers) | Reports → the report → Live report → the three VMs → "Report finished", 3 results; each VM's `platform` cell equals the platform Fleet recorded for it; Export results is `<name> - Results (…).csv` with `host_display_name,platform` and exactly those rows. `ReportLivePage.exportResults` / `resultsCount` / `resultsColumnValues` / `resultsSortControl`; `helpers/csv.ts`; `getHostPlatform`. |
+| C4 #P14 | — | Cut at review. |

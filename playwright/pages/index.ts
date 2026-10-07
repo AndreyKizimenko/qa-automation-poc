@@ -119,6 +119,7 @@ export type {
 export { ReportDetailsPage } from './reports/ReportDetailsPage';
 export type { ReportDetailsValues } from './reports/ReportDetailsPage';
 export { ReportLivePage } from './reports/ReportLivePage';
+export type { LiveRunKind } from './reports/ReportLivePage';
 
 // Policies
 export { PoliciesListPage } from './policies/PoliciesListPage';
@@ -132,6 +133,7 @@ export type {
 } from './policies/PolicyEditPage';
 export { PolicyDetailsPage } from './policies/PolicyDetailsPage';
 export type { PolicyDetailsValues } from './policies/PolicyDetailsPage';
+export { PolicyLivePage } from './policies/PolicyLivePage';
 
 // Labels
 export { LabelsPage } from './labels/LabelsPage';

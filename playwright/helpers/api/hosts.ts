@@ -29,6 +29,17 @@ export async function getHostDisplayName(request: APIRequestContext, hostId: num
   return (await res.json()).host.display_name as string;
 }
 
+/**
+ * A host's platform as Fleet records it — osquery's `os_version.platform`
+ * (`darwin`, `windows`, `ubuntu`, …), which is what a live query of that column
+ * returns on a real host.
+ */
+export async function getHostPlatform(request: APIRequestContext, hostId: number): Promise<string> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  return (await res.json()).host.platform as string;
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,
