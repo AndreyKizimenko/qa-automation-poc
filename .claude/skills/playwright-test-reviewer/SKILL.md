@@ -50,6 +50,8 @@ is a question. Say so rather than asserting it.
 - Assertions that can't fail: counts on shared lists (`toBeGreaterThanOrEqual(n, 2)`), "at least one row",
   a `toPass` whose body can't throw. The fix is set membership over records the test controls.
 - A UI write whose result isn't confirmed through the API.
+- `toHaveScreenshot` standing in for a behaviour check: assert the text or value instead. A snapshot that
+  can't be avoided needs its reason in the header.
 - A spec that relies on data it didn't create. `cleanup-setup` drains global reports and policies before
   the first test, so it passes with `--no-deps` and fails every nightly.
 - A discovery helper that turns a non-OK response into `null` and the caller into a skip: an infra 500
@@ -93,7 +95,7 @@ is a question. Say so rather than asserting it.
 - Duplicated setup or login that should be a fixture or storage state.
 
 **Docs that should have moved with the code** (findings, not blockers): a `test()` with no
-`docs/test-audit/` entry or stale audit counts; a batch file whose *What landed* doesn't list the spec; a new
+`docs/test-audit/` entry or stale audit counts; a new
 helper or page object missing from `helpers/README.md` / `pages/README.md`; a new fixture without a
 `test-data/` README; a skip owed to a Fleet bug without its `docs/blocked-by-product-bugs.md` row and
 `TODO(fleetdm/fleet#N)`.

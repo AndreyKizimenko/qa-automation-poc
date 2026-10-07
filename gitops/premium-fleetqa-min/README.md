@@ -18,3 +18,11 @@ References files in `../lib/` like the baseline. Each scope (no-team, Workstatio
 | Workstations | scripts | 6 | 5 | n/a |
 
 `org_name` also differs (`Premium QA Automation (min)`) for a cheap drift signal.
+
+## The instances rest on this variant
+
+Every gitops chain (the nightly, a branch run) applies the baseline, verifies it, then applies this variant and
+ends there, so between runs the instance holds min, not the baseline. Workstations shows 3 of its 5 reports, for
+example: `fleets/workstations.yml` drops "Collect XProtect reports" and "Detect if Apple Intelligence is enabled".
+Before calling a declared item missing, diff the two configs; a spec that reads a gitops item reads one both
+declare ("Collect default browser on macOS").
