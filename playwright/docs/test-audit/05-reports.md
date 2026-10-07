@@ -1490,9 +1490,12 @@ other:
    - ✅ *(API)* It stores its results (`discard_data: false`).
 3. ☐ *(API)* `GET /hosts/<vm>/queries` → the report's `last_fetched` for the VM.
    - ✅ *(API)* It isn't null.
-   - ✅ *(API)* It is younger than twice the report's interval plus 120 s — 720 s at 300 s. osquery
-     runs the report every interval, so a VM that is still collecting has stored a row within one;
-     the rest is room for a run that's just due and its delivery.
+   - ✅ *(API)* It is younger than 50 min plus twice the report's interval plus 120 s — 3720 s at
+     300 s. The report's answer never changes, and Fleet rewrites a host's stored rows only when they
+     change: an unchanged result moves `last_fetched` only at the first run after it turns 50 min
+     old (`queryResultsLastFetchedRefreshAge`, fleetdm/fleet#54897), and a 1-minute cron writes it.
+     So a VM that is still collecting reads up to ~56 min old; the rest is room for a run that's
+     just due, its delivery and the cron.
 4. ☐ Open the **dashboard** via URL → click **Reports** in the navbar → pick **VMs** in the fleet
    dropdown → search the report → click it.
    - ✅ *(UI)* The results table's row for the VM (matched by display name) contains `bar`.
@@ -1501,7 +1504,9 @@ other:
 - *Value:* the only check that scheduled collection is still running on the instance, rather than
   that a row once existed. HOSTP-09 reads the same row but not its age, so a Mac whose osquery
   stopped weeks ago, or a server that stopped storing results (the org setting off, say), still
-  passes there; here it fails within 12 minutes of the last row. It runs in seconds: nothing waits.
+  passes there; here it fails within about an hour of the last row. It also covers Fleet's
+  unchanged-result path (no rewrite, `last_fetched` refreshed by a cron), where RPT-28's first row
+  covers the write of a changed one. It runs in seconds: nothing waits.
 - *Coverage gaps:* the age is read through the API; the report page's own timestamp isn't read,
   and the UI row can't tell fresh from stale, since the SQL returns `bar` every time. Only the
   macOS VM is checked (the report targets darwin). The org setting itself — its **Store report
