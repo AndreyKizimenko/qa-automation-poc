@@ -5,14 +5,16 @@
  * target picker's fleets, Save as new's Fleet field, and the 403 a role gets on
  * `/reports/new`. Then the three writes whose UI path is the role's own.
  *
- * The cells come from Fleet's gating, not from the QA Wolf flows they replace
- * (round 1 C4 #F3–#P30, C7 #22), whose role checks were mostly stale copy:
+ * The cells come from Fleet's gating:
  *   - `ManageQueriesPage`: "Add report" for GA, GM, TA, TM; "Live report" for an
  *     observer+; neither for GO, GT, TO. Manage automations for GA and TA; row
- *     checkboxes for the roles that may edit, never on an inherited row.
+ *     checkboxes for the roles that may edit, never on an inherited row. A
+ *     maintainer gets no Manage automations, yet the API and the edit form's
+ *     automations slider let one set `automations_enabled` (likely by design,
+ *     not filed).
  *   - `QueryDetailsPage`: Edit for GA and GM, and for TA and TM on a fleet's
  *     report but never an inherited one — with **no authorship check**, in the
- *     UI or the rego, so "a report someone else wrote" (P21, P26) is any report
+ *     UI or the rego, so "a report someone else wrote" is any report
  *     of the fleet. Live report for every role but a plain observer, who gets it
  *     only on a report with "Observers can run".
  *   - `SelectTargets`: a global role is offered Unassigned and every fleet, a
@@ -33,14 +35,14 @@
  * screen — the seeded row, Show query, an open menu's other entries — so a page
  * that never rendered can't pass as a withheld control.
  *
- * Writes: a single-fleet maintainer's Save as new (P16), which lands in its
+ * Writes: a single-fleet maintainer's Save as new, which lands in its
  * fleet without a Fleet field; a global observer's live run of a report it may
- * run (F3, P12) — the UI has to send the report's id, since Fleet refuses ad-hoc
- * SQL from an observer (`campaigns.go`); and an observer+'s ad-hoc run (P18).
+ * run — the UI has to send the report's id, since Fleet refuses ad-hoc SQL from
+ * an observer (`campaigns.go`); and an observer+'s ad-hoc run.
  * The runs target one online simulation, which always answers, picked by name in
  * the picker's host search — never All hosts or a Platforms chip. Report edits,
- * deletes, schedules and automation toggles as a role (P9, P21, P23, P26, P30,
- * C7 #22) take the admin's form and endpoints, and are cut or kept as cells.
+ * deletes, schedules and automation toggles as a role take the admin's form and
+ * endpoints, so they're cells here, not writes.
  *
  * Reports are this spec's own, made through the API per test and deleted in an
  * `afterEach`; a Workstations report survives `cleanup-setup`, so the Save-as-new
@@ -232,7 +234,7 @@ test.describe('Premium • Reports • role access', () => {
         await expect(list.manageAutomationsButton).toHaveCount(role.manageAutomations ? 1 : 0);
 
         if (role.manageAutomations) {
-          // A team admin may open its fleet's report automations (C7 #22); the
+          // A team admin may open its fleet's report automations; the
           // toggle itself is `automations.spec.ts`, as admin.
           await list.openManageAutomations();
           await expect(list.reportAutomationCheckbox(FLEET_REPORT)).toBeVisible();
@@ -242,7 +244,7 @@ test.describe('Premium • Reports • role access', () => {
 
         if (role.scope === 'Workstations') {
           // A global report seen from a fleet: tagged, never selectable, never
-          // editable by a team role (P24, P25).
+          // editable by a team role.
           const inherited = await list.narrowTo(globalName);
           await expect(inherited.getByText('Inherited', { exact: true })).toBeVisible();
           await expect(inherited.getByRole('checkbox')).toHaveCount(0);
@@ -257,7 +259,7 @@ test.describe('Premium • Reports • role access', () => {
         const details = await expectDetails(page, list, ownName, { edit: role.edit, liveReport: liveOnOwn });
 
         if (role.picker) {
-          // P10, P22: which fleets the role may aim the report at.
+          // Which fleets the role may aim the report at.
           const live = new ReportLivePage(page);
           await details.clickLiveReport();
           await live.waitForReady();
@@ -268,7 +270,7 @@ test.describe('Premium • Reports • role access', () => {
         }
 
         if (role.saveAsNewFleetField !== undefined) {
-          // P16, P25: whether Save as new asks which fleet. Cancelled: the source
+          // Whether Save as new asks which fleet. Cancelled: the source
           // may be a gitops report, which is never saved.
           const edit = new ReportEditPage(page);
           await details.clickEdit();
@@ -294,7 +296,7 @@ test.describe('Premium • Reports • role access', () => {
     workstationsFleetId,
   }) => {
     // A plain observer's fleet chips follow the report: a global one it may run
-    // offers every scope; a fleet's report offers only that fleet (P11).
+    // offers every scope; a fleet's report offers only that fleet.
     const name = `pw-role-rep-ocr-${runNonce()}`;
     globalMarkers.push(name);
     await createReport(request, { name, observerCanRun: true });
