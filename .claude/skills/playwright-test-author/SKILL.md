@@ -174,6 +174,9 @@ A change isn't done until the docs describing it are current, in the same commit
   before requesting your own, because Fleet queues one after every install and a new request merges into
   it. A refetch also re-runs a host's policies immediately. `refetch_requested` is one bit with no author:
   any refetch's results landing clear it, so a read of it has to follow the moment it was set closely.
+  **A host mid-refetch answers no live query** until the refetch lands (about a minute on a VM): osquery reports
+  a batch only once every query in it has run, and a refetch's batch is Fleet's detail queries. `queryHost` waits
+  out a pending refetch before asking; a UI live run just waits, so bound it to cover one.
 - **A live report or policy run started in the UI has no timeout.** It finishes only once every online
   targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
   wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
