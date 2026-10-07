@@ -108,7 +108,7 @@ Consumer map (who breaks if a builder is wrong):
 | `script.*` | [premium/controls/scripts/library](../../tests/e2e/premium/controls/scripts/library.spec.ts), [free/…/library](../../tests/e2e/free/controls/scripts/library.spec.ts) | Unassigned, Workstations |
 | `script.ran` / `ranOnThisHost` / `ranBatch` | [shared/hosts/host-run-script](../../tests/e2e/shared/hosts/host-run-script.spec.ts), [premium/controls/scripts/batch-run](../../tests/e2e/premium/controls/scripts/batch-run.spec.ts) | n/a (host / host count) |
 | `mdmCommand.*` | [shared/hosts/mdm-commands](../../tests/e2e/shared/hosts/mdm-commands.spec.ts) | n/a |
-| `hostSoftware.*` | [premium/software/software-lifecycle-on-host](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts), [premium/software/install-on-host](../../tests/e2e/premium/software/install-on-host.spec.ts), [premium/software/uninstall-from-host](../../tests/e2e/premium/software/uninstall-from-host.spec.ts) | n/a — `failedToInstall`, `toldToInstall`, `toldToUninstall` have no consumer |
+| `hostSoftware.*` | [premium/software/software-lifecycle-on-host](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts), [premium/software/install-on-host](../../tests/e2e/premium/software/install-on-host.spec.ts), [premium/software/uninstall-from-host](../../tests/e2e/premium/software/uninstall-from-host.spec.ts), [premium/software/script-only-package](../../tests/e2e/premium/software/script-only-package.spec.ts) (`ranScriptPackage`) | n/a — `failedToInstall`, `toldToInstall`, `toldToUninstall` have no consumer |
 | `software.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts), [premium/software/edit-package](../../tests/e2e/premium/software/edit-package.spec.ts) | Unassigned, Workstations |
 | `appStoreApp.*` | [premium/software/library](../../tests/e2e/premium/software/library.spec.ts) | Unassigned, Workstations |
 | `configurationProfile.*` | [premium](../../tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts) + [free os-settings](../../tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts) | Unassigned, Workstations (free: none) |
@@ -1163,12 +1163,13 @@ other:
 
 **Flow**
 
-1. ☐ Build four of the six host-software builders for `title: 'fleet-pw (x64)'` and test each against an **actor-prefixed** literal (`admin …`) — the builders deliberately leave the actor out, since an admin's run names the admin and an automatic one names Fleet.
+1. ☐ Build five of the seven host-software builders for `title: 'fleet-pw (x64)'` and test each against an **actor-prefixed** literal (`admin …`) — the builders deliberately leave the actor out, since an admin's run names the admin and an automatic one names Fleet.
    - ✅ *(UNIT)* `installed` → `admin installed fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `uninstalled` → `admin uninstalled fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `failedToUninstall` → `admin failed to uninstall fleet-pw (x64) on this host.`
    - ✅ *(UNIT)* `toldToInstall` → `admin told Fleet to install fleet-pw (x64) on this host.` — the **Upcoming**-tab wording.
    - ✅ *(UNIT)* **negative:** `installed` does **not** match `admin uninstalled fleet-pw (x64) on this host.` — an uninstall's sentence *contains* "installed", and the builder's leading `\b` is what keeps the install matcher from taking it.
+   - ✅ *(UNIT)* `ranScriptPackage` → `admin ran fleet-pw (x64) on this host.` (a script-only package's run), and **not** `admin told Fleet to run fleet-pw (x64) on this host.` (its Upcoming item).
 
 **Assessment**
 - *Value:* good — the negative case is the one that matters for this family (substring collision between install/uninstall), and it copies API-14's pattern. The `(x64)` title exercises `esc()` on a real-looking package title.

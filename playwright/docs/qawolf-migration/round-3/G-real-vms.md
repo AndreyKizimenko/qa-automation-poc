@@ -3,8 +3,9 @@
 **10 gaps → 1 new spec and about 5 augments, after folds.** `Live policies` · `Live reports and CSV` ·
 `Install side effects` · `MDM command feed` · `Script-only packages` · `A host's Library`
 
-**Status: ready for review** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings, and
-2026-10-07 against E and F's).
+**Status: built, in [PR #92](https://github.com/AndreyKizimenko/qa-automation-poc/pull/92) with batch H** (planned 2026-10-01; re-checked 2026-10-05 against batches C and D's learnings,
+and 2026-10-07 against E and F's; reviewed 2026-10-07, Andrey's answers in *Decisions*). Built on
+`playwright/qawolf-round3-batch-g` beside batch H.
 
 > ## ▶ Start here
 >
@@ -130,6 +131,27 @@ Read every flow body. Known so far:
   to `LibraryInstallAction`. Whether a simulation without orbit is offered it is unverified; if not, take one from
   `findScriptableSimulations`. Don't click it there (decision 5).
 - **C5 #13** (from batch B) is a host's Library tab, read-only on a VM.
+
+### Review decisions (2026-10-07, Andrey's answers in *Decisions*)
+
+Every flow body read, against `main` 8b3a437 and Fleet 8d05209 (the build both instances run).
+
+| Gap | Decision | Where | Why |
+|---|---|---|---|
+| C3 #37 | **build** | new `shared/policies/live-policy-run.spec.ts` | Nothing in the suite runs a policy live. The three VMs, picked by host search (E's `targetHost`), with SQL only the Mac passes: Yes 33%, No 67%, tooltips "1 host" / "2 hosts", each row's Pass / Fail. No `pw-*` label: nothing to delete, nothing left on free. |
+| C3 #28 | **fold** into C3 #37 | same test | The VM names mix case on both tiers (`WIN-…`, `macos-…`, `ubuntu-…`), so the same run proves the case-insensitive Host sort. No simulations, no slice. |
+| C4 #F2, #P8 | **build, reshaped** | new `shared/reports/live-report-export.spec.ts` | A live report's export is untested anywhere. On the three VMs, not All hosts: All hosts is ~300 simulations whose canned rows ignore the SQL, and one that drops offline keeps the run from finishing; the flow's only check there ("responded % = online %") is the flaky part. The CSV is parsed: one row per VM with its own platform. |
+| C4 #P14 | **cut** | — | E's `premium/reports/role-access.spec.ts` already proves the Unassigned chip, offered or withheld by role and scope (RPT-29/30). What's left is a scope check over premium's Unassigned, which is simulations only and races the specs that move simulations on and off it. |
+| C5 #13 | **build, reshaped** | premium host-Library spec + a free twin | The header's static copy is low value. What the tab decides: "N items" matches the API, and **Add software** routes by the host's platform (macOS and Windows → Fleet-maintained, Linux → Custom package) with the host's fleet. Free has no Library tab, and nothing checks that. The Self-service filter is skipped: no VMs-fleet title is self-service. |
+| R2 #15 | **fold** | `premium/software/software-lifecycle-on-host.spec.ts` | `refetch_requested` read the moment each install or uninstall settles. Its limit: the flag has no author, and other specs ask for refetches on the same VMs, so a `true` can't be attributed; a Fleet that stopped asking would still fail most runs. The plan's no-refetch helper option has the same blind spot and is dropped. |
+| R2 #69 | **build** as planned | `shared/hosts/mdm-commands.spec.ts` | The activity through the API first, then the dashboard filtered to "Ran custom MDM command", the row, and its details modal by command UUID. It replaces the unfiltered end check, the buried-feed pattern that flaked in D. |
+| R2 #72 | **build, on the Mac** | `premium/software/script-only-package.spec.ts`, its own describe | A real host running a script-only package, which a simulation only fakes. On the Mac, not Linux: the Linux VM's orbit queue carries ~8 specs and sets the suite's floor, the Mac's ~4. |
+| R2 #88 | **fold** into R2 #72 | same test | R2 #72 clicks **Run** in the VM's Library, which is R2 #88's check. No simulation, no slice. |
+
+Two facts the review corrected: a live run started in the UI has no timeout at all (`FLEET_LIVE_QUERY_REST_PERIOD`
+bounds only the synchronous REST endpoint, so `host-live-query.spec.ts`' comment saying otherwise is wrong), and C's
+"never failing SQL on the VMs fleet" protects that fleet's two install policies, so a global policy with no automation
+failing on the VMs triggers nothing.
 
 ## 2. Facts for the build
 
@@ -258,7 +280,18 @@ API: `createManualLabel`, `deleteLabelsMatching`, `createPolicy` (takes `platfor
 `hostsOfferedTitle`, `findScriptableSimulations`, `latestActivityId` / `assertActivityAfter`; `Toast.dismissAll`;
 `ReportsListPage.liveReportButton` / `narrowTo`, `createReport({ observerCanRun })`.
 
-## Decisions to put to Andrey
+## Decisions (answered by Andrey, 2026-10-07)
+
+All four review recommendations accepted:
+
+1. **C4 #P14: cut.**
+2. **C4 #F2 / #P8 on the three VMs**, not All hosts.
+3. **C5 #13 reshaped:** the item count and Add software's routing per VM, and a free twin.
+4. **R2 #72 on the Mac**, with R2 #88 folded in.
+
+The plan's own recommendations below stand for R2 #69 (decision 3) and the global policy (decision 4).
+
+### The plan's questions, as written before the review
 
 1. **C4 #P14:** fold into C4 #P8 as a scoping check, or cut. *(Updated from the C/D re-check:)* the Unassigned chip
    still exists in the target picker, so the flow's step is current. Recommended: fold, as a premium run on that
@@ -310,4 +343,39 @@ Library tab and the refetch row are premium specs today.
 
 ## What landed
 
-*Nothing yet.*
+Built 2026-10-07 on `playwright/qawolf-round3-batch-g`; batch H merged in (`5f7ec7e`), and the two ship in [PR #92](https://github.com/AndreyKizimenko/qa-automation-poc/pull/92).
+
+| Gap | Landed in | What it asserts |
+|---|---|---|
+| C3 #37 + C3 #28 | new `shared/policies/live-policy-run.spec.ts` (both tiers) | Policies → the policy → Run policy → the three VMs by host search, "3 hosts targeted (100% online)" → "Policy finished", 100% responded, 3 results. The Mac Pass, Windows and Linux Fail; "(Yes: 33%, No: 67%)" with tooltips "1 host" / "2 hosts"; the Host column ascending `macos-…`, `ubuntu-…`, `WIN-…` and the reverse (the names are checked to sort differently with case first); Export results is `<name> - Results (…).csv` with `host,status` and `yes` / `no` per VM. `PolicyLivePage`, a `ReportLivePage` of the policy kind. |
+| C4 #F2 + #P8 | new `shared/reports/live-report-export.spec.ts` (both tiers) | Reports → the report → Live report → the three VMs → "Report finished", 3 results; each VM's `platform` cell equals the platform Fleet recorded for it; Export results is `<name> - Results (…).csv` with `host_display_name,platform` and exactly those rows. `ReportLivePage.exportResults` / `resultsCount` / `resultsColumnValues` / `resultsSortControl`; `helpers/csv.ts`; `getHostPlatform`. |
+| R2 #69 | `shared/hosts/mdm-commands.spec.ts` (both tiers) | After the Mac acknowledges `UserList`: the activity log holds a `ran_custom_mdm_command` with this command's UUID (its actor is the API user `fleetctl` signs in as); the dashboard filtered to "Ran custom MDM command" shows "ran UserList as a custom MDM command on HOST.", and its row opens the details modal ("ran UserList as a custom MDM command on <hostname>.") carrying this command's request and acknowledged response. Replaces the unfiltered end check. `DashboardPage.mdmCommandDetailsModal`. |
+| C5 #13 | new `premium/software/host-library-tab.spec.ts` (one test per VM); new `free/hosts/host-software-tab.spec.ts` | On each premium VM's Library: the subheader; "N items" equal to the titles the API says the host is offered (re-read by reload until a pair agrees, since per-run packages come and go); **Add software** opens `/software/add/fleet-maintained?fleet_id=<VMs>` on the Fleet-maintained tab for macOS and Windows and `/software/add/package?fleet_id=<VMs>` on Custom package for Linux. On free, a host's Software tab is the inventory alone, with no Library or Inventory tab. `HostSoftwareLibrary.subheader` / `itemCount`, `HostDetailsPage.openLibraryTab`, `countHostLibraryTitles`. |
+| R2 #15 | `premium/software/software-lifecycle-on-host.spec.ts`, the macOS Fleet-maintained app (Itsycal) | Its status read every second; the moment the install reaches `installed`, and the uninstall clears, the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asked for fresh vitals by itself. One fixture, read that closely, because any refetch landing on the VM clears the flag. The flag records no author either, so a pass can't be pinned on Fleet; a Fleet that stopped asking fails whenever no other refetch is outstanding. `getHostRefetchRequested`, `waitForHostSoftwareStatus`'s `interval`. |
+| R2 #72 + #88 | `premium/software/script-only-package.spec.ts`, its own describe on the Mac (600 s, `HOST_RETRIES`) | A per-run `fleet-pw-script-<nonce>.sh` (prints a marker, exits 0) on the VMs fleet: the Mac's Library offers **Run**, not Install, and no Uninstall (#88); Run's toast "Script is running…", then `pending_install` and the item in the host's upcoming activities (API); the run reaches `installed` with an `installed_software` activity by the admin (`source` `sh_packages`); the Past item "ran <title> on this host." opens "Script details" — "Fleet ran <title> (<file>) on <host>" — whose output holds the marker; the Library then reads Ran / Rerun. Deleted in an `afterEach`. `HostSoftwareLibrary.run`, `'Run' \| 'Rerun'` actions, `ScriptPackageDetailsModal`, `activityCopy.hostSoftware.ranScriptPackage`. |
+| C4 #P14 | — | Cut at review. |
+
+**No Fleet bug filed.** Two suite facts came out of the build: `assertActivity` checks the browser's admin as the
+actor, so an activity caused through `fleetctl` (R2 #69) is looked up with `findActivity` instead; and a live run
+started in the UI has no timeout, which `host-live-query.spec.ts`' comment had wrong.
+
+**Verified** against Fleet 8d05209 (`4.93.0-rc`), both instances. With dependencies: premium 46/46 (the changed
+specs, all six lifecycle fixtures, the setup and both cleanup projects), free 28 passed and 8 premium-only cleanup
+steps skipped. Headed on premium: 8/8. `--repeat-each=5 --workers=2`: premium 30/30 (live policy, live report, MDM
+feed, Library tab), free 20/20, and the script-only package run on the Mac 5/5. The Itsycal lifecycle repeated five
+times on one worker: 5/5 (20.7 min). Run with two workers it fails against itself (one copy uninstalls what the other
+just installed), so a fixture test is repeated on one worker; its refetch check passed in every copy either way. The
+first full lifecycle run read the refetch flag on all six fixtures, twelve reads, all true, before the check was
+narrowed to Itsycal. Nothing was left on the VMs fleet: only its durable titles, and no `pw-live-*` policy.
+
+**Branch run [37667485374](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37667485374)** (on
+4c09abf, with H): every gitops job green on both tiers; free 337 passed, 0 failed; premium 665 passed, 2 failed, 1
+flaky, job 62.1 min (main project ~43.8, against 47.3 on E + F's run). No G test failed or retried. The two failures
+were fixed on the branch: batch C's CVE-by-fleet test picked a CVE only a simulation borrowed onto the VMs fleet had
+when the hourly job counted, so the live host list was empty (now picked from the real Linux VM's own CVEs; 5/5
+locally); and H's gitops tooltip check lost one hover to a layout shift (H's re-hover fix). The flake was the Mac's
+live query timing out under the profile specs' load, as on 2026-09-30.
+
+**VM time added:** one script run on the Mac (~1–2 min with its queue), two refetch reads on the Mac (seconds), and
+the live runs' answers from the three VMs (seconds each, through osquery's distributed path, not the orbit queue).
+Nothing on the Linux VM's queue.

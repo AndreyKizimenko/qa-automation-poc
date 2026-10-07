@@ -1,6 +1,6 @@
 # Policies (free + premium) — test audit
 
-**Specs covered:** 12 files · **Test declarations:** 41 · **Projects:** premium / free / premium-exclusive
+**Specs covered:** 13 files · **Test declarations:** 42 · **Projects:** premium / free / premium-exclusive
 
 Policies are saved osquery queries with a pass/fail contract per host, managed at
 `/policies/manage` (list, team scope, automations) with a query editor at
@@ -25,7 +25,8 @@ list's Pass / Fail links (POL-35); and `premium/exclusive/policies/policy-automa
 script automation on the Ubuntu VM (POL-27). `premium/policies/policy-label-targets.spec.ts`
 is audited with label targeting, in [area 22](22-label-targeting.md) (LT-08). `role-access.spec.ts` on each tier
 is what each role is shown (POL-36…39); `policy-automations.spec.ts` also holds the fleet admin's #54623 check
-(POL-40, skipped) and the automation filter's options by scope (POL-41).
+(POL-40, skipped) and the automation filter's options by scope (POL-41). `shared/policies/live-policy-run.spec.ts` runs a
+policy live on the three real VMs (POL-42).
 
 ## Contents
 
@@ -72,6 +73,7 @@ is what each role is shown (POL-36…39); `policy-automations.spec.ts` also hold
 | POL-39 | `free/policies/role-access.spec.ts` | Free • Policies • role access › <role> is shown the policy controls its role grants (2 roles) | UI | ☐ |
 | POL-40 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • automations › a fleet admin can't add an inherited policy to the global webhook *(skipped, #54623)* | UI+API | ☐ |
 | POL-41 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • the automation filter by scope › offers only the automation types the scope supports | UI | ☐ |
+| POL-42 | `shared/policies/live-policy-run.spec.ts` | Policies • run live on the real VMs › marks each VM Pass or Fail, sums them as Yes / No, sorts the hosts case-insensitively and exports them | UI+API · **real VMs** | ☐ |
 
 ---
 
@@ -1540,6 +1542,45 @@ steps to cut:
 other:
 ```
 
+### POL-42 · Policies • run live on the real VMs › marks each VM Pass or Fail, sums them as Yes / No, sorts the hosts case-insensitively and exports them
+
+- **File:** [`playwright/tests/e2e/shared/policies/live-policy-run.spec.ts`](../../tests/e2e/shared/policies/live-policy-run.spec.ts)
+- **Grep:** `npx playwright test --project=premium live-policy-run` (and `--project=free`)
+- **Project:** premium, free · **Hosts:** the macOS, Windows and Linux **real VMs** (VMs fleet on premium, Unassigned on free), picked by name
+- **Mode:** UI+API · **Isolation:** one test; its own policy, deleted in an `afterEach`
+- **Source:** QA Wolf `policies-verify-pass-fail-percentage-on-live-policy` and `policies-run-policy-and-verify-sort-is-case-insensitive` (round 1 C3 #37 and C3 #28; round 3, batch G). Both flows ran a random gitops policy on a random Platforms chip, which on these instances holds simulations that pass everything.
+- **Preconditions (API):** the three VMs online (`requireRealHost`); their names sort differently with and without case (checked first). `POST /global/policies` creates `pw-live-policy-<nonce>`, `SELECT 1 FROM os_version WHERE platform = 'darwin';` (a row on macOS only).
+
+**Flow**
+
+1. ☐ Dashboard → **Policies** → **All fleets** → search the policy → open it → **Run policy**.
+   - ✅ *(UI)* the details page's heading is the policy's name; the URL is `/policies/:id/live`.
+2. ☐ On **Select targets**, search each VM by name and click its result.
+   - ✅ *(UI)* three hosts in the selected table; "3 hosts targeted (100% online)".
+3. ☐ **Run**.
+   - ✅ *(UI)* "Policy finished" (bounded at 150 s); "3 hosts targeted", "100% responded"; "3 results", three rows.
+4. ☐ Read the table.
+   - ✅ *(UI)* the Mac is **Pass**, the Windows and Linux VMs **Fail**.
+5. ☐ Read the summary; hover **33%**, then **67%**.
+   - ✅ *(UI)* "(Yes: 33%, No: 67%)"; the tooltips read "1 host" and "2 hosts".
+6. ☐ Click the **Host** header, then again.
+   - ✅ *(UI)* ascending is `macos-…`, `ubuntu-…`, `WIN-…` (case-insensitive; a case-sensitive sort would put `WIN-…` first); descending is the reverse.
+7. ☐ **Export results**.
+   - ✅ *(UI)* the file is `<policy> - Results (MM-dd-yy hh-mm-ss).csv`; its columns are `host`, `status`, and it holds one row per VM: `yes` for the Mac, `no` for the others.
+
+**Assessment**
+- *Value:* The first test to run a policy live; until now the suite only checked that **Run policy** is shown. Only real hosts can fail a policy (simulations answer every query with a row), so this is the one place Fail, the No share and the export's `no` are proven.
+- *Coverage gaps:* The Errors tab and **Export errors** (a query that errors on one VM), **Run again**, **Stop**, and running from the policy editor before saving.
+- *Efficiency / smells:* ~20 s; live queries use osquery's distributed path, not the VMs' install and script queue. A VM offline fails the target-count check with Fleet's own number in the message.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ---
 
 ## Area observations
@@ -1557,7 +1598,8 @@ other:
 | Platform targeting: which hosts list a platform-scoped policy | POL-33 (macOS only, both tiers) | Several platforms, and a platform changed on edit |
 | A host's Policies tab → hosts with the same answer | POL-34 (both answers, both tiers) | Containment only: other hosts answer hourly |
 | Policy list: Automations column | POL-09/10 (**Add automation** ↔ **Edit automation: Webhook**), POL-25 (**Edit automations**, "2 automations") | Ticket and calendar summaries untested |
-| Policy details page | POL-01/03 (name/desc/resolution, **Show query**, button presence) | **Run policy** never clicked; passing/failing host tabs + host links untested; **Platforms** field never read (locator exists, unused) |
+| Policy details page | POL-01/03 (name/desc/resolution, **Show query**, button presence) | Passing/failing host tabs + host links untested; **Platforms** field never read (locator exists, unused) |
+| Run a policy live | POL-42 (three real VMs: Pass / Fail, Yes / No and tooltips, Host sort, Export results) | Errors tab, Export errors, Run again, Stop; a live run from the editor before saving |
 | Team scoping of policies (premium) | POL-01/03/05 via the dropdown + `fleet_id`; POL-31 (a Workstations policy is absent under VMs) | Leakage checked in one direction only (Workstations → VMs), not under Unassigned; `Unassigned` scope not in `SCOPES` at all |
 | Failing-policies webhook automation (global) | POL-09, POL-10 (enable → one policy in `policy_ids` → off) | Scope-wide modal never reopened (no rehydration check); unticking a policy untested; no invalid-URL validation; the webhook never fires (`SELECT 1;` passes everywhere) |
 | Failing-policies webhook automation (a fleet's) | POL-30 (on a throwaway fleet) | A fleet policy's ticking and the off path untested; #54619 sidestepped, not pinned |

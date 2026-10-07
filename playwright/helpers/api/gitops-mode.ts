@@ -33,6 +33,27 @@ export interface GitOpsModeConfig {
 /** Every exception off — the fully-gated state most specs want. */
 const NO_EXCEPTIONS: GitOpsExceptions = { labels: false, software: false, secrets: false };
 
+/**
+ * The exceptions the premium instance rests on between runs.
+ *
+ * These values are load-bearing outside gitops mode: `fleetctl gitops` reads
+ * them with the mode off too. An entity that isn't excepted and whose key the
+ * YAML omits is deleted, and an excepted entity whose key the YAML carries is
+ * refused. Premium's YAML declares no `secrets:` (enroll secrets are the UI's),
+ * so `secrets: false` makes the next apply delete every enroll secret the
+ * simulations re-enroll with; it declares `labels:` and `software:`, so either
+ * one excepted turns the gitops chain red.
+ *
+ * Nothing can declare them (gitops rejects `org_settings.gitops.exceptions`), so
+ * they're pinned here and in `.github/scripts/restore-gitops-exceptions.sh`,
+ * which restores them before every premium apply. Change both together.
+ */
+export const GITOPS_EXCEPTIONS_BASELINE: Readonly<GitOpsExceptions> = {
+  labels: false,
+  software: false,
+  secrets: true,
+};
+
 interface RawGitOpsConfig {
   gitops_mode_enabled?: boolean;
   repository_url?: string;
@@ -107,6 +128,27 @@ export async function disableGitOpsMode(request: APIRequestContext): Promise<voi
   await setGitOpsMode(request, { ...current, gitops_mode_enabled: false });
 }
 
+/**
+ * Put the instance back at rest: the mode off and the exceptions at
+ * {@link GITOPS_EXCEPTIONS_BASELINE}, the repository URL as found. Writes
+ * nothing when it's already there.
+ *
+ * Unlike a `withGitOpsMode` restorer, this doesn't trust a snapshot: one taken
+ * after an earlier run died mid-flip would put the stuck exception back.
+ */
+export async function resetGitOpsMode(request: APIRequestContext): Promise<GitOpsModeConfig> {
+  const current = await getGitOpsMode(request);
+  const atBaseline = (Object.keys(GITOPS_EXCEPTIONS_BASELINE) as GitOpsEntity[]).every(
+    (entity) => current.exceptions[entity] === GITOPS_EXCEPTIONS_BASELINE[entity],
+  );
+  if (!current.gitops_mode_enabled && atBaseline) return current;
+  return setGitOpsMode(request, {
+    ...current,
+    gitops_mode_enabled: false,
+    exceptions: { ...GITOPS_EXCEPTIONS_BASELINE },
+  });
+}
+
 /** Flip one exception, leaving the other two and the mode flag alone. */
 export async function setGitOpsException(
   request: APIRequestContext,
@@ -123,6 +165,8 @@ export async function setGitOpsException(
 /**
  * Snapshot the whole subtree, apply `next`, and hand back a restorer — the
  * shape `helpers/api/config.ts` already uses for org info and webhooks.
+ * Whatever `next` leaves out stays as found, each exception included, so a
+ * spec writes only the exceptions it needs.
  *
  * Call the restorer from a teardown hook so a failing assertion still puts the
  * instance back, exceptions and repository URL included.
@@ -134,7 +178,7 @@ export async function setGitOpsException(
  */
 export async function withGitOpsMode(
   request: APIRequestContext,
-  next: Partial<GitOpsModeConfig>,
+  next: Partial<Omit<GitOpsModeConfig, 'exceptions'>> & { exceptions?: Partial<GitOpsExceptions> },
 ): Promise<() => Promise<void>> {
   const before = await getGitOpsMode(request);
   await setGitOpsMode(request, {

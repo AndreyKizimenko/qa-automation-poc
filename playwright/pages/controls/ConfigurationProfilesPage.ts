@@ -140,6 +140,17 @@ export class ConfigurationProfilesPage {
   }
 
   /**
+   * One of a profile row's action buttons, by the name `ProfileListItem` gives
+   * it: "View <name> details", "Edit <name>", "Download <name>", "Delete <name>".
+   * They render only while the row is hovered, so hover `itemByName(name)` before
+   * reading one.
+   */
+  rowButton(name: string, action: 'View' | 'Edit' | 'Download' | 'Delete'): Locator {
+    const label = action === 'View' ? `View ${name} details` : `${action} ${name}`;
+    return this.itemByName(name).getByRole('button', { name: label, exact: true });
+  }
+
+  /**
    * Opens a profile's Edit profile modal, where its target is read and changed.
    * Like download and delete, the button only renders while the row is hovered.
    */

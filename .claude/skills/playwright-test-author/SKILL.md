@@ -102,7 +102,9 @@ reason, so:
 - **Run once headed.** Headless on an idle machine hides render-order races that show up under load.
 - **`--repeat-each=5`** for anything timing-sensitive; **`--workers=2`** on anything touching the real VMs,
   since each VM works one queue and more workers stack it into timeouts; **`--output=<scratchpad>/<run>`**
-  so artifacts stay out of the repo.
+  so artifacts stay out of the repo. Repeat a test that owns a durable VM fixture
+  (`software-lifecycle-on-host`) on **one** worker: with two, `--repeat-each` runs it beside itself, and one copy
+  uninstalls the app the other just installed.
 - **`gh run list --limit 5` right before any run that touches the instances.** Two runs on one VM corrupt
   each other, and the nightly starts hours after its cron time.
 - On free, run what touches Unassigned knowing the real VMs are there.
@@ -170,7 +172,15 @@ A change isn't done until the docs describing it are current, in the same commit
 - **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
   moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
   before requesting your own, because Fleet queues one after every install and a new request merges into
-  it. A refetch also re-runs a host's policies immediately.
+  it. A refetch also re-runs a host's policies immediately. `refetch_requested` is one bit with no author:
+  any refetch's results landing clear it, so a read of it has to follow the moment it was set closely.
+  **A host mid-refetch answers no live query** until the refetch lands (about a minute on a VM): osquery reports
+  a batch only once every query in it has run, and a refetch's batch is Fleet's detail queries. `queryHost` waits
+  out a pending refetch before asking; a UI live run just waits, so bound it to cover one.
+- **A live report or policy run started in the UI has no timeout.** It finishes only once every online
+  targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
+  wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
+  Platforms chip or All hosts.
 - **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
   `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
   config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
@@ -183,6 +193,9 @@ A change isn't done until the docs describing it are current, in the same commit
   earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
   the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
   fields, never `JSON.stringify`.
+- **`assertActivity` expects the browser's admin as the actor.** An activity a spec causes through `fleetctl` or
+  an API helper is attributed to the API token's user instead: look it up with `findActivity` (or
+  `assertActivityAfter` with its `actor` left out) and match it by its content.
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
 - **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
@@ -202,6 +215,10 @@ A change isn't done until the docs describing it are current, in the same commit
   wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
   Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
   *role* write there needs a disposable `qa-test-*` user given that fleet.
+- **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
+  premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
+  enroll secret. Only the `gitops-mode` project writes them, it restores them in an `afterEach`, and its
+  teardown and every premium apply put back `GITOPS_EXCEPTIONS_BASELINE`. Never tick Enroll secrets in a UI test.
 - A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
   user-requested activity, so beside the install specs they starve.

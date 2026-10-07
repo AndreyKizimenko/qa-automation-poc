@@ -7,9 +7,17 @@
  * An excepted entity renders exactly like gitops mode being off — no wrapper,
  * no tooltip, control live — which is what these tests assert in both
  * directions.
+ *
+ * Each exception is flipped over the API here; `05-change-management` ticks one
+ * through the UI.
  */
 import { test, expect } from '@fixtures';
-import { getGitOpsMode, setGitOpsException, withGitOpsMode } from '@helpers/api';
+import {
+  findAvailableFleetMaintainedApp,
+  getGitOpsMode,
+  setGitOpsException,
+  withGitOpsMode,
+} from '@helpers/api';
 import {
   EnrollSecretModal,
   expectGatedByGitOps,
@@ -59,6 +67,27 @@ test.describe('Premium • gitops mode — exceptions', () => {
     await expect(gitopsWrappers(page)).toHaveCount(0);
   });
 
+  test('software — the exception unlocks the Fleet-maintained app form', async ({
+    fleetMaintainedAppDetail: fmaForm,
+    page,
+    request,
+    workstationsFleetId,
+  }) => {
+    // An app Workstations hasn't added: the form also locks *Add software* for
+    // one it has, which would read as gated with the exception on.
+    const app = await findAvailableFleetMaintainedApp(request, workstationsFleetId);
+
+    await fmaForm.goto(app.id, { fleetId: workstationsFleetId });
+    await expectGatedByGitOps(fmaForm.addSoftwareButton, repoUrl);
+
+    await setGitOpsException(request, 'software', true);
+    await fmaForm.goto(app.id, { fleetId: workstationsFleetId });
+
+    // Never clicked: with the exception on, it would add the app.
+    await expectNotGatedByGitOps(fmaForm.addSoftwareButton);
+    await expect(gitopsWrappers(page)).toHaveCount(0);
+  });
+
   test('enroll secrets — the exception unlocks the enroll-secret modal', async ({
     page,
     request,
@@ -66,11 +95,16 @@ test.describe('Premium • gitops mode — exceptions', () => {
   }) => {
     const modal = new EnrollSecretModal(page);
 
+    // Until the list arrives the modal shows its empty state, whose Add secret is
+    // another button in another place, so each check waits for the list first
+    // (see 02's enroll-secrets test).
     await modal.goto(workstationsFleetId);
+    await expect(modal.rows.first()).toBeVisible();
     await expectGatedByGitOps(modal.addSecretButton, repoUrl);
 
     await setGitOpsException(request, 'secrets', true);
     await modal.goto(workstationsFleetId);
+    await expect(modal.rows.first()).toBeVisible();
 
     const row = modal.rowControls(modal.rows.first());
     await expectNotGatedByGitOps(modal.addSecretButton);

@@ -1,6 +1,6 @@
 # GitOps mode — test audit
 
-**Specs covered:** 5 files · **Entries:** 21 · **Test declarations:** 21 (1 skipped) · **Projects:** gitops-mode (19), free (2)
+**Specs covered:** 7 files · **Entries:** 28 · **Test declarations:** 28 (1 skipped) · **Projects:** gitops-mode (26), free (2)
 
 GitOps mode is Fleet's "the YAML is the source of truth" lock: with
 `config.gitops.gitops_mode_enabled = true`, every control that would change
@@ -12,12 +12,13 @@ that three named entities can be exempted from it, and that it comes back off.
 **This area is unlike every other one in the audit, in five ways.** Read all of
 them before running anything.
 
-**1. It is its own Playwright project.** The four premium specs live in
+**1. It is its own Playwright project.** The six premium specs live in
 `tests/e2e/premium/gitops-mode/`, which the `premium` project explicitly ignores
 (`testIgnore: '**/gitops-mode/**'`). They run in a dedicated `gitops-mode`
-project pinned to `workers: 1`, `fullyParallel: false` and `retries: 0`, with
-`dependencies: ['premium']` — i.e. it runs *after* the entire premium suite has
-finished — plus a `gitops-mode-teardown` project ([playwright.config.ts:180](../../playwright.config.ts#L180)).
+project pinned to `workers: 1`, `fullyParallel: false` and `retries: 0`, which
+depends only on `premium-setup` and runs as its own invocation after the
+exclusive step (CI's third step), plus a `gitops-mode-teardown` project
+([playwright.config.ts](../../playwright.config.ts)).
 The fifth spec, `free/settings/gitops-mode.spec.ts`, is not in that folder and
 runs in the ordinary **free** project; it is the premium-gate check and needs no
 special handling.
@@ -35,9 +36,10 @@ still on disables the *next* run's entire suite, and it fails in a way that look
 like hundreds of unrelated UI regressions. There are deliberately two lifecycles:
 
 - the **`gitops-mode-teardown`** project ([setup/gitops-mode.teardown.ts](../../setup/gitops-mode.teardown.ts)) —
-  runs whatever the project's result was, calls `disableGitOpsMode` and then
-  re-reads `GET /config` to assert the flag really is off. Survives a failing
-  run, a `SIGINT` (Ctrl-C), and an assertion explosion.
+  runs whatever the project's result was, calls `resetGitOpsMode` (the flag off
+  and the exceptions at `GITOPS_EXCEPTIONS_BASELINE`) and then re-reads
+  `GET /config` to assert both. Survives a failing run, a `SIGINT` (Ctrl-C), and
+  an assertion explosion.
 - a **`disableGitOpsMode(request)`** call at the top of
   [`setup/cleanup.steps.ts`](../../setup/cleanup.steps.ts#L51) — the `cleanup-setup`
   dependency of both `premium` and `free`. This is the one that recovers from a
@@ -46,9 +48,19 @@ like hundreds of unrelated UI regressions. There are deliberately two lifecycles
   on free.
 
 Both were verified during the design work; see [GITOPS-PLAN §9.2](../qawolf-migration/round-2/GITOPS-PLAN.md).
-Neither touches `repository_url` or the exceptions, on purpose — the URL is
-itself part of the gate for three surfaces, so blanking it would quietly change
-the instance's configuration.
+Neither touches `repository_url`, on purpose — the URL is itself part of the
+gate for three surfaces, so blanking it would quietly change the instance's
+configuration.
+
+**The exceptions outlive the mode.** `fleetctl gitops` reads
+`config.gitops.exceptions` on every apply, gitops mode on or off: premium's YAML
+declares no `secrets:`, so `secrets: false` makes the next apply delete every
+enroll secret, and it declares `labels:` and `software:`, so either one excepted
+makes the apply refuse the YAML. `02` and `03` run with `secrets: false`. So the
+teardown restores the pinned baseline (`labels: false, software: false,
+secrets: true`), and because `cleanup-setup` runs only after the next nightly's
+gitops chain, every premium apply restores it first too
+(`.github/scripts/restore-gitops-exceptions.sh`).
 
 **4. "Disabled" has four distinct DOM signatures**, because
 `GitOpsModeTooltipWrapper` hands its child a `disableChildren` flag and lets the
@@ -72,8 +84,9 @@ probe in the suite.
 *enabled* under gitops mode — enrolling a host is not a config change. Several
 assertions here exist to catch over-gating rather than under-gating:
 GITOPS-05 (SMTP `Domain` + `Save` on Advanced options), GITOPS-07 (**Add hosts**),
-GITOPS-08 (**Copy to clipboard** / **Show secret** / **Done**) and GITOPS-09
-(the whole Change-management card). GITOPS-09 is the most important assertion in
+GITOPS-08 (**Copy to clipboard** / **Show secret** / **Done**), GITOPS-09
+(the whole Change-management card), GITOPS-24 (a profile's **View** / **Edit** /
+**Download**), GITOPS-25 (**Delete** a variable) and GITOPS-26 (**Live report**). GITOPS-09 is the most important assertion in
 the area: gate anything on that card and gitops mode becomes a one-way door with
 no supported way back out through the UI.
 
@@ -82,8 +95,9 @@ When an entity is excepted, gitops mode is treated as **disabled** for it — th
 naming is inverted relative to the UI ("Exceptions: ☑ Labels" means labels are
 *not* gitops-managed), and reading it backwards makes every test in
 `03-exceptions` pass for the wrong reason. An excepted entity renders exactly
-like the mode being off: no wrapper, no tooltip, control live. Only `labels` and
-`secrets` are covered; `software` is parked (see *Area observations*).
+like the mode being off: no wrapper, no tooltip, control live. All three are
+covered over the API (GITOPS-11, 12, 22), and `labels` through the
+Change-management form too (GITOPS-28).
 
 ---
 
@@ -98,10 +112,13 @@ clears it automatically outside a Playwright run.
 Turn it back off by hand:
 
 ```bash
-curl -sk -X PATCH "$FLEET_URL/api/v1/fleet/config" \
+# Sends the whole subtree: the URL as found, the mode off, the pinned exceptions.
+body="$(curl -sS -H "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/v1/fleet/config" \
+  | jq -c '{gitops: (.gitops | .gitops_mode_enabled = false
+                     | .exceptions = {labels: false, software: false, secrets: true})}')"
+curl -sS -X PATCH "$FLEET_URL/api/v1/fleet/config" \
   -H "Authorization: Bearer $FLEET_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"gitops":{"gitops_mode_enabled":false}}'
+  -H 'Content-Type: application/json' -d "$body"
 ```
 
 Or, through the UI (this page is never gated — that is what GITOPS-09 defends):
@@ -112,10 +129,10 @@ Confirm with `GET /api/v1/fleet/config` → `.gitops.gitops_mode_enabled === fal
 Two cautions on the manual write:
 
 - `PATCH /config` merges at the top level but **replaces `gitops` wholesale**, so
-  the one-liner above also blanks `repository_url` and resets the exceptions.
-  That is *not* what the suite's `disableGitOpsMode` does. To flip only the flag,
-  read the current subtree first and send it back with `gitops_mode_enabled`
-  false — `repository_url` is part of the gate for the Fleets dropdown, the
+  a body carrying only `gitops_mode_enabled` blanks `repository_url` and sets
+  every exception false — and `secrets: false` makes the next `fleetctl gitops`
+  delete every enroll secret. That is why the command above sends the whole
+  subtree. `repository_url` is part of the gate for the Fleets dropdown, the
   Fleets page and the command palette, so an accidentally blank URL produces a
   *different* gating set rather than an unlocked instance.
 - Running `npm run test:premium` (or `test:free`) also clears the flag as its
@@ -149,18 +166,25 @@ Two cautions on the manual write:
 | GITOPS-19 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | Change management agrees with the API and is still the way out | UI+API | ☐ |
 | GITOPS-20 | `free/settings/gitops-mode.spec.ts` | Change management offers no gitops controls | UI | ☐ |
 | GITOPS-21 | `free/settings/gitops-mode.spec.ts` | no gitops marker or gated control anywhere on the core pages | UI | ☐ |
+| GITOPS-22 | `premium/gitops-mode/03-exceptions.spec.ts` | software — the exception unlocks the Fleet-maintained app form | UI+API | ☐ |
+| GITOPS-23 | `premium/gitops-mode/04-controls-and-reports.spec.ts` | Disk encryption — enforcement is locked and Save is gated | UI | ☐ |
+| GITOPS-24 | `premium/gitops-mode/04-controls-and-reports.spec.ts` | Configuration profiles — Add and Delete are gated, View, Edit and Download stay open | UI | ☐ |
+| GITOPS-25 | `premium/gitops-mode/04-controls-and-reports.spec.ts` | Variables — Add variable is gated, Delete stays open | UI | ☐ |
+| GITOPS-26 | `premium/gitops-mode/04-controls-and-reports.spec.ts` | Reports — Save and Save as new are gated, Live report stays open | UI+API | ☐ |
+| GITOPS-27 | `premium/gitops-mode/05-change-management.spec.ts` | turning gitops mode off keeps the exceptions and the repository URL | UI+API | ☐ |
+| GITOPS-28 | `premium/gitops-mode/05-change-management.spec.ts` | ticking the labels exception saves only that exception and unlocks labels without a reload | UI+API | ☐ |
 
 `Mode` is one of: **UI** (all validation through the browser), **UI+API** (browser flow,
 some assertions via API), **API** (no meaningful UI validation), **PERF** (timing).
 
 ### Running these
 
-The premium nineteen need `--project=gitops-mode`, not `--project=premium` —
+The premium twenty-six need `--project=gitops-mode`, not `--project=premium` —
 the premium project does not see the folder at all:
 
 ```bash
 npm run test:gitops-mode:only -- -g "<title>"   # --no-deps, for local iteration
-npm run test:gitops-mode                        # full chain: runs the whole premium suite first
+npm run test:gitops-mode                        # login, the specs, then the teardown
 npm run test:gitops-mode:headed -- -g "<title>" # watch it
 ```
 
@@ -455,7 +479,7 @@ other:
 **Flow**
 
 1. ☐ Open `/hosts/manage?fleet_id=<workstationsFleetId>&manage_enroll_secrets=1` via URL — `EnrollSecretModal.goto()`. This entry point has **no gitops gate of its own**, which is the only reason the modal is reachable at all while the mode is on (the documented button on the fleet settings page is gated — see GITOPS-07 and GITOPS-13).
-   - ✅ *(UI)* The `.enroll-secret-modal` container is visible.
+   - ✅ *(UI)* The `.enroll-secret-modal` container is visible, then the first secret's row. Until the list arrives the modal shows its empty state, whose **Add secret** is another button in another place; a hover that lands on it is left over nothing once the list replaces it, and no tooltip appears.
 2. ☐ For each of **Add secret**, **Edit enroll secret**, **Delete enroll secret** — `expectGatedByGitOps`, pattern **A**:
    - ✅ *(UI)* One gitops wrapper each; disabled; "Manage in YAML" tooltip on hover with the `YAML` → `repository_url` link.
 3. ☐ For each of **Copy to clipboard**, **Show secret**, **Done** — `expectNotGatedByGitOps`:
@@ -605,12 +629,12 @@ other:
 
 1. ☐ (No user action) mode on, nothing excepted.
 2. ☐ Open `/hosts/manage?fleet_id=<workstationsFleetId>&manage_enroll_secrets=1` — the un-gated deep link.
-   - ✅ *(UI)* The enroll-secret modal is visible.
+   - ✅ *(UI)* The enroll-secret modal is visible, then the first secret's row (the empty state comes first; see GITOPS-08).
 3. ☐ Look at **Add secret** — `expectGatedByGitOps`, pattern **A**:
    - ✅ *(UI)* One wrapper; disabled; "Manage in YAML" tooltip with the `YAML` → `repository_url` link.
 4. ☐ (No user action) `setGitOpsException(request, 'secrets', true)`.
 5. ☐ Re-open the same deep link (a full navigation — the app reads `config` at load).
-   - ✅ *(UI)* The modal is visible again.
+   - ✅ *(UI)* The modal is visible again, then the first secret's row.
 6. ☐ Look at **Add secret**, **Edit enroll secret** and **Delete enroll secret** — `expectNotGatedByGitOps` each:
    - ✅ *(UI)* Visible, unwrapped, enabled.
 7. ☐ Look at the page as a whole.
@@ -967,6 +991,257 @@ other:
 
 ---
 
+### GITOPS-22 · Premium • gitops mode — exceptions › software — the exception unlocks the Fleet-maintained app form
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/03-exceptions.spec.ts`](../../tests/e2e/premium/gitops-mode/03-exceptions.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "software — the exception unlocks the Fleet-maintained app form"`
+- **Project:** gitops-mode · **Scope:** Workstations
+- **Mode:** UI+API · **Isolation:** independent; `beforeEach` / `afterEach` as GITOPS-10
+- **Preconditions:** Workstations hasn't added every Fleet-maintained app (it holds none at rest: `cleanup-teardown` wipes its software)
+- **Data created:** none — **do not click Add software**: with the exception on, it adds the app
+
+**Flow**
+
+1. ☐ (No user action) mode on, nothing excepted. `GET /software/fleet_maintained_apps?fleet_id=<ws>&available=true` → the first app Workstations hasn't added (`findAvailableFleetMaintainedApp`).
+2. ☐ Open `/software/add/fleet-maintained/<appId>?fleet_id=<ws>` — the app's details form.
+   - ✅ *(UI)* **Add software** is visible.
+3. ☐ Look at **Add software** — `expectGatedByGitOps`, pattern **A**:
+   - ✅ *(UI)* One wrapper; disabled; "Manage in YAML" tooltip with the `YAML` → `repository_url` link.
+4. ☐ (No user action) `setGitOpsException(request, 'software', true)`.
+5. ☐ Re-open the same form (a full navigation).
+   - ✅ *(UI)* **Add software** is visible, unwrapped and enabled.
+   - ✅ *(UI)* **Zero** gitops wrappers on the page (all three of the form's wrappers carry `entityType="software"`).
+
+**Assessment**
+- *Value:* the only coverage of the `software` exception, the entity whose lock most often stands between a customer and their work. One test asserts the transition on one control, the GITOPS-12 shape. An app the fleet hasn't added matters: the form also disables **Add software** for one it has, which would read as "still gated" with the exception on.
+- *Coverage gaps:* one surface. The software-title page's Library accordion (**Delete this version** on FMA, App Store and multi-package titles), the Actions menu (Edit appearance / Edit configuration) and the VPP / Play forms carry the same `entityType`; none is asserted. Dropped at review on purpose: same wrapper, and the accordion's only seed-free title is the VMs fleet's durable FMA, where a stray click under the exception deletes a fixture. The exception is set over the API (GITOPS-28 covers the form for labels).
+- *Redundancy:* none.
+- *Efficiency / smells:* the resolver reads the catalog's first available app, so the app changes as the catalog does; anything in the catalog works. The details page fetches the app's manifest, which is the slowest load in the project (~2 s).
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-23 · Premium • gitops mode — Controls and Reports › Disk encryption — enforcement is locked and Save is gated
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts`](../../tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "Disk encryption — enforcement is locked and Save is gated"`
+- **Project:** gitops-mode · **Scope:** Workstations
+- **Mode:** UI · **Isolation:** the file's `beforeAll` turns the mode on and leaves the exceptions as found (no wrapper here names an entity); `afterAll` restores the snapshot
+- **Preconditions:** Apple MDM on (premium has it); a `repository_url`
+- **Data created:** none — **do not click Save**
+
+**Flow**
+
+1. ☐ (No user action) mode on.
+2. ☐ Open `/controls/os-settings/disk-encryption/macos?fleet_id=<ws>` — the macOS tab.
+   - ✅ *(UI)* **Enable disk encryption** is visible, then disabled.
+3. ☐ Look at **Save** — `expectGatedByGitOps`, pattern **A**:
+   - ✅ *(UI)* One wrapper; disabled; "Manage in YAML" tooltip with the `YAML` → `repository_url` link.
+
+**Assessment**
+- *Value:* a sixth signature-in-practice: the checkbox reads the flag itself (pattern **D**, no wrapper, no tip, `isPlatformFormDisabled` in `DiskEncryption.tsx`) while only Save is wrapped. The QA Wolf flow (round 2 #57) asserted all three controls.
+- *Coverage gaps:* macOS only; **Require BitLocker PIN** was cut at review (its disabled state is the same `isPlatformFormDisabled("windows")`, so a throwaway fleet with Windows encryption on would prove the same branch again). Escrow and the Windows and Linux tabs aren't asserted.
+- *Redundancy:* none.
+- *Efficiency / smells:* the checkbox's `toBeDisabled` alone can't fail usefully: it's also disabled with MDM off. Save's wrapper is the half that discriminates, which the spec header says.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-24 · Premium • gitops mode — Controls and Reports › Configuration profiles — Add and Delete are gated, View, Edit and Download stay open
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts`](../../tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "Configuration profiles — Add and Delete are gated"`
+- **Project:** gitops-mode · **Scope:** Workstations
+- **Mode:** UI · **Isolation:** as GITOPS-23; the profile is deleted in an `afterEach` keyed to this test
+- **Preconditions:** Apple MDM on; Workstations holds no real host (it doesn't)
+- **Data created:** one inert profile `pw-gitops-<nonce>` (`inertMobileconfig`: a preference domain of its own, nothing reads it) on Workstations, uploaded over the API with the mode on, deleted in the `afterEach`; `cleanup-setup` wipes Workstations' profiles after a dead run. **Do not click Delete or Update profile**
+
+**Flow**
+
+1. ☐ (No user action) mode on; upload the inert profile to Workstations (`POST /configuration_profiles`).
+2. ☐ Open `/controls/os-settings/configuration-profiles?fleet_id=<ws>`.
+   - ✅ *(UI)* **Add profile** gated: one wrapper, disabled, the YAML tooltip.
+3. ☐ Hover the profile's row, then look at **Delete <name>** — `expectGatedByGitOps`:
+   - ✅ *(UI)* One wrapper; disabled; the YAML tooltip.
+4. ☐ Hover the row again for each of **View <name> details**, **Edit <name>**, **Download <name>** — `expectNotGatedByGitOps`:
+   - ✅ *(UI)* Visible, unwrapped, enabled.
+5. ☐ Click **Edit <name>**.
+   - ✅ *(UI)* The Edit profile modal opens; **Update profile** is gated (wrapper, disabled, tooltip).
+6. ☐ Click **Cancel**.
+   - ✅ *(UI)* The modal closes.
+
+**Assessment**
+- *Value:* the QA Wolf flow's Delete check, plus the over-gating half it never had. Edit is left open *by design* (the modal is the only place to read a profile's targets), and the test proves the lock moved into the modal rather than vanished.
+- *Coverage gaps:* Apple only; a Windows or Android profile row renders the same component. The upload modal's own controls aren't reached (Add profile is gated before it opens).
+- *Redundancy:* none.
+- *Efficiency / smells:* the row's buttons render only while the row is hovered, and every tooltip check ends by moving the pointer away, so the test re-hovers before each check (four hovers), and passes the row as the tooltip check's `reveal`. Branch run 37667485374 failed this test once at **Add profile**'s tooltip: the status cards above load after the page does, and the single hover was left over nothing. The tooltip check now retries its hover.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-25 · Premium • gitops mode — Controls and Reports › Variables — Add variable is gated, Delete stays open
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts`](../../tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "Variables — Add variable is gated, Delete stays open"`
+- **Project:** gitops-mode · **Scope:** none (variables are global)
+- **Mode:** UI · **Isolation:** as GITOPS-23; the variable is deleted in an `afterEach` keyed to this test
+- **Data created:** one global variable `PW_VAR_GITOPS_<stamp>`, created over the API, deleted in the `afterEach`; the next run's `cleanup-setup` sweeps any `PW_VAR_*` a dead run left. **Do not click Delete** (it isn't gated: it would delete the variable)
+
+**Flow**
+
+1. ☐ (No user action) mode on; `POST /custom_variables`.
+2. ☐ Open `/controls/variables/global-variables`.
+   - ✅ *(UI)* The variable's row is visible.
+3. ☐ Look at **Add variable** — `expectGatedByGitOps`:
+   - ✅ *(UI)* One wrapper; disabled; the YAML tooltip.
+4. ☐ Look at **Delete <name>** — `expectNotGatedByGitOps`:
+   - ✅ *(UI)* Visible, unwrapped, enabled ("Delete is allowed in GitOps mode", `GlobalVariablesTableConfig.tsx`).
+
+**Assessment**
+- *Value:* the split round 2's design called the best over-gating detector: one page where the add is locked and the delete deliberately isn't. A blanket "lock the Controls page" change fails it.
+- *Coverage gaps:* the Add variable modal isn't reached (gated). The `secrets` exception doesn't apply here (it means *enroll* secrets), and nothing asserts that.
+- *Redundancy:* none.
+- *Efficiency / smells:* none.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-26 · Premium • gitops mode — Controls and Reports › Reports — Save and Save as new are gated, Live report stays open
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts`](../../tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "Reports — Save and Save as new are gated"`
+- **Project:** gitops-mode · **Scope:** Workstations
+- **Mode:** UI+API · **Isolation:** as GITOPS-23
+- **Preconditions:** gitops declares "Collect default browser on macOS" on Workstations (both the full and the min config do); live reports enabled in org settings
+- **Data created:** none — **do not click Save, Save as new or Live report**
+
+**Flow**
+
+1. ☐ (No user action) mode on; find the report's id on Workstations (`GET /queries?team_id=<ws>`).
+2. ☐ Open `/reports/<id>/edit?fleet_id=<ws>`.
+   - ✅ *(UI)* The name field and the SQL editor are visible.
+3. ☐ Look at **Save** and **Save as new** — `expectGatedByGitOps` each:
+   - ✅ *(UI)* One wrapper each; disabled; the YAML tooltip.
+4. ☐ Look at **Live report** — `expectNotGatedByGitOps`:
+   - ✅ *(UI)* Visible, unwrapped, enabled. Running a report is an operation, not config.
+
+**Assessment**
+- *Value:* the one pair kept from round 2's Policies / Reports / Software-title / OS-settings breadth row: a gated save beside an operation that must stay open, on a gitops-declared report (no seed).
+- *Coverage gaps:* the form's other locks (name, description, the SQL editor, interval, the Observers checkbox; `disabled-by-gitops-mode` on the form) aren't asserted. Policies' equivalents (list checkboxes, the form's Save) were cut at review as breadth.
+- *Redundancy:* none.
+- *Efficiency / smells:* none.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-27 · Premium • gitops mode — Change management saves › turning gitops mode off keeps the exceptions and the repository URL
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/05-change-management.spec.ts`](../../tests/e2e/premium/gitops-mode/05-change-management.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "turning gitops mode off keeps the exceptions"`
+- **Project:** gitops-mode · **Scope:** none (global config)
+- **Mode:** UI+API · **Isolation:** the test snapshots `config.gitops` and turns the mode on (exceptions as found); its `afterEach` restores the snapshot
+- **Preconditions:** a `repository_url`
+- **Data created:** none (one config write through the UI, restored); an activity
+
+**Flow**
+
+1. ☐ (No user action) mode on; read `config.gitops` and the newest activity id.
+2. ☐ Open **Settings › Integrations › Change management**.
+   - ✅ *(UI)* The navbar's **GitOps mode** marker is visible; **Enable GitOps mode** is ticked.
+3. ☐ Untick **Enable GitOps mode** and click **Save**.
+   - ✅ *(UI)* "Successfully updated settings".
+   - ✅ *(API)* `gitops_mode_enabled` is false, and the URL and all three exceptions equal what they were before the save.
+   - ✅ *(API)* A `disabled_gitops_mode` activity newer than the one read in step 1.
+4. ☐ Look at the navbar without reloading.
+   - ✅ *(UI)* The **GitOps mode** marker is gone.
+
+**Assessment**
+- *Value:* the way out, exercised. GITOPS-09 proves the card is interactive with the mode on; this proves its Save turns the mode off without disturbing the rest of the subtree, which the form sends whole from its own state, and that the app's shared config picks it up without a reload.
+- *Coverage gaps:* turning the mode *on* through the UI isn't tested (it needs the URL field, which the specs never type).
+- *Redundancy:* none.
+- *Efficiency / smells:* none.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GITOPS-28 · Premium • gitops mode — Change management saves › ticking the labels exception saves only that exception and unlocks labels without a reload
+
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/05-change-management.spec.ts`](../../tests/e2e/premium/gitops-mode/05-change-management.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "ticking the labels exception"`
+- **Project:** gitops-mode · **Scope:** none (global config)
+- **Mode:** UI+API · **Isolation:** as GITOPS-27, with `labels: false` written and the other exceptions as found
+- **Data created:** none (one config write through the UI, restored); an activity. **Never tick or untick Enroll secrets** (a stuck `secrets: false` deletes every enroll secret on the next gitops apply)
+
+**Flow**
+
+1. ☐ (No user action) mode on, `labels` not excepted; read `config.gitops` and the newest activity id.
+2. ☐ Open **Settings › Integrations › Change management**.
+   - ✅ *(UI)* **Labels** (under Exceptions) is unticked.
+3. ☐ Tick **Labels** and click **Save**.
+   - ✅ *(UI)* "Successfully updated settings".
+   - ✅ *(API)* `exceptions.labels` is true; the mode, the URL, `software` and `secrets` equal what they were.
+   - ✅ *(API)* An `enabled_gitops_exception` activity with `exception: "labels"`, newer than step 1's.
+4. ☐ User menu › **Labels** (a client-side route change), then **Add label**.
+   - ✅ *(UI)* The new-label form's **Save** is visible, unwrapped and enabled.
+
+**Assessment**
+- *Value:* the Change-management form's write path for an exception, the only way a customer sets one: the right checkbox maps to the right key, the rest of the subtree survives, Fleet logs it, and the lock lifts without a reload. Labels, because a stuck labels exception fails loudly (gitops refuses the YAML's `labels:` key).
+- *Coverage gaps:* Software and Enroll secrets are never ticked through the UI (secrets on purpose). The feed copy ("enabled the labels exception for GitOps.") isn't read; the activity is checked through the API.
+- *Redundancy:* the unlocked-Save check repeats GITOPS-11's, reached through the UI instead of an API flip.
+- *Efficiency / smells:* none.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 **Coverage map**
@@ -975,16 +1250,16 @@ other:
 |---|---|---|
 | Navbar indicator + its docs link | GITOPS-02 (present), GITOPS-01 / 15 / 21 (absent) | Non-admin roles (the badge degrades to plain text with no link — untested); persistence across navigation; `target="_blank"` |
 | `YAML` → `repository_url` tooltip | GITOPS-03, and incidentally every `expectGatedByGitOps` call | The `repository_url`-empty third state, where the Fleets dropdown, the Fleets page and the command palette gate *differently* from a populated URL |
-| Pattern A (native control) | GITOPS-03, 04, 07, 08, 10; recovery in GITOPS-16 | Controls › OS settings, OS updates, SSO, MDM, Policies, Reports, Software title details — all pattern A, all uncovered (deliberately: same pattern, breadth not signal) |
+| Pattern A (native control) | GITOPS-03, 04, 07, 08, 10, 22–26; recovery in GITOPS-16 | OS updates, SSO, MDM, Policies, Software title details — all pattern A, uncovered on purpose (same pattern, breadth not signal; round 3 batch H kept one Controls and one Reports pair) |
 | Pattern B (Fleet `Checkbox`) | GITOPS-05; recovery in GITOPS-17 | Policies list row / select-all checkboxes; Setup-experience Install-software row checkboxes |
 | Pattern C (react-select) | GITOPS-06; recovery in GITOPS-18 | Only one instance in the product is tested, and it is located by class with a `.first()` |
-| Pattern D (raw `disabled`, no wrapper) | GITOPS-04 (org name, no tip), GITOPS-06 (Add fleet, tip from a plain `TooltipWrapper`) | SSO whole-form `.disabled-by-gitops-mode`; OS-updates `target` field |
-| Over-gating (must stay enabled) | GITOPS-05, 07, 08, 09 | Controls › Variables' split gating (`Add variable` disabled / `Delete <name>` enabled) — called the best over-gating detector in the design, parked for want of a create helper; Profiles' **View details / Edit / Download**; Hosts list actions; Software **Add software** |
-| Escape hatch (Change management never gated) | GITOPS-09 (mode on), GITOPS-19 (mode off) | The UI *write* path — tick an exception, Save, assert the toast and the activity copy. `ChangeManagementPage.save()` is modelled and unused |
+| Pattern D (raw `disabled`, no wrapper) | GITOPS-04 (org name, no tip), GITOPS-06 (Add fleet, tip from a plain `TooltipWrapper`), GITOPS-23 (Enable disk encryption) | SSO whole-form `.disabled-by-gitops-mode`; OS-updates `target` field |
+| Over-gating (must stay enabled) | GITOPS-05, 07, 08, 09, 24 (profile View / Edit / Download), 25 (Delete a variable), 26 (Live report) | Hosts list actions (Run script on a selection); a batch's Cancel |
+| Escape hatch (Change management never gated) | GITOPS-09 (mode on), GITOPS-19 (mode off), GITOPS-27 (the mode turned off through the UI), GITOPS-28 (an exception ticked through the UI) | Turning the mode *on* through the UI (it needs the URL typed, which the specs never do) |
 | `exceptions.labels` | GITOPS-10 (gated), GITOPS-11 (excepted) | The `/labels/manage` row **Delete** action (a fifth DOM shape: `aria-disabled` on a role-less option); **Edit label** / **Delete label** on `/hosts/manage/labels/:id` |
 | `exceptions.secrets` | GITOPS-12 (both directions, one test) | GITOPS-13 skipped — the only documented entry point ignores the exception ([fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218)) |
-| **`exceptions.software`** | **nothing** | Parked deliberately. Both probed surfaces were blocked (the Setup-experience Install-software form needs a DOM-level re-check — see the withdrawal note below; the Software-title Library accordion needs a seeded installer), and the one zero-seed surface that honours it (the FMA details form) needs an API resolver for an app not yet added to the fleet. **One third of the exception axis has no coverage at all.** |
-| Teardown / recovery | GITOPS-14 (API), 15–19 (UI), plus `gitops-mode-teardown` and `cleanup-setup` | `repository_url` is never read back, though preserving it is the one thing `disableGitOpsMode` explicitly promises |
+| `exceptions.software` | GITOPS-22 (both directions, one test, the Fleet-maintained app form) | The Library accordion's **Delete this version**, the title's Actions menu, the VPP / Play forms: same `entityType`, dropped as breadth |
+| Teardown / recovery | GITOPS-14 (API), 15–19 (UI), plus `gitops-mode-teardown` (the flag and the pinned exceptions, asserted), `cleanup-setup` (the flag) and the exception restore before every premium gitops apply | `repository_url` is read back only by GITOPS-27, not after the teardown |
 | Free-tier premium gate | GITOPS-20, 21 | The API-side gate (`PATCH /config` with a `gitops` subtree on free) is unasserted |
 | **The `ActionButtons` bypass** | **nothing** | [fleetdm/fleet#54168](https://github.com/fleetdm/fleet/issues/54168): "More options" renders every secondary action **ungated** and CSS reveals it at ~900 px, a supported width. GITOPS-07 filters the duplicates away rather than asserting them |
 
@@ -994,11 +1269,11 @@ other:
 2. **The gated/ungated mirror pairs.** GITOPS-03↔16, 05↔17, 06↔18, 09↔19. This is the design working as intended — one control per gating pattern, asserted in both directions — but it does mean eight of the nineteen premium tests are the same four pages twice.
 3. **GITOPS-08 vs GITOPS-12 step 3.** `addSecretButton` is asserted gated twice per run, in two files, under the same config.
 4. **GITOPS-07 vs GITOPS-13.** Same button on the same page; one asserts it gated, the other (skipped) would assert it un-gated under an exception.
-5. **The tooltip mechanics** (absent → hover → visible → `href` → move away → absent) run inside every one of the twelve `expectGatedByGitOps` calls. Correct and cheap, but a manual re-runner should know they are re-testing the same tooltip twelve times.
+5. **The tooltip mechanics** (absent → hover, stepped away from and retried until the tip opens, since a page still settling can move the control from under the pointer → visible → `href` → move away → absent) run inside every one of the twelve `expectGatedByGitOps` calls. Correct and cheap, but a manual re-runner should know they are re-testing the same tooltip twelve times.
 
 **UI-vs-API balance**
 
-- **Every state change in this area is an API write**, and that is the right call: the alternative is driving the Change-management form through the UI for every test, which would make each spec depend on the very form GITOPS-09 exists to protect. The cost is that the Change-management *write* path is never exercised — the suite can prove the card is interactive but not that saving it does anything.
+- **Every state change in this area is an API write except GITOPS-27 and 28**, and that is the right call: the alternative is driving the Change-management form through the UI for every test, which would make each spec depend on the very form GITOPS-09 exists to protect. Those two exercise the form's write path once each: the mode off, and one exception.
 - **`getGitOpsMode` in GITOPS-03 / 14 / 19 is a genuine contract check**, not a shortcut: `repository_url` is an input to a UI assertion (03), the flag is the thing under test (14), and the exceptions are compared against what the UI renders (19 — though see its assessment for how weak that comparison actually is).
 - **Everything else is UI**, including all the negative assertions. The helper pair `expectGatedByGitOps` / `expectNotGatedByGitOps` is the strongest piece of infrastructure in the area: it pairs a positive assertion (the wrapper is present / absent) with the pattern-specific disabled check, so a locator that silently stops matching cannot read as "not disabled".
 - **Weak-assertion watch list:** `gitopsWrappers(page).toHaveCount(0)` on the **dashboard** (GITOPS-01, 15 — passes in both mode states); `orgNameInput` `toBeDisabled()` with no paired unwrapped assertion (GITOPS-04); the exception loop in GITOPS-19 (compares the UI against the API response it just read, with no baseline); the free spec's wrapper probes (GITOPS-21 — cannot fail while the feature is premium-gated).
@@ -1023,7 +1298,7 @@ Three findings came out of the design work; all three are worth knowing before y
 
 **Bigger bets**
 
-1. **Cover `exceptions.software` — it is a third of the axis and it has nothing.** The blocker is seeding: the surfaces that honour it need an installed software title or an FMA resolver. With `cleanup-setup` wiping software before the run and `gitops-mode` running *after* the premium project, the cheapest route is a serial seed step at the top of the project that adds one small package over the API, asserts the Library accordion's **Delete this version** is gated, flips `exceptions.software`, re-asserts it live, and deletes the title. That is one upload's worth of runtime for the only exception with zero coverage — and the entity whose breakage ("customers locked out of software management while gitops mode is on") is the most expensive of the three.
+1. *Done in round 3 batch H (GITOPS-22), through the FMA form and an `available=true` resolver rather than a seeded package.* **Cover `exceptions.software` — it is a third of the axis and it has nothing.** The blocker is seeding: the surfaces that honour it need an installed software title or an FMA resolver. With `cleanup-setup` wiping software before the run and `gitops-mode` running *after* the premium project, the cheapest route is a serial seed step at the top of the project that adds one small package over the API, asserts the Library accordion's **Delete this version** is gated, flips `exceptions.software`, re-asserts it live, and deletes the title. That is one upload's worth of runtime for the only exception with zero coverage — and the entity whose breakage ("customers locked out of software management while gitops mode is on") is the most expensive of the three.
 2. **Add a viewport axis instead of a visibility filter.** The `ActionButtons` bypass is real, reachable and currently invisible to the suite. One test at 900 px on the fleet-settings page — assert **More options** is visible and its entries are gated — would turn #54168 from a comment into a regression net, and would generalise: `ActionButtons` is used on host details and software details too, so the same bypass shape exists on pages this area does not touch.
-3. **Decide what "the exception axis" is worth and test it through the UI once.** Every exception today is set over the API, which means the Change-management form's write path — the only way a customer ever sets one — is asserted as *interactive* and never as *working*. One test that ticks **Labels**, clicks **Save**, asserts the `Successfully updated settings` toast, and then observes `/labels/new` unlocked would cover the form, the persistence and the exception in one flow, and would make GITOPS-09's "the way back out" claim true end to end rather than structurally.
+3. *Done in round 3 batch H (GITOPS-27, 28).* **Decide what "the exception axis" is worth and test it through the UI once.** Every exception today is set over the API, which means the Change-management form's write path — the only way a customer ever sets one — is asserted as *interactive* and never as *working*. One test that ticks **Labels**, clicks **Save**, asserts the `Successfully updated settings` toast, and then observes `/labels/new` unlocked would cover the form, the persistence and the exception in one flow, and would make GITOPS-09's "the way back out" claim true end to end rather than structurally.
 4. **Track `.gitops-mode-tooltip-wrapper` as a preflight constant.** Nineteen tests fail at once if Fleet renames that BEM base. That is loud and therefore survivable, but [GITOPS-PLAN §11.2](../qawolf-migration/round-2/GITOPS-PLAN.md) asked for it to be added to the `fleet-upgrade-preflight` watch list and it is worth confirming that happened before the next upgrade — this area is the suite's single largest concentration of class-dependent locators, and it runs last, when a run is already hours old.

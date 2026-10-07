@@ -59,8 +59,8 @@ here** block, the gap table, the review to do first, facts for the build, the de
 | **[D](D-batch-scripts.md)** | Batch scripts: schedule, cancel, cancel-on-edit, preview, counts | simulations | 9 | **merged** 2026-10-04: 4 built, 3 folded, 2 cut; [PR #86](https://github.com/AndreyKizimenko/qa-automation-poc/pull/86) (with batch C); its 2 flaky retries in the branch run fixed; filed [fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732) and [#54734](https://github.com/fleetdm/fleet/issues/54734) |
 | **[E](E-role-visibility.md)** | Role-based UI visibility — one role matrix per area instead of ~40 role flows | static users | 41 | **merged** 2026-10-07: 23 built, 11 folded, 7 cut, all recommendations accepted; shipped with batch F in [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
 | **[F](F-mdm-setup-android.md)** | MDM, setup experience and Android settings, saved and read back | Workstations, throwaway `pw-*` fleets | 10 | **merged** 2026-10-07: 8 built or folded, 2 cut; filed [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845); [PR #89](https://github.com/AndreyKizimenko/qa-automation-poc/pull/89) (with batch E); branch run [37395809242](https://github.com/AndreyKizimenko/qa-automation-poc/actions/runs/37395809242) green, no E or F test retried |
-| **[G](G-real-vms.md)** | Real VMs: live policies and reports, CSV export, side effects of installs and MDM commands, a host's Library | real VMs | 10 | ready for review |
-| **[H](H-gitops-mode-v2.md)** | gitops mode V2 — round 2's parked list | own project | 5 | ready for review |
+| **[G](G-real-vms.md)** | Real VMs: live policies and reports, CSV export, side effects of installs and MDM commands, a host's Library | real VMs | 10 | **built** 2026-10-07: 6 built, 3 folded, 1 cut (C4 #P14), all recommendations accepted; ships with batch H in [PR #92](https://github.com/AndreyKizimenko/qa-automation-poc/pull/92) |
+| **[H](H-gitops-mode-v2.md)** | gitops mode V2 — round 2's parked list | own project | 5 | **built** 2026-10-07: 7 tests, every recommendation accepted (the BitLocker PIN and most of the breadth row cut); the gitops-mode exceptions pinned before every premium apply; ships with batch G in one PR |
 
 A–D need nothing that doesn't exist; E's per-role source read is done, so it's a design job; F works on
 Workstations, so nothing is delivered; G is the only batch that costs VM minutes, and H runs in its own project.
@@ -275,6 +275,28 @@ F was built beside E, and the two shipped together in
   `https://api.github.com/repos/<repo>/actions/artifacts/<id>/zip`, and poll `gh run view <id> --json status`.
 - **Decisions Andrey made in F that later batches inherit:** a gap whose action Fleet can't undo (an Android web
   app is created and never deleted) is cut, not pinned as a durable fixture; tooltip copy alone isn't worth a test.
+
+### Since batch G (2026-10-07)
+
+G was built beside H, and the two ship in one PR. What later work inherits:
+
+- **The three real VMs' names mix case on both tiers** (`WIN-…`, `macos-…`, `ubuntu-…`), so a table sorted on them
+  tells a case-insensitive sort from a case-sensitive one without simulations. A spec that relies on it checks the
+  two orders differ first, so a renamed VM fails loudly.
+- **Target live runs by host search** (`ReportLivePage.targetHost`): the three VMs answer, nothing is moved, and
+  nothing is left to clean up. A run started in the UI has no timeout; it ends when every online target answers.
+- **A policy's live run** has its own page object, `PolicyLivePage` (a `ReportLivePage` of the policy kind, plus the
+  Yes / No summary); both export their results, read with `helpers/csv.ts`.
+- **`assertActivity` expects the browser's admin.** A `fleetctl` or API action is attributed to the API token's user:
+  use `findActivity` and match the content.
+- **`refetch_requested` is one bit any refetch clears.** Read it within a second of the result, on as few hosts as
+  the point needs (`waitForHostSoftwareStatus`'s `interval`).
+- **A script-only package runs as an install**: Run / Rerun / Retry in the Library, `installed_software` from
+  `sh_packages`, "Script details" with its output only if the script printed some. Keep the script's exit 0
+  (fleetdm/fleet#54607).
+- **Decisions Andrey made in G:** live runs on the three VMs rather than All hosts or the Unassigned chip; a host's
+  Library is read for its count and Add software's routing, not its static copy; the script-only package runs on the
+  Mac, whose queue is lighter than Linux's.
 
 ## 6. Decisions round 3 already carries
 

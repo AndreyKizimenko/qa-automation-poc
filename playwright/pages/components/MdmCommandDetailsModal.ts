@@ -5,7 +5,9 @@ import { Page, Locator, expect } from '@playwright/test';
  * Raised from both of the host Activity card's views of a command: the activity
  * ("admin ran UserList as a custom MDM command on this host.") and, with
  * "Show MDM commands" on, the command itself ("The UserList command was
- * acknowledged."). The status line differs between the two; the payloads don't.
+ * acknowledged."), and from the dashboard feed's row for it ("admin ran UserList
+ * as a custom MDM command on <hostname>."). The status line differs between the
+ * three; the payloads don't.
  *
  * The request payload and the response are read-only textareas whose labels
  * carry no `for`, so `getByLabel` can't reach them. Each is scoped by the form

@@ -397,6 +397,23 @@ export async function listVulnerabilities(
  * The hosts Fleet lists for a CVE (`/hosts?vulnerability=`), what a CVE row's
  * "View all hosts" opens. Computed live, unlike the list's hourly counts.
  */
+/**
+ * The CVEs of the software a host has installed, by Fleet's reading of its
+ * inventory (`GET /hosts/:id/software?vulnerable=true`), in the order Fleet lists
+ * the software. The host's own live answer, unlike a fleet's hourly CVE counts.
+ */
+export async function listHostCves(request: APIRequestContext, hostId: number): Promise<string[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { vulnerable: 'true', per_page: '100' },
+  });
+  await expect(res, `Failed to list the vulnerable software on host ${hostId}`).toBeOK();
+  const rows = ((await res.json()).software ?? []) as Array<{
+    installed_versions: Array<{ vulnerabilities: string[] | null }> | null;
+  }>;
+  return rows.flatMap((r) => (r.installed_versions ?? []).flatMap((v) => v.vulnerabilities ?? []));
+}
+
 export async function listVulnerabilityHosts(
   request: APIRequestContext,
   cve: string,
@@ -638,9 +655,24 @@ export async function getHostSoftwareState(
 }
 
 /**
+ * How many titles a host's Library offers it — the `count` behind the Library
+ * card's "N items", from the same request the card makes
+ * (`available_for_install`).
+ */
+export async function countHostLibraryTitles(request: APIRequestContext, hostId: number): Promise<number> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { available_for_install: 'true', per_page: '1' },
+  });
+  await expect(res, `Failed to count the Library of host ${hostId}`).toBeOK();
+  return (await res.json()).count as number;
+}
+
+/**
  * Waits for a host's install or uninstall of a title to reach `status`. A shared
  * VM works through one queue — scripts, installs, uninstalls — so the budget
- * covers another spec's work landing first.
+ * covers another spec's work landing first. `interval` is how often the status is
+ * read; shorten it only where what follows has to be read right after the result.
  */
 export async function waitForHostSoftwareStatus(
   request: APIRequestContext,
@@ -648,6 +680,7 @@ export async function waitForHostSoftwareStatus(
   titleId: number,
   status: HostSoftwareStatus,
   timeout = 300_000,
+  interval = 5_000,
 ): Promise<HostSoftwareState> {
   let state: HostSoftwareState | null = null;
   await expect
@@ -656,7 +689,7 @@ export async function waitForHostSoftwareStatus(
         state = await getHostSoftwareState(request, hostId, titleId);
         return state?.status;
       },
-      { message: `title ${titleId} never reached ${status} on host ${hostId}`, timeout, intervals: [5_000] },
+      { message: `title ${titleId} never reached ${status} on host ${hostId}`, timeout, intervals: [interval] },
     )
     .toBe(status);
   return state!;

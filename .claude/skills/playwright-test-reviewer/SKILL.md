@@ -108,7 +108,9 @@ Known examples:
 - `.actions-dropdown-select__*` row menus;
 - section and card wrappers (`.host-activity-card`, `.software-installer-card`);
 - `.empty-state` and `.loading-overlay`;
-- `.data-table__tooltip-truncated-text`.
+- `.data-table__tooltip-truncated-text`;
+- a live run's role-less results and summaries (`.query-results`, `.query-results__results-pass-fail-pct`,
+  `.live-results-heading__information`, `.run-query-page__targets-total-count` / `.live-policy-page__…`).
 
 react-select v5 *options* should use `data-testid="dropdown-option"`, which Fleet does emit. Still flag a
 class selector with no comment, and one where a role- or text-based locator would have worked.

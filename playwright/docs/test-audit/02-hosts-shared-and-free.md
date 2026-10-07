@@ -1,6 +1,6 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 14 files · **Test declarations:** 26 entries (24 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **31 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 4 `free/hosts` specs)
+**Specs covered:** 15 files · **Test declarations:** 27 entries (25 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **32 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 5 `free/hosts` specs)
 
 This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
@@ -52,6 +52,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-24 | `free/hosts/host-idp-username.spec.ts` | Free • Hosts • IdP username › Add user opens the Fleet Premium message instead of the IdP field | UI | ☐ |
 | HOST-25 | `shared/hosts/host-reports-tab.spec.ts` | Host details — reports that don't store results show only with the toggle on | UI+API | ☐ |
 | HOST-26 | `free/hosts/host-actions-role-access.spec.ts` | Free • Hosts • Actions by role › <role> is offered the host actions its role grants (2 roles) | UI | ☐ |
+| HOST-27 | `free/hosts/host-software-tab.spec.ts` | a host's Software tab is its inventory alone, with no Library | UI | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -990,15 +991,17 @@ other:
    - ✅ *(UI)* the same payload + response UUID checks as step 4. **Close**.
 7. ☐ Click the **Upcoming** tab (switch still on).
    - ✅ *(UI)* no item matching `^The UserList command is pending\.` — acknowledged means no longer upcoming. (The *pending* state itself is never observed: the VM acknowledges within seconds, so the Upcoming item is not asserted positively anywhere.)
-8. ☐ Open the **Dashboard**.
-   - ✅ *(UI)* the feed has **"… ran UserList as a custom MDM command on `<host display name>`."** (`activityCopy.mdmCommand.ran`).
+8. ☐ *(API)* the activity log has a `ran_custom_mdm_command` activity whose `command_uuid` is this command's (`findActivity`; its actor is the API user `fleetctl` signs in as, so the admin-actor check of `assertActivity` doesn't apply).
+9. ☐ Open the **Dashboard** → activity type filter → **Ran custom MDM command** (round 2 #69; round 3, batch G).
+   - ✅ *(UI)* the filtered feed shows **"… ran UserList as a custom MDM command on `<host display name>`."** (`activityCopy.mdmCommand.ran`), read straight from the filtered feed (a reload would drop the filter).
+   - Click it → ✅ *(UI)* the `.command-details-modal` opens; its status line contains **"ran UserList as a custom MDM command on `<hostname>`."**; the same payload + response UUID checks as step 4. **Close**.
 
 **Assessment**
-- *Value:* high. The only test that sends an MDM command to a real device and reads the **device's answer** back — through the CLI, both Activity-card views, and the feed — with the host views pinned to the command by UUID. It also covers the **Show MDM commands** toggle, which nothing else touches. Choosing a read-only command is exactly right for a VM that can't be rebuilt.
+- *Value:* high. The only test that sends an MDM command to a real device and reads the **device's answer** back — through the CLI, both Activity-card views, and the feed filtered to its type — with every view pinned to the command by UUID. It also covers the **Show MDM commands** toggle, which nothing else touches. Choosing a read-only command is exactly right for a VM that can't be rebuilt.
 - *Coverage gaps:* the command is sent via **CLI only** — the UI has no custom-command sender, so that is inherent, but `POST /commands/run` and the `GET /commands/results` API are not asserted directly either; the **response body's content** (the user list itself) is never checked beyond the Acknowledged status — asserting it contains a known local username would prove the device actually *executed* UserList; no Error/NotNow response path; `fleetctl get mdm-commands` (the list view) untested; Windows MDM commands (SyncML) untested although the Windows VM is enrolled.
 - *Redundancy:* the CLI steps overlap area 19's `fleetctl mdm` coverage ([19-fleetctl-cli.md](19-fleetctl-cli.md)) — but those can't reach a real device's acknowledgement, so this is complementary.
 - *Efficiency / smells:*
-  - ⚠️ **The dashboard assertion (step 8) is not tied to this run.** Its sentence carries no UUID, and every run sends the same `UserList` to the same host, so any earlier run's activity within the feed's first 15 pages satisfies it. The host-card checks are pinned by UUID; this one is decorative. Clicking through to the details modal from the feed and re-running `carriesThisCommand` would fix it.
+  - The dashboard row is pinned by UUID too: the feed is filtered to the type, the newest row for a `UserList` on this host is opened, and its modal must carry this command. The filter keeps the row near the top however much the other workers logged during the acknowledgement wait, which is what an unfiltered feed walk lost in batch D.
   - Step 7 is an absence-only check against a tab whose contents aren't otherwise waited on — `showUpcomingActivities` asserts the tab is selected, not that its list rendered, so it can pass on a still-loading panel.
   - `CommandUUID` is matched by a regex over the payload textarea with `s` (dotall) — fine, but it depends on Fleet echoing the UUID into the rendered payload, which is Fleet's own injection, not what the test sent.
   - Direct-URL navigation to the host.
@@ -1114,6 +1117,33 @@ steps to cut:
 other:
 ```
 
+### HOST-27 · Free • Hosts • a host's Software tab is its inventory alone, with no Library
+
+- **File:** [`playwright/tests/e2e/free/hosts/host-software-tab.spec.ts`](../../tests/e2e/free/hosts/host-software-tab.spec.ts)
+- **Grep:** `npx playwright test --project=free host-software-tab`
+- **Project:** free · **Host:** any online Linux simulation (`findOnlineHost(…, 'linux', { kind: 'simulated' })`), read only
+- **Mode:** UI · **Isolation:** standalone
+- **Source:** free's side of round 1 C5 #13 (round 3, batch G); premium's is SWH-16.
+
+**Flow**
+
+1. ☐ Open the host's details → **Software**.
+   - ✅ *(UI)* the inventory renders: rows or its empty state, and **Search by name or vulnerability (CVE)**.
+   - ✅ *(UI)* no **Library** tab and no **Inventory** tab: free's Software card has no sub-tabs (`showSoftwareLibraryTab = isPremiumTier`).
+
+**Assessment**
+- *Value:* The tier gate on the host Library, which no free spec read; the search box is the positive control that the tab rendered before the absences are checked.
+- *Coverage gaps:* None worth adding: free has nothing to install.
+- *Efficiency / smells:* Seconds.
+
+**Notes (Andrey)**
+```
+verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+missing validations:
+steps to cut:
+other:
+```
+
 ---
 
 ## Area observations
@@ -1176,7 +1206,7 @@ API use elsewhere is **precondition/setup only** (host resolution, report seedin
 6. Harden HOST-15's two row assertions ([`host-certificates.spec.ts:66-67`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)): guard the issuer against `''` before asserting it (`toContainText('')` always passes), and read **Scope** out of its own cell instead of matching `System`/`User` anywhere in the row. Both are one-line changes and both currently admit a silent pass.
 7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* Full-inventory result rather than from page 1, or assert first that the Applications view is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
 8. Give HOST-21's agent-options restore an `afterEach` twin ([`host-run-script.spec.ts:320`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)) — Playwright skips `finally` on a test timeout, and on free the stranded 60s cap is **global**. Alternatively have `cleanup-setup` drop a `script_execution_timeout` of 60 the way it re-enables script execution.
-9. Tie HOST-23's dashboard assertion to this run ([`mdm-commands.spec.ts:134`](../../tests/e2e/shared/hosts/mdm-commands.spec.ts)): click the feed item and run `carriesThisCommand()` on the modal it opens, as the host-card steps already do. Today any earlier run's `UserList` activity satisfies it.
+9. ~~Tie HOST-23's dashboard assertion to this run~~ — done in round 3 batch G: the feed is filtered to *Ran custom MDM command*, and the row's modal is checked for this command's UUID.
 
 **Bigger bets**
 
