@@ -62,8 +62,12 @@ pool in every run's notes; switch to 10 only for a strict comparison with older 
 - Hosts buffer results that failed to submit (up to ~1M per host) and replay them, and after an outage every host is
   due a full detail and software refresh. Bringing traffic back after a long outage is its own load spike (the
   **reconnect wave**): ramp it, and give it ~30 min to settle before measuring anything.
-- Scripts run by osquery-perf succeed or fail at random; software installs "succeed". Simulated hosts don't run real
-  osquery SQL — results are canned.
+- Scripts run by osquery-perf exit 0 or 1 at random (half fail, so policy-script retries happen). Software installs:
+  an install script of exactly `exit 0` always passes and `exit 1` always fails; anything else fails with
+  `--software_installer_install_fail_prob` (default 5 %). Set a package's install script to control the outcome.
+  **Script packages (`.sh`/`.ps1`/`.py`) never complete**: osquery-perf can't read their metadata, posts no result and
+  re-downloads on every config poll — use a `.pkg`/`.deb`/`.msi`. Simulated hosts don't run real osquery SQL — results
+  are canned.
 - API throughput from one laptop is limited: refetching 25k hosts ran 14–40 hosts/s depending on the network, while
   each refetch took < 1 s on the server. Check server-side timing before blaming Fleet for a slow driver.
 
