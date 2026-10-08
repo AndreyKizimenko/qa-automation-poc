@@ -23,6 +23,7 @@ start dying.
 | `lt-env.sh` | Sourced by the others: region, cluster, writer, `lt_api` (admin API with the fleetctl context's token, never printed), time helpers |
 | `lt-status.sh [n] [s]` | One line: memory max/avg, running/pending/desired, writer 1-s peak, healthz |
 | `lt-db.sh <start> <end>` | Every DB instance: AAS, top SQL, waits, deadlocks/min, connections |
+| `lt-db-minute.sh <start> <end> [n] [db.wait_event]` | Writer load per minute split by top SQL (or waits): which statement climbed first |
 | `lt-logs.sh <start> <end> '<query>'` | CloudWatch Logs Insights on the Fleet log group (`-30m now` works) |
 | `lt-cron.sh <schedule> <start> <end>` | A cron's runs and per-job durations |
 | `lt-stops.sh` | Why Fleet tasks stopped (OOM vs health check), per minute — ECS keeps ~1 h |

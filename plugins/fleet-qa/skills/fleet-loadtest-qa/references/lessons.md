@@ -35,6 +35,11 @@ Each of these cost hours once. Skim before planning; reread the relevant part wh
 - **Synchronized cohorts.** At 100k hosts, anything that aligns host timers (a GitOps re-apply, a mass refetch, an
   outage) turns an hourly 1,700 requests/min into bursts several times that. Look at per-minute rates, not averages. After a traffic cut and ramp-up every host reconnects together, so their
   hourly policy runs stay aligned afterwards: expect a synchronized wave each hour until they drift apart.
+- **Run a no-load control before blaming the environment.** A collapse right at the hourly wave after a recovery looked
+  like the wave itself; the same recovery with no test data absorbed its wave, and the writer's per-minute breakdown
+  showed script-automation enqueues waiting on one row lock (#54925). A control step costs an hour and settles it.
+- **Policy automation timing.** A new policy's automation fires on each host's next policy run, so on a ramped-up
+  fleet it lands in the hourly wave, all at once — a calm first 30 minutes says nothing.
 
 ## Running things
 - Long runs go in the background with a completion notification; never block on them in the foreground. Poll a log
@@ -68,3 +73,9 @@ When the load test can't reproduce a bug (masked by config, needs MDM, needs asy
   `/api/osquery/distributed/read` + `/distributed/write` (policy results), `/api/osquery/log` (report results).
 - Same DB for both builds when no migrations differ; otherwise drop/recreate between runs. Tear down containers,
   worktrees and binaries afterwards and say so.
+
+**Lock chains** need no Fleet server: load the build's schema into a throwaway MySQL
+(`(echo 'SET FOREIGN_KEY_CHECKS=0;'; git show <sha>:server/datastore/mysql/schema.sql) | mysql …`), then run Fleet's
+own statements from the code in two or three sessions (one holds its transaction open with `SELECT SLEEP(n)`), timing
+each and printing `performance_schema.data_lock_waits` joined to `data_locks` while they wait. Include a control case
+without the suspected session. It turns "row_lock_wait on INSERT X" into a named chain a developer can check.

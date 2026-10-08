@@ -40,7 +40,10 @@ go tool pprof -top -sample_index=inuse_space profiles/<x>-heap.pb.gz | head -25
 go tool pprof -traces profiles/<x>-goroutine.pb.gz | awk '/^-----/{getline; print}' | sort | uniq -c | sort -rn | head
 ```
 Group goroutines by the top Fleet frame: thousands parked in `database/sql.(*DB).conn` = pool exhaustion; thousands of
-idle `bufio` readers = ALB keep-alive connections piling up (each costs memory). Profiles contain only symbols and a
+idle `bufio` readers = ALB keep-alive connections piling up (each costs memory). A dump shows who is **queued** for a
+connection, which is mostly whatever traffic is heaviest (host detail ingestion) — not who **holds** the connections.
+For that, look at the writer the minute the load climbed: `lt-db-minute.sh <start> <end>` — the statement that jumps
+first, and its wait event (`… db.wait_event`), is the cause; everything else is queueing behind it. Profiles contain only symbols and a
 build ID — safe to attach to public issues (zip them with a README of what each is).
 
 ## Things that skew numbers
