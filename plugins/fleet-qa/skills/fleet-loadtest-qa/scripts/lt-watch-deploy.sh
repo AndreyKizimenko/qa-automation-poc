@@ -15,7 +15,7 @@ while true; do
   fi
   arns=$( { aws ecs list-tasks --region "$R" --cluster "$C" --desired-status STOPPED --query 'taskArns' --output text 2>/dev/null; \
             aws ecs list-tasks --region "$R" --cluster "$C" --desired-status RUNNING --query 'taskArns' --output text 2>/dev/null; } | tr '\t' '\n' | grep -v '^None$' | grep . )
-  m=$(echo "$arns" | xargs -n 90 sh -c 'aws ecs describe-tasks --region "$0" --cluster "$1" --tasks "$@" --output json' "$R" "$C" 2>/dev/null \
+  m=$(echo "$arns" | xargs -n 90 sh -c 'r=$0; c=$1; shift; aws ecs describe-tasks --region "$r" --cluster "$c" --tasks "$@" --output json' "$R" "$C" 2>/dev/null \
     | jq -r '.tasks[] | select((.overrides.containerOverrides[0].command // []) | join(" ") | test("prepare")) | "migration task \(.taskArn | split("/")[-1][0:8]): \(.lastStatus) started=\(.startedAt // "-") stopped=\(.stoppedAt // "-") exit=\(.containers[0].exitCode // "-")"' 2>/dev/null | sort -u)
   if [ -n "$m" ] && [ "$m" != "$prevm" ]; then echo "$(date -u +%H:%M:%SZ) $m"; prevm=$m; fi
   echo "$s" | grep -q '^run completed' && exit 0
