@@ -31,6 +31,7 @@ Fleet logs JSON on the load test; useful fields: `level`, `msg`, `err`, `uri`, `
 - Slow requests on one endpoint (≥ 10 s): `filter uri = "/api/osquery/config" | fields if(took like /^\d\d+\.\d+s$/,1,0) as slow | stats count(*) as n, sum(slow) as ge10s by bin(1m)`
 - Server-side duration of an admin call: `filter @message like /spec\/policies/ | display @timestamp, took, err`
 - First occurrence: `filter msg like /deleting query stats/ | stats count(*), min(@timestamp), max(@timestamp) by err`
+- Fields with dashes can't be named directly; parse them: `filter err like /error in query ingestion/ | parse @message /"ingestion-err":"(?<ie>[^"]*)"/ | stats count(*), min(@timestamp) by ie` (live queries: `campaignID=N waiting for listener` / `stopped`).
 Ignore osquery-perf noise: `extra query executed with errors` (`fleet_detail_query_software_windows_program_files_scan`).
 Bin labels come back in UTC; `lt-stops.sh` and ECS events show the AWS account's local offset — say which you quote.
 
@@ -39,7 +40,8 @@ Bin labels come back in UTC; `lt-stops.sh` and ECS events show the AWS account's
 go tool pprof -top -sample_index=inuse_space profiles/<x>-heap.pb.gz | head -25
 go tool pprof -traces profiles/<x>-goroutine.pb.gz | awk '/^-----/{getline; print}' | sort | uniq -c | sort -rn | head
 ```
-Group goroutines by the top Fleet frame: thousands parked in `database/sql.(*DB).conn` = pool exhaustion; thousands of
+`fleetctl debug goroutine` hits one random task and can take a minute or two under load, so it rarely catches one
+slow admin request in flight — reproduce that locally instead. Group goroutines by the top Fleet frame: thousands parked in `database/sql.(*DB).conn` = pool exhaustion; thousands of
 idle `bufio` readers = ALB keep-alive connections piling up (each costs memory). A dump shows who is **queued** for a
 connection, which is mostly whatever traffic is heaviest (host detail ingestion) — not who **holds** the connections.
 For that, look at the writer the minute the load climbed: `lt-db-minute.sh <start> <end>` — the statement that jumps

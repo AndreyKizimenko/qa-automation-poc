@@ -27,6 +27,8 @@ Don't scale ECS services, restart osquery-perf, or redeploy as part of a recover
      cascades its `policy_membership` rows (~100k each) in one statement (#54215). While hosts are still writing
      results for those policies, a 5-policy delete took ~4 min and deadlocked with hosts' `host_issues` recompute;
      one at a time between waves took 3–5 s. If you can't cut traffic, wait out the wave, then delete.
+   - Labels: one per `DELETE /api/latest/fleet/labels/id/<id>`, paced on healthz < 3 s. A label with ~100k members
+     takes 30 s–3 min under traffic and stalls hosts' label writes while it runs (#55106); with traffic cut it's fast.
    - Settings you changed (webhooks, automations): turn them off first — it's cheaper than deleting.
 4. **Ramp traffic back:** `LT=<lt> scripts/ramp-up.sh 10 25 50 100` (holds each level 8 min, steps back at 70 %
    memory or lost tasks, retries twice). ~35–45 min total. The reconnect wave (detail/software refresh, buffered-log
