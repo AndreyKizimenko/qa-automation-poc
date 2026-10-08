@@ -7,7 +7,7 @@ D=$(cd "$(dirname "$0")" && pwd); source "$D/lt-env.sh" || exit 1
 arns=$(aws ecs list-tasks --region "$R" --cluster "$C" --service-name fleet --desired-status STOPPED --query 'taskArns' --output text | tr '\t' '\n' | grep -v '^None$' | grep .)
 [ -n "$arns" ] || { echo "no stopped tasks retained"; exit 0; }
 tmp=$(mktemp)
-echo "$arns" | xargs -n 90 sh -c 'aws ecs describe-tasks --region "$0" --cluster "$1" --tasks "$@" --output json' "$R" "$C" \
+echo "$arns" | xargs -n 90 sh -c 'r=$0; c=$1; shift; aws ecs describe-tasks --region "$r" --cluster "$c" --tasks "$@" --output json' "$R" "$C" \
   | jq -r '.tasks[] | select(.stoppedAt != null) | "\(.stoppedAt)\t\(.containers[0].exitCode // "-")\t\(.stoppedReason // "-" | .[0:60])"' > "$tmp"
 echo "stopped tasks retained: $(wc -l < "$tmp" | tr -d ' ')"
 cut -f2,3 "$tmp" | sort | uniq -c | sort -rn
