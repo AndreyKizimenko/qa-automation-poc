@@ -15,6 +15,14 @@ set for every step so before/after and step-to-step comparisons are like for lik
 | Cron jobs | `lt-cron.sh <schedule> -3h now` | Per-job durations; a long schedule run is usually one job. |
 | Heap / goroutines | `lt-step.sh` grabs them at 20/40 % memory; or `fleetctl debug heap|goroutine --context <ctx>` | What the memory is and what requests are waiting on. Each capture is from one task behind the LB — take several. |
 
+## Proving a task was killed by its health check, not by memory
+Right after the event (ECS keeps stopped tasks ~1 h): `lt-stops.sh` gives each stop's reason, then Container Insights
+gives each stopped task's memory — `lt-logs.sh` with `LT_LOG_GROUP=/aws/ecs/containerinsights/$LT/performance` and
+`filter Type = "Task" and TaskId in [<ids>] | stats max(MemoryUtilized) as max_mib by TaskId`. "Task failed ELB health
+checks" with peak memory well under the 4,096 MiB limit means the health check — not memory — took the task down
+(goroutine dumps then show `HealthCheck` queued in `database/sql.(*DB).conn`). OOM kills (exit 137) that follow are
+usually replacement tasks starting into an already overloaded fleet.
+
 ## Logs Insights recipes (`lt-logs.sh <start> <end> '<query>'`)
 Fleet logs JSON on the load test; useful fields: `level`, `msg`, `err`, `uri`, `took` (string like `1.4ms` / `30.0s`),
 `host_id`, `cron`/`schedule`, `jobID`.
