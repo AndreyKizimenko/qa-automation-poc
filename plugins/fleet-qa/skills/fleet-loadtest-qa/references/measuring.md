@@ -15,6 +15,14 @@ set for every step so before/after and step-to-step comparisons are like for lik
 | Cron jobs | `lt-cron.sh <schedule> -3h now` | Per-job durations; a long schedule run is usually one job. |
 | Heap / goroutines | `lt-step.sh` grabs them at 20/40 % memory; or `fleetctl debug heap|goroutine --context <ctx>` | What the memory is and what requests are waiting on. Each capture is from one task behind the LB — take several. |
 
+## Proving a task was killed by its health check, not by memory
+Right after the event (ECS keeps stopped tasks ~1 h): `lt-stops.sh` gives each stop's reason, then Container Insights
+gives each stopped task's memory — `lt-logs.sh` with `LT_LOG_GROUP=/aws/ecs/containerinsights/$LT/performance` and
+`filter Type = "Task" and TaskId in [<ids>] | stats max(MemoryUtilized) as max_mib by TaskId`. "Task failed ELB health
+checks" with peak memory well under the 4,096 MiB limit means the health check — not memory — took the task down
+(goroutine dumps then show `HealthCheck` queued in `database/sql.(*DB).conn`). OOM kills (exit 137) that follow are
+usually replacement tasks starting into an already overloaded fleet.
+
 ## Logs Insights recipes (`lt-logs.sh <start> <end> '<query>'`)
 Fleet logs JSON on the load test; useful fields: `level`, `msg`, `err`, `uri`, `took` (string like `1.4ms` / `30.0s`),
 `host_id`, `cron`/`schedule`, `jobID`.
@@ -23,6 +31,7 @@ Fleet logs JSON on the load test; useful fields: `level`, `msg`, `err`, `uri`, `
 - Slow requests on one endpoint (≥ 10 s): `filter uri = "/api/osquery/config" | fields if(took like /^\d\d+\.\d+s$/,1,0) as slow | stats count(*) as n, sum(slow) as ge10s by bin(1m)`
 - Server-side duration of an admin call: `filter @message like /spec\/policies/ | display @timestamp, took, err`
 - First occurrence: `filter msg like /deleting query stats/ | stats count(*), min(@timestamp), max(@timestamp) by err`
+- Fields with dashes can't be named directly; parse them: `filter err like /error in query ingestion/ | parse @message /"ingestion-err":"(?<ie>[^"]*)"/ | stats count(*), min(@timestamp) by ie` (live queries: `campaignID=N waiting for listener` / `stopped`).
 Ignore osquery-perf noise: `extra query executed with errors` (`fleet_detail_query_software_windows_program_files_scan`).
 Bin labels come back in UTC; `lt-stops.sh` and ECS events show the AWS account's local offset — say which you quote.
 
@@ -31,8 +40,12 @@ Bin labels come back in UTC; `lt-stops.sh` and ECS events show the AWS account's
 go tool pprof -top -sample_index=inuse_space profiles/<x>-heap.pb.gz | head -25
 go tool pprof -traces profiles/<x>-goroutine.pb.gz | awk '/^-----/{getline; print}' | sort | uniq -c | sort -rn | head
 ```
-Group goroutines by the top Fleet frame: thousands parked in `database/sql.(*DB).conn` = pool exhaustion; thousands of
-idle `bufio` readers = ALB keep-alive connections piling up (each costs memory). Profiles contain only symbols and a
+`fleetctl debug goroutine` hits one random task and can take a minute or two under load, so it rarely catches one
+slow admin request in flight — reproduce that locally instead. Group goroutines by the top Fleet frame: thousands parked in `database/sql.(*DB).conn` = pool exhaustion; thousands of
+idle `bufio` readers = ALB keep-alive connections piling up (each costs memory). A dump shows who is **queued** for a
+connection, which is mostly whatever traffic is heaviest (host detail ingestion) — not who **holds** the connections.
+For that, look at the writer the minute the load climbed: `lt-db-minute.sh <start> <end>` — the statement that jumps
+first, and its wait event (`… db.wait_event`), is the cause; everything else is queueing behind it. Profiles contain only symbols and a
 build ID — safe to attach to public issues (zip them with a README of what each is).
 
 ## Things that skew numbers

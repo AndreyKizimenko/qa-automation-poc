@@ -28,8 +28,21 @@ Each of these cost hours once. Skim before planning; reread the relevant part wh
   installer, App Store app or profile-resend clears all its results (and editing its query does too), so every failing
   host fires again on its next report — a mass trigger. Clearing the automation doesn't. Check the code
   (`server/service/team_policies.go`, `ApplyPolicySpecs`) rather than assuming.
+- **Control for osquery-perf churn before filing.** 500 random pass/fail policies collapsed the writer and got tasks
+  replaced; the same 500 as `SELECT 1` (stable results) cost a 5-minute writer spike and nothing else. Random-flip
+  policies make every host rewrite every result on every run, which real fleets don't do. Rerun a policy-driven finding
+  with stable queries before calling it a Fleet problem.
 - **Synchronized cohorts.** At 100k hosts, anything that aligns host timers (a GitOps re-apply, a mass refetch, an
-  outage) turns an hourly 1,700 requests/min into bursts several times that. Look at per-minute rates, not averages.
+  outage) turns an hourly 1,700 requests/min into bursts several times that. Look at per-minute rates, not averages. After a traffic cut and ramp-up every host reconnects together, so their
+  hourly policy runs stay aligned afterwards: expect a synchronized wave each hour until they drift apart.
+- **Run a no-load control before blaming the environment.** A collapse right at the hourly wave after a recovery looked
+  like the wave itself; the same recovery with no test data absorbed its wave, and the writer's per-minute breakdown
+  showed script-automation enqueues waiting on one row lock (#54925). A control step costs an hour and settles it.
+- **Compare the same request locally before blaming load.** A live query took 34–82 s to start on the load test and
+  0.4 s on a local server seeded with 100k hosts — through the API. Through fleetctl it was 46 s locally too: the
+  client was sending an empty host identifier (#55116). Use the user's client in the local comparison.
+- **Policy automation timing.** A new policy's automation fires on each host's next policy run, so on a ramped-up
+  fleet it lands in the hourly wave, all at once — a calm first 30 minutes says nothing.
 
 ## Running things
 - Long runs go in the background with a completion notification; never block on them in the foreground. Poll a log
@@ -48,7 +61,15 @@ Each of these cost hours once. Skim before planning; reread the relevant part wh
   JSON bodies overflow argv (`jq --rawfile` + `curl --data-binary @file`); inline `bash -c` blobs trip safety checks —
   write a script file.
 - Deletes are load: policy deletes cascade membership, report deletes leave stats behind under load, bulk report
-  deletes deadlock with stats ingestion (422; retry). Batch small, pause between, check the instance is calm.
+  deletes deadlock with stats ingestion (422; retry), and a 100k-member label delete takes 30 s–3 min under traffic
+  while hosts' label writes fail (#55106) — 100 labels took ~2 h, paced. Batch small, pause between, check the
+  instance is calm, and budget cleanup time (with the AWS session) before creating data you'll have to delete.
+- Keep every step's output: write drivers' per-run files to a step-named folder. A 10-campaign run once overwrote the
+  5-campaign run's error logs before they were read.
+- fleetctl live queries in drivers: `fleetctl report --labels X` without `--hosts` also targets every host with an empty
+  serial (#55116), so starts take minutes here. Use the API (`POST /api/latest/fleet/reports/run_by_identifiers` with
+  only `selected.labels`) unless that bug is what you're testing. fleetctl's results socket is always `wss` — a local
+  server needs TLS (the repo's `tools/osquery/fleet.crt`/`fleet.key`).
 
 ## Local before/after when the load test can't show it
 When the load test can't reproduce a bug (masked by config, needs MDM, needs async, or the timing is impossible):
@@ -63,3 +84,9 @@ When the load test can't reproduce a bug (masked by config, needs MDM, needs asy
   `/api/osquery/distributed/read` + `/distributed/write` (policy results), `/api/osquery/log` (report results).
 - Same DB for both builds when no migrations differ; otherwise drop/recreate between runs. Tear down containers,
   worktrees and binaries afterwards and say so.
+
+**Lock chains** need no Fleet server: load the build's schema into a throwaway MySQL
+(`(echo 'SET FOREIGN_KEY_CHECKS=0;'; git show <sha>:server/datastore/mysql/schema.sql) | mysql …`), then run Fleet's
+own statements from the code in two or three sessions (one holds its transaction open with `SELECT SLEEP(n)`), timing
+each and printing `performance_schema.data_lock_waits` joined to `data_locks` while they wait. Include a control case
+without the suspected session. It turns "row_lock_wait on INSERT X" into a named chain a developer can check.
