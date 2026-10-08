@@ -1,6 +1,6 @@
 {
   "name": "fleet-qa",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Fleet QA skills: QA a bug or security fix against a pre-fix and a fixed instance, QA a story or a quick win, QA and investigate behavior at scale on a 100k-host load test, file a bug, and retest the bugs you filed.",
   "author": {
     "name": "Fleet QA"
