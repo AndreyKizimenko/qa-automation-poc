@@ -28,8 +28,13 @@ Each of these cost hours once. Skim before planning; reread the relevant part wh
   installer, App Store app or profile-resend clears all its results (and editing its query does too), so every failing
   host fires again on its next report — a mass trigger. Clearing the automation doesn't. Check the code
   (`server/service/team_policies.go`, `ApplyPolicySpecs`) rather than assuming.
+- **Control for osquery-perf churn before filing.** 500 random pass/fail policies collapsed the writer and got tasks
+  replaced; the same 500 as `SELECT 1` (stable results) cost a 5-minute writer spike and nothing else. Random-flip
+  policies make every host rewrite every result on every run, which real fleets don't do. Rerun a policy-driven finding
+  with stable queries before calling it a Fleet problem.
 - **Synchronized cohorts.** At 100k hosts, anything that aligns host timers (a GitOps re-apply, a mass refetch, an
-  outage) turns an hourly 1,700 requests/min into bursts several times that. Look at per-minute rates, not averages.
+  outage) turns an hourly 1,700 requests/min into bursts several times that. Look at per-minute rates, not averages. After a traffic cut and ramp-up every host reconnects together, so their
+  hourly policy runs stay aligned afterwards: expect a synchronized wave each hour until they drift apart.
 
 ## Running things
 - Long runs go in the background with a completion notification; never block on them in the foreground. Poll a log
