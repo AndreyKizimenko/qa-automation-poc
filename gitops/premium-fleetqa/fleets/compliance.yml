@@ -16,7 +16,7 @@
 # on a fleet nothing else depends on.
 #
 # What it exercises, section by section: fleet `settings` (features with
-# historical data, host expiry, the three fleet webhooks), `agent_options` with
+# historical data, host expiry, the two fleet webhooks fleetctl manages), `agent_options` with
 # `command_line_flags` and `update_channels` (the only place they are declared:
 # anywhere else they reach real hosts), a fleet-scoped label, per-platform
 # `controls` (disk encryption and key escrow, BitLocker PIN, managed local
@@ -29,7 +29,8 @@
 # every section and drops one entry from every list.
 #
 # Software is only ever by `hash_sha256` of a file already in storage (the VMs
-# fleet's inert fixtures) or a small Fleet-maintained app: the premium instance
+# fleet's inert fixtures), a script-only package (the script is the installer,
+# so there is no file) or a small Fleet-maintained app: the premium instance
 # is a 2 GB Render box (see qa.yml's size rule), and an apply downloads
 # nothing here. The package files under lib/ are `*.compliance.package.yml`:
 # same hash as the VMs fleet's, with the options the VMs fleet must not carry.
@@ -209,7 +210,7 @@ policies:
     platform: darwin
     critical: true
     description: Disk encryption is on, as the fleet's controls require.
-    resolution: Fleet resends the profile that turns FileVault on.
+    resolution: Turn on FileVault in System Settings. Fleet also resends the Gatekeeper profile, re-asserting the fleet's macOS baseline.
     labels_include_any:
       - Compliance macOS hosts
     resend_configuration_profile: Turn on Gatekeeper

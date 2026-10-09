@@ -19,6 +19,7 @@
  * `default.yml` can't carry it, so the no-team scope skips.
  */
 import { test, expect } from '@playwright/test';
+import * as yaml from 'js-yaml';
 import {
   gitopsConfig,
   gitopsLabel,
@@ -154,6 +155,10 @@ function expectOptions(at: string, title: Title, declared: Declared): void {
       .soft([...(pkg.categories ?? [])].map(categoryName).sort(), `${at} categories`)
       .toEqual(declared.categories.map(categoryName).sort());
   }
+  // Held to the declared value with "undeclared" meaning off — unlike self-service, which is only compared when
+  // declared — because a title that installs during setup starts real work on any host enrolled into the fleet,
+  // and the QA shelf and the VMs fleet must never carry one. An apply doesn't reset the flag (fleetctl sends
+  // nothing for an undeclared key), so one toggled on by hand shows up here as drift until it is cleared by hand.
   expect.soft(software.setupExperienceTitleIds.has(title.id), `${at} setup_experience`).toBe(declared.setupExperience ?? false);
   if (declared.displayName !== undefined) expect.soft(title.displayName, `${at} display_name`).toBe(declared.displayName);
   if (declared.hasIcon) expect.soft(pkg.icon_url, `${at} icon`).toBeTruthy();
@@ -174,11 +179,18 @@ function expectOptions(at: string, title: Title, declared: Declared): void {
 }
 
 /**
- * A pre-install query file is written in fleetctl's apply format (apiVersion /
- * kind / spec.query); Fleet stores the query alone. The loader carries the
- * file's text, so the SQL is lifted out of it here.
+ * A pre-install query file takes one of the two shapes fleetctl reads — the
+ * apply format (apiVersion / kind / spec.query) or a list of query specs —
+ * and Fleet stores the query alone. The loader carries the file's text, so the
+ * SQL is parsed out of it here; a file in neither shape is compared as it is.
  */
 function preInstallSql(fileText: string): string {
-  const match = fileText.match(/^\s*query:\s*(.+)$/m);
-  return match ? match[1].trim().replace(/^["']|["']$/g, '') : fileText;
+  type QuerySpec = { query?: string };
+  const doc: unknown = yaml.load(fileText);
+  if (Array.isArray(doc)) return String((doc[0] as QuerySpec | undefined)?.query ?? fileText);
+  if (doc && typeof doc === 'object') {
+    const file = doc as QuerySpec & { spec?: QuerySpec };
+    return String(file.spec?.query ?? file.query ?? fileText);
+  }
+  return fileText;
 }

@@ -126,8 +126,9 @@ full (the cleanup never touches it).
   declared `undefined` is "not declared", not "must be undefined".
 - **Which tests run for which target:** the `_sanity`, labels, policies, profiles, reports and scripts specs run
   for every target. `fleets`, `host-vitals` and the org half of `settings` run for a no-team target only
-  (`fleets` on premium only); the fleet half of `settings`, the `software` spec and the `controls` spec run for a
-  fleet file only. The skips are data-availability guards, inline reasons only.
+  (`fleets` on premium only); the fleet half of `settings` and the `software` spec run for a fleet file only, and
+  each `controls` test for a fleet file that declares the keys it reads (today Compliance alone). The skips are
+  data-availability guards, inline reasons only.
 
 ---
 
@@ -930,7 +931,7 @@ other:
 
 1. ☐ For every declared package paired with a live title (GV-26's pairing), from the title detail:
    - ✅ *(API, soft, when declared)* `self_service`; `categories` as sorted lists with Fleet's emoji prefix stripped from both sides (`categoryName`: Fleet stores `🛠️ Utilities` for the YAML's `Utilities`); `display_name`; `icon_url` present when the YAML declares an `icon`.
-   - ✅ *(API, soft, always)* the title is in the fleet's setup-experience listing iff `setup_experience: true` (the per-platform `GET /setup_experience/software` is the only place the flag is reported for a Fleet-maintained app; an undeclared key means `false`).
+   - ✅ *(API, soft, always)* the title is in the fleet's setup-experience listing iff `setup_experience: true` (the per-platform `GET /setup_experience/software` is the only place the flag is reported for a Fleet-maintained app). An undeclared key is **held to `false`**, unlike `self_service`: a title that installs during setup starts real work on any host enrolled into the fleet, and the QA shelf and VMs must never carry one. An apply doesn't reset the flag (fleetctl sends nothing for an undeclared key), so one toggled on by hand shows up as drift until cleared by hand.
    - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists (undeclared ↔ absent).
    - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (the SQL lifted out of the apply-format query file, whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
 
@@ -997,7 +998,7 @@ other:
 
 1. ☐ For every declared app found live (by slug), from the title detail:
    - ✅ *(API, soft)* an exact `version` pin equals the installer's version; a caret pin bounds its major.
-   - ✅ *(API, soft)* the same option checks as GV-27: `self_service`, `categories` (emoji-normalized), setup experience through the fleet's listing (asserted `false` when undeclared), `display_name`, icon presence, label targets, and the pre-install query and three script bodies when declared.
+   - ✅ *(API, soft)* the same option checks as GV-27: `self_service`, `categories` (emoji-normalized), setup experience through the fleet's listing (held to `false` when undeclared, as in GV-27), `display_name`, icon presence, label targets, and the pre-install query and three script bodies when declared.
 
 **Assessment**
 - *Value:* on QA and VMs nothing declares an option (the shelf's rule), so there this asserts "defaults"; on
@@ -1048,7 +1049,7 @@ other:
 
 - **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
 - **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/compliance.yml npx playwright test --project=gitops-verify -g "disk encryption, key escrow"`
-- **Project:** gitops-verify · **Targets:** fleet files only (the per-platform controls are a fleet's; the no-team scope's global MDM flags are GV-21's)
+- **Project:** gitops-verify · **Targets:** fleet files that declare at least one of the keys it reads — Compliance; a file that declares none (Workstations, QA, VMs) skips with an inline reason, since a comparison of nothing would report a match (the per-platform controls are a fleet's; the no-team scope's global MDM flags are GV-21's)
 - **Mode:** API (one `GET /fleets/{id}` → `team.mdm` in a `beforeAll`, shared by GV-31 … GV-34)
 
 **Flow**
@@ -1057,8 +1058,7 @@ other:
    against `mdm.macos_settings`, `windows_settings.enable_disk_encryption` / `require_bitlocker_pin` /
    `enable_managed_local_account` against `mdm.windows_settings`, and
    `linux_settings.enable_escrow_disk_encryption_key` against `mdm.linux_settings`.
-   - ✅ *(API, soft per key)* every declared key equals. A fleet file that declares none of them (Workstations,
-     QA, VMs) asserts nothing here.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Manual repro** — **Controls → OS settings → Disk encryption**, fleet selected: the macOS, Windows and Linux
 toggles, the BitLocker PIN and the managed local account.
@@ -1083,7 +1083,7 @@ other:
 
 - **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
 - **Grep:** `… -g "Recovery Lock and the host name template"`
-- **Project:** gitops-verify · **Targets:** fleet files only
+- **Project:** gitops-verify · **Targets:** fleet files that declare either key (Compliance; the others skip, inline reason)
 - **Mode:** API
 
 **Flow**
@@ -1115,7 +1115,7 @@ other:
 
 - **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
 - **Grep:** `… -g "OS update settings"`
-- **Project:** gitops-verify · **Targets:** fleet files only
+- **Project:** gitops-verify · **Targets:** fleet files that declare an `*_updates` block (Compliance; the others skip, inline reason)
 - **Mode:** API
 
 **Flow**

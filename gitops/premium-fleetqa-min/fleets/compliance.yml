@@ -154,7 +154,7 @@ policies:
     platform: darwin
     critical: true
     description: Disk encryption is on, as the fleet's controls require.
-    resolution: Fleet resends the profile that turns FileVault on.
+    resolution: Turn on FileVault in System Settings. Fleet also resends the Gatekeeper profile, re-asserting the fleet's macOS baseline.
     labels_include_any:
       - Compliance macOS hosts
     resend_configuration_profile: Turn on Gatekeeper

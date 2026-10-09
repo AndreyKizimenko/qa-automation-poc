@@ -1,7 +1,8 @@
 # Pre-install query for the Compliance fleet's macOS package: Fleet installs
 # only when it returns rows. fleetctl reads a pre-install query file in its
-# apply format (apiVersion / kind / spec), not as a bare query. The fleet has
-# no hosts, so it is never run; it exists to be declared and read back.
+# apply format (apiVersion / kind / spec, as here) or as a list of query specs,
+# never as bare SQL. The fleet has no hosts, so it is never run; it exists to
+# be declared and read back.
 apiVersion: v1
 kind: query
 spec:
