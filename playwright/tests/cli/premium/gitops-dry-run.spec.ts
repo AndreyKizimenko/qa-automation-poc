@@ -61,9 +61,17 @@ test.describe('fleetctl gitops --dry-run · premium', () => {
     const res = await fleetctl(args, { env: DRY_RUN_ENV });
     expect(res.code, `dry run failed:\n${output(res)}`).toBe(0);
 
-    // The scaffold names none of this instance's fleets, so every one of them —
-    // Workstations included — is proposed for deletion. Proposed only: this is
-    // the flag whose real invocation would wipe the gitops-provisioned fleet.
-    expect(output(res)).toMatch(/would've deleted .*fleet/i);
+    // The scaffold names none of this instance's fleets, so each standing one is
+    // proposed for deletion, by name. Proposed only: this is the flag whose real
+    // invocation would wipe the gitops-provisioned fleets. fleetctl still words
+    // the line `would've deleted team <name>` (cmd/fleetctl/fleetctl/gitops.go);
+    // either noun is accepted so a terminology fix doesn't break the check. A
+    // match on the noun alone would be satisfied by a throwaway `pw-fleet-*` that
+    // another spec happens to hold at that moment, and by nothing else.
+    for (const fleet of ['Workstations', 'QA', 'VMs']) {
+      expect(output(res), `${fleet} proposed for deletion`).toMatch(
+        new RegExp(`would've deleted (team|fleet) ${fleet}\\b`),
+      );
+    }
   });
 });

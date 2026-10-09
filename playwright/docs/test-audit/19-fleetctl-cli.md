@@ -1174,8 +1174,11 @@ other:
 
 2. ☐ Same, plus `--delete-other-fleets`.
    - ✅ *(CLI)* Exit code is `0`.
-   - ✅ *(CLI)* Output matches `would've deleted .*fleet` — the scaffold names none of this
-     instance's fleets, so all of them, `Workstations` included, are proposed for removal.
+   - ✅ *(CLI)* Output matches `would've deleted (team|fleet) <name>` for each of `Workstations`, `QA`
+     and `VMs` — the scaffold names none of this instance's fleets, so all of them are proposed for
+     removal, and fleetctl still words the line with `team`. A match on the noun alone would be
+     satisfied only by a throwaway `pw-fleet-*` another spec happens to hold at that moment (branch run
+     37873060103 is where that assertion failed three times in a row).
 
 **Manual repro** — run both. **Never drop `--dry-run` from the second one**: a real apply would
 delete the gitops-provisioned `Workstations` fleet and create a separate `💻 Workstations`.
