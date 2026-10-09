@@ -44,7 +44,7 @@ for (const scope of SCOPES) {
       sql: 'SELECT version FROM osquery_info;',
     };
 
-    test('create', async ({ dashboard, policiesList, policyEdit, policyDetails, request }) => {
+    test('create', async ({ dashboard, policiesList, policyEdit, policyDetails, request, workstationsFleetId }) => {
       await dashboard.goto();
       await dashboard.navbar.goToPolicies();
       await policiesList.teamDropdown.select(scope);
@@ -63,11 +63,16 @@ for (const scope of SCOPES) {
       await expect(policyDetails.runButton).toBeVisible();
       await expect(policyDetails.editButton).toBeVisible();
 
-      // Click "Policies" in the navbar — confirm the new row is present.
-      // Re-select the scope (the navbar click preserves the last-used
-      // team filter) and search by name (the list is paginated; new
-      // policies may not be on page 1).
+      // Click "Policies" in the navbar, then load the list afresh: the navbar
+      // lands on a list React Query serves from its cache for 5 s after the
+      // last fetch (`staleTime: 5000` in ManagePoliciesPage) and never
+      // refetches on its own, so a list fetched empty just before the create —
+      // the run starts with no global policies — stays "No policies apply to
+      // all fleets", with the search box disabled, until a full page load.
+      // Re-select the scope (the page preserves the last-used team filter) and
+      // search by name (the list is paginated; new policies may not be on page 1).
       await policyDetails.navbar.goToPolicies();
+      await policiesList.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
       await policiesList.teamDropdown.select(scope);
       await policiesList.search.fill(policyName);
       await expect(policiesList.table.rowWith(policyName)).toBeVisible();
