@@ -79,12 +79,15 @@ repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwri
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
 - **GitOps (free)** — `fleetctl gitops -f gitops/free-fleetqa/default.yml`
-- **GitOps (premium)** —
+- **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps a
+  fleet that is deliberately not under gitops; see `gitops/premium-fleetqa/README.md`):
   ```bash
-  fleetctl gitops \
+  fleetctl gitops --context qa-premium \
     -f gitops/premium-fleetqa/default.yml \
     -f gitops/premium-fleetqa/fleets/workstations.yml \
-    --delete-other-fleets
+    -f gitops/premium-fleetqa/fleets/qa.yml \
+    -f gitops/premium-fleetqa/fleets/vms.yml \
+    -f gitops/premium-fleetqa/fleets/compliance.yml
   ```
 
 Source the matching `playwright/.env.<tier>` first so `FLEET_URL` /
@@ -111,7 +114,7 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
 | `nightly-qa-gitops-free.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Free chain: apply baseline → verify → apply min → verify → fleetctl checks. |
-| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, plus parallel verify of the Workstations team. Both passes also apply the QA and VMs fleets (`qa.yml`, `vms.yml`). |
+| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, plus parallel verifies of the Workstations and Compliance fleets. Both passes also apply the QA and VMs fleets (`qa.yml`, `vms.yml`). |
 | `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — the main project, then the exclusive specs and (premium) gitops-mode as their own steps, merged into one report; project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. Optional `workers` input. |
 | `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a worker-count trial. |
 | `playwright-check.yml` | Every PR, push to `main`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. Runs on every PR, with no path filter, because it is a required status check and one that never reports leaves a PR unmergeable. The only Playwright workflow that runs per-PR — the tier suites are nightly. |

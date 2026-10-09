@@ -1,0 +1,24 @@
+# The VMs fleet's inert macOS package (same URL and hash, so Fleet reuses the
+# file it already holds and downloads nothing) declared a second time for the
+# Compliance fleet, carrying every option a package file can: its own install,
+# uninstall and post-install scripts, a pre-install query, self-service with a
+# category, label targeting, a display name and an icon. Nothing here reaches a
+# host — the Compliance fleet has none — it exists to be applied and read back.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/950d61bec3d24200be6a968397a9013aab6e13a2/playwright/test-data/apple/macos/software/fleet-playwright-install-1.0.0.pkg
+  hash_sha256: 74f809bcab4fd4ae72c48f09501f15db7a601e00532036e34a47baec9c179ee1
+  pre_install_query:
+    path: ./compliance-pre-install.yml
+  install_script:
+    path: ./compliance-install.sh
+  uninstall_script:
+    path: ./compliance-uninstall.sh
+  post_install_script:
+    path: ./compliance-post-install.sh
+  self_service: true
+  categories:
+    - Productivity
+  labels_exclude_any:
+    - Pilot hosts
+  display_name: Fleet Playwright Install (Compliance)
+  icon:
+    path: ../../../icons/compliance.png

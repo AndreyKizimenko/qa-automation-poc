@@ -1,0 +1,9 @@
+# Pre-install query for the Compliance fleet's Windows package: Fleet installs
+# only when it returns rows. fleetctl reads a pre-install query file in its
+# apply format (apiVersion / kind / spec), not as a bare query. Never run (the
+# fleet has no hosts); declared to be read back.
+apiVersion: v1
+kind: query
+spec:
+  name: Compliance pre-install (Windows)
+  query: SELECT 1 FROM os_version WHERE platform = 'windows';
