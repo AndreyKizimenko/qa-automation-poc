@@ -1037,6 +1037,14 @@ A scaffold needs only `FLEET_URL` plus a throwaway `FLEET_ENROLL_SECRET` passed 
 cannot be perturbed by whatever the nightly last applied, and doubles as a check that the
 repository Fleet hands new customers actually validates against a live server.
 
+One value is carried over from the instance before the dry run: its end-user-authentication IdP
+(`carryLiveEndUserAuth`, `helpers/fleetctl.ts`, from `GET /config`), written into the scaffold's
+`default.yml`. A global file in a gitops run redefines the IdP, and the premium instance's Compliance
+fleet has end-user authentication on, so a scaffold that declares no IdP is refused as a config that
+would lock that fleet's enrollment — by fleetctl before it sends anything
+(`cmd/fleetctl/fleetctl/gitops.go`), and by the server under `--delete-other-fleets`, where the client
+skips its own check (branch run 37970527671, three tests red). Free has no IdP, so nothing is carried there.
+
 **`--dry-run` is not a diff.** It reports everything it *would apply* regardless of current
 state, so `[+] would've applied 22 policies` says nothing about the instance. Only
 `[-] would've deleted …` is state-dependent: gitops proposes a deletion solely for something
@@ -1055,7 +1063,8 @@ FCTL-43 lives in the nightly project; the rest run every time.
 
 **Flow**
 
-1. ☐ `fleetctl new --org-name "Dry Run Org" --dir <tmp>` .
+1. ☐ `fleetctl new --org-name "Dry Run Org" --dir <tmp>`; write the instance's IdP into its `default.yml`
+   when one is configured (premium).
 2. ☐ `GET /labels` — record every label name.
 3. ☐ `fleetctl gitops --dry-run -f <tmp>/default.yml`.
    - ✅ *(CLI)* Exit code is `0`.
@@ -1165,7 +1174,8 @@ other:
 
 **Flow — fleet configs are processed**
 
-1. ☐ Scaffold, then `fleetctl gitops --dry-run -f default.yml -f fleets/*.yml`.
+1. ☐ Scaffold, write the instance's IdP into its `default.yml`, then
+   `fleetctl gitops --dry-run -f default.yml -f fleets/*.yml`.
    - ✅ *(CLI)* Exit code is `0`, output contains `gitops dry run succeeded`.
    - ✅ *(CLI)* Output does **not** contain `teams are only supported for premium Fleet users`.
    - ✅ *(CLI)* Output matches `would've applied \d+ fleet`.
@@ -1174,10 +1184,10 @@ other:
 
 2. ☐ Same, plus `--delete-other-fleets`.
    - ✅ *(CLI)* Exit code is `0`.
-   - ✅ *(CLI)* Output matches `would've deleted (team|fleet) <name>` for each of `Workstations`, `QA`
-     and `VMs` — the scaffold names none of this instance's fleets, so all of them are proposed for
-     removal, and fleetctl still words the line with `team`. A match on the noun alone would be
-     satisfied only by a throwaway `pw-fleet-*` another spec happens to hold at that moment (branch run
+   - ✅ *(CLI)* Output matches `would've deleted (team|fleet) <name>` for each of `Workstations`, `QA`,
+     `VMs` and `Compliance` — the scaffold names none of this instance's fleets, so all of them are
+     proposed for removal, and fleetctl still words the line with `team`. A match on the noun alone would
+     be satisfied only by a throwaway `pw-fleet-*` another spec happens to hold at that moment (branch run
      37873060103 is where that assertion failed three times in a row).
 
 **Manual repro** — run both. **Never drop `--dry-run` from the second one**: a real apply would
@@ -1186,8 +1196,9 @@ delete the gitops-provisioned `Workstations` fleet and create a separate `💻 W
 **Assessment**
 - *Value:* high. The premium half of the tier pair with FCTL-42, and the only coverage anywhere of
   `--delete-other-fleets` — the single most destructive flag in the CLI.
-- *Coverage gaps:* asserts that deletion is *proposed*, never which fleets. Naming `Workstations`
-  explicitly would be a stronger assertion, at the cost of coupling to instance state.
+- *Coverage gaps:* the deletion assertion is coupled to the instance's standing fleets by name, so a new
+  gitops-declared fleet is added to the list (Compliance was, in batch 2); Mobile, kept by hand, isn't
+  asserted.
 - *Redundancy:* none.
 - *Efficiency / smells:* the second test is one `--dry-run` away from wiping the instance's fleet
   structure. That is inherent to covering the flag at all, and the header comment says so, but it

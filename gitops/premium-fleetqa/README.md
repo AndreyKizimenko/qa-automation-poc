@@ -166,6 +166,14 @@ premium instance sits behind a WAF that blocks a software batch whose scripts lo
 An app whose patch policy sets `notify_before_patching` or `patch_when_closed` can't carry a `pre_install_query`
 (Fleet manages that query itself), so the custom packages carry the pre-install query instead.
 
+**Its end-user authentication binds every global file.** With `setup_experience.enable_end_user_authentication`
+on here, a global file dry-run or applied against this instance must declare
+`org_settings.mdm.end_user_authentication` in full: fleetctl refuses a run whose global file would leave the IdP
+incomplete while a fleet outside the run has end-user authentication on (`cmd/fleetctl/fleetctl/gitops.go`), and
+under `--delete-other-fleets`, where the client skips that check, the server refuses the same config. Both
+`default.yml` variants declare it; the suite's scaffold-based dry-run specs write the instance's IdP into their
+`fleetctl new` scaffold first (`carryLiveEndUserAuth`, `playwright/helpers/fleetctl.ts`).
+
 ## The QA fleet's Fleet-maintained-app shelf
 
 `fleets/qa.yml` parks 10 popular apps — each on both macOS and Windows, 20 catalog entries — on the QA fleet **permanently**. They exist to be listed, never installed.

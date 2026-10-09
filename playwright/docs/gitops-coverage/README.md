@@ -496,6 +496,11 @@ client takes it; CI installs the server's own release); a `pre_install_query` fi
 (`apiVersion` / `kind: query` / `spec.query`), not bare SQL; the premium instance sits behind a WAF that answers a
 software batch whose scripts look like installer commands (`rm -rf`, `msiexec`, `installer -pkg`) with an HTML
 "Blocked" page — the compliance scripts are one-line `echo`s; `macos_setup.script` echoes the path the YAML gave.
+And from the branch run (37970527671, gitops chains green, three CLI tests red): once a fleet has end-user
+authentication on, a global file that would clear the IdP is refused — by fleetctl when the fleet is outside the
+run (`gitops.go`, issue fleetdm/fleet#43371's fix), and by the server under `--delete-other-fleets` — so the
+scaffold-based dry-run specs (`cli/shared/gitops-dry-run.spec.ts`, `cli/premium/gitops-dry-run.spec.ts`) now
+write the instance's IdP into their `fleetctl new` scaffold first (`carryLiveEndUserAuth`).
 
 **Verified:** `npm run check` clean; RC-client dry-runs of the full baseline and min file sets against premium
 succeed (`would apply ABM teams`, `would apply Windows enrollment default fleet`); a real apply of the baseline
