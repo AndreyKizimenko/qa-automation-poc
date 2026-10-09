@@ -48,11 +48,18 @@ Everything below follows from four facts about the environment.
 and nothing is risked by not doing so. Each chain holds its instance's concurrency group
 (`<tier>-fleetqa-instance`), shared by the gitops workflows and the suite workflow, so an apply and a test run,
 or two test runs, queue instead of overlapping. The callers (`QA — Nightly`, `QA — Branch run`) take no group of
-their own: a caller in the same group would wait on its own callees.
+their own: a caller in the same group would wait on its own callees. The four apply workflows
+(`gitops-{premium,free}{,-min}.yml`) take their own per-tier group when called, since the orchestrator already
+holds the instance's, and the instance group itself when **dispatched by hand** (their `caller` input is unset
+then): an apply deletes whatever its config doesn't declare, a running test's per-run items included, so a
+manual apply waits for a running suite instead of overlapping it.
 
 **gitops before the suite, and the suite runs whatever gitops did.** The suite assumes the instance is in the
 declared state (the Workstations, QA and VMs fleets exist; the VMs fleet carries the durable software
-fixtures). Applying first makes that true every night. In the nightly the suite runs even if a gitops step is
+fixtures). Applying first makes that true every night. After each apply, `gitops-verify` runs against every file
+that apply carried — on premium the no-team config, Workstations, QA and VMs, with the QA and VMs files verified
+after both the baseline and the min apply, since both carry them unchanged; the second pass proves the min
+apply left them alone. In the nightly the suite runs even if a gitops step is
 red, because a failed apply is its own signal and the night's test results are still wanted; in a branch run a
 red gitops step stops that tier's suite, because the branch is what is being judged. The fleetctl checks
 (`generate-gitops`, `gitops --dry-run`) sit inside the gitops chain on purpose: the suite's `cleanup-setup`

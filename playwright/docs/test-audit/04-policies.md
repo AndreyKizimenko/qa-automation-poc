@@ -107,7 +107,12 @@ policy live on the three real VMs (POL-42).
 8. ☐ Read the policy details page.
    - ✅ *(UI)* `<h1>` = name, `.policy-details-page__policy-description` = description, DataSet **Resolve** = resolution (`PolicyDetailsPage.expectValues`). **Platforms and SQL are not asserted here.**
    - ✅ *(UI)* **Show query**, **Run policy**, **Edit policy** buttons are visible.
-9. ☐ Click **Policies** in the navbar, re-select the scope, type the policy name in **Search by name**.
+9. ☐ Click **Policies** in the navbar, then load the list afresh (`policiesList.goto`), re-select the scope,
+   type the policy name in **Search by name**. The full load is load-bearing: the navbar lands on a list React
+   Query serves from its cache for 5 s after the last fetch (`staleTime: 5000`, `ManagePoliciesPage.tsx`) and never
+   refetches on its own, so a list fetched empty just before the create — the run starts with no global
+   policies — stays "No policies apply to all fleets" with the search box disabled (branch run 37873060103,
+   both tiers, first attempt).
    - ✅ *(UI)* A table row containing the name is visible (`DataTable.rowWith`).
 
 **Assessment**
@@ -147,7 +152,8 @@ click, and no re-select before the final search.
    - ✅ *(API)* `created_policy` activity with matching `policy_name`, actor = suite admin.
 3. ☐ Read the details page.
    - ✅ *(UI)* h1 / description / **Resolve** match the submitted values; **Show query**, **Run policy**, **Edit policy** visible.
-4. ☐ Click **Policies** in the navbar, search the name.
+4. ☐ Click **Policies** in the navbar, load the list afresh (`policiesList.goto` — the stale-cache reason in
+   POL-01 step 9), search the name.
    - ✅ *(UI)* Row with the name is visible.
 
 **Assessment**

@@ -1,0 +1,13 @@
+# A manual label with an empty membership. Exercises the `manual` membership
+# type and the `hosts:` key: gitops owns the list, so every apply resets the
+# membership to exactly what is declared here — nothing. A host added in the
+# UI is removed by the next apply, which is the documented behaviour of a
+# manual label under gitops, not a defect.
+#
+# Referenced by the label-scoped policy and report in the premium config, so it
+# stays declared in both the baseline and the min variant: a label another
+# entity references has to exist at the end of every apply.
+- name: Pilot hosts
+  description: Hosts opted into early rollouts; membership is managed in gitops
+  label_membership_type: manual
+  hosts: []

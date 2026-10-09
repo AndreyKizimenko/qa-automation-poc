@@ -1,0 +1,9 @@
+# A dynamic label restricted to one platform. Exercises `platform: linux`,
+# which narrows a dynamic label to hosts of that platform before the query is
+# considered. The baseline declares it; the min variant leaves it out, so an
+# apply that fails to delete a label shows up in the next verify.
+- name: Linux hosts running Docker
+  description: Linux hosts with the Docker daemon running
+  platform: linux
+  label_membership_type: dynamic
+  query: SELECT 1 FROM processes WHERE name = 'dockerd' LIMIT 1;

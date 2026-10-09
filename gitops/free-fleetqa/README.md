@@ -33,13 +33,32 @@ per-team instead), so applying this config rotates the secret to whatever
 | Resource | Count |
 |---|---:|
 | Configuration profiles | 23 |
-| Policies | 27 |
-| Reports | 30 |
-| Labels | 25 |
+| Policies | 28 |
+| Reports | 31 |
+| Labels | 27 |
 | Scripts | 11 |
+| Custom host vitals | 3 |
 
-Report and label counts expand from multi-entry files (21 report file refs / 12 label
-files).
+Report and label counts expand from multi-entry files (21 report file refs / 14 label
+files), and include the entities `default.yml` declares inline: a policy with every key a
+free policy can hold and a report with every option set away from its default (`critical`,
+label targeting and the automations are premium). The two Linux scripts come from one
+`paths:` glob.
+
+## What default.yml declares beyond the lib lists
+
+The org-level surface a free customer manages from YAML, each holding the value the instance
+already had so that gitops owns it and `gitops-verify` holds the instance to it:
+`server_settings` (every documented key), `features` with `additional_queries` (two benign
+detail queries every host answers) and `historical_data.uptime` (on — turning it off deletes
+the dashboard's history; the vulnerabilities dataset is premium), `fleet_desktop` at Fleet's
+defaults (changing any of its keys is premium, so free can only hold them), `activity_expiry_settings`,
+all four `webhook_settings` (declared and off, with example destinations), `secrets`, and
+`controls.android_enabled_and_configured` (Android MDM was turned on in the UI; the server ignores
+the key on a config write, so it records the assumption). The min variant changes one value in
+each section so the nightly proves updates, not only creates and deletes. Nothing new reaches
+the free VMs: on free the real VMs sit in Unassigned, which is where no-team `controls` land, so
+free's `controls` stay as they were.
 
 ## Verifying an apply landed
 

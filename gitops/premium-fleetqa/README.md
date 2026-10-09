@@ -52,8 +52,11 @@ line after any apply that carries software.
 
 **A known false report:** an apply can print `[-] deleted software - <name>` for a title it kept — seen for
 `Fleet Playwright Install` on VMs and `zoom` on QA, both declared, both with the same installer id and upload
-time afterwards. The deletion *report* matches titles on a different key from the deletion itself. Confirm by
-the title's installer id before treating one as real.
+time afterwards, and a dry-run prints the matching `[-] would've deleted software - <name>` (`zoom`, `7-zip`,
+`Fleet Playwright Install`, every nightly). The deletion *report* matches titles on a different key from the
+deletion itself. Confirm by the title's installer id before treating one as real. The nightly's idempotence
+check (`playwright/tests/cli/nightly/gitops-idempotence.spec.ts`) ignores software deletion lines for this
+reason, and the `gitops-verify` project asserts each fleet's software set exactly after every apply instead.
 
 ### Do not pass `--delete-other-fleets`
 
@@ -70,12 +73,51 @@ The flag is opt-in and off by default, so the command above is safe as written.
 
 ## Scope summary
 
-| Scope | Profiles | Policies | Scripts | Software |
-|---|---:|---:|---:|---:|
-| No team (default.yml) | 23 | 27 | 11 | — |
-| Workstations (fleets/workstations.yml) | 23 | 23 | 6 | — |
-| QA (fleets/qa.yml) | — | — | — | 20 Fleet-maintained apps |
-| VMs (fleets/vms.yml) | — | 2 | — | 2 Fleet-maintained apps (Claude, macOS + Windows) |
+| Scope | Profiles | Policies | Reports | Labels | Scripts | Vitals | Software |
+|---|---:|---:|---:|---:|---:|---:|---|
+| No team (default.yml) | 23 | 29 | 32 | 27 | 11 | 3 | — |
+| Workstations (fleets/workstations.yml) | 23 | 23 | 5 | — | 6 | — | — |
+| QA (fleets/qa.yml) | — | — | — | — | — | — | 20 Fleet-maintained apps |
+| VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 4 custom packages, 4 Fleet-maintained apps |
+
+Label and report counts expand from multi-entry lib files, and the no-team numbers include the entities
+`default.yml` declares inline (below).
+
+## What default.yml declares beyond the lib lists
+
+`default.yml` is also where the org-level surface customers manage from YAML is exercised, so the nightly
+proves more than entity names. Everything here holds the value the instance already had — the point is that
+gitops owns it and `gitops-verify` holds the instance to it — and the min variant changes one value in every
+section, so an apply that creates and deletes but never *updates* fails the next verify:
+
+- `org_settings`: `server_settings` (every documented key; `enable_analytics` is **true** because Fleet forces
+  usage statistics on for a premium license, whatever the YAML says), `features` with `additional_queries` (two
+  benign detail queries every host answers) and `historical_data` (both datasets on — turning either off deletes
+  the dashboard history for good), all three `fleet_desktop` keys, `activity_expiry_settings`, all four
+  `webhook_settings` (declared and off, with example destinations; no `policy_ids`, which Fleet keeps when the key
+  is omitted), and the `gitops` block (`gitops_mode_enabled: false` and the repository URL the gitops-mode specs
+  read; the exceptions can't be declared).
+- `custom_host_vitals`: three names. Unlike `labels`, omitting the key deletes every vital, so both variants
+  carry it.
+- Two labels beyond the lib set: a manual one, **Pilot hosts** (`hosts: []`, referenced by the label-scoped
+  policy and report, so it is in both variants), and a platform-restricted dynamic one.
+- Inline entities, which the loader reads like `path:` ones: a policy with every base key, a `critical`
+  policy scoped to **Pilot hosts**, a report with every option set away from its default, and a report scoped to
+  **Pilot hosts**. Their queries always pass or return a few rows, so they cost nothing on the hosts that run them.
+- The two Linux scripts come from one `paths:` glob rather than two `path:` lines.
+
+Which batch each item came from, and what is still to come (the Compliance fleet, `fleets/unassigned.yml`), is
+in [`playwright/docs/gitops-coverage/README.md`](../../playwright/docs/gitops-coverage/README.md).
+
+## Verification
+
+After each apply the nightly runs the `gitops-verify` Playwright project against every file that apply
+carried: the no-team config, Workstations, QA and VMs (`.github/workflows/nightly-qa-gitops-premium.yml`). QA
+and VMs are verified after the baseline *and* after the min apply, against the same files, since both applies
+carry them; the second pass proves the min apply left them alone. Locally:
+`npm run test:gitops-verify:premium`, `…:premium-workstations`, `…:premium-qa`, `…:premium-vms`,
+`…:premium-min`, `…:premium-min-workstations` from `playwright/`. What each spec compares is in
+[`playwright/docs/test-audit/16-gitops-verify.md`](../../playwright/docs/test-audit/16-gitops-verify.md).
 
 ## The QA fleet's Fleet-maintained-app shelf
 

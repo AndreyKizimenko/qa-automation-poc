@@ -9,16 +9,23 @@ References payloads in `../lib/` via relative `path:` — the same source of tru
 | | baseline | min | pagination |
 |---|---|---|---|
 | Configuration profiles | 23 | 21 | ✓ both |
-| Policies | 27 | 22 | ✓ both |
-| Reports | 30 | 26 | ✓ both |
-| Labels | 25 | 23 | ✓ both |
+| Policies | 28 | 23 | ✓ both |
+| Reports | 31 | 27 | ✓ both |
+| Labels | 27 | 24 | ✓ both |
 | Scripts | 11 | 9 | n/a |
+| Custom host vitals | 3 | 2 | n/a |
 | `org_name` | Free QA Automation | Free QA Automation (min) | n/a |
 
-Label and report counts include multi-entry files — 12 label files / 21 report file
-refs in baseline expand to 25 labels / 30 reports.
+Label and report counts include multi-entry files — 14 label files / 21 report file
+refs in baseline expand to 27 labels / 31 reports — and the inline policy and report.
 
-The `org_name` change is a cheap "did gitops actually apply?" signal that doesn't depend on counts.
+Counts prove that an apply creates and deletes. Values prove that it updates, which
+fleetdm/fleet#48021 (omitted keys aren't reset) makes the more important half, so every
+settings section the baseline declares has one changed value here: `org_name`,
+`activity_expiry_settings.activity_expiry_window` (31), every webhook's destination path
+(`/fleet-min/…`), `features.additional_queries` (one query instead of two), the inline
+policy's query, and the inline report's `interval` and `logging`. `fleet_desktop` can't carry
+a delta on free (changing it is premium).
 
 ## Usage
 

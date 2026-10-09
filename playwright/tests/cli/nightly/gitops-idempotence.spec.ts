@@ -20,6 +20,15 @@
  * `tests/cli/shared/gitops-dry-run.spec.ts` asserts positively using the
  * `fleetctl new` scaffold. That spec is this one's negative control.
  *
+ * Software deletion lines are the one exception to the exception. fleetctl's
+ * dry-run reports `[-] would've deleted software - <title>` for titles the
+ * apply keeps — `zoom` on QA, `7-zip` and `Fleet Playwright Install` on VMs,
+ * each declared, each still there with the same installer after every apply
+ * (gitops/premium-fleetqa/README.md, "A known false report"): the report
+ * matches titles on a different key from the deletion itself. Those lines are
+ * dropped here, and the software *set* of every fleet file is what the
+ * gitops-verify project asserts exactly, after each apply.
+ *
  * Runs in the nightly GitOps chain only, in the same window as the
  * generate-gitops checks — but for a different reason than those. The Playwright
  * suite mostly *deletes* global state, which produces no deletions here, so this
@@ -34,7 +43,14 @@ import * as path from 'path';
 import { fleetctl, output } from '@helpers/fleetctl';
 import { minConfigDir, minConfigLabel } from './_generated';
 
-/** Every file the nightly applies for this tier: default.yml plus any fleets/*.yml. */
+/**
+ * Every file the nightly's min apply passes for this tier: the min directory's
+ * default.yml and fleets/*.yml, plus — on premium — the baseline directory's
+ * fleet files the min apply carries unchanged (QA and VMs hold the suite's
+ * durable fixtures, so `gitops-premium-min.yml` applies the same files in both
+ * passes). A fleet file left out here would be a fleet the dry-run never
+ * looks at.
+ */
 function appliedFiles(): string[] {
   const files = [path.join(minConfigDir, 'default.yml')];
   const fleetsDir = path.join(minConfigDir, 'fleets');
@@ -42,6 +58,10 @@ function appliedFiles(): string[] {
     for (const entry of fs.readdirSync(fleetsDir).filter((f) => f.endsWith('.yml'))) {
       files.push(path.join(fleetsDir, entry));
     }
+  }
+  if (process.env.SUITE === 'premium') {
+    const baselineFleets = path.join(path.dirname(minConfigDir), 'premium-fleetqa', 'fleets');
+    for (const entry of ['qa.yml', 'vms.yml']) files.push(path.join(baselineFleets, entry));
   }
   return files;
 }
@@ -59,7 +79,9 @@ test.describe(`gitops --dry-run · ${minConfigLabel}`, () => {
 
     const deletions = output(res)
       .split('\n')
-      .filter((line) => line.trimStart().startsWith("[-] would've deleted"));
+      .filter((line) => line.trimStart().startsWith("[-] would've deleted"))
+      // fleetctl's false software-deletion report (header); the software set is gitops-verify's.
+      .filter((line) => !line.trimStart().startsWith("[-] would've deleted software - "));
 
     expect(
       deletions,

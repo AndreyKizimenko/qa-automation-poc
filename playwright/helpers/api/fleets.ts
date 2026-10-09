@@ -7,8 +7,7 @@ import { compareVersions } from './software';
  * A fleet's whole `webhook_settings` subtree. Specs that touch one webhook
  * snapshot and restore the **entire** object: Fleet replaces the subtree
  * wholesale on PATCH, so sending back only the key you changed would wipe the
- * fleet's other webhooks (Workstations carries a failing-policies webhook with
- * gitops-provisioned policy ids).
+ * fleet's other webhooks (the failing-policies and host-activities ones).
  */
 export async function getFleetWebhookSettings(
   request: APIRequestContext,

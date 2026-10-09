@@ -5,8 +5,54 @@ org_settings:
   features:
     enable_host_users: true
     enable_software_inventory: true
+    # Extra detail queries, collected with the host's other vitals and returned
+    # under `additional` on the host object. Benign reads that reach every host.
+    additional_queries:
+      time: SELECT * FROM time
+      uptime: SELECT total_seconds FROM uptime
+    # Both datasets stay on: turning either off deletes the history behind the
+    # dashboard charts, and no apply can bring it back.
+    historical_data:
+      uptime: true
+      vulnerabilities: true
   fleet_desktop:
     transparency_url: https://fleetdm.com/transparency
+    alternative_browser_host: ""
+    sso_enabled: false
+  activity_expiry_settings:
+    activity_expiry_enabled: false
+    activity_expiry_window: 30
+    preserve_host_activities_on_reenrollment: true
+  # Every webhook declared and off, each with the destination it would post to.
+  # The specs that exercise a webhook snapshot and restore it, so these are the
+  # values they put back. No `policy_ids`: Fleet keeps the live list when the
+  # key is omitted, and a policy's own `webhooks_and_tickets_enabled` is how
+  # gitops adds one.
+  webhook_settings:
+    interval: 24h0m0s
+    activities_webhook:
+      enable_activities_webhook: false
+      destination_url: https://example.com/fleet/activities
+    host_status_webhook:
+      enable_host_status_webhook: false
+      destination_url: https://example.com/fleet/host-status
+      host_percentage: 25
+      days_count: 7
+    failing_policies_webhook:
+      enable_failing_policies_webhook: false
+      destination_url: https://example.com/fleet/failing-policies
+      host_batch_size: 0
+    vulnerabilities_webhook:
+      enable_vulnerabilities_webhook: false
+      destination_url: https://example.com/fleet/vulnerabilities
+      host_batch_size: 0
+  # GitOps mode stays off: the suite's gitops-mode project turns it on and back
+  # off itself. The repository URL is what that project's indicator links to,
+  # so gitops declares it. The exceptions can't be declared (Fleet rejects the
+  # key); .github/scripts/restore-gitops-exceptions.sh pins them.
+  gitops:
+    gitops_mode_enabled: false
+    repository_url: https://github.com/AndreyKizimenko/qa-fleet-gitops
   # Expire hosts after a day offline so dead osquery-perf simulations are culled
   # rather than accumulating: a deleted simulation never re-enrols on its own.
   # Real fleetd hosts do re-enrol, so the QA VMs come back when powered on.
@@ -29,14 +75,17 @@ org_settings:
           - "All teams"
   org_info:
     contact_url: https://fleetdm.com/company/contact
-    org_logo_url: ""
-    org_logo_url_light_background: ""
+    org_logo_url_dark_mode: ""
+    org_logo_url_light_mode: ""
     org_name: Premium QA Automation
   server_settings:
     ai_features_disabled: false
     deferred_save_host: false
     discard_reports_data: false
-    enable_analytics: false
+    # Fleet forces usage statistics on for a premium license
+    # (server/service/appconfig.go, IsAllowDisableTelemetry), so this is the
+    # only value the instance can hold.
+    enable_analytics: true
     live_reporting_disabled: false
     report_cap: 0
     scripts_disabled: false
@@ -64,8 +113,10 @@ controls:
     - path: ../lib/platforms/windows/scripts/toggle-fleetd-debug.ps1
     - path: ../lib/platforms/windows/scripts/uninstall-fleetd-windows.ps1
     - path: ../lib/platforms/windows/scripts/uninstall-zoom.ps1
-    - path: ../lib/platforms/linux/scripts/change-password-linux.sh
-    - path: ../lib/platforms/linux/scripts/uninstall-fleetd-linux.sh
+    # A glob, relative to this file like `path:` is. Fleet keeps the .sh, .py
+    # and .ps1 matches, so a new script dropped into that folder joins the scope
+    # on the next apply without an edit here.
+    - paths: ../lib/platforms/linux/scripts/*.sh
   apple_settings:
     configuration_profiles:
       - path: ../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
@@ -109,6 +160,17 @@ labels:
   - path: ../lib/labels/virtual-machines.yml
   - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/x86-based-windows-hosts.yml
+  # A manual label (referenced by the label-scoped policy and report below) and
+  # a platform-restricted dynamic one.
+  - path: ../lib/labels/pilot-hosts.yml
+  - path: ../lib/labels/linux-hosts-running-docker.yml
+
+# Every custom host vital the instance holds. Unlike `labels`, leaving this key
+# out deletes every vital, so both the baseline and the min variant carry it.
+custom_host_vitals:
+  - name: Asset tag
+  - name: Cost center
+  - name: Device owner
 
 # No-team policies. Team-specific policies live in fleets/*.yml.
 policies:
@@ -139,6 +201,24 @@ policies:
   - path: ../lib/platforms/windows/policies/windows-fleet-hardening.yml
   - path: ../lib/platforms/linux/policies/disk-encryption-check.yml
   - path: ../lib/platforms/linux/policies/disk-space-check.yml
+  # Declared inline rather than through a lib file, carrying every key a global
+  # policy can hold (the automations are fleet-only), so an apply that drops or
+  # defaults one is caught by gitops-verify. The queries always pass — osquery 5
+  # has been the floor for years — so they cost nothing on the hosts that run
+  # them. The second is premium-only: `critical` and label targeting.
+  - name: osquery is at least version 5
+    query: SELECT 1 FROM osquery_info WHERE CAST(SUBSTR(version, 1, INSTR(version, '.') - 1) AS INTEGER) >= 5;
+    description: Checks that the osquery agent reports a major version of 5 or higher.
+    resolution: Update fleetd, which bundles the current osquery release.
+    platform: darwin,windows,linux
+  - name: Pilot hosts run osquery 5
+    query: SELECT 1 FROM osquery_info WHERE version LIKE '5.%';
+    description: The osquery major version on the hosts in the Pilot hosts label.
+    resolution: Update fleetd on the pilot hosts first.
+    platform: darwin,windows,linux
+    critical: true
+    labels_include_any:
+      - Pilot hosts
 
 reports:
   - path: ../lib/platforms/all/reports/collect-chromium-browser-extensions.yml
@@ -162,3 +242,26 @@ reports:
   - path: ../lib/platforms/windows/reports/all-x86-hosts.yml
   - path: ../lib/platforms/linux/reports/all-deb-hosts.yml
   - path: ../lib/platforms/linux/reports/all-rpm-hosts.yml
+  # Declared inline, with every option a report carries set away from its
+  # default, so a dropped or defaulted option shows up in gitops-verify. The
+  # first reads osquery's own schedule table every two hours on every host,
+  # sending results to the log destination and storing none; the second is
+  # premium-only (label targeting) and reaches only the Pilot hosts label.
+  - name: Collect osquery schedule stats
+    query: SELECT name, interval, executions, output_size, average_memory FROM osquery_schedule;
+    description: Per-query schedule statistics from osquery, for tuning intervals.
+    interval: 7200
+    platform: darwin,windows,linux
+    min_osquery_version: "5.0.0"
+    observer_can_run: true
+    automations_enabled: true
+    logging: differential_ignore_removals
+    discard_data: true
+  - name: Collect uptime on pilot hosts
+    query: SELECT total_seconds FROM uptime;
+    description: Uptime of the hosts in the Pilot hosts label.
+    interval: 86400
+    platform: darwin,windows,linux
+    logging: snapshot
+    labels_include_any:
+      - Pilot hosts

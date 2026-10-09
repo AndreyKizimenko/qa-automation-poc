@@ -22,6 +22,8 @@
     "test:gitops-verify:free-min": "SUITE=free GITOPS_TARGET=../gitops/free-fleetqa-min playwright test --project=gitops-verify",
     "test:gitops-verify:premium": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa playwright test --project=gitops-verify",
     "test:gitops-verify:premium-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/workstations.yml playwright test --project=gitops-verify",
+    "test:gitops-verify:premium-qa": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/qa.yml playwright test --project=gitops-verify",
+    "test:gitops-verify:premium-vms": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/vms.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min/fleets/workstations.yml playwright test --project=gitops-verify",
     "test:gitops-nightly:premium": "SUITE=premium playwright test --project=gitops-nightly",

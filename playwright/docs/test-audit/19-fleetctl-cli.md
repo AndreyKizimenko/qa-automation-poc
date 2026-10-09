@@ -1174,8 +1174,11 @@ other:
 
 2. ☐ Same, plus `--delete-other-fleets`.
    - ✅ *(CLI)* Exit code is `0`.
-   - ✅ *(CLI)* Output matches `would've deleted .*fleet` — the scaffold names none of this
-     instance's fleets, so all of them, `Workstations` included, are proposed for removal.
+   - ✅ *(CLI)* Output matches `would've deleted (team|fleet) <name>` for each of `Workstations`, `QA`
+     and `VMs` — the scaffold names none of this instance's fleets, so all of them are proposed for
+     removal, and fleetctl still words the line with `team`. A match on the noun alone would be
+     satisfied only by a throwaway `pw-fleet-*` another spec happens to hold at that moment (branch run
+     37873060103 is where that assertion failed three times in a row).
 
 **Manual repro** — run both. **Never drop `--dry-run` from the second one**: a real apply would
 delete the gitops-provisioned `Workstations` fleet and create a separate `💻 Workstations`.
@@ -1743,11 +1746,15 @@ other:
 
 **Flow**
 
-1. ☐ Collect the files the nightly applied for this tier: `default.yml` plus every `fleets/*.yml`
-   under `gitops/<tier>-fleetqa-min/`.
+1. ☐ Collect the files the nightly's min apply passed for this tier: `default.yml` plus every `fleets/*.yml`
+   under `gitops/<tier>-fleetqa-min/`, and on premium the baseline `fleets/qa.yml` and `fleets/vms.yml`,
+   which both applies carry unchanged.
 2. ☐ `fleetctl gitops --dry-run -f <each>`.
    - ✅ *(CLI)* Exit code is `0`, output contains `gitops dry run succeeded`.
-   - ✅ *(CLI)* **No** line starts with `[-] would've deleted`.
+   - ✅ *(CLI)* **No** line starts with `[-] would've deleted` — except `[-] would've deleted software - …`,
+     which fleetctl prints for titles the apply keeps (`zoom`, `7-zip`, `Fleet Playwright Install`, every
+     night; `gitops/premium-fleetqa/README.md`, "A known false report"). Those lines are dropped; the
+     software set of each fleet file is `gitops-verify`'s (GV-26 … GV-30), asserted after each apply.
 
 **Manual repro** — after a min apply, dry-run the same config. Expect a wall of `[+] would've
 applied …` and not a single `[-]`. For contrast, dry-run a `fleetctl new` scaffold against the

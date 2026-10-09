@@ -5,8 +5,49 @@ org_settings:
   features:
     enable_host_users: true
     enable_software_inventory: true
+    # One of the baseline's two extra detail queries: the drop is the drift
+    # signal for this map, which Fleet replaces whole.
+    additional_queries:
+      time: SELECT * FROM time
+    # Both datasets stay on: turning either off deletes the history behind the
+    # dashboard charts, and no apply can bring it back.
+    historical_data:
+      uptime: true
+      vulnerabilities: true
+  # A different transparency URL from the baseline: an update, not a deletion,
+  # which is the apply path the entity counts don't exercise.
   fleet_desktop:
-    transparency_url: https://fleetdm.com/transparency
+    transparency_url: https://fleetdm.com/handbook
+    alternative_browser_host: ""
+    sso_enabled: false
+  activity_expiry_settings:
+    activity_expiry_enabled: false
+    activity_expiry_window: 31
+    preserve_host_activities_on_reenrollment: true
+  # The baseline's webhooks with a different destination path on each, still
+  # off. No `policy_ids`, for the reason the baseline gives.
+  webhook_settings:
+    interval: 24h0m0s
+    activities_webhook:
+      enable_activities_webhook: false
+      destination_url: https://example.com/fleet-min/activities
+    host_status_webhook:
+      enable_host_status_webhook: false
+      destination_url: https://example.com/fleet-min/host-status
+      host_percentage: 25
+      days_count: 7
+    failing_policies_webhook:
+      enable_failing_policies_webhook: false
+      destination_url: https://example.com/fleet-min/failing-policies
+      host_batch_size: 0
+    vulnerabilities_webhook:
+      enable_vulnerabilities_webhook: false
+      destination_url: https://example.com/fleet-min/vulnerabilities
+      host_batch_size: 0
+  # Same as the baseline: the gitops-mode specs read this URL, so it never changes.
+  gitops:
+    gitops_mode_enabled: false
+    repository_url: https://github.com/AndreyKizimenko/qa-fleet-gitops
   # Expire hosts after a day offline so dead osquery-perf simulations are culled
   # rather than accumulating: a deleted simulation never re-enrols on its own.
   # Real fleetd hosts do re-enrol, so the QA VMs come back when powered on.
@@ -29,15 +70,16 @@ org_settings:
           - "All teams"
   org_info:
     contact_url: https://fleetdm.com/company/contact
-    org_logo_url: ""
-    org_logo_url_light_background: ""
+    org_logo_url_dark_mode: ""
+    org_logo_url_light_mode: ""
     org_name: Premium QA Automation (min)
   # secrets: omitted — enroll secrets are managed via UI on the premium instance
   server_settings:
     ai_features_disabled: false
     deferred_save_host: false
     discard_reports_data: false
-    enable_analytics: false
+    # Forced on for a premium license (see the baseline).
+    enable_analytics: true
     live_reporting_disabled: false
     report_cap: 0
     scripts_disabled: false
@@ -62,8 +104,7 @@ controls:
     - path: ../lib/platforms/windows/scripts/enable-ms-defender.ps1
     - path: ../lib/platforms/windows/scripts/toggle-fleetd-debug.ps1
     - path: ../lib/platforms/windows/scripts/uninstall-fleetd-windows.ps1
-    - path: ../lib/platforms/linux/scripts/change-password-linux.sh
-    - path: ../lib/platforms/linux/scripts/uninstall-fleetd-linux.sh
+    - paths: ../lib/platforms/linux/scripts/*.sh
   apple_settings:
     configuration_profiles:
       # 11 of 11 (mac unchanged)
@@ -96,7 +137,8 @@ controls:
       - path: ../lib/platforms/android/configuration-profiles/disable-screen-capture.json
 
 labels:
-  # 10 of 12 (drop keynote-14, virtual-machines)
+  # 11 of 14 (drop keynote-14, virtual-machines, linux-hosts-running-docker;
+  # pilot-hosts stays, since the inline policy and report below reference it)
   - path: ../lib/labels/apple-silicon-macos-hosts.yml
   - path: ../lib/labels/arm-based-windows-hosts.yml
   - path: ../lib/labels/debian-based-linux-hosts.yml
@@ -107,10 +149,18 @@ labels:
   - path: ../lib/labels/rpm-based-linux-hosts.yml
   - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/x86-based-windows-hosts.yml
+  - path: ../lib/labels/pilot-hosts.yml
+
+# 2 of the baseline's 3. Leaving the key out would delete every vital.
+custom_host_vitals:
+  - name: Asset tag
+  - name: Cost center
 
 policies:
-  # 22 of 27: drop 3 mac (install-santa, latest-macos, update-1password ... no wait — let's drop 1password-emergency, install-santa, update-claude, update-firefox, update-safari)
-  # Net: 8 mac + 12 win + 2 linux = 22 (vs 13+12+2=27 in baseline)
+  # 22 of the 27 lib policies: drops the macOS 1password-emergency-kit,
+  # latest-macos, update-claude, update-firefox and update-safari
+  # (8 mac + 12 win + 2 linux). The inline policies below are the baseline's,
+  # one with a changed query and one no longer critical.
   - path: ../lib/platforms/macos/policies/all-software-updates-installed.yml
   - path: ../lib/platforms/macos/policies/battery-health-check.yml
   - path: ../lib/platforms/macos/policies/disk-encryption-check.yml
@@ -133,6 +183,19 @@ policies:
   - path: ../lib/platforms/windows/policies/windows-fleet-hardening.yml
   - path: ../lib/platforms/linux/policies/disk-encryption-check.yml
   - path: ../lib/platforms/linux/policies/disk-space-check.yml
+  - name: osquery is at least version 5
+    query: SELECT 1 FROM osquery_info WHERE version >= '5';
+    description: Checks that the osquery agent reports version 5 or higher.
+    resolution: Update fleetd, which bundles the current osquery release.
+    platform: darwin,windows,linux
+  - name: Pilot hosts run osquery 5
+    query: SELECT 1 FROM osquery_info WHERE version LIKE '5.%';
+    description: The osquery major version on the hosts in the Pilot hosts label.
+    resolution: Update fleetd on the pilot hosts first.
+    platform: darwin,windows,linux
+    critical: false
+    labels_include_any:
+      - Pilot hosts
 
 reports:
   # 17 of 21 file refs → 26 reports (vs 30 in baseline). Drop 4 single-entry files.
@@ -153,3 +216,22 @@ reports:
   - path: ../lib/platforms/macos/reports/detect-apns-certificate.yml
   - path: ../lib/platforms/windows/reports/all-x86-hosts.yml
   - path: ../lib/platforms/linux/reports/all-deb-hosts.yml
+  # The baseline's inline reports with a changed interval and logging mode.
+  - name: Collect osquery schedule stats
+    query: SELECT name, interval, executions, output_size, average_memory FROM osquery_schedule;
+    description: Per-query schedule statistics from osquery, for tuning intervals.
+    interval: 3600
+    platform: darwin,windows,linux
+    min_osquery_version: "5.0.0"
+    observer_can_run: true
+    automations_enabled: true
+    logging: differential
+    discard_data: true
+  - name: Collect uptime on pilot hosts
+    query: SELECT total_seconds FROM uptime;
+    description: Uptime of the hosts in the Pilot hosts label.
+    interval: 43200
+    platform: darwin,windows,linux
+    logging: snapshot
+    labels_include_any:
+      - Pilot hosts

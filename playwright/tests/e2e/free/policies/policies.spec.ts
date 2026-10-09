@@ -47,6 +47,13 @@ test.describe('Policies CRUD', () => {
     await expect(policyDetails.editButton).toBeVisible();
 
     await policyDetails.navbar.goToPolicies();
+    // The navbar lands on a list React Query serves from its cache for 5 s
+    // after the last fetch (`staleTime: 5000` in ManagePoliciesPage), and never
+    // refetches on its own. A list fetched empty just before the create — the
+    // run starts with no global policies — therefore stays "No policies yet",
+    // with the search box disabled, until a full page load. The load below is
+    // that; the row assertion is on the list as the server has it.
+    await policiesList.goto();
     await policiesList.search.fill(policyName);
     await expect(policiesList.table.rowWith(policyName)).toBeVisible();
   });
