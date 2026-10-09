@@ -1,6 +1,6 @@
 # GitOps drift verification — test audit
 
-**Specs covered:** 10 files · **Test declarations:** 30 · **Projects:** gitops-verify
+**Specs covered:** 11 files · **Test declarations:** 34 · **Projects:** gitops-verify
 
 This area answers one question: **does the live Fleet instance match the YAML in `gitops/`?**
 Every spec loads a GitOps target off disk (via [`helpers/gitops-yaml.ts`](../../helpers/gitops-yaml.ts)),
@@ -48,27 +48,33 @@ steps. The plan this area grows along is [`docs/gitops-coverage/README.md`](../g
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | [`../gitops/free-fleetqa`](../../../gitops/free-fleetqa/default.yml) | no-team | 27 | 28 | 31 | 11 | 23 (11/10/2) | 3 | — |
 | [`../gitops/free-fleetqa-min`](../../../gitops/free-fleetqa-min/default.yml) | no-team | 24 | 23 | 27 | 9 | 21 (11/8/2) | 2 | — |
-| [`../gitops/premium-fleetqa`](../../../gitops/premium-fleetqa/default.yml) | no-team (+ 3 fleet files) | 27 | 29 | 32 | 11 | 23 (11/10/2) | 3 | — |
+| [`../gitops/premium-fleetqa`](../../../gitops/premium-fleetqa/default.yml) | no-team (+ 4 fleet files) | 28 | 29 | 32 | 11 | 23 (11/10/2) | 3 | — |
 | [`../gitops/premium-fleetqa/fleets/workstations.yml`](../../../gitops/premium-fleetqa/fleets/workstations.yml) | fleet `Workstations` | 0 | 23 | 5 | 6 | 23 (11/10/2) | — | — |
 | [`../gitops/premium-fleetqa/fleets/qa.yml`](../../../gitops/premium-fleetqa/fleets/qa.yml) | fleet `QA` | 0 | 0 | 0 | 0 | 0 | — | 20 Fleet-maintained apps |
 | [`../gitops/premium-fleetqa/fleets/vms.yml`](../../../gitops/premium-fleetqa/fleets/vms.yml) | fleet `VMs` | 0 | 2 | 1 | 0 | 0 | — | 4 packages, 4 Fleet-maintained apps |
-| [`../gitops/premium-fleetqa-min`](../../../gitops/premium-fleetqa-min/default.yml) | no-team (+ 1 fleet file) | 24 | 24 | 28 | 9 | 21 (11/8/2) | 2 | — |
+| [`../gitops/premium-fleetqa/fleets/compliance.yml`](../../../gitops/premium-fleetqa/fleets/compliance.yml) | fleet `Compliance` | 1 | 7 | 2 | 12 | 6 (3/2/1) | — | 5 packages (2 script-only), 2 Fleet-maintained apps |
+| [`../gitops/premium-fleetqa-min`](../../../gitops/premium-fleetqa-min/default.yml) | no-team (+ 2 fleet files) | 25 | 24 | 28 | 9 | 21 (11/8/2) | 2 | — |
 | [`../gitops/premium-fleetqa-min/fleets/workstations.yml`](../../../gitops/premium-fleetqa-min/fleets/workstations.yml) | fleet `Workstations` | 0 | 21 | 3 | 5 | 21 (11/8/2) | — | — |
+| [`../gitops/premium-fleetqa-min/fleets/compliance.yml`](../../../gitops/premium-fleetqa-min/fleets/compliance.yml) | fleet `Compliance` | 1 | 6 | 1 | 6 | 4 (2/1/1) | — | 3 packages (1 script-only), 2 Fleet-maintained apps |
 
 Label/report counts exceed the file count because three referenced files hold multiple entries
 (`lib/platforms/all/reports/dex-queries.yml` 10 reports, `lib/labels/macs-with-fleet-maintained-apps-installed.yml`
 9 labels, `lib/labels/windows-with-fleet-maintained-apps-installed.yml` 6 labels), and because the no-team
 configs carry entities **inline** (a policy and, on premium, a label-scoped one; a report with every option and,
-on premium, a label-scoped one). The two Linux scripts come from one `paths:` glob.
+on premium, a label-scoped one). The two Linux scripts come from one `paths:` glob. Compliance's label is
+fleet-scoped, its twelve scripts come from three globs (one per platform folder, which is how the Linux folder's
+Python script gets in), and it is the one target whose fleet-level `controls` (GV-31 … GV-34) and software
+options are declared.
 
 Nightly chain (`.github/workflows/nightly-qa-gitops-{premium,free}.yml`, run by `QA — Nightly` after the Render
 redeploy and by `QA — Branch run`): apply baseline → verify baseline → apply **min** → verify min → fleetctl
-checks. On premium each verify pass covers the no-team config, Workstations, QA and VMs (QA and VMs against the
-same files both times, since both applies carry them). Baseline and min differ in every count **and in a value
-in every settings section**, so the pair proves gitops creates, deletes and updates; the min variant is what the
-chain ends on, and the suite's `cleanup-setup` then wipes the global reports, policies, scripts and profiles and
-Workstations' policies, profiles, scripts and software, so between runs the instance holds min's org settings,
-labels, vitals and Workstations' reports, and everything on QA and VMs.
+checks. On premium each verify pass covers the no-team config, Workstations, Compliance, QA and VMs (QA and VMs
+against the same files both times, since both applies carry them). Baseline and min differ in every count **and
+in a value in every settings section**, so the pair proves gitops creates, deletes and updates; the min variant
+is what the chain ends on, and the suite's `cleanup-setup` then wipes the global reports, policies, scripts and
+profiles and Workstations' policies, profiles, scripts and software, so between runs the instance holds min's
+org settings, labels, vitals and Workstations' reports, everything on QA and VMs, and min's Compliance fleet in
+full (the cleanup never touches it).
 
 ## Contents
 
@@ -104,10 +110,15 @@ labels, vitals and Workstations' reports, and everything on QA and VMs.
 | GV-28 | `gitops-verify/software.spec.ts` | the Fleet-maintained app set matches gitops exactly | API | ☐ |
 | GV-29 | `gitops-verify/software.spec.ts` | each Fleet-maintained app's options match gitops | API | ☐ |
 | GV-30 | `gitops-verify/software.spec.ts` | the App Store app set matches gitops exactly | API | ☐ |
+| GV-31 | `gitops-verify/controls.spec.ts` | disk encryption, key escrow, the BitLocker PIN and the managed local account match gitops | API | ☐ |
+| GV-32 | `gitops-verify/controls.spec.ts` | Recovery Lock and the host name template match gitops | API | ☐ |
+| GV-33 | `gitops-verify/controls.spec.ts` | OS update settings match gitops | API | ☐ |
+| GV-34 | `gitops-verify/controls.spec.ts` | setup experience matches gitops | API | ☐ |
 
 - **Isolation:** independent tests, `fullyParallel: true`, `retries: 0`. Each spec reads its live list once in
-  a `beforeAll`; the software specs share one cached read of the fleet's titles, their details and the
-  Fleet-maintained-app catalog (`resolveFleetSoftware`).
+  a `beforeAll`; the software specs (and the policies spec, for its automation targets) share one cached read of
+  the fleet's titles, their details, the setup-experience listing per platform and the Fleet-maintained-app
+  catalog (`resolveFleetSoftware`).
 - **Two comparisons do most of the work.** `expectExactNames(what, live, declared)` reports the names declared
   but missing *and* the names live but undeclared (both soft, so one run lists every difference), then fails on
   the count. `expectSubset(what, live, declared)` compares every key the YAML declares and ignores the rest —
@@ -115,8 +126,8 @@ labels, vitals and Workstations' reports, and everything on QA and VMs.
   declared `undefined` is "not declared", not "must be undefined".
 - **Which tests run for which target:** the `_sanity`, labels, policies, profiles, reports and scripts specs run
   for every target. `fleets`, `host-vitals` and the org half of `settings` run for a no-team target only
-  (`fleets` on premium only); the fleet half of `settings` and the `software` spec run for a fleet file only.
-  The skips are data-availability guards, inline reasons only.
+  (`fleets` on premium only); the fleet half of `settings`, the `software` spec and the `controls` spec run for a
+  fleet file only. The skips are data-availability guards, inline reasons only.
 
 ---
 
@@ -224,7 +235,7 @@ other:
    runs before the sweep that removes them).
    - ✅ *(API)* the remaining names, sorted, **equal** the expected set.
 
-**Manual repro** — **Settings → Fleets** lists exactly Workstations, QA, VMs and Mobile.
+**Manual repro** — **Settings → Fleets** lists exactly Workstations, QA, VMs, Compliance and Mobile.
 
 **Assessment**
 - *Value:* the only place the *set* of fleets is asserted. An extra fleet (a renamed one orphaned by an apply, a
@@ -276,7 +287,7 @@ other:
 
 - **File:** [`playwright/tests/api/gitops-verify/labels.spec.ts`](../../tests/api/gitops-verify/labels.spec.ts)
 - **Grep:** `… -g "label set matches"`
-- **Project:** gitops-verify · **Targets:** all — the no-team config owns the global labels (`fleet_id` null), a fleet file the labels scoped to that fleet (none today)
+- **Project:** gitops-verify · **Targets:** all — the no-team config owns the global labels (`fleet_id` null), a fleet file the labels scoped to that fleet (Compliance declares one; the other fleet files none)
 - **Mode:** API
 
 **Flow**
@@ -318,7 +329,8 @@ other:
 **Assessment**
 - *Value:* a label is its query; a body swap under an unchanged name was undetectable before. The manual label
   (`Pilot hosts`) and the platform-restricted one (`Linux hosts running Docker`) exercise the type and platform
-  paths.
+  paths; premium's host-vitals label (`Engineering department`, membership from the end-user IdP's department)
+  exercises `criteria`; Compliance's `Compliance macOS hosts` is the one fleet-scoped label.
 - *Coverage gaps:* a manual label's `hosts:` list isn't compared (it's empty by declaration).
 
 **Notes (Andrey)**
@@ -373,16 +385,22 @@ other:
    - ✅ *(API, soft)* `critical` equals the declared value or `false` on premium, and `false` on free: the field is premium-only (`PolicySpec.Critical`, `premium:"true"`), so a free license stores `false` for the three shared lib policies that declare `true`.
    - ✅ *(API, soft, declared keys only)* `calendar_events_enabled`, `conditional_access_enabled`, `continuous_automations_enabled`, `patch_when_closed`, `notify_before_patching`, `type`.
    - ✅ *(API, soft)* `labels_include_any` / `labels_exclude_any` as sorted name lists.
-   - ✅ *(API, soft)* `run_script.name` equals the declared script's basename.
-   - ✅ *(API, soft)* `install_software.software_title_id` equals the title the declared slug / package hash / App Store id resolved to on this fleet (through `resolveFleetSoftware`), or `install_software` is absent when none is declared.
+   - ✅ *(API, soft)* `run_script.name` equals the declared script's basename, and `resend_configuration_profile.name` the declared profile's name (both `undefined` ↔ absent).
+   - ✅ *(API, soft)* `install_software.software_title_id` equals the title the declared slug / package path / package hash / App Store id resolved to on this fleet (through `resolveFleetSoftware`), or `install_software` is absent when none is declared.
+   - ✅ *(API, soft)* for a `type: patch` policy, `patch_software.software_title_id` equals the title the declared `fleet_maintained_app_slug` resolved to.
+   - ✅ *(API, soft)* when `webhooks_and_tickets_enabled` is declared, the policy's id is (or isn't) in the scope's `failing_policies_webhook.policy_ids` (`GET /config` for no-team, `GET /fleets/{id}` for a fleet).
 
 **Manual repro** — open the policy; compare query, platform, critical, labels and the automation's target.
 
 **Assessment**
 - *Value:* the automation check is what makes `vms.yml`'s two "Claude is installed" policies verifiable: a
-  declared slug is checked against the title Fleet actually linked, not against a name.
-- *Coverage gaps:* `resend_configuration_profile` and `webhooks_and_tickets_enabled` are parsed but not compared
-  (no API field read yet; both arrive with the Compliance fleet in batch 2).
+  declared slug is checked against the title Fleet actually linked, not against a name. Compliance's seven
+  policies carry every automation and targeting key a fleet policy has — a resent profile, a script, installs by
+  package path, by hash and by slug, the webhook flag against the fleet's own failing-policies webhook, and two
+  patch policies (`notify_before_patching` and `patch_when_closed`, which can't share one) — and the min variant
+  drops one policy and one automation.
+- *Coverage gaps:* `calendar_events_enabled` and `conditional_access_enabled` are compared when declared, which
+  no config does (no Google Calendar or Entra on the instances).
 
 **Notes (Andrey)**
 ```
@@ -435,8 +453,10 @@ other:
    - ✅ *(API, soft)* `labels_include_all`, `labels_include_any`, `labels_exclude_any` as sorted name lists equal the declared ones (undeclared ↔ absent).
 
 **Assessment**
-- *Value:* who a profile reaches is as much its definition as its payload. Today no profile is label-scoped,
-  so the check asserts "unscoped"; batch 2's Compliance fleet declares scoped ones.
+- *Value:* who a profile reaches is as much its definition as its payload. The no-team and Workstations
+  profiles are unscoped, so there the check asserts "unscoped"; Compliance's six profiles use all three keys
+  (`labels_include_all` with two labels, `labels_include_any`, and `labels_exclude_any` with its fleet-scoped
+  label), and the min variant drops two of them.
 
 **Notes (Andrey)**
 ```
@@ -598,16 +618,18 @@ other:
 
 1. ☐ `expectSubset` of `org_settings.org_info` (name, contact URL, both logo URLs), `server_settings` (every
    declared key; `server_url` compared with a trailing slash trimmed on both sides — free's configured URL
-   carries one), `features` (`enable_*`, `additional_queries`, `historical_data`) and `fleet_desktop` (all
-   three keys) against the live config.
+   carries one), `features` (`enable_*`, `additional_queries`, `historical_data` and, on premium,
+   `vulnerability_exposure_historical_reporting`) and `fleet_desktop` (all three keys) against the live config.
    - ✅ *(API, soft per key)* every declared key equals.
 
 **Manual repro** — **Settings → Organization settings**: Organization info, Advanced options, Fleet Desktop.
 
 **Assessment**
 - *Value:* closes the audit's largest gap in one test. `enable_analytics` is the known trap: Fleet forces it on
-  for a premium license, so premium's YAML says `true` and this would fail the moment it said otherwise.
-- *Coverage gaps:* `vulnerability_exposure_historical_reporting` and `detail_query_overrides` aren't declared.
+  for a premium license, so premium's YAML says `true` and this would fail the moment it said otherwise. The
+  vulnerability-exposure filters are display-only (the dashboard chart's defaults), and the min variant moves
+  `cvss_min`.
+- *Coverage gaps:* `detail_query_overrides` isn't declared (it rewrites the detail queries every host runs).
 
 **Notes (Andrey)**
 ```
@@ -696,7 +718,11 @@ Purchasing Program tables, and **End user authentication**.
 
 **Assessment**
 - *Value:* the ABM default-fleet mapping was invisible drift before, and an omitted `apple_business` /
-  `volume_purchasing_program` key *clears* the mappings — this is the check that would catch it.
+  `volume_purchasing_program` key *clears* the mappings — this is the check that would catch it. The ABM
+  mappings and `windows_automatic_enrollment.default_fleet` both point at **Compliance**, the fleet with no hosts
+  that nothing in the suite depends on: Fleet assigns that fleet only to a host whose record the enrollment
+  itself created, so the fleetd-enrolled VMs keep theirs, and an automated enrollment can never land on
+  Workstations, which half a dozen specs need hostless.
 
 **Notes (Andrey)**
 ```
@@ -726,6 +752,12 @@ other:
 **Assessment**
 - *Value:* the Android flag gates two profiles and was unchecked. Note `android_enabled_and_configured` is a
   server no-op on a config write: this holds the instance to the YAML's claim, not the apply to its effect.
+  Premium declares the rest too: the three enrollment flags at the live `false`, with no min delta because
+  flipping one changes how the real Windows VMs or Apple DEP enroll, and `macos_migration` off with a mode and a
+  webhook URL the min variant changes (`premium/settings/integrations/mdm.spec.ts` restores the block after its
+  own edit).
+- *Coverage gaps:* `only_allow_apple_business_enrollment` isn't declared — the live `false` is Fleet's default,
+  and `true` would block manual enrollment.
 
 **Notes (Andrey)**
 ```
@@ -753,7 +785,8 @@ other:
 **Assessment**
 - *Value:* the options every host runs with; never verified before.
 - *Coverage gaps:* `command_line_flags` and `update_channels` aren't declared globally on purpose (they reach
-  the real VMs); batch 2 declares them on the hostless Compliance fleet.
+  the real VMs); the hostless Compliance fleet declares them and GV-25 compares them there (min changes
+  `events_max`).
 
 **Notes (Andrey)**
 ```
@@ -809,7 +842,12 @@ other:
 
 **Assessment**
 - *Value:* the first verification of any fleet's `settings:` block (features, host expiry on Workstations, QA
-  and VMs). Fleet webhooks and integrations are compared when a fleet declares them (batch 2).
+  and VMs). Compliance declares two fleet webhooks — `failing_policies_webhook` on, whose `policy_ids` GV-09
+  reads for `webhooks_and_tickets_enabled`, and `host_activities_webhook` off — and the min variant changes both
+  destination paths and the host expiry window.
+- *Coverage gaps:* `host_status_webhook` isn't declared on a fleet: fleetctl doesn't manage a fleet's, and Fleet
+  reports it `null` after an apply that declares one (`premium/settings/team-host-status-webhook.spec.ts` owns
+  that surface). `integrations` are credentials the instances don't have.
 
 **Notes (Andrey)**
 ```
@@ -853,7 +891,7 @@ other:
 - **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
 - **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/vms.yml npx playwright test --project=gitops-verify -g "custom package set"`
 - **Project:** gitops-verify · **Targets:** fleet files only (a `default.yml` can't carry `software`)
-- **Mode:** API (`resolveFleetSoftware`: `GET /software/titles?available_for_install=true` paginated, one `GET /software/titles/{id}` per title, one `GET /software/fleet_maintained_apps?per_page=5000`)
+- **Mode:** API (`resolveFleetSoftware`: `GET /software/titles?available_for_install=true` paginated, one `GET /software/titles/{id}` per title, `GET /setup_experience/software?team_id={id}&platform={macos,windows,linux}`, one `GET /software/fleet_maintained_apps?per_page=5000`)
 
 **Flow**
 
@@ -890,14 +928,21 @@ other:
 
 **Flow**
 
-1. ☐ For every declared package paired with a live installer (GV-26's pairing), from the title detail:
-   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists when declared.
-   - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists.
-   - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
+1. ☐ For every declared package paired with a live title (GV-26's pairing), from the title detail:
+   - ✅ *(API, soft, when declared)* `self_service`; `categories` as sorted lists with Fleet's emoji prefix stripped from both sides (`categoryName`: Fleet stores `🛠️ Utilities` for the YAML's `Utilities`); `display_name`; `icon_url` present when the YAML declares an `icon`.
+   - ✅ *(API, soft, always)* the title is in the fleet's setup-experience listing iff `setup_experience: true` (the per-platform `GET /setup_experience/software` is the only place the flag is reported for a Fleet-maintained app; an undeclared key means `false`).
+   - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists (undeclared ↔ absent).
+   - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (the SQL lifted out of the apply-format query file, whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
+
+**Manual repro** — **Software**, fleet selected, open the title: self-service, categories, display name, icon and
+label targets on its detail; the scripts and pre-install query under *Advanced options* of its edit form.
 
 **Assessment**
 - *Value:* the hash is what lets an apply skip the download, so a mismatch means a different file is on the
-  instance; 7-Zip's own install/uninstall scripts are compared body for body.
+  instance; 7-Zip's own install/uninstall scripts are compared body for body. On Compliance the same inert
+  fixtures carry every option a package has (through their `*.compliance.package.yml` files), plus two script-only
+  packages with a display name, an icon and a label target, and the min variant drops two packages.
+- *Coverage gaps:* the icon is checked for presence, not pixels.
 
 **Notes (Andrey)**
 ```
@@ -951,16 +996,16 @@ other:
 **Flow**
 
 1. ☐ For every declared app found live (by slug), from the title detail:
-   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists.
    - ✅ *(API, soft)* an exact `version` pin equals the installer's version; a caret pin bounds its major.
-   - ✅ *(API, soft)* label targets as sorted name lists.
-   - ✅ *(API, soft, when declared)* the pre-install query and the three script bodies.
+   - ✅ *(API, soft)* the same option checks as GV-27: `self_service`, `categories` (emoji-normalized), setup experience through the fleet's listing (asserted `false` when undeclared), `display_name`, icon presence, label targets, and the pre-install query and three script bodies when declared.
 
 **Assessment**
-- *Value:* today nothing on QA or VMs declares an option (the shelf's rule), so this asserts "defaults"; the
-  Compliance fleet in batch 2 is where self-service, categories, label targets and a caret pin get declared.
+- *Value:* on QA and VMs nothing declares an option (the shelf's rule), so there this asserts "defaults"; on
+  Compliance Itsycal carries self-service, setup experience, a category, a label target, a post-install script
+  and a display name, and DB Browser a caret pin, and the min variant turns DB Browser's self-service off.
 - *Coverage gaps:* the version an unpinned app resolved to isn't compared with the catalog's latest (it lags
-  the hourly auto-update cron by design).
+  the hourly auto-update cron by design). No `pre_install_query` on a Fleet-maintained app whose patch policy
+  sets `notify_before_patching` or `patch_when_closed`: Fleet manages that query itself and refuses a declared one.
 
 **Notes (Andrey)**
 ```
@@ -999,6 +1044,145 @@ other:
 
 ---
 
+### GV-31 · GitOps verify · controls › disk encryption, key escrow, the BitLocker PIN and the managed local account match gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/compliance.yml npx playwright test --project=gitops-verify -g "disk encryption, key escrow"`
+- **Project:** gitops-verify · **Targets:** fleet files only (the per-platform controls are a fleet's; the no-team scope's global MDM flags are GV-21's)
+- **Mode:** API (one `GET /fleets/{id}` → `team.mdm` in a `beforeAll`, shared by GV-31 … GV-34)
+
+**Flow**
+
+1. ☐ `expectSubset` of the file's `apple_settings.enable_disk_encryption` / `enable_escrow_disk_encryption_key`
+   against `mdm.macos_settings`, `windows_settings.enable_disk_encryption` / `require_bitlocker_pin` /
+   `enable_managed_local_account` against `mdm.windows_settings`, and
+   `linux_settings.enable_escrow_disk_encryption_key` against `mdm.linux_settings`.
+   - ✅ *(API, soft per key)* every declared key equals. A fleet file that declares none of them (Workstations,
+     QA, VMs) asserts nothing here.
+
+**Manual repro** — **Controls → OS settings → Disk encryption**, fleet selected: the macOS, Windows and Linux
+toggles, the BitLocker PIN and the managed local account.
+
+**Assessment**
+- *Value:* these settings act on every host of the fleet that carries them, which is why only Compliance — a
+  fleet with no hosts — declares them, and the min variant turns macOS key escrow and the BitLocker PIN off, so
+  the update path runs nightly, not only the first apply.
+- *Coverage gaps:* per-host encryption state isn't read (there are no hosts to read it from).
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-32 · GitOps verify · controls › Recovery Lock and the host name template match gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
+- **Grep:** `… -g "Recovery Lock and the host name template"`
+- **Project:** gitops-verify · **Targets:** fleet files only
+- **Mode:** API
+
+**Flow**
+
+1. ☐ `expectSubset` of `enable_recovery_lock_password` and `name_template` against the fleet's `mdm`.
+   - ✅ *(API, soft per key)* every declared key equals; `$FLEET_VAR_HOST_HARDWARE_SERIAL` is compared verbatim
+     (the loader never expands `$FLEET_VAR_*`, and neither does fleetctl).
+
+**Manual repro** — **Controls → OS settings**, fleet selected: Recovery Lock under the macOS section, and the
+host name template.
+
+**Assessment**
+- *Value:* Recovery Lock on a fleet with hosts is the one setting `recovery-lock.spec.ts` is allowed to flip
+  (VMs, and back off); here it is held on in the baseline and off in min, on a fleet nothing can receive it
+  from. The name template renames through MDM, so with no hosts it renames nothing.
+- *Coverage gaps:* none for the two keys.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-33 · GitOps verify · controls › OS update settings match gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
+- **Grep:** `… -g "OS update settings"`
+- **Project:** gitops-verify · **Targets:** fleet files only
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For `macos_updates`, `ios_updates`, `ipados_updates` and `windows_updates`: `expectSubset` of the declared
+   block (`minimum_version`, `deadline`, `update_new_hosts`; `deadline_days`, `grace_period_days`) against
+   `mdm.<key>`.
+   - ✅ *(API, soft per key)* every declared key equals.
+
+**Manual repro** — **Controls → OS updates**, fleet selected, each platform tab.
+
+**Assessment**
+- *Value:* the only place an OS-update minimum or deadline is declared anywhere in `gitops/`:
+  `exclusive/os-updates/*` asserts Workstations enforces none, and nothing may set one on the VMs fleet
+  (`CLAUDE.md` → Test hosts). The min variant moves the macOS minimum, the iPadOS deadline and the Windows
+  deadline days.
+- *Coverage gaps:* a DDM software-update declaration isn't declared (batch 3, a new payload type).
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-34 · GitOps verify · controls › setup experience matches gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/controls.spec.ts`](../../tests/api/gitops-verify/controls.spec.ts)
+- **Grep:** `… -g "setup experience matches"`
+- **Project:** gitops-verify · **Targets:** fleet files that declare `setup_experience` (skipped otherwise, inline reason)
+- **Mode:** API
+
+**Flow**
+
+1. ☐ `expectSubset` against `mdm.macos_setup`, with the YAML's names mapped to the API's:
+   `enable_end_user_authentication`, `lock_end_user_info`, `apple_enable_release_device_manually` →
+   `enable_release_device_manually`, `macos_manual_agent_install` → `manual_agent_install`,
+   `require_all_software_macos`, `require_all_software_windows`, `enable_create_local_admin_account` →
+   `enable_managed_local_account`, `end_user_local_account_type`.
+   - ✅ *(API, soft per key)* every declared key equals.
+2. ☐ `macos_script`, when declared, compared by **basename** against `macos_setup.script` (Fleet echoes the path
+   the YAML gave).
+   - ✅ *(API, soft)* the basenames equal.
+
+**Manual repro** — **Controls → Setup experience**, fleet selected: *End user authentication*, the Setup
+assistant's options, the local account settings and the setup script.
+
+**Assessment**
+- *Value:* end-user authentication on and `lock_end_user_info` need the IdP only premium has, and the min
+  variant flips the lock and the local account type (`standard` → `admin`), so both the apply and the update are
+  proven on a fleet where no device will ever run setup.
+- *Coverage gaps:* the bootstrap package, the ADE setup-assistant profile and `macos_manual_agent_install` (which
+  requires a bootstrap package) need fixtures (batch 3); which titles install during setup is GV-27 / GV-29's.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
 ## Area observations
 
 ### Coverage map
@@ -1009,26 +1193,26 @@ GitOps YAML surface present in `gitops/**` vs. what the specs verify:
 |---|---|---|
 | `org_settings.org_info` (name, contact URL, logo URLs) | GV-17 | — |
 | `org_settings.server_settings` (8 keys) | GV-17 | — (premium's `enable_analytics` is forced on by Fleet; the YAML says so) |
-| `org_settings.features` (`enable_*`, `additional_queries`, `historical_data`) | GV-17 | `vulnerability_exposure_historical_reporting` not declared |
+| `org_settings.features` (`enable_*`, `additional_queries`, `historical_data`, premium's `vulnerability_exposure_historical_reporting`) | GV-17 | `detail_query_overrides` not declared (rewrites every host's detail queries) |
 | `org_settings.fleet_desktop` (3 keys) | GV-17 | — |
 | `host_expiry_settings`, `activity_expiry_settings`, `webhook_settings` (4), `gitops`, `vulnerability_settings` | GV-18 | `failing_policies_webhook.policy_ids` deliberately undeclared |
 | `sso_settings` (6 keys) | GV-19 | — |
-| `mdm.end_user_authentication`, `apple_business_manager`, `volume_purchasing_program` | GV-20 | `apple_server_url`, `windows_automatic_enrollment` not declared |
-| `controls.windows_enabled_and_configured`, `android_enabled_and_configured` | GV-21 | the other global flags not declared (batch 2) |
-| `agent_options` (org and fleet) | GV-22, GV-25 | `command_line_flags`, `update_channels` not declared (batch 2, Compliance) |
+| `mdm.end_user_authentication`, `apple_business`, `volume_purchasing_program`, `windows_automatic_enrollment` | GV-20 | `apple_server_url` not declared (saving it re-syncs DEP) |
+| `controls.windows_enabled_and_configured`, `android_enabled_and_configured`, `windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`, `macos_migration` | GV-21 | `only_allow_apple_business_enrollment` not declared (Fleet's default; `true` blocks manual enrollment) |
+| `agent_options` (org and fleet; `command_line_flags` and `update_channels` on Compliance) | GV-22, GV-25 | — |
 | `org_settings.secrets` (free) | GV-23 | premium's fleet secrets are excepted, by design |
-| Fleet `settings` (features, host expiry) | GV-24 | fleet webhooks and integrations not declared yet |
+| Fleet `settings` (features, host expiry, the failing-policies and host-activities webhooks) | GV-24 | `host_status_webhook` (fleetctl doesn't manage a fleet's); `integrations` (credentials) |
 | The set of fleets | GV-04 | `--delete-other-fleets` never passed |
 | `custom_host_vitals` | GV-05 | references from scripts/profiles |
-| `labels[]` (names, type, query, platform, description) | GV-06, GV-07 | membership; fleet-scoped labels not declared (batch 2) |
-| `policies[]` (names, query, platform, critical, flags, label targets, `install_software`, `run_script`) | GV-08, GV-09 | `resend_configuration_profile`, `webhooks_and_tickets_enabled` (batch 2) |
+| `labels[]` (names, type, query, platform, description, host-vitals `criteria`; fleet-scoped on Compliance) | GV-06, GV-07 | membership |
+| `policies[]` (names, query, platform, critical, flags, label targets, `install_software` by path / hash / slug, `run_script`, `resend_configuration_profile`, `webhooks_and_tickets_enabled`, patch policies) | GV-08, GV-09 | `calendar_events_enabled`, `conditional_access_enabled` (Google Calendar / Entra) |
 | `reports[]` (every documented key) | GV-13, GV-14 | — |
-| `controls.scripts[]` (names, bodies; `paths:` glob) | GV-15, GV-16 | body check unproven until the first apply after this landed |
+| `controls.scripts[]` (names, bodies; `paths:` globs) | GV-15, GV-16 | body check unproven until the first apply after this landed |
 | `*_settings.configuration_profiles[]` (names per platform, label targets, payloads) | GV-10, GV-11, GV-12 | payload check unproven until the first apply; DDM declarations not declared (batch 3) |
-| `software.packages` (filenames, hash, options, scripts) | GV-26, GV-27 | a second version of one title (batch 3) |
-| `software.fleet_maintained_apps` (slugs, options, pins) | GV-28, GV-29 | options are all defaults until Compliance |
+| `software.packages` (filenames, hash, self-service, categories, setup experience, display name, icon, label targets, pre-install query, scripts) | GV-26, GV-27 | a second version of one title (batch 3) |
+| `software.fleet_maintained_apps` (slugs, the same options, caret and exact pins) | GV-28, GV-29 | — |
 | `software.app_store_apps` | GV-30 | none declared (batch 3) |
-| Fleet-level `controls` (disk encryption, OS updates, Recovery Lock, setup experience, `name_template`) | **nothing yet** | batch 2's Compliance fleet and its `controls` spec |
+| Fleet-level `controls` (disk encryption and escrow, BitLocker PIN, managed local account, Recovery Lock, `name_template`, OS updates for four platforms, setup experience) | GV-31 … GV-34 | bootstrap package, ADE setup assistant, manual agent install, DDM declarations and assets (batch 3) |
 
 **Exact-match everywhere.** Every entity family is compared as an exact set in one test (missing *and* extra,
 then the count), and every declared field in a second. The exactness no longer depends on three separate tests
@@ -1071,7 +1255,7 @@ Two new ones to know about:
 
 ### UI-vs-API balance
 
-All 30 are pure API, and that is the right call: the question is "does server state match YAML", the
+All 34 are pure API, and that is the right call: the question is "does server state match YAML", the
 `gitops-verify` project has no browser or `storageState`, and it runs inside a CI apply→verify chain. The e2e
 areas assert the UI renders these entities. Still missing from the API-only framing: nothing checks that the
 **activity feed** records the apply, so "gitops ran" versus "state coincidentally matches" is indistinguishable
@@ -1079,15 +1263,15 @@ except through the baseline ↔ min alternation.
 
 ### Quick wins
 
-1. Compare `resend_configuration_profile` and `webhooks_and_tickets_enabled` in GV-09 once the Compliance fleet
-   declares them (the API fields are `resend_configuration_profile`'s profile and the webhook's `policy_ids`).
-2. Add `custom_host_vitals` and `webhook_settings` to `cli/nightly/generate-gitops.spec.ts`'s round-trip, if
+1. Add `custom_host_vitals` and `webhook_settings` to `cli/nightly/generate-gitops.spec.ts`'s round-trip, if
    `generate-gitops` emits them.
-3. A `controls` spec for fleet-level MDM settings, written with the Compliance fleet (batch 2).
+2. Compare a package's icon by checksum (GV-27 asserts presence only) once Fleet serves the icon bytes from a
+   stable URL.
 
 ### Bigger bets
 
 1. **Apply-freshness:** read the activity feed for `edited_*` / `applied_*` entries since the chain started.
-2. **`fleets/unassigned.yml` on premium**, the layout `generate-gitops` itself emits (batch 2): the no-team
-   `controls`, `policies`, software and webhooks move there, and the loader learns a third scope.
-3. **The Compliance fleet** (batch 2): every host-affecting control, verified here, on a fleet with no hosts.
+2. **`fleets/unassigned.yml` on premium**, the layout `generate-gitops` itself emits: the no-team `controls`,
+   `policies`, software and webhooks move there, and the loader learns a third scope. A follow-up to batch 2.
+3. **Batch 3's fixtures**: a bootstrap package and ADE setup assistant (GV-34 would compare them), a DDM
+   declaration with assets (GV-10 … GV-12), a second version of one package (GV-26), App Store apps (GV-30).

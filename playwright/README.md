@@ -55,6 +55,7 @@ but they're invisible if you're bringing up a fresh instance.
 |---|---|---|---|
 | **Static users** (`api-*@fleetdm.com`, `team-admin@fleetdm.com`, the role users in `helpers/api/static-users.ts`) | both | the role-access and permission specs | recreate as that file's header says; a new human user comes back with `force_password_reset`, which `PATCH` can't clear |
 | **The `Workstations`, `VMs` and `QA` fleets**, declared in gitops | premium | most premium specs | re-apply [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) with `--context qa-premium`. The suite never creates, renames or deletes them |
+| **The `Compliance` fleet**, declared in gitops | premium | no spec — it exists for the nightly's `gitops-verify`, carrying every host-affecting control on a fleet with no hosts, and ABM's and Windows' automated enrollments default to it | the next apply recreates it in full. Never move a host into it |
 | Report **`pw-host-report-results`** on the **VMs** fleet (interval 300, `SELECT 'bar' AS foo`) | premium | `premium/hosts/host-report-details.spec.ts` | re-apply `fleets/vms.yml`, then allow ~3.5 min for one scheduled run. It lives on a fleet because `cleanup-setup` wipes global reports |
 | **Claude installed on the macOS and Windows VMs**, tracking latest, from the VMs fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
 | **Install/uninstall fixtures on the VMs fleet**: inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` and the other install specs | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` |
@@ -102,8 +103,12 @@ From `playwright/`:
 | `npm run test:gitops-verify:free-min` | Verify free-fleetqa-min variant matches the live free instance |
 | `npm run test:gitops-verify:premium` | Verify premium-fleetqa baseline (no-team scope) |
 | `npm run test:gitops-verify:premium-workstations` | Verify Workstations team in premium-fleetqa |
+| `npm run test:gitops-verify:premium-qa` | Verify the QA fleet (the Fleet-maintained-app shelf) |
+| `npm run test:gitops-verify:premium-vms` | Verify the VMs fleet (the real VMs' durable fixtures) |
+| `npm run test:gitops-verify:premium-compliance` | Verify the Compliance fleet in premium-fleetqa (every host-affecting control, on a fleet with no hosts) |
 | `npm run test:gitops-verify:premium-min` | Verify premium-fleetqa-min (no-team scope) |
 | `npm run test:gitops-verify:premium-min-workstations` | Verify Workstations team in premium-fleetqa-min |
+| `npm run test:gitops-verify:premium-min-compliance` | Verify the Compliance fleet in premium-fleetqa-min |
 | `npm run test:all` | Premium **and** free, sequentially |
 | `npm run lint` | Lint specs + page objects + helpers |
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
