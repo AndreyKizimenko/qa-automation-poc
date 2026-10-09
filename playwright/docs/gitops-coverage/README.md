@@ -386,10 +386,12 @@ branch run.
    lists login-window restrictions among the things to stop and ask about. Decide whether free's `controls`
    should shrink to scripts only, or the profiles be re-approved as a set.
 2. ABM's default fleet for macOS/iOS/iPadOS is Workstations, which half a dozen specs require to stay
-   hostless. An automated enrollment would break them. **Decided (§8): batch 2 points
-   `mdm.apple_business_manager.{macos,ios,ipados}_fleet` at Compliance** once the fleet exists — ABM isn't used
-   on this instance beyond being configured, and the two specs that need it (`automatic-enrollment.spec.ts`,
-   `integrations/mdm.spec.ts`) need the token present, not a particular default fleet (checked during batch 2).
+   hostless. An automated enrollment would break them. **Decided (§8), done in batch 2 (§10):
+   `mdm.apple_business.{macos,ios,ipados}_fleet` and `windows_automatic_enrollment.default_fleet` point at
+   Compliance** — ABM isn't used on this instance beyond being configured, and the two specs that need it
+   (`automatic-enrollment.spec.ts`, `integrations/mdm.spec.ts`) need the token present, not a particular default
+   fleet. Fleet assigns the Windows default fleet only to a host whose record the MDM enrollment itself created
+   (`maybeAssignWindowsEnrollmentDefaultFleet`), so the fleetd-enrolled VMs can't be moved by it.
 3. A manual dispatch of an apply workflow isn't locked out of a running suite (item 12). Batch 1 fixes it.
 4. The instances don't rest on min between nights (item 13). Batch 1 corrects the two docs that say so.
 5. Fleet docs/code mismatches worth filing (item 7b): the three `managed_local_account` keys and
@@ -446,12 +448,75 @@ cleanup had wiped every script and profile, and a local apply was declined as a 
 instances. The branch run is their proof; if Fleet normalizes a served payload, the comparison moves to a
 checksum.
 
+## 10. Batch 2 — what landed (2026-10-09)
+
+**The Compliance fleet** (`gitops/premium-fleetqa/fleets/compliance.yml`, with its min variant beside it): a
+fifth standing fleet with no hosts, applied in both passes and verified after each. It declares every §4
+"new fleet" row that needed no new fixture or decision: fleet `settings` (features, host expiry, the
+failing-policies and host-activities webhooks), `agent_options` with `command_line_flags` and `update_channels`,
+a fleet-scoped label, per-platform `controls` (disk encryption and key escrow, the BitLocker PIN, the managed
+local account, Recovery Lock, `name_template`, OS updates for all four platforms, six label-targeted profiles on
+three platforms, scripts of all three kinds through three `paths:` globs, the credential-free `setup_experience`
+keys with a setup script), `software` (the three inert fixtures a second time through
+`lib/platforms/*/software/*.compliance.package.yml` — same hash, every option: self-service, categories, setup
+experience, a display name, an icon, a pre-install query and the three scripts; two script-only packages;
+Itsycal and DB Browser with options and a caret pin), seven policies carrying every automation and targeting
+key a fleet policy has (a resent profile, a script, installs by package path, by hash and by slug, the webhook
+flag against the fleet's own webhook, two patch policies), and two label-targeted reports. The min variant
+changes a value in every section and drops an entry from every list. Not declared, with the reason: a fleet's
+`host_status_webhook` (fleetctl doesn't manage it; Fleet reports it `null` after an apply that declares one), a
+`pre_install_query` on a Fleet-maintained app whose patch policy sets `notify_before_patching` or
+`patch_when_closed` (Fleet manages that query and refuses a declared one).
+
+**Global rows** (premium `default.yml` and min): ABM's three default fleets and
+`windows_automatic_enrollment.default_fleet` point at Compliance (§7.2 — Fleet assigns the Windows default only
+to a host whose record the enrollment itself created, so the fleetd-enrolled VMs can't be moved);
+`features.vulnerability_exposure_historical_reporting` (min moves `cvss_min`); the three enrollment flags under
+`controls` at the live `false` with no min delta; `controls.macos_migration` off with a mode and a URL the min
+variant changes; the host-vitals label **Engineering department** (`end_user_idp_department`).
+
+**Harness** (34 tests / 11 specs): `controls.spec.ts` — encryption, escrow, PIN and managed account; Recovery
+Lock and the name template; the four OS-update blocks; setup experience, with the YAML → API renames mapped and
+the script compared by basename. `policies.spec.ts` compares `resend_configuration_profile`, a patch policy's
+`patch_software` and `webhooks_and_tickets_enabled` (through the scope's `failing_policies_webhook.policy_ids`).
+`software.spec.ts` compares every option: self-service, categories past Fleet's emoji prefix (`🛠️ Utilities`),
+setup experience from the per-platform `GET /setup_experience/software` (the title detail doesn't carry the flag
+for a Fleet-maintained app; undeclared means `false`), the display name, icon presence, label targets, the
+pre-install query lifted out of its apply-format file, and the three scripts. The loader records an `icon`.
+
+**CI**: both premium apply workflows carry `compliance.yml`; `verify-baseline-compliance` and
+`verify-min-compliance` (twelve verify reports a run); `generate-gitops.spec.ts` expects `fleets/compliance.yml`;
+`npm run test:gitops-verify:premium-{compliance,min-compliance}`. Docs: both gitops READMEs (a Compliance
+section), the root README's premium apply example (it carried `--delete-other-fleets`, which would delete
+Mobile), `playwright/README.md`'s preconditions and scripts, `CLAUDE.md`'s standing fleets and CI facts,
+`ci-pipeline.md`, audit areas 16 and 19.
+
+**Found on the way:** the released fleetctl 4.92.1 rejects `notify_before_patching` on a policy (the 4.93 RC
+client takes it; CI installs the server's own release); a `pre_install_query` file is in fleetctl's apply format
+(`apiVersion` / `kind: query` / `spec.query`), not bare SQL; the premium instance sits behind a WAF that answers a
+software batch whose scripts look like installer commands (`rm -rf`, `msiexec`, `installer -pkg`) with an HTML
+"Blocked" page — the compliance scripts are one-line `echo`s; `macos_setup.script` echoes the path the YAML gave.
+
+**Verified:** `npm run check` clean; RC-client dry-runs of the full baseline and min file sets against premium
+succeed (`would apply ABM teams`, `would apply Windows enrollment default fleet`); a real apply of the baseline
+fleet file on the playground (premium, 4.93 RC) created the fleet with every section, and the verify project
+against it passed 24 / skipped 10 / failed 0. The global rows are dry-run-verified only. **Not yet proven:** the
+first real apply to premium — a dry-run skips software validation for a fleet that doesn't exist yet
+(fleetdm/fleet#54534) — and the profile-payload and script-body checks of §9, which still await their first
+applied instance. The branch run is their proof.
+
+**Deferred:** `fleets/unassigned.yml` (a layout change for the no-team scope, its own follow-up); the batch-3
+rows of §4 (DDM declarations and assets, bootstrap package and ADE JSON, a second package version, App Store
+apps, EULA, `yara_rules`), each decided with Andrey one at a time.
+
 ## 8. Decisions (Andrey, 2026-10-08)
 
 1. The fleet is **Compliance**; a fifth standing fleet is fine.
 2. Benign settings that reach hosts are fine: free carries `custom_host_vitals` and both tiers carry
    `features.additional_queries`.
-3. `playwright/gitops-coverage` is deleted once batch 2 has harvested it.
+3. `playwright/gitops-coverage` is deleted once batch 2 has harvested it — done with batch 2. Its one
+   unharvested fixture was a 10-line example YARA rule matching a marker string, trivial to recreate for batch
+   3's `yara_rules`.
 4. ABM's default fleets move to Compliance in batch 2 (§7.2). §7.1 (free's profiles on the free VMs) is still
    open; nothing in the batches changes it.
 5. Docs move with every slice: the per-key table here, `docs/test-audit/16-gitops-verify.md` and the audit

@@ -55,11 +55,12 @@ then): an apply deletes whatever its config doesn't declare, a running test's pe
 manual apply waits for a running suite instead of overlapping it.
 
 **gitops before the suite, and the suite runs whatever gitops did.** The suite assumes the instance is in the
-declared state (the Workstations, QA and VMs fleets exist; the VMs fleet carries the durable software
+declared state (the Workstations, QA, VMs and Compliance fleets exist; the VMs fleet carries the durable software
 fixtures). Applying first makes that true every night. After each apply, `gitops-verify` runs against every file
-that apply carried — on premium the no-team config, Workstations, QA and VMs, with the QA and VMs files verified
-after both the baseline and the min apply, since both carry them unchanged; the second pass proves the min
-apply left them alone. In the nightly the suite runs even if a gitops step is
+that apply carried — on premium the no-team config, Workstations, Compliance, QA and VMs, with the QA and VMs
+files verified after both the baseline and the min apply, since both carry them unchanged; the second pass
+proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
+control, so its verify is the only place those are checked. In the nightly the suite runs even if a gitops step is
 red, because a failed apply is its own signal and the night's test results are still wanted; in a branch run a
 red gitops step stops that tier's suite, because the branch is what is being judged. The fleetctl checks
 (`generate-gitops`, `gitops --dry-run`) sit inside the gitops chain on purpose: the suite's `cleanup-setup`

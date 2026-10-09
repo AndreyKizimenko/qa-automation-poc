@@ -1710,6 +1710,7 @@ other:
 1. ☐ Generate (shared run).
 2. ☐ **Premium branch:**
    - ✅ *(FS)* `fleets/workstations.yml` exists.
+   - ✅ *(FS)* `fleets/compliance.yml` exists (the min apply carries that fleet too).
    - ✅ *(FS)* `fleets/unassigned.yml` exists.
    - ✅ *(FS)* `fleets/workstations.yml` has a `name` key.
    - ✅ *(FS)* `fleets/workstations.yml` has a `controls` key.
@@ -1724,7 +1725,7 @@ other:
 
 **Assessment**
 - *Value:* **highest of the five.** The only entry asserting the *structural* tier contract rather than entity names, and it covers three separate licence branches at once (fleets tree, controls scoping, software omission). It is also the structurally correct version of what FCTL-17 and FCTL-25 assert via error strings.
-- *Coverage gaps:* checks key *presence*, not contents. Premium `fleets/*.yml` should also carry `software` and `settings` (per the test plan's shape table) and neither is asserted. The other fleets on the instance (`qa`, `vms`) are ignored — correct, since they are not gitops-managed.
+- *Coverage gaps:* checks key *presence*, not contents. Premium `fleets/*.yml` should also carry `software` and `settings` (per the test plan's shape table) and neither is asserted. The QA and VMs fleets' files aren't asserted either, though the min apply carries both: `gitops-verify` holds their content exactly, and here only the layout matters.
 - *Redundancy:* deliberately overlaps FCTL-17 and FCTL-25, which run every night in the regular projects while this runs only in the gitops chain. The overlap is the point: the property stays covered in both windows.
 - *Efficiency / smells:* the `if (isPremium)` branch means one test declaration behaves as two different tests. Slightly against the suite's explicit-tier-separation preference, but splitting it would duplicate the generate setup for little gain. Judge whether the tier split should be explicit here.
 

@@ -1,10 +1,10 @@
 name: Nightly QA GitOps — Premium
 
 # Nightly verification chain for the premium instance:
-#   1. apply baseline           (gitops-premium.yml — default + workstations + qa + vms)
-#   2. verify baseline          (gitops-verify against no-team, Workstations, QA and VMs, parallel)
-#   3. apply min variant        (gitops-premium-min.yml — the min default + workstations, the baseline qa + vms)
-#   4. verify min               (gitops-verify against the min no-team and Workstations, and QA and VMs again)
+#   1. apply baseline           (gitops-premium.yml — default + workstations + qa + vms + compliance)
+#   2. verify baseline          (gitops-verify against no-team, Workstations, QA, VMs and Compliance, parallel)
+#   3. apply min variant        (gitops-premium-min.yml — the min default, workstations and compliance, the baseline qa + vms)
+#   4. verify min               (gitops-verify against the min no-team, Workstations and Compliance, and QA and VMs again)
 #
 # QA and VMs are verified in both passes against the same files, since both
 # applies carry them: the second pass proves the min apply left them alone.
@@ -84,12 +84,22 @@ jobs:
       label: baseline
     secrets: inherit
 
+  verify-baseline-compliance:
+    needs: apply-baseline
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/compliance.yml
+    secrets: inherit
+
   apply-min:
     needs:
       - verify-baseline-no-team
       - verify-baseline-workstations
       - verify-baseline-qa
       - verify-baseline-vms
+      - verify-baseline-compliance
     uses: ./.github/workflows/gitops-premium-min.yml
     with:
       ref: ${{ inputs.ref }}
@@ -133,6 +143,15 @@ jobs:
       label: min
     secrets: inherit
 
+  verify-min-compliance:
+    needs: apply-min
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa-min/fleets/compliance.yml
+    secrets: inherit
+
   # fleetctl checks against the min config just applied: generate-gitops
   # reproduces it, and a dry-run of it proposes no deletions. Must stay inside
   # this chain — the Playwright suite's cleanup-setup drains global reports and
@@ -143,6 +162,7 @@ jobs:
       - verify-min-workstations
       - verify-min-qa
       - verify-min-vms
+      - verify-min-compliance
     uses: ./.github/workflows/gitops-nightly-cli.yml
     with:
       ref: ${{ inputs.ref }}
