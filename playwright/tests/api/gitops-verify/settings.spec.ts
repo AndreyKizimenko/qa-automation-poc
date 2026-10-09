@@ -34,10 +34,13 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
 
   test('org_info, server_settings, features and fleet_desktop match gitops', async () => {
     expectSubset('org_info', config.org_info, org().org_info);
-    expectSubset('server_settings', config.server_settings, {
-      ...org().server_settings,
-      server_url: trimSlash(org().server_settings?.server_url),
-    });
+    // Fleet stores `server_url` as given, so a trailing slash in the instance's
+    // configured URL survives: both sides are compared without one.
+    expectSubset(
+      'server_settings',
+      { ...config.server_settings, server_url: trimSlash(config.server_settings?.server_url) },
+      { ...org().server_settings, server_url: trimSlash(org().server_settings?.server_url) },
+    );
     expectSubset('features', config.features, org().features);
     expectSubset('fleet_desktop', config.fleet_desktop, org().fleet_desktop);
   });

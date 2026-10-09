@@ -12,6 +12,7 @@ import { test, expect } from '@playwright/test';
 import {
   gitopsConfig,
   gitopsLabel,
+  isPremium,
   resolveTeamId,
   getAll,
   expectExactNames,
@@ -72,7 +73,10 @@ test.describe(`GitOps verify · policies · ${gitopsLabel}`, () => {
       if (declared.type !== 'patch') {
         expect.soft(normalizeSql(policy.query), `${at} query`).toBe(normalizeSql(declared.query));
       }
-      expect.soft(policy.critical, `${at} critical`).toBe(declared.critical ?? false);
+      // `critical` is a premium field (`server/fleet/policies.go`, `premium:"true"`): a free
+      // license stores false whatever the YAML says, and the lib policies the tiers share
+      // declare it. On free the instance is held to that, not to the declaration.
+      expect.soft(policy.critical, `${at} critical`).toBe(isPremium ? (declared.critical ?? false) : false);
       expectSubset(at, policy, {
         calendar_events_enabled: declared.calendarEventsEnabled,
         conditional_access_enabled: declared.conditionalAccessEnabled,

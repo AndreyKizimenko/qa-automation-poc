@@ -52,8 +52,11 @@ line after any apply that carries software.
 
 **A known false report:** an apply can print `[-] deleted software - <name>` for a title it kept — seen for
 `Fleet Playwright Install` on VMs and `zoom` on QA, both declared, both with the same installer id and upload
-time afterwards. The deletion *report* matches titles on a different key from the deletion itself. Confirm by
-the title's installer id before treating one as real.
+time afterwards, and a dry-run prints the matching `[-] would've deleted software - <name>` (`zoom`, `7-zip`,
+`Fleet Playwright Install`, every nightly). The deletion *report* matches titles on a different key from the
+deletion itself. Confirm by the title's installer id before treating one as real. The nightly's idempotence
+check (`playwright/tests/cli/nightly/gitops-idempotence.spec.ts`) ignores software deletion lines for this
+reason, and the `gitops-verify` project asserts each fleet's software set exactly after every apply instead.
 
 ### Do not pass `--delete-other-fleets`
 

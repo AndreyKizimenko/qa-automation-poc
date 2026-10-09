@@ -370,7 +370,7 @@ other:
 
 1. ☐ For every declared policy found live:
    - ✅ *(API, soft)* `platform` equals (`''` ↔ undeclared); `query` equals, whitespace-normalized (skipped for a patch policy, whose query Fleet writes).
-   - ✅ *(API, soft)* `critical` equals the declared value or `false`.
+   - ✅ *(API, soft)* `critical` equals the declared value or `false` on premium, and `false` on free: the field is premium-only (`PolicySpec.Critical`, `premium:"true"`), so a free license stores `false` for the three shared lib policies that declare `true`.
    - ✅ *(API, soft, declared keys only)* `calendar_events_enabled`, `conditional_access_enabled`, `continuous_automations_enabled`, `patch_when_closed`, `notify_before_patching`, `type`.
    - ✅ *(API, soft)* `labels_include_any` / `labels_exclude_any` as sorted name lists.
    - ✅ *(API, soft)* `run_script.name` equals the declared script's basename.
@@ -597,8 +597,9 @@ other:
 **Flow**
 
 1. ☐ `expectSubset` of `org_settings.org_info` (name, contact URL, both logo URLs), `server_settings` (every
-   declared key; `server_url` with a trailing slash trimmed), `features` (`enable_*`, `additional_queries`,
-   `historical_data`) and `fleet_desktop` (all three keys) against the live config.
+   declared key; `server_url` compared with a trailing slash trimmed on both sides — free's configured URL
+   carries one), `features` (`enable_*`, `additional_queries`, `historical_data`) and `fleet_desktop` (all
+   three keys) against the live config.
    - ✅ *(API, soft per key)* every declared key equals.
 
 **Manual repro** — **Settings → Organization settings**: Organization info, Advanced options, Fleet Desktop.

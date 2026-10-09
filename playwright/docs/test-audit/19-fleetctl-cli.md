@@ -1743,11 +1743,15 @@ other:
 
 **Flow**
 
-1. ☐ Collect the files the nightly applied for this tier: `default.yml` plus every `fleets/*.yml`
-   under `gitops/<tier>-fleetqa-min/`.
+1. ☐ Collect the files the nightly's min apply passed for this tier: `default.yml` plus every `fleets/*.yml`
+   under `gitops/<tier>-fleetqa-min/`, and on premium the baseline `fleets/qa.yml` and `fleets/vms.yml`,
+   which both applies carry unchanged.
 2. ☐ `fleetctl gitops --dry-run -f <each>`.
    - ✅ *(CLI)* Exit code is `0`, output contains `gitops dry run succeeded`.
-   - ✅ *(CLI)* **No** line starts with `[-] would've deleted`.
+   - ✅ *(CLI)* **No** line starts with `[-] would've deleted` — except `[-] would've deleted software - …`,
+     which fleetctl prints for titles the apply keeps (`zoom`, `7-zip`, `Fleet Playwright Install`, every
+     night; `gitops/premium-fleetqa/README.md`, "A known false report"). Those lines are dropped; the
+     software set of each fleet file is `gitops-verify`'s (GV-26 … GV-30), asserted after each apply.
 
 **Manual repro** — after a min apply, dry-run the same config. Expect a wall of `[+] would've
 applied …` and not a single `[-]`. For contrast, dry-run a `fleetctl new` scaffold against the
