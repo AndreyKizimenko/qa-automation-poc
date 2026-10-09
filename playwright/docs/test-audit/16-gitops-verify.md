@@ -100,7 +100,7 @@ labels, vitals and Workstations' reports, and everything on QA and VMs.
 | GV-24 | `gitops-verify/settings.spec.ts` | the fleet's settings match gitops | API | ☐ |
 | GV-25 | `gitops-verify/settings.spec.ts` | the fleet's agent options match gitops | API | ☐ |
 | GV-26 | `gitops-verify/software.spec.ts` | the custom package set matches gitops exactly | API | ☐ |
-| GV-27 | `gitops-verify/software.spec.ts` | each custom package's hash and options match gitops | API | ☐ |
+| GV-27 | `gitops-verify/software.spec.ts` | each custom package's options match gitops | API | ☐ |
 | GV-28 | `gitops-verify/software.spec.ts` | the Fleet-maintained app set matches gitops exactly | API | ☐ |
 | GV-29 | `gitops-verify/software.spec.ts` | each Fleet-maintained app's options match gitops | API | ☐ |
 | GV-30 | `gitops-verify/software.spec.ts` | the App Store app set matches gitops exactly | API | ☐ |
@@ -856,16 +856,19 @@ other:
 
 **Flow**
 
-1. ☐ Keep the titles whose package has no `fleet_maintained_app_id`.
-   - ✅ *(API)* `expectExactNames` of their installer filenames against the declared packages' filenames (the URL's last segment, or the script's name for a script-only package).
+1. ☐ Keep the titles whose package has no `fleet_maintained_app_id`; pair each declared package with one of
+   them — by `hash_sha256` when the package file declares a hash, else by installer filename (the URL's last
+   segment, or the script's name for a script-only package) — each live installer claimed at most once.
+   - ✅ *(API, soft)* no declared package is left unpaired; no live installer is left unclaimed.
+   - ✅ *(API)* the number of differences is 0.
 
 **Manual repro** — **Software**, fleet selected, filter *Available for install*: the four inert fixtures on VMs.
 
 **Assessment**
-- *Value:* `vms.yml`'s packages were applied nightly and never verified. Matching on the filename rather than the
-  title name is deliberate: Fleet names a Windows title by what the host reports until its reconcile cron runs.
-- *Coverage gaps:* a second version of the same title (allowed since 4.7x) would key on the same filename only
-  if the URL differs — not declared yet.
+- *Value:* `vms.yml`'s packages were applied nightly and never verified. The hash is what makes an apply skip
+  the download, so it identifies the file; matching on the filename rather than the title name for the rest is
+  deliberate, since Fleet names a Windows title by what the host reports until its reconcile cron runs.
+- *Coverage gaps:* two versions of one title with the same filename would pair by hash only if both declare one.
 
 **Notes (Andrey)**
 ```
@@ -877,18 +880,17 @@ other:
 
 ---
 
-### GV-27 · GitOps verify · software › each custom package's hash and options match gitops
+### GV-27 · GitOps verify · software › each custom package's options match gitops
 
 - **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
-- **Grep:** `… -g "each custom package's hash"`
+- **Grep:** `… -g "each custom package's options"`
 - **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ For every declared package found live (by filename), from the title detail:
-   - ✅ *(API, soft)* `hash_sha256` equals the declared hash.
-   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists.
+1. ☐ For every declared package paired with a live installer (GV-26's pairing), from the title detail:
+   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists when declared.
    - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists.
    - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
 
