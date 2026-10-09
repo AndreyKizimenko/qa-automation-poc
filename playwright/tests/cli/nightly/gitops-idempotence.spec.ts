@@ -34,7 +34,14 @@ import * as path from 'path';
 import { fleetctl, output } from '@helpers/fleetctl';
 import { minConfigDir, minConfigLabel } from './_generated';
 
-/** Every file the nightly applies for this tier: default.yml plus any fleets/*.yml. */
+/**
+ * Every file the nightly's min apply passes for this tier: the min directory's
+ * default.yml and fleets/*.yml, plus — on premium — the baseline directory's
+ * fleet files the min apply carries unchanged (QA and VMs hold the suite's
+ * durable fixtures, so `gitops-premium-min.yml` applies the same files in both
+ * passes). A fleet file left out here would be a fleet the dry-run never
+ * looks at.
+ */
 function appliedFiles(): string[] {
   const files = [path.join(minConfigDir, 'default.yml')];
   const fleetsDir = path.join(minConfigDir, 'fleets');
@@ -42,6 +49,10 @@ function appliedFiles(): string[] {
     for (const entry of fs.readdirSync(fleetsDir).filter((f) => f.endsWith('.yml'))) {
       files.push(path.join(fleetsDir, entry));
     }
+  }
+  if (process.env.SUITE === 'premium') {
+    const baselineFleets = path.join(path.dirname(minConfigDir), 'premium-fleetqa', 'fleets');
+    for (const entry of ['qa.yml', 'vms.yml']) files.push(path.join(baselineFleets, entry));
   }
   return files;
 }

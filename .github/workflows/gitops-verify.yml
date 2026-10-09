@@ -40,6 +40,11 @@ on:
         description: 'Path to a gitops directory or fleet file'
         required: true
         type: string
+      label:
+        description: Distinguishes two verifications of the same target in one run (the QA and VMs files are verified after both the baseline and the min apply); it suffixes the report artifact's name
+        required: false
+        type: string
+        default: ''
 
 defaults:
   run:
@@ -89,11 +94,20 @@ jobs:
           # we expose it under the unprefixed name the playwright config reads.
           FLEET_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_URL || secrets.FLEET_PREMIUM_URL }}
           FLEET_API_TOKEN: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_API_TOKEN || secrets.FLEET_PREMIUM_API_TOKEN }}
+          # The configs interpolate these, and the verify specs expand them the
+          # way fleetctl does before comparing (the SSO metadata URL, the enroll
+          # secret on free, the ABM and VPP mappings on premium). Same set the
+          # gitops-action passes when applying.
+          FLEET_ENROLL_SECRET: ${{ secrets.FLEET_FREE_ENROLL_SECRET }}
+          FLEET_SSO_METADATA_URL: ${{ inputs.suite == 'free' && secrets.FLEET_FREE_SSO_METADATA_URL || secrets.FLEET_PREMIUM_SSO_METADATA_URL }}
+          FLEET_EUA_METADATA_URL: ${{ secrets.FLEET_EUA_METADATA_URL }}
+          FLEET_ABM_ORG_NAME: ${{ secrets.FLEET_ABM_ORG_NAME }}
+          FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
         run: npx playwright test --project=gitops-verify
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}
+          name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}${{ inputs.label && format('-{0}', inputs.label) || '' }}
           path: playwright/playwright-report/
           retention-days: 7

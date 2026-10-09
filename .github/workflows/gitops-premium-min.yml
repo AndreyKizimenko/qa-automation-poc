@@ -4,7 +4,8 @@ name: GitOps — Premium (min variant)
 # tests to confirm `fleetctl gitops` actually mutates a Premium instance,
 # including team-scoped resources.
 #
-# Manual / on-demand only. The orchestrator (nightly.yml) runs this in sequence.
+# The orchestrator (nightly-qa-gitops-premium.yml) runs this after the baseline
+# apply and its verification; a manual dispatch is for re-applying by hand.
 
 on:
   workflow_dispatch:
@@ -15,11 +16,19 @@ on:
         required: false
         type: string
         default: ''
+      caller:
+        description: Set by being called at all — it tells the concurrency group below that an orchestrator already holds the instance lock
+        required: false
+        type: string
+        default: orchestrator
   # No push/pull_request triggers — gitops only runs from the nightly
   # orchestrator (workflow_call) or manual dispatch.
 
+# Shares gitops-premium.yml's lock when called (the orchestrator holds the
+# instance lock), and takes the instance lock itself when dispatched by hand, so
+# a manual apply waits for a running suite instead of deleting its state.
 concurrency:
-  group: gitops-premium # share the lock with gitops-premium.yml — same target instance
+  group: ${{ inputs.caller && 'gitops-premium' || 'premium-fleetqa-instance' }}
   cancel-in-progress: false
 
 defaults:

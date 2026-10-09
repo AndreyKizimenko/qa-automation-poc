@@ -1,10 +1,13 @@
 name: Nightly QA GitOps — Premium
 
 # Nightly verification chain for the premium instance:
-#   1. apply baseline           (gitops-premium.yml — default + workstations)
-#   2. verify baseline          (gitops-verify against no-team and Workstations, parallel)
-#   3. apply min variant        (gitops-premium-min.yml)
-#   4. verify min               (gitops-verify against no-team and Workstations, parallel)
+#   1. apply baseline           (gitops-premium.yml — default + workstations + qa + vms)
+#   2. verify baseline          (gitops-verify against no-team, Workstations, QA and VMs, parallel)
+#   3. apply min variant        (gitops-premium-min.yml — the min default + workstations, the baseline qa + vms)
+#   4. verify min               (gitops-verify against the min no-team and Workstations, and QA and VMs again)
+#
+# QA and VMs are verified in both passes against the same files, since both
+# applies carry them: the second pass proves the min apply left them alone.
 #
 # Test-state cleanup runs inside the Playwright project itself
 # (cleanup-setup runs before tests, cleanup-teardown after — see
@@ -61,10 +64,32 @@ jobs:
       gitops-target: gitops/premium-fleetqa/fleets/workstations.yml
     secrets: inherit
 
+  verify-baseline-qa:
+    needs: apply-baseline
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/qa.yml
+      label: baseline
+    secrets: inherit
+
+  verify-baseline-vms:
+    needs: apply-baseline
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/vms.yml
+      label: baseline
+    secrets: inherit
+
   apply-min:
     needs:
       - verify-baseline-no-team
       - verify-baseline-workstations
+      - verify-baseline-qa
+      - verify-baseline-vms
     uses: ./.github/workflows/gitops-premium-min.yml
     with:
       ref: ${{ inputs.ref }}
@@ -88,6 +113,26 @@ jobs:
       gitops-target: gitops/premium-fleetqa-min/fleets/workstations.yml
     secrets: inherit
 
+  verify-min-qa:
+    needs: apply-min
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/qa.yml
+      label: min
+    secrets: inherit
+
+  verify-min-vms:
+    needs: apply-min
+    uses: ./.github/workflows/gitops-verify.yml
+    with:
+      ref: ${{ inputs.ref }}
+      suite: premium
+      gitops-target: gitops/premium-fleetqa/fleets/vms.yml
+      label: min
+    secrets: inherit
+
   # fleetctl checks against the min config just applied: generate-gitops
   # reproduces it, and a dry-run of it proposes no deletions. Must stay inside
   # this chain — the Playwright suite's cleanup-setup drains global reports and
@@ -96,6 +141,8 @@ jobs:
     needs:
       - verify-min-no-team
       - verify-min-workstations
+      - verify-min-qa
+      - verify-min-vms
     uses: ./.github/workflows/gitops-nightly-cli.yml
     with:
       ref: ${{ inputs.ref }}
