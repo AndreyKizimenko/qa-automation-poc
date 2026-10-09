@@ -428,10 +428,14 @@ baseline `qa.yml` / `vms.yml` the min apply carries; the four apply workflows ta
 dispatched by hand (`caller` input). Docs: the gitops READMEs, `CLAUDE.md`'s CI facts, `ci-pipeline.md`,
 `helpers/README.md`, two `npm run test:gitops-verify:premium-{qa,vms}` scripts.
 
-**Found and fixed on the way:** `deleteAllGlobalPolicies` called `GET /global/policies`, which Fleet
-answers 404, and swallowed it — the global policies were never wiped on either tier (22 survived every
-cleanup; `policy-host-counts.spec.ts:9` and `pickers.spec.ts:15` describe the intended state, which is
-now the real one). It calls `GET /policies` and fails loud.
+**Found and fixed on the way:** `deleteAllGlobalPolicies` listed the global policies through
+`/api/v1/fleet/global/policies` (which works) and then posted the bulk delete to `/api/v1/fleet/policies/delete`,
+a route Fleet serves only from its 2022-04 API version (`/api/latest`): the POST answered 404, a 404 doesn't
+reject the promise, and the `.catch` beside it never fired. The global policies were never wiped on either
+tier (22 survived every cleanup; `policy-host-counts.spec.ts:9` and `pickers.spec.ts:15` describe the intended
+state, which is now the real one). Both calls now go to `/api/latest` and a non-OK answer fails the run.
+The first attempt at this fix moved the listing to `/api/v1/fleet/policies`, which 404s, and stopped both
+suites in branch run 37871039304 — the kind of mistake the throw exists to surface.
 
 **Verified:** `npm run check` clean; dry-runs of all four configs against the instances (4.92.1 client; the
 local `fleetctl@4.93.0` install is blocked by an npm `before` pin on this machine, CI installs 4.93.0);
