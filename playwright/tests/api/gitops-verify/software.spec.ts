@@ -2,14 +2,14 @@
  * Software: the fleet's installable titles are exactly the declared custom
  * packages and Fleet-maintained apps, and each carries the declared options.
  *
- * A custom package is matched by its installer filename (the URL's last
- * segment, as Fleet records it) and then held to its hash — the hash is what
- * makes an apply skip the download, so a mismatch means a different file is on
- * the instance. A Fleet-maintained app is matched by slug through the catalog,
- * which reports the title each slug resolved to on this fleet. The option
- * fields (self-service, categories, label targets, setup experience, the
- * scripts and the pre-install query) are read from the title detail, the only
- * place Fleet returns them.
+ * A custom package is matched by its hash when the package file declares one
+ * (the hash is what makes an apply skip the download, so it identifies the
+ * file), else by its installer filename (the URL's last segment, as Fleet
+ * records it; the name of a script-only package). A Fleet-maintained app is
+ * matched by slug through the catalog, which reports the title each slug
+ * resolved to on this fleet. The option fields (self-service, categories,
+ * label targets, setup experience, the scripts and the pre-install query) are
+ * read from the title detail, the only place Fleet returns them.
  *
  * Software is declared by fleet files (and `fleets/unassigned.yml`); a
  * `default.yml` can't carry it, so the no-team scope skips.
@@ -41,27 +41,48 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
   const customTitles = () => software.titles.filter((t) => t.package && t.package.fleet_maintained_app_id == null);
   const fmaTitles = () => software.titles.filter((t) => t.package && t.package.fleet_maintained_app_id != null);
 
+  /**
+   * Pairs each declared package with the live installer it identifies — by hash
+   * when the package file declares one, else by filename — each live installer
+   * claimed at most once. What is left on either side is a difference.
+   */
+  function matchPackages() {
+    const live = customTitles().map((t) => t.package!);
+    const claimed = new Set<Record<string, any>>();
+    const matched = new Map<(typeof gitopsConfig.software.packages)[number], Record<string, any>>();
+    const missing: string[] = [];
+    for (const declared of gitopsConfig.software.packages) {
+      const pkg = live.find(
+        (p) => !claimed.has(p) && (declared.hash ? p.hash_sha256 === declared.hash : p.name === declared.fileName),
+      );
+      if (pkg) {
+        claimed.add(pkg);
+        matched.set(declared, pkg);
+      } else {
+        missing.push(declared.fileName);
+      }
+    }
+    const extra = live.filter((p) => !claimed.has(p)).map((p) => p.name as string);
+    return { matched, missing, extra };
+  }
+
   test('the custom package set matches gitops exactly', async () => {
-    expectExactNames(
-      'custom packages',
-      customTitles().map((t) => t.package!.name as string),
-      gitopsConfig.software.packages.map((p) => p.fileName),
-    );
+    const { missing, extra } = matchPackages();
+    expect.soft(missing, 'custom packages declared in gitops but missing on the instance').toEqual([]);
+    expect.soft(extra, "custom packages on the instance that gitops doesn't declare").toEqual([]);
+    expect(missing.length + extra.length, 'custom package differences').toBe(0);
   });
 
-  test("each custom package's hash and options match gitops", async () => {
-    const byFile = new Map(customTitles().map((t) => [t.package!.name as string, t.package!]));
-    for (const declared of gitopsConfig.software.packages) {
-      const pkg = byFile.get(declared.fileName);
-      if (!pkg) continue; // reported by the set test
+  test("each custom package's options match gitops", async () => {
+    for (const [declared, pkg] of matchPackages().matched) {
       const at = `package "${declared.fileName}"`;
-      if (declared.hash) expect.soft(pkg.hash_sha256, `${at} hash_sha256`).toBe(declared.hash);
       expectSubset(at, pkg, {
         self_service: declared.selfService,
-        categories: declared.categories ? [...declared.categories].sort() : undefined,
         install_during_setup: declared.setupExperience,
       });
-      if (pkg.categories) expect.soft([...pkg.categories].sort(), `${at} categories`).toEqual(declared.categories ?? []);
+      if (declared.categories) {
+        expect.soft([...(pkg.categories ?? [])].sort(), `${at} categories`).toEqual([...declared.categories].sort());
+      }
       expectTargets(at, pkg, declared);
       expectScripts(at, pkg, declared);
     }

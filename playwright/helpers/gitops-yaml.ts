@@ -374,7 +374,8 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
       const url: string | undefined = item.url;
       const readRef = (ref: any) => (ref?.path ? fs.readFileSync(path.resolve(packageDir, ref.path), 'utf-8') : undefined);
       return {
-        fileName: url ? path.basename(new URL(url).pathname) : String(item.hash_sha256 ?? ''),
+        // A package declared by hash alone (already in Fleet's storage) has no filename to show; the hash names it.
+        fileName: url ? path.basename(new URL(url).pathname) : `sha256:${String(item.hash_sha256 ?? '').slice(0, 12)}`,
         path: packageFile ?? baseDir,
         scriptOnly: false,
         url,

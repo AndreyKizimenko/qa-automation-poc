@@ -2,8 +2,10 @@
  * Configuration profiles: the scope's profiles are exactly the declared files,
  * per platform, and each one's label targeting is as declared. A profile's
  * payload is what a host receives, so it is compared too, as Fleet serves it
- * back: Fleet stores a profile as uploaded, so the repo file and the served
- * body differ only in line endings.
+ * back: a .mobileconfig or Windows XML as uploaded, so the repo file and the
+ * served body differ only in line endings; an Android JSON declaration as a
+ * document, since Fleet may re-serialize it, so the two are compared with
+ * their keys sorted.
  */
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
@@ -63,7 +65,27 @@ test.describe(`GitOps verify · configuration profiles · ${gitopsLabel}`, () =>
       if (!profile) continue; // reported by the set test
       const served = await getText(request, `configuration_profiles/${profile.profile_uuid}?alt=media`);
       const repo = fs.readFileSync(declared.path, 'utf-8');
-      expect.soft(normalizeBody(served), `profile "${declared.name}" (${declared.platform}) payload`).toBe(normalizeBody(repo));
+      const normalize = declared.path.endsWith('.json') ? canonicalJson : normalizeBody;
+      expect.soft(normalize(served), `profile "${declared.name}" (${declared.platform}) payload`).toBe(normalize(repo));
     }
   });
 });
+
+/** A JSON document with its keys sorted at every level, so two serializations of one document compare equal. */
+function canonicalJson(text: string): string {
+  const sortKeys = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(sortKeys)
+      : value && typeof value === 'object'
+        ? Object.fromEntries(
+            Object.keys(value as Record<string, unknown>)
+              .sort()
+              .map((k) => [k, sortKeys((value as Record<string, unknown>)[k])]),
+          )
+        : value;
+  try {
+    return JSON.stringify(sortKeys(JSON.parse(text)));
+  } catch {
+    return normalizeBody(text);
+  }
+}

@@ -8,8 +8,8 @@
  *
  * The webhook config is a global-config-style mutation, so the fleet's whole
  * `webhook_settings` subtree is snapshotted and restored — Fleet replaces that
- * subtree wholesale on PATCH, and Workstations carries a failing-policies
- * webhook with gitops-provisioned policy ids that must survive.
+ * subtree wholesale on PATCH, so a write carrying only the host-status webhook
+ * would wipe the fleet's failing-policies and host-activities webhooks.
  *
  * Host expiry on a fleet stacks on the global setting instead of replacing it:
  * Fleet ticks the fleet-level checkbox for the fleet's own setting *or* the
@@ -17,9 +17,10 @@
  * add a custom window on top of the global policy but cannot opt out of it. The
  * test below reads both settings from the API and asserts the checkbox derives
  * from them, so it holds whichever way the instance is configured. The QA
- * instances keep global host expiry off (gitops `default.yml`), and the suite
- * deliberately never turns it on: a live expiry window can make Fleet delete the
- * simulated hosts the rest of the suite depends on.
+ * instances keep global host expiry on at one day (gitops `default.yml`): that
+ * is what culls the simulations the perf daemons abandon at their daily
+ * refresh. The suite never changes it, and a fleet's own window only stacks on
+ * top of it.
  */
 import { test, expect } from '@fixtures';
 import { TeamSettingsPage } from '@pages';

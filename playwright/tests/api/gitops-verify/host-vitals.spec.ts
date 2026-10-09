@@ -4,7 +4,7 @@
  * makes fleetctl delete every vital, so a no-team config that omits it is
  * verified as holding none.
  */
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 import { gitopsConfig, gitopsLabel, getAll, expectExactNames } from './_config';
 
 test.describe(`GitOps verify · custom host vitals · ${gitopsLabel}`, () => {
@@ -13,7 +13,6 @@ test.describe(`GitOps verify · custom host vitals · ${gitopsLabel}`, () => {
   test('the custom host vital set matches gitops exactly', async ({ request }) => {
     const live = await getAll<{ name: string }>(request, 'custom_host_vitals', 'custom_host_vitals');
     const declared = gitopsConfig.customHostVitals ?? [];
-    expect(declared.length, 'custom_host_vitals declared').toBeGreaterThanOrEqual(0);
     expectExactNames(
       'custom host vitals',
       live.map((v) => v.name),
