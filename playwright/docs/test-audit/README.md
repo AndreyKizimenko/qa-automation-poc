@@ -12,7 +12,7 @@ those notes into spec changes.
 Written 2026-07-29 against `main` @ `a420f1c`. Suite at that commit: **113 spec
 files · ~350 test declarations · 4 projects**.
 
-> Brought current with the suite through 2026-10-07.
+> Brought current with the suite through 2026-10-08.
 
 ## The area files
 
@@ -33,7 +33,7 @@ files · ~350 test declarations · 4 projects**.
 | 13 | [Labels, packs, dashboard, paywalls](13-labels-packs-dashboard-paywalls.md) | 36 | premium, free |
 | 14 | [API contract specs](14-api-contracts.md) | 32 | premium, free |
 | 15 | [API role-access probes](15-api-role-access.md) | 14 | premium, free |
-| 16 | [GitOps drift verification](16-gitops-verify.md) | 22 | gitops-verify |
+| 16 | [GitOps drift verification](16-gitops-verify.md) | 30 | gitops-verify |
 | 17 | [Loadtest / performance](17-loadtest-performance.md) | 12 (per spec file) | loadtest + loadtest-api (local only) |
 | 18 | [Locator verification vs React source](18-locator-verification.md) | 56 rows (102 locators) | code review, not tests |
 | 19 | [`fleetctl` CLI](19-fleetctl-cli.md) | 43 | premium, free, gitops-nightly |

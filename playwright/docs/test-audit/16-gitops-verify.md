@@ -1,150 +1,147 @@
 # GitOps drift verification — test audit
 
-**Specs covered:** 6 files · **Test declarations:** 22 · **Projects:** gitops-verify
+**Specs covered:** 10 files · **Test declarations:** 30 · **Projects:** gitops-verify
 
 This area answers one question: **does the live Fleet instance match the YAML in `gitops/`?**
 Every spec loads a GitOps target off disk (via [`helpers/gitops-yaml.ts`](../../helpers/gitops-yaml.ts)),
-issues one read-only `GET` per test, and diffs names/counts. There is no browser and no
-mutation — the specs run in the `gitops-verify` project (`retries: 0`, bearer-token auth,
-no `storageState`, no page objects, no `pageHealth`), and are invoked by the two nightly
-orchestrators *between* `fleetctl gitops` apply steps.
+reads the matching live state with a few `GET`s, and compares — the *set* of each entity kind
+exactly (nothing declared missing, nothing live undeclared), then every declared field of every
+entity, and the org or fleet settings key by key. There is no browser and no mutation — the specs run
+in the `gitops-verify` project (`retries: 0`, bearer-token auth, no `storageState`, no page objects,
+no `pageHealth`), and are invoked by the two nightly orchestrators *between* `fleetctl gitops` apply
+steps. The plan this area grows along is [`docs/gitops-coverage/README.md`](../gitops-coverage/README.md).
 
 ## How the target is resolved
 
 [`tests/api/gitops-verify/_config.ts`](../../tests/api/gitops-verify/_config.ts) does all of it, once per worker process:
 
-- `GITOPS_TARGET` is resolved against **`process.cwd()`**, defaulting to `../gitops/free-fleetqa`
-  (`_config.ts:14-16`). A **directory** → `loadGitOpsConfig()` (reads `default.yml`, `scope: 'no-team'`,
-  `teamName: 'No team'`); a **file** → `loadFleetConfig()` (reads `fleets/<name>.yml`, `scope: 'team'`,
-  `teamName: doc.name`, `labels: []`).
+- `SUITE` must be `free` or `premium`; the module throws otherwise. `GITOPS_TARGET` is resolved against
+  **`process.cwd()`**, defaulting to the tier's baseline directory (`../gitops/<suite>-fleetqa`), and is
+  **refused unless its path contains `<suite>-fleetqa` or `<suite>-fleetqa-min`**: the two tiers' configs
+  are near-identical, so most of a run against the wrong one would pass.
+- A **directory** → `loadGitOpsConfig()` (reads `default.yml`, `scope: 'no-team'`, `teamName: 'No team'`,
+  plus the `name:` of every sibling `fleets/*.yml`); a **file** → `loadFleetConfig()` (`scope: 'team'`,
+  `teamName: doc.name`, the file's `settings:`).
 - `gitopsLabel` = `basename(target)` and appears in every describe title, so the same test title
   is reused across targets — grep on the test title, not the describe.
 - `resolveTeamId(request)`: `no-team` → `0`; `team` → `GET /teams?per_page=200`, match `t.name === teamName`,
   **throw** if absent. Cached per process.
-- `loadGitOpsConfig` flattens `path:`-referenced files (`expandList`), takes script names from the
-  file **basename with extension**, macOS profile names from the top-level `<PayloadDisplayName>`
-  in the `.mobileconfig` (smallest-indentation heuristic, `gitops-yaml.ts:197-224`, silently falling
-  back to the basename on any read error), and Windows/Android profile names from the basename
-  without extension.
+- The loader expands every list the same way whether its entries are `path:` references (one file, holding
+  one entity or a list), **`paths:` globs** (relative to the referencing file, like `path:`; scripts keep only
+  `.sh` / `.py` / `.ps1` matches, as Fleet does) or **inline entities**. It reads each entity's option fields,
+  `org_settings` or the fleet's `settings`, `agent_options` (through its `path:`), the `controls` flags,
+  `custom_host_vitals`, and `software` (packages through their package files — the hash, the scripts, the
+  pre-install query — plus Fleet-maintained and App Store apps). Names come from where Fleet takes them: the
+  `name:` field; a script's basename; a `.mobileconfig`'s top-level `PayloadDisplayName` (smallest-indentation
+  heuristic, basename fallback) and a Windows / Android profile's basename without extension; a package's
+  installer filename (the URL's last segment); a Fleet-maintained app's slug.
+- **`$VAR` / `${VAR}` are expanded from the environment** the way fleetctl expands them (never inside
+  `description:` / `resolution:`, never `$FLEET_VAR_*` / `$FLEET_SECRET_*`), and an unset variable **throws**
+  naming it. The verify workflow passes the same set the apply does (the SSO metadata URL, free's enroll
+  secret, premium's EUA / ABM / VPP values).
+- Every list read is paginated (`getAll`: follows `meta.has_next_results`, else pages while a page is full),
+  and every non-2xx **throws** with the body: a swallowed error would read as "nothing declared".
 
 ## Targets in use (counts derived from the YAML)
 
-| `GITOPS_TARGET` | Scope | Labels | Policies | Reports | Scripts | Profiles (mac/win/android) |
-|---|---|---:|---:|---:|---:|---:|
-| [`../gitops/free-fleetqa`](../../../gitops/free-fleetqa/default.yml) | no-team | 25 | 27 | 30 | 11 | 23 (11/10/2) |
-| [`../gitops/free-fleetqa-min`](../../../gitops/free-fleetqa-min/default.yml) | no-team | 23 | 22 | 26 | 9 | 21 (11/8/2) |
-| [`../gitops/premium-fleetqa`](../../../gitops/premium-fleetqa/default.yml) | no-team | 25 | 27 | 30 | 11 | 23 (11/10/2) |
-| [`../gitops/premium-fleetqa/fleets/workstations.yml`](../../../gitops/premium-fleetqa/fleets/workstations.yml) | team `Workstations` | — (skipped) | 23 | 5 | 6 | 23 (11/10/2) |
-| [`../gitops/premium-fleetqa-min`](../../../gitops/premium-fleetqa-min/default.yml) | no-team | 23 | 22 | 26 | 9 | 21 (11/8/2) |
-| [`../gitops/premium-fleetqa-min/fleets/workstations.yml`](../../../gitops/premium-fleetqa-min/fleets/workstations.yml) | team `Workstations` | — (skipped) | 21 | 3 | 5 | 21 (11/8/2) |
+| `GITOPS_TARGET` | Scope | Labels | Policies | Reports | Scripts | Profiles (mac/win/android) | Vitals | Software |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| [`../gitops/free-fleetqa`](../../../gitops/free-fleetqa/default.yml) | no-team | 27 | 28 | 31 | 11 | 23 (11/10/2) | 3 | — |
+| [`../gitops/free-fleetqa-min`](../../../gitops/free-fleetqa-min/default.yml) | no-team | 24 | 23 | 27 | 9 | 21 (11/8/2) | 2 | — |
+| [`../gitops/premium-fleetqa`](../../../gitops/premium-fleetqa/default.yml) | no-team (+ 3 fleet files) | 27 | 29 | 32 | 11 | 23 (11/10/2) | 3 | — |
+| [`../gitops/premium-fleetqa/fleets/workstations.yml`](../../../gitops/premium-fleetqa/fleets/workstations.yml) | fleet `Workstations` | 0 | 23 | 5 | 6 | 23 (11/10/2) | — | — |
+| [`../gitops/premium-fleetqa/fleets/qa.yml`](../../../gitops/premium-fleetqa/fleets/qa.yml) | fleet `QA` | 0 | 0 | 0 | 0 | 0 | — | 20 Fleet-maintained apps |
+| [`../gitops/premium-fleetqa/fleets/vms.yml`](../../../gitops/premium-fleetqa/fleets/vms.yml) | fleet `VMs` | 0 | 2 | 1 | 0 | 0 | — | 4 packages, 4 Fleet-maintained apps |
+| [`../gitops/premium-fleetqa-min`](../../../gitops/premium-fleetqa-min/default.yml) | no-team (+ 1 fleet file) | 24 | 24 | 28 | 9 | 21 (11/8/2) | 2 | — |
+| [`../gitops/premium-fleetqa-min/fleets/workstations.yml`](../../../gitops/premium-fleetqa-min/fleets/workstations.yml) | fleet `Workstations` | 0 | 21 | 3 | 5 | 21 (11/8/2) | — | — |
 
-Label/report counts exceed the file count because three referenced files hold multiple entries:
-`lib/platforms/all/reports/dex-queries.yml` (10 reports),
-`lib/labels/macs-with-fleet-maintained-apps-installed.yml` (9 labels),
-`lib/labels/windows-with-fleet-maintained-apps-installed.yml` (6 labels).
+Label/report counts exceed the file count because three referenced files hold multiple entries
+(`lib/platforms/all/reports/dex-queries.yml` 10 reports, `lib/labels/macs-with-fleet-maintained-apps-installed.yml`
+9 labels, `lib/labels/windows-with-fleet-maintained-apps-installed.yml` 6 labels), and because the no-team
+configs carry entities **inline** (a policy and, on premium, a label-scoped one; a report with every option and,
+on premium, a label-scoped one). The two Linux scripts come from one `paths:` glob.
 
-Nightly chain (`.github/workflows/nightly-qa-gitops-{premium,free}.yml`, run by `QA — Nightly` after the Render redeploy):
-apply baseline → verify baseline → apply **min** → verify min. Because baseline and min differ in
-every count, the pair proves gitops both **creates and deletes**; it also means the instance is
-left in the *min* shape overnight.
+Nightly chain (`.github/workflows/nightly-qa-gitops-{premium,free}.yml`, run by `QA — Nightly` after the Render
+redeploy and by `QA — Branch run`): apply baseline → verify baseline → apply **min** → verify min → fleetctl
+checks. On premium each verify pass covers the no-team config, Workstations, QA and VMs (QA and VMs against the
+same files both times, since both applies carry them). Baseline and min differ in every count **and in a value
+in every settings section**, so the pair proves gitops creates, deletes and updates; the min variant is what the
+chain ends on, and the suite's `cleanup-setup` then wipes the global reports, policies, scripts and profiles and
+Workstations' policies, profiles, scripts and software, so between runs the instance holds min's org settings,
+labels, vitals and Workstations' reports, and everything on QA and VMs.
 
 ## Contents
 
 | ID | Spec | Test | Mode | Manual? |
 |---|---|---|---|---|
-| GV-01 | `gitops-verify/org-settings.spec.ts` | org name matches gitops | API | ☐ |
-| GV-02 | `gitops-verify/org-settings.spec.ts` | SSO settings match gitops | API | ☐ |
-| GV-03 | `gitops-verify/org-settings.spec.ts` | Windows MDM is enabled per gitops | API | ☐ |
-| GV-04 | `gitops-verify/org-settings.spec.ts` | feature flags match gitops | API | ☐ |
-| GV-05 | `gitops-verify/labels.spec.ts` | user label count matches gitops | API | ☐ |
-| GV-06 | `gitops-verify/labels.spec.ts` | every gitops label exists by name | API | ☐ |
-| GV-07 | `gitops-verify/labels.spec.ts` | no extra user labels on live (no superset drift) | API | ☐ |
-| GV-08 | `gitops-verify/policies.spec.ts` | policy count matches gitops | API | ☐ |
-| GV-09 | `gitops-verify/policies.spec.ts` | every gitops policy exists by name | API | ☐ |
-| GV-10 | `gitops-verify/policies.spec.ts` | no extra policies on live (no superset drift) | API | ☐ |
-| GV-11 | `gitops-verify/policies.spec.ts` | platform field matches gitops for each policy | API | ☐ |
-| GV-12 | `gitops-verify/profiles.spec.ts` | total profile count matches gitops | API | ☐ |
-| GV-13 | `gitops-verify/profiles.spec.ts` | per-platform profile counts match gitops | API | ☐ |
-| GV-14 | `gitops-verify/profiles.spec.ts` | every gitops profile exists by name | API | ☐ |
-| GV-15 | `gitops-verify/profiles.spec.ts` | no extra profiles on live (no superset drift) | API | ☐ |
-| GV-16 | `gitops-verify/scripts.spec.ts` | script count matches gitops | API | ☐ |
-| GV-17 | `gitops-verify/scripts.spec.ts` | every gitops script exists by basename | API | ☐ |
-| GV-18 | `gitops-verify/scripts.spec.ts` | no extra scripts on live (no superset drift) | API | ☐ |
-| GV-19 | `gitops-verify/reports.spec.ts` | report count matches gitops | API | ☐ |
-| GV-20 | `gitops-verify/reports.spec.ts` | every gitops report exists by name | API | ☐ |
-| GV-21 | `gitops-verify/reports.spec.ts` | platform field matches gitops for each report | API | ☐ |
-| GV-22 | `gitops-verify/reports.spec.ts` | no extra reports on live (no superset drift) | API | ☐ |
+| GV-01 | `gitops-verify/_sanity.spec.ts` | the no-team config declares every entity kind | API | ☐ |
+| GV-02 | `gitops-verify/_sanity.spec.ts` | a fleet file declares at least one entity | API | ☐ |
+| GV-03 | `gitops-verify/_sanity.spec.ts` | every declared name is unique within its kind | API | ☐ |
+| GV-04 | `gitops-verify/fleets.spec.ts` | the fleet set matches the gitops fleet files plus the hand-kept fleets | API | ☐ |
+| GV-05 | `gitops-verify/host-vitals.spec.ts` | the custom host vital set matches gitops exactly | API | ☐ |
+| GV-06 | `gitops-verify/labels.spec.ts` | the label set matches gitops exactly | API | ☐ |
+| GV-07 | `gitops-verify/labels.spec.ts` | each label's definition matches gitops | API | ☐ |
+| GV-08 | `gitops-verify/policies.spec.ts` | the policy set matches gitops exactly | API | ☐ |
+| GV-09 | `gitops-verify/policies.spec.ts` | each policy's definition matches gitops | API | ☐ |
+| GV-10 | `gitops-verify/profiles.spec.ts` | the profile set matches gitops exactly, per platform | API | ☐ |
+| GV-11 | `gitops-verify/profiles.spec.ts` | each profile's targeting matches gitops | API | ☐ |
+| GV-12 | `gitops-verify/profiles.spec.ts` | each profile's payload matches the repo | API | ☐ |
+| GV-13 | `gitops-verify/reports.spec.ts` | the report set matches gitops exactly | API | ☐ |
+| GV-14 | `gitops-verify/reports.spec.ts` | each report's definition matches gitops | API | ☐ |
+| GV-15 | `gitops-verify/scripts.spec.ts` | the script set matches gitops exactly | API | ☐ |
+| GV-16 | `gitops-verify/scripts.spec.ts` | each script's body matches the repo | API | ☐ |
+| GV-17 | `gitops-verify/settings.spec.ts` | org_info, server_settings, features and fleet_desktop match gitops | API | ☐ |
+| GV-18 | `gitops-verify/settings.spec.ts` | expiry, webhook, activity and gitops settings match gitops | API | ☐ |
+| GV-19 | `gitops-verify/settings.spec.ts` | SSO settings match gitops | API | ☐ |
+| GV-20 | `gitops-verify/settings.spec.ts` | MDM integrations match gitops | API | ☐ |
+| GV-21 | `gitops-verify/settings.spec.ts` | the global MDM flags under controls match gitops | API | ☐ |
+| GV-22 | `gitops-verify/settings.spec.ts` | agent options match gitops | API | ☐ |
+| GV-23 | `gitops-verify/settings.spec.ts` | the global enroll secrets match gitops | API | ☐ |
+| GV-24 | `gitops-verify/settings.spec.ts` | the fleet's settings match gitops | API | ☐ |
+| GV-25 | `gitops-verify/settings.spec.ts` | the fleet's agent options match gitops | API | ☐ |
+| GV-26 | `gitops-verify/software.spec.ts` | the custom package set matches gitops exactly | API | ☐ |
+| GV-27 | `gitops-verify/software.spec.ts` | each custom package's hash and options match gitops | API | ☐ |
+| GV-28 | `gitops-verify/software.spec.ts` | the Fleet-maintained app set matches gitops exactly | API | ☐ |
+| GV-29 | `gitops-verify/software.spec.ts` | each Fleet-maintained app's options match gitops | API | ☐ |
+| GV-30 | `gitops-verify/software.spec.ts` | the App Store app set matches gitops exactly | API | ☐ |
 
-Every entry shares these **preconditions** and **data created**, so they are not repeated below:
-
-- **Preconditions:** `fleetctl gitops` applied for *exactly* this target immediately before, and the
-  Playwright e2e suite has not run since — `setup/cleanup.steps.ts` deletes all queries (= reports),
-  global + Workstations policies, profiles, and scripts, i.e. most of what these specs check.
-  `FLEET_API_TOKEN` + `FLEET_URL` for the matching instance; `SUITE` must be set explicitly
-  (`gitops-verify` is in `SUITE_AMBIGUOUS_PROJECTS`, `playwright.config.ts:21-25`).
-- **Data created:** none. Read-only `GET`s.
-- **Isolation:** independent tests, `fullyParallel: true`, `retries: 0`.
-
----
-
-### GV-01 · GitOps verify · org-settings › org name matches gitops
-
-- **File:** [`playwright/tests/api/gitops-verify/org-settings.spec.ts`](../../tests/api/gitops-verify/org-settings.spec.ts)
-- **Grep:** `SUITE=free GITOPS_TARGET=../gitops/free-fleetqa npx playwright test --project=gitops-verify -g "org name matches gitops"`
-- **Project:** gitops-verify · **Targets:** no-team only — `test.skip(gitopsConfig.scope !== 'no-team')` at `org-settings.spec.ts:6`
-- **Mode:** API
-
-**Flow**
-
-1. ☐ Load `default.yml` → `org_settings.org_info.org_name` (`Free QA Automation` / `Premium QA Automation` / `… (min)`).
-2. ☐ `GET /api/latest/fleet/config`.
-   - ✅ *(API)* Response is OK (`expect(res).toBeOK()`).
-   - ✅ *(API)* `org_info.org_name` **exactly equals** the YAML value.
-
-**Manual repro** — open `gitops/<target>/default.yml`, read `org_settings.org_info.org_name`; in the UI go to
-**Settings → Organization settings → Organization info** and compare the **Organization name** field.
-API equivalent: `curl -sH "Authorization: Bearer $FLEET_API_TOKEN" "$FLEET_URL/api/latest/fleet/config" | jq .org_info.org_name`.
-
-**Assessment**
-- *Value:* the single cheapest "did the right config get applied to the right instance" canary — org name differs across all four dirs, so a swapped `GITOPS_TARGET`/`SUITE` pairing fails here first.
-- *Coverage gaps:* `org_info.contact_url`, `org_logo_url`, `org_logo_url_light_background` are declared in YAML and never checked.
-- *Redundancy:* [`tests/api/config.spec.ts`](../../tests/api/config.spec.ts) `org info is populated` asserts only `toBeTruthy()` — strictly weaker, no conflict.
-- *Efficiency / smells:* all four tests in this file re-issue the identical `GET /config` (4 requests where 1 `beforeAll` fetch would do).
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
+- **Isolation:** independent tests, `fullyParallel: true`, `retries: 0`. Each spec reads its live list once in
+  a `beforeAll`; the software specs share one cached read of the fleet's titles, their details and the
+  Fleet-maintained-app catalog (`resolveFleetSoftware`).
+- **Two comparisons do most of the work.** `expectExactNames(what, live, declared)` reports the names declared
+  but missing *and* the names live but undeclared (both soft, so one run lists every difference), then fails on
+  the count. `expectSubset(what, live, declared)` compares every key the YAML declares and ignores the rest —
+  Fleet fills defaults and adds read-only fields, and a key the config doesn't manage can't drift from it. A
+  declared `undefined` is "not declared", not "must be undefined".
+- **Which tests run for which target:** the `_sanity`, labels, policies, profiles, reports and scripts specs run
+  for every target. `fleets`, `host-vitals` and the org half of `settings` run for a no-team target only
+  (`fleets` on premium only); the fleet half of `settings` and the `software` spec run for a fleet file only.
+  The skips are data-availability guards, inline reasons only.
 
 ---
 
-### GV-02 · GitOps verify · org-settings › SSO settings match gitops
+### GV-01 · GitOps verify · target › the no-team config declares every entity kind
 
-- **File:** [`playwright/tests/api/gitops-verify/org-settings.spec.ts`](../../tests/api/gitops-verify/org-settings.spec.ts)
-- **Grep:** `-g "SSO settings match gitops"`
-- **Project:** gitops-verify · **Targets:** no-team only
-- **Mode:** API
+- **File:** [`playwright/tests/api/gitops-verify/_sanity.spec.ts`](../../tests/api/gitops-verify/_sanity.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa npx playwright test --project=gitops-verify -g "declares every entity kind"`
+- **Project:** gitops-verify · **Targets:** no-team only (skips for a fleet file: a fleet may legitimately leave a kind empty)
+- **Mode:** API (no request — the parsed config only)
 
 **Flow**
 
-1. ☐ Load `default.yml` → `org_settings.sso_settings`: `enable_sso: true`, `entity_id: fleet`, `idp_name: Okta` (all four dirs). Absent keys default to `''` / `false` in `gitops-yaml.ts:110-112`.
-2. ☐ `GET /api/latest/fleet/config`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `sso_settings.enable_sso` === YAML `enable_sso === true`.
-   - ✅ *(API)* `sso_settings.entity_id` === YAML `entity_id`.
-   - ✅ *(API)* `sso_settings.idp_name` === YAML `idp_name`.
+1. ☐ Load the target.
+   - ✅ `org_settings.org_info.org_name` is truthy; `agent_options` resolved.
+   - ✅ labels, policies, reports, `controls.scripts` and configuration profiles each parsed to **more than zero** entries.
 
-**Manual repro** — diff `org_settings.sso_settings` in the YAML against **Settings → Organization settings → Single sign-on options**
-(Enable SSO checkbox, **Entity ID**, **Identity provider name**), or `jq .sso_settings` on `/api/latest/fleet/config`.
+**Manual repro** — open the target's `default.yml` and confirm each of those keys is present and non-empty.
 
 **Assessment**
-- *Value:* catches gitops silently dropping SSO config — which would lock admins out of SSO login (a real outage on these instances, since admin SSO is assumed pre-configured).
-- *Coverage gaps:* `metadata_url` (env-substituted), `enable_sso_idp_login: false`, `idp_image_url` all unchecked. `metadata_url` is the field most likely to break login.
+- *Value:* every other spec here is a set or field comparison, and two empty sets compare equal. A key that
+  went missing, a `path:` list that stopped resolving or a glob that matches nothing would otherwise turn the
+  project green with nothing asserted. This names that failure.
+- *Coverage gaps:* doesn't pin the *counts* (a half-parsed list still passes); the Targets table above is the
+  reference for those.
 - *Redundancy:* none.
-- *Efficiency / smells:* the `?? ''` defaults mean a YAML that omits `sso_settings` asserts live `entity_id === ''` — an *inference* about gitops reset semantics, not a declaration (`gitops-yaml.ts:110-111`).
 
 **Notes (Andrey)**
 ```
@@ -156,33 +153,88 @@ other:
 
 ---
 
-### GV-03 · GitOps verify · org-settings › Windows MDM is enabled per gitops
+### GV-02 · GitOps verify · target › a fleet file declares at least one entity
 
-- **File:** [`playwright/tests/api/gitops-verify/org-settings.spec.ts`](../../tests/api/gitops-verify/org-settings.spec.ts)
-- **Grep:** `-g "Windows MDM is enabled per gitops"`
-- **Project:** gitops-verify · **Targets:** no-team only
+- **File:** [`playwright/tests/api/gitops-verify/_sanity.spec.ts`](../../tests/api/gitops-verify/_sanity.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/qa.yml npx playwright test --project=gitops-verify -g "at least one entity"`
+- **Project:** gitops-verify · **Targets:** fleet files only
+- **Mode:** API (parsed config only)
+
+**Flow**
+
+1. ☐ Load the fleet file.
+   - ✅ The sum of its labels, policies, reports, scripts, profiles, packages, Fleet-maintained apps and App Store apps is **more than zero**.
+
+**Manual repro** — open the fleet file; it declares something the specs can verify.
+
+**Assessment**
+- *Value:* the fleet-file counterpart of GV-01, loose on purpose — QA declares only software, VMs no profiles.
+- *Coverage gaps:* a fleet file whose one section stopped parsing still passes on the others.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-03 · GitOps verify · target › every declared name is unique within its kind
+
+- **File:** [`playwright/tests/api/gitops-verify/_sanity.spec.ts`](../../tests/api/gitops-verify/_sanity.spec.ts)
+- **Grep:** `… -g "unique within its kind"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API (parsed config only)
+
+**Flow**
+
+1. ☐ For labels, policies, reports, scripts and profiles (keyed `platform:name`), collect duplicated names.
+   - ✅ *(soft, per kind)* the duplicate list is empty.
+
+**Assessment**
+- *Value:* a duplicate name would make Fleet reject the apply, or make an exact-set comparison pass on a
+  shorter live list; catching it in the YAML names the file.
+- *Coverage gaps:* software (filenames, slugs) and vitals aren't checked for duplicates.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-04 · GitOps verify · fleets › the fleet set matches the gitops fleet files plus the hand-kept fleets
+
+- **File:** [`playwright/tests/api/gitops-verify/fleets.spec.ts`](../../tests/api/gitops-verify/fleets.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa npx playwright test --project=gitops-verify -g "fleet set matches"`
+- **Project:** gitops-verify · **Targets:** premium, no-team only (free has no fleets)
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load `default.yml` → `controls.windows_enabled_and_configured` (`true` in all four dirs).
-2. ☐ `GET /api/latest/fleet/config`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `mdm.windows_enabled_and_configured` === YAML value.
+1. ☐ Collect the `name:` of every `fleets/*.yml` in the target directory **and** in its sibling (`premium-fleetqa` ↔
+   `premium-fleetqa-min`): the nightly applies the baseline's QA and VMs files in both passes, so the fleet set is
+   the union. Add `HAND_KEPT_FLEETS` (`Mobile`, per `gitops/premium-fleetqa/README.md`).
+2. ☐ `GET /teams?per_page=200`; drop names starting `pw-` (a throwaway a dead run left — logged, since the chain
+   runs before the sweep that removes them).
+   - ✅ *(API)* the remaining names, sorted, **equal** the expected set.
 
-**Manual repro** — check `controls.windows_enabled_and_configured` in the YAML, then
-**Settings → Integrations → Mobile device management → Windows MDM** ("turned on"), or
-`jq .mdm.windows_enabled_and_configured`.
+**Manual repro** — **Settings → Fleets** lists exactly Workstations, QA, VMs and Mobile.
 
 **Assessment**
-- *Value:* Windows MDM off ⇒ every Windows profile in the same YAML silently fails to deliver, so this guards GV-12..15's premise.
-- *Coverage gaps:* **`controls.android_enabled_and_configured: true`** is declared in both premium dirs and has **no check at all** — same failure mode for the two Android profiles. `mdm.enabled_and_configured` (Apple APNs) also unchecked (not gitops-declared, but it gates the 11 macOS profiles).
-- *Redundancy:* `tests/api/config.spec.ts` `mdm key exists in config` only asserts the key is defined.
-- *Efficiency / smells:* helper coerces with `=== true` (`gitops-yaml.ts:115`), so a YAML typo like `windows_enabled_and_configured: "true"` becomes `false` and the test asserts the *wrong* expectation without complaining.
+- *Value:* the only place the *set* of fleets is asserted. An extra fleet (a renamed one orphaned by an apply, a
+  hand-made one) was invisible before.
+- *Coverage gaps:* `--delete-other-fleets` is never passed, so this verifies the union, not gitops' own view.
+- *Redundancy:* `resolveTeamId` throws on a missing fleet, which covers absence but not presence of extras.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -190,33 +242,29 @@ other:
 
 ---
 
-### GV-04 · GitOps verify · org-settings › feature flags match gitops
+### GV-05 · GitOps verify · custom host vitals › the custom host vital set matches gitops exactly
 
-- **File:** [`playwright/tests/api/gitops-verify/org-settings.spec.ts`](../../tests/api/gitops-verify/org-settings.spec.ts)
-- **Grep:** `-g "feature flags match gitops"`
-- **Project:** gitops-verify · **Targets:** no-team only
+- **File:** [`playwright/tests/api/gitops-verify/host-vitals.spec.ts`](../../tests/api/gitops-verify/host-vitals.spec.ts)
+- **Grep:** `… -g "custom host vital set"`
+- **Project:** gitops-verify · **Targets:** no-team only (vitals are global)
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load `default.yml` → `org_settings.features.enable_software_inventory`, `enable_host_users` (both `true` everywhere).
-2. ☐ `GET /api/latest/fleet/config`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `features.enable_software_inventory` === YAML value.
-   - ✅ *(API)* `features.enable_host_users` === YAML value.
+1. ☐ `GET /custom_host_vitals` (paginated).
+   - ✅ *(API)* `expectExactNames` against `custom_host_vitals[].name` — an **absent** key means "none", because
+     fleetctl deletes every vital when the key is omitted.
 
-**Manual repro** — compare `org_settings.features` against the toggles under
-**Settings → Organization settings → Advanced options** (host users / software inventory), or `jq .features`.
+**Manual repro** — **Settings → Organization → Custom host vitals** lists exactly the declared names (3 on the
+baseline, 2 on min).
 
 **Assessment**
-- *Value:* software inventory off would gut most of the Software area's e2e specs; this is the guard that explains *why* they'd all fail.
-- *Coverage gaps:* the same two flags on the **team** scope (`fleets/workstations.yml → settings.features`) are never verified — the whole file skips for team targets. `host_expiry_settings` (org and team) unchecked.
-- *Redundancy:* none.
-- *Efficiency / smells:* 4th duplicate `GET /config` in one file.
+- *Value:* the first verification of this key, which both configs now carry; the min variant drops one.
+- *Coverage gaps:* a vital's `$FLEET_HOST_VITAL_<id>` reference from a script or profile isn't exercised.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -224,33 +272,27 @@ other:
 
 ---
 
-### GV-05 · GitOps verify · labels › user label count matches gitops
+### GV-06 · GitOps verify · labels › the label set matches gitops exactly
 
 - **File:** [`playwright/tests/api/gitops-verify/labels.spec.ts`](../../tests/api/gitops-verify/labels.spec.ts)
-- **Grep:** `-g "user label count matches gitops"`
-- **Project:** gitops-verify · **Targets:** no-team only — `test.skip(gitopsConfig.scope !== 'no-team', 'labels are not team-scoped')` (`labels.spec.ts:13`)
+- **Grep:** `… -g "label set matches"`
+- **Project:** gitops-verify · **Targets:** all — the no-team config owns the global labels (`fleet_id` null), a fleet file the labels scoped to that fleet (none today)
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load `default.yml → labels[]`, flattening each `lib/labels/*.yml` (25 entries baseline, 23 min).
-2. ☐ `GET /api/latest/fleet/labels`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Labels with `label_type !== 'builtin'` number **exactly** the YAML count.
+1. ☐ `GET /labels`; keep `label_type: regular` with the scope's `fleet_id`.
+   - ✅ *(API)* `expectExactNames` against the declared label names.
 
-**Manual repro** — count the `- name:` entries across the files listed under `labels:` in the target's
-`default.yml` (remember the two FMA label files hold 9 and 6), then open **`/labels/manage`** — that page
-lists *only* custom labels ([`pages/labels/LabelsPage.ts:8-11`](../../pages/labels/LabelsPage.ts)) — and compare the row count.
+**Manual repro** — **Hosts → Filter by label** lists the declared labels and no other custom one.
 
 **Assessment**
-- *Value:* the only exact-cardinality check on labels; catches both a dropped label and manual/leftover labels.
-- *Coverage gaps:* label **content** — `query`, `description`, `label_membership_type: dynamic`, platform — is never compared, so a label whose query was rewritten passes.
-- *Redundancy:* strictly implied by GV-06 + GV-07 together (set equality ⇒ equal cardinality). Kept as the fast-failing signal.
-- *Efficiency / smells:* fragile against the rest of the suite — `setup/cleanup.steps.ts` sweeps `pw-*` labels on premium only (the VMs-fleet step), so on free an aborted `tests/e2e/shared/labels/labels.spec.ts` leaves a `pw-label-*` label behind until that spec's next `beforeAll` purge, and this test can fail as "drift" in between. Also re-fetches `/labels` in all three tests.
+- *Value:* exact in both directions, scoped — a fleet-scoped label no longer fails the global count.
+- *Coverage gaps:* membership (which hosts) is not compared; built-in labels are Fleet's and skipped.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -258,33 +300,347 @@ other:
 
 ---
 
-### GV-06 · GitOps verify · labels › every gitops label exists by name
+### GV-07 · GitOps verify · labels › each label's definition matches gitops
 
 - **File:** [`playwright/tests/api/gitops-verify/labels.spec.ts`](../../tests/api/gitops-verify/labels.spec.ts)
-- **Grep:** `-g "every gitops label exists by name"`
+- **Grep:** `… -g "each label's definition"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared label found live (missing ones are GV-06's):
+   - ✅ *(API, soft)* `label_membership_type` equals the declared type (default `dynamic`).
+   - ✅ *(API, soft)* `description` equals, when declared.
+   - ✅ *(API, soft)* for a dynamic label, `query` (whitespace-normalized) and `platform` (`''` ↔ undeclared) equal.
+   - ✅ *(API, soft)* for a host-vitals label, `criteria` contains the declared criteria.
+
+**Assessment**
+- *Value:* a label is its query; a body swap under an unchanged name was undetectable before. The manual label
+  (`Pilot hosts`) and the platform-restricted one (`Linux hosts running Docker`) exercise the type and platform
+  paths.
+- *Coverage gaps:* a manual label's `hosts:` list isn't compared (it's empty by declaration).
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-08 · GitOps verify · policies › the policy set matches gitops exactly
+
+- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
+- **Grep:** `… -g "policy set matches"`
+- **Project:** gitops-verify · **Targets:** all — `GET /policies` for no-team, `GET /fleets/{id}/policies` for a fleet (`?team_id=` on the first is ignored)
+- **Mode:** API
+
+**Flow**
+
+1. ☐ Read the scope's policies (paginated).
+   - ✅ *(API)* `expectExactNames` against the declared policy names.
+
+**Manual repro** — **Policies**, scope selected, lists exactly the declared names.
+
+**Assessment**
+- *Value:* exact in both directions; the inline policies are counted like the lib ones.
+- *Redundancy:* none; `tests/cli/nightly/generate-gitops.spec.ts` compares the same set from `generate-gitops`'s side.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-09 · GitOps verify · policies › each policy's definition matches gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
+- **Grep:** `… -g "each policy's definition"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared policy found live:
+   - ✅ *(API, soft)* `platform` equals (`''` ↔ undeclared); `query` equals, whitespace-normalized (skipped for a patch policy, whose query Fleet writes).
+   - ✅ *(API, soft)* `critical` equals the declared value or `false`.
+   - ✅ *(API, soft, declared keys only)* `calendar_events_enabled`, `conditional_access_enabled`, `continuous_automations_enabled`, `patch_when_closed`, `notify_before_patching`, `type`.
+   - ✅ *(API, soft)* `labels_include_any` / `labels_exclude_any` as sorted name lists.
+   - ✅ *(API, soft)* `run_script.name` equals the declared script's basename.
+   - ✅ *(API, soft)* `install_software.software_title_id` equals the title the declared slug / package hash / App Store id resolved to on this fleet (through `resolveFleetSoftware`), or `install_software` is absent when none is declared.
+
+**Manual repro** — open the policy; compare query, platform, critical, labels and the automation's target.
+
+**Assessment**
+- *Value:* the automation check is what makes `vms.yml`'s two "Claude is installed" policies verifiable: a
+  declared slug is checked against the title Fleet actually linked, not against a name.
+- *Coverage gaps:* `resend_configuration_profile` and `webhooks_and_tickets_enabled` are parsed but not compared
+  (no API field read yet; both arrive with the Compliance fleet in batch 2).
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-10 · GitOps verify · configuration profiles › the profile set matches gitops exactly, per platform
+
+- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
+- **Grep:** `… -g "profile set matches"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ `GET /configuration_profiles?team_id={id}` (paginated).
+   - ✅ *(API)* `expectExactNames` on `platform:name` keys, so a Windows profile named like a macOS one is still distinct, and the per-platform counts are implied.
+
+**Manual repro** — **Controls → OS settings → Custom settings**, scope selected, per platform.
+
+**Assessment**
+- *Value:* exact in both directions, per platform, in one test instead of four.
+- *Coverage gaps:* iOS/iPadOS profiles would key as `ios:`/`ipados:` and show up as extras — none are declared.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-11 · GitOps verify · configuration profiles › each profile's targeting matches gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
+- **Grep:** `… -g "each profile's targeting"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared profile found live:
+   - ✅ *(API, soft)* `labels_include_all`, `labels_include_any`, `labels_exclude_any` as sorted name lists equal the declared ones (undeclared ↔ absent).
+
+**Assessment**
+- *Value:* who a profile reaches is as much its definition as its payload. Today no profile is label-scoped,
+  so the check asserts "unscoped"; batch 2's Compliance fleet declares scoped ones.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-12 · GitOps verify · configuration profiles › each profile's payload matches the repo
+
+- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
+- **Grep:** `… -g "each profile's payload"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared profile found live: `GET /configuration_profiles/{uuid}?alt=media`.
+   - ✅ *(API, soft)* the served body equals the repo file, after line-ending and trailing-whitespace normalization.
+
+**Manual repro** — download the profile from the UI and `diff` it against `gitops/lib/platforms/<platform>/configuration-profiles/<file>`.
+
+**Assessment**
+- *Value:* the payload is what a host receives; a name check alone can't see an edited payload.
+- *Coverage gaps / risk:* assumes Fleet serves a profile as uploaded. Written against the documented endpoint
+  and not yet run against an applied instance (the suite's cleanup had wiped every profile when this landed);
+  the first branch run is its proof. If Fleet normalizes a payload, this compares a checksum instead.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-13 · GitOps verify · reports › the report set matches gitops exactly
+
+- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
+- **Grep:** `… -g "report set matches"`
+- **Project:** gitops-verify · **Targets:** all — `GET /queries?team_id={id}&merge_inherited=false`
+- **Mode:** API
+
+**Flow**
+
+1. ☐ Read the scope's own reports (paginated).
+   - ✅ *(API)* `expectExactNames` against the declared report names.
+
+**Assessment**
+- *Value:* exact in both directions; the inline reports count like the lib ones.
+- *Redundancy:* `cli/nightly/generate-gitops.spec.ts` compares the same set from the generated side.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-14 · GitOps verify · reports › each report's definition matches gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
+- **Grep:** `… -g "each report's definition"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared report found live:
+   - ✅ *(API, soft)* `query` equals, whitespace-normalized.
+   - ✅ *(API, soft, declared keys only)* `platform`, `description`, `interval`, `logging`, `discard_data`, `observer_can_run`, `automations_enabled`, `min_osquery_version`.
+   - ✅ *(API, soft)* `labels_include_any` / `labels_include_all` as sorted name lists.
+
+**Assessment**
+- *Value:* the inline "Collect osquery schedule stats" sets every option away from its default and the min
+  variant changes two, so the update path is exercised nightly. `vms.yml`'s `pw-host-report-results` is held to
+  the interval and `discard_data` two specs depend on.
+- *Coverage gaps:* none for the documented report keys.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-15 · GitOps verify · scripts › the script set matches gitops exactly
+
+- **File:** [`playwright/tests/api/gitops-verify/scripts.spec.ts`](../../tests/api/gitops-verify/scripts.spec.ts)
+- **Grep:** `… -g "script set matches"`
+- **Project:** gitops-verify · **Targets:** all — `GET /scripts?team_id={id}`
+- **Mode:** API
+
+**Flow**
+
+1. ☐ Read the scope's scripts (paginated).
+   - ✅ *(API)* `expectExactNames` against the declared basenames — the two Linux ones coming from a `paths:` glob.
+
+**Assessment**
+- *Value:* exact in both directions, and the first exercise of a glob reference.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-16 · GitOps verify · scripts › each script's body matches the repo
+
+- **File:** [`playwright/tests/api/gitops-verify/scripts.spec.ts`](../../tests/api/gitops-verify/scripts.spec.ts)
+- **Grep:** `… -g "each script's body"`
+- **Project:** gitops-verify · **Targets:** all
+- **Mode:** API
+
+**Flow**
+
+1. ☐ For every declared script found live: `GET /scripts/{id}?alt=media`.
+   - ✅ *(API, soft)* the served body equals the repo file, after line-ending and trailing-whitespace normalization.
+
+**Manual repro** — **Controls → Scripts**, download, `diff` against `gitops/lib/platforms/<platform>/scripts/<file>`.
+
+**Assessment**
+- *Value:* the body is what a host runs; it was the audit's first "bigger bet".
+- *Coverage gaps / risk:* like GV-12, not yet run against an applied instance; the first branch run is its proof.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-17 · GitOps verify · org settings › org_info, server_settings, features and fleet_desktop match gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "org_info, server_settings"`
+- **Project:** gitops-verify · **Targets:** no-team only
+- **Mode:** API (one `GET /config` in a `beforeAll`, shared by GV-17 … GV-22)
+
+**Flow**
+
+1. ☐ `expectSubset` of `org_settings.org_info` (name, contact URL, both logo URLs), `server_settings` (every
+   declared key; `server_url` with a trailing slash trimmed), `features` (`enable_*`, `additional_queries`,
+   `historical_data`) and `fleet_desktop` (all three keys) against the live config.
+   - ✅ *(API, soft per key)* every declared key equals.
+
+**Manual repro** — **Settings → Organization settings**: Organization info, Advanced options, Fleet Desktop.
+
+**Assessment**
+- *Value:* closes the audit's largest gap in one test. `enable_analytics` is the known trap: Fleet forces it on
+  for a premium license, so premium's YAML says `true` and this would fail the moment it said otherwise.
+- *Coverage gaps:* `vulnerability_exposure_historical_reporting` and `detail_query_overrides` aren't declared.
+
+**Notes (Andrey)**
+```
+verdict:
+missing validations:
+steps to cut:
+other:
+```
+
+---
+
+### GV-18 · GitOps verify · org settings › expiry, webhook, activity and gitops settings match gitops
+
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "expiry, webhook"`
 - **Project:** gitops-verify · **Targets:** no-team only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load the YAML label names.
-2. ☐ `GET /api/latest/fleet/labels`, build a name Set from **all** labels (builtins included).
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* For each YAML label: name is present in the live set (message: `label "<name>" missing from API`).
-
-**Manual repro** — subset direction only: for each `name:` in the `lib/labels/*.yml` files the target
-references, search it on `/labels/manage`. Faster: `jq -r '.labels[].name' <(curl …/labels) | sort > /tmp/live`
-and diff against the YAML names.
+1. ☐ `expectSubset` of `host_expiry_settings`, `activity_expiry_settings`, `webhook_settings` (interval and the
+   four webhooks — enable flags, destinations, host percentage / days / batch sizes), `gitops`
+   (`gitops_mode_enabled`, `repository_url`; the `exceptions` Fleet adds are ignored) and `vulnerability_settings`.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Assessment**
-- *Value:* names the specific missing label, which GV-05 cannot.
-- *Coverage gaps:* subset-only — extra live labels invisible here (that is GV-07's job). No content comparison.
-- *Redundancy:* overlaps GV-05 and GV-07; the three together = set equality.
-- *Efficiency / smells:* the Set is built **without** filtering `builtin` (`labels.spec.ts:27`), unlike GV-05/GV-07 — a gitops label name colliding with a Fleet built-in would pass this test while the label is actually absent. Loop body is empty-safe: if `gitopsConfig.labels` were `[]` the test passes having asserted only `toBeOK()`.
+- *Value:* the min variant changes the activity window and every webhook destination, so this proves updates
+  land, not just that a value was once set. The specs that write a webhook snapshot and restore it, so the
+  gitops value is what they put back.
+- *Coverage gaps:* `failing_policies_webhook.policy_ids` is deliberately undeclared (Fleet keeps the live list).
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -292,33 +648,26 @@ other:
 
 ---
 
-### GV-07 · GitOps verify · labels › no extra user labels on live (no superset drift)
+### GV-19 · GitOps verify · org settings › SSO settings match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/labels.spec.ts`](../../tests/api/gitops-verify/labels.spec.ts)
-- **Grep:** `-g "no extra user labels on live"`
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "SSO settings match"`
 - **Project:** gitops-verify · **Targets:** no-team only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load the YAML label names into an expected Set.
-2. ☐ `GET /api/latest/fleet/labels`, filter to `label_type !== 'builtin'`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* For each live custom label: name is in the expected Set (message: `live has unexpected label "<name>" not in gitops`).
-
-**Manual repro** — the reverse diff of GV-06: read every row on `/labels/manage` and confirm each one
-appears in the target's `labels:` file list. This is the direction that catches labels created by hand
-in the UI or left behind by a crashed test run.
+1. ☐ The config declares `sso_settings` (hard assertion — omitting the section would turn admin SSO off).
+2. ☐ `expectSubset` of all six declared keys, `metadata_url` expanded from `FLEET_SSO_METADATA_URL`.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Assessment**
-- *Value:* the only superset check for labels — and the one most likely to fire, since gitops does not delete labels it never created.
-- *Coverage gaps:* no content comparison; nothing distinguishes "extra label" from "label renamed" (a rename trips GV-06 *and* GV-07 with two unrelated-looking failures).
-- *Redundancy:* pairs with GV-06; GV-05 is implied.
-- *Efficiency / smells:* third duplicate `GET /labels` in the file. Vacuous if live has zero custom labels.
+- *Value:* six keys where three were checked; `shared/auth/sso-login.spec.ts` depends on `enable_sso` and an
+  Okta `idp_name`, both held here.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -326,34 +675,31 @@ other:
 
 ---
 
-### GV-08 · GitOps verify · policies › policy count matches gitops
+### GV-20 · GitOps verify · org settings › MDM integrations match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
-- **Grep:** `-g "policy count matches gitops"`
-- **Project:** gitops-verify · **Targets:** all six (no-team **and** team)
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "MDM integrations match"`
+- **Project:** gitops-verify · **Targets:** no-team only (free declares no `mdm` block, so it asserts nothing there)
 - **Mode:** API
 
 **Flow**
 
-1. ☐ `beforeAll`: `resolveTeamId()` → `0` for a directory target, or `GET /teams?per_page=200` → id of `doc.name` for a fleet file (**throws** with the list of known team names if missing).
-2. ☐ Load the target's `policies[]` (27 / 22 no-team; 23 / 21 Workstations).
-3. ☐ `GET /policies?per_page=200` when `teamId === 0`, else `GET /fleets/{id}/policies?per_page=200` (`policiesEndpoint`, `policies.spec.ts:23-27` — the comment records that `?team_id=` is ignored on `/policies`).
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `body.policies` has exactly the YAML length.
+1. ☐ `expectSubset` of `mdm.end_user_authentication` (entity id, IdP name, metadata URL), `apple_server_url` and
+   `windows_automatic_enrollment` where declared.
+2. ☐ For each declared ABM token, find the live one by `organization_name`; for each VPP token, by `location`.
+   - ✅ *(API, soft)* the token exists; its declared keys (the three `*_fleet` mappings; the `fleets` list) equal.
+   - ✅ *(API, soft)* the live token counts equal the declared ones.
 
-**Manual repro** — count `- path:` lines under `policies:` in the target file (each `lib/**/policies/*.yml`
-holds exactly one policy, verified across all 27), then open **Policies** with the matching scope selected
-(Unassigned for `default.yml`, Workstations for the fleet file) and compare the list total.
+**Manual repro** — **Settings → Integrations → Mobile device management**: Apple Business Manager and Volume
+Purchasing Program tables, and **End user authentication**.
 
 **Assessment**
-- *Value:* the headline drift number; the baseline→min transition (27→22, 23→21) makes it a genuine test that gitops *deletes* as well as creates.
-- *Coverage gaps:* `inherited_policies` in the team response is ignored, so global→team inheritance is unverified. Policy content (`query`, `description`, `resolution`, `critical`, `calendar_events_enabled`, `labels_include_any`, install-software/run-script automations) is entirely unchecked.
-- *Redundancy:* implied by GV-09 + GV-10.
-- *Efficiency / smells:* four tests, four identical `GET`s. `per_page=200` is a hard ceiling with no guard — at >200 policies the count silently caps and the test starts failing for the wrong reason.
+- *Value:* the ABM default-fleet mapping was invisible drift before, and an omitted `apple_business` /
+  `volume_purchasing_program` key *clears* the mappings — this is the check that would catch it.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -361,33 +707,28 @@ other:
 
 ---
 
-### GV-09 · GitOps verify · policies › every gitops policy exists by name
+### GV-21 · GitOps verify · org settings › the global MDM flags under controls match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
-- **Grep:** `-g "every gitops policy exists by name"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "global MDM flags"`
+- **Project:** gitops-verify · **Targets:** no-team only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load YAML policy names (from the `name:` field inside each referenced file, e.g. `macOS - Battery healthy`).
-2. ☐ `GET` the scope's policies endpoint; build a name Set.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Each YAML policy name is present (message includes `(team_id=<n>)`).
-
-**Manual repro** — `grep -h '^- name:' $(…the policy files the target lists…) | sort` vs the Policies list
-for that scope (search each name in the list's search box). The `team_id` in the failure message tells you
-which scope was queried.
+1. ☐ `expectSubset` of `windows_enabled_and_configured`, `android_enabled_and_configured`,
+   `windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`,
+   `only_allow_apple_business_enrollment` and `macos_migration` — each where `controls` declares it — against
+   `config.mdm`.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Assessment**
-- *Value:* pinpoints *which* policy vanished; the failure message carries the scope, which is the first thing you need.
-- *Coverage gaps:* subset-only; no query/description/resolution comparison, so a policy whose SQL was silently reverted passes.
-- *Redundancy:* overlaps GV-08/GV-10 (three tests = set equality on names).
-- *Efficiency / smells:* loop is vacuous if the YAML declares no policies.
+- *Value:* the Android flag gates two profiles and was unchecked. Note `android_enabled_and_configured` is a
+  server no-op on a config write: this holds the instance to the YAML's claim, not the apply to its effect.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -395,33 +736,27 @@ other:
 
 ---
 
-### GV-10 · GitOps verify · policies › no extra policies on live (no superset drift)
+### GV-22 · GitOps verify · org settings › agent options match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
-- **Grep:** `-g "no extra policies on live"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "agent options match"`
+- **Project:** gitops-verify · **Targets:** no-team only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Build the expected name Set from the YAML.
-2. ☐ `GET` the scope's policies endpoint.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Every live policy name is in the expected Set (message: `live has unexpected policy "<name>" not in gitops (team_id=<n>)`).
-
-**Manual repro** — reverse diff: read the Policies list for the scope and confirm each row exists in the
-target's `policies:` list. This is the direction that catches a policy added by hand in the UI, or a
-`playwright-policy-*` left by an aborted CRUD spec.
+1. ☐ The config declares `agent_options` (hard — omitting it clears the global agent options).
+2. ☐ `expectSubset` of the resolved `lib/agent-options.yml` document against `config.agent_options`.
+   - ✅ *(API, soft per key)* every declared key equals (`config.options.*`, `config.decorators.load`).
 
 **Assessment**
-- *Value:* the superset half — the only thing that notices state gitops didn't put there.
-- *Coverage gaps:* none beyond content.
-- *Redundancy:* GV-08 is arithmetic-implied by GV-09 + GV-10.
-- *Efficiency / smells:* vacuous when live has zero policies (would then be caught only by GV-08).
+- *Value:* the options every host runs with; never verified before.
+- *Coverage gaps:* `command_line_flags` and `update_channels` aren't declared globally on purpose (they reach
+  the real VMs); batch 2 declares them on the hostless Compliance fleet.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -429,32 +764,28 @@ other:
 
 ---
 
-### GV-11 · GitOps verify · policies › platform field matches gitops for each policy
+### GV-23 · GitOps verify · org settings › the global enroll secrets match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/policies.spec.ts`](../../tests/api/gitops-verify/policies.spec.ts)
-- **Grep:** `-g "platform field matches gitops for each policy"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `SUITE=free GITOPS_TARGET=../gitops/free-fleetqa npx playwright test --project=gitops-verify -g "global enroll secrets"`
+- **Project:** gitops-verify · **Targets:** no-team configs that declare `org_settings.secrets` — free; premium skips (its secrets are under the gitops-mode exception)
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load YAML `{name, platform}` pairs (e.g. `darwin`, `windows`, `linux`).
-2. ☐ `GET` the scope's policies endpoint; build `name → platform` Map.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* For each YAML policy **that declares a platform**, live `platform` string matches exactly (`policies.spec.ts:64-67`).
+1. ☐ `GET /spec/enroll_secret`.
+   - ✅ *(API, soft)* the **count** of declared secrets missing live is 0.
+   - ✅ *(API)* the live count equals the declared count.
 
-**Manual repro** — for a handful of policies, compare `platform:` in the `lib/**/policies/*.yml` file against
-the **Platform** column / policy details page for that policy. All 27 policy files currently declare `platform`.
+Values are never printed: the messages carry counts only.
 
 **Assessment**
-- *Value:* the only *field-level* drift check on policies — a wrong platform silently changes which hosts a policy targets, and nothing else in the suite would notice.
-- *Coverage gaps:* platform is the only field compared. Multi-platform values are comma-joined strings compared with `toBe`, so a reordering by Fleet (`darwin,windows` vs `windows,darwin`) reads as drift.
-- *Redundancy:* none — the only non-name policy assertion.
-- *Efficiency / smells:* `if (!p.platform) continue` (`policies.spec.ts:65`) is a silent skip — today no policy file omits `platform`, but adding one removes it from this check with no signal. `apiByName.get()` returns `undefined` for a missing policy, so a deletion fails here *and* in GV-08/09 with three confusing failures.
+- *Value:* free's apply rotates the global secret to `$FLEET_ENROLL_SECRET`; the simulations re-enroll with it.
+- *Coverage gaps:* none for free; premium's fleet secrets aren't declared and can't be.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -462,34 +793,26 @@ other:
 
 ---
 
-### GV-12 · GitOps verify · configuration profiles › total profile count matches gitops
+### GV-24 · GitOps verify · fleet settings › the fleet's settings match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
-- **Grep:** `-g "total profile count matches gitops"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/workstations.yml npx playwright test --project=gitops-verify -g "fleet's settings match"`
+- **Project:** gitops-verify · **Targets:** fleet files only
+- **Mode:** API (one `GET /fleets/{id}` in a `beforeAll`, shared with GV-25)
 
 **Flow**
 
-1. ☐ `beforeAll`: resolve `teamId`.
-2. ☐ Load `controls.apple_settings/windows_settings/android_settings.configuration_profiles[]` → 23 (11/10/2) baseline, 21 (11/8/2) min. macOS names come from `<PayloadDisplayName>` inside the `.mobileconfig`; Windows/Android from the filename minus extension.
-3. ☐ `GET /configuration_profiles?per_page=200&team_id={id}`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `body.profiles` has exactly the YAML length.
-
-**Manual repro** — count the `- path:` entries across the three `*_settings.configuration_profiles`
-blocks in the target file, then **Controls → OS settings → Custom settings** with the scope selected
-and compare the row count.
+1. ☐ `expectSubset` of the file's `settings.features`, `host_expiry_settings`, `webhook_settings` and
+   `integrations` against the fleet object.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Assessment**
-- *Value:* 23→21 between baseline and min proves gitops removes profiles; a stuck profile is a real MDM-delivery hazard.
-- *Coverage gaps:* profile **payload** never compared (a rewritten `.mobileconfig` with the same display name passes); profile→label scoping (`labels_include_all` etc.) not exercised by these configs at all; delivery status (Verified/Pending/Failed host counts) unchecked.
-- *Redundancy:* implied by GV-13 (per-platform sums) and by GV-14 + GV-15.
-- *Efficiency / smells:* four identical `GET`s in the file; `per_page=200` unguarded.
+- *Value:* the first verification of any fleet's `settings:` block (features, host expiry on Workstations, QA
+  and VMs). Fleet webhooks and integrations are compared when a fleet declares them (batch 2).
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -497,32 +820,26 @@ other:
 
 ---
 
-### GV-13 · GitOps verify · configuration profiles › per-platform profile counts match gitops
+### GV-25 · GitOps verify · fleet settings › the fleet's agent options match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
-- **Grep:** `-g "per-platform profile counts match gitops"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/settings.spec.ts`](../../tests/api/gitops-verify/settings.spec.ts)
+- **Grep:** `… -g "fleet's agent options"`
+- **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load the YAML profile list with its derived `platform` tag.
-2. ☐ `GET /configuration_profiles?per_page=200&team_id={id}`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* For each of `darwin`, `windows`, `android`: live count for that platform === YAML count (labelled `${platform} profile count`).
-
-**Manual repro** — the three YAML blocks give the expected split (11 mac / 10 or 8 win / 2 android);
-in **Controls → OS settings → Custom settings** the platform is shown per row — tally by platform.
+1. ☐ The fleet file declares `agent_options` (hard — omitting it clears the fleet's).
+2. ☐ `expectSubset` of the resolved document against the fleet's `agent_options`.
+   - ✅ *(API, soft per key)* every declared key equals.
 
 **Assessment**
-- *Value:* localises a total-count mismatch to a platform, which usually identifies the cause immediately (e.g. Windows MDM off ⇒ windows count 0).
-- *Coverage gaps:* `ios` / `ipados` are in the `ApiProfile` union (`profiles.spec.ts:8`) but **not** in the loop (`:32`) — an unexpected iOS profile is caught only indirectly by GV-12/GV-15. Declaration (DDM) profiles likewise unclassified.
-- *Redundancy:* GV-12 is the sum of this test.
-- *Efficiency / smells:* both empty ⇒ `0 === 0` passes, so this test can "pass" three times having verified nothing.
+- *Value:* the VMs fleet's agent options are what the real VMs run with; `cleanup.steps.ts` strips a
+  `script_execution_timeout` a spec leaves there, and this confirms the rest is as declared.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -530,34 +847,29 @@ other:
 
 ---
 
-### GV-14 · GitOps verify · configuration profiles › every gitops profile exists by name
+### GV-26 · GitOps verify · software › the custom package set matches gitops exactly
 
-- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
-- **Grep:** `-g "every gitops profile exists by name"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
+- **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/vms.yml npx playwright test --project=gitops-verify -g "custom package set"`
+- **Project:** gitops-verify · **Targets:** fleet files only (a `default.yml` can't carry `software`)
+- **Mode:** API (`resolveFleetSoftware`: `GET /software/titles?available_for_install=true` paginated, one `GET /software/titles/{id}` per title, one `GET /software/fleet_maintained_apps?per_page=5000`)
 
 **Flow**
 
-1. ☐ Load YAML profile names — macOS via the `<PayloadDisplayName>` heuristic, Windows/Android via basename.
-2. ☐ `GET /configuration_profiles?per_page=200&team_id={id}`; build a name Set.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Each YAML profile name is present (message includes the platform and `team_id`).
+1. ☐ Keep the titles whose package has no `fleet_maintained_app_id`.
+   - ✅ *(API)* `expectExactNames` of their installer filenames against the declared packages' filenames (the URL's last segment, or the script's name for a script-only package).
 
-**Manual repro** — for a macOS profile, open the `.mobileconfig` and read the **top-level**
-`PayloadDisplayName` (not the ones nested in sub-payloads); that string must appear as the profile name
-in **Controls → OS settings → Custom settings**. For Windows/Android the profile name is the bare filename
-(`disable-onedrive`, `disable-camera`).
+**Manual repro** — **Software**, fleet selected, filter *Available for install*: the four inert fixtures on VMs.
 
 **Assessment**
-- *Value:* the only test that ties Fleet's parsed profile name back to the file contents — catches a `.mobileconfig` edited without re-checking its display name.
-- *Coverage gaps:* subset-only; no payload comparison.
-- *Redundancy:* overlaps GV-12/GV-15.
-- *Efficiency / smells:* `extractMacosProfileName` swallows read errors and falls back to the basename (`gitops-yaml.ts:220-223`) — a moved/unreadable file becomes a confusing "profile `firewall` missing" instead of a file-not-found. The smallest-indentation heuristic is a genuine reimplementation of Fleet's parser and can diverge.
+- *Value:* `vms.yml`'s packages were applied nightly and never verified. Matching on the filename rather than the
+  title name is deliberate: Fleet names a Windows title by what the host reports until its reconcile cron runs.
+- *Coverage gaps:* a second version of the same title (allowed since 4.7x) would key on the same filename only
+  if the URL differs — not declared yet.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -565,33 +877,28 @@ other:
 
 ---
 
-### GV-15 · GitOps verify · configuration profiles › no extra profiles on live (no superset drift)
+### GV-27 · GitOps verify · software › each custom package's hash and options match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/profiles.spec.ts`](../../tests/api/gitops-verify/profiles.spec.ts)
-- **Grep:** `-g "no extra profiles on live"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
+- **Grep:** `… -g "each custom package's hash"`
+- **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Build the expected name Set from the YAML (all three platforms).
-2. ☐ `GET /configuration_profiles?per_page=200&team_id={id}`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Every live profile name is in the expected Set (message: `live has unexpected profile "<name>" (<platform>) not in gitops (team_id=<n>)`).
-
-**Manual repro** — reverse diff of GV-14: every row in **Controls → OS settings → Custom settings** for the
-scope must trace back to a `- path:` in the target YAML. This is the check that catches a profile uploaded
-manually or left by an aborted profiles CRUD spec.
+1. ☐ For every declared package found live (by filename), from the title detail:
+   - ✅ *(API, soft)* `hash_sha256` equals the declared hash.
+   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists.
+   - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists.
+   - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
 
 **Assessment**
-- *Value:* an extra MDM profile is the highest-consequence drift in this area (it actually changes device configuration), and this is the only test that sees it.
-- *Coverage gaps:* platform is reported in the message but not asserted, so a profile that flipped platform is invisible here (GV-13 catches it).
-- *Redundancy:* pairs with GV-14; GV-12/13 are arithmetic consequences.
-- *Efficiency / smells:* fourth duplicate `GET` in the file.
+- *Value:* the hash is what lets an apply skip the download, so a mismatch means a different file is on the
+  instance; 7-Zip's own install/uninstall scripts are compared body for body.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -599,33 +906,31 @@ other:
 
 ---
 
-### GV-16 · GitOps verify · scripts › script count matches gitops
+### GV-28 · GitOps verify · software › the Fleet-maintained app set matches gitops exactly
 
-- **File:** [`playwright/tests/api/gitops-verify/scripts.spec.ts`](../../tests/api/gitops-verify/scripts.spec.ts)
-- **Grep:** `-g "script count matches gitops"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
+- **Grep:** `SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/qa.yml npx playwright test --project=gitops-verify -g "Fleet-maintained app set"`
+- **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ `beforeAll`: resolve `teamId`.
-2. ☐ Load `controls.scripts[]` → names are **file basenames with extension** (11 / 9 no-team, 6 / 5 Workstations).
-3. ☐ `GET /scripts?per_page=200&team_id={id}`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `body.scripts` has exactly the YAML length.
+1. ☐ Map each live title's `fleet_maintained_app_id` to its catalog slug.
+   - ✅ *(API)* `expectExactNames` of those slugs against the declared `fleet_maintained_apps[].slug`.
+   - ✅ *(API, soft)* every such slug's title has an installer on the fleet.
 
-**Manual repro** — count `- path:` under `controls.scripts` in the target, then **Controls → Scripts**
-with the scope selected and compare the row count (11 for `default.yml`, 6 for baseline Workstations).
+The catalog's own `software_title_id` is **not** used as the signal: Fleet sets it on a catalog entry whose app
+was uploaded as a custom package too (7-Zip on VMs), which would count once as each.
+
+**Manual repro** — **Software → Add software → Fleet-maintained**, fleet selected: the declared apps show as added.
 
 **Assessment**
-- *Value:* proves gitops uploaded and (in the min pass) removed the script set for the scope.
-- *Coverage gaps:* **script contents are never compared** — this is the widest content gap in the area, because a script is nothing *but* content: swap `uninstall-fleetd-macos.sh`'s body for `rm -rf /` and all three script tests still pass. Fleet exposes the body via `GET /scripts/{id}` and a `script_contents_id`/hash on the list response.
-- *Redundancy:* implied by GV-17 + GV-18.
-- *Efficiency / smells:* three identical `GET`s; `per_page=200` unguarded.
+- *Value:* the QA shelf (20 apps) and the VMs fixtures (4) were never verified; `version-pinning.spec.ts`
+  depends on Postman being on QA, which this now proves nightly.
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -633,32 +938,30 @@ other:
 
 ---
 
-### GV-17 · GitOps verify · scripts › every gitops script exists by basename
+### GV-29 · GitOps verify · software › each Fleet-maintained app's options match gitops
 
-- **File:** [`playwright/tests/api/gitops-verify/scripts.spec.ts`](../../tests/api/gitops-verify/scripts.spec.ts)
-- **Grep:** `-g "every gitops script exists by basename"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
+- **Grep:** `… -g "each Fleet-maintained app's options"`
+- **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Load `controls.scripts[]` basenames (`toggle-fleetd-debug.sh`, `create-admin-user.ps1`, …).
-2. ☐ `GET /scripts?per_page=200&team_id={id}`; build a name Set.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Each YAML basename is present (message includes `team_id`).
-
-**Manual repro** — `basename` each `- path:` under `controls.scripts` and search that exact filename
-(extension included) in **Controls → Scripts** for the scope.
+1. ☐ For every declared app found live (by slug), from the title detail:
+   - ✅ *(API, soft, declared keys only)* `self_service`, `install_during_setup`; `categories` as sorted lists.
+   - ✅ *(API, soft)* an exact `version` pin equals the installer's version; a caret pin bounds its major.
+   - ✅ *(API, soft)* label targets as sorted name lists.
+   - ✅ *(API, soft, when declared)* the pre-install query and the three script bodies.
 
 **Assessment**
-- *Value:* names the missing script; also implicitly asserts Fleet's "script name = uploaded filename" contract.
-- *Coverage gaps:* no contents; the `platform` the helper derives from the path (`gitops-yaml.ts:191-195`) is parsed and then **never asserted by any test**.
-- *Redundancy:* overlaps GV-16/GV-18.
-- *Efficiency / smells:* vacuous loop if `controls.scripts` is absent.
+- *Value:* today nothing on QA or VMs declares an option (the shelf's rule), so this asserts "defaults"; the
+  Compliance fleet in batch 2 is where self-service, categories, label targets and a caret pin get declared.
+- *Coverage gaps:* the version an unpinned app resolved to isn't compared with the catalog's latest (it lags
+  the hourly auto-update cron by design).
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -666,169 +969,26 @@ other:
 
 ---
 
-### GV-18 · GitOps verify · scripts › no extra scripts on live (no superset drift)
+### GV-30 · GitOps verify · software › the App Store app set matches gitops exactly
 
-- **File:** [`playwright/tests/api/gitops-verify/scripts.spec.ts`](../../tests/api/gitops-verify/scripts.spec.ts)
-- **Grep:** `-g "no extra scripts on live"`
-- **Project:** gitops-verify · **Targets:** all six
+- **File:** [`playwright/tests/api/gitops-verify/software.spec.ts`](../../tests/api/gitops-verify/software.spec.ts)
+- **Grep:** `… -g "App Store app set"`
+- **Project:** gitops-verify · **Targets:** fleet files only
 - **Mode:** API
 
 **Flow**
 
-1. ☐ Build the expected basename Set from the YAML.
-2. ☐ `GET /scripts?per_page=200&team_id={id}`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Every live script name is in the expected Set (message: `live has unexpected script "<name>" not in gitops (team_id=<n>)`).
-
-**Manual repro** — reverse diff: every row in **Controls → Scripts** for the scope must appear as a
-`- path:` basename in the target YAML. Catches manually uploaded scripts and leftovers from the scripts CRUD spec.
+1. ☐ Keep the titles with an `app_store_app`, keyed `platform:app_store_id` (or the id alone when a declared app names no platform, since Fleet then adds one title per platform).
+   - ✅ *(API)* `expectExactNames` against the declared `app_store_apps`.
 
 **Assessment**
-- *Value:* an extra runnable script on a fleet is a standing footgun; only this test sees it.
-- *Coverage gaps:* no contents.
-- *Redundancy:* pairs with GV-17.
-- *Efficiency / smells:* third duplicate `GET`; vacuous when live has zero scripts.
+- *Value:* holds every gitops-managed fleet to "no VPP or Android app unless declared" — none is today.
+- *Coverage gaps:* the option keys of a store app aren't compared; batch 3 decides whether to declare any
+  (fleetdm/fleet#54013: an unavailable app halts the whole apply).
 
 **Notes (Andrey)**
 ```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
-
----
-
-### GV-19 · GitOps verify · reports › report count matches gitops
-
-- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
-- **Grep:** `-g "report count matches gitops"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
-
-**Flow**
-
-1. ☐ `beforeAll`: resolve `teamId`.
-2. ☐ Load `reports[]`, flattening referenced files — note `dex-queries.yml` contributes **10** reports, so 21 file refs = 30 reports (baseline) and 17 refs = 26 (min); Workstations declares 5 / 3.
-3. ☐ `GET /queries?per_page=200&team_id={id}&merge_inherited=false` (`reportsEndpoint`, `reports.spec.ts:24` — `merge_inherited=false` so a team's own reports are counted without global inheritance).
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* `body.queries` has exactly the YAML length.
-
-**Manual repro** — `grep -c '^- name:'` across the files listed under `reports:` (don't count paths — count
-entries), then open **Reports** ("Queries" on the API) with the scope selected. For Workstations you must be
-in the team scope, not **All fleets**, or you'll see the inherited globals too.
-
-**Assessment**
-- *Value:* the report set is the largest gitops-managed collection (30) and the one the e2e suite most often disturbs; a count mismatch here is the sharpest apply/wipe signal in the area.
-- *Coverage gaps:* report content — `query`, `interval`, `automations_enabled`, `logging`, `observer_can_run`, `discard_data` — is never verified. `interval` + `automations_enabled` change *behaviour* (scheduled collection), so silent drift there is invisible today. Global→team inheritance is deliberately excluded and never separately asserted.
-- *Redundancy:* implied by GV-20 + GV-22.
-- *Efficiency / smells:* four identical `GET`s. ⚠️ unclear from the code whether `team_id=0` is interpreted as "global/no team" by `/queries` or ignored — the assertion only holds if it scopes; worth confirming once against a live instance.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
-
----
-
-### GV-20 · GitOps verify · reports › every gitops report exists by name
-
-- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
-- **Grep:** `-g "every gitops report exists by name"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
-
-**Flow**
-
-1. ☐ Load YAML report names (`Collect listening TCP/UDP ports`, `DEX - Hardware inventory - system information`, …).
-2. ☐ `GET /queries?per_page=200&team_id={id}&merge_inherited=false`; build a name Set.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Each YAML report name is present (message includes `team_id`).
-
-**Manual repro** — collect names with `grep -h '^- name:'` over the referenced report files and search each
-in the **Reports** list for the scope. The 10 `DEX - …` entries all come from the single `dex-queries.yml`,
-so if they're all missing, suspect that one file reference.
-
-**Assessment**
-- *Value:* isolates which report failed to apply — valuable because one bad multi-entry file drops 10 at once.
-- *Coverage gaps:* subset-only; no SQL/interval comparison.
-- *Redundancy:* overlaps GV-19/GV-22.
-- *Efficiency / smells:* vacuous loop if `reports:` is absent from the target.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
-
----
-
-### GV-21 · GitOps verify · reports › platform field matches gitops for each report
-
-- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
-- **Grep:** `-g "platform field matches gitops for each report"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
-
-**Flow**
-
-1. ☐ Load YAML `{name, platform}` pairs — commonly the comma-joined `darwin,linux,windows`.
-2. ☐ `GET /queries?…`; build `name → platform` Map.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* For each YAML report **that declares a platform**, live `platform` matches exactly (`reports.spec.ts:52-55`).
-
-**Manual repro** — compare `platform:` in the report's `lib/platforms/**/reports/*.yml` against the report's
-details page (**Platform** / compatibility). All 21 report files currently declare `platform`.
-
-**Assessment**
-- *Value:* only field-level check on reports; a narrowed platform silently stops collection on the excluded OSes.
-- *Coverage gaps:* platform only. Exact string compare on a comma-joined list is order-sensitive — if Fleet ever normalises the order this fails as false drift.
-- *Redundancy:* mirrors GV-11 exactly (same shape, different entity) — the two are candidates for one shared helper.
-- *Efficiency / smells:* `if (!r.platform) continue` (`reports.spec.ts:53`) silently excludes any platform-less report.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
-missing validations:
-steps to cut:
-other:
-```
-
----
-
-### GV-22 · GitOps verify · reports › no extra reports on live (no superset drift)
-
-- **File:** [`playwright/tests/api/gitops-verify/reports.spec.ts`](../../tests/api/gitops-verify/reports.spec.ts)
-- **Grep:** `-g "no extra reports on live"`
-- **Project:** gitops-verify · **Targets:** all six
-- **Mode:** API
-
-**Flow**
-
-1. ☐ Build the expected name Set from the YAML.
-2. ☐ `GET /queries?per_page=200&team_id={id}&merge_inherited=false`.
-   - ✅ *(API)* Response OK.
-   - ✅ *(API)* Every live report name is in the expected Set (message: `live has unexpected report "<name>" not in gitops (team_id=<n>)`).
-
-**Manual repro** — reverse diff: every row in **Reports** for the scope must trace to a `name:` in the
-target's referenced report files. Highest-yield check in the area for suite residue, since
-`deleteAllQueries` in `cleanup.steps.ts` treats queries as global and an aborted reports CRUD spec
-leaves `playwright-*` reports behind.
-
-**Assessment**
-- *Value:* the only superset check on reports; also the canary for "the e2e suite ran after the gitops apply".
-- *Coverage gaps:* no content comparison; nothing asserts that a team *inherits* the global reports.
-- *Redundancy:* pairs with GV-20; GV-19 is implied.
-- *Efficiency / smells:* fourth duplicate `GET` in the file; vacuous when live has zero reports.
-
-**Notes (Andrey)**
-```
-verdict:            (keep / trim / expand / rewrite / delete / merge-with-___)
+verdict:
 missing validations:
 steps to cut:
 other:
@@ -840,111 +1000,91 @@ other:
 
 ### Coverage map
 
-GitOps YAML surface actually present in `gitops/**` vs. what the six specs verify:
+GitOps YAML surface present in `gitops/**` vs. what the specs verify:
 
 | GitOps surface (declared in YAML) | Covered by | Gap |
 |---|---|---|
-| `org_settings.org_info.org_name` | GV-01 | `contact_url`, both logo URLs unchecked |
-| `org_settings.sso_settings` | GV-02 (3 of 6 fields) | `metadata_url`, `enable_sso_idp_login`, `idp_image_url` |
-| `org_settings.features` (org) | GV-04 | — |
-| `controls.windows_enabled_and_configured` | GV-03 | — |
-| `controls.android_enabled_and_configured` (premium) | **nothing** | no check at all; gates the 2 Android profiles |
-| `org_settings.server_settings.*` (8 keys incl. `scripts_disabled`, `report_cap`, `server_url`) | **nothing** | `scripts_disabled: true` would break every script flow silently |
-| `org_settings.host_expiry_settings` (org + team) | **nothing** | — |
-| `org_settings.fleet_desktop.transparency_url` | **nothing** | — |
-| `org_settings.secrets` (enroll secrets, free only) | **nothing** | `GET /spec/enroll_secret` |
-| `org_settings.mdm.end_user_authentication` (premium) | **nothing** | EUA entity_id / idp_name |
-| `org_settings.mdm.apple_business_manager` (ABM → Workstations for macos/ios/ipados) | **nothing** | the ABM default-team mapping is invisible drift |
-| `org_settings.mdm.volume_purchasing_program` | **nothing** | — |
-| `agent_options` (`lib/agent-options.yml`, org + both teams) | **nothing** | `GET /config → agent_options`, `GET /fleets/{id}` |
-| Team `settings.features` / `host_expiry_settings` (`fleets/workstations.yml`) | **nothing** | org-settings spec skips team scope wholesale |
-| Team existence / team **set** (`--delete-other-fleets`) | `resolveTeamId` throws if `Workstations` is missing | no assertion that the live team list equals the gitops fleet files — an extra team is invisible |
-| `labels[]` names | GV-05/06/07 (exact set) | label `query`, `description`, `label_membership_type`, platform |
-| `policies[]` names + platform | GV-08/09/10/11 (exact set + platform) | `query`, `description`, `resolution`, `critical`, `calendar_events_enabled`, `labels_include_any`, install-software / run-script automations; `inherited_policies` |
-| `reports[]` names + platform | GV-19/20/21/22 (exact set + platform) | `query`, `interval`, `automations_enabled`, `logging`, `observer_can_run`, `discard_data`; inheritance |
-| `controls.scripts[]` basenames | GV-16/17/18 (exact set) | **script body** — the entire point of a script |
-| `*_settings.configuration_profiles[]` names + platform counts | GV-12/13/14/15 (exact set + per-platform) | **profile payload**; `ios`/`ipados` not in the per-platform loop; profile→label scoping |
-| Software / FMA / VPP apps | n/a | not declared in these gitops configs (deliberate — `cleanup-setup` wipes installable software) |
+| `org_settings.org_info` (name, contact URL, logo URLs) | GV-17 | — |
+| `org_settings.server_settings` (8 keys) | GV-17 | — (premium's `enable_analytics` is forced on by Fleet; the YAML says so) |
+| `org_settings.features` (`enable_*`, `additional_queries`, `historical_data`) | GV-17 | `vulnerability_exposure_historical_reporting` not declared |
+| `org_settings.fleet_desktop` (3 keys) | GV-17 | — |
+| `host_expiry_settings`, `activity_expiry_settings`, `webhook_settings` (4), `gitops`, `vulnerability_settings` | GV-18 | `failing_policies_webhook.policy_ids` deliberately undeclared |
+| `sso_settings` (6 keys) | GV-19 | — |
+| `mdm.end_user_authentication`, `apple_business_manager`, `volume_purchasing_program` | GV-20 | `apple_server_url`, `windows_automatic_enrollment` not declared |
+| `controls.windows_enabled_and_configured`, `android_enabled_and_configured` | GV-21 | the other global flags not declared (batch 2) |
+| `agent_options` (org and fleet) | GV-22, GV-25 | `command_line_flags`, `update_channels` not declared (batch 2, Compliance) |
+| `org_settings.secrets` (free) | GV-23 | premium's fleet secrets are excepted, by design |
+| Fleet `settings` (features, host expiry) | GV-24 | fleet webhooks and integrations not declared yet |
+| The set of fleets | GV-04 | `--delete-other-fleets` never passed |
+| `custom_host_vitals` | GV-05 | references from scripts/profiles |
+| `labels[]` (names, type, query, platform, description) | GV-06, GV-07 | membership; fleet-scoped labels not declared (batch 2) |
+| `policies[]` (names, query, platform, critical, flags, label targets, `install_software`, `run_script`) | GV-08, GV-09 | `resend_configuration_profile`, `webhooks_and_tickets_enabled` (batch 2) |
+| `reports[]` (every documented key) | GV-13, GV-14 | — |
+| `controls.scripts[]` (names, bodies; `paths:` glob) | GV-15, GV-16 | body check unproven until the first apply after this landed |
+| `*_settings.configuration_profiles[]` (names per platform, label targets, payloads) | GV-10, GV-11, GV-12 | payload check unproven until the first apply; DDM declarations not declared (batch 3) |
+| `software.packages` (filenames, hash, options, scripts) | GV-26, GV-27 | a second version of one title (batch 3) |
+| `software.fleet_maintained_apps` (slugs, options, pins) | GV-28, GV-29 | options are all defaults until Compliance |
+| `software.app_store_apps` | GV-30 | none declared (batch 3) |
+| Fleet-level `controls` (disk encryption, OS updates, Recovery Lock, setup experience, `name_template`) | **nothing yet** | batch 2's Compliance fleet and its `controls` spec |
 
-**Exact-match vs subset.** Every entity family *is* exact-match, but only because the count test +
-"every gitops X exists" + "no extra X on live" are run together — the three are individually one-directional.
-Drop or skip any one of them and the family silently degrades to a subset check. Policies, profiles and
-reports have all three; **labels** have all three; **scripts** have all three. The exactness is at the
-*name-set* level only — nothing anywhere compares entity **contents**.
+**Exact-match everywhere.** Every entity family is compared as an exact set in one test (missing *and* extra,
+then the count), and every declared field in a second. The exactness no longer depends on three separate tests
+staying enabled together.
 
 ### The "green with zero coverage" failure modes
 
-1. **Team target silently skips 7 of 22 tests.** `org-settings.spec.ts:6` and `labels.spec.ts:13` skip on
-   `gitopsConfig.scope !== 'no-team'`. A run against `fleets/workstations.yml` reports 15 passed / 7 skipped
-   and exits 0. If the nightly ever lost its no-team job, all org settings and all label drift would go
-   unverified with a green board. Nothing asserts "the union of targets covers every scope".
-2. **`GITOPS_TARGET` defaults to `../gitops/free-fleetqa` regardless of `SUITE`** (`_config.ts:14-16`).
-   `SUITE=premium playwright test --project=gitops-verify` with no target compares the premium instance to
-   free YAML. GV-01 fails (different org name), so it isn't silent — but nothing *structurally* ties target
-   to suite, and the free/premium `default.yml` files are otherwise near-identical, so ~19 of 22 tests would
-   have passed against the wrong config.
-3. **Vacuous loops.** 10 of the 22 tests are `for` loops with no minimum-length guard: an empty
-   `gitopsConfig.<entity>` (a deleted YAML key, a mis-shaped `path:` list) makes them pass having asserted
-   only `toBeOK()`. GV-13 is the worst — with both sides empty it asserts `0 === 0` three times.
-   No spec asserts `expect(gitopsConfig.policies.length).toBeGreaterThan(0)`.
-4. **Two silent `continue`s** — `policies.spec.ts:65` and `reports.spec.ts:53` drop any entity lacking a
-   `platform` from the only field-level check. Currently a no-op (27/27 and 21/21 declare it) but unguarded.
-5. **`per_page=200`** everywhere with no `body.count`/`meta.has_next_results` guard: past 200 entities the
-   comparisons quietly compare a truncated page.
-6. **Nothing asserts the apply was fresh.** Verification can't distinguish "gitops applied correctly" from
-   "instance already happened to match". The baseline→min→baseline alternation is what actually gives this
-   teeth, since the two shapes differ in every count — worth preserving deliberately rather than by accident.
+What the 2026-07 audit listed, and where each stands:
+
+1. **A fleet target silently skipped a third of the tests.** Still true that fewer tests apply to a fleet
+   file, but the ones that do are the ones that *can* (the org half of `settings`, `fleets` and `host-vitals`
+   are global by nature), and the fleet-only specs (`software`, the fleet half of `settings`) now exist. The
+   skips are inline data-availability guards.
+2. **`GITOPS_TARGET` defaulted to free regardless of `SUITE`.** Fixed: the default follows `SUITE`, and a target
+   outside the tier's directories throws at load.
+3. **Vacuous loops.** Fixed two ways: `_sanity` pins each kind non-empty for a no-team target, and every
+   field loop is preceded by an exact-set test in the same file — a declared entity that is missing fails there.
+4. **Silent `continue`s on a missing `platform`.** Gone: `platform` is compared as `''` when undeclared.
+5. **`per_page=200` with no guard.** Fixed: `getAll` follows `has_next_results` or pages while full.
+6. **Nothing asserts the apply was fresh.** Still true, and still mitigated by the baseline ↔ min alternation —
+   now with a changed *value* in every settings section, so an apply that creates and deletes but never updates
+   would fail GV-14, GV-17 and GV-18.
+
+Two new ones to know about:
+
+7. **The payload and body checks (GV-12, GV-16) have not run against an applied instance** at the time of this
+   rewrite — the suite's cleanup had wiped every script and profile. Their first proof is the branch run that
+   lands them; if Fleet normalizes what it serves, the comparison moves to a checksum.
+8. **`expectSubset` compares declared keys only.** That is the point (Fleet adds read-only fields), but it means a
+   key the YAML drops is not noticed here — and fleetdm/fleet#48021 says Fleet doesn't reset it either. The
+   min variant *changing* values is the guard; a key present in the baseline and absent from min is a hole.
 
 ### Duplication
 
-- **Three-test cliché ×4.** count / every-declared-exists / no-extra is repeated verbatim for labels,
-  policies, scripts, reports and (as four tests) profiles — ~18 of 22 tests are the same two set-diffs
-  over a different endpoint. One parameterised `expectExactNameSet(entity, endpoint, expected)` helper
-  would collapse the file set to ~6 tests without losing a single assertion.
-- **GV-11 ≡ GV-21** (policy platform vs report platform) — identical logic, identical silent `continue`.
-- **`GET` fan-out:** 22 tests issue 22 requests where 6 would do (4× `/config`, 3× `/labels`, 4× `/policies`,
-  4× `/configuration_profiles`, 3× `/scripts`, 4× `/queries`). Harmless for runtime, but it triples the blast
-  radius of a flaky instance and each request re-pays auth.
-- Weak overlap with [`tests/api/config.spec.ts`](../../tests/api/config.spec.ts) (`toBeTruthy`/`toBeDefined`
-  shape checks on the same `/config` fields) — no conflict; the gitops versions strictly dominate.
+- The count / declared-exists / no-extra triad is one helper (`expectExactNames`), called once per entity kind.
+- `GET /config` is read once per worker for GV-17 … GV-22, `GET /fleets/{id}` once for GV-24 … GV-25, and the
+  software reads once for GV-26 … GV-30.
+- Weak overlap with [`tests/api/config.spec.ts`](../../tests/api/config.spec.ts) (shape checks on `/config`) — no
+  conflict; the gitops versions strictly dominate.
 
 ### UI-vs-API balance
 
-All 22 are pure API, and that is the right call: the question is "does server state match YAML", the
-`gitops-verify` project has no browser or `storageState`, and it runs inside a CI apply→verify chain. No
-test here should become a UI test. The correct *complement* is that the e2e areas already assert the UI
-renders these entities. One thing genuinely missing from the API-only framing: nothing checks the
-gitops-created entities' **activity feed** entries, so "gitops ran" versus "state coincidentally matches"
-is indistinguishable.
+All 30 are pure API, and that is the right call: the question is "does server state match YAML", the
+`gitops-verify` project has no browser or `storageState`, and it runs inside a CI apply→verify chain. The e2e
+areas assert the UI renders these entities. Still missing from the API-only framing: nothing checks that the
+**activity feed** records the apply, so "gitops ran" versus "state coincidentally matches" is indistinguishable
+except through the baseline ↔ min alternation.
 
 ### Quick wins
 
-1. Add `android_enabled_and_configured` to `org-settings.spec.ts` alongside GV-03 — one line, closes the
-   only fully-uncovered `controls` flag (both premium configs declare it).
-2. Guard the vacuous loops: one `expect(gitopsConfig.<entity>.length).toBeGreaterThan(0)` per spec (or a
-   shared assertion in `_config.ts`) so an emptied YAML fails instead of passing.
-3. Fail fast on target/suite mismatch in `_config.ts` — assert `gitopsLabel` starts with `process.env.SUITE`
-   and drop the `../gitops/free-fleetqa` default, replacing it with a thrown error when `GITOPS_TARGET` is unset.
-4. Filter builtins in GV-06's name Set (`labels.spec.ts:27`) to match GV-05/GV-07, and turn the two silent
-   `continue`s (`policies.spec.ts:65`, `reports.spec.ts:53`) into failures.
-5. Hoist each spec's `GET` into a `beforeAll`-cached response — 22 requests → 6, and adds a `has_next_results`
-   check in one place instead of six.
+1. Compare `resend_configuration_profile` and `webhooks_and_tickets_enabled` in GV-09 once the Compliance fleet
+   declares them (the API fields are `resend_configuration_profile`'s profile and the webhook's `policy_ids`).
+2. Add `custom_host_vitals` and `webhook_settings` to `cli/nightly/generate-gitops.spec.ts`'s round-trip, if
+   `generate-gitops` emits them.
+3. A `controls` spec for fleet-level MDM settings, written with the Compliance fleet (batch 2).
 
 ### Bigger bets
 
-1. **One generic exact-set helper + content hashing.** Replace the four-times-repeated triad with
-   `expectExactNameSet()`, then extend `gitops-yaml.ts` to carry each entity's *content* (policy/report SQL,
-   script body, profile payload, label query) and compare it — for scripts and profiles the name is the least
-   interesting thing about them, and today a body swap is undetectable drift.
-2. **Cover the org/team settings surface the specs ignore.** A `settings.spec.ts` for `agent_options`,
-   `server_settings`, `host_expiry_settings`, `fleet_desktop`, enroll secrets, and the premium `mdm` block
-   (EUA / ABM team mapping / VPP), plus a team-scope variant of GV-04 reading `GET /fleets/{id}` so
-   `fleets/workstations.yml`'s `settings:` block stops being unverified. Add a team-set assertion so
-   `--delete-other-fleets` semantics are actually tested.
-3. **Fix the nightly scheduling collision.** `nightly-qa-gitops-{premium,free}.yml` start at 05:00 and run
-   apply→verify→apply-min→verify-min, while `playwright-{premium,free}.yml` start at **05:30** and
-   `cleanup-setup` deletes all queries, global + team policies, profiles and scripts — i.e. exactly what
-   GV-08..22 compare. Either gate the Playwright suites on the gitops chain completing (`workflow_run`) or
-   fold verification into a single orchestrator, so a "drift" failure always means drift and never a race.
-   **Resolved 2026-09-29:** the single orchestrator is `QA — Nightly` (`qa-nightly.yml`) — a tier's suite
-   starts only after its gitops chain has finished.
+1. **Apply-freshness:** read the activity feed for `edited_*` / `applied_*` entries since the chain started.
+2. **`fleets/unassigned.yml` on premium**, the layout `generate-gitops` itself emits (batch 2): the no-team
+   `controls`, `policies`, software and webhooks move there, and the loader learns a third scope.
+3. **The Compliance fleet** (batch 2): every host-affecting control, verified here, on a fleet with no hosts.

@@ -1,67 +1,78 @@
+/**
+ * Reports: the scope's reports are exactly the declared ones, and each carries
+ * the declared query, schedule and options.
+ *
+ * Fleet's REST route is still `/queries`; `merge_inherited=false` keeps a
+ * fleet's listing to its own reports rather than the global ones it inherits.
+ */
 import { test, expect } from '@playwright/test';
-import { apiLatestUrl } from '@helpers/api';
-import { gitopsConfig, gitopsLabel, resolveTeamId } from './_config';
+import {
+  gitopsConfig,
+  gitopsLabel,
+  resolveTeamId,
+  getAll,
+  expectExactNames,
+  expectSubset,
+  targetNames,
+  normalizeSql,
+} from './_config';
 
 interface ApiQuery {
   id: number;
   name: string;
+  query: string;
   platform: string;
+  description: string;
+  interval: number;
+  logging: string;
+  discard_data: boolean;
+  observer_can_run: boolean;
+  automations_enabled: boolean;
+  min_osquery_version: string;
+  labels_include_any: unknown;
+  labels_include_all: unknown;
 }
 
 let teamId = 0;
+let live: ApiQuery[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
+  live = await getAll<ApiQuery>(request, `queries?team_id=${teamId}&merge_inherited=false`, 'queries');
 });
 
-/**
- * Reports endpoint: scope by team_id and pass merge_inherited=false so we get
- * only that scope's own reports (no implicit global inheritance for teams).
- *
- * Fleet's REST API uses `/queries` for the route name; UI calls them "reports".
- */
-function reportsEndpoint(id: number): string {
-  return apiLatestUrl(`queries?per_page=200&team_id=${id}&merge_inherited=false`);
-}
-
 test.describe(`GitOps verify · reports · ${gitopsLabel}`, () => {
-  test('report count matches gitops', async ({ request }) => {
-    const res = await request.get(reportsEndpoint(teamId));
-    await expect(res).toBeOK();
-    const body = await res.json();
-    expect(body.queries as ApiQuery[]).toHaveLength(gitopsConfig.reports.length);
-  });
-
-  test('every gitops report exists by name', async ({ request }) => {
-    const res = await request.get(reportsEndpoint(teamId));
-    await expect(res).toBeOK();
-    const body = await res.json();
-    const apiNames = new Set((body.queries as ApiQuery[]).map((q) => q.name));
-    for (const report of gitopsConfig.reports) {
-      expect(apiNames, `report "${report.name}" missing from API (team_id=${teamId})`).toContain(report.name);
-    }
-  });
-
-  test('platform field matches gitops for each report', async ({ request }) => {
-    const res = await request.get(reportsEndpoint(teamId));
-    await expect(res).toBeOK();
-    const body = await res.json();
-    const apiByName = new Map(
-      (body.queries as ApiQuery[]).map((q) => [q.name, q.platform]),
+  test('the report set matches gitops exactly', async () => {
+    expectExactNames(
+      'reports',
+      live.map((q) => q.name),
+      gitopsConfig.reports.map((r) => r.name),
     );
-    for (const r of gitopsConfig.reports) {
-      if (!r.platform) continue;
-      expect(apiByName.get(r.name), `report "${r.name}" platform mismatch`).toBe(r.platform);
-    }
   });
 
-  test('no extra reports on live (no superset drift)', async ({ request }) => {
-    const res = await request.get(reportsEndpoint(teamId));
-    await expect(res).toBeOK();
-    const body = await res.json();
-    const expected = new Set(gitopsConfig.reports.map((r) => r.name));
-    for (const live of body.queries as ApiQuery[]) {
-      expect(expected, `live has unexpected report "${live.name}" not in gitops (team_id=${teamId})`).toContain(live.name);
+  test("each report's definition matches gitops", async () => {
+    const byName = new Map(live.map((q) => [q.name, q]));
+    for (const declared of gitopsConfig.reports) {
+      const report = byName.get(declared.name);
+      if (!report) continue; // reported by the set test
+      const at = `report "${declared.name}"`;
+      expect.soft(normalizeSql(report.query), `${at} query`).toBe(normalizeSql(declared.query));
+      expectSubset(at, report, {
+        platform: declared.platform,
+        description: declared.description,
+        interval: declared.interval,
+        logging: declared.logging,
+        discard_data: declared.discardData,
+        observer_can_run: declared.observerCanRun,
+        automations_enabled: declared.automationsEnabled,
+        min_osquery_version: declared.minOsqueryVersion,
+      });
+      expect.soft(targetNames(report.labels_include_any), `${at} labels_include_any`).toEqual(
+        declared.labelsIncludeAny ? [...declared.labelsIncludeAny].sort() : undefined,
+      );
+      expect.soft(targetNames(report.labels_include_all), `${at} labels_include_all`).toEqual(
+        declared.labelsIncludeAll ? [...declared.labelsIncludeAll].sort() : undefined,
+      );
     }
   });
 });
