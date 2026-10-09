@@ -398,6 +398,50 @@ branch run.
    the server ignores it; `lock_end_user_info`'s documented default (`true`) versus the code's (follows EUA).
    Each is a dry-run on the playground away from confirmed.
 
+## 9. Batch 1 — what landed (2026-10-08)
+
+**Harness v2** (`playwright/helpers/gitops-yaml.ts`, `tests/api/gitops-verify/`, 10 specs / 30 tests, audit
+area 16 rewritten): the loader reads `path:`, `paths:` globs and inline entities alike, each entity's option
+fields, `org_settings` / fleet `settings`, `agent_options`, the `controls` flags, `software` (through the
+package files) and `custom_host_vitals`, expands `$VAR`s like fleetctl and throws on an unset one;
+`GITOPS_TARGET` must belong to `SUITE`'s tier; every list is paginated and every non-2xx throws. Two
+comparisons carry the specs: `expectExactNames` (missing *and* extra, then the count) and `expectSubset`
+(declared keys only). New: `settings` (org: org_info, server_settings, features, fleet_desktop, expiry,
+webhooks, gitops, SSO, EUA/ABM/VPP, the controls flags, agent options, free's enroll secrets; fleet: features,
+host expiry, webhooks, integrations, agent options), `software` (packages by filename then hash and options
+and script bodies; Fleet-maintained apps by slug — through the title's `fleet_maintained_app_id`, not the
+catalog's `software_title_id`, which Fleet also sets on a custom upload of the same app; App Store apps),
+`fleets` (the standing set = both variants' fleet files ∪ Mobile), `host-vitals`, `_sanity`; label, policy,
+report, script and profile specs compare every declared field, script and profile bodies included.
+
+**Declared on both tiers** (§4's batch-1 rows): `server_settings` (premium `enable_analytics: true`),
+`features.additional_queries` + `historical_data`, all of `fleet_desktop`, `activity_expiry_settings`, the
+four `webhook_settings` (no `policy_ids`), premium's `gitops` block, free's `android_enabled_and_configured`,
+`custom_host_vitals` (3 / min 2), the manual **Pilot hosts** label and a `platform: linux` one, an inline
+policy with every base key (+ a `critical`, label-scoped one on premium), an inline report with every option
+(+ a label-scoped one on premium), the Linux scripts as one `paths:` glob, the non-deprecated logo keys. Every
+new section has a changed value in the min variant.
+
+**CI**: QA and VMs verified after both premium applies (`label` input on `gitops-verify.yml` keeps the two
+artifacts apart); the verify workflow passes the interpolation vars; the idempotence dry-run covers the
+baseline `qa.yml` / `vms.yml` the min apply carries; the four apply workflows take the instance lock when
+dispatched by hand (`caller` input). Docs: the gitops READMEs, `CLAUDE.md`'s CI facts, `ci-pipeline.md`,
+`helpers/README.md`, two `npm run test:gitops-verify:premium-{qa,vms}` scripts.
+
+**Found and fixed on the way:** `deleteAllGlobalPolicies` called `GET /global/policies`, which Fleet
+answers 404, and swallowed it — the global policies were never wiped on either tier (22 survived every
+cleanup; `policy-host-counts.spec.ts:9` and `pickers.spec.ts:15` describe the intended state, which is
+now the real one). It calls `GET /policies` and fails loud.
+
+**Verified:** `npm run check` clean; dry-runs of all four configs against the instances (4.92.1 client; the
+local `fleetctl@4.93.0` install is blocked by an npm `before` pin on this machine, CI installs 4.93.0);
+`gitops-verify` against the live VMs and QA fleets, 20/20 each; against the live min no-team config, 17 pass
+and the 4 failures are the three wiped kinds plus `enable_analytics`, which the YAML now corrects. **Not yet
+proven:** the script-body and profile-payload comparisons (GV-16, GV-12) against an applied instance — the
+cleanup had wiped every script and profile, and a local apply was declined as a blind write to the shared
+instances. The branch run is their proof; if Fleet normalizes a served payload, the comparison moves to a
+checksum.
+
 ## 8. Decisions (Andrey, 2026-10-08)
 
 1. The fleet is **Compliance**; a fifth standing fleet is fine.
