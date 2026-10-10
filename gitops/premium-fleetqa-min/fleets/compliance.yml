@@ -128,8 +128,9 @@ software:
         - Utilities
       labels_include_any:
         - Pilot hosts
-      icon:
-        path: ../../lib/icons/compliance.png
+      # Off until the instance's icon store is persistent (the baseline file says why).
+      # icon:
+      #   path: ../../lib/icons/compliance.png
   fleet_maintained_apps:
     - slug: itsycal/darwin
       self_service: true

@@ -942,8 +942,10 @@ label targets on its detail; the scripts and pre-install query under *Advanced o
 - *Value:* the hash is what lets an apply skip the download, so a mismatch means a different file is on the
   instance; 7-Zip's own install/uninstall scripts are compared body for body. On Compliance the same inert
   fixtures carry every option a package has (through their `*.compliance.package.yml` files), plus two script-only
-  packages with a display name, an icon and a label target, and the min variant drops two packages.
-- *Coverage gaps:* the icon is checked for presence, not pixels.
+  packages with a display name and a label target, and the min variant drops two packages.
+- *Coverage gaps:* no config declares an `icon` today — the premium instance keeps icons on the container's
+  `/tmp`, so a redeploy loses the file while `icon_url` survives (`playwright/TODO.md`); once declared again,
+  the check is for presence, not pixels — fetching the URL (expect 200) would catch that loss.
 
 **Notes (Andrey)**
 ```
