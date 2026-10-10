@@ -176,6 +176,11 @@ software:
         - Utilities
       labels_include_any:
         - Pilot hosts
+      # The icon lives in the instance's icon store, which on premium is a
+      # directory beside the installers (FLEET_SOFTWARE_TITLE_ICON_STORE_DIR on
+      # the Render service). Without that, Fleet keeps icons in /tmp: a redeploy
+      # drops the file while the record survives, fleetctl sees matching hashes
+      # and never re-uploads, and `fleetctl generate-gitops` exits 1 on it.
       icon:
         path: ../../lib/icons/compliance.png
     - path: ../../lib/platforms/windows/software/compliance-marker.ps1

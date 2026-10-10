@@ -166,6 +166,16 @@ premium instance sits behind a WAF that blocks a software batch whose scripts lo
 An app whose patch policy sets `notify_before_patching` or `patch_when_closed` can't carry a `pre_install_query`
 (Fleet manages that query itself), so the custom packages carry the pre-install query instead.
 
+**The icon needs a persistent icon store on the instance.** `fleet serve` without S3 keeps software-title icons
+in `FLEET_SOFTWARE_TITLE_ICON_STORE_DIR`, else the container's `/tmp` (`cmd/fleet/serve.go`). Until that variable
+was set on the premium Render service (2026-10-10, `/opt/fleet/installers` — the installers' own root; each
+store keeps its own subfolder), every nightly redeploy dropped the file while the database record and `icon_url`
+survived, `fleetctl gitops` compared hashes against that record and never re-uploaded, and
+`fleetctl generate-gitops` exited 1 on the unreadable icon (nightly 38059790306). If it recurs: the service's
+boot log line `using local filesystem software title icon store … directory=` names the store; delete the stale
+record (`DELETE /api/latest/fleet/software/titles/{id}/icon?team_id=<Compliance>`) and the next apply uploads the
+icon again. GV-27 fetches the icon, so the Compliance verify is where a lost file shows first.
+
 **Its end-user authentication binds every global file.** With `setup_experience.enable_end_user_authentication`
 on here, a global file dry-run or applied against this instance must declare
 `org_settings.mdm.end_user_authentication` in full: fleetctl refuses a run whose global file would leave the IdP

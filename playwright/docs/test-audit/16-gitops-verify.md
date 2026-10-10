@@ -930,7 +930,7 @@ other:
 **Flow**
 
 1. ☐ For every declared package paired with a live title (GV-26's pairing), from the title detail:
-   - ✅ *(API, soft, when declared)* `self_service`; `categories` as sorted lists with Fleet's emoji prefix stripped from both sides (`categoryName`: Fleet stores `🛠️ Utilities` for the YAML's `Utilities`); `display_name`; `icon_url` present when the YAML declares an `icon`.
+   - ✅ *(API, soft, when declared)* `self_service`; `categories` as sorted lists with Fleet's emoji prefix stripped from both sides (`categoryName`: Fleet stores `🛠️ Utilities` for the YAML's `Utilities`); `display_name`; an `icon_url` when the YAML declares an `icon`, **and that URL answers 200** — Fleet serves the URL from the database record and the bytes from its icon store, so a store that isn't persistent leaves a URL that 404s after a redeploy (nightly 38059790306).
    - ✅ *(API, soft, always)* the title is in the fleet's setup-experience listing iff `setup_experience: true` (the per-platform `GET /setup_experience/software` is the only place the flag is reported for a Fleet-maintained app). An undeclared key is **held to `false`**, unlike `self_service`: a title that installs during setup starts real work on any host enrolled into the fleet, and the QA shelf and VMs must never carry one. An apply doesn't reset the flag (fleetctl sends nothing for an undeclared key), so one toggled on by hand shows up as drift until cleared by hand.
    - ✅ *(API, soft)* `labels_include_all` / `labels_include_any` / `labels_exclude_any` as sorted name lists (undeclared ↔ absent).
    - ✅ *(API, soft, when the package file declares them)* `pre_install_query` (the SQL lifted out of the apply-format query file, whitespace-normalized), `install_script`, `uninstall_script`, `post_install_script` bodies against the referenced files.
@@ -943,7 +943,8 @@ label targets on its detail; the scripts and pre-install query under *Advanced o
   instance; 7-Zip's own install/uninstall scripts are compared body for body. On Compliance the same inert
   fixtures carry every option a package has (through their `*.compliance.package.yml` files), plus two script-only
   packages with a display name, an icon and a label target, and the min variant drops two packages.
-- *Coverage gaps:* the icon is checked for presence, not pixels.
+- *Coverage gaps:* the icon's bytes aren't compared with `lib/icons/compliance.png`; a fetch that answers 200 is
+  the check.
 
 **Notes (Andrey)**
 ```

@@ -510,6 +510,14 @@ first real apply to premium — a dry-run skips software validation for a fleet 
 (fleetdm/fleet#54534) — and the profile-payload and script-body checks of §9, which still await their first
 applied instance. The branch run is their proof.
 
+**After the first nightly (38059790306, 2026-10-10):** `generate-gitops` exited 1 on the Compliance icon. The
+premium instance kept software-title icons in the container's `/tmp` (`fleet serve` without S3 and without
+`FLEET_SOFTWARE_TITLE_ICON_STORE_DIR`), the nightly's Render redeploy dropped the file while the database record
+and `icon_url` survived, and `fleetctl gitops` never re-uploads a hash it already knows. #99 commented the icon
+out for a day; the variable is now set on the Render service (`/opt/fleet/installers`, beside the installers),
+#99 is reverted, the stale record was deleted so the next apply uploads the icon, and GV-27 fetches the icon
+instead of checking that `icon_url` is set.
+
 **Deferred:** `fleets/unassigned.yml` (a layout change for the no-team scope, its own follow-up); the batch-3
 rows of §4 (DDM declarations and assets, bootstrap package and ADE JSON, a second package version, App Store
 apps, EULA, `yara_rules`), each decided with Andrey one at a time.
