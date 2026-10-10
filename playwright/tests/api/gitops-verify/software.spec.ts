@@ -18,8 +18,9 @@
  * Software is declared by fleet files (and `fleets/unassigned.yml`); a
  * `default.yml` can't carry it, so the no-team scope skips.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import * as yaml from 'js-yaml';
+import { authHeaders } from '@helpers/api';
 import {
   gitopsConfig,
   gitopsLabel,
@@ -93,9 +94,9 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
     expect(missing.length + extra.length, 'custom package differences').toBe(0);
   });
 
-  test("each custom package's options match gitops", async () => {
+  test("each custom package's options match gitops", async ({ request }) => {
     for (const [declared, title] of matchPackages().matched) {
-      expectOptions(`package "${declared.fileName}"`, title, declared);
+      await expectOptions(request, `package "${declared.fileName}"`, title, declared);
     }
   });
 
@@ -112,7 +113,7 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
     }
   });
 
-  test("each Fleet-maintained app's options match gitops", async () => {
+  test("each Fleet-maintained app's options match gitops", async ({ request }) => {
     for (const declared of gitopsConfig.software.fleetMaintainedApps) {
       const titleId = software.addedSlugs.get(declared.slug);
       const title = software.titles.find((t) => t.id === titleId);
@@ -126,7 +127,7 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
           declared.version.slice(1).split('.')[0],
         );
       }
-      expectOptions(at, title, declared);
+      await expectOptions(request, at, title, declared);
     }
   });
 
@@ -147,7 +148,7 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
 });
 
 /** The option fields a package or Fleet-maintained app declares, against the title Fleet holds for it. */
-function expectOptions(at: string, title: Title, declared: Declared): void {
+async function expectOptions(request: APIRequestContext, at: string, title: Title, declared: Declared): Promise<void> {
   const pkg = title.package!;
   if (declared.selfService !== undefined) expect.soft(pkg.self_service, `${at} self_service`).toBe(declared.selfService);
   if (declared.categories) {
@@ -161,7 +162,18 @@ function expectOptions(at: string, title: Title, declared: Declared): void {
   // nothing for an undeclared key), so one toggled on by hand shows up here as drift until it is cleared by hand.
   expect.soft(software.setupExperienceTitleIds.has(title.id), `${at} setup_experience`).toBe(declared.setupExperience ?? false);
   if (declared.displayName !== undefined) expect.soft(title.displayName, `${at} display_name`).toBe(declared.displayName);
-  if (declared.hasIcon) expect.soft(pkg.icon_url, `${at} icon`).toBeTruthy();
+  if (declared.hasIcon) {
+    expect.soft(pkg.icon_url, `${at} icon`).toBeTruthy();
+    // The URL is served from the database record and outlives the file: Fleet keeps the bytes in its icon store,
+    // and an instance whose store isn't persistent loses them at a redeploy while the record stays. Fetching is
+    // what the UI and `fleetctl generate-gitops` do with the URL, so the fetch is the check.
+    if (pkg.icon_url) {
+      const res = await request.get(`${String(process.env.FLEET_URL).replace(/\/+$/, '')}${pkg.icon_url}`, {
+        headers: authHeaders(),
+      });
+      expect.soft(res.status(), `${at} icon fetch (${pkg.icon_url})`).toBe(200);
+    }
+  }
   const targets = declaredTargets(declared);
   expect.soft(targetNames(pkg.labels_include_all), `${at} labels_include_all`).toEqual(targets.labels_include_all);
   expect.soft(targetNames(pkg.labels_include_any), `${at} labels_include_any`).toEqual(targets.labels_include_any);
