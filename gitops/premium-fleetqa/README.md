@@ -144,7 +144,7 @@ BitLocker PIN and managed local account, Recovery Lock, a host name template, th
 setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script),
 `agent_options.command_line_flags` and `update_channels`, label-targeted profiles on three platforms, scripts of
 all three kinds through `paths:` globs, custom packages by `hash_sha256` with every option (self-service,
-categories, label targets, a display name, an icon, a pre-install query and the three scripts), script-only
+categories, label targets, a display name, a pre-install query and the three scripts), script-only
 packages, Fleet-maintained apps with options and a caret pin, policies with every automation and targeting key
 (`resend_configuration_profile`, `run_script`, `install_software` by package path, by hash and by slug,
 `webhooks_and_tickets_enabled` against the fleet's own failing-policies webhook, two patch policies), and
@@ -165,6 +165,13 @@ apply downloads nothing. The scripts under `lib/platforms/*/software/compliance-
 premium instance sits behind a WAF that blocks a software batch whose scripts look like real installer commands.
 An app whose patch policy sets `notify_before_patching` or `patch_when_closed` can't carry a `pre_install_query`
 (Fleet manages that query itself), so the custom packages carry the pre-install query instead.
+
+**No icon, for now.** The script-only package's `icon:` (`lib/icons/compliance.png`) is commented out in both
+variants. The premium instance keeps software-title icons on the container's own disk — `fleet serve` uses
+`FLEET_SOFTWARE_TITLE_ICON_STORE_DIR`, else `/tmp`, unless S3 is configured — so the nightly's Render redeploy
+drops the file while the database record survives; `fleetctl gitops` then sees matching hashes and never
+re-uploads, and `fleetctl generate-gitops` exits 1 on the unreadable icon (nightly 38059790306). The unblock is
+that one environment variable on the Render service, then uncommenting and one apply; `playwright/TODO.md` has it.
 
 **Its end-user authentication binds every global file.** With `setup_experience.enable_end_user_authentication`
 on here, a global file dry-run or applied against this instance must declare
