@@ -510,12 +510,6 @@ first real apply to premium — a dry-run skips software validation for a fleet 
 (fleetdm/fleet#54534) — and the profile-payload and script-body checks of §9, which still await their first
 applied instance. The branch run is their proof.
 
-**Switched off after the first nightly (38059790306, 2026-10-10):** the script-only package's `icon`. The premium
-instance has no persistent icon store (`fleet serve` without S3 keeps icons in `FLEET_SOFTWARE_TITLE_ICON_STORE_DIR`,
-else `/tmp`), so the nightly's redeploy dropped the file while the record and `icon_url` survived, fleetctl saw
-matching hashes and never re-uploaded, and `generate-gitops` exited 1 on it. Commented out in both variants until
-that variable is set on Render (`playwright/TODO.md`); `lib/icons/compliance.png` stays.
-
 **Deferred:** `fleets/unassigned.yml` (a layout change for the no-team scope, its own follow-up); the batch-3
 rows of §4 (DDM declarations and assets, bootstrap package and ADE JSON, a second package version, App Store
 apps, EULA, `yara_rules`), each decided with Andrey one at a time.
