@@ -1,0 +1,10 @@
+# A host-vitals label: membership comes from an end-user IdP vital Fleet
+# collects, not from a query or a hand-picked list. Needs the end-user
+# authentication IdP, which only the premium instance has, so only the premium
+# configs declare it.
+- name: Engineering department
+  description: Hosts whose end user's IdP department is Engineering
+  label_membership_type: host_vitals
+  criteria:
+    vital: end_user_idp_department
+    value: Engineering

@@ -6,7 +6,10 @@
  * (the repo configs interpolate ABM/VPP/SSO vars the suite deliberately does not
  * require), it cannot be perturbed by whatever the nightly last applied, and it
  * doubles as a check that the repository Fleet hands new customers actually
- * validates against a real server.
+ * validates against a real server. One value is carried over from the instance:
+ * its end-user-authentication IdP (`carryLiveEndUserAuth`), because a global
+ * file that would clear the IdP is refused while a fleet has end-user
+ * authentication on, and premium's Compliance fleet does.
  *
  * Tier-specific behaviour lives next door: the free team-skip in
  * `tests/cli/free/gitops-skips-teams.spec.ts`, the premium counterpart in
@@ -17,7 +20,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { apiUrl, authHeaders } from '@helpers/api';
-import { fleetctl, output } from '@helpers/fleetctl';
+import { carryLiveEndUserAuth, fleetctl, output } from '@helpers/fleetctl';
 
 /** A placeholder the scaffold interpolates; never applied, since every run is a dry run. */
 const DRY_RUN_ENV = { FLEET_ENROLL_SECRET: 'dry-run-placeholder-secret' };
@@ -35,6 +38,7 @@ test.describe('fleetctl gitops --dry-run', () => {
   test('validates the fleetctl new scaffold without changing anything', async ({ request }) => {
     test.setTimeout(180_000);
     const root = await scaffold();
+    await carryLiveEndUserAuth(request, path.join(root, 'default.yml'));
 
     const before = await request.get(apiUrl('labels'), { headers: authHeaders() });
     await expect(before).toBeOK();

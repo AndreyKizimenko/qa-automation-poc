@@ -1,0 +1,210 @@
+# The min variant of ../../premium-fleetqa/fleets/compliance.yml: the same
+# fleet with one value changed in every section and one entry dropped from
+# every list, so the nightly proves gitops updates and deletes on a fleet's
+# controls, settings, software, policies and reports — not only creates them.
+# fleetdm/fleet#48021 means a key the YAML drops keeps its live value, so the
+# deltas are changed values, never omitted keys. The baseline file's header
+# says why this fleet exists and why nothing here may ever reach a host.
+name: Compliance
+
+agent_options:
+  config:
+    options:
+      pack_delimiter: /
+      logger_tls_period: 10
+      distributed_plugin: tls
+      disable_distributed: false
+      logger_tls_endpoint: /api/osquery/log
+      distributed_interval: 10
+      distributed_tls_max_attempts: 3
+    decorators:
+      load:
+        - SELECT uuid AS host_uuid FROM system_info;
+        - SELECT hostname AS hostname FROM system_info;
+  command_line_flags:
+    enable_file_events: true
+    disable_audit: false
+    events_max: 40000 # baseline 50000
+    events_expiry: 86400
+  update_channels:
+    orbit: stable
+    osqueryd: stable
+    desktop: stable
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+    historical_data:
+      uptime: true
+      vulnerabilities: true
+  host_expiry_settings:
+    host_expiry_enabled: true
+    host_expiry_window: 31 # baseline 30
+  webhook_settings:
+    failing_policies_webhook:
+      enable_failing_policies_webhook: true
+      destination_url: https://example.com/compliance-min/failing-policies
+      host_batch_size: 0
+    host_activities_webhook:
+      enable_host_activities_webhook: false
+      destination_url: https://example.com/compliance-min/host-activities
+
+labels:
+  - name: Compliance macOS hosts
+    description: macOS hosts on the Compliance fleet
+    platform: darwin
+    label_membership_type: dynamic
+    query: SELECT 1 FROM os_version WHERE platform = 'darwin';
+
+controls:
+  enable_recovery_lock_password: false # baseline true
+  name_template: compliance-$FLEET_VAR_HOST_HARDWARE_SERIAL
+  macos_updates:
+    minimum_version: "15.1" # baseline 15.0
+    deadline: "2026-12-31"
+    update_new_hosts: true
+  ios_updates:
+    minimum_version: "18.0"
+    deadline: "2026-12-31"
+  ipados_updates:
+    minimum_version: "18.0"
+    deadline: "2027-01-31" # baseline 2026-12-31
+  windows_updates:
+    deadline_days: 10 # baseline 7
+    grace_period_days: 2
+  apple_settings:
+    enable_disk_encryption: true
+    enable_escrow_disk_encryption_key: false # baseline true
+    configuration_profiles:
+      # 2 of 3: drops disable-guest-account
+      - path: ../../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
+        labels_include_all:
+          - Apple Silicon macOS hosts
+          - Pilot hosts
+      - path: ../../lib/platforms/macos/configuration-profiles/enable-gatekeeper.mobileconfig
+        labels_include_any:
+          - Pilot hosts
+  windows_settings:
+    enable_disk_encryption: true
+    require_bitlocker_pin: false # baseline true
+    enable_managed_local_account: true
+    configuration_profiles:
+      # 1 of 2: drops enable-smartscreen
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-firewall.xml
+        labels_include_any:
+          - Pilot hosts
+  linux_settings:
+    enable_escrow_disk_encryption_key: true
+  android_settings:
+    configuration_profiles:
+      - path: ../../lib/platforms/android/configuration-profiles/disable-camera.json
+        labels_include_any:
+          - Pilot hosts
+  scripts:
+    # 2 of 3 globs: drops the Windows scripts
+    - paths: ../../lib/platforms/macos/scripts/*.sh
+    - paths: ../../lib/platforms/linux/scripts/*
+  setup_experience:
+    enable_end_user_authentication: true
+    lock_end_user_info: false # baseline true
+    apple_enable_release_device_manually: false
+    require_all_software_macos: true
+    require_all_software_windows: false
+    enable_create_local_admin_account: true
+    end_user_local_account_type: admin # baseline standard
+    macos_script: ../../lib/platforms/macos/setup/compliance-setup.sh
+
+software:
+  packages:
+    # 2 of 3 package files: drops the Linux one
+    - path: ../../lib/platforms/macos/software/fleet-playwright-install.compliance.package.yml
+    - path: ../../lib/platforms/windows/software/fleet-playwright-install.compliance.package.yml
+    # 1 of 2 script-only packages: drops the Windows one
+    - path: ../../lib/platforms/linux/software/compliance-marker.sh
+      display_name: Compliance marker (Linux)
+      self_service: true
+      categories:
+        - Utilities
+      labels_include_any:
+        - Pilot hosts
+      icon:
+        path: ../../lib/icons/compliance.png
+  fleet_maintained_apps:
+    - slug: itsycal/darwin
+      self_service: true
+      setup_experience: true
+      categories:
+        - Productivity
+      labels_include_any:
+        - Pilot hosts
+      post_install_script:
+        path: ../../lib/platforms/macos/software/compliance-post-install.sh
+      display_name: Itsycal (Compliance)
+    - slug: db-browser-for-sqlite/windows
+      version: "^3"
+      self_service: false # baseline true
+      categories:
+        - Developer tools
+
+policies:
+  # 6 of 7: drops "Itsycal is installed"; the Gatekeeper policy loses its script automation
+  - name: Compliance - FileVault is on
+    query: SELECT 1 FROM disk_encryption WHERE encrypted = 1;
+    platform: darwin
+    critical: true
+    description: Disk encryption is on, as the fleet's controls require.
+    resolution: Turn on FileVault in System Settings. Fleet also resends the Gatekeeper profile, re-asserting the fleet's macOS baseline.
+    labels_include_any:
+      - Compliance macOS hosts
+    resend_configuration_profile: Turn on Gatekeeper
+  - name: Compliance - Gatekeeper is on
+    query: SELECT 1 FROM gatekeeper WHERE assessments_enabled = 1;
+    platform: darwin
+    description: Gatekeeper assessments are enabled.
+    resolution: Turn Gatekeeper on in System Settings.
+    labels_exclude_any:
+      - Pilot hosts
+  - name: Compliance - Fleet Playwright Install is present (macOS)
+    query: SELECT 1 FROM apps WHERE name = 'Fleet Playwright Install.app';
+    platform: darwin
+    description: The inert package is installed.
+    resolution: Fleet installs it from the package declared on this fleet.
+    install_software:
+      package_path: ../../lib/platforms/macos/software/fleet-playwright-install.compliance.package.yml
+    continuous_automations_enabled: true
+  - name: Compliance - Fleet Playwright Install is present (Windows)
+    query: SELECT 1 FROM programs WHERE name = 'Fleet Playwright Install';
+    platform: windows
+    description: The inert package is installed.
+    resolution: Fleet installs it, matched by the package's hash.
+    install_software:
+      hash_sha256: 18993c1e4fbdfb926896902d994dd8e2315e20ac728cca0e466b3ad1f63fbb2b
+    webhooks_and_tickets_enabled: true
+  - name: Compliance - Itsycal is current
+    type: patch
+    fleet_maintained_app_slug: itsycal/darwin
+    platform: darwin
+    install_software: true
+    notify_before_patching: true
+  - name: Compliance - DB Browser for SQLite is current
+    type: patch
+    fleet_maintained_app_slug: db-browser-for-sqlite/windows
+    platform: windows
+    install_software: true
+    patch_when_closed: true
+
+reports:
+  # 1 of 2: drops "Pilot hosts uptime"; the interval changes
+  - name: Compliance - FileVault status
+    query: SELECT encrypted FROM disk_encryption;
+    description: Disk encryption state of the fleet's macOS hosts.
+    interval: 7200 # baseline 3600
+    platform: darwin
+    min_osquery_version: "5.0.0"
+    observer_can_run: true
+    automations_enabled: true
+    logging: snapshot
+    discard_data: false
+    labels_include_any:
+      - Compliance macOS hosts

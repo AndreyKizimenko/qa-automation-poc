@@ -56,8 +56,10 @@ test.describe(`generate-gitops · ${minConfigLabel}`, () => {
     const { global, fleets } = await generate();
 
     if (isPremium) {
-      // Fleets are premium-only, and the min config provisions Workstations.
+      // Fleets are premium-only, and the min config provisions Workstations and
+      // Compliance; generate-gitops also emits the no-team scope as a fleet file.
       expect(fleets.has('workstations')).toBe(true);
+      expect(fleets.has('compliance')).toBe(true);
       expect(fleets.has('unassigned')).toBe(true);
 
       const workstations = fleets.get('workstations')!;

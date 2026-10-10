@@ -1,6 +1,6 @@
 # premium-fleetqa
 
-GitOps config for the Premium QA Fleet instance. `default.yml` mirrors `free-fleetqa/` and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the real QA VMs.
+GitOps config for the Premium QA Fleet instance. `default.yml` mirrors `free-fleetqa/` and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the real QA VMs; `fleets/compliance.yml` configures the **Compliance** fleet, which has no hosts and carries every control that would act on one.
 
 ```
 premium-fleetqa/
@@ -8,7 +8,8 @@ premium-fleetqa/
 └── fleets/
     ├── workstations.yml     # fleet "Workstations" — full scope
     ├── qa.yml               # fleet "QA" — the durable Fleet-maintained-app shelf
-    └── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, a report)
+    ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, a report)
+    └── compliance.yml       # fleet "Compliance" — every host-affecting control, on a fleet with no hosts
 ```
 
 All `path:` references resolve to `../lib/` (or `../../lib/` from `fleets/`) — same source of truth as the free configs.
@@ -21,13 +22,14 @@ fleetctl gitops --context qa-premium \
   -f gitops/premium-fleetqa/default.yml \
   -f gitops/premium-fleetqa/fleets/workstations.yml \
   -f gitops/premium-fleetqa/fleets/qa.yml \
-  -f gitops/premium-fleetqa/fleets/vms.yml
+  -f gitops/premium-fleetqa/fleets/vms.yml \
+  -f gitops/premium-fleetqa/fleets/compliance.yml
 ```
 
-The nightly applies all four: `.github/workflows/gitops-premium.yml` exactly as above, and
-`gitops-premium-min.yml` with the min variant's `default.yml` and `workstations.yml` plus this directory's
-`qa.yml` and `vms.yml` — the QA and VMs fleets hold the suite's durable fixtures, which are the same in both
-passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
+The nightly applies all five: `.github/workflows/gitops-premium.yml` exactly as above, and
+`gitops-premium-min.yml` with the min variant's `default.yml`, `workstations.yml` and `compliance.yml` plus this
+directory's `qa.yml` and `vms.yml` — the QA and VMs fleets hold the suite's durable fixtures, which are the same
+in both passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
 overlap: an apply deletes whatever its files don't declare, including a running test's per-run items.
 
 Either fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
@@ -38,7 +40,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa (the RC build timestamps differ between instances), and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs and Mobile.
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa (the RC build timestamps differ between instances), and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance and Mobile.
 
 ### Keep the client within a minor of the server
 
@@ -75,13 +77,15 @@ The flag is opt-in and off by default, so the command above is safe as written.
 
 | Scope | Profiles | Policies | Reports | Labels | Scripts | Vitals | Software |
 |---|---:|---:|---:|---:|---:|---:|---|
-| No team (default.yml) | 23 | 29 | 32 | 27 | 11 | 3 | — |
+| No team (default.yml) | 23 | 29 | 32 | 28 | 11 | 3 | — |
 | Workstations (fleets/workstations.yml) | 23 | 23 | 5 | — | 6 | — | — |
 | QA (fleets/qa.yml) | — | — | — | — | — | — | 20 Fleet-maintained apps |
 | VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 4 custom packages, 4 Fleet-maintained apps |
+| Compliance (fleets/compliance.yml) | 6 | 7 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
 
 Label and report counts expand from multi-entry lib files, and the no-team numbers include the entities
-`default.yml` declares inline (below).
+`default.yml` declares inline (below). Compliance's label is fleet-scoped, and its scripts come from three
+`paths:` globs (one per platform folder, so the Linux folder's Python script is in).
 
 ## What default.yml declares beyond the lib lists
 
@@ -92,32 +96,83 @@ section, so an apply that creates and deletes but never *updates* fails the next
 
 - `org_settings`: `server_settings` (every documented key; `enable_analytics` is **true** because Fleet forces
   usage statistics on for a premium license, whatever the YAML says), `features` with `additional_queries` (two
-  benign detail queries every host answers) and `historical_data` (both datasets on — turning either off deletes
-  the dashboard history for good), all three `fleet_desktop` keys, `activity_expiry_settings`, all four
+  benign detail queries every host answers), `historical_data` (both datasets on — turning either off deletes
+  the dashboard history for good) and `vulnerability_exposure_historical_reporting` (the dashboard chart's
+  default filters: display only), all three `fleet_desktop` keys, `activity_expiry_settings`, all four
   `webhook_settings` (declared and off, with example destinations; no `policy_ids`, which Fleet keeps when the key
   is omitted), and the `gitops` block (`gitops_mode_enabled: false` and the repository URL the gitops-mode specs
   read; the exceptions can't be declared).
+- `org_settings.mdm`: the end-user authentication IdP, the ABM token's three default fleets and
+  `windows_automatic_enrollment.default_fleet`, all pointing at **Compliance** — an automated enrollment lands on
+  the fleet nothing depends on, never on Workstations, which half a dozen specs need hostless (Fleet moves only a
+  host whose record was created by that enrollment, so the fleetd-enrolled VMs stay where their secret put
+  them) — and the VPP token on all fleets.
+- The global MDM flags under `controls`: `windows_enabled_and_configured`, `android_enabled_and_configured`,
+  `windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`, each
+  at the value the instance has (flipping one changes how the real Windows VMs or Apple DEP enroll, so the min
+  variant leaves them), and `macos_migration` off with a mode and webhook URL (the min variant changes the URL;
+  `premium/settings/integrations/mdm.spec.ts` restores it after its own edit).
 - `custom_host_vitals`: three names. Unlike `labels`, omitting the key deletes every vital, so both variants
   carry it.
-- Two labels beyond the lib set: a manual one, **Pilot hosts** (`hosts: []`, referenced by the label-scoped
-  policy and report, so it is in both variants), and a platform-restricted dynamic one.
+- Three labels beyond the lib set: a manual one, **Pilot hosts** (`hosts: []`, referenced by the label-scoped
+  policy and report, so it is in both variants), a platform-restricted dynamic one, and a host-vitals one,
+  **Engineering department** (membership from the end-user IdP's department, which only premium's EUA provides).
 - Inline entities, which the loader reads like `path:` ones: a policy with every base key, a `critical`
   policy scoped to **Pilot hosts**, a report with every option set away from its default, and a report scoped to
   **Pilot hosts**. Their queries always pass or return a few rows, so they cost nothing on the hosts that run them.
 - The two Linux scripts come from one `paths:` glob rather than two `path:` lines.
 
-Which batch each item came from, and what is still to come (the Compliance fleet, `fleets/unassigned.yml`), is
-in [`playwright/docs/gitops-coverage/README.md`](../../playwright/docs/gitops-coverage/README.md).
+Which batch each item came from, and what is still to come (`fleets/unassigned.yml`, the fixtures that need a
+decision), is in [`playwright/docs/gitops-coverage/README.md`](../../playwright/docs/gitops-coverage/README.md).
 
 ## Verification
 
 After each apply the nightly runs the `gitops-verify` Playwright project against every file that apply
-carried: the no-team config, Workstations, QA and VMs (`.github/workflows/nightly-qa-gitops-premium.yml`). QA
-and VMs are verified after the baseline *and* after the min apply, against the same files, since both applies
-carry them; the second pass proves the min apply left them alone. Locally:
+carried: the no-team config, Workstations, Compliance, QA and VMs (`.github/workflows/nightly-qa-gitops-premium.yml`).
+QA and VMs are verified after the baseline *and* after the min apply, against the same files, since both
+applies carry them; the second pass proves the min apply left them alone. Locally:
 `npm run test:gitops-verify:premium`, `…:premium-workstations`, `…:premium-qa`, `…:premium-vms`,
-`…:premium-min`, `…:premium-min-workstations` from `playwright/`. What each spec compares is in
+`…:premium-compliance`, `…:premium-min`, `…:premium-min-workstations`, `…:premium-min-compliance` from
+`playwright/`. What each spec compares is in
 [`playwright/docs/test-audit/16-gitops-verify.md`](../../playwright/docs/test-audit/16-gitops-verify.md).
+
+## The Compliance fleet
+
+`fleets/compliance.yml` is where the controls that *act on a host* are declared and verified: OS-update
+minimum versions and deadlines for all four platforms, disk encryption and key escrow per platform, the
+BitLocker PIN and managed local account, Recovery Lock, a host name template, the credential-free
+setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script),
+`agent_options.command_line_flags` and `update_channels`, label-targeted profiles on three platforms, scripts of
+all three kinds through `paths:` globs, custom packages by `hash_sha256` with every option (self-service,
+categories, label targets, a display name, an icon, a pre-install query and the three scripts), script-only
+packages, Fleet-maintained apps with options and a caret pin, policies with every automation and targeting key
+(`resend_configuration_profile`, `run_script`, `install_software` by package path, by hash and by slug,
+`webhooks_and_tickets_enabled` against the fleet's own failing-policies webhook, two patch policies), and
+label-targeted reports. The min variant changes one value in every section and drops one entry from every list.
+
+**The fleet holds no hosts, and nothing may ever move one there.** Workstations can't carry these settings
+(`exclusive/os-updates/*` asserts it enforces nothing, and the cleanup resets its OS updates and setup
+experience every run), and nothing on the VMs fleet may change what the real VMs run. No spec names Compliance,
+the static users have no role on it, and `playwright/setup/cleanup.steps.ts` never touches it, so every apply
+lands exactly what the file says and the verify runs against a fleet no test has altered. The one thing that
+could put a host there is an automated enrollment, which is the point of ABM's and Windows' default fleets
+pointing at it: an enrollment that would otherwise break Workstations lands on a fleet nothing reads.
+
+Software is only ever a file already in storage — the VMs fleet's inert fixtures, declared a second time through
+`lib/platforms/*/software/*.compliance.package.yml` (same `url` and `hash_sha256`, with the options the VMs fleet
+must not carry) — or a small Fleet-maintained app (Itsycal, DB Browser for SQLite, the VMs fleet's own), so an
+apply downloads nothing. The scripts under `lib/platforms/*/software/compliance-*` are one-line `echo`s: the
+premium instance sits behind a WAF that blocks a software batch whose scripts look like real installer commands.
+An app whose patch policy sets `notify_before_patching` or `patch_when_closed` can't carry a `pre_install_query`
+(Fleet manages that query itself), so the custom packages carry the pre-install query instead.
+
+**Its end-user authentication binds every global file.** With `setup_experience.enable_end_user_authentication`
+on here, a global file dry-run or applied against this instance must declare
+`org_settings.mdm.end_user_authentication` in full: fleetctl refuses a run whose global file would leave the IdP
+incomplete while a fleet outside the run has end-user authentication on (`cmd/fleetctl/fleetctl/gitops.go`), and
+under `--delete-other-fleets`, where the client skips that check, the server refuses the same config. Both
+`default.yml` variants declare it; the suite's scaffold-based dry-run specs write the instance's IdP into their
+`fleetctl new` scaffold first (`carryLiveEndUserAuth`, `playwright/helpers/fleetctl.ts`).
 
 ## The QA fleet's Fleet-maintained-app shelf
 

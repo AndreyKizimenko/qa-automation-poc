@@ -15,6 +15,14 @@ org_settings:
     historical_data:
       uptime: true
       vulnerabilities: true
+    # Default filters for the Vulnerability exposure dashboard chart. Display
+    # only — they change nothing Fleet collects — and premium.
+    vulnerability_exposure_historical_reporting:
+      software_filters:
+        - os
+        - browsers
+      cvss_min: 7
+      has_known_exploit: false
   fleet_desktop:
     transparency_url: https://fleetdm.com/transparency
     alternative_browser_host: ""
@@ -64,11 +72,17 @@ org_settings:
       entity_id: fleet-eua
       idp_name: Okta
       metadata_url: $FLEET_EUA_METADATA_URL
-    apple_business_manager:
+    # Automated enrollments land on Compliance, the fleet with no hosts that
+    # nothing in the suite depends on; Workstations has to stay hostless for
+    # half a dozen specs. fleetctl creates a fleet named here before it sets
+    # the token's assignment, so a first apply works.
+    apple_business:
       - organization_name: $FLEET_ABM_ORG_NAME
-        macos_fleet: Workstations
-        ios_fleet: Workstations
-        ipados_fleet: Workstations
+        macos_fleet: Compliance
+        ios_fleet: Compliance
+        ipados_fleet: Compliance
+    windows_automatic_enrollment:
+      default_fleet: Compliance
     volume_purchasing_program:
       - location: $FLEET_VPP_LOCATION
         fleets:
@@ -103,6 +117,18 @@ org_settings:
 controls:
   windows_enabled_and_configured: true
   android_enabled_and_configured: true
+  # The remaining global MDM flags, held at the values the instance has: each
+  # reaches the real Windows VMs' enrollment or Apple DEP if flipped, so the
+  # min variant leaves them alone.
+  windows_migration_enabled: false
+  enable_turn_on_windows_mdm_manually: false
+  apple_require_hardware_attestation: false
+  # The macOS migration workflow, off; `premium/settings/integrations/mdm.spec.ts`
+  # snapshots and restores it around its own edit.
+  macos_migration:
+    enable: false
+    mode: voluntary
+    webhook_url: https://example.com/fleet/macos-migration
   scripts:
     - path: ../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
     - path: ../lib/platforms/macos/scripts/uninstall-fleetd-macos.sh
@@ -164,6 +190,8 @@ labels:
   # a platform-restricted dynamic one.
   - path: ../lib/labels/pilot-hosts.yml
   - path: ../lib/labels/linux-hosts-running-docker.yml
+  # A host-vitals label (membership from the end-user IdP, which premium has).
+  - path: ../lib/labels/engineering-department.yml
 
 # Every custom host vital the instance holds. Unlike `labels`, leaving this key
 # out deletes every vital, so both the baseline and the min variant carry it.

@@ -19,6 +19,9 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
+import type { APIRequestContext } from '@playwright/test';
+import * as yaml from 'js-yaml';
+import { apiUrl, authHeaders } from '@helpers/api';
 
 const execFileAsync = promisify(execFile);
 
@@ -141,6 +144,41 @@ export async function clientVersion(): Promise<string> {
   const match = res.stdout.match(/version (\S+)/);
   if (!match) throw new Error(`could not parse fleetctl version from: ${res.stdout}`);
   return match[1];
+}
+
+/**
+ * Writes the instance's configured end-user-authentication IdP into a
+ * scaffold's `default.yml`, so a gitops run of that file keeps the IdP rather
+ * than clearing it. An instance with no complete IdP (free) is left alone.
+ *
+ * A global file in a gitops run redefines the IdP outright: whatever the file
+ * omits is cleared. `fleetctl gitops` (cmd/fleetctl/fleetctl/gitops.go) refuses
+ * a run that would leave the IdP incomplete while a fleet outside the run has
+ * end-user authentication on, and under `--delete-other-fleets`, where the
+ * client skips that check, the server refuses the same config. The premium
+ * instance's Compliance fleet has end-user authentication on, so a `fleetctl
+ * new` scaffold, which declares no IdP, can't be dry-run there without this.
+ *
+ * The file is parsed and written back, which drops the scaffold's comments;
+ * every caller only dry-runs it.
+ */
+export async function carryLiveEndUserAuth(request: APIRequestContext, defaultYml: string): Promise<void> {
+  const res = await request.get(apiUrl('config'), { headers: authHeaders() });
+  if (!res.ok()) throw new Error(`GET /config failed: ${res.status()} ${await res.text()}`);
+  const eua = ((await res.json()).mdm?.end_user_authentication ?? {}) as Record<string, string | undefined>;
+  if (!eua.idp_name || !eua.entity_id || !(eua.metadata_url || eua.metadata)) return;
+
+  const doc = yaml.load(fs.readFileSync(defaultYml, 'utf8')) as {
+    org_settings?: { mdm?: Record<string, unknown> };
+  };
+  const org = (doc.org_settings ??= {});
+  const mdm = (org.mdm ??= {});
+  mdm.end_user_authentication = {
+    idp_name: eua.idp_name,
+    entity_id: eua.entity_id,
+    ...(eua.metadata_url ? { metadata_url: eua.metadata_url } : { metadata: eua.metadata }),
+  };
+  fs.writeFileSync(defaultYml, yaml.dump(doc, { lineWidth: -1 }));
 }
 
 /** True when the binary printed the version-mismatch banner for this instance. */

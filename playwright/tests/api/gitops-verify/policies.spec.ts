@@ -15,6 +15,7 @@ import {
   isPremium,
   resolveTeamId,
   getAll,
+  getJson,
   expectExactNames,
   expectSubset,
   declaredTargets,
@@ -38,6 +39,8 @@ interface ApiPolicy {
   notify_before_patching?: boolean;
   install_software: { software_title_id: number; name: string } | null;
   run_script: { id: number; name: string } | null;
+  patch_software: { software_title_id: number; name: string } | null;
+  resend_configuration_profile: { profile_uuid: string; name: string } | null;
   labels_include_any: unknown;
   labels_exclude_any: unknown;
 }
@@ -45,12 +48,20 @@ interface ApiPolicy {
 let teamId = 0;
 let live: ApiPolicy[] = [];
 let software: FleetSoftware | undefined;
+/** The scope's failing-policies webhook `policy_ids`: where a policy's `webhooks_and_tickets_enabled` is recorded. */
+let webhookPolicyIds: number[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
   live = await getAll<ApiPolicy>(request, teamId === 0 ? 'policies' : `fleets/${teamId}/policies`, 'policies');
-  if (gitopsConfig.policies.some((p) => p.installSoftware)) {
+  // The automation targets: the title an install policy installs, and the one a patch policy patches.
+  if (gitopsConfig.policies.some((p) => p.installSoftware || p.type === 'patch')) {
     software = await resolveFleetSoftware(request, teamId);
+  }
+  if (gitopsConfig.policies.some((p) => p.webhooksAndTicketsEnabled !== undefined)) {
+    const settings =
+      teamId === 0 ? await getJson(request, 'config') : (await getJson(request, `fleets/${teamId}`)).team;
+    webhookPolicyIds = settings?.webhook_settings?.failing_policies_webhook?.policy_ids ?? [];
   }
 });
 
@@ -89,12 +100,26 @@ test.describe(`GitOps verify · policies · ${gitopsLabel}`, () => {
       expect.soft(targetNames(policy.labels_include_any), `${at} labels_include_any`).toEqual(targets.labels_include_any);
       expect.soft(targetNames(policy.labels_exclude_any), `${at} labels_exclude_any`).toEqual(targets.labels_exclude_any);
       expect.soft(policy.run_script?.name, `${at} run_script`).toBe(declared.runScript);
+      expect.soft(policy.resend_configuration_profile?.name, `${at} resend_configuration_profile`).toBe(
+        declared.resendConfigurationProfile,
+      );
       if (declared.installSoftware) {
         expect.soft(policy.install_software?.software_title_id, `${at} install_software`).toBe(
           expectedTitleId(declared.installSoftware, declared.fleetMaintainedAppSlug),
         );
       } else {
         expect.soft(policy.install_software ?? null, `${at} install_software`).toBeNull();
+      }
+      // A patch policy is bound to the Fleet-maintained app it patches; Fleet reports that title as `patch_software`.
+      if (declared.type === 'patch') {
+        expect.soft(policy.patch_software?.software_title_id, `${at} patch_software`).toBe(
+          software?.addedSlugs.get(declared.fleetMaintainedAppSlug ?? ''),
+        );
+      }
+      if (declared.webhooksAndTicketsEnabled !== undefined) {
+        expect.soft(webhookPolicyIds.includes(policy.id), `${at} webhooks_and_tickets_enabled`).toBe(
+          declared.webhooksAndTicketsEnabled,
+        );
       }
     }
   });

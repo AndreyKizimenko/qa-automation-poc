@@ -1,0 +1,283 @@
+# "Compliance" fleet — the gitops-only fleet that carries every control Fleet
+# can apply to a host, on a fleet that has none.
+#
+# Why a fleet of its own: OS-update deadlines, disk encryption, Recovery Lock,
+# a host name template, setup experience, agent command-line flags and update
+# channels all act on the hosts that receive them. Workstations can't carry
+# them — specs assert it enforces nothing (`exclusive/os-updates/*`) and the
+# cleanup resets its OS updates and setup experience every run — and nothing
+# on the real VMs may change what they run. This fleet holds no host, no spec
+# names it, the static users have no role on it, and `setup/cleanup.steps.ts`
+# never touches it (it sweeps Unassigned, Workstations, the QA/VMs pins and
+# `pw-*` things). So everything below is applied, verified by the nightly's
+# `gitops-verify` project after both the baseline and the min apply, and
+# reaches nothing. **Never move a host into this fleet.** ABM's default fleets
+# point here (`default.yml`) for the same reason: an automated enrollment lands
+# on a fleet nothing else depends on.
+#
+# What it exercises, section by section: fleet `settings` (features with
+# historical data, host expiry, the two fleet webhooks fleetctl manages), `agent_options` with
+# `command_line_flags` and `update_channels` (the only place they are declared:
+# anywhere else they reach real hosts), a fleet-scoped label, per-platform
+# `controls` (disk encryption and key escrow, BitLocker PIN, managed local
+# account, OS updates for all four platforms, Recovery Lock, a name template,
+# label-targeted profiles on three platforms, scripts of all three kinds via
+# globs, the credential-free setup-experience keys), `software` (packages by
+# hash with every option, script-only packages, Fleet-maintained apps with
+# options and a caret pin), policies with every automation and targeting key,
+# and reports with label targeting. The min variant changes one value in
+# every section and drops one entry from every list.
+#
+# Software is only ever by `hash_sha256` of a file already in storage (the VMs
+# fleet's inert fixtures), a script-only package (the script is the installer,
+# so there is no file) or a small Fleet-maintained app: the premium instance
+# is a 2 GB Render box (see qa.yml's size rule), and an apply downloads
+# nothing here. The package files under lib/ are `*.compliance.package.yml`:
+# same hash as the VMs fleet's, with the options the VMs fleet must not carry.
+#
+# Applied before every nightly premium run, in both passes, by
+# `.github/workflows/gitops-premium{,-min}.yml`; the min pass applies
+# `../../premium-fleetqa-min/fleets/compliance.yml`.
+name: Compliance
+
+agent_options:
+  config:
+    options:
+      pack_delimiter: /
+      logger_tls_period: 10
+      distributed_plugin: tls
+      disable_distributed: false
+      logger_tls_endpoint: /api/osquery/log
+      distributed_interval: 10
+      distributed_tls_max_attempts: 3
+    decorators:
+      load:
+        - SELECT uuid AS host_uuid FROM system_info;
+        - SELECT hostname AS hostname FROM system_info;
+  command_line_flags:
+    enable_file_events: true
+    disable_audit: false
+    events_max: 50000
+    events_expiry: 86400
+  update_channels:
+    orbit: stable
+    osqueryd: stable
+    desktop: stable
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+    historical_data:
+      uptime: true
+      vulnerabilities: true
+  host_expiry_settings:
+    host_expiry_enabled: true
+    host_expiry_window: 30
+  webhook_settings:
+    # Enabled so a policy's `webhooks_and_tickets_enabled` has somewhere to
+    # register; with no hosts it never posts.
+    failing_policies_webhook:
+      enable_failing_policies_webhook: true
+      destination_url: https://example.com/compliance/failing-policies
+      host_batch_size: 0
+    # No host_status_webhook: fleetctl doesn't manage a fleet's host-status
+    # webhook (Fleet reports it as null after an apply that declares one), and
+    # `premium/settings/team-host-status-webhook.spec.ts` owns that surface.
+    host_activities_webhook:
+      enable_host_activities_webhook: false
+      destination_url: https://example.com/compliance/host-activities
+
+# A fleet-scoped label: it exists only on this fleet, and this file's profiles,
+# policies and reports target it beside the global ones.
+labels:
+  - name: Compliance macOS hosts
+    description: macOS hosts on the Compliance fleet
+    platform: darwin
+    label_membership_type: dynamic
+    query: SELECT 1 FROM os_version WHERE platform = 'darwin';
+
+controls:
+  enable_recovery_lock_password: true
+  name_template: compliance-$FLEET_VAR_HOST_HARDWARE_SERIAL
+  macos_updates:
+    minimum_version: "15.0"
+    deadline: "2026-12-31"
+    update_new_hosts: true
+  ios_updates:
+    minimum_version: "18.0"
+    deadline: "2026-12-31"
+  ipados_updates:
+    minimum_version: "18.0"
+    deadline: "2026-12-31"
+  windows_updates:
+    deadline_days: 7
+    grace_period_days: 2
+  apple_settings:
+    enable_disk_encryption: true
+    enable_escrow_disk_encryption_key: true
+    configuration_profiles:
+      - path: ../../lib/platforms/macos/configuration-profiles/date-time.mobileconfig
+        labels_include_all:
+          - Apple Silicon macOS hosts
+          - Pilot hosts
+      - path: ../../lib/platforms/macos/configuration-profiles/enable-gatekeeper.mobileconfig
+        labels_include_any:
+          - Pilot hosts
+      - path: ../../lib/platforms/macos/configuration-profiles/disable-guest-account.mobileconfig
+        labels_exclude_any:
+          - Compliance macOS hosts
+  windows_settings:
+    enable_disk_encryption: true
+    require_bitlocker_pin: true
+    enable_managed_local_account: true
+    configuration_profiles:
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-firewall.xml
+        labels_include_any:
+          - Pilot hosts
+      - path: ../../lib/platforms/windows/configuration-profiles/enable-smartscreen.xml
+  linux_settings:
+    enable_escrow_disk_encryption_key: true
+  android_settings:
+    configuration_profiles:
+      - path: ../../lib/platforms/android/configuration-profiles/disable-camera.json
+        labels_include_any:
+          - Pilot hosts
+  # Globs, one per platform folder: Fleet keeps the .sh, .py and .ps1 matches,
+  # so the Linux folder's Python script joins this fleet (the no-team configs
+  # glob `*.sh` there and leave it out).
+  scripts:
+    - paths: ../../lib/platforms/macos/scripts/*.sh
+    - paths: ../../lib/platforms/windows/scripts/*.ps1
+    - paths: ../../lib/platforms/linux/scripts/*
+  # Every setup-experience key that needs no bootstrap package or ADE profile.
+  # End-user authentication needs the IdP the premium instance has configured.
+  setup_experience:
+    enable_end_user_authentication: true
+    lock_end_user_info: true
+    apple_enable_release_device_manually: false
+    require_all_software_macos: true
+    require_all_software_windows: false
+    enable_create_local_admin_account: true
+    end_user_local_account_type: standard
+    macos_script: ../../lib/platforms/macos/setup/compliance-setup.sh
+
+software:
+  packages:
+    - path: ../../lib/platforms/macos/software/fleet-playwright-install.compliance.package.yml
+    - path: ../../lib/platforms/windows/software/fleet-playwright-install.compliance.package.yml
+    - path: ../../lib/platforms/linux/software/fleet-playwright-install.compliance.package.yml
+    # Script-only packages: the script is the installer, and self-service,
+    # categories, label targeting and the icon are declared here.
+    - path: ../../lib/platforms/linux/software/compliance-marker.sh
+      display_name: Compliance marker (Linux)
+      self_service: true
+      categories:
+        - Utilities
+      labels_include_any:
+        - Pilot hosts
+      icon:
+        path: ../../lib/icons/compliance.png
+    - path: ../../lib/platforms/windows/software/compliance-marker.ps1
+      display_name: Compliance marker (Windows)
+      self_service: false
+  fleet_maintained_apps:
+    # No pre_install_query here: Fleet manages that query for an app whose
+    # patch policy sets notify_before_patching or patch_when_closed (both below),
+    # and refuses a declared one. The custom packages carry it instead.
+    - slug: itsycal/darwin # Itsycal — small, inert, the VMs fleet's macOS fixture
+      self_service: true
+      setup_experience: true
+      categories:
+        - Productivity
+      labels_include_any:
+        - Pilot hosts
+      post_install_script:
+        path: ../../lib/platforms/macos/software/compliance-post-install.sh
+      display_name: Itsycal (Compliance)
+    - slug: db-browser-for-sqlite/windows # DB Browser for SQLite — the VMs fleet's Windows fixture
+      version: "^3"
+      self_service: true
+      categories:
+        - Developer tools
+
+# Every automation and targeting key a fleet policy can carry. Each automation
+# references something this file declares: the resent profile, the script
+# (through its glob), the packages by file and by hash, the apps by slug.
+policies:
+  - name: Compliance - FileVault is on
+    query: SELECT 1 FROM disk_encryption WHERE encrypted = 1;
+    platform: darwin
+    critical: true
+    description: Disk encryption is on, as the fleet's controls require.
+    resolution: Turn on FileVault in System Settings. Fleet also resends the Gatekeeper profile, re-asserting the fleet's macOS baseline.
+    labels_include_any:
+      - Compliance macOS hosts
+    resend_configuration_profile: Turn on Gatekeeper
+  - name: Compliance - Gatekeeper is on
+    query: SELECT 1 FROM gatekeeper WHERE assessments_enabled = 1;
+    platform: darwin
+    description: Gatekeeper assessments are enabled.
+    resolution: Fleet runs the remediation script.
+    labels_exclude_any:
+      - Pilot hosts
+    run_script:
+      path: ../../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
+  - name: Compliance - Fleet Playwright Install is present (macOS)
+    query: SELECT 1 FROM apps WHERE name = 'Fleet Playwright Install.app';
+    platform: darwin
+    description: The inert package is installed.
+    resolution: Fleet installs it from the package declared on this fleet.
+    install_software:
+      package_path: ../../lib/platforms/macos/software/fleet-playwright-install.compliance.package.yml
+    continuous_automations_enabled: true
+  - name: Compliance - Fleet Playwright Install is present (Windows)
+    query: SELECT 1 FROM programs WHERE name = 'Fleet Playwright Install';
+    platform: windows
+    description: The inert package is installed.
+    resolution: Fleet installs it, matched by the package's hash.
+    install_software:
+      hash_sha256: 18993c1e4fbdfb926896902d994dd8e2315e20ac728cca0e466b3ad1f63fbb2b
+    webhooks_and_tickets_enabled: true
+  - name: Compliance - Itsycal is installed
+    query: SELECT 1 FROM apps WHERE bundle_identifier = 'com.mowglii.ItsycalApp';
+    platform: darwin
+    description: Itsycal is installed.
+    resolution: Fleet installs the Fleet-maintained app.
+    install_software:
+      fleet_maintained_app_slug: itsycal/darwin
+  - name: Compliance - Itsycal is current
+    type: patch
+    fleet_maintained_app_slug: itsycal/darwin
+    platform: darwin
+    install_software: true
+    notify_before_patching: true
+  - name: Compliance - DB Browser for SQLite is current
+    type: patch
+    fleet_maintained_app_slug: db-browser-for-sqlite/windows
+    platform: windows
+    install_software: true
+    patch_when_closed: true
+
+reports:
+  - name: Compliance - FileVault status
+    query: SELECT encrypted FROM disk_encryption;
+    description: Disk encryption state of the fleet's macOS hosts.
+    interval: 3600
+    platform: darwin
+    min_osquery_version: "5.0.0"
+    observer_can_run: true
+    automations_enabled: true
+    logging: snapshot
+    discard_data: false
+    labels_include_any:
+      - Compliance macOS hosts
+  - name: Compliance - Pilot hosts uptime
+    query: SELECT total_seconds FROM uptime;
+    description: Uptime of the pilot hosts on this fleet.
+    interval: 86400
+    platform: darwin,windows,linux
+    logging: differential
+    discard_data: true
+    labels_include_all:
+      - Pilot hosts

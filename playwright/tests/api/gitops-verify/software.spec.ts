@@ -8,26 +8,44 @@
  * records it; the name of a script-only package). A Fleet-maintained app is
  * matched by slug through the catalog, which reports the title each slug
  * resolved to on this fleet. The option fields (self-service, categories,
- * label targets, setup experience, the scripts and the pre-install query) are
- * read from the title detail, the only place Fleet returns them.
+ * label targets, display name, the scripts and the pre-install query) are read
+ * from the title detail, the only place Fleet returns them; whether a title
+ * installs during setup experience comes from the setup-experience listing,
+ * since the detail doesn't carry it for a Fleet-maintained app. Fleet's
+ * built-in categories carry an emoji prefix the YAML never writes, so
+ * categories are compared past it. An icon is checked for presence, not pixels.
  *
  * Software is declared by fleet files (and `fleets/unassigned.yml`); a
  * `default.yml` can't carry it, so the no-team scope skips.
  */
 import { test, expect } from '@playwright/test';
+import * as yaml from 'js-yaml';
 import {
   gitopsConfig,
   gitopsLabel,
   resolveTeamId,
   expectExactNames,
-  expectSubset,
   declaredTargets,
   targetNames,
+  categoryName,
   normalizeBody,
   normalizeSql,
   resolveFleetSoftware,
   type FleetSoftware,
 } from './_config';
+
+type Title = FleetSoftware['titles'][number];
+type Declared = {
+  selfService?: boolean;
+  categories?: string[];
+  setupExperience?: boolean;
+  displayName?: string;
+  hasIcon?: boolean;
+  preInstallQuery?: string;
+  installScript?: string;
+  uninstallScript?: string;
+  postInstallScript?: string;
+} & Parameters<typeof declaredTargets>[0];
 
 let software: FleetSoftware;
 
@@ -42,27 +60,29 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
   const fmaTitles = () => software.titles.filter((t) => t.package && t.package.fleet_maintained_app_id != null);
 
   /**
-   * Pairs each declared package with the live installer it identifies — by hash
-   * when the package file declares one, else by filename — each live installer
-   * claimed at most once. What is left on either side is a difference.
+   * Pairs each declared package with the live title it identifies — by hash
+   * when the package file declares one, else by installer filename — each live
+   * title claimed at most once. What is left on either side is a difference.
    */
   function matchPackages() {
-    const live = customTitles().map((t) => t.package!);
-    const claimed = new Set<Record<string, any>>();
-    const matched = new Map<(typeof gitopsConfig.software.packages)[number], Record<string, any>>();
+    const live = customTitles();
+    const claimed = new Set<Title>();
+    const matched = new Map<(typeof gitopsConfig.software.packages)[number], Title>();
     const missing: string[] = [];
     for (const declared of gitopsConfig.software.packages) {
-      const pkg = live.find(
-        (p) => !claimed.has(p) && (declared.hash ? p.hash_sha256 === declared.hash : p.name === declared.fileName),
+      const title = live.find(
+        (t) =>
+          !claimed.has(t) &&
+          (declared.hash ? t.package!.hash_sha256 === declared.hash : t.package!.name === declared.fileName),
       );
-      if (pkg) {
-        claimed.add(pkg);
-        matched.set(declared, pkg);
+      if (title) {
+        claimed.add(title);
+        matched.set(declared, title);
       } else {
         missing.push(declared.fileName);
       }
     }
-    const extra = live.filter((p) => !claimed.has(p)).map((p) => p.name as string);
+    const extra = live.filter((t) => !claimed.has(t)).map((t) => t.package!.name as string);
     return { matched, missing, extra };
   }
 
@@ -74,17 +94,8 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
   });
 
   test("each custom package's options match gitops", async () => {
-    for (const [declared, pkg] of matchPackages().matched) {
-      const at = `package "${declared.fileName}"`;
-      expectSubset(at, pkg, {
-        self_service: declared.selfService,
-        install_during_setup: declared.setupExperience,
-      });
-      if (declared.categories) {
-        expect.soft([...(pkg.categories ?? [])].sort(), `${at} categories`).toEqual([...declared.categories].sort());
-      }
-      expectTargets(at, pkg, declared);
-      expectScripts(at, pkg, declared);
+    for (const [declared, title] of matchPackages().matched) {
+      expectOptions(`package "${declared.fileName}"`, title, declared);
     }
   });
 
@@ -104,24 +115,18 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
   test("each Fleet-maintained app's options match gitops", async () => {
     for (const declared of gitopsConfig.software.fleetMaintainedApps) {
       const titleId = software.addedSlugs.get(declared.slug);
-      const pkg = software.titles.find((t) => t.id === titleId)?.package;
-      if (!pkg) continue; // reported by the set test
+      const title = software.titles.find((t) => t.id === titleId);
+      if (!title?.package) continue; // reported by the set test
       const at = `Fleet-maintained app "${declared.slug}"`;
-      expectSubset(at, pkg, {
-        self_service: declared.selfService,
-        install_during_setup: declared.setupExperience,
-      });
-      if (declared.categories) {
-        expect.soft([...(pkg.categories ?? [])].sort(), `${at} categories`).toEqual([...declared.categories].sort());
-      }
       // An exact pin is a version the installer must be; a caret pin only bounds the major.
       if (declared.version && !declared.version.startsWith('^')) {
-        expect.soft(pkg.version, `${at} version`).toBe(declared.version);
+        expect.soft(title.package.version, `${at} version`).toBe(declared.version);
       } else if (declared.version) {
-        expect.soft(String(pkg.version).split('.')[0], `${at} major version`).toBe(declared.version.slice(1).split('.')[0]);
+        expect.soft(String(title.package.version).split('.')[0], `${at} major version`).toBe(
+          declared.version.slice(1).split('.')[0],
+        );
       }
-      expectTargets(at, pkg, declared);
-      expectScripts(at, pkg, declared);
+      expectOptions(at, title, declared);
     }
   });
 
@@ -141,20 +146,28 @@ test.describe(`GitOps verify · software · ${gitopsLabel}`, () => {
   });
 });
 
-function expectTargets(at: string, pkg: Record<string, any>, declared: Parameters<typeof declaredTargets>[0]): void {
+/** The option fields a package or Fleet-maintained app declares, against the title Fleet holds for it. */
+function expectOptions(at: string, title: Title, declared: Declared): void {
+  const pkg = title.package!;
+  if (declared.selfService !== undefined) expect.soft(pkg.self_service, `${at} self_service`).toBe(declared.selfService);
+  if (declared.categories) {
+    expect
+      .soft([...(pkg.categories ?? [])].map(categoryName).sort(), `${at} categories`)
+      .toEqual(declared.categories.map(categoryName).sort());
+  }
+  // Held to the declared value with "undeclared" meaning off — unlike self-service, which is only compared when
+  // declared — because a title that installs during setup starts real work on any host enrolled into the fleet,
+  // and the QA shelf and the VMs fleet must never carry one. An apply doesn't reset the flag (fleetctl sends
+  // nothing for an undeclared key), so one toggled on by hand shows up here as drift until it is cleared by hand.
+  expect.soft(software.setupExperienceTitleIds.has(title.id), `${at} setup_experience`).toBe(declared.setupExperience ?? false);
+  if (declared.displayName !== undefined) expect.soft(title.displayName, `${at} display_name`).toBe(declared.displayName);
+  if (declared.hasIcon) expect.soft(pkg.icon_url, `${at} icon`).toBeTruthy();
   const targets = declaredTargets(declared);
   expect.soft(targetNames(pkg.labels_include_all), `${at} labels_include_all`).toEqual(targets.labels_include_all);
   expect.soft(targetNames(pkg.labels_include_any), `${at} labels_include_any`).toEqual(targets.labels_include_any);
   expect.soft(targetNames(pkg.labels_exclude_any), `${at} labels_exclude_any`).toEqual(targets.labels_exclude_any);
-}
-
-function expectScripts(
-  at: string,
-  pkg: Record<string, any>,
-  declared: { preInstallQuery?: string; installScript?: string; uninstallScript?: string; postInstallScript?: string },
-): void {
   if (declared.preInstallQuery !== undefined) {
-    expect.soft(normalizeSql(pkg.pre_install_query), `${at} pre_install_query`).toBe(normalizeSql(declared.preInstallQuery));
+    expect.soft(normalizeSql(pkg.pre_install_query), `${at} pre_install_query`).toBe(normalizeSql(preInstallSql(declared.preInstallQuery)));
   }
   for (const [key, body] of [
     ['install_script', declared.installScript],
@@ -163,4 +176,21 @@ function expectScripts(
   ] as const) {
     if (body !== undefined) expect.soft(normalizeBody(pkg[key] ?? ''), `${at} ${key}`).toBe(normalizeBody(body));
   }
+}
+
+/**
+ * A pre-install query file takes one of the two shapes fleetctl reads — the
+ * apply format (apiVersion / kind / spec.query) or a list of query specs —
+ * and Fleet stores the query alone. The loader carries the file's text, so the
+ * SQL is parsed out of it here; a file in neither shape is compared as it is.
+ */
+function preInstallSql(fileText: string): string {
+  type QuerySpec = { query?: string };
+  const doc: unknown = yaml.load(fileText);
+  if (Array.isArray(doc)) return String((doc[0] as QuerySpec | undefined)?.query ?? fileText);
+  if (doc && typeof doc === 'object') {
+    const file = doc as QuerySpec & { spec?: QuerySpec };
+    return String(file.spec?.query ?? file.query ?? fileText);
+  }
+  return fileText;
 }

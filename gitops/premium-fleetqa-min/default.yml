@@ -14,6 +14,12 @@ org_settings:
     historical_data:
       uptime: true
       vulnerabilities: true
+    vulnerability_exposure_historical_reporting:
+      software_filters:
+        - os
+        - browsers
+      cvss_min: 8 # baseline 7
+      has_known_exploit: false
   # A different transparency URL from the baseline: an update, not a deletion,
   # which is the apply path the entity counts don't exercise.
   fleet_desktop:
@@ -59,11 +65,13 @@ org_settings:
       entity_id: fleet-eua
       idp_name: Okta
       metadata_url: $FLEET_EUA_METADATA_URL
-    apple_business_manager:
+    apple_business:
       - organization_name: $FLEET_ABM_ORG_NAME
-        macos_fleet: Workstations
-        ios_fleet: Workstations
-        ipados_fleet: Workstations
+        macos_fleet: Compliance
+        ios_fleet: Compliance
+        ipados_fleet: Compliance
+    windows_automatic_enrollment:
+      default_fleet: Compliance
     volume_purchasing_program:
       - location: $FLEET_VPP_LOCATION
         fleets:
@@ -95,6 +103,13 @@ org_settings:
 controls:
   windows_enabled_and_configured: true
   android_enabled_and_configured: true
+  windows_migration_enabled: false
+  enable_turn_on_windows_mdm_manually: false
+  apple_require_hardware_attestation: false
+  macos_migration:
+    enable: false
+    mode: voluntary
+    webhook_url: https://example.com/fleet-min/macos-migration # baseline /fleet/
   scripts:
     # 9 of 11
     - path: ../lib/platforms/macos/scripts/toggle-fleetd-debug.sh
@@ -137,7 +152,7 @@ controls:
       - path: ../lib/platforms/android/configuration-profiles/disable-screen-capture.json
 
 labels:
-  # 11 of 14 (drop keynote-14, virtual-machines, linux-hosts-running-docker;
+  # 12 of 15 (drop keynote-14, virtual-machines, linux-hosts-running-docker;
   # pilot-hosts stays, since the inline policy and report below reference it)
   - path: ../lib/labels/apple-silicon-macos-hosts.yml
   - path: ../lib/labels/arm-based-windows-hosts.yml
@@ -150,6 +165,7 @@ labels:
   - path: ../lib/labels/windows-with-fleet-maintained-apps-installed.yml
   - path: ../lib/labels/x86-based-windows-hosts.yml
   - path: ../lib/labels/pilot-hosts.yml
+  - path: ../lib/labels/engineering-department.yml
 
 # 2 of the baseline's 3. Leaving the key out would delete every vital.
 custom_host_vitals:

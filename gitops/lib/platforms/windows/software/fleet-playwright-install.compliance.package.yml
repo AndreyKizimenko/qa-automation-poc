@@ -1,0 +1,21 @@
+# The VMs fleet's inert Windows package (same URL and hash, so Fleet reuses the
+# file it already holds) declared a second time for the Compliance fleet with
+# every option a package file can carry. Nothing here reaches a host — the
+# Compliance fleet has none.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/950d61bec3d24200be6a968397a9013aab6e13a2/playwright/test-data/windows/software/fleet-playwright-install-1.0.0.msi
+  hash_sha256: 18993c1e4fbdfb926896902d994dd8e2315e20ac728cca0e466b3ad1f63fbb2b
+  pre_install_query:
+    path: ./compliance-pre-install.yml
+  install_script:
+    path: ./compliance-install.ps1
+  uninstall_script:
+    path: ./compliance-uninstall.ps1
+  post_install_script:
+    path: ./compliance-post-install.ps1
+  self_service: true
+  categories:
+    - Productivity
+    - Developer tools
+  labels_include_any:
+    - Pilot hosts
+  display_name: Fleet Playwright Install (Compliance)

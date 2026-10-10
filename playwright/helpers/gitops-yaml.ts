@@ -106,6 +106,8 @@ export interface PackageEntry extends LabelTargets {
   categories?: string[];
   setupExperience?: boolean;
   displayName?: string;
+  /** Whether an `icon.path` is declared (the image itself isn't compared). */
+  hasIcon?: boolean;
   preInstallQuery?: string;
   installScript?: string;
   uninstallScript?: string;
@@ -119,6 +121,7 @@ export interface FleetMaintainedAppEntry extends LabelTargets {
   categories?: string[];
   setupExperience?: boolean;
   displayName?: string;
+  hasIcon?: boolean;
   preInstallQuery?: string;
   installScript?: string;
   uninstallScript?: string;
@@ -360,6 +363,7 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
       categories: entry.categories,
       setupExperience: entry.setup_experience,
       displayName: entry.display_name,
+      hasIcon: entry.icon ? true : undefined,
       ...labelTargets(entry),
     };
     // A script-only package: the referenced .sh / .ps1 / .py is the installer itself.
@@ -389,6 +393,7 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
           categories: item.categories,
           setupExperience: item.setup_experience,
           displayName: item.display_name,
+          hasIcon: item.icon ? true : undefined,
           ...labelTargets(item),
         }),
         ...stripUndefined(fleetLevel),
@@ -406,6 +411,7 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
         categories: item.categories,
         setupExperience: item.setup_experience,
         displayName: item.display_name,
+        hasIcon: item.icon ? true : undefined,
         preInstallQuery: readRef(item.pre_install_query),
         installScript: readRef(item.install_script),
         uninstallScript: readRef(item.uninstall_script),

@@ -160,6 +160,16 @@ export function declaredTargets(entry: LabelTargets): Record<string, string[] | 
   };
 }
 
+/**
+ * A self-service category as Fleet names it versus as the YAML names it: Fleet's
+ * built-in categories carry an emoji prefix ("🛠️ Utilities") and its uniqueness
+ * check ignores it, so "Utilities" resolves to that category. The comparison
+ * drops everything before the first letter or digit on both sides.
+ */
+export function categoryName(name: string): string {
+  return name.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+}
+
 /** SQL as Fleet stores it versus as a YAML block scalar carries it: whitespace runs and a trailing newline are not differences. */
 export function normalizeSql(sql: string | undefined): string {
   return (sql ?? '').replace(/\s+/g, ' ').trim();
@@ -183,6 +193,8 @@ export interface FleetSoftware {
   titles: Array<{
     id: number;
     name: string;
+    /** The fleet's display-name override for the title, '' when none. */
+    displayName: string;
     source: string;
     package?: Record<string, any>;
     appStoreApp?: Record<string, any>;
@@ -191,6 +203,12 @@ export interface FleetSoftware {
   addedSlugs: Map<string, number>;
   /** Every catalog entry, by slug. */
   catalog: Map<string, { id: number; name: string; platform: string }>;
+  /**
+   * Titles that install during setup experience on this fleet. The title
+   * detail doesn't carry the flag for a Fleet-maintained app; the setup
+   * experience listing, per platform, does.
+   */
+  setupExperienceTitleIds: Set<number>;
 }
 const softwareCache = new Map<number, Promise<FleetSoftware>>();
 export function resolveFleetSoftware(request: APIRequestContext, teamId: number): Promise<FleetSoftware> {
@@ -208,12 +226,25 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
           return {
             id: t.id as number,
             name: t.name as string,
+            displayName: (detail.display_name ?? '') as string,
             source: t.source as string,
             package: detail.software_package ?? undefined,
             appStoreApp: detail.app_store_app ?? undefined,
           };
         }),
       );
+      const setupExperienceTitleIds = new Set<number>();
+      for (const platform of ['macos', 'windows', 'linux']) {
+        const body = await getJson(
+          request,
+          `setup_experience/software?team_id=${teamId}&platform=${platform}&per_page=200`,
+        );
+        for (const t of (body.software_titles ?? []) as Array<Record<string, any>>) {
+          if (t.software_package?.install_during_setup || t.app_store_app?.install_during_setup) {
+            setupExperienceTitleIds.add(t.id);
+          }
+        }
+      }
       // One page holds the whole catalog: it is read with a page size above its count.
       const catalogBody = await getJson(request, `software/fleet_maintained_apps?team_id=${teamId}&per_page=5000`);
       const apps = catalogBody.fleet_maintained_apps as Array<Record<string, any>>;
@@ -234,7 +265,7 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
         if (!slug) throw new Error(`title ${title.id} (${title.name}) names Fleet-maintained app ${appId}, which the catalog doesn't list`);
         addedSlugs.set(slug, title.id);
       }
-      return { titles, addedSlugs, catalog };
+      return { titles, addedSlugs, catalog, setupExperienceTitleIds };
     })();
     softwareCache.set(teamId, pending);
   }

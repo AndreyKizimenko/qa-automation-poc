@@ -1,0 +1,12 @@
+# The VMs fleet's inert Debian package (same URL and hash, so Fleet reuses the
+# file it already holds) declared a second time for the Compliance fleet, with
+# the options that don't need a script file. Nothing here reaches a host — the
+# Compliance fleet has none.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/eb85e929cda2aaf2902ea8e3449d427f6e7ab774/playwright/test-data/linux/software/fleet-playwright-install_1.0.0_all.deb
+  hash_sha256: 6fcc33be969fa089a58ab69e4a3749c96f2b642704c6ec176c92105582c9dcc3
+  self_service: false
+  categories:
+    - Utilities
+  labels_include_all:
+    - Debian-based Linux hosts
+    - Pilot hosts
