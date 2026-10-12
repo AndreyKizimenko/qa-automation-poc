@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { apiUrl, authHeaders } from './core';
 import { getSoftwarePackage } from './software';
 
-interface FmaListEntry {
+export interface FmaListEntry {
   id: number;
   slug: string;
   name: string;
@@ -214,4 +214,169 @@ export async function setPinnedVersion(
     (await getSoftwarePackage(request, fleetId, titleId))?.pinnedVersion,
     `title ${titleId}'s pin on fleet ${fleetId} after setting it to "${version}"`,
   ).toBe(version);
+}
+
+/** One catalog entry as `GET /software/fleet_maintained_apps/:id` returns it. */
+export interface FleetMaintainedAppDetail {
+  id: number;
+  name: string;
+  slug: string;
+  platform: string;
+  /** The version Fleet's manifest currently publishes. */
+  version: string;
+  /** The vendor URL Fleet downloads the installer from. */
+  url: string;
+  installScript: string;
+  uninstallScript: string;
+  /** The title on the fleet asked about, or null when the fleet hasn't added the app. */
+  titleId: number | null;
+}
+
+/**
+ * Every catalog entry, optionally for one platform. Pages until Fleet says
+ * there are no more (`meta.has_next_results`): the list pages by app, not by
+ * entry, so a page's length says nothing about whether another follows.
+ */
+export async function listAllFleetMaintainedApps(
+  request: APIRequestContext,
+  opts: { fleetId?: number; platform?: 'darwin' | 'windows' } = {},
+): Promise<FmaListEntry[]> {
+  const all: FmaListEntry[] = [];
+  for (let page = 0; page < 50; page++) {
+    const res = await request.get(apiUrl('software/fleet_maintained_apps'), {
+      headers: authHeaders(),
+      params: {
+        per_page: '200',
+        page: String(page),
+        ...(opts.fleetId !== undefined ? { fleet_id: String(opts.fleetId) } : {}),
+        ...(opts.platform ? { platform: opts.platform } : {}),
+      },
+    });
+    await expect(res, 'Failed to list Fleet-maintained apps').toBeOK();
+    const body = await res.json();
+    const apps = ((body.fleet_maintained_apps ?? []) as FmaListEntry[]).filter(
+      (a) => !opts.platform || a.platform === opts.platform,
+    );
+    all.push(...apps);
+    if (!body.meta?.has_next_results) return all;
+  }
+  throw new Error('Fleet-maintained apps list never reported its last page in 50 pages');
+}
+
+/**
+ * One catalog entry with what Fleet hydrates from its manifest: version,
+ * installer URL and the default scripts. Downloads nothing — the cheap way to
+ * check the whole catalog.
+ */
+export async function getFleetMaintainedApp(
+  request: APIRequestContext,
+  appId: number,
+  fleetId?: number,
+): Promise<FleetMaintainedAppDetail> {
+  const res = await request.get(apiUrl(`software/fleet_maintained_apps/${appId}`), {
+    headers: authHeaders(),
+    params: fleetId !== undefined ? { fleet_id: String(fleetId) } : {},
+    timeout: 60_000,
+  });
+  await expect(res, `Failed to read Fleet-maintained app ${appId}`).toBeOK();
+  const app = (await res.json()).fleet_maintained_app;
+  return {
+    id: app.id,
+    name: app.name,
+    slug: app.slug,
+    platform: app.platform,
+    version: app.version ?? '',
+    url: app.url ?? '',
+    installScript: app.install_script ?? '',
+    uninstallScript: app.uninstall_script ?? '',
+    titleId: app.software_title_id ?? null,
+  };
+}
+
+/** The add's outcome, kept as data so a caller can classify a refusal instead of throwing on it. */
+export type FmaAddOutcome =
+  | { ok: true; titleId: number; ms: number }
+  | { ok: false; status: number; message: string; ms: number };
+
+/**
+ * Adds a Fleet-maintained app to a fleet and reports what happened rather than
+ * asserting. Fleet downloads the installer inside this request (up to its
+ * 15-minute installer timeout), checks it against the manifest's SHA-256 and
+ * stores it, so the refusal text says which of those failed.
+ */
+export async function tryAddFmaToFleet(
+  request: APIRequestContext,
+  fleetId: number,
+  slug: string,
+  opts: { selfService?: boolean; timeout?: number } = {},
+): Promise<FmaAddOutcome> {
+  const fmaId = await findFmaIdBySlug(request, fleetId, slug);
+  const started = Date.now();
+  const res = await request.post(apiUrl('software/fleet_maintained_apps'), {
+    headers: authHeaders(),
+    data: { fleet_maintained_app_id: fmaId, fleet_id: fleetId, self_service: opts.selfService ?? false },
+    timeout: opts.timeout ?? 300_000,
+  });
+  const ms = Date.now() - started;
+  const body = await res.json().catch(() => ({}));
+  if (res.ok() && body.software_title_id) return { ok: true, titleId: body.software_title_id, ms };
+  const message =
+    (body.errors as Array<{ reason?: string }> | undefined)?.map((e) => e.reason).join('; ') ||
+    body.message ||
+    JSON.stringify(body);
+  return { ok: false, status: res.status(), message, ms };
+}
+
+/** What Fleet stored for a Fleet-maintained title on one fleet — the catalog smoke's subject. */
+export interface FleetMaintainedTitleMetadata {
+  titleId: number;
+  name: string;
+  /** osquery source the title is matched on: `apps` (macOS) or `programs` (Windows). */
+  source: string;
+  bundleIdentifier: string | null;
+  upgradeCode: string | null;
+  package: {
+    /** The installer's file name as Fleet stored it. */
+    name: string;
+    platform: string;
+    version: string;
+    hashSha256: string;
+    url: string;
+    installScript: string;
+    uninstallScript: string;
+    selfService: boolean;
+    fleetMaintainedAppId: number | null;
+  } | null;
+}
+
+export async function getFleetMaintainedTitleMetadata(
+  request: APIRequestContext,
+  fleetId: number,
+  titleId: number,
+): Promise<FleetMaintainedTitleMetadata> {
+  const res = await request.get(apiUrl(`software/titles/${titleId}`), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId) },
+  });
+  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  const t = (await res.json()).software_title;
+  const pkg = t.software_package ?? t.packages?.[0] ?? null;
+  return {
+    titleId: t.id,
+    name: t.name,
+    source: t.source ?? '',
+    bundleIdentifier: t.bundle_identifier ?? null,
+    upgradeCode: t.upgrade_code ?? null,
+    package: pkg && {
+      name: pkg.name ?? '',
+      platform: pkg.platform ?? '',
+      version: pkg.version ?? '',
+      hashSha256: pkg.hash_sha256 ?? '',
+      url: pkg.url ?? '',
+      installScript: pkg.install_script ?? '',
+      uninstallScript: pkg.uninstall_script ?? '',
+      selfService: !!pkg.self_service,
+      fleetMaintainedAppId: pkg.fleet_maintained_app_id ?? null,
+    },
+  };
 }

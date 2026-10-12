@@ -907,3 +907,99 @@ export async function listHostSoftwareNames(
   await expect(res, `Failed to read the software inventory of host ${hostId}`).toBeOK();
   return (((await res.json()).software ?? []) as Array<{ name: string }>).map((r) => r.name);
 }
+
+/** The host's last install attempt of a title, as its Library row carries it. */
+export interface HostLastInstall {
+  status: HostSoftwareStatus;
+  /** Keys `GET /software/install/:uuid/results`; null before any attempt, or for an App Store app. */
+  installUuid: string | null;
+  installedAt: string | null;
+}
+
+/** The title's last install on a host, or null when the title isn't offered to it. */
+export async function getHostLastInstall(
+  request: APIRequestContext,
+  hostId: number,
+  titleId: number,
+): Promise<HostLastInstall | null> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { available_for_install: 'true', per_page: '100' },
+  });
+  await expect(res, `Failed to list installable software on host ${hostId}`).toBeOK();
+  const row = ((await res.json()).software ?? []).find((s: { id: number }) => s.id === titleId) as
+    | {
+        status: HostSoftwareStatus;
+        software_package: { last_install: { install_uuid?: string; installed_at?: string } | null } | null;
+      }
+    | undefined;
+  if (!row) return null;
+  const last = row.software_package?.last_install ?? null;
+  return {
+    status: row.status ?? null,
+    installUuid: last?.install_uuid || null,
+    installedAt: last?.installed_at ?? null,
+  };
+}
+
+/** What a host reported for one install: the script's output and Fleet's verdict. */
+export interface SoftwareInstallResult {
+  status: string;
+  output: string;
+  preInstallQueryOutput: string;
+  postInstallScriptOutput: string;
+  hashSha256: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export async function getSoftwareInstallResult(
+  request: APIRequestContext,
+  installUuid: string,
+): Promise<SoftwareInstallResult> {
+  const res = await request.get(apiUrl(`software/install/${installUuid}/results`), { headers: authHeaders() });
+  await expect(res, `Failed to read install result ${installUuid}`).toBeOK();
+  const r = (await res.json()).results;
+  return {
+    status: r.status ?? '',
+    output: r.output ?? '',
+    preInstallQueryOutput: r.pre_install_query_output ?? '',
+    postInstallScriptOutput: r.post_install_script_output ?? '',
+    hashSha256: r.hash_sha256 ?? '',
+    createdAt: r.created_at ?? '',
+    updatedAt: r.updated_at ?? null,
+  };
+}
+
+/**
+ * Waits for a queued install or uninstall to stop being pending, and returns
+ * whichever terminal status it reached — unlike {@link waitForHostSoftwareStatus},
+ * which waits for one named status and so spends its whole budget on a failure.
+ * A smoke run wants the failure the moment it lands, with its output.
+ *
+ * `pending` is the status to wait out (`pending_install` or `pending_uninstall`).
+ * A null status after an uninstall is terminal: it is what a clean uninstall leaves.
+ */
+export async function waitForSoftwareActionTerminal(
+  request: APIRequestContext,
+  hostId: number,
+  titleId: number,
+  pending: 'pending_install' | 'pending_uninstall',
+  timeout: number,
+): Promise<HostSoftwareStatus> {
+  let status: HostSoftwareStatus = pending;
+  await expect
+    .poll(
+      async () => {
+        status = (await getHostSoftwareState(request, hostId, titleId))?.status ?? null;
+        return status;
+      },
+      {
+        message: `title ${titleId} stayed ${pending} on host ${hostId} for ${Math.round(timeout / 1000)} s`,
+        timeout,
+        intervals: [2_000, 5_000, 10_000],
+      },
+    )
+    .not.toBe(pending);
+  return status;
+}

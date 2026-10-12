@@ -42,9 +42,11 @@ permissions:
 jobs:
   test:
     # A guard against a hung run, with room for growth: Playwright stops the
-    # main suite at 100 min (globalTimeout), the exclusive specs at 60 and the
-    # gitops-mode specs at 15, so a run that uses all of it still merges and
-    # uploads its report inside this limit.
+    # main suite at 100 min (globalTimeout), the exclusive specs at 60, the
+    # gitops-mode specs at 15 and the FMA smoke's catalog layer at 15 — 190 in
+    # the worst case, which a real run doesn't approach (63.5 min measured, the
+    # catalog layer ~5) — so a run still merges and uploads its report inside
+    # this limit.
     timeout-minutes: 185
     runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
@@ -153,11 +155,22 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/gitops-mode
         run: SUITE=premium npx playwright test --project=gitops-mode --reporter=github,blob --global-timeout=900000
 
+      # The FMA smoke's catalog layer (tests/fma-smoke/): the manifest's apps added
+      # to a throwaway fleet with no hosts, plus the checks that need no instance.
+      # After the suite so its installer downloads don't land while the suite has
+      # the instance under load; it stops itself at 15 min. The FMA smoke
+      # reporter writes the per-app table to the job summary.
+      - name: Run the FMA smoke — catalog
+        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/fma-catalog
+        run: SUITE=premium npx playwright test --project=fma-smoke-catalog --reporter=github,blob,./helpers/fma-smoke-reporter.ts --global-timeout=900000
+
       - name: Merge the reports
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
         run: |
           mkdir -p blob-report/all
-          find blob-report/suite blob-report/exclusive blob-report/gitops-mode -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          find blob-report/suite blob-report/exclusive blob-report/gitops-mode blob-report/fma-catalog -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
           npx playwright merge-reports --reporter html blob-report/all
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose

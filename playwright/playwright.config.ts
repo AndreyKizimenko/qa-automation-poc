@@ -15,6 +15,7 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'gitops-mode': 'premium',
   'gitops-mode-teardown': 'premium',
   'premium-exclusive': 'premium',
+  'fma-smoke-catalog': 'premium',
   free: 'free',
   'free-exclusive': 'free',
   'free-setup': 'free',
@@ -227,6 +228,8 @@ export default defineConfig({
         '**/gitops-mode/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
+        // The FMA smoke runs as projects of its own; see fma-smoke-catalog.
+        '**/fma-smoke/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -263,6 +266,26 @@ export default defineConfig({
       },
       dependencies: ['premium-setup'],
       teardown: 'cleanup-teardown',
+    },
+
+    // ── FMA smoke: catalog layer (premium; tests/fma-smoke/) ─────────────────
+    // Adds the manifest's apps to a throwaway `pw-fma-*` fleet with no hosts, and
+    // runs the manifest and summary checks that need no instance. Safe in
+    // parallel; CI runs it as its own step after the suite only to keep its
+    // installer downloads off the instance while the suite has it under load. It
+    // depends only on login setup: a dependency on `premium` would skip it on one
+    // unrelated red test. No cleanup-teardown: each worker deletes its own fleet
+    // in afterAll, and cleanup-setup's `pw-*` fleet sweep removes one a killed
+    // run left.
+    {
+      name: 'fma-smoke-catalog',
+      testDir: './tests/fma-smoke',
+      testMatch: /(catalog|offline)\.spec\.ts/,
+      workers: 2,
+      // One retry turns a vendor CDN blip into a flaky row (the reporter keeps
+      // the failed attempt visible); a hash mismatch fails both attempts alike.
+      retries: 1,
+      dependencies: ['premium-setup'],
     },
 
     // ── GitOps mode (its own invocation after the exclusive specs, one worker) ─
@@ -317,6 +340,7 @@ export default defineConfig({
         '**/loadtest/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
+        '**/fma-smoke/**',
       ],
       use: {
         ...devices['Desktop Chrome'],

@@ -148,21 +148,22 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Eight browser/API projects target three Fleet environments. Each has its own env file
+Nine browser/API projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder — no tags. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**`, `**/exclusive/**` | `.auth/premium-admin.json` |
-| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**` | `.auth/free-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/gitops-mode/**`, `**/exclusive/**`, `**/fma-smoke/**` | `.auth/premium-admin.json` |
+| `free` | `tests/e2e/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/exclusive/**`, `**/fma-smoke/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`), one worker | `**/api/**` | `.auth/loadtest-admin.json` |
 | `loadtest-api` | `tests/loadtest/api/**` only (`testDir`), one worker, no browser | n/a | bearer token |
 | `gitops-verify` | `tests/api/gitops-verify/**` only (`testDir`) | n/a | bearer token |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`), one worker, its own invocation after `premium-exclusive` | n/a | `.auth/premium-admin.json` |
 | `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
 | `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, one worker, its own invocation after `free` | n/a | `.auth/free-admin.json` |
+| `fma-smoke-catalog` | `tests/fma-smoke/{catalog,offline}.spec.ts`, two workers, `retries: 1`, no browser; a throwaway `pw-fma-*` fleet per worker; its own CI step after `gitops-mode` (see `docs/test-plans/fma-smoke.md`) | n/a | bearer token (login setup only) |
 
 Folder conventions:
 

@@ -10,6 +10,7 @@
     "test:gitops-mode": "SUITE=premium playwright test --project=gitops-mode",
     "test:gitops-mode:only": "SUITE=premium playwright test --project=gitops-mode --no-deps",
     "test:gitops-mode:headed": "SUITE=premium playwright test --project=gitops-mode --no-deps --headed",
+    "test:fma-smoke:catalog": "SUITE=premium playwright test --project=fma-smoke-catalog --reporter=list,html,./helpers/fma-smoke-reporter.ts",
     "test:free": "SUITE=free playwright test --project=free; s=$?; SUITE=free PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=free-exclusive; e=$?; exit $((s || e))",
     "test:free:headed": "SUITE=free playwright test --project=free --headed; s=$?; SUITE=free PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=free-exclusive --headed; e=$?; exit $((s || e))",
     "test:free:ui": "SUITE=free playwright test --project=free --ui",

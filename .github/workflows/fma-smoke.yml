@@ -1,0 +1,94 @@
+name: FMA smoke — on demand
+
+# The FMA smoke outside the nightly: the p1 apps beside the p0 ones, and
+# optionally the whole-catalog pass (Fleet hydrates every entry's metadata; the
+# runner probes every installer URL and reads every manifest's SHA-256 — no
+# installer is downloaded to the instance). For an RC sign-off, or after the
+# catalog changes upstream.
+#
+#   gh workflow run "FMA smoke — on demand" -f tier=p1 -f full-catalog=true
+#
+# It runs against the premium instance's current state; it does not redeploy or
+# apply gitops. The nightly runs the p0 selection inside `Playwright — Premium`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: p0 (nightly set) or p1 (p0 + p1)
+        type: choice
+        options: [p0, p1]
+        default: p1
+      full-catalog:
+        description: Also check every catalog entry (metadata from Fleet, URLs from the runner)
+        type: boolean
+        default: false
+
+# The premium instance's group: the catalog layer's downloads land on the same
+# 2 GB box, so it may not run beside the nightly, a branch run or a gitops apply.
+# A group of its own would let them overlap.
+concurrency:
+  group: premium-fleetqa-instance
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  fma-smoke:
+    # The whole-catalog pass is ~1,400 metadata reads plus as many runner-side
+    # URL probes, 8 at a time.
+    timeout-minutes: 90
+    runs-on: ubuntu-26.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --user 1001
+    defaults:
+      run:
+        shell: bash
+        working-directory: playwright
+    env:
+      FMA_SMOKE_TIER: ${{ inputs.tier }}
+      FMA_SMOKE_FULL_CATALOG: ${{ inputs.full-catalog && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - run: npm ci
+
+      # Only what the catalog layer and its login setup read.
+      - name: Write .env.premium from secrets
+        run: |
+          cat > .env.premium <<ENV
+          FLEET_URL=${{ secrets.FLEET_PREMIUM_URL }}
+          FLEET_API_TOKEN=${{ secrets.FLEET_PREMIUM_API_TOKEN }}
+          FLEET_ADMIN_EMAIL=${{ secrets.FLEET_PREMIUM_ADMIN_EMAIL }}
+          FLEET_ADMIN_PASSWORD=${{ secrets.FLEET_PREMIUM_ADMIN_PASSWORD }}
+          ENV
+
+      - name: Catalog layer
+        id: catalog
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/fma-catalog
+        run: SUITE=premium npx playwright test --project=fma-smoke-catalog --reporter=github,blob,./helpers/fma-smoke-reporter.ts
+
+      - name: Merge the reports
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p blob-report/all
+          find blob-report -path blob-report/all -prune -o -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          npx playwright merge-reports --reporter html blob-report/all
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: playwright-report-fma-smoke
+          path: playwright/playwright-report/
+          retention-days: 14
