@@ -188,6 +188,25 @@ test.describe('FMA smoke • catalog', () => {
       }
     });
   }
+});
+
+/**
+ * Its own describe, skipped at describe level, so a run without
+ * FMA_SMOKE_FULL_CATALOG=1 starts no worker hook and creates no fleet for it.
+ */
+test.describe('FMA smoke • whole catalog', () => {
+  // On demand only: ~1,400 metadata reads against the shared instance.
+  test.skip(process.env.FMA_SMOKE_FULL_CATALOG !== '1', 'whole-catalog pass runs only with FMA_SMOKE_FULL_CATALOG=1');
+
+  let fleet: FleetRef;
+
+  test.beforeAll(async () => {
+    fleet = await withApiRequest((request) => createFleet(request, `pw-fma-${runNonce()}`));
+  });
+
+  test.afterAll(async () => {
+    if (fleet) await withApiRequest((request) => deleteFleet(request, fleet.id, { ignoreMissing: true }));
+  });
 
   /**
    * Every catalog entry, without adding any:
@@ -205,7 +224,6 @@ test.describe('FMA smoke • catalog', () => {
    * than 2× off the manifest's `approxMb`.
    */
   test('whole catalog: metadata hydrates and installer URLs answer', async ({ request }, testInfo) => {
-    test.skip(process.env.FMA_SMOKE_FULL_CATALOG !== '1', 'whole-catalog pass runs only with FMA_SMOKE_FULL_CATALOG=1');
     test.setTimeout(3_600_000);
     const entries = await listAllFleetMaintainedApps(request, { fleetId: fleet.id });
     expect(entries.length, 'the catalog is not empty').toBeGreaterThan(0);
