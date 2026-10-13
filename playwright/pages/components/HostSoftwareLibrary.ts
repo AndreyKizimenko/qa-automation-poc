@@ -108,7 +108,7 @@ export class HostSoftwareLibrary {
    * install up on its next check-in, so the result is the caller's to wait for.
    */
   async install(title: string, label: LibraryInstallAction = 'Install'): Promise<void> {
-    await this.installAction(title, label).click();
+    await this.clickOffered(this.installAction(title, label), title, label);
     await this.toast.expectSuccess('Software is installing. To see details, go to Details > Activity.');
   }
 
@@ -118,13 +118,24 @@ export class HostSoftwareLibrary {
    * reaches the host on its next check-in.
    */
   async run(title: string, label: 'Run' | 'Rerun' = 'Run'): Promise<void> {
-    await this.installAction(title, label).click();
+    await this.clickOffered(this.installAction(title, label), title, label);
     await this.toast.expectSuccess('Script is running. To see details, go to Details > Activity.');
   }
 
   async uninstall(title: string, label: LibraryUninstallAction = 'Uninstall'): Promise<void> {
-    await this.uninstallAction(title, label).click();
+    await this.clickOffered(this.uninstallAction(title, label), title, label);
     await this.toast.expectSuccess('Software is uninstalling. To see details, go to Details > Activity.');
+  }
+
+  /**
+   * Clicks a row action once the row offers it. The label is derived from the
+   * row's state, so a row in another state (Reinstall where Install was
+   * expected) has no such button, and a bare click would wait out the test's
+   * timeout; this fails within the `expect` timeout and names the action.
+   */
+  private async clickOffered(action: Locator, title: string, label: string): Promise<void> {
+    await expect(action, `${title}'s Library row doesn't offer "${label}"`).toBeVisible();
+    await action.click();
   }
 
   /**
