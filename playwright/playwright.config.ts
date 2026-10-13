@@ -145,7 +145,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  // In CI the whole run stops at 100 min — under the job's 120-min limit — so a
+  // In CI the whole run stops at 100 min — under the job's limit (free 120 min,
+  // premium 185, which leaves room for its exclusive and gitops-mode steps) — so a
   // run that grows too long ends with its remaining tests marked not run and the
   // HTML report written, instead of being killed by the job timeout with no
   // report at all. The real-VM specs are what make a run long: each VM works one
@@ -162,12 +163,14 @@ export default defineConfig({
     : process.env.CI
       ? suite === 'premium' ? 3 : 2
       : 4,
-  // Fleet serves /assets/bundle-*.js without Cache-Control, so Cloudflare
-  // doesn't cache it (cf-cache-status: DYNAMIC) and every cold browser
-  // context refetches the 4.7 MB bundle from origin. Under origin load
-  // that can exceed Playwright's default 30 s and surface as `page.goto`
-  // timeouts with a blank screenshot. Drop back to 30 s once
-  // fleetdm/fleet#45682 ships and the bundle is edge-cached.
+  // The QA instances' Cloudflare doesn't edge-cache /assets/bundle-*.js — a
+  // repeat request still answers cf-cache-status: DYNAMIC, although Fleet
+  // serves it as `Cache-Control: public, max-age=31536000, immutable`
+  // (fleetdm/fleet#45682) — so every cold browser context refetches the
+  // 4.7 MB bundle from origin. Under origin load that can exceed Playwright's
+  // default 30 s and surface as `page.goto` timeouts with a blank screenshot.
+  // Drop back to 30 s once a repeat request for the bundle answers
+  // cf-cache-status: HIT.
   timeout: 60000,
   // Web-first assertions get a wider window than Playwright's 5s default: the
   // shared QA instance renders slowly under concurrent load (the bundle refetch
