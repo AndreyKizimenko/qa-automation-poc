@@ -5,12 +5,15 @@ Things earlier runs lost time on. Skim before building test data.
 ## osquery-perf
 
 ```bash
-cd <fleet checkout> && go run ./cmd/osquery-perf \
+cd <fleet checkout> && go build -o <QA workspace>/qa-<N>/osquery-perf ./cmd/osquery-perf
+<QA workspace>/qa-<N>/osquery-perf \
   -server_url https://<instance> -enroll_secret <fleet secret> \
   -host_count 2 -os_templates ubuntu_22.04 &      # templates: cmd/osquery-perf/*.tmpl
 echo "pid $! # osquery-perf <ctx>" >> <QA workspace>/qa-<N>/created.txt
 ```
 
+- Run the built binary, not `go run`: with `go run`, `$!` is the wrapper's PID,
+  and killing it leaves the agent running (it re-enrolls the hosts cleanup deletes).
 - Record the PID and one `api <ctx> DELETE /api/v1/fleet/hosts/<id>` line per host
   once enrolled. Deleting a fleet **does not** delete its hosts — they move to
   "No fleet" — and a stopped osquery-perf host just goes offline.
@@ -27,22 +30,25 @@ echo "pid $! # osquery-perf <ctx>" >> <QA workspace>/qa-<N>/created.txt
   the manifest.
 - Fleet Desktop (so `fleet_desktop_version` is set and the My device link shows):
   `-orbit_prob 1` on desktop templates.
-- iPhone/iPad over MDM: build once (`go build -o qa-<N>/osquery-perf ./cmd/osquery-perf`),
-  then `-os_templates iphone_14.6,ipad_13.18 -mdm_scep_challenge "$(tr -d '\n' <
-  <fleet checkout>/scep_challenge)" -mdm_apns_url http://127.0.0.1:9` — no
+- iPhone/iPad over MDM: the same binary with `-os_templates iphone_14.6,ipad_13.18
+  -mdm_scep_challenge "<challenge>" -mdm_apns_url http://127.0.0.1:9`, where the
+  challenge is the instance's `mdm.apple_scep_challenge` server setting (ask the user,
+  or note where it's kept in `~/.claude/fleet-qa.local.md`) — no
   enroll secret, lands in "No fleet" (transfer it to your `qa-<N>` fleet). The dead
   APNs URL is fine: enrollment, host creation and `mdm_enrolled` happen for real,
-  but pushes fail with `BadDeviceToken`, so commands you send (wipe, lock, Recovery
-  Lock) stay **pending** forever — a real way to reach a pending state. The API call
+  but pushes fail with `BadDeviceToken`, so commands you send (wipe, lock) stay
+  **pending** forever — a real way to reach a pending state. (Recovery Lock is
+  Apple Silicon macOS only; iOS/iPadOS hosts reject it.) The API call
   that sends a command can return 502 *after* queuing it; check `pending_action`.
 
 ## Counts and crons
 
 - Policy pass/fail counts on the policies page only update when
-  `cleanups_then_aggregation` runs: `fleetctl --context <ctx> trigger --name
+  `cleanups_then_aggregation` runs: `fleetctl trigger --context <ctx> --name
   cleanups_then_aggregation`, then poll. Software counts read 0 mid-aggregation —
-  not a bug.
-- Other crons: `fleetctl --context <ctx> trigger --name <name>` (schedule names are in `cmd/fleet/cron.go`).
+  not a bug. (`--context` goes after the subcommand; fleetctl has no global flags.)
+- Other crons: `fleetctl trigger --context <ctx> --name <name>` (schedule names are
+  the constants in `server/fleet/cron_schedules.go`).
 - To make hosts re-report policies: `POST /api/v1/fleet/hosts/:id/refetch`.
 
 ## Shared instances
@@ -62,7 +68,7 @@ Other QA sessions may be using the same two instances and the same Mac.
   API role matrices. They're redirected to `/apionlyuser` in the UI, so UI-by-role
   needs a real user from the user.
 - The UI auth cookie is `__Host-token` over https, `token` over http
-  (`frontend/utilities/auth_token.ts`) — `pw.mjs` handles it.
+  (`frontend/utilities/auth_token/index.ts`) — `pw.mjs` handles it.
 
 ## APIs
 
@@ -73,7 +79,7 @@ Other QA sessions may be using the same two instances and the same Mac.
   with `{"ids":[...]}`, so their manifest lines carry a body. Deleting a fleet
   removes its own policies.
 - Software upload is multipart: `fleetapi.sh <ctx> POST /api/v1/fleet/software/package
-  -F team_id=12 -F software=@pkg.sh`.
+  -F fleet_id=12 -F software=@pkg.sh`.
 - Apple enroll endpoints need a deviceinfo blob; `scripts/encode_deviceinfo/` makes
   a self-signed one, which is rejected while `mdm.apple_machineinfo_verify` is on.
 

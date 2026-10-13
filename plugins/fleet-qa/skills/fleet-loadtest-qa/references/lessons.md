@@ -27,7 +27,8 @@ Each of these cost hours once. Skim before planning; reread the relevant part wh
   webhook) fire when a host first fails or goes from passing to failing. Setting or changing a policy's script,
   installer, App Store app or profile-resend clears all its results (and editing its query does too), so every failing
   host fires again on its next report — a mass trigger. Clearing the automation doesn't. Check the code
-  (`server/service/team_policies.go`, `ApplyPolicySpecs`) rather than assuming.
+  (`modifyPolicy` in `server/service/team_policies.go`, `ApplyPolicySpecs` in `server/service/global_policies.go`)
+  rather than assuming.
 - **Control for osquery-perf churn before filing.** 500 random pass/fail policies collapsed the writer and got tasks
   replaced; the same 500 as `SELECT 1` (stable results) cost a 5-minute writer spike and nothing else. Random-flip
   policies make every host rewrite every result on every run, which real fleets don't do. Rerun a policy-driven finding

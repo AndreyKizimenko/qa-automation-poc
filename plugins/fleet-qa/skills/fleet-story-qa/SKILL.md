@@ -121,7 +121,7 @@ role would change your confidence, it belonged in the ask while the run was goin
 ### 1. Read everything, then map risk
 
 Read the story body and comments, the test plan, and **every** linked PR's diff
-(backend, frontend, docs, cherry-picks: `gh pr list --search <N> --state all`,
+(backend, frontend, docs, cherry-picks: `gh pr list -R fleetdm/fleet --search <N> --state all`,
 `git log --oneline --grep <N>`). Check what the instance actually runs
 (`GET /api/v1/fleet/version` revision, `git merge-base --is-ancestor <sha> <rev>`).
 

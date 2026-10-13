@@ -33,7 +33,8 @@ Fleet logs JSON on the load test; useful fields: `level`, `msg`, `err`, `uri`, `
 - First occurrence: `filter msg like /deleting query stats/ | stats count(*), min(@timestamp), max(@timestamp) by err`
 - Fields with dashes can't be named directly; parse them: `filter err like /error in query ingestion/ | parse @message /"ingestion-err":"(?<ie>[^"]*)"/ | stats count(*), min(@timestamp) by ie` (live queries: `campaignID=N waiting for listener` / `stopped`).
 Ignore osquery-perf noise: `extra query executed with errors` (`fleet_detail_query_software_windows_program_files_scan`).
-Bin labels come back in UTC; `lt-stops.sh` and ECS events show the AWS account's local offset — say which you quote.
+Bin labels come back in UTC, and so do `lt-stops.sh`'s times; other `aws` CLI output and the ECS console show your
+machine's local time — say which you quote.
 
 ## Reading profiles
 ```bash

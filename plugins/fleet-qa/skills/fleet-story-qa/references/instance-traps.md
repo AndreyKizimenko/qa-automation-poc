@@ -2,7 +2,7 @@
 
 Things that cost time in earlier story and quick-win runs. What's specific to one engineer's machine
 (which server is which, container names, log paths, role users) is in `~/.claude/fleet-qa.local.md`, not
-here. See `fleet-bug-qa/references/local-setup.md`.
+here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
 
 ## Which server is which
 

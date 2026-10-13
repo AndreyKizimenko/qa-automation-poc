@@ -29,9 +29,14 @@ There are two audiences, and they get different documents:
 
 - The issue (bugs: `fleetdm/fleet`; security reports: `fleetdm/security` — the
   fix PRs land in `fleetdm/fleet`).
-- The fix PR(s). If none are linked: `gh issue view <N> --json
-  closedByPullRequestsReferences,timelineItems`, `gh pr list --search "<N>" --state
-  all`, and `git log --all --grep '<N>'`. If there is still nothing, see step 1.
+- The fix PR(s). If none are linked: `gh issue view <N> -R fleetdm/<fleet|security>
+  --json closedByPullRequestsReferences`, the PRs that mention it
+  (`gh api --paginate repos/fleetdm/<fleet|security>/issues/<N>/timeline --jq '.[] |
+  select(.event=="cross-referenced" and .source.issue.pull_request) |
+  "\(.source.issue.html_url) \(.source.issue.title)"'`), `gh pr list -R fleetdm/fleet
+  --search "<N>" --state all`, and `git log --all --grep '<N>'`. Always pass `-R` —
+  without it `gh` uses whatever repo the shell is in. If there is still nothing, see
+  step 1.
 - Two instances, as fleetctl contexts in `~/.fleet/config`: the pre-fix one and the
   fixed one, as `~/.claude/fleet-qa.local.md` names them (usually **`previous`** and
   **`default`**). The user may name others. Tokens for every context are in
@@ -50,7 +55,7 @@ any repo, and holds no tokens.
 |---|---|
 | `fleetapi.sh <ctx> <METHOD> <path> [json \| -F k=v ...]` | Authenticated REST call; `-F` for multipart uploads (software, profiles); `FLEET_TOKEN=` to act as another user |
 | `env_check.sh <pre-ctx> <fix-ctx> <sha>...` | Version/branch/revision/license/MDM of both instances, and whether each contains the given commit(s) |
-| `screenshot.mjs <ctx> <path> <out.png> [...]` | Headless logged-in PNG. `--clip sel`, `--click text`, `--focus sel`, `--type text`, `--cookie K=V`, `--token`, `--anon`, `--caret`. Run with no args for help |
+| `screenshot.mjs <ctx> <path> <out.png> [...]` | Headless logged-in PNG. `--clip sel`, `--click text`, `--focus sel`, `--type text`, `--cookie K=V`, `--token`, `--anon`, `--caret`. Full option list in its header comment |
 | `pw.mjs` | `import { open } from '<skill>/scripts/pw.mjs'` — the same cookie login for multi-step Playwright drivers |
 | `stack.py <out.png> <a.png> <b.png> ... [--side] [--gap N]` | Combine screenshots into one PNG in reading order (top to bottom; `--side` for narrow clips) |
 | `cleanup.sh <manifest> [--run]` | Lists (default) or undoes, newest first: `api`, `pid`, `worktree`, `docker`, `file` lines |
@@ -60,8 +65,8 @@ Read `references/fleet-gotchas.md` once before building test data — it covers
 osquery-perf behavior, count aggregation, shared instances and other traps that
 cost earlier runs time.
 
-Work in `<QA workspace>/qa-<N>/` (the local file names the workspace): drivers, `RESULTS.md`,
-`issue-comment.md`, `screenshots/`, and `created.txt` (the cleanup manifest).
+Work in `<QA workspace>/qa-<N>/` (the local file names the workspace): drivers, `plan.md`
+(step 3), `RESULTS.md`, `issue-comment.md`, `screenshots/`, and `created.txt` (the cleanup manifest).
 Write drivers as re-runnable scripts parameterized by context — the same driver
 runs against both instances, and a rerun after a fix-of-the-fix is free.
 
@@ -146,8 +151,8 @@ between, which matters for classifying findings (step 7).
 
 ### 3. Build the test plan
 
-Three kinds of rows. Aim for coverage, not count — each row should be able to catch
-something the others can't.
+Write it to `qa-<N>/plan.md`. Three kinds of rows. Aim for coverage, not count —
+each row should be able to catch something the others can't.
 
 - **Core** — the issue's repro as written, then variants attacking the same
   mechanism: each entry point from step 1, edge inputs (empty, malformed, max

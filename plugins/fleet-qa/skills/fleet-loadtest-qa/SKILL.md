@@ -30,7 +30,11 @@ start dying.
 | `lt-step.sh <label> <min> [apply] [revert]` | One load step with trip wires, auto-profiles and auto-revert |
 | `ramp.sh 0\|1-99\|100\|cleanup`, `ramp-up.sh 10 25 50 100` | Cut / restore device traffic at the ALB (infra change — ask first) |
 | `lt-watch-deploy.sh <run-id>` | Follow a deploy and time the migration task |
-The fleet-bug-qa scripts (`fleetapi.sh`, `cleanup.sh`, `screenshot.mjs`) work too, with the load test's fleetctl context.
+
+`LT` is `fleet-<terraform_workspace>` (environment.md). The scripts need the AWS CLI v2 signed in through SSO (export
+`AWS_PROFILE` when the local file names a profile), `jq`, and GNU `timeout` (`lt-step.sh`'s profile capture; on macOS
+from Homebrew coreutils). The fleet-bug-qa scripts (`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh`,
+`cleanup.sh`, `screenshot.mjs`) work too, with the load test's fleetctl context.
 
 ## Workflow
 
@@ -38,7 +42,7 @@ The fleet-bug-qa scripts (`fleetapi.sh`, `cleanup.sh`, `screenshot.mjs`) work to
 - Read `~/.claude/fleet-qa.local.md` for the load-test section (instance `LT`, fleetctl context, QA workspace). If it's
   missing, add it (names only, no tokens) per the fleet-bug-qa local-setup reference.
 - `LT=<lt> scripts/lt-status.sh`, and `export LT=<lt>; source scripts/lt-env.sh; lt_api GET /api/latest/fleet/version`: is it up, which build, how loaded. If AWS
-  calls fail, ask the user to run `aws sso login`.
+  calls fail, ask the user to run `aws sso login` (with `--profile <profile>` for a named profile).
 - Record the instance's shape before touching anything: build, pool size and sizing (from the last deploy's log),
   hosts and platforms, what's already scheduled (reports, policies, automations, scripts, packages), cron health
   (`lt-cron.sh cleanups_then_aggregation -3h now`). Leftovers from earlier work change the load you measure.
@@ -113,7 +117,7 @@ rather than disappears when a bottleneck is fixed — keep going until you know 
 ### 9. Clean up
 From `created.txt`, newest first, after looking at each object (it may already be gone). Small batches with pauses —
 policy deletes cascade, report deletes leave stats behind under load (recovery.md). Restore settings you changed
-(`query_report_cap`, webhooks, automations), stop local stacks (containers, worktrees, binaries). Leave anything you're
+(`server_settings.report_cap`, webhooks, automations), stop local stacks (containers, worktrees, binaries). Leave anything you're
 unsure about and list it for the user. Note the end state of the instance (build, pool, data left) for whoever's next.
 
 ## Safety
