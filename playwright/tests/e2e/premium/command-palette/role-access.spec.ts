@@ -14,12 +14,18 @@
  * picker that returned nothing at all would look like working authorization,
  * and without the admin control an out-of-scope miss could just mean the host
  * was unsearchable.
+ *
+ * The global maintainer case is the premium half of the role gate on the
+ * Controls group and the script commands: free offers them on every page,
+ * premium only inside a specific fleet, so the maintainer is checked on both
+ * sides of that line — absent at All fleets, present on Workstations. The groups
+ * both tiers share for each global role are in the shared role-access spec.
  */
 import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from '@fixtures';
 import { apiUrl, authHeaders } from '@helpers/api';
 import { withStaticUser } from '@helpers/auth';
-import { CommandPalette, DashboardPage } from '@pages';
+import { CommandPalette, DashboardPage, ReportsListPage } from '@pages';
 
 /** An online host in the Unassigned fleet, which no fleet-scoped role can see. */
 async function findUnassignedHost(
@@ -88,6 +94,38 @@ test.describe('Premium • Command palette • role access', () => {
         scopedPalette.list.getByText(`No hosts match "${unassigned.displayName}".`),
       ).toBeVisible();
       await expect(scopedPalette.row(unassigned.displayName)).toHaveCount(0);
+    });
+  });
+
+  test('a global maintainer gets the Controls group and Add script only inside a fleet', async ({
+    browser,
+    workstationsFleetId,
+  }) => {
+    await withStaticUser(browser, 'global-maintainer', async (page) => {
+      const palette = new CommandPalette(page);
+
+      await new DashboardPage(page).goto();
+      await palette.open();
+      await expect(palette.item('Hosts')).toBeVisible();
+      expect(await palette.groupNames(), 'All fleets has no Controls group').not.toContain('Controls');
+      await expect(palette.item('Add script')).toHaveCount(0);
+      await palette.toggleClosed();
+
+      const reportsList = new ReportsListPage(page);
+      await reportsList.goto({ fleetId: workstationsFleetId });
+      await reportsList.teamDropdown.select('Workstations');
+      await palette.open();
+
+      const controls = palette.group('Controls');
+      for (const parent of ['OS updates', 'OS settings', 'Setup experience', 'Scripts', 'Variables']) {
+        await expect(
+          controls.getByRole('option', { name: parent, exact: true }),
+          `${parent} should be in the Controls group on Workstations`,
+        ).toBeVisible();
+      }
+      for (const label of ['Add script', 'Add custom variable']) {
+        await expect(palette.item(label), `${label} should be offered on Workstations`).toBeVisible();
+      }
     });
   });
 });

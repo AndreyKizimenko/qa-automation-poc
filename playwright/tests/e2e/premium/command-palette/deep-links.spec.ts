@@ -10,6 +10,12 @@
  *
  * Premium-only because the fleet is what's being carried: on All fleets the
  * link has no fleet param to preserve, which is the shared spec's case.
+ *
+ * `Add script` and `Add custom variable` are fleet rows on premium: they render
+ * only inside a specific fleet (or Unassigned), so they're entered from
+ * Workstations here, while free, which always has its one implicit fleet,
+ * covers them from its dashboard (tests/e2e/free/command-palette/). Neither
+ * saves anything; the modal opening is the assertion.
  */
 import { test, expect } from '@fixtures';
 
@@ -40,5 +46,46 @@ test.describe('Premium • Command palette • deep links', () => {
     // the URL alone doesn't prove the page agreed with it.
     await expect(page).toHaveURL(new RegExp(`fleet_id=${workstationsFleetId}\\b`));
     await expect(hostsList.teamDropdown.currentValue).toHaveText('Workstations');
+  });
+
+  test('Add script from a fleet opens the script library add modal and drops its flag', async ({
+    palette,
+    reportsList,
+    scriptsLibrary,
+    page,
+    workstationsFleetId,
+  }) => {
+    await reportsList.goto({ fleetId: workstationsFleetId });
+    await reportsList.teamDropdown.select('Workstations');
+
+    await palette.open();
+    await palette.selectItem('Add script');
+
+    await expect(page).toHaveURL(/\/controls\/scripts\/library/);
+    await expect(scriptsLibrary.uploadModal).toBeVisible();
+    await expect(page).not.toHaveURL(/add_script=/);
+    // The script library is per fleet, so the add modal has to be Workstations'.
+    await expect(page).toHaveURL(new RegExp(`fleet_id=${workstationsFleetId}\\b`));
+    await expect(scriptsLibrary.teamDropdown.currentValue).toHaveText('Workstations');
+  });
+
+  test('Add custom variable from a fleet opens the add variable modal and drops its flag', async ({
+    palette,
+    reportsList,
+    variables,
+    page,
+    workstationsFleetId,
+  }) => {
+    await reportsList.goto({ fleetId: workstationsFleetId });
+    await reportsList.teamDropdown.select('Workstations');
+
+    await palette.open();
+    await palette.selectItem('Add custom variable');
+
+    // The bare Variables route redirects to its first section, carrying the
+    // query along, so the flag is read on Global variables.
+    await expect(page).toHaveURL(/\/controls\/variables\/global-variables/);
+    await expect(variables.addModal).toBeVisible();
+    await expect(page).not.toHaveURL(/add_variable=/);
   });
 });

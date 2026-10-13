@@ -14,9 +14,10 @@
  * scope. Premium's fleet-scoped rows (Disk encryption, Add Fleet-maintained
  * app) belong to tests/e2e/premium/command-palette/.
  *
- * "Vulnerable software" is deliberately never selected: its destination
- * (`?vulnerable=true`) is the known QA 500 on software-titles, which the auto
- * `pageHealth` fixture would flag.
+ * "Vulnerable software" lands on `?vulnerable=true`, the software-titles query
+ * that has returned the QA instances' MySQL "table is full" 500. Its test keeps
+ * selecting it: should the 500 come back, the auto `pageHealth` fixture fails the
+ * test on the 5xx, which points at the instance rather than at the palette.
  */
 import { test, expect } from '@fixtures';
 

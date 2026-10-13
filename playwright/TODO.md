@@ -61,6 +61,13 @@ Known gaps nobody has scheduled. Each row says where the test would go and what 
 | Exploited vulnerabilities | The option is disabled with the premium tooltip on free (`free/software/vulnerabilities.spec.ts`) |
 | Severity / CVSS filters | The software filters modal has no severity block on free (`free/software/vulnerabilities.spec.ts`) |
 
+**Command palette.** Modes the palette plan ([docs/test-plans/command-palette.md](docs/test-plans/command-palette.md)) can't reach from the main projects.
+
+| Gap | What to do |
+|---|---|
+| Primo Mode | Neither instance runs Primo (`partnerships.enable_primo`), which hides the fleet switcher and `Add fleet` and drops the fleet chips. Needs an instance in Primo Mode; nothing to build until one exists |
+| GitOps mode hides `Add fleet` | One case in `tests/e2e/premium/gitops-mode/`: with the mode on, the palette offers no `Add fleet` (`groups/commands.ts` gates it on `isGitOpsMode`) |
+
 **Suite chores**
 
 | What | Note |
