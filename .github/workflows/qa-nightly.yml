@@ -11,9 +11,9 @@ name: QA — Nightly
 #     └─► gitops free    ─► Playwright free    (whatever gitops did)
 #
 # Scheduled for 03:17 UTC (10:17 PM CDT) — off the top of the hour, which GitHub
-# documents as its most-delayed slot. GitHub starts scheduled runs late — since
-# 2026-08-27 this repo's have been starting 4–6.5 h after their cron time — so it
-# lands around 1–4:30 AM Central and is done before morning. The chain doesn't
+# documents as its most-delayed slot. GitHub starts scheduled runs late — every
+# scheduled run from 2026-10-01 to 10-10 started 5.9–7.3 h after its cron time —
+# so it lands around 4–5:30 AM Central and finishes by about 7:30. The chain doesn't
 # mind the lag: every step waits on the one before it, not on a clock. If GitHub
 # catches up, it runs at 10 PM Central.
 # For a start at an exact time, an outside scheduler can call workflow_dispatch.

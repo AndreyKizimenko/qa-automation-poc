@@ -1,6 +1,6 @@
 # premium-fleetqa
 
-GitOps config for the Premium QA Fleet instance. `default.yml` mirrors `free-fleetqa/` and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the real QA VMs; `fleets/compliance.yml` configures the **Compliance** fleet, which has no hosts and carries every control that would act on one.
+GitOps config for the Premium QA Fleet instance. `default.yml` carries the free config's lists plus the premium-only surface described below, and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the real QA VMs; `fleets/compliance.yml` configures the **Compliance** fleet, which has no hosts and carries every control that would act on one.
 
 ```
 premium-fleetqa/
@@ -8,7 +8,7 @@ premium-fleetqa/
 └── fleets/
     ├── workstations.yml     # fleet "Workstations" — full scope
     ├── qa.yml               # fleet "QA" — the durable Fleet-maintained-app shelf
-    ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, a report)
+    ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, the install/uninstall packages and apps, a report)
     └── compliance.yml       # fleet "Compliance" — every host-affecting control, on a fleet with no hosts
 ```
 
@@ -32,7 +32,7 @@ directory's `qa.yml` and `vms.yml` — the QA and VMs fleets hold the suite's du
 in both passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
 overlap: an apply deletes whatever its files don't declare, including a running test's per-run items.
 
-Either fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
+Any fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
 
 From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, and no longer blocks a host's queued script runs and installs while it applies.
 
@@ -40,7 +40,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa (the RC build timestamps differ between instances), and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance and Mobile.
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance and Mobile (free has no fleets).
 
 ### Keep the client within a minor of the server
 
@@ -91,8 +91,9 @@ Label and report counts expand from multi-entry lib files, and the no-team numbe
 
 `default.yml` is also where the org-level surface customers manage from YAML is exercised, so the nightly
 proves more than entity names. Everything here holds the value the instance already had — the point is that
-gitops owns it and `gitops-verify` holds the instance to it — and the min variant changes one value in every
-section, so an apply that creates and deletes but never *updates* fails the next verify:
+gitops owns it and `gitops-verify` holds the instance to it — and the min variant changes one value in most
+sections (its README lists the ones it leaves alone), so an apply that creates and deletes but never *updates*
+fails the next verify:
 
 - `org_settings`: `server_settings` (every documented key; `enable_analytics` is **true** because Fleet forces
   usage statistics on for a premium license, whatever the YAML says), `features` with `additional_queries` (two
@@ -148,7 +149,8 @@ categories, label targets, a display name, an icon, a pre-install query and the 
 packages, Fleet-maintained apps with options and a caret pin, policies with every automation and targeting key
 (`resend_configuration_profile`, `run_script`, `install_software` by package path, by hash and by slug,
 `webhooks_and_tickets_enabled` against the fleet's own failing-policies webhook, two patch policies), and
-label-targeted reports. The min variant changes one value in every section and drops one entry from every list.
+label-targeted reports. The min variant changes one value in every section but the fleet label, and drops one
+entry from every list but the label, the single Android profile and the two Fleet-maintained apps.
 
 **The fleet holds no hosts, and nothing may ever move one there.** Workstations can't carry these settings
 (`exclusive/os-updates/*` asserts it enforces nothing, and the cleanup resets its OS updates and setup

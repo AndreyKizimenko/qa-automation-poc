@@ -3,7 +3,7 @@
 The reasoning behind the CI flow: what runs where, in what order, and what each choice protects. The numbers
 that change — worker counts, runtimes, the cron, which reports a run uploads — live in one place,
 [`CLAUDE.md` → *CI and the shared instances*](../CLAUDE.md#ci-and-the-shared-instances--current-facts), and this
-document points there rather than repeating them. The workflow map (one row per file) is in the
+document points there rather than repeating them. The workflow map (one row per workflow; tier twins share one) is in the
 [repo README](../../README.md#ci). Per-run triage history is in [`run-reviews/`](run-reviews/) (gitignored).
 
 ## The shape
@@ -47,8 +47,10 @@ Everything below follows from four facts about the environment.
 **Two tier chains, side by side.** The tiers are different instances, so nothing is gained by serialising them
 and nothing is risked by not doing so. Each chain holds its instance's concurrency group
 (`<tier>-fleetqa-instance`), shared by the gitops workflows and the suite workflow, so an apply and a test run,
-or two test runs, queue instead of overlapping. The callers (`QA — Nightly`, `QA — Branch run`) take no group of
-their own: a caller in the same group would wait on its own callees. The four apply workflows
+or two test runs, queue instead of overlapping. The callers (`QA — Nightly`, `QA — Branch run`) take no instance
+group: a caller in the same group would wait on its own callees. `QA — Nightly` holds only `qa-nightly-chain`, so
+a second nightly (a manual one beside the scheduled one) queues instead of redeploying the instances under a
+running suite; `QA — Branch run` holds none. The four apply workflows
 (`gitops-{premium,free}{,-min}.yml`) take their own per-tier group when called, since the orchestrator already
 holds the instance's, and the instance group itself when **dispatched by hand** (their `caller` input is unset
 then): an apply deletes whatever its config doesn't declare, a running test's per-run items included, so a
@@ -72,8 +74,10 @@ dependency before the first test and as a teardown after the last. The pre-run p
 however the instance got into its state; the post-run pass leaves it clean for whoever is next. It also puts
 back the global locks (gitops mode off, script execution on) and brings the real VMs to their resting state,
 because a Playwright teardown does not run on a `SIGKILL` and a stuck lock would disable the *next* run's
-entire suite. The wipe touches only Unassigned, Workstations and the suite's own `pw-*` / `fleet-pw-*` things on
-the VMs fleet; the durable fixtures gitops declares are never deleted.
+entire suite. The wipe touches the global scope and Unassigned (reports, policies, packs, scripts, profiles,
+installable titles; the suite's own users, enroll-secret markers and `PW_VAR_*` variables), Workstations, any
+throwaway `pw-*` fleet, version pins on QA and VMs, and the suite's own `pw-*` / `fleet-pw-*` things on the VMs
+fleet; the durable fixtures gitops declares are never deleted.
 
 **Projects are routed by folder, not by tag.** `tests/e2e/shared/` runs on both tiers, `premium/` and `free/`
 on one; the `testIgnore` matrix in `playwright.config.ts` is the source of truth. A tag has to be remembered on
@@ -105,10 +109,12 @@ measurements that set the current numbers are in [*What bounds a run*](#what-bou
 count is a branch run with `-f workers=N`, read with `run_timeline.py` (below), never a config commit first.
 
 **Retries: two, except where an attempt is long.** CI retries so that a transient does not fail a night; a
-pass on retry is reported as `flaky` and triaged as such. A describe that waits on a real VM takes one retry
-(`HOST_RETRIES`): its attempts run 10–15 minutes and a wedged host fails every attempt the same way, so three
-attempts of two such tests are 90 of a run's roughly 300 worker-minutes and can reach the run's own stop.
-Locally there are no retries, so repeating one test shows its real spread.
+pass on retry is reported as `flaky` and triaged as such. Every describe that waits on a real VM takes one retry
+(`HOST_RETRIES`): its attempts run 10–25 minutes (`recovery-lock`'s is 25) and a wedged host fails every attempt
+the same way, so three attempts of two 15-minute tests are 90 of a run's roughly 300 worker-minutes and can reach
+the run's own stop. The `gitops-mode`, `gitops-verify` and `gitops-nightly` projects take no retries: a gitops
+failure or a drift is something to read, not to retry away. Locally there are no retries, so repeating one test
+shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
 minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
@@ -121,7 +127,10 @@ night so the suite tracks Fleet. A deploy hook only queues a deploy, and Render 
 serving until the new one is live, so the instance answering says nothing about the deploy being done: the
 wait polls Render's deploy API when its credentials are present (and fails on a failed deploy, the case the
 instance itself never reports), else waits a fixed time; then `/healthz`; then a notice with each instance's
-`version @ revision`, so a night's results are attributable to a build.
+`version @ revision`, so a night's results are attributable to a build. If that wait fails — a failed deploy, one
+not live within 30 minutes, or an instance still unhealthy 15 minutes later — neither tier's gitops chain or suite
+runs that night. A failed deploy hook alone doesn't stop it: that instance keeps its previous build and the night
+runs against it.
 
 **The cron is off the top of the hour.** GitHub documents the start of every hour as its most-delayed slot for
 scheduled workflows, and this repo's runs have been starting hours late. Nothing in the chain waits on a
@@ -162,7 +171,7 @@ platform, with a lease so two tests never pick the same host, is the only thing 
 itself. Front-loading the VM specs was considered and dropped: it would add contention, and the tail of a
 three-worker run is short specs, not installs.
 
-Free is small enough that none of this applies: two workers, worker-bound, about ten minutes.
+Free is small enough that none of this applies: two workers, worker-bound; its runtime is in the facts table.
 
 ## Changing it without breaking it
 
@@ -170,7 +179,8 @@ Free is small enough that none of this applies: two workers, worker-bound, about
   its own work, and `retries: HOST_RETRIES`. Anything it can leave on the VMs fleet after a timed-out attempt
   needs a home in `setup/cleanup.steps.ts`; the per-run name prefixes (`pw-*`, `fleet-pw-*`) are what the sweep
   keys on.
-- **Adding a project.** Name it in `PROJECT_TO_SUITE` (the config throws on an unknown `--project`), give it
+- **Adding a project.** Name it in `PROJECT_TO_SUITE` (without it the config can't resolve its tier when
+  `SUITE` is unset, and the guards that refuse a bad pairing don't see it), give it
   the tier's login setup as its dependency and `cleanup-teardown` as its teardown, and decide whether it can
   share an invocation with the main project. If it cannot, it is a new step in the suite workflow with its own
   blob directory, included in the merge, and a new pairing in the config's guard.

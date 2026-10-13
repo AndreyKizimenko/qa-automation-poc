@@ -24,7 +24,7 @@ References files in `../lib/` like the baseline. Each scope (no-team, Workstatio
 | Compliance | custom packages | 5 | 3 | n/a |
 
 Counts prove that an apply creates and deletes. **Values** prove that it updates, which fleetdm/fleet#48021
-(omitted keys aren't reset) makes the more important half, so every settings section the baseline declares has
+(omitted keys aren't reset) makes the more important half, so most settings sections the baseline declares have
 one changed value here: `org_name` (`Premium QA Automation (min)`), `fleet_desktop.transparency_url`,
 `activity_expiry_settings.activity_expiry_window` (31), every webhook's destination path (`/fleet-min/…`),
 `features.additional_queries` (one query instead of two), `vulnerability_exposure_historical_reporting.cvss_min`
@@ -32,12 +32,15 @@ one changed value here: `org_name` (`Premium QA Automation (min)`), `fleet_deskt
 policy's `critical`, and the inline reports' `interval` and `logging`. The `gitops` block, the ABM and Windows
 default fleets, the other global MDM flags and the Pilot hosts label are identical in both: the gitops-mode
 specs read the repository URL, a flipped MDM flag would change how real hosts enroll, and the label is referenced.
+`server_settings`, `sso_settings`, `host_expiry_settings`, `features.historical_data`, the end-user
+authentication IdP and the VPP token carry no delta either.
 
-On Compliance every section has a changed value too: `agent_options.command_line_flags.events_max`,
+On Compliance every section but the fleet label has a changed value too: `agent_options.command_line_flags.events_max`,
 `host_expiry_window`, both webhook paths, Recovery Lock off, the macOS minimum version, the iPadOS deadline, the
 Windows deadline days, macOS key escrow off, the BitLocker PIN off, `lock_end_user_info` off, the local account
 type (`admin`), DB Browser's `self_service` off, the Gatekeeper policy without its script automation, and the
-FileVault report's interval — and every list drops an entry (a macOS and a Windows profile, the Windows scripts
+FileVault report's interval — and every list but the label, the Android profile and the two Fleet-maintained
+apps drops an entry (a macOS and a Windows profile, the Windows scripts
 glob, the Linux package and the Windows script-only package, the "Itsycal is installed" policy, the uptime report).
 
 ## The instance ends each chain on this variant — then the suite wipes most of it
