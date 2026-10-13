@@ -53,6 +53,8 @@ test.describe('Policies CRUD', () => {
     // run starts with no global policies — therefore stays "No policies yet",
     // with the search box disabled, until a full page load. The load below is
     // that; the row assertion is on the list as the server has it.
+    // TODO(fleetdm/fleet#55251): once the list shows a scope's first policy
+    // without a reload, search the list the navbar lands on instead.
     await policiesList.goto();
     await policiesList.search.fill(policyName);
     await expect(policiesList.table.rowWith(policyName)).toBeVisible();

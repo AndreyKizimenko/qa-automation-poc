@@ -100,6 +100,9 @@ test.describe('Premium • gitops mode — gated surfaces', () => {
     // ActionButtons renders every secondary action twice — once inline and
     // once as an option inside a "More options" menu that CSS hides at this
     // width — so each name matches two elements. Narrow to the rendered one.
+    // TODO(fleetdm/fleet#54168): the menu's copies are ungated, and CSS shows
+    // them at ~900px. Once the menu stops duplicating ungated actions, drop the
+    // visibility filter.
     const action = (name: string) =>
       page.getByRole('button', { name, exact: true }).filter({ visible: true });
 
