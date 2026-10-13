@@ -3,12 +3,15 @@
  *
  * ── Why this file only tests refusals ────────────────────────────────────────
  *
- * A successful lock or wipe against an osquery-perf simulation is **not
- * recoverable**. The simulation never acknowledges the MDM command (macOS,
- * Windows) and never executes the script (Windows, Linux), so the host sits at
- * `IsPendingLock()` / `IsPendingWipe()` indefinitely — and once pending, Fleet
- * rejects every subsequent lock *and* unlock for that host. There is no CLI path
- * back. The host is spent.
+ * A lock or wipe that reaches a simulation either proves nothing or costs the
+ * pool a host. A macOS simulation never locks: osquery-perf enrols with a
+ * synthetic APNs device token, so the lock push fails with a 502. Windows and
+ * Linux lock and unlock run as scripts, which only the simulations running orbit
+ * execute; one without orbit sits at `IsPendingLock()` forever, after which Fleet
+ * refuses every further lock *and* unlock and the host can only be deleted. A
+ * wipe is final on any host. The one real lock → unlock is
+ * `mdm-lock-lifecycle.spec.ts`, on an orbit-running Ubuntu simulation it
+ * unlocks again afterwards.
  *
  * What keeps these specs safe is a client-side guard: `hostMdmActionSetup`
  * refuses a host that isn't connected to Fleet MDM *before* calling the server,
@@ -17,11 +20,10 @@
  *
  * **Linux is deliberately absent from this file.** Linux is not MDM-supported,
  * so the client-side guard doesn't apply; the request reaches the server, whose
- * only Linux gate is `scripts_enabled`, and every simulation reports
- * `scripts_enabled: null` — which does *not* trip the guard. A Linux lock or
- * wipe here would enqueue for real. Linux is covered on the free tier instead
- * (`tests/cli/free/mdm-licensing.spec.ts`), where the licence check
- * short-circuits before anything is queued.
+ * only Linux gate is `scripts_enabled`, which doesn't refuse these hosts. A
+ * Linux lock or wipe here would enqueue for real. Linux is covered on the free
+ * tier instead (`tests/cli/free/mdm-licensing.spec.ts`), where the licence
+ * check short-circuits before anything is queued.
  *
  * Every host is drawn with `mdmConnected: false` for the same reason — roughly a
  * third of the simulated pool *is* MDM-enrolled, and one of those would reach

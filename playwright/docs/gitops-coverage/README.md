@@ -2,7 +2,7 @@
 
 Customers run Fleet from YAML, so the nightly should prove that `fleetctl gitops` applies the whole
 surface Fleet documents, on both tiers, against a live instance — and keep proving it after every
-RC. Today it proves the names and counts of six entity kinds and four org keys. This plan grows that
+RC. Before batch 1 it proved the names and counts of six entity kinds and four org keys. This plan grows that
 without the Playwright suite noticing, in three batches: things that need no new fixture or fleet,
 then a gitops-only fleet for every control that reaches a host, then the items that need a fixture,
 a credential or a decision.
@@ -11,7 +11,12 @@ It was written from an audit of the chain, the suite's dependencies on gitops st
 pipeline, Fleet 4.93's schema and docs, and the stale `playwright/gitops-coverage` branch
 (2026-07-20, never PR'd). Section 2 is the audit; everything after it follows from those facts.
 
-## 1. What exists today
+**Status (2026-10-13).** Batch 1 merged in PR #97 (2026-10-09) and batch 2 in PR #98 (2026-10-10), with the
+Compliance icon follow-ups #99 and #100 the same day; §9 and §10 record what each landed. Batch 3 and
+`fleets/unassigned.yml` are open, each decided with Andrey one at a time. Sections 1 and 2 describe the
+state the plan started from.
+
+## 1. What existed before batch 1 (audit, 2026-10-08)
 
 **The chain.** `QA — Nightly` and `QA — Branch run` run, per tier, `nightly-qa-gitops-{premium,free}.yml`:
 apply the baseline (`gitops/<tier>-fleetqa/`) → `gitops-verify` → apply the min variant
@@ -55,7 +60,8 @@ refused (`server/service/client.go:2256-2300`). Premium therefore never declares
 
 ## 2. What the audit found
 
-Each item below is a fact the design rests on, with where it comes from.
+Each item below is a fact the design rests on, with where it comes from, as of the audit. Batch 1 fixed
+items 6, 12 and 13 (§9), and fleetctl 4.93.0 fixed the free half of item 11.
 
 1. **Verification runs before the wipe.** `cleanup-setup` is a dependency of the `premium` / `free`
    projects, which start only after their gitops chain (`qa-nightly.yml`, `qa-branch-run.yml`). Everything
@@ -120,8 +126,9 @@ Each item below is a fact the design rests on, with where it comes from.
      verifying it compares live to YAML, not an apply to its effect.
    - The docs describe keys the code doesn't have: `apple_settings.managed_local_account_settings`,
      `apple_settings.end_user_local_account_type`, `linux_settings.enable_managed_local_account` and
-     `setup_experience.require_all_software` (the live keys are `setup_experience.enable_managed_local_account`
-     / `end_user_local_account_type` and `windows_settings.enable_managed_local_account`); `yara_rules[].path`
+     `setup_experience.require_all_software` (the live keys are `setup_experience.enable_create_local_admin_account`
+     — `enable_managed_local_account` is its deprecated alias — / `end_user_local_account_type` and
+     `windows_settings.enable_managed_local_account`); `yara_rules[].path`
      is validated against a struct with only `name` and `contents`, so it probably fails as an unknown key —
      which is why the coverage branch dropped it. These are docs bugs to file (§7).
 
@@ -143,18 +150,21 @@ Each item below is a fact the design rests on, with where it comes from.
     need `features.historical_data` on (declare `true`/`true`; `false` **deletes history irreversibly**);
     `shared/auth/sso-login.spec.ts` needs SSO on with `idp_name` matching /okta/i; `software/library.spec.ts`
     needs the VPP token on all fleets, Android MDM on, and Bear (iOS) available; `helpers/api/hosts.ts:365`
-    relies on global host expiry at 1 day; two gitops-mode specs and `reports/role-access.spec.ts` read
+    relies on global host expiry at 1 day; `gitops-mode/04-controls-and-reports.spec.ts` and `reports/role-access.spec.ts` read
     "Collect default browser on macOS" on Workstations (both configs must keep declaring it, with
     `observer_can_run: true`); `labels/role-access.spec.ts` (both tiers) reads "Debian-based Linux hosts";
-    `version-pinning.spec.ts` needs Postman on QA, unpinned. Nothing in the suite reads
-    `webhook_settings`, `activity_expiry_settings`, `vulnerability_settings`, `custom_host_vitals`,
-    `agent_options` content (beyond stripping `script_execution_timeout` on VMs/global) or any fleet's
-    OS-update, disk-encryption or setup-experience state except on Unassigned, Workstations and VMs.
+    `version-pinning.spec.ts` needs Postman on QA, unpinned. Nothing in the suite depends on the value of
+    `webhook_settings` or `activity_expiry_settings` (the specs that write them — the host-status and
+    vulnerability webhook specs, `policy-automations`, `automations-activity`, `advanced-options` — snapshot and
+    restore them), and nothing reads `vulnerability_settings`, `custom_host_vitals`, `agent_options` content
+    (beyond stripping `script_execution_timeout` on VMs/global) or any fleet's OS-update, disk-encryption or
+    setup-experience state except on Unassigned, Workstations and VMs.
 
 11. **What the fleetctl checks expect.** `cli/premium/generate-gitops.spec.ts:19-33`: the generated global
     file has no `controls`, Workstations' has `enable_disk_encryption`. `cli/nightly/generate-gitops.spec.ts`:
     on premium the generated tree has `workstations` and `unassigned`. A new fleet adds a `fleets.has()` line.
-    generate-gitops still exits 1 on free with Apple MDM on (fleetdm/fleet#53965, skipped).
+    On free, generate-gitops exited 1 with Apple MDM on until fleetctl 4.93.0 (fleetdm/fleet#53965, closed
+    2026-10-08); the free skips are gone (`docs/blocked-by-product-bugs.md` › Resolved).
 
 12. **Two CI gaps.** The apply workflows (`gitops-{premium,free}{,-min}.yml`) use concurrency groups
     `gitops-premium` / `gitops-free`, not the instance groups the orchestrator and suite share, so a *manual*
@@ -204,7 +214,8 @@ no `pw-*` names on anything; `version:` pins are fine here (cleanup unpins only 
 is what gets declared.
 
 Hazards it does not remove: a spec that one day *moves a host in* (none does; the header says so and the
-sweep in `cleanup.steps.ts` could assert `host_count == 0`); ABM's default fleet stays Workstations (§7).
+sweep in `cleanup.steps.ts` could assert `host_count == 0`), and an automated enrollment — ABM's and Windows'
+default fleets point here since batch 2 (§7.2), so one would land a host on it.
 
 ### 3.2 Free grows at global scope only
 
@@ -250,7 +261,7 @@ The coverage-branch column says whether its example is the starting point.
 | key | decision | note | coverage branch |
 |---|---|---|---|
 | `org_info` (all four) | **1** verify | `org_logo_url*` stay `""` (custom-logo skips otherwise) | — |
-| `server_settings` (all documented keys) | **1** declare + verify | premium `enable_analytics: true` (item 5); `scripts_disabled`, `live_reporting_disabled`, `ai_features_disabled` stay `false` (specs need them); min changes nothing here — a forced key can't carry the delta, `report_cap` can (0 → 500) | yes |
+| `server_settings` (all documented keys) | **1** declare + verify | premium `enable_analytics: true` (item 5); `scripts_disabled`, `live_reporting_disabled`, `ai_features_disabled` stay `false` (specs need them); min changes nothing here (a forced key can't carry a delta, and `report_cap` stays 0 in both) | yes |
 | `features.enable_*` | **1** verify | — | — |
 | `features.historical_data` | **1** declare `true`/`true` + verify | matches live on both tiers; never `false` | — |
 | `features.additional_queries` | **1** both | reaches every host as an extra benign detail query (`SELECT * FROM time`), approved (§8); `features` is overwritten when present, so both configs carry the map and min drops one entry | — |
@@ -282,13 +293,13 @@ The coverage-branch column says whether its example is the starting point.
 | `agent_options.command_line_flags`, `update_channels` | **2** on the new fleet only | reach real hosts anywhere else (channels change TUF) | yes |
 | `custom_host_vitals` | **1** both | no license check anywhere in the code; three names, min two; omitting the key deletes all vitals, so both configs carry it; an apply fails if a vital is still referenced; `global` only (errors in a fleet file) | — |
 | `labels` dynamic | already | — | — |
-| `labels` manual (`hosts: []`) | **1** both | lib file; min drops it | yes |
-| `labels` with `platform` | **1** both | one dynamic label with `platform: linux` | — |
+| `labels` manual (`hosts: []`) | **1** both | lib file; min keeps it (the label-scoped policy and report, and Compliance's targets, reference it) | yes |
+| `labels` with `platform` | **1** both | one dynamic label with `platform: linux`; min drops it | — |
 | `labels` `host_vitals` (`criteria`) | **2** premium | `vital` is one of `end_user_idp_group`, `end_user_idp_department` (the EUA IdP is configured on premium only) or `custom_host_vital` + `custom_host_vital_id` (Fleet-assigned, so not portable YAML; usable once the vital exists and its id is pinned per instance) | — |
 | fleet-scoped `labels` | **2** on the new fleet | needs the labels spec to count per scope | — |
 | `controls.scripts` via `paths:` glob | **1** both (the two Linux scripts) | harness expands the glob; a new lib file would join silently — only there | — |
 | `controls.android_enabled_and_configured` | **1** free declare + verify (live `true`), premium verify | a server no-op on PATCH (item 7b): the verify is a consistency check, not proof of an apply | — |
-| premium `fleets/unassigned.yml` | **2** | the layout `generate-gitops` itself emits (the nightly spec already expects `fleets.has('unassigned')`): no-team `controls`, `policies`, `software` and `webhook_settings` move there from `default.yml` (`controls` may live in one of the two, never both). Lets premium declare Unassigned software (hash-pinned, wiped by cleanup after verify) and Unassigned webhooks. First check what `software/library.spec.ts:56,76` expects on Unassigned (Bear, ChatGPT): a `software:` key replaces Unassigned's software as a batch | — |
+| premium `fleets/unassigned.yml` | **deferred** (§10) | the layout `generate-gitops` itself emits (the nightly spec already expects `fleets.has('unassigned')`): no-team `controls`, `policies`, `software` and `webhook_settings` move there from `default.yml` (`controls` may live in one of the two, never both). Lets premium declare Unassigned software (hash-pinned, wiped by cleanup after verify) and Unassigned webhooks. First check what `software/library.spec.ts:56,76` expects on Unassigned (Bear, ChatGPT): a `software:` key replaces Unassigned's software as a batch | — |
 | `controls.windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation` | **2** premium declare live `false` + verify | no min delta: flipping any reaches the Windows VMs' enrollment or DEP | yes |
 | `controls.macos_migration` | **2** premium | `enable: false`, `mode`, `webhook_url`; `integrations/mdm.spec.ts` snapshots/restores it; min changes the URL | yes |
 | `controls.windows_entra_*` | **—** | Entra tenant | — |
@@ -299,11 +310,11 @@ The coverage-branch column says whether its example is the starting point.
 |---|---|
 | `settings.features` incl. `historical_data` | `true`/`true` |
 | `settings.host_expiry_settings` | on, 30 days; min 31 |
-| `settings.webhook_settings`: `failing_policies_webhook`, `host_status_webhook`, `host_activities_webhook` | disabled, example URLs; min changes a path |
+| `settings.webhook_settings`: `failing_policies_webhook` (enabled, the target of `webhooks_and_tickets_enabled`), `host_activities_webhook` (disabled) | example URLs; min changes a path; no `host_status_webhook` (fleetctl doesn't manage a fleet's, §10) |
 | `agent_options` with `command_line_flags`, `update_channels` | the only place these are declared |
 | `apple_settings.enable_disk_encryption`, `enable_escrow_disk_encryption_key` | min turns escrow off |
 | `windows_settings.enable_disk_encryption`, `require_bitlocker_pin`, `enable_managed_local_account` | min turns the PIN off |
-| `setup_experience.enable_managed_local_account`, `end_user_local_account_type` | the keys the code has (the docs' `apple_settings.managed_local_account_settings` doesn't exist — item 7b); min flips the account type |
+| `setup_experience.enable_create_local_admin_account` (deprecated alias `enable_managed_local_account`), `end_user_local_account_type` | the keys the code has (the docs' `apple_settings.managed_local_account_settings` doesn't exist — item 7b); min flips the account type |
 | `linux_settings.enable_escrow_disk_encryption_key` | — |
 | `enable_recovery_lock_password` | min off |
 | `macos_updates` (3 keys), `ios_updates`, `ipados_updates`, `windows_updates` | min moves one deadline and one version |
@@ -392,15 +403,28 @@ branch run.
    (`automatic-enrollment.spec.ts`, `integrations/mdm.spec.ts`) need the token present, not a particular default
    fleet. Fleet assigns the Windows default fleet only to a host whose record the MDM enrollment itself created
    (`maybeAssignWindowsEnrollmentDefaultFleet`), so the fleetd-enrolled VMs can't be moved by it.
-3. A manual dispatch of an apply workflow isn't locked out of a running suite (item 12). Batch 1 fixes it.
-4. The instances don't rest on min between nights (item 13). Batch 1 corrects the two docs that say so.
+3. A manual dispatch of an apply workflow wasn't locked out of a running suite (item 12). Fixed in batch 1 (§9).
+4. The instances don't rest on min between nights (item 13). Batch 1 corrected the two docs that said so (§9).
 5. Fleet docs/code mismatches worth filing (item 7b): the three `managed_local_account` keys and
    `setup_experience.require_all_software` that the docs list and the code lacks; `yara_rules[].path` likely
    failing key validation; `controls.android_enabled_and_configured` documented as turning Android MDM on while
    the server ignores it; `lock_end_user_info`'s documented default (`true`) versus the code's (follows EUA).
    Each is a dry-run on the playground away from confirmed.
 
-## 9. Batch 1 — what landed (2026-10-08)
+## 8. Decisions (Andrey, 2026-10-08)
+
+1. The fleet is **Compliance**; a fifth standing fleet is fine.
+2. Benign settings that reach hosts are fine: free carries `custom_host_vitals` and both tiers carry
+   `features.additional_queries`.
+3. `playwright/gitops-coverage` is deleted once batch 2 has harvested it — done with batch 2. Its one
+   unharvested fixture was a 10-line example YARA rule matching a marker string, trivial to recreate for batch
+   3's `yara_rules`.
+4. ABM's default fleets move to Compliance in batch 2 (§7.2). §7.1 (free's profiles on the free VMs) is still
+   open; nothing in the batches changes it.
+5. Docs move with every slice: the per-key table here, `docs/test-audit/16-gitops-verify.md` and the audit
+   index, the gitops READMEs, `playwright/README.md`'s preconditions, `CLAUDE.md`'s CI facts.
+
+## 9. Batch 1 — what landed (PR #97, merged 2026-10-09)
 
 **Harness v2** (`playwright/helpers/gitops-yaml.ts`, `tests/api/gitops-verify/`, 10 specs / 30 tests, audit
 area 16 rewritten): the loader reads `path:`, `paths:` globs and inline entities alike, each entity's option
@@ -422,7 +446,8 @@ four `webhook_settings` (no `policy_ids`), premium's `gitops` block, free's `and
 `custom_host_vitals` (3 / min 2), the manual **Pilot hosts** label and a `platform: linux` one, an inline
 policy with every base key (+ a `critical`, label-scoped one on premium), an inline report with every option
 (+ a label-scoped one on premium), the Linux scripts as one `paths:` glob, the non-deprecated logo keys. Every
-new section has a changed value in the min variant.
+new section has a changed value in the min variant except `server_settings`, premium's `gitops` block and free's
+`fleet_desktop`, which §4 leaves without one.
 
 **CI**: QA and VMs verified after both premium applies (`label` input on `gitops-verify.yml` keeps the two
 artifacts apart); the verify workflow passes the interpolation vars; the idempotence dry-run covers the
@@ -442,21 +467,20 @@ suites in branch run 37871039304 — the kind of mistake the throw exists to sur
 **Verified:** `npm run check` clean; dry-runs of all four configs against the instances (4.92.1 client; the
 local `fleetctl@4.93.0` install is blocked by an npm `before` pin on this machine, CI installs 4.93.0);
 `gitops-verify` against the live VMs and QA fleets, 20/20 each; against the live min no-team config, 17 pass
-and the 4 failures are the three wiped kinds plus `enable_analytics`, which the YAML now corrects. **Not yet
-proven:** the script-body and profile-payload comparisons (GV-16, GV-12) against an applied instance — the
-cleanup had wiped every script and profile, and a local apply was declined as a blind write to the shared
-instances. The branch run is their proof; if Fleet normalizes a served payload, the comparison moves to a
-checksum.
+and the 4 failures are the three wiped kinds plus `enable_analytics`, which the YAML now corrects. The
+script-body and profile-payload comparisons (GV-16, GV-12) couldn't run locally — the cleanup had wiped every
+script and profile, and a local apply was declined as a blind write to the shared instances — so the branch
+run was their proof: in 37937293329 (2026-10-09) every gitops apply and verify job passed on both tiers.
 
-## 10. Batch 2 — what landed (2026-10-09)
+## 10. Batch 2 — what landed (PR #98, merged 2026-10-10; icon follow-ups #99 and #100)
 
 **The Compliance fleet** (`gitops/premium-fleetqa/fleets/compliance.yml`, with its min variant beside it): a
 fifth standing fleet with no hosts, applied in both passes and verified after each. It declares every §4
 "new fleet" row that needed no new fixture or decision: fleet `settings` (features, host expiry, the
 failing-policies and host-activities webhooks), `agent_options` with `command_line_flags` and `update_channels`,
 a fleet-scoped label, per-platform `controls` (disk encryption and key escrow, the BitLocker PIN, the managed
-local account, Recovery Lock, `name_template`, OS updates for all four platforms, six label-targeted profiles on
-three platforms, scripts of all three kinds through three `paths:` globs, the credential-free `setup_experience`
+local account, Recovery Lock, `name_template`, OS updates for all four platforms, six profiles on three platforms
+(five label-targeted), scripts of all three kinds through three `paths:` globs, the credential-free `setup_experience`
 keys with a setup script), `software` (the three inert fixtures a second time through
 `lib/platforms/*/software/*.compliance.package.yml` — same hash, every option: self-service, categories, setup
 experience, a display name, an icon, a pre-install query and the three scripts; two script-only packages;
@@ -505,32 +529,20 @@ write the instance's IdP into their `fleetctl new` scaffold first (`carryLiveEnd
 **Verified:** `npm run check` clean; RC-client dry-runs of the full baseline and min file sets against premium
 succeed (`would apply ABM teams`, `would apply Windows enrollment default fleet`); a real apply of the baseline
 fleet file on the playground (premium, 4.93 RC) created the fleet with every section, and the verify project
-against it passed 24 / skipped 10 / failed 0. The global rows are dry-run-verified only. **Not yet proven:** the
-first real apply to premium — a dry-run skips software validation for a fleet that doesn't exist yet
-(fleetdm/fleet#54534) — and the profile-payload and script-body checks of §9, which still await their first
-applied instance. The branch run is their proof.
+against it passed 24 / skipped 10 / failed 0. A dry-run skips software validation for a fleet that doesn't
+exist yet (fleetdm/fleet#54534), so the first real apply to premium was the branch run's: in 37970527671
+(2026-10-09) both premium applies created and changed Compliance, and every verify job passed after each —
+`verify-baseline-compliance` and `verify-min-compliance` included, with the no-team verify's script-body and
+profile-payload checks among its 21 passes.
 
 **After the first nightly (38059790306, 2026-10-10):** `generate-gitops` exited 1 on the Compliance icon. The
 premium instance kept software-title icons in the container's `/tmp` (`fleet serve` without S3 and without
 `FLEET_SOFTWARE_TITLE_ICON_STORE_DIR`), the nightly's Render redeploy dropped the file while the database record
 and `icon_url` survived, and `fleetctl gitops` never re-uploads a hash it already knows. #99 commented the icon
-out for a day; the variable is now set on the Render service (`/opt/fleet/installers`, beside the installers),
-#99 is reverted, the stale record was deleted so the next apply uploads the icon, and GV-27 fetches the icon
+out; #100 reverted it 18 minutes later, once the variable was set on the Render service (`/opt/fleet/installers`,
+beside the installers) and the stale record deleted so the next apply uploads the icon. GV-27 fetches the icon
 instead of checking that `icon_url` is set.
 
 **Deferred:** `fleets/unassigned.yml` (a layout change for the no-team scope, its own follow-up); the batch-3
 rows of §4 (DDM declarations and assets, bootstrap package and ADE JSON, a second package version, App Store
 apps, EULA, `yara_rules`), each decided with Andrey one at a time.
-
-## 8. Decisions (Andrey, 2026-10-08)
-
-1. The fleet is **Compliance**; a fifth standing fleet is fine.
-2. Benign settings that reach hosts are fine: free carries `custom_host_vitals` and both tiers carry
-   `features.additional_queries`.
-3. `playwright/gitops-coverage` is deleted once batch 2 has harvested it — done with batch 2. Its one
-   unharvested fixture was a 10-line example YARA rule matching a marker string, trivial to recreate for batch
-   3's `yara_rules`.
-4. ABM's default fleets move to Compliance in batch 2 (§7.2). §7.1 (free's profiles on the free VMs) is still
-   open; nothing in the batches changes it.
-5. Docs move with every slice: the per-key table here, `docs/test-audit/16-gitops-verify.md` and the audit
-   index, the gitops READMEs, `playwright/README.md`'s preconditions, `CLAUDE.md`'s CI facts.
