@@ -29,7 +29,7 @@ is a question. Say so rather than asserting it.
    screen lock, inactivity timeout, FileVault, login-window restrictions, anything disabling SSH, remote
    management or MDM. **Uploading is delivering:** on free, Unassigned holds the real VMs and the reconciler
    delivers within 30 s, so a lifecycle spec that deletes the profile a step later still reaches them. Flag
-   any committed profile fixture that isn't inert (the suite's are `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*`),
+   any committed profile fixture that isn't inert (the suite's are `test-data/{apple/macos,windows}/profiles/fleet-pw-inert*`),
    and any **new payload type** delivered to a VM without a note that Andrey approved it.
 2. **A setting that updates, reboots or locks a real host, set where one can receive it:** an OS-update
    minimum version or deadline, a DDM software-update declaration, Recovery Lock password enforcement. On
@@ -42,7 +42,12 @@ is a question. Say so rather than asserting it.
    hosts a profile is listed for or which are offered a title, a simulation answers correctly. Don't flag
    those.)
 4. **Durable fixtures changed or deleted:** the VMs fleet's software in `helpers/vm-fixtures.ts` /
-   `vms.yml` (resting state: uninstalled), a gitops-declared fleet renamed, static users edited.
+   `vms.yml` (resting state: uninstalled), a standing fleet (Workstations, VMs, QA, Compliance, Mobile)
+   created, renamed or deleted, a host moved onto Compliance, static users edited.
+5. **One-way or instance-wide writes:** saving a *changed* Fleet web address or global IdP setting, creating
+   an Android web app, editing a durable Fleet-maintained app's install script (QA or VMs fleet), toggling
+   *Store report results*, triggering a Fleet cron (`POST /trigger`, `fleetctl trigger`), or writing
+   `secrets: false` / ticking Enroll secrets outside the `gitops-mode` project.
 
 ## What to check
 
@@ -72,11 +77,16 @@ is a question. Say so rather than asserting it.
   without `waitForNoPendingRefetch` first, or a VM wait whose budget outlasts the test's timeout.
 - Cleanup: everything created is removed in a `finally`, *and* anything that could survive a timed-out
   test on the VMs fleet has a home in `setup/cleanup.steps.ts` (the VMs sweep for things stored by name, the
-  resting-state step for host state). Per-run names start `pw-*` / `fleet-pw-*`; durable ones don't.
-  Borrowed simulations go back.
+  resting-state step for host state). Per-run names start `pw-*` / `fleet-pw-*`; durable ones don't. Reports
+  are the exception: on VMs and Workstations the sweep matches exact prefixes (gitops declares
+  `pw-host-report-results` on VMs), so a new kind of per-run report left there needs its prefix added to
+  `cleanup.steps.ts`. On free nothing sweeps `pw-*` labels, so a free spec deletes its own. Borrowed
+  simulations go back.
 - Shared mutable state between tests, except CRUD lifecycle specs (`describe.configure({ mode: 'serial' })`
-  with closure-shared ids, per `CLAUDE.md`). Global config changed without a restore inside the same test,
-  or flipped by a main-project spec when it belongs in `exclusive/`.
+  with closure-shared ids, per `CLAUDE.md`). Global config changed without an `afterEach` restore keyed to
+  the test that changed it (a timed-out test skips its `finally`), restoring only the keys it changed; a key
+  another spec also writes, outside that spec's serial describe; or a switch flipped by a main-project spec
+  when it belongs in `exclusive/`.
 - A multipart helper that may send an empty-string field. Playwright drops it, and Fleet answers 200 and
   changes nothing.
 
@@ -96,26 +106,32 @@ is a question. Say so rather than asserting it.
 
 **Docs that should have moved with the code** (findings, not blockers): a `test()` with no
 `docs/test-audit/` entry or stale audit counts; a new
-helper or page object missing from `helpers/README.md` / `pages/README.md`; a new fixture without a
-`test-data/` README; a skip owed to a Fleet bug without its `docs/blocked-by-product-bugs.md` row and
-`TODO(fleetdm/fleet#N)`.
+helper, page object or component object missing from `helpers/README.md` / `pages/README.md` /
+`pages/components/README.md`; a new fixture without a `test-data/` README; a gitops change without its
+file header and config README (`gitops/{premium,free}-fleetqa{,-min}/README.md`), or made to only one of the
+full and `-min` copies of a file both declare; a skip, or a `DEFAULT_IGNORED_PAGE_ERRORS` entry, owed to a
+Fleet bug without its `docs/blocked-by-product-bugs.md` row and `TODO(fleetdm/fleet#N)`.
 
 ### Class selectors that are legitimate
 
 A class selector with an inline comment explaining why Fleet's component offers nothing better is fine.
 Known examples:
 - modal containers: Fleet's `Modal` has no `role="dialog"`;
-- react-select triggers, v5 (`.team-dropdown__control`, `.label-filter-select__control`) and v1 (`.Select-*`
-  in `PackEditPage` and `TargetLabelSelector`'s dropdown);
+- react-select triggers: v5 `.label-filter-select__control`; the fleet dropdown's `.fleet-dropdown__button` /
+  `__option` (its trigger is a `<button>`, but react-select stays mounted with a hidden control, so a role
+  query is ambiguous, and its options carry no role); v1 `.Select-*` in `PackEditPage` and
+  `TargetLabelSelector`'s dropdown;
 - `.actions-dropdown-select__*` row menus;
-- section and card wrappers (`.host-activity-card`, `.software-installer-card`);
+- section and card wrappers (`.host-activity-card`, the software Library row `.library-item-accordion`);
 - `.empty-state` and `.loading-overlay`;
 - `.data-table__tooltip-truncated-text`;
 - a live run's role-less results and summaries (`.query-results`, `.query-results__results-pass-fail-pct`,
   `.live-results-heading__information`, `.run-query-page__targets-total-count` / `.live-policy-page__…`).
 
-react-select v5 *options* should use `data-testid="dropdown-option"`, which Fleet does emit. Still flag a
-class selector with no comment, and one where a role- or text-based locator would have worked.
+react-select v5 *options* should use `data-testid="dropdown-option"`, which Fleet emits from
+`DropdownWrapper` and `ActionsDropdown`. The fleet dropdown's and the label filter's options carry none, so
+their classes are legitimate. Still flag a class selector with no comment, and one where a role- or
+text-based locator would have worked.
 
 ## Reporting
 

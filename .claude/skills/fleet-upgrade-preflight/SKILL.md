@@ -6,7 +6,7 @@ description: Run BEFORE upgrading a Fleet QA instance to predict which Playwrigh
 Predicts which specs a Fleet upgrade breaks, before the upgrade happens. Run
 every command below from the **repo root**; paths are relative to it.
 
-The driver is [.claude/skills/fleet-upgrade-preflight/preflight.mjs](.claude/skills/fleet-upgrade-preflight/preflight.mjs)
+The driver is [.claude/skills/fleet-upgrade-preflight/preflight.mjs](preflight.mjs)
 — zero deps, ~5s. It locates the suite by walking up to the repo root, so it
 works from any cwd. It reads the running instance's exact revision, then asks one
 question of every selector the suite names: *does this exist in Fleet's source
@@ -16,14 +16,15 @@ today, and does it still exist in the target?*
     present → present  safe.
     absent  → absent   proves nothing. Dropped, not reported.
 
-That third bucket is why the output is trustworthy: a token that was never
-literal in Fleet's source can't be evidence, so it never reaches the report.
+That third bucket keeps the report free of noise: a token that was never literal
+in Fleet's source can't be evidence, so it never reaches the report. What does
+reach it is a floor, not the full list (see *It under-reports* in Gotchas).
 
 ## Prerequisites
 
-A `fleetdm/fleet` checkout next to this repo (`../fleet`, or `$FLEET_REPO`), and
-`playwright/.env.premium` / `.env.free` with `FLEET_URL` + `FLEET_API_TOKEN`.
-Node 20+.
+A `fleetdm/fleet` checkout (`--fleet-repo <path>`, else `$FLEET_REPO`, else
+`../fleet` next to this repo), and `playwright/.env.premium` / `.env.free` with
+`FLEET_URL` + `FLEET_API_TOKEN`. Node 20+.
 
 ```bash
 git -C ../fleet fetch origin
@@ -38,9 +39,14 @@ node .claude/skills/fleet-upgrade-preflight/preflight.mjs detect
 ```
 
 ```
-premium  4.90.1-rc.2608131849  branch=rc-patch-fleet-v4.90.1  revision=e2eb7578a1…
-free     4.90.1-rc.2608131849  branch=rc-patch-fleet-v4.90.1  revision=e2eb7578a1…
+premium  4.90.1-rc.2608131849  branch=rc-patch-fleet-v4.90.1  revision=e2eb7578a1…  (<instance host>)
+free     4.90.1-rc.2608131849  branch=rc-patch-fleet-v4.90.1  revision=e2eb7578a1…  (<instance host>)
+
+Use as --from: e2eb7578a1…
 ```
+
+Each line ends with the instance's real hostname. This repo is public, so trim it
+before you paste the output anywhere that gets committed.
 
 Then scan. `--from` defaults to that live revision, which is what you want —
 it pins the diff to the exact build deployed, not to a tag that may not exist:
@@ -50,7 +56,7 @@ node .claude/skills/fleet-upgrade-preflight/preflight.mjs scan \
   --to origin/rc-minor-fleet-v4.91.0
 ```
 
-Writes `playwright/docs/upgrade-preflight/<from>-to-<to>.md` (gitignored —
+Writes `playwright/docs/upgrade-preflight/<from-sha10>-to-<to-sha10>.md` (gitignored —
 regenerate it, don't commit it) and prints the path. Add `--from <ref>` to compare two refs
 without an instance, `--out <file>` to redirect.
 
@@ -82,9 +88,16 @@ already explained, so triage only has to account for the rest.
   and *nowhere* in the source as a literal string. The successor lookup resolves
   through the component that declares the base; a flat text search finds nothing.
 - **The obvious base swap is often wrong.** `.team-dropdown__control` →
-  `.fleet-dropdown__control` reads as certain and does not exist: 4.91 replaced
-  react-select's control with a plain `<button>`. Every hint is verified against
-  the target tree before it is printed — trust the `⚠︎` when you see it.
+  `.fleet-dropdown__control` reads as certain and is the wrong target: 4.91 made
+  the visible trigger a plain `<button>` (`.fleet-dropdown__button`) and kept
+  react-select only as a hidden control for keyboard navigation. Every hint is
+  verified against the target tree before it is printed — trust the `⚠︎` when you
+  see it.
+- **It under-reports.** A token counts as present if it appears anywhere in the
+  corpus, including Fleet's own tests (`*.tests.tsx`, `*_test.go`) and in any
+  component, not just the one a page object drives. So a class or copy a
+  component dropped, but that a test or an unrelated component still names, reads
+  as present → present. Treat section 1 as a floor, not the full list.
 - **A BEM modifier counts as its base.** 4.90's only mention of
   `.team-dropdown__control` is `&.team-dropdown__control--is-focused`. Demanding
   a hard word boundary silently loses real breakages; a bare `-` still doesn't

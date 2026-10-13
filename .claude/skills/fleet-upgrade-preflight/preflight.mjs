@@ -828,8 +828,8 @@ else {
 
   --to           Fleet ref you are upgrading TO (e.g. origin/rc-minor-fleet-v4.91.0)
   --from         Fleet ref running now. Defaults to the live instance's revision.
-  --fleet-repo   Path to a fleetdm/fleet checkout. Defaults to ../fleet, or $FLEET_REPO.
-  --out          Report path. Defaults to docs/upgrade-preflight/<from>-to-<to>.md
+  --fleet-repo   Path to a fleetdm/fleet checkout. Defaults to $FLEET_REPO, else ../fleet.
+  --out          Report path. Defaults to playwright/docs/upgrade-preflight/<from-sha10>-to-<to-sha10>.md
 `);
   process.exit(cmd ? 1 : 0);
 }

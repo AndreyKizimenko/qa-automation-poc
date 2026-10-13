@@ -9,9 +9,9 @@ worker count changed, or when a red run ended with tests marked "did not run".
 
 Every result in the report carries its startTime, duration and workerIndex, so
 the whole run can be reconstructed without the terminal log. A merged report
-(the main project and the exclusive specs as two invocations) reads the same
-way: each invocation's login and teardown steps appear once, with their own
-worker indices.
+(the main project, the exclusive specs and, on premium, gitops-mode, each its
+own invocation) reads the same way: each invocation's login and teardown steps
+appear once, with their own worker indices.
 
 Usage:
     run_timeline.py <report-dir-or-index.html> [--tail 10] [--long 120] [--platforms]
