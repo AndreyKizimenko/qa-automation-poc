@@ -36,6 +36,15 @@ export type { PinTarget } from './components/VersionsModal';
 export { clickHoverAction } from './components/clickHoverAction';
 export { EnrollSecretModal } from './components/EnrollSecretModal';
 export { AccessDenied } from './components/AccessDenied';
+export { AddHostsModal } from './components/AddHostsModal';
+export { DataSet } from './components/DataSet';
+export { EditConfigurationModal } from './components/EditConfigurationModal';
+export { FileUploader } from './components/FileUploader';
+export { SelectReportModal } from './components/SelectReportModal';
+export { SoftwareInstallerCard } from './components/SoftwareInstallerCard';
+export { Toast } from './components/Toast';
+export { TransferHostModal } from './components/TransferHostModal';
+export { setAceValue, getAceValue } from './components/aceEditor';
 export {
   expectGatedByGitOps,
   expectNotGatedByGitOps,

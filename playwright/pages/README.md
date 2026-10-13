@@ -7,7 +7,7 @@ write raw selectors; they work through these pages.
 ## Why POM
 
 1. **Selectors in one place.** If the "Search" placeholder changes from "Search by name" to "Search", we update `SoftwareTitlesPage` once and every test keeps working.
-2. **High-level API.** Tests read like a user flow: `await softwareTitles.applyVulnerableFilter()` instead of `await page.getByRole('button', {...}).click(); await page.locator('form').getByRole('switch').click(); ...`.
+2. **High-level API.** Tests read like a user flow: `await hostDetails.applyVulnerableFilter()` instead of `await page.getByRole('button', {...}).click(); await page.locator('form').getByRole('switch').click(); ...`.
 3. **TypeScript catches breakage.** If a page rename breaks a field, the compiler flags it before CI does.
 
 ## Structure
@@ -15,7 +15,7 @@ write raw selectors; they work through these pages.
 ```
 pages/
 ├── components/         # Reusable widgets used across pages (DataTable, Navbar, etc.)
-├── index.ts            # Re-exports every page + component
+├── index.ts            # Re-exports every page and every component
 ├── DashboardPage.ts    # Top-level nav entries live at root
 ├── auth/               # LoginPage, ForgotPasswordPage
 ├── account/            # MyAccountPage
@@ -24,21 +24,22 @@ pages/
 │                       #   but hosts is its primary nav context)
 ├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
 │                       #   detail pages, CVE detail, FMA, and the add-software forms
-├── controls/           # ControlsPage, OsUpdates, OsSettings, profiles, certificates,
-│                       #   Passwords (Recovery Lock), scripts, variables, and the
-│                       #   setup-experience pages
+├── controls/           # ControlsPage, OsUpdates, OsSettings, DiskEncryption, profiles,
+│                       #   certificates, Passwords (Recovery Lock), scripts, variables,
+│                       #   and the setup-experience pages
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
 ├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage, PolicyLivePage (a ReportLivePage for a policy's run, plus its Yes / No summary)
 ├── labels/             # LabelsPage
 ├── packs/              # PacksListPage, PackEditPage
-└── settings/           # Organization info/advanced, Integrations, TeamSettings,
-    │                   #   FleetUsersPage (a fleet's Users tab + its header),
+└── settings/           # Organization info/advanced, Integrations, ChangeManagementPage,
+    │                   #   TeamSettings, FleetUsersPage (a fleet's Users tab + its header),
     │                   #   FleetsPage (Settings › Fleets: add / rename / delete)
     └── users/          # UsersPage, Create/Edit user + API user, shared UserFormFields
 ```
 
-A folder with more than a couple of pages carries its own `index.ts` barrel
-(`account/`, `settings/users/`); `pages/index.ts` re-exports everything either way.
+Two folders carry their own `index.ts` barrel (`account/`, `settings/users/`);
+`pages/index.ts` re-exports every page and every component either way. A new
+page or component gets its line in `pages/index.ts`.
 
 Inside a feature folder, `import { Foo } from '../components/Foo'` (one
 directory up). Specs and fixtures should import from `@pages` (the
@@ -94,7 +95,7 @@ Per [Playwright best practices](https://playwright.dev/docs/locators), prefer in
 2. `getByLabel(text)` — form fields with labels
 3. `getByPlaceholder(text)` — form fields without labels
 4. `getByText(text)` — non-interactive text content
-5. `getByTestId('id')` — explicit test contract. Fleet ships only a handful, and we don't add more to its React source: `user-menu`, `dropdown-option`, `card`, `download-icon`, `success-icon`, `trash-icon`
+5. `getByTestId('id')` — explicit test contract. Fleet ships only a handful, and we don't add more to its React source: `user-menu`, `dropdown-option`, `card`, `download-icon`, `success-icon`, `trash-icon`, `close-icon`, `warning-icon`, `info-outline-icon`
 6. `page.locator('.css-class')` — **last resort, always add a comment** explaining why no role/text worked (typically: react-select internals or widgets without accessible roles)
 
 ## Authoring a new page object
@@ -107,13 +108,17 @@ Per [Playwright best practices](https://playwright.dev/docs/locators), prefer in
    - Existing `data-testid` attributes you can reuse
    - Widget class names (only as a last-resort fallback)
 
-3. **Cover everything visible.** Include interactive elements even if no current test uses them. Example: `SoftwareTitlesPage` exposes `showVersionsSwitch`, `manageAutomationsButton`, and `addSoftwareButton` despite no tests clicking them yet. Future tests should reach for these properties rather than re-locating them.
+3. **Cover everything visible.** Include interactive elements even if no current test uses them. Example: `SoftwareTitlesPage` exposes `showVersionsSwitch` although no test uses it yet. Future tests should reach for such properties rather than re-locating them.
 
 4. **Document CSS fallbacks inline.** If you must use a class selector, add a one-line comment explaining why role/text didn't work. Future maintainers can then evaluate whether Fleet could add a `data-testid` upstream to fix it.
 
 5. **Add a fixture.** In `fixtures.ts`, add your page to `FleetFixtures` and provide a factory. Tests can then destructure it.
 
 ## Example — annotated
+
+An abridged `SoftwareTitlesPage` (the real one also carries the Manage
+automations modal's controls, and its `goto()` takes `availableForInstall` and
+`sort` too):
 
 ```ts
 export class SoftwareTitlesPage {
@@ -124,17 +129,19 @@ export class SoftwareTitlesPage {
   readonly table: DataTable;
   readonly filter: FilterModal;
   readonly pagination: Pagination;
+  readonly teamDropdown: TeamDropdown;
 
   // Page-specific controls — role-based locators, scoped to this page
   readonly search: Locator;
-  readonly showVersionsSwitch: Locator;
-  readonly manageAutomationsButton: Locator;  // exposed even though no test clicks it today
+  readonly showVersionsSwitch: Locator;  // exposed even though no test uses it today
+  readonly manageAutomationsButton: Locator;
   readonly addSoftwareButton: Locator;
 
   // Tabs live at the top of the software section
-  readonly softwareTab: Locator;
+  readonly inventoryTab: Locator;
   readonly osTab: Locator;
   readonly vulnerabilitiesTab: Locator;
+  readonly libraryTab: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -142,21 +149,29 @@ export class SoftwareTitlesPage {
     this.table = new DataTable(page);
     this.filter = new FilterModal(page);
     this.pagination = new Pagination(page);
+    this.teamDropdown = new TeamDropdown(page);
 
     this.search = page.getByRole('textbox', { name: /Search by name or vulnerability/ });
     this.showVersionsSwitch = page.getByRole('switch', { name: /versions/i });
     this.manageAutomationsButton = page.getByRole('button', { name: 'Manage automations', exact: true });
     this.addSoftwareButton = page.getByRole('button', { name: 'Add software' });
 
-    this.softwareTab = page.getByRole('tab', { name: 'Software' });
+    this.inventoryTab = page.getByRole('tab', { name: 'Inventory' });
     this.osTab = page.getByRole('tab', { name: 'OS' });
     this.vulnerabilitiesTab = page.getByRole('tab', { name: 'Vulnerabilities' });
+    this.libraryTab = page.getByRole('tab', { name: 'Library' });
   }
 
   // goto() handles URL + ready-state in one call
-  async goto(opts: { vulnerable?: boolean } = {}) {
-    await this.page.goto(opts.vulnerable ? '/software/titles?vulnerable=true' : '/software/titles');
-    await expect(this.table.firstRow).toBeVisible();
+  async goto(opts: { fleetId?: number; vulnerable?: boolean } = {}) {
+    const params = new URLSearchParams();
+    if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
+    if (opts.vulnerable) params.set('vulnerable', 'true');
+    const qs = params.toString();
+    // /software/inventory is canonical; /software/titles only resolves via a legacy redirect.
+    await this.page.goto(`/software/inventory${qs ? '?' + qs : ''}`);
+    await expect(this.inventoryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(this.table.rowOrEmpty()).toBeVisible();
   }
 }
 ```
