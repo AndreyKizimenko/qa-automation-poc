@@ -5,12 +5,13 @@ for the Playwright `loadtest` project: hundreds of policies, reports,
 labels, scripts, profiles, software packages, FMAs, and app-store apps.
 
 Only [`generate.sh`](./generate.sh) is checked in. Everything it writes
-lands under `generated/` and is gitignored — each run produces fresh
-content tied to a specific instance's enroll secret.
+lands under `generated/` and is gitignored — the output is regenerated
+locally, and you fill in the team name and enroll secret afterwards.
 
 ```
 gitops/loadtest/
-├── generate.sh         # the generator (this dir is otherwise empty)
+├── README.md
+├── generate.sh         # the generator
 └── generated/          # gitignored output (created by generate.sh)
     ├── team-load-test.yml
     ├── policies/       # 500 .yml
@@ -35,7 +36,8 @@ a high-scale instance. The dataset has to be in place before tests run.
    ./gitops/loadtest/generate.sh
    ```
    Writes everything to `gitops/loadtest/generated/`. Re-run to start
-   over; `--clean` removes the directory.
+   over; `--clean` removes the directory. Run it on macOS: it uses BSD
+   `sed -i ''`, which GNU sed rejects.
 
 3. **Fill in the placeholders in `generated/team-load-test.yml`:**
    - `name:` — the team you want created (e.g. `loadtest-2026-05`).
@@ -49,7 +51,7 @@ a high-scale instance. The dataset has to be in place before tests run.
    set -a; source playwright/.env.loadtest; set +a
    /path/to/fleet/build/fleetctl gitops -f gitops/loadtest/generated/team-load-test.yml
    ```
-   Apply takes several minutes — the bundle uploads ~1.5k entities.
+   Apply takes several minutes — the bundle declares ~2.7k entities.
 
 5. **Move hosts into the new team.** The Playwright loadtest specs read
    the first host (sorted by display name) in this fleet — make sure the
@@ -90,8 +92,8 @@ a high-scale instance. The dataset has to be in place before tests run.
 | Reports | 500 | Rotates across 10 archetypes; intervals 1–5h |
 | Labels | 500 | Mixed dynamic / host_vitals / manual membership |
 | Android certificates | 100 | Inlined in the team yml |
-| Fleet Maintained Apps | 276 | Full macOS + Windows catalog |
-| Android app-store apps | 28 | A common shortlist |
+| Fleet Maintained Apps | 276 | A fixed selection: 221 macOS + 55 Windows (Fleet's catalog is ~1.4k). Six slugs are no longer in Fleet's catalog: `backblaze`, `intellij-idea-ce`, `linear-linear`, `messenger`, `windsurf`, `yubico-yubikey-manager` (all `/darwin`) |
+| Android app-store apps | 25 | A common shortlist |
 
 VPP apps are intentionally omitted to avoid name conflicts with the FMAs
 above; add them manually if your VPP token has non-overlapping titles.

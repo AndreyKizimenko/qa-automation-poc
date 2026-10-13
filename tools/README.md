@@ -9,15 +9,16 @@ outside this repo.
 |---|---|---|
 | [`perf-hosts/`](perf-hosts/README.md) | `launchd` daemons running Fleet's osquery-perf simulator, keeping ~300 online hosts on each QA instance | A dedicated macOS QA VM |
 | [`windows-mdm-loadtest/`](windows-mdm-loadtest/README.md) | Drivers for the Windows MDM profile fan-out and team-transfer load-test scenarios | Anywhere with API access to the load-test instance |
-| [`kubernetes/`](kubernetes/README.md) | Deploys a Fleet release to Docker Desktop Kubernetes to smoke-test the Helm chart | Your machine, from a `fleetdm/fleet` clone |
+| [`kubernetes/`](kubernetes/README.md) | Deploys a Fleet release to Docker Desktop Kubernetes to smoke-test the Helm chart | Your machine, with a `fleetdm/fleet` clone |
 | [`loadtest-api-audit/`](loadtest-api-audit/README.md) | Checks every request in the Playwright `loadtest-api` matrix against the Fleet source: registered route, decoded parameters | Your machine, with a `fleetdm/fleet` checkout |
 
 ## Before you run anything
 
-**Two of these operate on other repos or hosts.** `kubernetes/` must be invoked
-from inside a `fleetdm/fleet` checkout (it reads that repo's chart and compose
-file), and `windows-mdm-loadtest/` implements a runbook that lives in the fleet
-repo. Each README says so up front.
+**Three of these use another repo.** `kubernetes/` and `loadtest-api-audit/`
+read a `fleetdm/fleet` checkout (`kubernetes/` its chart and compose file,
+`loadtest-api-audit/` its routes and request structs) — both find one on their
+own or take `FLEET_REPO` — and `windows-mdm-loadtest/` implements a runbook that
+lives in the fleet repo. Each README says so.
 
 **This repository is public.** Nothing here may contain a real instance URL,
 enroll secret, or API token:
@@ -33,6 +34,7 @@ credentials in a gitignored file next to it and commit a `.example` alongside.
 
 ## Generated artifacts aren't committed
 
-`windows-mdm-loadtest/` ships a deterministic generator rather than its ~300 KB
-of output — run `./generate.sh` after cloning. Same pattern as
+`windows-mdm-loadtest/` ships a deterministic generator rather than its ~600 KB
+of output — run `tools/windows-mdm-loadtest/generate.sh` after cloning (it works
+from any directory). Same pattern as
 [`gitops/loadtest/`](../gitops/loadtest/README.md).

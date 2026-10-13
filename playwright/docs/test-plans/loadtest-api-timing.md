@@ -2,7 +2,7 @@
 
 **Goal:** every Fleet API request a user-facing page makes finishes in under 5 s on the per-release
 loadtest instance. Two tools get us there: the existing Playwright `loadtest` project (times page
-loads) and a new API-timing script (hits each endpoint 5–20× with sorts/filters and reports medians).
+loads) and a new API-timing script (hits each endpoint 2–10× with sorts/filters and reports medians).
 This document audits what the UI suite covers today, maps every scale bug Fleet has filed to the
 request shape that broke, records a live probe of the 4.93 RC instance, and proposes the request
 matrix for the script.
@@ -13,26 +13,32 @@ Written 2026-10-01 against `fleet-493loadtest.loadtest.fleetdm.com` (4.93.0-rc, 
 
 Implemented the same day as the `loadtest-api` Playwright project:
 
-- `tests/loadtest/api/shapes.ts` — the §6 matrix as data (~480 shapes before scope expansion), each with
-  its priority, scope and issue; `resolve.ts` looks up the ids; `helpers/perf-api.ts` samples and grades.
+- `tests/loadtest/api/shapes.ts` — the §6 matrix as data (556 shapes in 12 families before scope
+  expansion, including the `ui` family of §6.0), each with its priority and scope and, where one applies,
+  its issue; `resolve.ts` looks up the ids; `helpers/perf-api.ts` samples and grades. `shapes.ts` is the
+  source of truth — §6 below is the original proposal, and the end of §6 lists where they differ.
 - `npm run test:loadtest:api` runs every family; `-g <family>` one of them; `API_PRIORITY=P0` the
   known-bad subset; `API_SAMPLES=20` for tighter medians; `API_SHAPE=<id substring>` one shape.
-- Severity: over 5 s but answering is `slow` (flagged, keeps rolling, capped at 3 min of sampling per
-  shape and 90 s per request); never answering is `broken` and fails the family; a mix is `error`.
+- Severity: a median over 5 s while every sample answers is `slow` (flagged, never a failure; sampling
+  is capped at 3 min per shape and 90 s per request); never answering is `broken`, a mix is `error`, and
+  either fails the family; an `optional` shape that answers 4xx on every sample is `unavailable` (the
+  feature is off on that instance).
 - Results: `.perf-history-api/<timestamp>/summary.md` + `results.json`, console table with the last
   three runs' medians, dataset counts and resolved ids in the run metadata.
 - Not implemented: §6.12 write paths and §6.13 device endpoints (they mutate data or need a device token).
-- Verified end to end against a local 4.93 RC instance (19 hosts, premium, MDM on): all 11 families run in
-  ~2 min at two samples; skipped shapes report their missing id; a failing family restarts the worker and
-  the resolution cache is reused. Every shape was then audited mechanically against Fleet's registered GET
-  routes and the query parameters each route's request struct decodes (663 variants, all routed, all
-  parameters decoded) — the audit script is `tools/loadtest-api-audit/audit-shapes.py` in the repo root.
+- Verified end to end against a local 4.93 RC instance (19 hosts, premium, MDM on): the 11 families of
+  that first run took ~2 min at two samples; skipped shapes report their missing id; a failing family
+  restarts the worker and the resolution cache is reused. Every shape was then audited mechanically against
+  Fleet's registered GET routes and the query parameters each route's request struct decodes (663 variants
+  then, all routed, all parameters decoded; the matrix expands to 694 today) — the audit script is
+  `tools/loadtest-api-audit/audit-shapes.py` in the repo root.
 - What that first local run and the audit turned up, after checking each against the server code:
   - `hosts?connected_to_fleet=true&fleet_id=N` (and `hosts/count`) answer the masked 422 while the same
     filter without `fleet_id` answers 200 — a real bug, no existing issue found.
   - The REST docs list `mdm_enrollment_status=manual-personal`; the server constant is `personal` and the
-    documented spelling gets 400 (docs bug; the matrix sends `personal`). Related open work:
-    fleetdm/fleet#52285 / #53677 re-establish the personal status and its filters.
+    documented spelling gets 400 on 4.93 (docs bug; the matrix sends `personal`). Related open work:
+    fleetdm/fleet#52285 / #53677 re-establish the personal status and its filters; Fleet main (#54177,
+    after 4.93) accepts `manual-personal` as its own filter value too.
   - The CVE sort keys for `software/versions` are only accepted while vulnerability details are included
     (`softwareOrderKeys` in the datastore); the docs don't say so. Not a bug — the matrix now sends
     `without_vulnerability_details=false` for those sorts.
@@ -85,11 +91,11 @@ Implemented the same day as the `loadtest-api` Playwright project:
 3. **Three issues that were closed as fixed have regressed or were never fully fixed:** the software
    titles sorts/filters from #35799 (name sort 18 s, `query=chrome` 30 s, `vulnerable=true` 422),
    the versions/vulnerabilities shapes from #45415 (`min_cvss_score=7` 49 s, `order_key=created_at`
-   28 s), and the labels host-count subquery from #4890 (2022) — `GET /labels` with the default
-   `include_host_counts=true` takes 37–48 s.
-4. **The UI suite measures 73 page loads but only ~20 distinct API shapes**, all single-sample, with
-   4 workers contending, no budget assertion, and five measurements that anchor on a static heading
-   and never wait for data. That audit already exists in
+   28 s), and the labels host-count subquery from #4890 (opened 2022, closed in 4.87) — `GET /labels`
+   with the default `include_host_counts=true` takes 37–48 s.
+4. **The UI suite measured 73 page loads (76 since the follow-ups in Status) but only ~20 distinct API
+   shapes**, all single-sample, with 4 workers contending (now one), no budget assertion, and five
+   measurements that anchor on a static heading and never wait for data. That audit already exists in
    [`docs/test-audit/17-loadtest-performance.md`](../test-audit/17-loadtest-performance.md); this
    document does not repeat it.
 5. **The current loadtest instance does not have the gitops loadtest bundle applied** to the fleet the
@@ -102,16 +108,16 @@ Implemented the same day as the `loadtest-api` Playwright project:
 
 ## 2. What the Playwright loadtest suite targets today
 
-73 measurements across 11 spec files in `tests/loadtest/`. The table maps each spec to the API
+76 measurements across 11 spec files in `tests/loadtest/`. The table maps each spec to the API
 requests the page fans out to (from `frontend/services/entities/*` and the page components), so the
 API script can cover the same surface directly.
 
 | Spec (measurements) | Page(s) | API requests behind the page |
 |---|---|---|
-| `dashboard.spec.ts` (6) | `/dashboard[/mac\|windows\|linux]?fleet_id` | `config`, `fleets`, `me`, `host_summary?fleet_id[&platform]`, `labels/summary`, `hosts/summary/mdm`, `macadmins?fleet_id`, **`os_versions?fleet_id[&platform]`** (OS card), `software/versions?…order_key=hosts_count` (top software card), `activities?per_page=8` (All-fleets view only), `charts/{metric}` (historical cards) |
-| `hosts.spec.ts` (9) | `/hosts/manage` + status / platform / label / search / sort | `hosts?fleet_id&per_page=50&order_key=display_name&order_direction=asc` (UI default), `hosts/count` (paired with every list call), `labels/summary`, `hosts/summary/mdm`; filters add `status=online`, `labels/{id}/hosts` (platform + custom labels), `query=` |
+| `dashboard.spec.ts` (6) | `/dashboard[/mac\|windows\|linux]?fleet_id` | `config`, `fleets`, `me`, `host_summary?fleet_id[&platform]`, `labels/summary`, `hosts/summary/mdm`, `macadmins?fleet_id`, **`os_versions?fleet_id[&platform]`** (OS card), legacy `software?per_page=8&order_key=hosts_count&order_direction=desc` (top software card, vulnerability details on), `activities?per_page=8` (All-fleets view only), `charts/{metric}` (historical cards) |
+| `hosts.spec.ts` (11) | `/hosts/manage` + status / platform / label / search / sort / page 1000 / Export hosts | `hosts?fleet_id&per_page=50&device_mapping=true&order_key=display_name&order_direction=asc` (UI default), `hosts/count` (paired with every list call), `labels/summary`, `hosts/summary/mdm`; filters add `status=online`, `labels/{id}/hosts` (platform + custom labels), `query=`; `page=1000`; `hosts/report?format=csv` (Export) |
 | `host-details.spec.ts` (6) | `/hosts/{id}` + Software / Reports / Policies tabs | `hosts/{id}`, `hosts/{id}/activities`, `hosts/{id}/activities/upcoming`, `hosts/{id}/software[?vulnerable=true\|available_for_install=true]`, `hosts/{id}/reports`, `hosts/{id}/configuration_profiles`, `hosts/{id}/certificates`, `hosts/{id}/scripts`, `hosts/{id}/device_mapping`, `hosts/{id}/macadmins`, `hosts/{id}/mdm`, `hosts/{id}/dep_assignment` |
-| `software.spec.ts` (14) | `/software/inventory`, `/software/versions` | `software/titles?fleet_id&order_key=name\|hosts_count&vulnerable=true&query=`, `software/versions?…` (same params + `without_vulnerability_details=true`) |
+| `software.spec.ts` (15) | `/software/inventory`, Library tab, `/software/versions` | `software/titles?fleet_id&order_key=name\|hosts_count&vulnerable=true&query=`, `software/titles?available_for_install=true` (Library), `software/versions?…` (same params + `without_vulnerability_details=true`) |
 | `software-os.spec.ts` (7) | `/software/os` + View hosts | `os_versions?fleet_id[&platform][&order_key=hosts_count]`, then `hosts?os_version_id=` |
 | `software-vulnerabilities.spec.ts` (5) | `/software/vulnerabilities` | `vulnerabilities?fleet_id[&exploit=true][&order_key=cvss_score][&query=]` |
 | `policies.spec.ts` (4) | `/policies/manage` (All fleets + team) | `policies` (global, `/api/latest`), `policies/count`, `fleets/{id}/policies[?automation_type=]`, `fleets/{id}/policies/count` |
@@ -168,30 +174,30 @@ script — osquery-perf already generates that load and the metrics scripts meas
 
 | Issue | State | Request shape that broke | Status on 4.93 RC probe |
 |---|---|---|---|
-| [#35799](https://github.com/fleetdm/fleet/issues/35799) Software titles perf | closed (4.76) | `software/titles` with `order_key=name`, `vulnerable=true`, `query=chrome`, `exploit=true`, `min/max_cvss_score` | **regressed**: name 18 s, `query=chrome` 30 s, `vulnerable` 422, `min_cvss` 422 / 43 s, exploit 7–11 s |
+| [#35799](https://github.com/fleetdm/fleet/issues/35799) Software titles perf | closed (4.83) | `software/titles` with `order_key=name`, `vulnerable=true`, `query=chrome`, `exploit=true`, `min/max_cvss_score` | **regressed**: name 18 s, `query=chrome` 30 s, `vulnerable` 422, `min_cvss` 422 / 43 s, exploit 7–11 s |
 | [#51954](https://github.com/fleetdm/fleet/issues/51954) `titles?vulnerable=true` 10 s+ | open | `software/titles?vulnerable=true` | 422 at 10 s (fleet and all-fleets) |
 | [#45415](https://github.com/fleetdm/fleet/issues/45415) versions + vulns slow, DB CPU 100% | closed | `software/versions?vulnerable&min_cvss_score&order_key=hosts_count&query=c`; `vulnerabilities?order_key=created_at\|cvss_score&min_cvss_score` | **still bad**: versions `min_cvss=7` 49 s, `vulnerable` 13 s, `query=chrome` 17 s; vulns `order_key=created_at desc` 28 s |
-| [#43030](https://github.com/fleetdm/fleet/issues/43030) / [#47755](https://github.com/fleetdm/fleet/issues/47755) versions without `per_page` | closed / open | `software/versions` (no `per_page` → 1M default) | 3.1 s, 200 — fixed in practice |
+| [#43030](https://github.com/fleetdm/fleet/issues/43030) / [#47755](https://github.com/fleetdm/fleet/issues/47755) versions without `per_page` | closed / closed (4.93) | `software/versions` (no `per_page` → 1M default) | 3.1 s, 200 — fixed in practice |
 | [#47722](https://github.com/fleetdm/fleet/issues/47722) hosts search + device_mapping | closed | `hosts?device_mapping=true&query=<email>&per_page=100` | 4.2 s — borderline; host_emails not seeded here |
 | [#15744](https://github.com/fleetdm/fleet/issues/15744) host search by email | closed | `hosts?query=<partial email>`, `hosts/count`, `hosts/report` | search 3.9–4.2 s; needs the email seeding SQL from the issue |
 | [#48996](https://github.com/fleetdm/fleet/issues/48996) hosts list 1 min+ with 100 profiles on 50k hosts | open | `hosts?os_settings=verified` and the OS settings page (`configuration_profiles/summary`) | 0.13 s — **not exercised** (0 profiles in fleet 1) |
 | [#42565](https://github.com/fleetdm/fleet/issues/42565) Windows OS settings summary timeout | closed | `configuration_profiles/summary?fleet_id` with Windows profiles | 0.08 s — not exercised |
 | [#44170](https://github.com/fleetdm/fleet/issues/44170) list MDM commands times out | closed | `commands?host_identifier=…&per_page=10` (UNION ALL + OR join) | now 400 without `host_identifier`; needs a host with command history |
 | [#44388](https://github.com/fleetdm/fleet/issues/44388) many list endpoints time out on `order_key` (audit requested) | closed | every allowlisted `order_key` on hosts, activities, titles, versions, policies, scripts, labels, reports, profiles, users, teams | **this script is that audit** — see §6 |
-| [#4890](https://github.com/fleetdm/fleet/issues/4890) label host_count subquery | closed (2022) | `labels` (default `include_host_counts=true`) | **regressed**: 37–48 s; 0.17 s with counts off |
+| [#4890](https://github.com/fleetdm/fleet/issues/4890) label host_count subquery | closed (4.87; opened 2022) | `labels` (default `include_host_counts=true`) | **regressed**: 37–48 s; 0.17 s with counts off |
 | [#52213](https://github.com/fleetdm/fleet/issues/52213) affected-hosts for a CVE never loads | open | `hosts/count?vulnerability=CVE`, `hosts?vulnerability=CVE` | count 3.9 s, list 0.12 s; needs a CVE with many hosts |
-| [#51896](https://github.com/fleetdm/fleet/issues/51896) host software quadratic self-join | open | `hosts/{id}/software` on a host with install history | 0.35 s — simulated hosts have no `host_software_installs` rows |
+| [#51896](https://github.com/fleetdm/fleet/issues/51896) host software quadratic self-join | closed (4.93) | `hosts/{id}/software` on a host with install history | 0.35 s — simulated hosts have no `host_software_installs` rows |
 | [#21847](https://github.com/fleetdm/fleet/issues/21847) long JSON encode | closed | `osquery/config` with 15k-char queries (agent path) | n/a |
-| [#49746](https://github.com/fleetdm/fleet/issues/49746) stale Windows enrollments | open | inflates every `mdm_windows_enrollments` join (profiles summary, hosts MDM filters) | n/a — distorts Windows baselines on recycled fleets |
+| [#49746](https://github.com/fleetdm/fleet/issues/49746) stale Windows enrollments | closed (4.93) | inflates every `mdm_windows_enrollments` join (profiles summary, hosts MDM filters) | n/a — distorts Windows baselines on recycled fleets |
 
 ### 4b. Write endpoints (opt-in, separate run — they mutate the dataset)
 
 | Issue | State | Request |
 |---|---|---|
-| [#38955](https://github.com/fleetdm/fleet/issues/38955), [#44071](https://github.com/fleetdm/fleet/issues/44071), [#44858](https://github.com/fleetdm/fleet/issues/44858), [#46894](https://github.com/fleetdm/fleet/issues/46894) | closed / closed / open / open | `POST hosts/transfer` and `hosts/transfer/filter` with 1k / 10k / 30k hosts (lock waits, silent reverts, reader spike) |
+| [#38955](https://github.com/fleetdm/fleet/issues/38955), [#44071](https://github.com/fleetdm/fleet/issues/44071), [#44858](https://github.com/fleetdm/fleet/issues/44858), [#46894](https://github.com/fleetdm/fleet/issues/46894) | closed / closed / closed (4.93) / closed (4.93) | `POST hosts/transfer` and `hosts/transfer/filter` with 1k / 10k / 30k hosts (lock waits, silent reverts, reader spike) |
 | [#39921](https://github.com/fleetdm/fleet/issues/39921) | closed | `POST spec/teams` (gitops apply) with ~70k hosts and ~30 profiles — 107 s |
 | [#48349](https://github.com/fleetdm/fleet/issues/48349), [#46993](https://github.com/fleetdm/fleet/issues/46993), [#44051](https://github.com/fleetdm/fleet/issues/44051), [#44050](https://github.com/fleetdm/fleet/issues/44050) | closed | `POST mdm/profiles/batch` (Windows, large add / remove); OS settings page 502 while profiles apply |
-| [#54536](https://github.com/fleetdm/fleet/issues/54536) | open | `POST software/batch` with 40+ FMAs exceeds fleetctl's 45 s |
+| [#54536](https://github.com/fleetdm/fleet/issues/54536) | closed (4.93) | `POST software/batch` with 40+ FMAs exceeds fleetctl's 45 s |
 | [#44191](https://github.com/fleetdm/fleet/issues/44191) | closed | policy creation / edit → `policy_membership` rewrite over all hosts |
 | [#42441](https://github.com/fleetdm/fleet/issues/42441), [#49197–#49199](https://github.com/fleetdm/fleet/issues/49199) | closed / open | `POST reports/run` live query targeting all hosts (Redis O(hosts × queries)) |
 
@@ -308,23 +314,37 @@ documented default sort is 7× slower than omitting it** on `vulnerabilities`
 
 ## 6. Proposed API-timing request matrix
 
+`tests/loadtest/api/shapes.ts` is the source of truth; this section is the proposal it was built from,
+and §6.14 lists where the two differ.
+
 Conventions for every row:
 
-- Base path `/api/latest/fleet`. Each list shape runs **twice**: fleet-scoped (`fleet_id=$FLEET`)
-  and all-fleets (no `fleet_id`), because the two aggregate differently (`global_stats` rows vs
-  per-team rows in `software_host_counts` / `vulnerability_host_counts`).
-- Every `hosts?…` shape also runs as `hosts/count?…` with the same params — the UI pairs them and
-  the count query has blown up independently (#47722, #52213).
+- Base path `/api/latest/fleet`. A list shape runs **twice** by default (`scope: 'both'`): fleet-scoped
+  (`fleet_id=$FLEET`) and all-fleets (no `fleet_id`), because the two aggregate differently
+  (`global_stats` rows vs per-team rows in `software_host_counts` / `vulnerability_host_counts`).
+  Shapes marked `scope: 'fleet'` or `'global'` run once.
+- A `hosts?…` shape marked `countTwin` also runs as `hosts/count?…` with the same filters (minus
+  `page`, `per_page`, `order_key`, `order_direction`) — the UI pairs them and the count query has
+  blown up independently (#47722, #52213).
 - `per_page=50` for hosts (UI default), `20` for everything else, unless the row says otherwise.
 - Priority: **P0** = known-broken or a UI default request; **P1** = allowlisted sort/filter nobody
   has measured; **P2** = long tail / API-only consumers.
-- IDs resolved at run start (see §7): `$HOST_FIRST` (display_name asc), `$HOST_ISSUES`
-  (`order_key=issues desc`), `$HOST_WIN` (Windows label, MDM-enrolled), `$TITLE_TOP`,
-  `$TITLE_INSTALLER` (`available_for_install=true`), `$VERSION_TOP`, `$CVE_TOP`
-  (`order_key=hosts_count desc`), `$CVE_RARE` (lowest non-zero host count), `$OSV_TOP`,
-  `$LABEL_MAC` / `$LABEL_ALL` (builtins), `$LABEL_DYN` (biggest regular label), `$LABEL_MANUAL`,
-  `$POLICY_G` / `$POLICY_T`, `$REPORT_T`, `$PROFILE_UUID`, `$SCRIPT_ID`, `$BATCH_ID`,
+- IDs resolved at run start (`resolve.ts`; the names there are in §6.14): `$HOST_FIRST`
+  (display_name asc), `$HOST_ISSUES` (`order_key=issues desc`), `$HOST_WIN` (first host in the
+  Windows label), `$TITLE_TOP`, `$TITLE_INSTALLER` (`available_for_install=true`), `$VERSION_TOP`,
+  `$CVE_TOP` (`order_key=hosts_count desc`), `$CVE_RARE` (`order_key=hosts_count asc`), `$OSV_TOP`,
+  `$LABEL_MAC` / `$LABEL_ALL` (builtins), `$LABEL_DYN` (first dynamic custom label), `$LABEL_MANUAL`,
+  `$POLICY_G` / `$POLICY_T`, `$REPORT_G` / `$REPORT_T`, `$PROFILE_UUID`, `$SCRIPT_ID`, `$BATCH_ID`,
   `$HOST_PREFIX` (first 3 chars of a hostname), `$SERIAL`, `$EMAIL`.
+
+### 6.0 UI requests, verbatim (`ui` family)
+
+The exact requests each page sent in a 2026-10-01 page drive, re-timed without a browser
+(`shapes.ts` `ui` family, 30 shapes, P0 and fleet-scoped except the uptime chart, P1, and the Labels
+page, global). They differ from the API defaults in ways that change the cost: 50-row lists,
+`device_mapping=true` on the hosts list, a `hosts_count` sort on the vulnerabilities page,
+`max_vulnerabilities` on the OS page, plus `charts/uptime`. Run the family alone with
+`npm run test:loadtest:api -- -g ui`.
 
 ### 6.1 Hosts list — `GET hosts` (+ `hosts/count` twin)
 
@@ -332,7 +352,7 @@ Conventions for every row:
 |---|---|---|---|
 | H1 | no sort, `per_page=50` | control (0.14 s) | P0 |
 | H2 | `order_key=display_name` asc **and** desc | UI default; 6–39 s | P0 |
-| H3 | `order_key=` each of: `hostname`, `computer_name`, `issues`, `seen_time`, `last_restarted_at`, `last_enrolled_at`, `created_at`, `updated_at`, `detail_updated_at`, `platform`, `os_version`, `osquery_version`, `memory`, `cpu_type`, `hardware_vendor`, `hardware_model`, `hardware_serial`, `primary_ip`, `primary_mac`, `public_ip`, `team_name`, `agent` (orbit), `fleet_desktop_version`, `software_updated_at`, `gigs_disk_space_available`, `percent_disk_space_available`, `gigs_total_disk_space`, `uuid`, `label_updated_at`, `policy_updated_at` — desc only, asc for the UI-sortable ones | full `hostAllowedOrderKeys` allowlist; #44388 | P1 (issues / seen_time P0) |
+| H3 | `order_key=` each of: `hostname`, `computer_name`, `issues`, `seen_time`, `last_restarted_at`, `last_enrolled_at`, `created_at`, `updated_at`, `detail_updated_at`, `platform`, `os_version`, `osquery_version`, `memory`, `cpu_type`, `hardware_vendor`, `hardware_model`, `hardware_serial`, `primary_ip`, `primary_mac`, `public_ip`, `team_name`, `agent` (orbit), `fleet_desktop_version`, `software_updated_at`, `gigs_disk_space_available`, `percent_disk_space_available`, `gigs_total_disk_space`, `uuid`, `id`, `label_updated_at`, `policy_updated_at` — desc only, asc for the UI-sortable ones | `hostAllowedOrderKeys` allowlist except `team_id` and `orbit_version`; #44388 | P1 (issues / seen_time P0) |
 | H4 | `page=0`, `100`, `1000`, last page (`count/per_page`) with the UI default sort | offset pagination cost | P0 |
 | H5 | `per_page=100`, `500` | API consumers | P2 |
 | H6 | `status=online` / `offline` / `new` / `missing` / `mia` / `enrolled` | status dropdown | P0 |
@@ -343,7 +363,7 @@ Conventions for every row:
 | H11 | `software_title_id=$TITLE_TOP`; `software_version_id=$VERSION_TOP`; `software_title_id=$TITLE_INSTALLER&software_status=installed` / `pending` / `failed` | software "view hosts" | P1 |
 | H12 | `os_version_id=$OSV_TOP`; `os_name=…&os_version=…` | OS "view hosts" | P1 |
 | H13 | `vulnerability=$CVE_TOP` and `$CVE_RARE` | CVE affected hosts; #52213 | P0 |
-| H14 | `mdm_enrollment_status=enrolled` / `manual` / `automatic` / `pending` / `unenrolled` / `manual-personal`; `mdm_name=Fleet`; `connected_to_fleet=true` | MDM filters | P1 |
+| H14 | `mdm_enrollment_status=enrolled` / `manual` / `automatic` / `pending` / `unenrolled` / `personal` (the REST docs' `manual-personal` is a 400 on 4.93); `mdm_name=Fleet`; `connected_to_fleet=true` | MDM filters | P1 |
 | H15 | `os_settings=verified` / `verifying` / `pending` / `failed`; `os_settings_disk_encryption=verified` / `enforcing` / `action_required` / `failed`; `macos_settings=…`; `macos_settings_disk_encryption=…` | OS settings status links; #48996 (needs profiles applied) | P0 |
 | H16 | `bootstrap_package=installed` / `pending` / `failed`; `profile_uuid=$PROFILE_UUID&profile_status=verified` / `pending` / `failed`; `dep_profile_error=true`; `dep_assign_profile_response=SUCCESS`; `munki_issue_id=`; `low_disk_space=10` / `32` | remaining MDM / premium filters | P1 |
 | H17 | `script_batch_execution_id=$BATCH_ID&script_batch_execution_status=ran` / `pending` / `errored` | batch script progress | P1 |
@@ -373,7 +393,7 @@ Conventions for every row:
 | S3 | `page=100`, `1000`, last (≈25k) — with default and with `name` sort | pagination | P0 |
 | S4 | `vulnerable=true`; `vulnerable=true&exploit=true`; `vulnerable=true&min_cvss_score=7`; `max_cvss_score=8`; `min=7&max=9` | #51954, #35799; 422s | P0 |
 | S5 | `query=chrome`; `query=a`; `query=Microsoft`; `query=$CVE_TOP` (title search matches CVE) | search; 30 s / 422 | P0 |
-| S6 | `available_for_install=true`; `self_service=true`; `packages_only=true`; `available_for_install=true&platform=darwin` / `windows` / `linux` / `ios` / `ipados` / `android`; `exclude_fleet_maintained_apps=true` | Library tab + platform filter; 10 s | P0 |
+| S6 | `available_for_install=true`; `self_service=true`; `packages_only=true`; `available_for_install=true&platform=darwin` / `windows` / `linux` / `ios` / `ipados` / `android` | Library tab + platform filter; 10 s | P0 |
 | S7 | `hash_sha256=` / `package_name=` lookups (fleet-scoped) | gitops dedupe path | P2 |
 | S8 | combo: `vulnerable=true&exploit=true&min_cvss_score=7&order_key=name&query=a` | worst case | P1 |
 | S9 | `software/titles/{id}` (fleet / all); `software/titles/{id}/package` | title detail | P1 |
@@ -454,8 +474,9 @@ Conventions for every row:
 
 Run the full `/dashboard?fleet_id` fan-out back-to-back and report the **max** as the page's
 server cost: `config`, `fleets`, `me`, H21 (7 platform variants), `labels/summary`,
-`hosts/summary/mdm`, `macadmins`, O1, `software/versions?order_key=hosts_count&order_direction=desc&per_page=8`
-(top software card), `activities?per_page=8` (all-fleets only), `charts/{metric}` (metric names in
+`hosts/summary/mdm`, `macadmins`, O1, the legacy
+`software?order_key=hosts_count&order_direction=desc&per_page=8` (top software card, vulnerability
+details on), `activities?per_page=8` (all-fleets only), `charts/{metric}` (metric names in
 `frontend/services/entities/charts.ts`). Repeat without `fleet_id` for the All-fleets dashboard.
 
 ### 6.11 Admin / global
@@ -484,23 +505,55 @@ side-effects (`hosts/count` drift, `activities` growth), not gate them at 5 s.
 `distributed/read` / `write`, `orbit/config`) are exercised by osquery-perf continuously and show
 up in the metrics synopsis, not here.
 
+### 6.14 Where `shapes.ts` differs from this proposal
+
+Proposed rows with no shape (trimmed when the matrix was built):
+
+- Hosts: H8 crosses only the prefix and full-email searches with `device_mapping=true`; H9 has no
+  iOS / Android label, the H2 sort only on All Hosts and `status=online` only on All Hosts and the
+  dynamic label; H15 has no `macos_settings_disk_encryption`; H16 has no `munki_issue_id`.
+- Host details: no D2 last page, no D3 `order_key=created_at`, no D5 `common_name` certificate sort,
+  no D6 `commands/results`.
+- Software: S3 pages the `name` sort only at page 1000; no S7 `hash_sha256` / `package_name` lookups;
+  no S15 `fleet_maintained_apps/{id}`.
+- Vulnerabilities: V3 crosses `exploit=true` only with `cvss_score desc`; no V4 `query=1171`; no V5
+  `page=1000`.
+- Policies, reports, labels: no P5 `automation_activities?page=10`, no R3 `+order_key`, no R4
+  `packs/{id}/scheduled`, no L4 last page for the dynamic label.
+- Controls, dashboard, admin: no C6 `hostname` / `updated_at` sorts, no C7 `certificates/{id}` or
+  certificate paging; the `dashboard` family has no `host_summary` platform variants and no
+  `charts/{metric}` (`charts/uptime` is in `ui`); no A1 / A2 `page`, no A3 `end_created_at` or last page.
+
+Shapes the proposal doesn't list: the `ui` family (§6.0), `hosts.sort.id.desc`, the
+`hosts/count?label_id=` twins (`hosts.label.*.count`), `labels.fleet.counts`, `policies.global.query`,
+`software.title.installer.detail`, `software.versions.details`, `software.legacy.software.no_details`.
+
+Placeholder names in `resolve.ts`: `$OSV_TOP` is `OSV_ID`, `$SERIAL` is `HOST_SERIAL`, `$EMAIL` is
+`HOST_EMAIL` (fixed to `john@example.com`, local part `HOST_EMAIL_LOCAL`); report shapes use
+`REPORT_G`.
+
 ---
 
-## 7. How the script should take measurements
+## 7. How the script takes measurements
+
+The design behind `helpers/perf-api.ts`; the code is the reference where the two disagree.
 
 1. **One request in flight, always.** Two concurrent probe scripts tripled the hosts-list latency
    (5.9 s → 39 s). `workers: 1`, no `Promise.all` across shapes. The matrix is long; accept the
    runtime (estimate: ~350 shapes × 5 samples × fleet/all ≈ 1–2 h on a healthy build, longer when
    things are broken).
-2. **Warm-up then N samples, shapes interleaved.** Discard one call per shape, then take N = 5
-   (P2), 10 (P1), 20 (P0 and anything over 5 s on the previous run). Randomise the order of shapes
-   within each iteration (Victor's gist for #35799 does this) so a slow neighbour's cache effect is
-   spread rather than attributed to one row.
+2. **N samples, shapes interleaved.** P0 10, P1 5, P2 2 by default (`API_SAMPLES` /
+   `API_SAMPLES_P0|P1|P2` override), and a shape stops early once its samples have used 3 min. No
+   warm-up call is discarded; the first sample is reported in its own column. Each pass visits the
+   shapes in a fresh random order (Victor's gist for #35799 does this) so a slow neighbour's cache
+   effect is spread rather than attributed to one row.
 3. **Record per call:** HTTP status, time-to-first-byte, total, bytes, the response `count` /
    `meta` (so an empty result is visible), and on ≥400 the body's `uuid`. Report median, p95, max.
-4. **Gate on median ≤ 5 s *and* max ≤ 5 s** — a 4 s median hiding a 40 s outlier is what users
-   see. Any 422 / 5xx / timeout is a failure regardless of timing. Colour the markdown table
-   ✅ ≤ 2 s / ⚠️ 2–5 s / ❌ > 5 s or error, with the delta against the previous stored run, the way
+4. **Fail on errors, flag the median.** Any non-2xx or timeout makes a shape `error` (some samples)
+   or `broken` (all), and either fails its family regardless of timing. A median over 5 s is `slow`:
+   flagged, never a failure. p95 and max are reported beside the median, so a 4 s median hiding a
+   40 s outlier — what users see — stays visible. The markdown table marks each row by severity
+   (✅ ok / ⚠️ slow / ❌ error / ⛔ broken) with the last three stored runs' medians beside it, the way
    `tools/loadtest/metrics/compare-metrics.sh` in the fleet repo does for CloudWatch numbers.
 5. **Timeout 90 s per call.** The ALB idle timeout is 60 s; 502 / 504 arrive at 60–90 s, and
    those are the signals #44170 / #47755 were filed on.
@@ -509,16 +562,16 @@ up in the metrics synopsis, not here.
    labels) — and the API-consumer spelling next to it where they differ (default labels call,
    explicit `order_key=created_at`), because fleetctl and integrations send the latter.
 7. **Resolve IDs up front, record run metadata.** Fleet version (`/version`), fleet id, host /
-   title / version / CVE / label / policy / report / profile counts, worker count, start/end time,
-   and the resolved IDs from §6. Fail the run (do not record) when a precondition count is 0 for a
-   family — an empty-state 80 ms is worse than no number, which is the trap the UI suite fell into
-   on this instance.
-8. **Where it lives.** A `loadtest-api` Playwright project (`tests/loadtest-api/`, `workers: 1`,
-   `retries: 0`, `expect(median).toBeLessThan(5000)`) reuses `.env.loadtest`, the bearer-token
-   helpers in `helpers/api/core.ts`, and the `.perf-history` teardown so API runs sit next to UI
-   runs and are diffed the same way. Keep the shape list as a data file
-   (`tests/loadtest-api/shapes.ts`: `{ family, id, path, params, priority, samples, issue }`) so
-   it can also be driven as a plain script and so adding a shape is one line.
+   title / version / CVE / label / policy / report / profile counts, the sampling config, start/end
+   time, and the resolved IDs from §6. A shape whose id can't be resolved (no policies in the fleet,
+   no finished batch run) is `skipped` with the reason rather than timed — an empty-state 80 ms is
+   worse than no number, which is the trap the UI suite fell into on this instance.
+8. **Where it lives.** The `loadtest-api` Playwright project (`tests/loadtest/api/`, `workers: 1`,
+   `retries: 0`, no browser, test timeout off) reuses `.env.loadtest` and the bearer-token helpers in
+   `helpers/api/core.ts`; the shared global teardown (`helpers/perf-teardown.ts`) writes API runs to
+   `.perf-history-api/`, next to the UI suite's `.perf-history/`. The shape list is a data file
+   (`tests/loadtest/api/shapes.ts`: `{ family, id, label, path, params, scope, priority, issue, needs,
+   countTwin, optional, samples }`), so adding a shape is one line.
 9. **Dataset preconditions to automate or document per run:** apply `gitops/loadtest/generated/`
    to the hosts' fleet (policies, reports, labels, scripts, macOS + Windows profiles); seed host
    emails with the SQL from #15744; create install history on a few hosts for #51896; let the
@@ -528,9 +581,9 @@ up in the metrics synopsis, not here.
 
 ## 8. UI suite follow-ups that this audit changes
 
-The existing audit's quick wins still stand (fix the four shell-only anchors, replace `rowOrEmpty()`
-with row-count assertions, use `measureSearch` for `Reports › Team - search`, record run metadata,
-pin `workers=1` and sample 3×). On top of that, from the probe:
+Of the existing audit's quick wins, the shell-only anchors, `measureSearch` for `Reports › Team -
+search` and `workers=1` have landed (see Status); replacing `rowOrEmpty()` with row-count assertions,
+recording run metadata and sampling 3× still stand. On top of that, from the probe:
 
 - **Split API time from render time** inside `measureNav` with `page.waitForResponse` on the
   page's primary request, so a 20 s Hosts list can be attributed (it is the `display_name` sort,
