@@ -82,7 +82,7 @@ your confidence, ask for it during the run.
 ### 1. Understand the change (5 minutes, not 50)
 
 - Issue body + comments, the linked PR(s) and their full diff
-  (`gh pr list --search <N> --state all`). Docs PRs count — a new API parameter
+  (`gh pr list -R fleetdm/fleet --search <N> --state all`). Docs PRs count — a new API parameter
   should match its REST API reference entry.
 - **Is it in the build?** `GET /api/v1/fleet/version` → revision;
   `git merge-base --is-ancestor <merge-sha> <revision>` (or `git branch -r --contains`

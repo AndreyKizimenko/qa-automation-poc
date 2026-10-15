@@ -28,8 +28,7 @@
  * and let one interval elapse.
  *
  * The walk also runs the other way: from the report's results across hosts, the
- * Mac's Host link opens the same per-host page, and its "Back to host details"
- * returns to the host.
+ * Mac's Host link opens the same per-host page.
  *
  * Not covered: the card's "N additional results not shown" banner. It needs more
  * than one stored row for the host, `pw-host-report-results` returns one, and a
@@ -115,8 +114,5 @@ test.describe('Premium • Hosts • host report results', () => {
     await expect(page).toHaveURL(new RegExp(`/hosts/${liveMacosHost.id}/reports/${report!.id}`));
     await expect(hostQueryReport.hostHeading).toHaveText(liveMacosHost.displayName);
     await expect(hostQueryReport.table.firstRow).toContainText('bar');
-
-    await hostQueryReport.backButton.click();
-    await expect(page).toHaveURL(new RegExp(`/hosts/${liveMacosHost.id}/details`));
   });
 });

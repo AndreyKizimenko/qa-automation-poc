@@ -16,17 +16,22 @@ configs use, so a profile or policy is authored once and applied on both tiers.
 
 ```bash
 set -a; source playwright/.env.free; set +a
-fleetctl gitops -f gitops/free-fleetqa/default.yml
+fleetctl gitops --context qa-free -f gitops/free-fleetqa/default.yml
 ```
 
 The config interpolates `$FLEET_URL`, `$FLEET_ENROLL_SECRET`, and
-`$FLEET_SSO_METADATA_URL`, so sourcing `.env.free` first is what supplies them. In CI
-this runs via the `gitops-free` workflow, which reads the same values from repo
-secrets.
+`$FLEET_SSO_METADATA_URL`, so sourcing `.env.free` first is what supplies them. It
+does not aim the command: `fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`
+and applies to its fleetctl context, `default` unless `--context` names another (see
+[`--context qa-premium` is not optional](../premium-fleetqa/README.md#--context-qa-premium-is-not-optional)).
+`qa-free` stands for the context you keep for the free instance. In CI this runs via
+the `gitops-free` workflow, which reads the same values from repo secrets and points
+fleetctl at the instance itself.
 
-Note that on free the **enroll secret is managed by gitops** (premium manages it
-per-team instead), so applying this config rotates the secret to whatever
-`$FLEET_ENROLL_SECRET` holds.
+Note that on free the **enroll secret is managed by gitops** (premium's YAML declares
+no `secrets:`; its enroll secrets are managed in the UI), so applying this config
+rotates the secret to whatever `$FLEET_ENROLL_SECRET` holds — on whichever instance
+the context points at.
 
 ## Scope summary
 
@@ -56,9 +61,10 @@ defaults (changing any of its keys is premium, so free can only hold them), `act
 all four `webhook_settings` (declared and off, with example destinations), `secrets`, and
 `controls.android_enabled_and_configured` (Android MDM was turned on in the UI; the server ignores
 the key on a config write, so it records the assumption). The min variant changes one value in
-each section so the nightly proves updates, not only creates and deletes. Nothing new reaches
-the free VMs: on free the real VMs sit in Unassigned, which is where no-team `controls` land, so
-free's `controls` stay as they were.
+most sections (`server_settings`, `sso_settings`, `host_expiry_settings`, `historical_data`,
+`fleet_desktop` and `secrets` stay put) so the nightly proves updates, not only creates and
+deletes. Nothing new reaches the free VMs: on free the real VMs sit in Unassigned, which is
+where no-team `controls` land, so free's `controls` stay as they were.
 
 ## Verifying an apply landed
 

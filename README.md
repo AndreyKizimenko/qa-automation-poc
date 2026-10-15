@@ -10,21 +10,26 @@ suite, and the GitHub Actions that wire them together.
 ├── gitops/
 │   ├── lib/                    # Shared payloads referenced by every config
 │   │   ├── agent-options.yml
+│   │   ├── icons/              # Software-title icons the configs upload
 │   │   ├── labels/             # Label definitions (multi-entry files)
-│   │   └── platforms/<os>/     # configuration-profiles, policies, reports, scripts
+│   │   └── platforms/<os>/     # configuration-profiles, policies, reports, scripts, software (+ all/ for cross-platform reports)
 │   ├── free-fleetqa/           # Baseline gitops config for the free QA instance
 │   ├── free-fleetqa-min/       # Trimmed variant — used by gitops-verify
 │   ├── premium-fleetqa/        # Baseline gitops config for the premium QA instance
 │   ├── premium-fleetqa-min/    # Trimmed variant — used by gitops-verify
 │   └── loadtest/               # Generator for the bulk loadtest team bundle (local-only)
 ├── playwright/                 # Playwright browser + API test suite
-│   └── docs/                   # Suite docs: CI pipeline, blocked-by-product-bugs, test audit, long-term goals
+│   └── docs/                   # Suite docs: CI pipeline, blocked-by-product-bugs, long-term goals, test plans, gitops coverage, loadtest runs, test audit
 ├── tools/                      # Hand-run ops tooling — see tools/README.md
 │   ├── perf-hosts/             # osquery-perf launchd daemons keeping QA hosts online
 │   ├── windows-mdm-loadtest/   # Windows MDM profile fan-out + team-transfer drivers
+│   ├── loadtest-api-audit/     # Checks the loadtest-api request matrix against the Fleet source
 │   └── kubernetes/             # Helm-chart smoke test on Docker Desktop
+├── plugins/fleet-qa/           # The fleet-qa Claude Code plugin (see below); .claude-plugin/ is its marketplace
+├── .claude/skills/             # This repo's Claude Code skills (see below)
 └── .github/
     ├── gitops-action/          # Composite action: install fleetctl, dry-run, apply
+    ├── scripts/                # restore-gitops-exceptions.sh, run before every premium apply
     └── workflows/              # CI workflows (see below)
 ```
 
@@ -51,6 +56,7 @@ covers the same rule for the hand-run tooling.
 | `fleet-quickwin-qa` | QA a small change end to end |
 | `fleet-bug-file` | file a bug from a finding, and record how to retest it |
 | `fleet-bug-retest` | retest the bugs you filed once their fix is in a build |
+| `fleet-loadtest-qa` | QA and investigate behavior at scale on a 100k-host load test |
 
 Install it once:
 
@@ -73,12 +79,13 @@ from the request.
 
 Tokens stay in `~/.fleet/config`. It also needs an authenticated `gh`, a Fleet checkout, a clone of this
 repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwright), and Pillow
-(`pip3 install pillow`) for `stack.py`.
+(`pip3 install pillow`) for `stack.py`. The load-test skill also needs the AWS CLI v2 (SSO), jq and GNU
+`timeout`.
 
 ## Running locally
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
-- **GitOps (free)** — `fleetctl gitops -f gitops/free-fleetqa/default.yml`
+- **GitOps (free)** — `fleetctl gitops --context <your free-instance context> -f gitops/free-fleetqa/default.yml`
 - **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps a
   fleet that is deliberately not under gitops; see `gitops/premium-fleetqa/README.md`):
   ```bash
@@ -90,9 +97,13 @@ repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwri
     -f gitops/premium-fleetqa/fleets/compliance.yml
   ```
 
-Source the matching `playwright/.env.<tier>` first so `FLEET_URL` /
-`FLEET_API_TOKEN` (and the SSO / VPP / ABM env vars used by gitops) are
-in the environment.
+`fleetctl gitops` aims only by `--context` and ignores `FLEET_URL` /
+`FLEET_API_TOKEN`: without `--context` the config lands on whatever your
+`default` context points at (see `gitops/premium-fleetqa/README.md`). Export
+the matching `playwright/.env.<tier>` first — `set -a; source
+playwright/.env.<tier>; set +a` — so the variables the config references reach
+fleetctl: `FLEET_SSO_METADATA_URL`, `FLEET_ENROLL_SECRET` on free, and the
+EUA / ABM / VPP vars on premium.
 
 Loadtest runs are local-only — credentials change per run, so they are
 not stored as GitHub Actions secrets. The loadtest fleet itself is
@@ -108,13 +119,14 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `qa-nightly.yml` | 03:17 UTC daily (GitHub starts it hours late), manual | **The nightly**, as one chain: Render redeploy → wait for the deploys (Render's API when its credentials are set, else 30 min) + both instances healthy + a notice with each build → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
-| `render-deploy.yml` | Manual, `workflow_call` | Hits Render deploy hooks so the free + premium instances pick up the latest Fleet release. The nightly's first step. |
+| `qa-nightly.yml` | 03:17 UTC daily (GitHub starts it hours late), manual (optional `render-wait-minutes`, default 30, used only without Render credentials) | **The nightly**, as one chain: Render redeploy → wait for the deploys (Render's API when its credentials are set, else 30 min) + both instances healthy + a notice with each build → per tier, the gitops chain, then that tier's Playwright suite. `gh workflow run "QA — Nightly"`. |
+| `render-deploy.yml` | Manual, `workflow_call` | Hits Render deploy hooks so the free + premium instances redeploy the image their Render service is set to (the current Fleet RC). The nightly's first step. |
 | `gitops-free.yml` / `gitops-premium.yml` | Manual, `workflow_call` | Apply the baseline gitops config to the matching instance via the `gitops-action` composite. |
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
 | `nightly-qa-gitops-free.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Free chain: apply baseline → verify → apply min → verify → fleetctl checks. |
-| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, plus parallel verifies of the Workstations and Compliance fleets. Both passes also apply the QA and VMs fleets (`qa.yml`, `vms.yml`). |
+| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, but each pass applies and verifies (in parallel) the no-team config and the Workstations, QA, VMs and Compliance fleets; the min pass reuses the baseline's `qa.yml` and `vms.yml`. |
+| `gitops-nightly-cli.yml` | `workflow_call` (last step of each tier's gitops chain), manual (`suite`) | Read-only fleetctl checks right after the min apply: `generate-gitops` reproduces the min config, and a `gitops --dry-run` of it proposes no deletions (Playwright `gitops-nightly` project). |
 | `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — the main project, then the exclusive specs and (premium) gitops-mode as their own steps, merged into one report; project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. Optional `workers` input. |
 | `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a worker-count trial. |
 | `playwright-check.yml` | Every PR, push to `main`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. Runs on every PR, with no path filter, because it is a required status check and one that never reports leaves a PR unmergeable. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
@@ -126,10 +138,13 @@ polls Render's deploy API when `RENDER_API_KEY` and the two service ids are set,
 failing on a failed deploy, and otherwise sleeps 30 min), checks both instances'
 `/healthz`, records each instance's build, then runs each tier's gitops chain
 and, once it has finished — green or red — that tier's suite, the two tiers side
-by side. It's scheduled for 03:17 UTC (10:17 PM CDT), off the top of the hour,
-and GitHub starts it late — since 2026-08-27
-this repo's scheduled runs have been starting 4–6.5 h after their cron time — so
-it lands around 1–4:30 AM Central and is done before morning. The chain tolerates
+by side. If the wait fails (a failed deploy, one not live in 30 min, or an
+instance still unhealthy 15 min later), neither tier's gitops chain or suite runs
+that night. It's scheduled for 03:17 UTC (10:17 PM CDT), off the top of the hour,
+and GitHub starts it late: every scheduled run from 2026-10-01 to 10-10 started
+5.9–7.3 h after its cron time (09:09–10:35 UTC) and took 1 h 29 m–1 h 44 m, 30 min
+of it the fixed Render wait, so it finished around 11:15–12:15 UTC (~6:15–7:15 AM
+CDT). The chain tolerates
 the lag, since no step waits on a clock. A start at an exact
 time would take an outside scheduler calling its `workflow_dispatch` with a token
 that has **Actions: read and write** on this repo.
@@ -143,6 +158,8 @@ newer queued run replaces an older queued one.
 Every workflow in the gitops and Playwright chains takes an optional `ref`
 input on `workflow_call` and checks it out, which is how `qa-branch-run.yml`
 runs a branch's code under the default branch's workflow definitions. A branch
+that changes a workflow file is dispatched with `--ref <branch>` as well, so the
+run uses the branch's workflow YAML rather than `main`'s. A branch
 run leaves the branch's gitops config applied until the next nightly re-applies
 `main`'s.
 
@@ -152,14 +169,14 @@ Instance + gitops:
 
 | Secret | Used by |
 |---|---|
-| `FLEET_FREE_URL`, `FLEET_FREE_API_TOKEN` | gitops-free, gitops-verify, playwright-free |
+| `FLEET_FREE_URL`, `FLEET_FREE_API_TOKEN` | gitops-free(-min), gitops-verify, gitops-nightly-cli, playwright-free, qa-nightly |
 | `FLEET_FREE_ADMIN_EMAIL`, `FLEET_FREE_ADMIN_PASSWORD` | playwright-free |
-| `FLEET_FREE_ENROLL_SECRET` | gitops-free (enroll secret managed via gitops on free) |
-| `FLEET_PREMIUM_URL`, `FLEET_PREMIUM_API_TOKEN` | gitops-premium, gitops-verify, playwright-premium |
+| `FLEET_FREE_ENROLL_SECRET` | gitops-free(-min), gitops-verify, gitops-nightly-cli (enroll secret managed via gitops on free) |
+| `FLEET_PREMIUM_URL`, `FLEET_PREMIUM_API_TOKEN` | gitops-premium(-min), gitops-verify, gitops-nightly-cli, playwright-premium, qa-nightly |
 | `FLEET_PREMIUM_ADMIN_EMAIL`, `FLEET_PREMIUM_ADMIN_PASSWORD` | playwright-premium |
-| `FLEET_FREE_SSO_METADATA_URL` | gitops-free |
-| `FLEET_PREMIUM_SSO_METADATA_URL` | gitops-premium |
-| `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium |
+| `FLEET_FREE_SSO_METADATA_URL` | gitops-free(-min), gitops-verify, gitops-nightly-cli |
+| `FLEET_PREMIUM_SSO_METADATA_URL` | gitops-premium(-min), gitops-verify, gitops-nightly-cli |
+| `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium(-min), gitops-verify, gitops-nightly-cli |
 | `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec, both tiers) |
 | `RENDER_FREE_DEPLOY_HOOK`, `RENDER_PREMIUM_DEPLOY_HOOK` | render-deploy |
 | `RENDER_API_KEY`, `RENDER_FREE_SERVICE_ID`, `RENDER_PREMIUM_SERVICE_ID` | qa-nightly's deploy wait (optional: without them it is a fixed 30-min sleep) |

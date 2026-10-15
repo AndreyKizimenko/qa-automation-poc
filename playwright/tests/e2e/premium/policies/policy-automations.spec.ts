@@ -18,7 +18,7 @@
  *     throwaway `pw-fleet-webhook-*` fleet: a fleet's automations save replaces
  *     its whole `webhook_settings` (fleetdm/fleet#54619), so on Workstations it
  *     would race `team-host-status-webhook.spec.ts`, which writes the same
- *     subtree.
+ *     subtree (docs/blocked-by-product-bugs.md).
  *   - **One policy's** — a row's Automations cell opens that policy's own
  *     "Manage automations" modal (Fleet's ManageAutomationsModal, around
  *     PolicyAutomationsFields): Install software, Run script and Continuous
@@ -384,6 +384,8 @@ test.describe("Premium • Policies • a fleet's failing-policies webhook", () 
   // writing there in parallel. The test deletes the fleet itself; this hook
   // catches a failed body, and `cleanup.steps.ts` sweeps `pw-*` fleets a dead
   // run left.
+  // TODO(fleetdm/fleet#54619): once the save writes only its own keys, run this
+  // on Workstations instead of a throwaway fleet.
   let fleetId: number | undefined;
 
   test.afterEach(async ({ request }) => {

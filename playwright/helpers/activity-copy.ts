@@ -76,6 +76,17 @@ function appStoreAppScope(scope: TeamScope, action: 'add' | 'delete'): string {
   return action === 'add' ? 'the No team fleet' : 'unassigned';
 }
 
+interface AppStoreAppActivity {
+  name: string;
+  /** The version's name, rendered only for iOS, iPadOS and Android titles ("Default version" on add). */
+  version?: string;
+  platform: string;
+  scope: TeamScope;
+}
+
+/** ` (Version)`, or nothing for a title whose activities name no version. */
+const versionSuffix = (version?: string): string => (version ? ` \\(${esc(version)}\\)` : '');
+
 /**
  * Scope-suffix for configuration profiles. Tier-aware: Fleet renders
  * different copy on free vs premium, gated by `isPremiumTier` in the
@@ -231,15 +242,17 @@ export const activityCopy = {
   },
 
   // VPP and Android app-store entries. The feed renders the title with a
-  // `(Platform)` parens suffix before the preposition. Scope suffix is
+  // `(Platform)` parens suffix before the preposition, and on iOS, iPadOS and
+  // Android — whose titles hold versions — the version's name in parens before
+  // that (`makeVersionSuffix`): pass `version` for those. Scope suffix is
   // asymmetric on Unassigned — see {@link appStoreAppScope}.
   appStoreApp: {
-    /** @see frontend/.../GlobalActivityItem.tsx:1480 — `added <b>TITLE</b> (Platform) to <scope>.` */
-    added: ({ name, platform, scope }: { name: string; platform: string; scope: TeamScope }) =>
-      new RegExp(`added ${esc(name)} \\(${esc(platform)}\\) to ${appStoreAppScope(scope, 'add')}\\.`),
-    /** @see frontend/.../GlobalActivityItem.tsx:1518 — `deleted <b>TITLE</b> (Platform) from <scope>.` */
-    deleted: ({ name, platform, scope }: { name: string; platform: string; scope: TeamScope }) =>
-      new RegExp(`deleted ${esc(name)} \\(${esc(platform)}\\) from ${appStoreAppScope(scope, 'delete')}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx addedAppStoreApp — `added <b>TITLE</b> (Version) (Platform) to <scope>.` */
+    added: ({ name, version, platform, scope }: AppStoreAppActivity) =>
+      new RegExp(`added ${esc(name)}${versionSuffix(version)} \\(${esc(platform)}\\) to ${appStoreAppScope(scope, 'add')}\\.`),
+    /** @see frontend/.../GlobalActivityItem.tsx deletedAppStoreApp — `deleted <b>TITLE</b> (Version) (Platform) from <scope>.` */
+    deleted: ({ name, version, platform, scope }: AppStoreAppActivity) =>
+      new RegExp(`deleted ${esc(name)}${versionSuffix(version)} \\(${esc(platform)}\\) from ${appStoreAppScope(scope, 'delete')}\\.`),
   },
 
   // MDM configuration profiles. Suffix is tier-aware via process.env.SUITE

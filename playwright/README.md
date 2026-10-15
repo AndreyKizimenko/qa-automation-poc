@@ -1,11 +1,14 @@
 # Fleet Playwright Test Suite
 
-Automated browser + API tests for Fleet. Four projects:
+Automated browser, API and `fleetctl` tests for Fleet. The projects:
 
-- **premium** — Fleet Premium instance (default browser suite).
-- **free** — Fleet Free instance (browser suite).
-- **loadtest** — high-scale instance for page-load timing.
+- **premium** — Fleet Premium instance (default browser suite), with **premium-exclusive** and **gitops-mode** run after it.
+- **free** — Fleet Free instance (browser suite), with **free-exclusive** run after it.
+- **loadtest** / **loadtest-api** — high-scale instance for page-load and API timing (local only).
 - **gitops-verify** — pure-API checks that a gitops target matches the live instance. Driven by the nightly orchestrators.
+- **gitops-nightly** — `fleetctl` checks of the applied min config (`tests/cli/nightly/`), run by the nightly gitops chain.
+
+See [How the projects differ](#how-the-projects-differ).
 
 ---
 
@@ -41,9 +44,15 @@ your own. Those bearer tokens are shown once at user-creation time and can't be
 rotated, so a locally-created user would diverge from what CI and everyone else is
 using.
 
-The example files also carry vars used only by a local `fleetctl gitops` apply —
+The example files also carry the vars the gitops configs reference —
 `FLEET_ENROLL_SECRET`, `FLEET_SSO_METADATA_URL`, and premium's ABM / VPP / EUA vars.
-They sit under their own comment header, and the suite never reads them.
+They sit under their own comment header. The browser projects never read them, but a
+local `fleetctl gitops` apply and the `gitops-verify` / `gitops-nightly` projects do:
+the gitops YAML is loaded with its `$VAR`s expanded, and an unset one throws.
+
+The `fleetctl` specs (`tests/cli/`) run the `fleetctl` on your `PATH` (or `FLEETCTL_BIN`).
+Install the version that matches the server (`npm i -g fleetctl@<server version>`), as CI
+does: an older client fails — 4.92.1's `generate-gitops` exits 1 on free.
 
 **3. Know what the suite expects to already exist**
 
@@ -68,7 +77,7 @@ measures real page-load times against a high-scale team that has to
 exist before any spec runs. See
 [../gitops/loadtest/README.md](../gitops/loadtest/README.md) for the
 generate-bundle → `fleetctl gitops` → move-hosts → wait-for-crons flow.
-The last step of that doc — setting `FLEET_LOADTEST_FLEET_ID` in
+Step 7 of that doc — setting `FLEET_LOADTEST_FLEET_ID` in
 `.env.loadtest` — is required; the loadtest fixtures throw at setup if
 it's missing.
 
@@ -89,12 +98,16 @@ From `playwright/`:
 | Command | What it runs |
 |---|---|
 | `npm run test:premium` | Premium suite, headless — three invocations in sequence: the main project, the exclusive specs, gitops-mode |
-| `npm run test:premium:headed` | Premium suite, browser visible |
-| `npm run test:premium:ui` | Premium suite, Playwright UI |
-| `npm run test:free` | Free suite, headless |
-| `npm run test:free:headed` | Free suite, browser visible |
-| `npm run test:free:ui` | Free suite, Playwright UI |
+| `npm run test:premium:headed` | Premium suite, browser visible — the same three invocations |
+| `npm run test:premium:ui` | Premium main project, Playwright UI |
+| `npm run test:premium:exclusive` | Premium's exclusive specs alone (`premium-exclusive`) |
+| `npm run test:free` | Free suite, headless — two invocations in sequence: the main project, the exclusive specs |
+| `npm run test:free:headed` | Free suite, browser visible — the same two invocations |
+| `npm run test:free:ui` | Free main project, Playwright UI |
+| `npm run test:free:exclusive` | Free's exclusive specs alone (`free-exclusive`) |
 | `npm run test:gitops-mode` | The gitops-mode specs alone: login, the specs on one worker, teardown |
+| `npm run test:gitops-mode:only` / `test:gitops-mode:headed` | The gitops-mode specs with `--no-deps` (headless / browser visible), for local iteration |
+| `npm run test:gitops-nightly:premium` / `test:gitops-nightly:free` | The `gitops-nightly` CLI checks — meaningful only right after a min apply |
 | `npm run test:loadtest` | Loadtest tests, headless |
 | `npm run test:loadtest:headed` | Loadtest tests, browser visible |
 | `npm run test:loadtest:ui` | Loadtest tests, Playwright UI |
@@ -109,7 +122,7 @@ From `playwright/`:
 | `npm run test:gitops-verify:premium-min` | Verify premium-fleetqa-min (no-team scope) |
 | `npm run test:gitops-verify:premium-min-workstations` | Verify Workstations team in premium-fleetqa-min |
 | `npm run test:gitops-verify:premium-min-compliance` | Verify the Compliance fleet in premium-fleetqa-min |
-| `npm run test:all` | Premium **and** free, sequentially |
+| `npm run test:all` | Premium, then free if premium passed (`&&`) |
 | `npm run lint` | Lint specs + page objects + helpers |
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
 | `npm run typecheck` | Run `tsc --noEmit` on the whole project |
@@ -135,32 +148,13 @@ Floating-promise detection is on via `@typescript-eslint`, so missing
 
 ```
 playwright/
-├── tests/                        # Specs — see tests/README.md
+├── tests/                        # Specs — see tests/README.md for the full layout
 │   ├── e2e/                      # Browser specs
-│   │   ├── shared/               # Tier-agnostic (both projects)
-│   │   │   ├── account/          # change-password, theme
-│   │   │   ├── auth/             # login, logout, SSO, forgot-password
-│   │   │   ├── hosts/            # host details, live query, software, CSV export
-│   │   │   ├── packs/            # packs CRUD (global, no team scope)
-│   │   │   └── settings/         # host-status webhook, user list search/pagination/row-actions
-│   │   ├── premium/              # Premium-only (Unassigned + Workstations variants)
-│   │   │   ├── account/
-│   │   │   ├── controls/         # custom-variables, os-settings, scripts, setup-experience
-│   │   │   ├── dashboard/
-│   │   │   ├── hosts/            # transfer, delete, CTA + MDM-action availability
-│   │   │   ├── labels/
-│   │   │   ├── policies/
-│   │   │   ├── reports/
-│   │   │   ├── settings/         # org, integrations, enroll-secrets, users
-│   │   │   └── software/         # library, edit-package, os, vulnerabilities
+│   │   ├── shared/               # Tier-agnostic (both projects), plus exclusive/
+│   │   ├── premium/              # Premium-only, plus exclusive/ and gitops-mode/
 │   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs
-│   ├── api/                      # Pure-API specs (no browser)
-│   │   ├── config.spec.ts        # Agnostic config-shape checks (both projects)
-│   │   ├── activity-copy.spec.ts # Activity-feed copy contract
-│   │   ├── premium/              # Premium-only API contracts
-│   │   ├── free/                 # Free-only API contracts (license, endpoints)
-│   │   ├── role-access/          # Per-role endpoint allow/deny probes, split free/ + premium/
-│   │   └── gitops-verify/        # GitOps drift checks
+│   ├── api/                      # Pure-API specs (no browser): root contracts, premium/, free/, role-access/, gitops-verify/
+│   ├── cli/                      # fleetctl specs: shared/, premium/, free/, plus nightly/ (gitops-nightly project only)
 │   └── loadtest/                 # Page-load timing (loadtest project only)
 │       └── api/                  # API timing (loadtest-api project only)
 ├── pages/                        # Page Object Model — see pages/README.md
@@ -173,22 +167,36 @@ playwright/
 │   ├── premium.setup.ts          # Logs into premium instance
 │   ├── free.setup.ts             # Logs into free instance
 │   ├── loadtest.setup.ts         # Logs into loadtest instance
-│   └── cleanup.steps.ts          # Wipes unassigned + Workstations state; runs pre-test (cleanup-setup) and post-test (cleanup-teardown)
+│   ├── gitops-mode.teardown.ts   # Turns gitops mode off and restores the pinned exceptions after the gitops-mode project
+│   └── cleanup.steps.ts          # Wipes test state (Unassigned, Workstations, pw-* leftovers) and rests the VMs; runs pre-test (cleanup-setup) and post-test (cleanup-teardown)
 ├── helpers/                      # Non-UI utilities — see helpers/README.md
 │   ├── api/                      # Per-area Fleet API helpers + cleanup helpers
 │   ├── catalogs/                 # Typed FMA / VPP / Android app-store reference data
 │   ├── activity-copy.ts          # Expected activity-feed strings, shared by specs and the copy contract
 │   ├── auth.ts                   # loginAsAdmin (setup-time), withCleanContext, withStaticUser
-│   ├── console.ts                # monitorConsoleErrors, monitorNetworkFailures — auto-wired via the pageHealth fixture
-│   ├── gitops-yaml.ts            # Loads + flattens gitops YAML refs for gitops-verify specs
+│   ├── console.ts                # monitorConsoleErrors, monitorPageErrors, monitorNetworkFailures — auto-wired via the pageHealth fixture
+│   ├── csv.ts                    # Reads the CSV Fleet's frontend exports
+│   ├── deb.ts                    # Builds Debian packages in memory for per-run installs
+│   ├── fleetctl.ts               # Runs the fleetctl binary against the suite's instance
+│   ├── gitops-yaml.ts            # Loads + flattens gitops YAML refs for gitops-verify and gitops-nightly specs
 │   ├── perf.ts                   # measureNav, measureSearch
+│   ├── perf-api.ts               # API timing engine for the loadtest-api project
 │   ├── perf-teardown.ts          # Summary table + historical comparison
+│   ├── profiles.ts               # Inert configuration profiles generated at run time
 │   ├── team-scope.ts             # fleetIdFor(scope, workstationsFleetId) → the fleet_id URL value
+│   ├── vm-fixtures.ts            # The VMs fleet's durable install/uninstall software
 │   └── vuln.ts                   # Vulnerability column assertions
 ├── test-data/                    # Static fixtures (.pkg/.msi/.deb/.sh) by platform
 ├── docs/
+│   ├── ci-pipeline.md            # Why the CI flow is shaped as it is, and what bounds a run
 │   ├── blocked-by-product-bugs.md  # Skips caused by confirmed Fleet defects, with unblock conditions
-│   └── run-reviews/              # Per-run triage write-ups (gitignored — local only)
+│   ├── long-term-goals.md        # Coverage that waits on infrastructure the instances lack
+│   ├── test-plans/               # Per-feature E2E coverage plans
+│   ├── gitops-coverage/          # The plan for the nightly's gitops coverage
+│   ├── loadtest-runs/            # Dated load-test write-ups
+│   ├── test-audit/               # Per-test breakdown for the manual audit
+│   ├── run-reviews/              # Per-run triage write-ups (gitignored — local only)
+│   └── upgrade-preflight/        # Pre-upgrade impact reports (gitignored — local only)
 ├── eslint.config.js              # Lint config
 ├── playwright.config.ts
 ├── tsconfig.json
@@ -199,7 +207,8 @@ playwright/
 ├── .env.loadtest                 # loadtest credentials (gitignored)
 ├── .env.*.example                # Templates
 ├── .auth/                        # Stored login state per suite (gitignored)
-└── .perf-history/                # Performance run history (gitignored)
+├── .perf-history/                # Page-load timing run history (gitignored)
+└── .perf-history-api/            # API timing run history (gitignored)
 ```
 
 ### Fixtures
@@ -211,10 +220,10 @@ playwright/
   Destructure what you need; TypeScript lists what's available.
 - **Worker fixtures**, resolved once per worker via the Fleet API so specs don't
   re-look-up shared state: `workstationsFleetId`, `qaFleetId`, `vmsFleetId` (fleet ids),
-  `liveMacosHost` (a real MDM-enrolled macOS host), plus `loadtestFleetId` / `firstHostId`
-  for the loadtest project.
-- **`pageHealth`** — auto-applied to every test. Monitors console errors and 5xx responses
-  and asserts at teardown. Opt out with `pageHealth.disable()` in specs that intentionally
+  `liveMacosHost` (the online real macOS VM, found by hardware model), plus `loadtestFleetId` /
+  `firstHostId` for the loadtest project.
+- **`pageHealth`** — auto-applied to every test. Monitors uncaught page exceptions, console
+  errors and 5xx responses, and asserts at teardown. Opt out with `pageHealth.disable()` in specs that intentionally
   trigger errors.
 
 ---
@@ -224,16 +233,17 @@ playwright/
 | | premium | free | loadtest | gitops-verify |
 |---|---|---|---|---|
 | Target | Premium Fleet instance | Free Fleet instance | High-scale instance | Premium **or** free, selected via `SUITE` |
-| Picks up | `tests/e2e/{shared,premium}/**`, `tests/api/**` (minus `free/` + `gitops-verify/`) | `tests/e2e/{shared,free}/**`, `tests/api/**` (minus `premium/` + `gitops-verify/`) | `tests/loadtest/**` only | `tests/api/gitops-verify/**` only |
-| Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**` | n/a — own `testDir` | n/a — own `testDir` |
+| Picks up | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` (minus `free/` + `gitops-verify/`) | `tests/e2e/{shared,free}/**`, `tests/cli/{shared,free}/**`, `tests/api/**` (minus `premium/` + `gitops-verify/`) | `tests/loadtest/**` only | `tests/api/gitops-verify/**` only |
+| Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/exclusive/**` | n/a — own `testDir` | n/a — own `testDir` |
 | Retries on failure | 2 in CI, 0 locally | 2 in CI, 0 locally | No — a slow run is a slow run | No — drift should fail loudly |
 | Timeouts | 60s test / 10s expect | 60s test / 10s expect | 60s test / 30s expect | 60s test / 10s expect (inherits top-level) |
 | Auth state | `.auth/premium-admin.json` | `.auth/free-admin.json` | `.auth/loadtest-admin.json` | None (bearer token via `FLEET_API_TOKEN`) |
 | Env file | `.env.premium` | `.env.free` | `.env.loadtest` | `.env.<SUITE>` |
 
 The 60s test timeout and 10s expect timeout are both workarounds for a shared-QA-instance
-render-latency issue, not intended defaults — see [TODO.md](TODO.md#config-workarounds) for the
-revert condition.
+render-latency issue, not intended defaults: neither instance's Cloudflare edge caches Fleet's 4.7 MB
+bundle, so every cold browser context pulls it from origin. They revert once a repeat request for
+the bundle answers `cf-cache-status: HIT` — see [TODO.md](TODO.md#config-workarounds).
 
 Worker counts are per tier in CI and higher locally; the current numbers and why they are what they are
 live in [CLAUDE.md's facts table](CLAUDE.md#ci-and-the-shared-instances--current-facts) and
@@ -244,13 +254,15 @@ Three more projects run **alone, in their own invocation after the main project*
 Each depends only on the tier's login setup, and the config refuses to name one beside another browser
 project — [docs/ci-pipeline.md](docs/ci-pipeline.md) has the reasoning.
 
-`loadtest-api` is the one project with no browser: it has its own `testDir` (`tests/loadtest/api/`, which the `loadtest` project ignores), one worker, no test timeout (the per-request cap is `API_REQUEST_TIMEOUT_MS`, 90 s), and authenticates with the bearer token from `.env.loadtest`.
+`gitops-nightly` runs `tests/cli/nightly/` alone (its own `testDir`, which premium and free ignore), with a 180 s test timeout and no retries: `fleetctl` checks that only hold right after the nightly's min gitops apply.
+
+`loadtest-api` has no browser either: it has its own `testDir` (`tests/loadtest/api/`, which the `loadtest` project ignores), one worker, no test timeout (the per-request cap is `API_REQUEST_TIMEOUT_MS`, 90 s), and authenticates with the bearer token from `.env.loadtest`.
 
 Project scope is decided by folder — no tags. The `testIgnore` matrix in `playwright.config.ts` is the source of truth.
 
 `SUITE` decides which `.env.<suite>` is loaded, and the config **refuses to start** rather
 than guess: `--project=premium|free|loadtest` implies its suite, but the tier-ambiguous
-projects (`cleanup-setup`, `cleanup-teardown`, `gitops-verify`) need `SUITE=` set
+projects (`cleanup-setup`, `cleanup-teardown`, `gitops-verify`, `gitops-nightly`) need `SUITE=` set
 explicitly. The npm scripts already do this.
 
 ---
@@ -320,14 +332,14 @@ Browser specs run via per-tier workflows
 job runs the main project, then the exclusive specs and (premium) gitops-mode as separate steps, and merges
 the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
-`-f workers=N` for a worker-count trial.
+`-f workers=N` for a worker-count trial, and `--ref <branch>` as well when the branch changes a workflow file.
 
 Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in
 [docs/ci-pipeline.md](docs/ci-pipeline.md).
 
-`playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint)
-on any PR touching `playwright/**`, and on push to `main` so the check registers
-for branch protection. The tier suites themselves are nightly only — a PR never
+`playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint) on every PR, with
+no path filter, because `check` is a required status check and one that never reports leaves a PR
+unmergeable. It also runs on push to `main`. The tier suites themselves are nightly only — a PR never
 runs live specs.
 
 `gitops-verify` runs as part of the nightly gitops orchestrators
@@ -338,12 +350,6 @@ workflow map.
 Loadtest is **local-only** — the high-scale instance has per-run
 credentials, so there's no CI workflow for it.
 
-Required secrets for the Playwright workflows:
-
-| Secret | Used by |
-|---|---|
-| `FLEET_PREMIUM_URL`, `FLEET_PREMIUM_API_TOKEN` | playwright-premium |
-| `FLEET_PREMIUM_ADMIN_EMAIL`, `FLEET_PREMIUM_ADMIN_PASSWORD` | playwright-premium |
-| `FLEET_FREE_URL`, `FLEET_FREE_API_TOKEN` | playwright-free |
-| `FLEET_FREE_ADMIN_EMAIL`, `FLEET_FREE_ADMIN_PASSWORD` | playwright-free |
-| `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | admin-SSO login spec (both tiers) |
+Required secrets for the Playwright workflows (instance URL and token, admin login, SSO login, and
+the test-user password, static-user password and static-user tokens) are listed in the repo-root
+[README](../README.md#required-secrets).

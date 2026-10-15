@@ -1,8 +1,9 @@
 #!/bin/bash
 # Sourced by the other lt-*.sh scripts:  LT=fleet-493loadtest-3 source lt-env.sh
-# The loadtest terraform names the ECS cluster, Aurora cluster, Redis replication group and CloudWatch log group after
-# the workspace ($LT), and the internal (device) ALB $LT-int. Everything below can be overridden by env.
-#   LT        the instance (required), e.g. fleet-493loadtest-3
+# The loadtest terraform names the ECS cluster, Aurora cluster, Redis replication group and CloudWatch log group
+# fleet-<terraform workspace> ($LT), and the internal (device) ALB $LT-int. Everything below can be overridden by env.
+# AWS calls use the default credential chain, so export AWS_PROFILE for a named SSO profile.
+#   LT        the instance (required): fleet-<terraform workspace>, e.g. fleet-493loadtest-3
 #   R         AWS region (us-east-2)
 #   LT_CTX    fleetctl context in ~/.fleet/config for the admin API (loadtest); its token is read, never printed
 #   LT_URL    public URL (from the context's address, else https://$LT.loadtest.fleetdm.com)

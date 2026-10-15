@@ -18,9 +18,11 @@ logo only happens to have it.
 | `fleet-test-icon-too-small.png` | 100×100 | 203 B | under the 120 minimum |
 | `fleet-test-logo.png` | 256×256 | 567 B | a second valid image, distinct in colour — the "replace it with a different one" half of the icon lifecycle, and the org logo |
 
-The limits come from `EditIconModal` in Fleet's frontend (`MAX_FILE_SIZE`,
-`MIN_DIMENSION`, `MAX_DIMENSION`) and from `utilities/file/orgLogoFile.ts` for
-the logo, which shares the 100 KB cap.
+The limits come from `EditIconModal` in Fleet's frontend
+(`frontend/pages/SoftwarePage/SoftwareTitleDetailsPage/EditIconModal/EditIconModal.tsx`:
+`MAX_FILE_SIZE`, `MIN_DIMENSION`, `MAX_DIMENSION`) and from
+`frontend/utilities/file/orgLogoFile.ts` (`ORG_LOGO_MAX_SIZE_BYTES`) for the
+logo, which shares the 100 KB cap.
 
 The oversized file is filled from a linear congruential generator rather than a
 solid colour: PNG deflates a flat image down to a few hundred bytes, so only

@@ -3,11 +3,11 @@
 # that installs one inert app bundle, /Applications/Fleet Playwright <Role>.app,
 # and nothing else — no scripts, no launch items. Run on macOS (needs pkgbuild):
 #
-#   ./make-pkg.sh install 1.0.0     # premium/software/install-on-host.spec.ts
-#   ./make-pkg.sh uninstall 1.0.0   # premium/software/uninstall-from-host.spec.ts
+#   ./make-pkg.sh install 1.0.0     # the VMs fleet's durable fixture
+#                                   #   (gitops/premium-fleetqa/fleets/vms.yml, helpers/vm-fixtures.ts)
 #
-# One package per spec, because a premium title can hold several packages: two
-# specs uploading the same title to the VMs fleet would share one Library row.
+# Each role is its own title, because a premium title can hold several packages:
+# two specs uploading the same title to the VMs fleet would share one Library row.
 #
 # Why an app bundle: Fleet's macOS software inventory comes from osquery's
 # `apps` table, which lists .app bundles. A package that only drops files (the gh

@@ -5,11 +5,11 @@
 # own Programs entry, which is what puts it in Fleet's software inventory.
 # Needs msitools (`brew install msitools` / `apt install wixl`):
 #
-#   ./make-msi.sh install 1.0.0     # premium/software/install-on-host.spec.ts
-#   ./make-msi.sh uninstall 1.0.0   # premium/software/uninstall-from-host.spec.ts
+#   ./make-msi.sh install 1.0.0     # the VMs fleet's durable fixture
+#                                   #   (gitops/premium-fleetqa/fleets/vms.yml, helpers/vm-fixtures.ts)
 #
-# One package per spec, for the reason make-pkg.sh gives: a premium title can
-# hold several packages, and two specs sharing one would share a Library row.
+# Each role is its own title, for the reason make-pkg.sh gives: a premium title
+# can hold several packages, and two specs sharing one would share a Library row.
 #
 # The UpgradeCode is derived from the role, so every version of one role is the
 # same product to Windows Installer and a newer build upgrades an older one.

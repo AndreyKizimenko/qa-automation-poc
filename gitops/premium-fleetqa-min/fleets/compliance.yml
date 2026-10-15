@@ -1,6 +1,7 @@
 # The min variant of ../../premium-fleetqa/fleets/compliance.yml: the same
-# fleet with one value changed in every section and one entry dropped from
-# every list, so the nightly proves gitops updates and deletes on a fleet's
+# fleet with a value changed in every section but the fleet label, and an entry
+# dropped from every list but the label, the Android profile and the two
+# Fleet-maintained apps, so the nightly proves gitops updates and deletes on a fleet's
 # controls, settings, software, policies and reports — not only creates them.
 # fleetdm/fleet#48021 means a key the YAML drops keeps its live value, so the
 # deltas are changed values, never omitted keys. The baseline file's header

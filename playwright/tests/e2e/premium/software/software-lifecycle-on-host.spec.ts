@@ -11,9 +11,10 @@
  *
  * **The software is durable.** Every subject is declared in
  * `gitops/premium-fleetqa/fleets/vms.yml` and never deleted, so Fleet always
- * knows whether it's installed. Its resting state is uninstalled: the test
- * leaves it that way, and the preflight in `setup/cleanup.steps.ts` uninstalls
- * one a dead run left installed before the next run starts. The list lives in
+ * knows whether it's installed. Its resting state is uninstalled with no failed
+ * install or uninstall on record: the test leaves it that way, and the preflight
+ * in `setup/cleanup.steps.ts` puts back one a dead run left otherwise before the
+ * next run starts (`ensureVmFixtureUninstalled`). The list lives in
  * `helpers/vm-fixtures.ts`, shared with that preflight:
  *
  *   | row | software | installs |
@@ -132,7 +133,7 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
       const version = (await getHostSoftwareState(request, host.id, title.titleId))?.libraryVersion;
       expect(version, `${title.name} isn't offered to ${host.displayName}`).toBeTruthy();
 
-      // Normally a no-op: the preflight leaves every fixture uninstalled.
+      // Normally a no-op: the preflight leaves every fixture at rest.
       await ensureVmFixtureUninstalled(request, host.id, title);
 
       try {

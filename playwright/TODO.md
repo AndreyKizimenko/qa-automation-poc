@@ -25,8 +25,7 @@ VMs, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-te
 | `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
 
 Product-defect skips live in
-[docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md) — currently
-three, across `premium/software/vulnerabilities.spec.ts`.
+[docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md).
 
 ---
 
@@ -46,7 +45,7 @@ Known gaps nobody has scheduled. Each row says where the test would go and what 
 | Vulnerabilities: search narrows to one CVE | Add to `free/software/vulnerabilities.spec.ts`. Low value, and the `vulnerable=true` query is the suite's slowest |
 | Request-size limits | Move `tests/api/premium/max-request-file-sizes.spec.ts` to `tests/api/`: no route carries a license check before the size middleware. Confirm the `commands/run` under-limit case on free once |
 | `fleetctl generate-gitops` argument errors | Move `rejects --dir and --key together` and `requires one of --dir or --key` to `tests/cli/shared/`: resolved client-side |
-| Dashboard chart card | A free sibling of `premium/dashboard/fleet-scoped-cards.spec.ts`: the plain "Hosts online" heading, the filter round-trip, and no dataset dropdown |
+| Dashboard chart filter | Add the platform-filter round-trip (narrowed request, *Filtered* flag) of `premium/dashboard/fleet-scoped-cards.spec.ts` to `free/dashboard/historical-data-collection.spec.ts`, which already asserts the plain "Hosts online" heading and the missing dataset dropdown |
 | Host delete | A free sibling of `premium/hosts/host-delete.spec.ts` (bulk and from host details). Free has no fleet to stage hosts on, so select rows individually or narrow the list first |
 | Policy SQL compatibility | Add `macadmins extension table` and `common-table-expression names` to `free/policies/sql-validation.spec.ts` |
 | OS versions | Add the platform filter and the row's View all hosts to `free/software/os.spec.ts` |
@@ -81,9 +80,9 @@ Known gaps nobody has scheduled. Each row says where the test would go and what 
 
 | Where | Why | Revert when |
 |---|---|---|
-| `playwright.config.ts` → top-level `timeout: 60000` | `/assets/bundle-*.js` is served without `Cache-Control`, so Cloudflare doesn't edge-cache it and every cold browser context refetches 4.7 MB from origin. Under origin load that can exceed the default 30 s and surface as `page.goto` timeouts with a blank screenshot. | [fleetdm/fleet#45682](https://github.com/fleetdm/fleet/issues/45682) ships — then drop back to Playwright's default 30 s. |
-| `playwright.config.ts` → `expect: { timeout: 10_000 }` | Same root cause: the shared QA instance renders slowly under concurrent load, so transient render latency shouldn't surface as a flake. Twice Playwright's 5 s default. | Same as above — drop back to 5 s once the bundle is edge-cached. |
-| `playwright.config.ts` → `workers: CI ? 2 : 4` | The shared Fleet QA instance has limited concurrency headroom; higher worker counts in CI surface as flaky navigation timeouts even when the test logic is correct. | The premium instance / render infra gets more headroom — the tests themselves are not the constraint. `WORKERS=N` overrides for a one-off. |
+| `playwright.config.ts` → top-level `timeout: 60000` | Cloudflare doesn't edge-cache Fleet's `/assets/bundle-*.js` on either QA instance. Fleet's half shipped in 4.90 ([fleetdm/fleet#45682](https://github.com/fleetdm/fleet/issues/45682), fixed by fleetdm/fleet#48409: the bundle carries `Cache-Control: public, max-age=31536000, immutable`), but both instances still answer `cf-cache-status: DYNAMIC` on a repeat request (checked 2026-10-13), so every cold browser context still pulls 4.7 MB from origin. Under origin load that can exceed the default 30 s and surface as `page.goto` timeouts with a blank screenshot. | A repeat request for the bundle answers `cf-cache-status: HIT` — then drop back to Playwright's default 30 s. |
+| `playwright.config.ts` → `expect: { timeout: 10_000 }` | Same root cause: the shared QA instance renders slowly under concurrent load, so transient render latency shouldn't surface as a flake. Twice Playwright's 5 s default. | Same as above — drop back to 5 s once a repeat request for the bundle answers `cf-cache-status: HIT`. |
+| `playwright.config.ts` → `workers` (CI: premium 3, free 2; local 4) | The shared Fleet QA instances have limited concurrency headroom; higher worker counts in CI surface as flaky navigation timeouts even when the test logic is correct. Premium's third worker leans on its MySQL's 2 CPU / 4 GB, and the real VMs still work one queue each. | The instances / render infra get more headroom — the tests themselves are not the constraint. `WORKERS=N` (or `-f workers=N` on a branch run) overrides for a one-off. |
 
 ---
 
@@ -91,7 +90,7 @@ Known gaps nobody has scheduled. Each row says where the test would go and what 
 
 | What | Note |
 |---|---|
-| No static-user provisioning script | Day-to-day this doesn't bite — the credentials are shared and come from 1Password. It only matters when an instance is rebuilt from scratch, which means creating ~13 API-only users by hand via `POST /users/admin`, capturing each one-shot token, and updating 1Password plus the GitHub secrets. The registry in `helpers/api/static-users.ts` already holds everything a script would need (email, name, role, tier). Low priority until the next rebuild. |
+| No static-user provisioning script | Day-to-day this doesn't bite — the credentials are shared and come from 1Password. It only matters when an instance is rebuilt from scratch, which means creating the 12 API-only users by hand via `POST /users/api_only` and capturing each one-shot token, creating the 8 human users via `POST /users/admin`, and updating 1Password plus the GitHub secrets. The registry in `helpers/api/static-users.ts` already holds everything a script would need (email, name, role, tier). Low priority until the next rebuild. |
 
 ---
 
@@ -105,18 +104,17 @@ Known gaps nobody has scheduled. Each row says where the test would go and what 
 
 ## Conventions for marking skips
 
-1. **Static skip with reason** at the top of a describe — when the feature is
-   unavailable on this instance:
+1. **Conditional skip with reason** inside a test or at the top of a describe —
+   when what the test needs is missing on this instance (a data guard, which
+   needs no entry):
    ```ts
-   test.skip(
-     process.env.FLEET_LICENSE !== 'free',
-     'Set FLEET_LICENSE=free to run Fleet Free tests',
-   );
+   test.skip(!host, 'no online macOS VM');
    ```
+   Tier is decided by folder, never by an env-var gate.
 2. **`test.describe.skip(...)` block** — when an entire describe is inert.
 3. **`test.skip('name', async () => { ... })`** — one specific test broken
    for a reason unrelated to the rest of the spec.
 
-Every skip needs an entry above — or, for product defects, in
+Every env-gated or deferred skip needs an entry above — or, for product defects, in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md). Every env var
 gate needs a row in `.env.<suite>.example`.

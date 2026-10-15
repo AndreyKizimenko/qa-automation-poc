@@ -84,8 +84,9 @@ export class FleetMaintainedAppsPage {
    *
    * The shell waits keep modest headroom past the default expect timeout
    * because the Add software route depends on the large JS bundle, which the
-   * shared instance serves slowly under concurrent load (see the
-   * playwright.config.ts timeout note and fleetdm/fleet#45682).
+   * shared instance serves from origin, slowly under concurrent load: its
+   * Cloudflare edge doesn't cache the bundle (see the playwright.config.ts
+   * timeout note).
    */
   async expectLoaded(): Promise<void> {
     await expect(this.heading).toBeVisible({ timeout: 15_000 });

@@ -120,8 +120,8 @@ type FleetWorkerFixtures = {
 
   /**
    * Numeric id of the fleet (team) holding the loadtest dataset on the
-   * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, which the
-   * workflow that provisions the team sets per run. Required by the
+   * loadtest instance. Sourced from FLEET_LOADTEST_FLEET_ID, set by hand per
+   * run (see `gitops/loadtest/README.md` step 7). Required by the
    * loadtest project — specs fail at fixture setup if the env var is
    * missing or non-numeric.
    */
@@ -133,11 +133,11 @@ type FleetWorkerFixtures = {
    * device behaviour — live reports that actually run the query's SQL, refetch,
    * real local users and agent versions.
    *
-   * Resolved by platform + online status + MDM enrollment rather than by name or
-   * a pinned id, since ids change on re-enrollment. MDM enrollment is what
-   * separates the real VMs from the osquery-perf load fleet sharing these
+   * Resolved by platform + online status + hardware model rather than by name or
+   * a pinned id, since ids change on re-enrollment. A virtualized hardware model
+   * is what separates the real VMs from the osquery-perf load fleet sharing these
    * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
-   * fleet, but free has no fleets, so enrollment is the cross-tier signal.
+   * fleet, but free has no fleets, so the hardware model is the cross-tier signal.
    *
    * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
    * should draw from the simulated pool via `findSimulatedHostIds` instead —

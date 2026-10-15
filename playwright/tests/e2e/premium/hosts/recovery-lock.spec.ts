@@ -49,7 +49,7 @@
  * worker (`--workers=1`): two copies at once would toggle the same fleet's
  * setting under each other.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   assertActivityAfter,
   getFleetRecoveryLock,
@@ -63,6 +63,8 @@ const MAC_WAIT = 4 * 60_000;
 const ADMIN = process.env.FLEET_ADMIN_EMAIL;
 
 test.describe('Premium • Hosts • Recovery Lock password', () => {
+  test.describe.configure({ retries: HOST_RETRIES });
+
   test.afterEach(async ({ request, vmsFleetId }) => {
     await setFleetRecoveryLock(request, vmsFleetId, false);
   });

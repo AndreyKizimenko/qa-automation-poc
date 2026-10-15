@@ -29,8 +29,8 @@ test.describe('Login validation', () => {
     await expect(loginPage.passwordRequiredMessage).toBeVisible();
   });
 
-  test('shows validation error for invalid email format', async ({ loginPage, page }) => {
+  test('shows validation error for invalid email format', async ({ loginPage }) => {
     await loginPage.login('notanemail', 'SomePassword123!');
-    await expect(page.getByText('Email must be a valid email address')).toBeVisible();
+    await expect(loginPage.emailInvalidMessage).toBeVisible();
   });
 });

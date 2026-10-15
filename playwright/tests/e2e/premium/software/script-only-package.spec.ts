@@ -3,7 +3,7 @@
  *
  * A `.sh` uploaded through Add software → Custom package is not an installer:
  * Fleet stores the file's contents *as* the install script and calls the result
- * a "Script-only package (macOS & Linux)". This spec is the add → inspect →
+ * a "Script-only package (.sh)". This spec is the add → inspect →
  * delete round-trip for that shape, driven through the UI end to end because
  * the upload preview is half of what it verifies.
  *
@@ -104,9 +104,7 @@ test.describe('Premium • Software • Script-only package', () => {
       expect(titleId).toBeGreaterThan(0);
 
       await expect(softwareTitleDetail.displayHeading).toHaveText(TITLE_NAME);
-      await expect(softwareTitleDetail.typeValue).toHaveText(
-        'Script-only package (macOS & Linux)',
-      );
+      await expect(softwareTitleDetail.typeValue).toHaveText('Script-only package (.sh)');
       await expect(softwareTitleDetail.headerPills).toHaveText(['Custom package']);
       await expect(softwareTitleDetail.installerCard.card).toContainText(FILE_NAME);
       await expect(softwareTitleDetail.installerCard.card).toContainText(

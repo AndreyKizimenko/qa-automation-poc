@@ -1,8 +1,9 @@
 # Test data
 
-Static **binary fixtures** that smoke specs upload, install, or otherwise feed
-into Fleet — bootstrap packages, sample scripts, custom software packages,
-configuration profiles, and declarations.
+Static fixtures that specs upload, install, or otherwise feed into Fleet —
+bootstrap packages, sample scripts, custom software packages and configuration
+profiles. Declarations, and profiles a spec needs its own copy of, are generated
+at run time by `helpers/profiles.ts` instead.
 
 App-store *reference* catalogues (FMA, VPP, Android) are not in here — they're
 typed TypeScript modules under
@@ -19,18 +20,18 @@ test-data/
 │   ├── macos/
 │   │   ├── bootstrap-package/   # .pkg used by Setup Experience tests
 │   │   ├── profiles/            # .mobileconfig
-│   │   ├── scripts/             # marker create/delete .sh scripts
+│   │   ├── scripts/             # marker-create .sh script + fleet-test-script.sh (setup-experience run script)
 │   │   ├── setup-assistant/     # automatic-enrollment .json
 │   │   ├── setup-experience/    # .pkg installed during setup experience
 │   │   └── software/            # .pkg custom packages
 │   └── ios-ipados/              # (future) .mobileconfig, declarations
 ├── linux/
-│   ├── scripts/                 # marker create/delete .sh scripts
+│   ├── scripts/                 # marker-create .sh script
 │   ├── setup-experience/        # .deb installed during setup experience
-│   └── software/                # .deb / .rpm / .tar.gz custom packages (README)
+│   └── software/                # .deb custom packages (README)
 ├── windows/
 │   ├── profiles/                # .xml profiles
-│   ├── scripts/                 # marker create/delete .ps1 scripts
+│   ├── scripts/                 # marker-create .ps1 script
 │   ├── setup-experience/        # .msi installed during setup experience
 │   └── software/                # .msi / .exe custom packages
 └── shared/
@@ -42,11 +43,11 @@ test-data/
 
 - **Software**: real upstream installers, kept verbatim by their
   upstream filename so the source is obvious. Examples:
-  `gh_2.92.0_macOS_universal.pkg`, `7z2601-x64.msi`,
+  `gh_2.92.0_macOS_universal.pkg`, `7z2601-arm64.exe`,
   `step-cli_0.30.2-1_amd64.deb`,
   `npp.8.9.4.Installer.x64.msi`,
   `sublime-text_build-4200_amd64.deb`. Pick the closest fit for what a
-  test needs (display-name, source, multi-arch, etc.).
+  test needs (display name, package type, etc.).
 
 - **Profiles**: `fleet-pw-inert.mobileconfig` (macOS),
   `fleet-pw-inert.xml` (Windows) — inert, because **every profile upload
@@ -54,23 +55,24 @@ test-data/
   or access-gating payload ever goes in `test-data/`; each profiles folder's
   README says why its fixtures are safe and how to prove they arrived.
 
-- **Scripts**: platform-prefixed `<platform>-{create,delete}-marker`
-  pairs (`macos-create-marker.sh`, `linux-create-marker.sh`,
-  `windows-create-marker.ps1`, …). Each writes / removes
-  `/tmp/fleet-playwright-marker.txt` (or `%TEMP%\fleet-playwright-marker.txt`
-  on Windows) so a future host-execution test can verify success via
-  osquery's `file` table. Idempotent — safe to re-run on the same
-  host. The platform prefix lets the three platforms run in parallel
-  against the shared smoke fleet without filename collisions.
+- **Scripts**: one platform-prefixed `<platform>-create-marker` script per
+  platform (`macos-create-marker.sh`, `linux-create-marker.sh`,
+  `windows-create-marker.ps1`), which the scripts library specs upload. Each
+  writes `/tmp/fleet-playwright-marker.txt` (or `%TEMP%\fleet-playwright-marker.txt`
+  on Windows), so a host-execution test could verify the run via osquery's
+  `file` table. Idempotent — safe to re-run on the same host. The platform
+  prefix keeps the three names distinct when they share one fleet's library.
+  `apple/macos/scripts/fleet-test-script.sh` is the setup-experience run script
+  (`premium/controls/setup-experience/run-script.spec.ts`).
 
 - **Bootstrap package**: `dummy-bootstrap-package.pkg` — small,
   signed-but-inert payload. Fleet won't actually install it on a host
-  because we never enroll an ADE Mac during smoke; we only verify
+  because the suite never enrolls an ADE Mac; the spec only verifies
   upload/list/download/delete.
 
 - **Setup Assistant**: `automatic-enrollment.dep.json` — a minimal
-  DEP profile that the Setup Assistant smoke uploads, downloads, then
-  deletes.
+  DEP profile that `premium/controls/setup-experience/setup-assistant.spec.ts`
+  uploads, downloads, then deletes.
 
 ## Generated fixtures
 
@@ -111,7 +113,9 @@ minus the extension, so the filename *is* the title and has to stay unique.
 When a new spec needs a fixture that isn't here yet, add it under the
 matching `<platform>/<category>/` path and reference it from the spec
 via
-`path.resolve(__dirname, '../../test-data/<platform>/<category>/<file>')`.
+`path.resolve(__dirname, '../../../../test-data/<platform>/<category>/<file>')`
+— one `../` per directory between the spec and `playwright/` (four from
+`tests/e2e/<tier>/<area>/`, five from a sub-area such as `controls/os-settings/`).
 
 Don't gitignore binary fixtures — committing them is intentional so any
 contributor can run the suite without a prior data-fetch step. If a

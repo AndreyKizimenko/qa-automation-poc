@@ -28,21 +28,28 @@ Each has happened, or nearly happened, and none can be undone from a test.
   free VMs 7 and 32 times before anyone noticed.
 - **Any new payload type, even one you believe is inert.** Get Andrey's approval first. macOS 26.6 happily
   installed a "must be refused" payload everyone expected it to reject, so "inert" is a claim to check on
-  the device, not a property of the XML. The approved fixtures are the inert pair
-  `test-data/{apple/macos,windows}/profiles/fleet-pw-inert.*` (see their READMEs), plus generators on the
-  same pattern in `helpers/profiles.ts`.
+  the device, not a property of the XML. The approved fixtures are the inert profiles
+  `test-data/{apple/macos,windows}/profiles/fleet-pw-inert*` (see their READMEs). `helpers/profiles.ts`
+  builds more: `inertMobileconfig` / `inertWindowsProfile` / `inertDeclaration` on the same pattern, and
+  `rejectedMobileconfig` (the approved Wi-Fi payload a Mac refuses). It also holds two OS-update enforcers,
+  `updateEnforcementDeclaration` and `windowsUpdateProfile`, which make a real host update and restart: they
+  take `noRealHostsOnFleet: true` and go only to a fleet you've checked holds no real host
+  (`ddm-conflict.spec.ts` uses Workstations).
 - **Settings that update, reboot or lock a real host:** an OS-update minimum version or deadline, a DDM
   software-update declaration, Recovery Lock password enforcement. Exercise them only on a fleet with no
   real hosts (Workstations), and restore them in the same test. On **free**, global settings reach the free
   VMs, because they're in Unassigned. The one approved exception is `recovery-lock.spec.ts`, which sets,
   rotates and clears Recovery Lock on the premium Mac (`playwright/CLAUDE.md` → Test hosts).
 - **Changing what other specs stand on:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
-  `gitops/premium-fleetqa/fleets/vms.yml`), renaming a fleet gitops declares (VMs, Workstations), gitops
-  config, static users (their tokens can't be re-minted).
-- **Saving the Fleet web address or the global end-user authentication (IdP) settings.** Either save re-syncs
-  every fleet's DEP profile with Apple Business Manager, and `server_url` also feeds the Apple MDM URL (while
-  `apple_server_url` is empty), Windows MDM discovery, the Android callback and the SSO ACS URL. No test saves
-  either.
+  `gitops/premium-fleetqa/fleets/vms.yml`), creating, renaming or deleting a standing fleet (Workstations,
+  VMs, QA and Compliance from gitops; Mobile by hand), moving any host onto Compliance, gitops config, static
+  users (their tokens can't be re-minted). A global gitops file a spec dry-runs or applies on premium must
+  declare the IdP (`carryLiveEndUserAuth` in `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl
+  refuses a global file that would clear it.
+- **Changing the Fleet web address or the global end-user authentication (IdP) settings.** Changing either
+  re-syncs every fleet's DEP profile with Apple Business Manager, and `server_url` also feeds the Apple MDM URL
+  (while `apple_server_url` is empty), Windows MDM discovery, the Android callback and the SSO ACS URL. No test
+  changes either.
 - **Anything Fleet can't undo.** An Android web app can be created and never deleted, so a gap that needs one
   is cut, not pinned as a durable fixture. Editing a durable Fleet-maintained app's install script sets
   `install_script_edited`, which auto-update carries forward, so the scripts of the QA shelf's and the VMs
@@ -96,12 +103,16 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    when a test times out, so anything that could survive on the VMs fleet also needs a home in
    `setup/cleanup.steps.ts`: the VMs sweep for things Fleet stores by name, the resting-state step for state
    on a host. Name per-run things `pw-*` (packages `fleet-pw-*`) so the sweep recognises them, and never
-   give a durable thing those prefixes.
+   give a durable thing those prefixes. Reports are the exception: on VMs and Workstations the sweep matches
+   exact prefixes (gitops declares `pw-host-report-results` on VMs), so a spec that leaves a new kind of report
+   there adds its prefix to `cleanup.steps.ts`. On free nothing sweeps `pw-*` labels, so a free spec deletes
+   its own.
 8. **Verify, scoped** (next section).
 9. **Build in slices, and update the docs in the same commit** (the table below): one concern per commit,
    each green on the instance, so a failure points at one change.
 10. **Review your own work** with `playwright-test-reviewer` on the branch's diff, fix what it finds or
-    write down why not, then open the PR and tell Andrey it's ready for its branch run.
+    write down why not, then open the PR and tell Andrey it's ready for its branch run. Say if the PR changes
+    a workflow file: its branch run needs `--ref <branch>`.
 
 ## Verifying without disrupting anyone
 
@@ -111,10 +122,14 @@ reason, so:
 - **Run only what you changed, on every tier it targets:** `npx playwright test --project=premium
   <spec-file-names>`, and `--project=free` for anything in `shared/` or `free/`. That runs the setup and
   cleanup projects, including the VM resting-state step, and then only your tests. **Never
-  `npm run test:<tier> -- <spec>`:** it runs the whole main project, then the exclusive one, and your
-  arguments reach only the second. For an `exclusive/` spec: `--project=premium-exclusive <file-name>`, by
+  `npm run test:<tier> -- <spec>`:** npm appends your arguments after the script's final `exit`, so no
+  `playwright test` sees them. You get the whole main project, the exclusive one and, on premium,
+  gitops-mode, then exit 1. For an `exclusive/` spec: `--project=premium-exclusive <file-name>`, by
   file name (it runs only the login setup and `cleanup-teardown` around it). Never name a main project and
-  its exclusive one in one invocation: they'd run side by side, and the config refuses to.
+  its exclusive one in one invocation: they'd run side by side, and the config refuses to. A
+  `gitops-mode/` spec runs alone: `npm run test:gitops-mode` (login, the specs, teardown). A gitops-verify
+  change runs through its `npm run test:gitops-verify:<target>` script, which sets `SUITE` and
+  `GITOPS_TARGET`.
 - **Run once with dependencies** (no `--no-deps`). `cleanup-setup` drains global reports and policies
   before the first test, so a spec leaning on pre-existing data passes with `--no-deps` and fails every
   nightly.
@@ -131,8 +146,8 @@ reason, so:
 - **Another session may be using the same instances or checkout.** Each session works in its own
   `git worktree` and stages by file, never `git add -A`. Announce every run to the others ("about to run
   <specs> on <tier>, ~N min", then "done"). A run **with dependencies** waits for their explicit go: its
-  `cleanup-setup` wipes global reports and policies and Unassigned's scripts, packages and profiles. So does a
-  `gitops-mode` run, which makes every control read-only.
+  `cleanup-setup` wipes global reports and policies and Unassigned's scripts, packages and profiles. A
+  `gitops-mode` run needs the same go: while it runs, every control is read-only.
 
 ## Docs move with the code
 
@@ -141,9 +156,10 @@ A change isn't done until the docs describing it are current, in the same commit
 | you changed | update |
 |---|---|
 | a `test()` | its `docs/test-audit/` area entry (steps a person would perform, validations tagged *(UI)* / *(API)*, an honest assessment) and the audit README's index and counts |
-| a helper or page object | `helpers/README.md` / `pages/README.md` |
+| a helper, page object or component object | `helpers/README.md` / `pages/README.md` / `pages/components/README.md` |
 | a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
-| gitops | the fleet file's header and `gitops/premium-fleetqa/README.md`; apply it, and say so in the PR |
+| gitops | the file's header and its config's README (`gitops/{premium,free}-fleetqa{,-min}/README.md`); a file both the full and `-min` configs declare changes in both; apply it, and say so in the PR |
+| an ignored page error | its `DEFAULT_IGNORED_PAGE_ERRORS` entry (`helpers/console.ts`) carries `TODO(fleetdm/fleet#N)`, plus a row in `docs/blocked-by-product-bugs.md` |
 | a rule every spec should follow | `playwright/CLAUDE.md`, and this skill or the reviewer's |
 | a skip owed to a Fleet bug | a row in `docs/blocked-by-product-bugs.md` and `TODO(fleetdm/fleet#N)` on the skip. Search Fleet's issues for it first, and file only when Andrey agrees it's a bug; run the test un-skipped once to see it fail for the filed reason |
 | an env-gated or deferred skip | a `TODO.md` row |
@@ -152,8 +168,10 @@ A change isn't done until the docs describing it are current, in the same commit
 
 **Locators and UI state**
 - **Locator order:** `getByRole` with a name, then `getByLabel`, `getByPlaceholder`, `getByText`. A class
-  selector is a last resort and needs an inline comment saying why nothing else works. Fleet emits no
-  `data-testid`, except `dropdown-option` on react-select v5 options.
+  selector is a last resort and needs an inline comment saying why nothing else works. Fleet adds a few
+  `data-testid`s of its own: `dropdown-option` on the options of `DropdownWrapper` and `ActionsDropdown`,
+  `<name>-icon` on every `Icon`, plus `card`, `user-menu` and `ace-editor`. Use one when no role or text
+  names the element (an icon-only button); never add one to Fleet's source.
 - **Names change under state.** A tab's accessible name gains a count (*Controls 1* once a profile fails,
   *Policies 3*, *Upcoming 1*). A `FormField`'s label is replaced by its error text. Row actions are
   hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.

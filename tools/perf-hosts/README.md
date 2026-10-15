@@ -2,7 +2,7 @@
 
 Runs Fleet's **osquery-perf** host simulator on a MacStadium macOS VM so the
 premium + free QA instances always have ~300 **online** hosts for the
-host-dependent Playwright specs (Batch 4).
+host-dependent Playwright specs.
 
 ## TL;DR — the smart, low-infra approach
 
@@ -29,12 +29,13 @@ deploy new"), that's the optional `com.fleetqa.perf.refresh.plist` — see below
 You almost certainly don't need it; persistent + host_expiry is simpler and
 gives the tests *stable* host IDs between reboots.
 
-## Two corrections to the original plan
+## Two things that look right but aren't
 
 1. `go run ./agent.go` won't compile — osquery-perf is a multi-file
    `package main` (`agent.go` + `android_agent.go` + `certificates.go` +
-   `ddm.go`). Build the whole package: `go build -o fleet-perf ./cmd/osquery-perf`
-   (or `go run ./cmd/osquery-perf`). `install.sh` does the build for you.
+   `ddm.go` + `websocket.go`). Build the whole package:
+   `go build -o fleet-perf ./cmd/osquery-perf` (or `go run ./cmd/osquery-perf`).
+   `install.sh` does the build for you.
 2. A daily kill/restart isn't needed to keep hosts online — see above.
 
 ## Prerequisites (on the VM)
@@ -44,9 +45,10 @@ gives the tests *stable* host IDs between reboots.
 - A clone of `github.com/fleetdm/fleet` (for the osquery-perf source). Point
   `FLEET_REPO` at it (default `~/fleet`).
 - Network reachability from the VM to both Fleet instances.
-- On **each** Fleet instance: set **host expiry window = 1 day** (Settings →
-  Organization settings → Advanced, `host_expiry_settings`). This is your
-  cleanup for abandoned/offline sims.
+- On **each** Fleet instance: **host expiry window = 1 day**
+  (`host_expiry_settings`). The QA instances' gitops configs declare it
+  (`gitops/*-fleetqa*/default.yml`), so every gitops apply keeps it set. This is
+  your cleanup for abandoned/offline sims.
 
 ## Credentials
 
@@ -60,7 +62,7 @@ $EDITOR perf-hosts.env      # gitignored
 
 `install.sh` sources that file and substitutes the values as it installs each
 daemon, so real credentials only ever exist in `perf-hosts.env` and in the
-rendered plists under `/Library/LaunchDaemons/`. Exporting the four vars instead
+rendered plists under `/Library/LaunchDaemons/`. Exporting the six vars instead
 of creating the file works too. The install refuses to load a plist that still
 contains a placeholder.
 
@@ -73,7 +75,7 @@ on a shared one. See [Security note](#security-note).
 ```bash
 # from this directory on the VM
 FLEET_REPO=~/fleet ./install.sh
-# …or, if you also want the optional forced 09:00 daily refresh:
+# …or, if you also want the optional forced daily refresh (09:00 VM-local time):
 FLEET_REPO=~/fleet ./install.sh --daily-refresh
 ```
 
@@ -110,7 +112,8 @@ Bandwidth is **not** the constraint. For 600 hosts total (300 per instance) at
 these intervals, traffic is dominated by tiny periodic polls (distributed query
 every 10s, config every 60s, scheduled-query logs every 10s) plus a small
 software-inventory submission ~hourly per host (the per-OS payloads are tens of
-KB; the 88 MB `software.db` is a server-side library pool, not per-host):
+KB; osquery-perf's optional 88 MB `software.db` library isn't loaded by these
+daemons, which fall back to the embedded data):
 
 - **Steady state ≈ 3–6 Mbps** across both instances (~5% of 100 Mbps).
 - **Peak initial-enrollment burst ≈ 10–20 Mbps**, spread over `--start_period 2m`
@@ -209,17 +212,16 @@ payload from a real Apple device, so it is not curl-able either. Two options:
    python3 -c '
    import sys
    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-   key, blob = sys.argv[1].encode(), bytes.fromhex(sys.argv[2])
+   key, blob = sys.argv[1].encode()[:32], bytes.fromhex(sys.argv[2])
    print(AESGCM(key).decrypt(blob[:12], blob[12:], None).decode())
    ' "$FLEET_SERVER_PRIVATE_KEY" "<hex from Adminer>"
    ```
 
    The key is used as **raw string bytes** (`aes.NewCipher([]byte(privateKey))`),
-   so it has to be exactly 16, 24 or 32 characters — 32 in practice. Fleet only
-   validates "at least 32", but a longer key would make `aes.NewCipher` fail
-   outright, so a working instance's key is exactly 32. If what you copied is
-   longer (e.g. 44 chars, the length of `openssl rand -base64 32` output) you
-   picked up extra characters — try its first 32.
+   and Fleet truncates `FLEET_SERVER_PRIVATE_KEY` to its first 32 bytes at boot
+   after checking it is at least 32 (`cmd/fleet/serve.go`, `PrivateKey[:32]`) —
+   so the snippet uses the first 32 characters too. A 44-character key (the
+   length of `openssl rand -base64 32` output) is normal, not a copy error.
 
    Sanity checks on the blob before you go key-hunting: it should be
    `12 + len(plaintext) + 16` bytes, so a UUID challenge gives exactly **64**

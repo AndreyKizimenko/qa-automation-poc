@@ -26,9 +26,10 @@ they come with the setup and checks that make a quick retest possible — a bug
 without a tracker entry has none of that, and sweeping in everything the user ever
 authored buries the few bugs that matter under years of already-closed ones.
 
-- Entries still marked pending (no issue number): find them with
+- Rows without a `#N` in the Issue column (hand-edited, or recorded before filing):
+  the script skips them. Find the number with
   `gh issue list -R fleetdm/fleet --author @me --search "<exact title> in:title" --state all`
-  and fill in the number.
+  and fill it in.
 - Entries in another repo (e.g. `security#<N>`): the script only reads `#N` rows, so
   check those by hand — `gh issue view <N> -R fleetdm/<repo> --json state,closedByPullRequestsReferences`
   — and include them in the triage table.
@@ -44,8 +45,9 @@ scripts/bug_status.py [--ctx previous --ctx default] [<issue> ...]
 ```
 
 It finds the tracker at `$QA_WORKSPACE/filed-bugs/INDEX.md` and the Fleet checkout at
-`$FLEET_REPO`, defaulting to `~/repositories/fleet/qa-stuff` and `~/repositories/fleet`.
-Export them from the local file if yours differ.
+`$FLEET_REPO`, defaulting to `$FLEET_REPO/qa-stuff` and `~/repositories/fleet`.
+Export them from the local file if yours differ. It runs `git fetch origin` in the Fleet
+checkout first, so the instances' revisions can be checked against current branches.
 
 One JSON line per bug: issue state, board status (e.g. `Awaiting QA`), fix PRs
 with merge commits, and whether each instance contains each fix. Sort every bug
@@ -110,8 +112,10 @@ Per retested bug, the `fleet-bug-qa` step 8 ticket comment (verdict, X/Y, one-li
 scope, matrix — four-backtick block) and, separately, its decision list for
 anything new that turned up. Then:
 
-- update the tracker: status (`verified <branch> (<sha>)`, `reopened`,
-  `needs full QA`), last-checked date, and a History line;
+- update the tracker (`tracker.md` status values) for every triaged bug, not only the
+  retested ones: `verified <branch> (<sha>)`, `reopened` or `needs full QA` after a
+  retest; `fix merged (#PR)` for Waiting for a build; `closed without fix` for Closed
+  without a fix — plus the last-checked date and a History line;
 - list the setup left behind and ask before cleaning up (`fleet-bug-qa` step 9);
 - don't close issues, move board cards or post comments yourself — hand the user
   the comment and let them do it (or do it if they ask).

@@ -256,8 +256,9 @@ test('sweep host-execution leftovers from the VMs fleet', async ({ request }) =>
 //    and scripts would otherwise hold each VM's one queue ahead of this run's;
 //  - the script timeout is Fleet's default — the timeout case lowers it to 60 s
 //    and restores it in a `finally` a timed-out test never reaches;
-//  - on premium, every durable install/uninstall fixture is uninstalled — its
-//    resting state, which a dead run can leave the other way;
+//  - on premium, every durable install/uninstall fixture is uninstalled with
+//    no failed install or uninstall on record — its resting state, which a
+//    dead run, or a test that failed partway, can leave otherwise;
 //  - on premium, Recovery Lock enforcement is off on the VMs fleet —
 //    `recovery-lock.spec.ts` turns it on and off, and Fleet clears the Mac's
 //    password on its next cron tick once it's off.

@@ -21,8 +21,8 @@
 The profile the suite delivers: one `<Replace>` of
 `./Device/Vendor/MSFT/Policy/Config/ApplicationManagement/AllowGameDVR` to `0`, which turns off Xbox Game Bar
 recording. Nothing on a QA VM records gameplay, so installing and removing it changes nothing a person or a
-process on the VM could notice. It is also a setting our own gitops (`lib/platforms/windows/configuration-profiles/disable-game-dvr.xml`)
-already applies to the free VMs every night.
+process on the VM could notice. It is also a setting our own full gitops config (`lib/platforms/windows/configuration-profiles/disable-game-dvr.xml`)
+delivers to the free VMs during each night's chain, before the min config the chain ends on removes it.
 
 - **Profile name in Fleet:** `fleet-pw-inert` — Fleet names a Windows profile after its file name.
 - **Proving it reached the host:** Windows records an MDM policy under

@@ -25,8 +25,9 @@
 # globs, the credential-free setup-experience keys), `software` (packages by
 # hash with every option, script-only packages, Fleet-maintained apps with
 # options and a caret pin), policies with every automation and targeting key,
-# and reports with label targeting. The min variant changes one value in
-# every section and drops one entry from every list.
+# and reports with label targeting. The min variant changes a value in every
+# section but the fleet label, and drops an entry from every list but the
+# label, the Android profile and the two Fleet-maintained apps.
 #
 # Software is only ever by `hash_sha256` of a file already in storage (the VMs
 # fleet's inert fixtures), a script-only package (the script is the installer,

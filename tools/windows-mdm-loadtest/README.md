@@ -99,8 +99,8 @@ versions against provably identical payloads — as long as both runs use the sa
 Create an **API-only** user so session churn doesn't skew timings, and grab its token:
 
 ```bash
-fleetctl user create --name loadtest --email loadtest@example.com --api-only --global-role admin
-# log in as that user, then read the token from ~/.fleet/config
+fleetctl user create --name loadtest --api-only --global-role admin
+# prints the user's API token once — copy it
 ```
 
 ```bash
@@ -124,7 +124,7 @@ export TEAM_ID=1      # target team; omit for "No team" / global
 # ...let ReconcileWindowsProfiles drain (full sweep ~25 min at 100k). Watch queue depth below.
 
 # Scenario 4 — replace with 100 differently-named profiles (exercises the Replace path).
-# This is also where the 100-profile modification timeout (#48349) shows up.
+# This is where the 100-profile modification timeout (#48349, fixed in 4.90) showed up.
 ./batch_profiles.sh replace batch_B.json
 
 # Scenario 5 — delete all profiles (empty set)
@@ -143,9 +143,9 @@ differently-named batch B (an add + remove, not a modify).
 
 It exists to generate a large, concurrent **modification-path** writer load — e.g. to run
 alongside the certificate-ingestion loadtest for
-[#49705](https://github.com/fleetdm/fleet/issues/49705), where the concern is the writer being
-serialized by inventory writes. Re-pushing 100 profiles × N hosts drives heavy concurrent writes
-to `host_mdm_windows_profiles` and `windows_mdm_command_queue` at the same time.
+[#49705](https://github.com/fleetdm/fleet/issues/49705) (closed 2026-08), where the concern was
+the writer being serialized by inventory writes. Re-pushing 100 profiles × N hosts drives heavy
+concurrent writes to `host_mdm_windows_profiles` and `windows_mdm_command_queue` at the same time.
 
 You already have batch A applied. Generate a bumped-revision copy and push it:
 
@@ -174,7 +174,8 @@ TEAM_ID=2 ./batch_profiles.sh apply batch_A.json
 ```
 
 Then transfer in interactive batches. **Batch size is hard-capped at 30000** — larger single
-transfers are blocked by [#46894](https://github.com/fleetdm/fleet/issues/46894).
+transfers were blocked by [#46894](https://github.com/fleetdm/fleet/issues/46894), fixed in
+4.93.0; keep the cap for builds older than that.
 
 ```bash
 export SRC_TEAM_ID=1      # move hosts out of this team
@@ -210,8 +211,8 @@ SELECT status, COUNT(*) FROM host_mdm_windows_profiles GROUP BY status;  -- pend
 ## Gotchas
 
 - **`WindowsEnabledAndConfigured` must be on.** The batch endpoint reads it from app config;
-  enable Windows MDM in the UI first. (`batch_profiles.sh` can be extended with
-  `--assume_enabled` if needed, but enabling in the UI is cleaner.)
+  enable Windows MDM in the UI first. (The endpoint's `assume_enabled` parameter only applies
+  with `dry_run=true`, so it is no substitute.)
 - **`ids_<SRC>.txt` goes stale** after a transfer (those hosts are no longer in the source team).
   Use `--refresh` when reversing or re-running.
 - **Batch A and batch B must target DISJOINT LocURIs.** The generator guarantees this: the

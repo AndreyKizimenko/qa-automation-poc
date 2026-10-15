@@ -2,7 +2,7 @@
 # usage: cleanup.sh <manifest>          list what would be undone (reads nothing else)
 #        cleanup.sh <manifest> --run    undo it, newest first
 # Manifest lines, appended at creation time:
-#   api <ctx> <METHOD> <path> [json-body]    e.g. api default DELETE /api/v1/fleet/teams/12
+#   api <ctx> <METHOD> <path> [json-body]    e.g. api default DELETE /api/v1/fleet/fleets/12
 #                                                 api default POST /api/v1/fleet/global/policies/delete {"ids":[5]}
 #   pid <pid> [# note]                       a background process this run started (osquery-perf, a proxy)
 #   worktree <path>                          git worktree to remove

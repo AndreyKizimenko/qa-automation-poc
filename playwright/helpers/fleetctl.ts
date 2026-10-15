@@ -3,11 +3,12 @@
  *
  * Three things every caller needs and nobody should re-implement:
  *
- * 1. **Config isolation.** `fleetctl` reads `~/.fleetctl/config` by default, so
+ * 1. **Config isolation.** `fleetctl` reads `~/.fleet/config` by default, so
  *    an un-isolated call would both read the developer's own context (wrong
  *    instance) and be clobbered by `fleetctl config set`. Every invocation
- *    passes `--config <.auth/fleetctl-<suite>.yml>`, written on first use from
- *    FLEET_URL + FLEET_API_TOKEN.
+ *    runs with a throwaway `HOME`: one holding the suite's `.fleet/config`,
+ *    written from FLEET_URL + FLEET_API_TOKEN (see `fleetctlHome`), or an empty
+ *    one for a command that never reaches a server.
  * 2. **Banner stripping.** When client and server versions differ, `fleetctl`
  *    prints a three-line "Warning: Version mismatch." block to stderr on every
  *    single command. Left in place it breaks naive stderr assertions, so it is
