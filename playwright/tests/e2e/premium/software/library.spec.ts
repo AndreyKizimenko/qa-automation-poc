@@ -215,6 +215,8 @@ for (const scope of SCOPES) {
           // Well-formed JSON with a key that isn't an ApplicationPolicy field:
           // refused, and nothing changes. The modal's toast is generic, so the
           // reason is read off the refused request.
+          // TODO(fleetdm/fleet#55614): assert the reason in the toast once the
+          // Edit version modal shows it.
           await modal.fill('{ "pwUnsupportedKey": true }');
           const refusal = page.waitForResponse(
             (r) => r.request().method() === 'PATCH' && /\/software\/titles\/\d+\/app_store_app\b/.test(r.url()),
