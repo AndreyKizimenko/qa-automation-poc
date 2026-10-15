@@ -21,8 +21,8 @@ export class SoftwareVersionDetailPage {
    * The CVE identifiers rendered on the current page, in the order the table
    * shows them. Pair with `findRenderableCve` from `@helpers/api` to choose one
    * Fleet's CVE detail endpoint can serve, then hand it to {@link clickCve} —
-   * the top row is the newest match and so the likeliest to 404
-   * (fleetdm/fleet#49913).
+   * the top row is the newest match and so the likeliest not to be in Fleet's
+   * host counts yet, which leaves its detail page empty.
    */
   async cveNames(): Promise<string[]> {
     const links = this.table.table.locator('tbody a', { hasText: /^CVE-\d{4}-\d+$/ });

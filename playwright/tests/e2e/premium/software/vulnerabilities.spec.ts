@@ -172,7 +172,7 @@ for (const osKey of OS_KEYS) {
     await softwareVersionDetail.waitForReady();
     // Fleet links every CVE it has matched to this version, but its detail
     // page shows nothing for one not yet in its host counts, and the newest
-    // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+    // match sorts to the top. Drill into one the detail
     // endpoint can serve, so this covers the click-through rather than racing
     // Fleet's aggregation.
     const cveText = await findRenderableCve(
@@ -182,7 +182,7 @@ for (const osKey of OS_KEYS) {
     );
     test.skip(
       !cveText,
-      'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
+      'No CVE on this version has a renderable detail page yet',
     );
     await softwareVersionDetail.clickCve(cveText!);
 
@@ -399,7 +399,7 @@ for (const osKey of OS_KEYS) {
     await softwareVersionDetail.waitForReady();
     // Fleet links every CVE it has matched to this version, but its detail
     // page shows nothing for one not yet in its host counts, and the newest
-    // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+    // match sorts to the top. Drill into one the detail
     // endpoint can serve, so this covers the click-through rather than racing
     // Fleet's aggregation.
     const cveText = await findRenderableCve(
@@ -409,7 +409,7 @@ for (const osKey of OS_KEYS) {
     );
     test.skip(
       !cveText,
-      'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
+      'No CVE on this version has a renderable detail page yet',
     );
     await softwareVersionDetail.clickCve(cveText!);
 
@@ -426,8 +426,8 @@ for (const osKey of OS_KEYS) {
  *
  * The CVE is resolved through `findRenderableCve`, not read off the top of the
  * list: Fleet matches CVEs faster than it counts their hosts and shows an empty
- * detail page for any it hasn't counted yet, with the newest match sorting first
- * (fleetdm/fleet#49913).
+ * detail page for any it hasn't counted yet, with the newest match sorting
+ * first.
  *
  * Summing every row's host count and comparing it to "Affected hosts" is not a
  * contract — a host running two affected versions is counted once in the CVE
@@ -447,7 +447,7 @@ test('Vulnerabilities — a CVE hands off to the hosts running each affected ver
 
   const listed = await vulnerabilitiesList.cveNames();
   const cve = await findRenderableCve(request, listed, fleetIdFromUrl(page.url()));
-  test.skip(!cve, 'No listed CVE has a renderable detail page — fleetdm/fleet#49913');
+  test.skip(!cve, 'No listed CVE has a renderable detail page yet');
 
   await cveDetail.goto(cve!);
   await expect(cveDetail.vulnerableSoftwareHeading).toBeVisible();

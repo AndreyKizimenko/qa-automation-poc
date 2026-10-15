@@ -126,7 +126,7 @@ test.describe('Software vulnerabilities', () => {
       await softwareVersionDetail.waitForReady();
       // Fleet links every CVE it has matched to this version, but its detail
       // page shows nothing for one not yet in its host counts, and the newest
-      // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+      // match sorts to the top. Drill into one the detail
       // endpoint can serve, so this covers the click-through rather than racing
       // Fleet's aggregation.
       const cveText = await findRenderableCve(
@@ -136,7 +136,7 @@ test.describe('Software vulnerabilities', () => {
       );
       test.skip(
         !cveText,
-        'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
+        'No CVE on this version has a renderable detail page yet',
       );
       await softwareVersionDetail.clickCve(cveText!);
 
@@ -212,7 +212,7 @@ test.describe('Software vulnerabilities', () => {
       await softwareVersionDetail.waitForReady();
       // Fleet links every CVE it has matched to this version, but its detail
       // page shows nothing for one not yet in its host counts, and the newest
-      // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+      // match sorts to the top. Drill into one the detail
       // endpoint can serve, so this covers the click-through rather than racing
       // Fleet's aggregation.
       const cveText = await findRenderableCve(
@@ -222,7 +222,7 @@ test.describe('Software vulnerabilities', () => {
       );
       test.skip(
         !cveText,
-        'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
+        'No CVE on this version has a renderable detail page yet',
       );
       await softwareVersionDetail.clickCve(cveText!);
 
@@ -240,7 +240,7 @@ test.describe('Software vulnerabilities', () => {
    * The CVE is resolved through `findRenderableCve`, not read off the top of
    * the list: Fleet matches CVEs faster than it counts their hosts and shows an
    * empty detail page for any it hasn't counted yet, with the newest match
-   * sorting first (fleetdm/fleet#49913).
+   * sorting first.
    *
    * The hand-off itself is not premium-gated — only the summary's Severity and
    * Probability of exploit are — so free covers the same flow, minus the fleet
@@ -259,7 +259,7 @@ test.describe('Software vulnerabilities', () => {
 
     const listed = await vulnerabilitiesList.cveNames();
     const cve = await findRenderableCve(request, listed, fleetIdFromUrl(page.url()));
-    test.skip(!cve, 'No listed CVE has a renderable detail page — fleetdm/fleet#49913');
+    test.skip(!cve, 'No listed CVE has a renderable detail page yet');
 
     await cveDetail.goto(cve!);
     await expect(cveDetail.vulnerableSoftwareHeading).toBeVisible();
