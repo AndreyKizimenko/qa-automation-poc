@@ -7,7 +7,7 @@ This document audits what the UI suite covers today, maps every scale bug Fleet 
 request shape that broke, records a live probe of the 4.93 RC instance, and proposes the request
 matrix for the script.
 
-Written 2026-10-01 against `fleet-493loadtest.loadtest.fleetdm.com` (4.93.0-rc, `rc-minor-fleet-v4.93.0`).
+Written 2026-10-01 against the 4.93 RC loadtest instance (4.93.0-rc, `rc-minor-fleet-v4.93.0`).
 
 ## Status
 
