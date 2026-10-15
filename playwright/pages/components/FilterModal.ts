@@ -3,8 +3,9 @@ import { waitForTableSettled } from './DataTable';
 
 /**
  * The "Add filters" modal used on /software/titles and the host details
- * Software tab. Lets users toggle the Vulnerable software filter and
- * (on Premium) configure severity / exploit filters.
+ * Software tab. Lets users narrow the list by software type, toggle the
+ * Vulnerable software filter and (on Premium) configure exploit and, under
+ * "Advanced", severity filters.
  *
  * Opening the modal is done from the parent page (clicks the "Add filters"
  * button). This component exposes the form controls inside the modal.
@@ -16,10 +17,19 @@ export class FilterModal {
   readonly modal: Locator;
   readonly vulnerableSwitch: Locator;
   /**
+   * The Types picker: a checkbox per software type the list can hold, named by
+   * its display name ("macOS app", "deb package"). `SoftwareTypesPicker` is a
+   * role-less div, so its class is the scope that keeps the KEV checkbox out.
+   */
+  readonly typesPicker: Locator;
+  /** Reveals the premium-only severity controls, which mount collapsed. */
+  readonly advancedToggle: Locator;
+  /**
    * Premium-only severity controls. `SoftwareFiltersModal` renders them behind
-   * `isPremiumTier`, and disables them until the Vulnerable software toggle is
-   * on. react-select exposes no role on either the trigger or the value, so both
-   * are reached through the SeverityFilter's own container class.
+   * `isPremiumTier` and the "Advanced" reveal, and disables them until the
+   * Vulnerable software toggle is on. react-select exposes no role on either the
+   * trigger or the value, so both are reached through the SeverityFilter's own
+   * container class.
    */
   readonly severityTrigger: Locator;
   readonly severityValue: Locator;
@@ -33,6 +43,8 @@ export class FilterModal {
     this.openButton = page.getByRole('button', { name: /filter/i });
     // The "Vulnerable software" toggle is rendered as <button role="switch"> by Fleet's Slider component
     this.vulnerableSwitch = page.locator('form').getByRole('switch');
+    this.typesPicker = this.modal.locator('.software-types-picker');
+    this.advancedToggle = this.modal.getByRole('button', { name: 'Advanced', exact: true });
     this.severityTrigger = page.locator('.severity-filter__dropdown .react-select__control');
     this.severityValue = page.locator('.severity-filter__dropdown .react-select__single-value');
     this.applyButton = page.getByRole('button', { name: 'Apply' });
@@ -48,6 +60,41 @@ export class FilterModal {
   async open(): Promise<void> {
     await expect(this.openButton).toBeEnabled();
     await this.openButton.click();
+  }
+
+  /** A type's checkbox in the Types picker, by its display name. */
+  typeCheckbox(name: string): Locator {
+    return this.typesPicker.getByRole('checkbox', { name, exact: true });
+  }
+
+  /**
+   * Leaves exactly `names` ticked in the open modal's Types picker. Reads the
+   * ticked names first and changes each box once, so a box that refuses the
+   * click fails its assertion instead of looping.
+   */
+  async selectTypes(names: string[]): Promise<void> {
+    await expect(this.typesPicker).toBeVisible();
+    const ticked = await this.typesPicker
+      .getByRole('checkbox', { checked: true })
+      .evaluateAll((boxes) => boxes.map((b) => b.getAttribute('aria-label') ?? ''));
+    for (const name of ticked.filter((n) => !names.includes(n))) {
+      await this.typeCheckbox(name).click();
+      await expect(this.typeCheckbox(name)).not.toBeChecked();
+    }
+    for (const name of names.filter((n) => !ticked.includes(n))) {
+      await this.typeCheckbox(name).click();
+      await expect(this.typeCheckbox(name)).toBeChecked();
+    }
+  }
+
+  /**
+   * Opens the "Advanced" section, where the severity controls live. It mounts
+   * open when a severity is already applied, so it's only toggled when closed.
+   */
+  async showAdvanced(): Promise<void> {
+    await expect(this.advancedToggle).toBeVisible();
+    if (!(await this.severityTrigger.isVisible())) await this.advancedToggle.click();
+    await expect(this.severityTrigger).toBeVisible();
   }
 
   /** Dismisses the modal without applying anything it changed. */

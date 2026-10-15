@@ -172,7 +172,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 6. ☐ (Automatic) land on the new title's detail page.
    - ✅ *(UI)* The active installer accordion row (`.library-item-accordion` without `--inactive`) is visible.
    - ✅ *(UI)* The title's display heading (`aria-label="software display name"`) has non-empty text — **only** a length check, the expected name is never asserted.
-   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Application (Android)` / `Application (<iOS>)`. Fleet derives it from the title's osquery source (`SOURCE_TYPE_CONVERSION`), so `android_apps` renders "Application (Android)" and `ios_apps` renders "Application (iOS)"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
+   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Android app` / `<iOS> app`. Fleet derives it from the title's osquery source (`formatSoftwareType`), so `android_apps` renders "Android app" and `ios_apps` renders "iOS app"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
 7. ☐ (No user action) API cross-check of the add.
    - ✅ *(API)* `GET /activities` (paged, ≤5×100, newest first) contains `added_software` (custom/FMA) or `added_app_store_app` (VPP/Android) whose `details.software_title` equals the heading text, **and** whose `actor_email` is `FLEET_ADMIN_EMAIL` — `assertActivity`.
    - ✅ *(UI)* Title id parsed from the URL is > 0.
@@ -222,7 +222,7 @@ other:
 
 1. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (raw `page.goto` in the spec, not `softwareTitleDetail.goto()`).
 2. ☐ Click the installer accordion row header to expand it, click **Delete this version**, confirm in the modal.
-   - ✅ *(UI)* A modal whose title matches `Delete software` or `Delete package` is visible before confirming.
+   - ✅ *(UI)* A modal whose title matches `Delete software`, `Delete package` or `Delete version` (an iOS / iPadOS App Store or Play Store title, which holds versions) is visible before confirming.
    - ✅ *(UI)* After confirming, the active accordion row is hidden (Fleet redirects to the library list when the last installer is removed) — `SoftwareInstallerCard.delete()`.
 3. ☐ (No user action) API cross-check.
    - ✅ *(API)* `GET /activities` contains `deleted_software` / `deleted_app_store_app` with `details.software_title === titleName`, actor = suite admin.
@@ -1271,7 +1271,7 @@ other:
    - ✅ *(API)* The title exists and has ≥1 cached build.
 2. ☐ *(Setup, API)* Read its stored package. ✅ `pinned_version` is `''`.
 3. ☐ Open the dashboard → **Software** → select the **QA** fleet (`selectByLabel`, since QA is outside the typed `TeamScope` matrix) → click the **Library** tab → search "Postman".
-4. ☐ Click the row whose **Type** cell reads **Application (macOS)** — the name alone is ambiguous across the two platform titles.
+4. ☐ Click the row whose **Type** cell reads **macOS app** — the name alone is ambiguous across the two platform titles.
    - ✅ *(UI)* The display heading is visible; its text is captured for the save toasts.
 5. ✅ *(UI)* The installer accordion row carries the **Latest** badge — an unpinned app tracks latest.
 6. ☐ Open **Actions → Versions**.
@@ -1295,7 +1295,7 @@ other:
 - *Efficiency / smells:*
   - The unpinned precondition is a **test failure with an operational cause**: one aborted run leaves this test red until somebody clears the pin by hand. Deliberate and clearly messaged, but worth knowing before triaging it as a flake.
   - It mutates a **shared, durable, gitops-provisioned** resource that no cleanup project touches. The only guard is the `finally`, which doesn't run on a `SIGKILL`.
-  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "Application (macOS)" would also match.
+  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "macOS app" would also match.
   - `PIN_SHAPES_APP` hard-codes "Postman": a `qa.yml` change that drops it breaks this test (with a good message, but it still breaks).
 
 **Notes (Andrey)**
@@ -1372,7 +1372,7 @@ other:
    - ✅ *(UI)* The id parsed out of the URL is > 0.
 4. ✅ *(UI)* On the title detail page, four things at once:
    - the display heading reads exactly `fleet-playwright-script-package`;
-   - the summary card's **Type** line reads **"Script-only package (macOS & Linux)"**;
+   - the summary card's **Type** line reads **"Script-only package (.sh)"**;
    - the header pills are exactly `['Custom package']`;
    - the installer accordion row contains the filename **and** the text **"Added less than a minute ago"**.
 5. ✅ *(API)* `GET /software/titles/:id` → `software_package.install_script` equals the fixture file's contents **byte for byte** (read off disk in the test), and `uninstall_script` is the empty string. This is the defining property of a script-only package: the uploaded file *is* the install script, and Fleet generates no uninstall counterpart.
@@ -1713,31 +1713,32 @@ other:
 - **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` / `titleName` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its fleet and the configuration it records.
 - **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
 - **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
-- **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the modal throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
+- **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the editor throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
 
 **Flow**
 
 1. ☐ *(API)* Read the stored configuration (`getAppStoreAppConfiguration` → `GET /software/titles/:id?fleet_id=` → `app_store_app.configuration`).
-2. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (`softwareTitleDetail.goto`) → **Actions** → **Edit configuration**.
-   - ✅ *(UI)* **Actions** is visible; the **Edit configuration** modal and its Ace editor are visible.
+2. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (`softwareTitleDetail.goto`) → the Library row's **Edit version** icon (`openEditVersion`). An Android title holds versions, and each version's configuration is edited there, not from **Actions**.
+   - ✅ *(UI)* The **Edit version** modal and its Configuration Ace editor are visible.
 3. ☐ Replace the editor's text with `{ "pwUnsupportedKey": true }` (through Ace's API, `setAceValue`) → **Save**.
-   - ✅ *(UI)* Error toast `Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.` — well-formed JSON that Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+   - ✅ *(API)* The save's `PATCH /software/titles/:id/app_store_app` is refused, its reason reading `Unknown top-level key "pwUnsupportedKey".` — well-formed JSON whose key isn't an Android Management API `ApplicationPolicy` field, which Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+   - ✅ *(UI)* Error toast `Couldn't update. Please try again.` — the modal shows only a generic message; the reason rides in the response.
    - ✅ *(UI)* The modal stays open.
    - ✅ *(API)* The stored configuration is unchanged.
 4. ☐ Replace the text with `{"managedConfiguration":{"pw_setting":"pw-value"},"workProfileWidgets":"WORK_PROFILE_WIDGETS_ALLOWED"}` → **Save**.
-   - ✅ *(UI)* **Save** is enabled; success toast matching `configuration updated.`; the modal closes.
+   - ✅ *(UI)* **Save** is enabled; success toast matching `Successfully updated <version>.`; the modal closes.
    - ✅ *(API)* The stored configuration equals that object.
    - ✅ *(API)* An `edited_app_store_app` activity newer than the save, for this title on this fleet, by the suite admin, whose recorded configuration carries both saved values — compared field by field, since Fleet records the keys in its own order (`latestActivityId` → `assertActivityAfter`).
-5. ☐ Reload → **Actions** → **Edit configuration**.
+5. ☐ Reload → the row's **Edit version** icon.
    - ✅ *(UI)* The editor's text, parsed, equals the saved object. Fleet reopens it re-serialised (tab-indented), so it's compared parsed, and read through Ace's API (`getAceValue`): Ace renders only the visible lines.
-6. ☐ Close the modal with its ✕.
+6. ☐ Click **Cancel**.
    - ✅ *(UI)* The modal is hidden.
 
 **Assessment**
 - *Value:* the only coverage of an app's managed configuration: Fleet's top-level-key rule, what it stores, and the modal reopening what was stored, on both scopes. The refusal is checked at both layers (the toast, and nothing stored), and the activity is pinned to its fleet and payload, so the two scopes' parallel runs can't satisfy each other's assertion. It rides on SWL-01's title, so it costs no extra add.
 - *Coverage gaps:* JSON that doesn't parse (Save disabled client-side) isn't tried. Clearing a configuration back to none isn't covered. The iOS / iPadOS configuration (an XML `<dict>`, same modal) isn't: the VPP case (Bear) has no edit step. Values Fleet should refuse *inside* the two allowed keys aren't probed. The `edited_app_store_app` copy in the dashboard feed isn't checked — SWL-03 stays add → delete. A configuration reaching a device is out of reach (no Android host).
 - *Redundancy:* none.
-- *Efficiency / smells:* seconds. The modal's ✕ is reached by Fleet's `close-icon` test id (an icon-only button); the modal by its BEM root (no `role="dialog"`). The page-error ignore is one substring but suite-wide: any other flow that hits the same `worker-json.js` error passes too, until #54845 is fixed and the entry dropped.
+- *Efficiency / smells:* seconds. The modal is reached by its BEM root (no `role="dialog"`); the row's **Edit version** icon by its aria-label, exact, since the row header's accessible name nests it. The page-error ignore is one substring but suite-wide: any other flow that hits the same `worker-json.js` error passes too, until #54845 is fixed and the entry dropped.
 
 **Notes (Andrey)**
 ```
@@ -1759,7 +1760,7 @@ other:
 | Add Fleet-maintained app | SWL-01 (Airtame macOS, 7-Zip Windows); seeded via API in SWL-25/26/27 | Editing an FMA's scripts — SWL-36 drives the same modal and `PATCH` on a custom package instead, deliberately, since an edited FMA install script sets a sticky `install_script_edited` flag that auto-update carries forward; catalog *sorting* and pagination (filters + search now covered by SWL-21–23) |
 | Add Apple VPP app | SWL-01 (Bear, iOS) | macOS and iPadOS VPP platforms; the App Store *search* UI (`vppUiSearchNames` exists for it, unused); missing/expired VPP-token error path |
 | Add Managed Google Play app | SWL-01 (ChatGPT) | Invalid application-ID error path; no post-add catalog re-check (FMA and VPP both have one) |
-| App managed configuration (Actions → **Edit configuration**) | SWL-39 (Android, both scopes: an unsupported top-level key refused, a valid configuration stored, logged and reopened) | iOS / iPadOS XML configuration; unparseable JSON; clearing it; the edit in the dashboard feed; delivery to a device (no Android host) |
+| App managed configuration (a Library row's **Edit version** modal) | SWL-39 (Android, both scopes: an unsupported top-level key refused, a valid configuration stored, logged and reopened) | iOS / iPadOS XML configuration; unparseable JSON; clearing it; the edit in the dashboard feed; delivery to a device (no Android host) |
 | Library tab list | SWL-01, SWL-02, SWL-19 (it is a strict subset of Inventory), SWL-25/27 (a row renders the custom icon / display name) | Library's own columns (Version / Type / Hosts / Status), sorting and pagination — SWL-16–18 cover the **Inventory** table only; the **Self-service only** filter switch (`SoftwareLibraryPage.selfServiceSwitch`, still used by zero specs) |
 | Edit installer config | SWL-06 (self-service, write); SWL-31 (all four Advanced-options scripts, read against the API); SWL-36 (all four written in one save, read back through the API) | Edited scripts shown in a reopened modal (API-only read-back); clearing a script back to empty; categories; re-uploading a replacement installer; Cancel/discard on a dirty form. Label scope is `software-label-targets.spec.ts` ([area 22](22-label-targeting.md)) |
 | Delete installer | SWL-02, SWL-07 | Cancel path; per-version delete on a multi-package title; blocked-delete when referenced by Setup Experience (only covered incidentally in `install-software.spec.ts`) |

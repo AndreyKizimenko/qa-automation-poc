@@ -142,6 +142,14 @@ test.describe('activityCopy', () => {
       .test('added ChatGPT (Android) to the Workstations fleet.')).toBe(true);
     expect(activityCopy.appStoreApp.deleted({ name: 'ChatGPT', platform: 'Android', scope: 'Workstations' })
       .test('deleted ChatGPT (Android) from the Workstations fleet.')).toBe(true);
+    // A title that holds versions names the version before the platform.
+    const version = { name: 'ChatGPT', version: 'Default version', platform: 'Android', scope: 'Workstations' } as const;
+    expect(activityCopy.appStoreApp.added(version)
+      .test('added ChatGPT (Default version) (Android) to the Workstations fleet.')).toBe(true);
+    expect(activityCopy.appStoreApp.deleted(version)
+      .test('deleted ChatGPT (Default version) (Android) from the Workstations fleet.')).toBe(true);
+    expect(activityCopy.appStoreApp.added(version)
+      .test('added ChatGPT (Android) to the Workstations fleet.')).toBe(false);
   });
 
   test('configurationProfile.* — tier-aware via process.env.SUITE', () => {

@@ -2,7 +2,7 @@
  * Premium • Controls • Configuration profiles — who a label-targeted DDM
  * declaration reaches.
  *
- * A declaration (`.json`) goes through the same Add profile modal and the same
+ * A declaration (`.json`) goes through the same Add profile page and the same
  * label targets as a `.mobileconfig`, but Fleet stores its targeting in a table
  * of its own and delivers it over Apple's declarative management channel, not as
  * an InstallProfile command — so targeting a declaration is its own path to get

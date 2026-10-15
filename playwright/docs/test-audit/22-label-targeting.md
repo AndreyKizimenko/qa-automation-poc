@@ -154,7 +154,7 @@ other:
    - ✅ *(UI)* The VM's **Controls** tab has no row for it.
 
 **Assessment**
-- *Value:* High. Covers Windows include/exclude, negative half included, plus the **Edit** modal's re-targeting (new in 4.91), and proves an edit that excludes a host *removes* the profile from it, on the device.
+- *Value:* High. Covers Windows include/exclude, negative half included, plus the **Edit** page's re-targeting, and proves an edit that excludes a host *removes* the profile from it, on the device.
 - *Coverage gaps:* Include **any** on Windows isn't exercised; one Windows profile at a time means the modes can't run side by side.
 - *Redundancy:* none.
 - *Efficiency / smells:* the `finally` can't help a timed-out run; the cleanup sweep does.
@@ -201,7 +201,7 @@ refusal is what's left to guard.
 **Assessment**
 - *Value:* Medium-high. Guards a data-integrity rule across all three things that can target a label (the declaration case is the easy one to lose — its link lives in a different table), plus the release once the profile goes.
 - *Coverage gaps:* the **software** version of the refusal ("Software uses this label as a custom target…") belongs with the software targeting spec. The warning icon for a broken label can't be provoked, so it's asserted absent only.
-- *Redundancy:* the upload is API-only on purpose — LT-01/02 cover targeting through the modal.
+- *Redundancy:* the upload is API-only on purpose — LT-01/02 cover targeting through the Add profile page.
 - *Efficiency / smells:* ~12 s for all four. The Labels page lists by name, 20 a page; `locateRow` pages to the label.
 
 **Notes (Andrey)**
@@ -248,7 +248,7 @@ other:
 **Assessment**
 - *Value:* High. Declarations keep their targeting in their own table and reach the Mac over DDM, not InstallProfile — a separate path from LT-01's. Covers a declaration's include/exclude, including the "All hosts" step, with a negative half that can fail.
 - *Coverage gaps:* no on-device read — osquery has no table for a test declaration, so *verified* (the device's report) is the host-side proof. Include **any** isn't exercised for declarations.
-- *Redundancy:* the modal's target controls are LT-01's; here they're the route, not the subject.
+- *Redundancy:* the profile form's target controls are LT-01's; here they're the route, not the subject.
 - *Efficiency / smells:* ~1 min.
 
 **Notes (Andrey)**

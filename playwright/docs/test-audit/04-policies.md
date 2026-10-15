@@ -69,7 +69,7 @@ policy live on the three real VMs (POL-42).
 | POL-35 | `premium/policies/policy-host-counts.spec.ts` | the Pass count opens exactly the hosts passing the policy, and Fail those failing it | UI+API | ☐ |
 | POL-36 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › <role> is shown the policy controls its role grants (7 roles) | UI | ☐ |
 | POL-37 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › <team-admin \| ws-maintainer> creates a Workstations policy from the UI | UI+API | ☐ |
-| POL-38 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy *(skipped, #54624)* | UI | ☐ |
+| POL-38 | `premium/policies/role-access.spec.ts` | Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy | UI | ☐ |
 | POL-39 | `free/policies/role-access.spec.ts` | Free • Policies • role access › <role> is shown the policy controls its role grants (2 roles) | UI | ☐ |
 | POL-40 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • automations › a fleet admin can't add an inherited policy to the global webhook *(skipped, #54623)* | UI+API | ☐ |
 | POL-41 | `premium/policies/policy-automations.spec.ts` | Premium • Policies • the automation filter by scope › offers only the automation types the scope supports | UI | ☐ |
@@ -1368,7 +1368,7 @@ other:
 
 **Assessment**
 - *Value:* The first assertion of what each role is *shown* on Policies; the API probes only cover create. The technician and observer+ columns are the unusual ones (Run without Edit or Add policy). Every absence is anchored on the same screen's seeded row, Automations cell or Show query, so a page that never rendered can't pass. The cells come from Fleet's gating (`ManagePoliciesPage`, `PoliciesTableConfig`, `PolicyDetailsPage`, the router).
-- *Coverage gaps:* The global roles never read a fleet's list (a global maintainer may edit inherited policies). TO+ has no static user. #54624 (GO+ on an Unassigned policy) is POL-38, skipped.
+- *Coverage gaps:* The global roles never read a fleet's list (a global maintainer may edit inherited policies). TO+ has no static user. GO+ on an Unassigned policy is POL-38.
 - *Redundancy:* None; the admin's controls are POL-01's.
 - *Efficiency / smells:* A few seconds a role; one login per role per run through the session cache.
 
@@ -1413,12 +1413,12 @@ other:
 
 ---
 
-### POL-38 · Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy *(skipped)*
+### POL-38 · Premium • Policies • role access › global-observer-plus is offered Run policy on an Unassigned policy
 
 - **File:** [`playwright/tests/e2e/premium/policies/role-access.spec.ts`](../../tests/e2e/premium/policies/role-access.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "Run policy on an Unassigned policy"`
 - **Project:** premium · **Scope:** Unassigned
-- **Mode:** UI · **Isolation:** skipped behind [fleetdm/fleet#54624](https://github.com/fleetdm/fleet/issues/54624) (`docs/blocked-by-product-bugs.md`)
+- **Mode:** UI · **Isolation:** standalone; its policy is deleted in the `afterEach`
 - **Preconditions (API):** `POST /fleets/0/policies` seeds `pw-role-pol-unassigned-<nonce>`, deleted in the `afterEach`.
 
 **Flow**
@@ -1427,9 +1427,9 @@ other:
    - ✅ *(UI)* **Show query** and **Run policy**; no **Edit policy**.
 
 **Assessment**
-- *Value:* Fleet's role table says observer+ runs every policy; the UI hides Run on Unassigned because `isObserverPlus` needs a non-zero fleet id. Run un-skipped on 2026-10-05, it failed on exactly that button.
-- *Coverage gaps:* None beyond the bug.
-- *Efficiency / smells:* Skipped: costs nothing until the fix ships.
+- *Value:* Fleet's role table says observer+ runs every policy, Unassigned's included. Guards [fleetdm/fleet#54624](https://github.com/fleetdm/fleet/issues/54624) (`isObserverPlus` once needed a non-zero fleet id), fixed in 4.94.
+- *Coverage gaps:* the run itself isn't started.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -1596,7 +1596,7 @@ other:
 | AI Autofill (Save policy modal) | POL-32 (both tiers, live fleetdm.com call) | Only non-emptiness asserted; the Generative-AI-off path untested |
 | Free-tier paywalls for premium policy features | — (`tests/e2e/free/paywalls.spec.ts` has no policies entry) | Untested |
 | Activity-feed copy for policies | POL-07, POL-08 (+ regex unit test `tests/api/activity-copy.spec.ts`) | Order and count not asserted |
-| What each role is shown (list, details, `/policies/new`) | POL-36 (7 roles, premium), POL-39 (2, free); a team role's create POL-37; #54623 / #54624 skipped (POL-40, POL-38) | TO+ (no static user); a global role on a fleet's list |
+| What each role is shown (list, details, `/policies/new`) | POL-36 (7 roles, premium), POL-39 (2, free); a team role's create POL-37; #54623 skipped (POL-40); GO+ on Unassigned is POL-38 | TO+ (no static user); a global role on a fleet's list |
 | Automation filter options by scope | POL-41 | Choosing an option and its filtered list |
 | Policy API contracts / roles / gitops | `tests/api/role-access/**`, `tests/api/gitops-verify/policies.spec.ts` | out of scope here |
 

@@ -4,11 +4,12 @@
  * add + delete, plus one edit for the Play Store case: its managed
  * configuration, saved and read back.
  *
- * A Play Store app's configuration (Actions → Edit configuration) is JSON whose
- * top-level keys Fleet limits to `managedConfiguration` and
- * `workProfileWidgets` (`ValidateAndroidAppConfiguration`); the browser checks
- * only that it parses. Premium holds no Android host, so a saved configuration
- * reaches no device: what's tested is what Fleet stores and what it refuses.
+ * A Play Store app's configuration (its Library row's Edit version modal) is
+ * JSON whose top-level keys must be Android Management API `ApplicationPolicy`
+ * fields other than `packageName` and `installType`, which Fleet sets itself
+ * (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+ * Premium holds no Android host, so a saved configuration reaches no device:
+ * what's tested is what Fleet stores and what it refuses.
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
@@ -157,13 +158,13 @@ for (const scope of SCOPES) {
         // The summary card's Type line is how an admin tells an App Store or
         // Play Store app apart from a package of the same name once it's added
         // — the only visible difference on the title page. Fleet derives it
-        // from the title's osquery source (`SOURCE_TYPE_CONVERSION`), so
-        // `android_apps` reads "Application (Android)" and `ios_apps` reads
-        // "Application (iOS)".
+        // from the title's osquery source (`formatSoftwareType` in
+        // `interfaces/software.ts`), so `android_apps` reads "Android app" and
+        // `ios_apps` reads "iOS app".
         if (c.kind === 'android') {
-          await expect(softwareTitleDetail.typeValue).toHaveText('Application (Android)');
+          await expect(softwareTitleDetail.typeValue).toHaveText('Android app');
         } else if (c.kind === 'vpp') {
-          await expect(softwareTitleDetail.typeValue).toHaveText(`Application (${c.platform})`);
+          await expect(softwareTitleDetail.typeValue).toHaveText(`${c.platform} app`);
         }
         const activity = await assertActivity(
           request,
@@ -205,18 +206,27 @@ for (const scope of SCOPES) {
       if (c.kind === 'android') {
         test('edit configuration', async ({ softwareTitleDetail, workstationsFleetId, request, page }) => {
           const fleetId = fleetIdFor(scope, workstationsFleetId);
-          const modal = softwareTitleDetail.editConfigurationModal;
+          const modal = softwareTitleDetail.editVersionModal;
           const stored = await getAppStoreAppConfiguration(request, fleetId, titleId);
 
           await softwareTitleDetail.goto({ titleId, fleetId });
-          await softwareTitleDetail.openEditConfiguration();
+          await softwareTitleDetail.openEditVersion();
 
-          // Well-formed JSON with a key Fleet doesn't support: refused, and nothing changes.
+          // Well-formed JSON with a key that isn't an ApplicationPolicy field:
+          // refused, and nothing changes. The modal's toast is generic, so the
+          // reason is read off the refused request.
+          // TODO(fleetdm/fleet#55614): assert the reason in the toast once the
+          // Edit version modal shows it.
           await modal.fill('{ "pwUnsupportedKey": true }');
-          await modal.saveButton.click();
-          await softwareTitleDetail.toast.expectError(
-            'Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.',
+          const refusal = page.waitForResponse(
+            (r) => r.request().method() === 'PATCH' && /\/software\/titles\/\d+\/app_store_app\b/.test(r.url()),
           );
+          await modal.saveButton.click();
+          const refused = await refusal;
+          expect(refused.ok(), 'the configuration was accepted').toBe(false);
+          const { errors } = (await refused.json()) as { errors?: { reason: string }[] };
+          expect(errors?.map((e) => e.reason).join(' ')).toContain('Unknown top-level key "pwUnsupportedKey".');
+          await softwareTitleDetail.toast.expectError("Couldn't update. Please try again.");
           await expect(modal.modal).toBeVisible();
           expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(stored);
 
@@ -249,9 +259,9 @@ for (const scope of SCOPES) {
 
           // Fleet reopens it re-serialised (tab-indented), so it's compared parsed.
           await page.reload();
-          await softwareTitleDetail.openEditConfiguration();
+          await softwareTitleDetail.openEditVersion();
           expect(JSON.parse(await modal.value())).toEqual(configuration);
-          await modal.close();
+          await modal.cancel();
         });
       }
 
@@ -290,19 +300,18 @@ for (const scope of SCOPES) {
 
       test('activity feed shows add → delete', async ({ dashboard }) => {
         await dashboard.goto();
-        const matchers = isAppStore
-          ? [
-              activityCopy.appStoreApp.added({
-                name: titleName,
-                platform: c.kind === 'android' ? 'Android' : c.platform,
-                scope,
-              }),
-              activityCopy.appStoreApp.deleted({
-                name: titleName,
-                platform: c.kind === 'android' ? 'Android' : c.platform,
-                scope,
-              }),
-            ]
+        // The iOS and Android titles hold versions, so their activities name the
+        // one added — Fleet's default, "Default version".
+        const appStoreActivity = isAppStore
+          ? {
+              name: titleName,
+              version: 'Default version',
+              platform: c.kind === 'android' ? 'Android' : c.platform,
+              scope,
+            }
+          : undefined;
+        const matchers = appStoreActivity
+          ? [activityCopy.appStoreApp.added(appStoreActivity), activityCopy.appStoreApp.deleted(appStoreActivity)]
           : [
               activityCopy.software.added({ packageName, scope }),
               activityCopy.software.deleted({ packageName, scope }),

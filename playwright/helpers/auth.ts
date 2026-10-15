@@ -14,8 +14,8 @@ type StoredSession = Exclude<BrowserContextOptions['storageState'], string | und
 
 export async function loginAsAdmin(page: Page, email: string, password: string): Promise<void> {
   // Fleet throttles POST /login to 10/min (burst 9) in a single bucket shared by
-  // every user and worker, and a throttled attempt just leaves the browser on
-  // /login with no visible error. Retrying gives the bucket time to refill
+  // every user and worker, and a throttled attempt leaves the browser on /login,
+  // with at most an error toast. Retrying gives the bucket time to refill
   // instead of failing the test on a neighbour's login spend.
   await expect(async () => {
     // Wait for Fleet's /sso settings probe to resolve before touching inputs —

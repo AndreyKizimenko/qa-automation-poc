@@ -407,21 +407,21 @@ other:
 
 1. ☐ Delete any existing EULA via the API (`GET /setup_experience/eula/metadata` → `DELETE /setup_experience/eula/<token>`; 404 treated as success).
 2. ☐ Open **Settings → Integrations → MDM** (via URL).
-   - ✅ *(UI)* Heading **End user license agreement (EULA)** visible — `gotoMdm()`.
+   - ✅ *(UI)* Heading **End user license agreement (EULA)** visible — `gotoMdm()`. The section opens on its **macOS** tab, the first platform with MDM on.
 3. ☐ Choose the PDF in the EULA uploader (auto-submits on file selection) — `uploadEula` → `FileUploader.setFile`.
    - ✅ *(UI)* The uploaded-EULA list item is visible (asserted inside `uploadEula`).
    - ✅ *(UI)* The list item's name reads exactly `pw-eula.pdf`.
    - ✅ *(API)* `GET /setup_experience/eula/metadata` returns `name === 'pw-eula.pdf'`.
-4. ☐ Click the trash icon on the EULA row → confirm in the **Delete EULA** modal — `deleteEula()`.
+4. ☐ Click **Delete EULA** (the row's trash button) → confirm in the **Delete EULA** modal — `deleteEula()`.
    - ✅ *(UI)* The **Delete EULA** modal is visible before confirming.
    - ✅ *(UI)* The EULA list item is hidden afterwards.
    - ✅ *(API)* `GET /setup_experience/eula/metadata` returns null (404).
 
 **Assessment**
 - *Value:* solid, self-contained CRUD-in-one-test with matched UI and API assertions on both create and delete. Catches the EULA upload endpoint, the list rendering, and the delete confirmation flow.
-- *Coverage gaps:* no negative upload (non-PDF rejection, oversize rejection); no "view/open EULA" click (the sibling non-trash button on the row is never exercised); no assertion the EULA actually appears in the end-user enrolment experience; no replace-in-place case (upload while one already exists).
+- *Coverage gaps:* no negative upload (non-PDF rejection, oversize rejection); no "view/open EULA" click (the sibling non-trash button on the row is never exercised); no assertion the EULA actually appears in the end-user enrolment experience; no replace-in-place case (upload while one already exists); the section's **Windows** tab (a markdown EULA shown during Entra and Autopilot enrollment) is never opened.
 - *Redundancy:* none.
-- *Efficiency / smells:* three justified BEM-class locators (`.eula-list-item`, `…__list-item-name`, `…__list-item-button`) plus a `[data-testid="trash-icon"]` filter and a `.modal__modal_container` filter — all documented in `IntegrationsPage`, but it means five separate coupling points to Fleet's markup for one small flow. The pre-clean is duplicated with `afterEach` (deliberate belt-and-braces, cheap).
+- *Efficiency / smells:* two justified BEM-class locators (`.eula-list-item`, `…__list-item-name`) and a `.modal__modal_container` filter — all documented in `IntegrationsPage`; the delete button is reached by its aria-label (**Delete EULA**). The pre-clean is duplicated with `afterEach` (deliberate belt-and-braces, cheap).
 
 **Notes (Andrey)**
 ```
