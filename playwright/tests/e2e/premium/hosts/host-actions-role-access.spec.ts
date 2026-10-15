@@ -8,8 +8,8 @@
  * from the modal's list rather than its description:
  *   - Live report for every role (on a desktop host); Run script for GA, GM, GT,
  *     TA, TM; Transfer for global admins, maintainers and technicians (a team
- *     role moves hosts only through the API, by design); Delete for GA, GM, TA,
- *     TM — never a technician.
+ *     role moves hosts only through the API, by design); Delete for GA, GM, GT,
+ *     TA, TM, TT — every role but the observers.
  *   - the modal lists every report, with a "create a report" link, except for a
  *     plain observer, who gets only the reports observers can run and no link.
  *
@@ -56,7 +56,7 @@ const ROLES: RoleCase[] = [
     delete: false,
     everyReport: true,
   },
-  { key: 'global-technician', host: 'unassigned-simulation', runScript: true, transfer: true, delete: false, everyReport: true },
+  { key: 'global-technician', host: 'unassigned-simulation', runScript: true, transfer: true, delete: true, everyReport: true },
   { key: 'team-admin', host: 'vms-fleet', runScript: true, transfer: false, delete: true, everyReport: true },
 ];
 

@@ -869,7 +869,7 @@ other:
 **Flow**
 
 1. ☐ Log in as the role → the host's details by id → **Actions**.
-   - ✅ *(UI)* **Live report** (the anchor). **Run script** for GM, GT, TA; **Transfer** for GM, GT; **Delete** for GM, TA. None of the three for GO, GO+.
+   - ✅ *(UI)* **Live report** (the anchor). **Run script** for GM, GT, TA; **Transfer** for GM, GT; **Delete** for GM, GT, TA. None of the three for GO, GO+.
 2. ☐ **Live report** → the "Select a report" modal → filter by the marker.
    - ✅ *(UI)* `…-observers` listed for everyone; `…-others` for every role but GO. The **create a report** link for GM, GO+, TA, not GO (the technician's is HOSTP-21). **Close**.
 
