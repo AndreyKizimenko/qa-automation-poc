@@ -171,7 +171,6 @@ playwright/
 │   └── cleanup.steps.ts          # Wipes test state (Unassigned, Workstations, pw-* leftovers) and rests the VMs; runs pre-test (cleanup-setup) and post-test (cleanup-teardown)
 ├── helpers/                      # Non-UI utilities — see helpers/README.md
 │   ├── api/                      # Per-area Fleet API helpers + cleanup helpers
-│   ├── catalogs/                 # Typed FMA / VPP / Android app-store reference data
 │   ├── activity-copy.ts          # Expected activity-feed strings, shared by specs and the copy contract
 │   ├── auth.ts                   # loginAsAdmin (setup-time), withCleanContext, withStaticUser
 │   ├── console.ts                # monitorConsoleErrors, monitorPageErrors, monitorNetworkFailures — auto-wired via the pageHealth fixture

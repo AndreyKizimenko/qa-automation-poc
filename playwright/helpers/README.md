@@ -17,7 +17,6 @@ and component objects). See [`../pages/README.md`](../pages/README.md).
 | Assert an endpoint is allowed / denied for a role | `@helpers/api/role-access` |
 | Resolve a live host to test against | `findOnlineHost` from `@helpers/api/hosts` |
 | Assert activity-feed wording | `@helpers/activity-copy` |
-| Pick a known FMA / VPP / Android app for an API or UI search test | `@helpers/catalogs` |
 
 If you catch yourself writing `page.getByRole(...)` in a helper, stop —
 that's a page-object responsibility.
@@ -41,7 +40,6 @@ that's a page-object responsibility.
 | [`profiles.ts`](./profiles.ts) | `inertMobileconfig(name)` / `inertWindowsProfile(name)` / `inertDeclaration(name)` (Apple's no-op `management.test`) / `rejectedMobileconfig(name)` (a Wi-Fi payload with no SSID, which macOS refuses — for Fleet's retries) — configuration profiles generated at run time on the pattern of the committed inert pair (`writeProfile` puts one where the upload modal can take it), each with a name, `PayloadIdentifier` and preference domain of its own so parallel uploads never collide; `runNonce()`. Every name starts `pw-` for the cleanup sweep. One generated Windows profile per fleet at a time: they share the one approved LocURI. At the end, fenced off: `updateEnforcementDeclaration` / `windowsUpdateProfile` — real OS update payloads, which force updates on a host, for the DDM-conflict spec on Workstations only; each demands `noRealHostsOnFleet: true` |
 | [`vm-fixtures.ts`](./vm-fixtures.ts) | `VM_SOFTWARE_FIXTURES` — the VMs fleet's durable install/uninstall software (declared in `gitops/premium-fleetqa/fleets/vms.yml`), `findVmFixtureTitle`, `ensureVmFixtureUninstalled` (returns a fixture to rest: uninstalls one that's installed, clears a failed install or uninstall by installing and uninstalling, and uninstalls on an inventory listing alone only after a fresh collection still shows it). Shared by `software-lifecycle-on-host.spec.ts` and the cleanup preflight |
 | [`vuln.ts`](./vuln.ts) | Vulnerability column assertions (`expectRowHasVulnData`, `expectSingleCve`, `assertVulnTooltip`) for specs that drill into the "Vulnerabilities" column of the DataTable |
-| [`catalogs/`](./catalogs/) | Typed app-store reference catalogs: `fmaApps`, `vppApps`, `vppUiSearchNames`, `androidApps`. Pick (id + platform) for API/GitOps tests; pick a name for UI search tests |
 
 ### `api/` modules
 
@@ -139,34 +137,6 @@ test('Software page', async ({ page }, testInfo) => {
 ```
 
 Results are aggregated into a summary table at the end of the run with deltas against the 3 previous runs. See `perf-teardown.ts`.
-
-### App-store catalogs — pick by id (API) or name (UI)
-
-```ts
-import {
-  fmaApps,
-  vppApps,
-  vppUiSearchNames,
-  androidApps,
-} from '@helpers/catalogs';
-import { apiUrl, authHeaders } from '@helpers/api';
-
-// API: pick the first macOS VPP entry and add it to the fleet
-const vpp = vppApps.find((a) => a.platform === 'darwin')!;
-await request.post(apiUrl('software/app_store_apps'), {
-  headers: authHeaders(),
-  data: { app_store_id: vpp.appStoreId, platform: vpp.platform, fleet_id: fleet.id },
-});
-
-// UI: search through the App Store list for a name we know exists
-for (const name of vppUiSearchNames) {
-  await page.getByRole('searchbox').fill(name);
-  await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible();
-}
-```
-
-The catalogs hold *identifiers only* — never bake `self_service` or
-`setup_experience` into entries; tests set those on the request.
 
 ## Related READMEs
 

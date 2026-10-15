@@ -12,9 +12,9 @@ interface FmaListEntry {
 
 /**
  * Look up the integer id Fleet uses internally for a Fleet-Maintained App
- * by its catalog slug (e.g. `airtame/darwin`). The slug is what
- * `helpers/catalogs/fma.ts` exposes; the id is what the Add FMA endpoint
- * requires. Caches results across calls.
+ * by its slug (e.g. `airtame/darwin`), as Fleet's maintained-apps list
+ * reports it; the id is what the Add FMA endpoint requires. Caches results
+ * across calls.
  */
 const _fmaIdBySlug = new Map<string, number>();
 
