@@ -226,11 +226,9 @@ test.describe('Premium • Policies • role access', () => {
     });
   }
 
-  // TODO(fleetdm/fleet#54624): a global observer+ gets no Run policy on an
-  // Unassigned policy. `useTeamIdParam` computes `isObserverPlus` as
-  // `!!currentTeam?.id && …`, and Unassigned's id is 0, while Fleet's role table
-  // says observer+ runs every policy. Un-skip once the fix ships.
-  test.skip('global-observer-plus is offered Run policy on an Unassigned policy', async ({ browser, request }) => {
+  // Fleet's role table says observer+ runs every policy, Unassigned's included
+  // (fleet id 0, which `useTeamIdParam` counts as a fleet for `isObserverPlus`).
+  test('global-observer-plus is offered Run policy on an Unassigned policy', async ({ browser, request }) => {
     const name = `pw-role-pol-unassigned-${runNonce()}`;
     fleetPolicyNames.push({ fleetId: 0, name });
     await createFleetPolicy(request, 0, { name, query: 'SELECT 1;' });

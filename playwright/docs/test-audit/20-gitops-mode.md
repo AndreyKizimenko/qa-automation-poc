@@ -1,6 +1,6 @@
 # GitOps mode — test audit
 
-**Specs covered:** 7 files · **Entries:** 28 · **Test declarations:** 28 (1 skipped) · **Projects:** gitops-mode (26), free (2)
+**Specs covered:** 7 files · **Entries:** 28 · **Test declarations:** 28 · **Projects:** gitops-mode (26), free (2)
 
 GitOps mode is Fleet's "the YAML is the source of truth" lock: with
 `config.gitops.gitops_mode_enabled = true`, every control that would change
@@ -157,7 +157,7 @@ Two cautions on the manual write:
 | GITOPS-10 | `premium/gitops-mode/03-exceptions.spec.ts` | labels — the new-label form is gated while labels are managed in YAML | UI | ☐ |
 | GITOPS-11 | `premium/gitops-mode/03-exceptions.spec.ts` | labels — the exception unlocks the new-label form | UI | ☐ |
 | GITOPS-12 | `premium/gitops-mode/03-exceptions.spec.ts` | enroll secrets — the exception unlocks the enroll-secret modal | UI | ☐ |
-| GITOPS-13 | `premium/gitops-mode/03-exceptions.spec.ts` | enroll secrets — the exception reaches the fleet settings entry point — **skipped** (fleetdm/fleet#48218) | UI | ☐ |
+| GITOPS-13 | `premium/gitops-mode/03-exceptions.spec.ts` | enroll secrets — the exception reaches the fleet settings entry point | UI | ☐ |
 | GITOPS-14 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | the config says gitops mode is off | API | ☐ |
 | GITOPS-15 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | the navbar marker is gone | UI | ☐ |
 | GITOPS-16 | `premium/gitops-mode/zz-everything-is-back.spec.ts` | Controls — Add script is editable again | UI | ☐ |
@@ -438,7 +438,7 @@ other:
 - **Mode:** UI · **Isolation:** serial describe, step 4 of 6
 - **Preconditions:** mode on, no exceptions; the `Workstations` gitops-provisioned fleet exists
 - **Data created:** none — **do not click any of these**; they open rename / delete / enroll-secret flows against a gitops-provisioned fleet
-- **Cross-link:** the skipped GITOPS-13 targets the **Manage enroll secrets** button on this same page.
+- **Cross-link:** GITOPS-13 asserts the same **Manage enroll secrets** button un-gated under the `secrets` exception.
 
 **Flow**
 
@@ -565,7 +565,7 @@ other:
 - *Redundancy:* the gated-Save half duplicates the shape of GITOPS-03/04 on a different page.
 - *Efficiency / smells:*
   - Unlike specs 01 and 02, this spec never asserts `repository_url` is non-empty. On an instance with a blank URL, `expectGitOpsTooltip`'s `new URL('')` throws a `TypeError` mid-test instead of failing with the clear "the instance has no gitops repository_url configured" message the other two specs produce.
-  - `beforeEach`/`afterEach` means **two config writes per test** in this file, four tests deep — including for the skipped one (see GITOPS-13).
+  - `beforeEach`/`afterEach` means **two config writes per test** in this file, five tests deep.
 
 **Notes (Andrey)**
 ```
@@ -658,22 +658,17 @@ other:
 
 ---
 
-### GITOPS-13 · Premium • gitops mode — exceptions › enroll secrets — the exception reaches the fleet settings entry point — **SKIPPED**
+### GITOPS-13 · Premium • gitops mode — exceptions › enroll secrets — the exception reaches the fleet settings entry point
 
-- **File:** [`playwright/tests/e2e/premium/gitops-mode/03-exceptions.spec.ts`](../../tests/e2e/premium/gitops-mode/03-exceptions.spec.ts#L81)
-- **Grep:** `npm run test:gitops-mode:only -- -g "the exception reaches the fleet settings entry point"` (reports as skipped)
+- **File:** [`playwright/tests/e2e/premium/gitops-mode/03-exceptions.spec.ts`](../../tests/e2e/premium/gitops-mode/03-exceptions.spec.ts)
+- **Grep:** `npm run test:gitops-mode:only -- -g "the exception reaches the fleet settings entry point"`
 - **Project:** gitops-mode · **Scope:** Workstations
-- **Mode:** UI · **Isolation:** independent; `beforeEach` / `afterEach` still run for it (the skip is evaluated inside the test body)
-- **Preconditions:** none reachable — the test never executes
-- **Data created:** none
+- **Mode:** UI · **Isolation:** independent; the file's `afterEach` puts the exceptions back
+- **Preconditions:** gitops mode on (the file's `beforeEach`)
+- **Data created:** none — the `secrets` exception is restored afterwards
+- **Guards:** [fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218) — *"`Manage enroll secrets` ignores `exceptions.secrets`"*, filed against 4.87.0 and fixed in 4.94 (fleetdm/fleet#53588): the button's `GitOpsModeTooltipWrapper` now carries `entityType="secrets"`.
 
-**Status: skipped, blocked by a confirmed Fleet defect**
-
-- **Issue:** [fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218) — *"`Manage enroll secrets` ignores `exceptions.secrets`"*. Filed against 4.87.0, re-confirmed on v4.93.0-rc (2026-09-27).
-- **Mechanism:** the **Manage enroll secrets** button on a fleet's settings page is an `ActionButtons` entry with `gitOpsModeCompatible: true`, so it gets a `GitOpsModeTooltipWrapper` with **no `entityType`**. The modal it opens is the *only* surface that honours `entityType="secrets"`. With `exceptions.secrets: true` the button therefore stays disabled, leaving the exception unreachable from the only documented way into the modal it governs. (It *is* reachable via the `?manage_enroll_secrets=1` deep link, which has no gitops gate at all — which is how GITOPS-08 and GITOPS-12 can test the modal, and is itself an inconsistency noted on the issue.)
-- **Unblock condition:** when that wrapper carries `entityType="secrets"`, remove the `test.skip(true, …)` — the test body is already written and should pass as-is. Tracked in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) (row 24), with a matching `TODO(fleetdm/fleet#48218)` on the skip so the two cannot drift.
-
-**Flow (what it would do, once unblocked)**
+**Flow**
 
 1. ☐ (No user action) mode on, nothing excepted, then `setGitOpsException(request, 'secrets', true)`.
 2. ☐ Open `/settings/fleets/settings?fleet_id=<workstationsFleetId>`.
@@ -681,12 +676,10 @@ other:
    - ✅ *(UI)* Visible, no gitops wrapper, enabled.
 
 **Assessment**
-- *Value (once unblocked):* closes the loop between GITOPS-07 (button gated, no exception) and GITOPS-12 (modal excepted, reached by deep link) — the only assertion that the exception is usable the way a customer would actually reach it.
-- *Coverage gaps:* while skipped, the exception axis has a hole exactly where the product is broken. The suite is *aware* of the bug but asserts nothing about it, so a Fleet fix produces no signal.
+- *Value:* closes the loop between GITOPS-07 (button gated, no exception) and GITOPS-12 (modal excepted, reached by deep link) — the only assertion that the exception is usable the way a customer would actually reach it.
+- *Coverage gaps:* the button isn't clicked, so the modal opening from it isn't asserted (GITOPS-12 covers the modal by deep link).
 - *Redundancy:* none.
-- *Efficiency / smells:*
-  - `test.skip(true, …)` is called **inside the test body**, so Playwright runs `beforeEach` and `afterEach` for it first — two `PATCH /config` round-trips per run for a test that does nothing. A declaration-level `test.skip('…', async () => {…})` or `test.fixme` would cost nothing. Minor, but this project is single-worker and every config write is serial.
-  - The suite chose *skip* here where the design had recommended asserting the *current* (broken) behaviour with a TODO, so a Fleet fix would break the test loudly. The as-shipped choice is defensible — a test that is green *because* the product is broken inverts the meaning of green, and `blocked-by-product-bugs.md` now makes it the rule — but it means the unblock depends on someone re-reading the blocked-bugs table rather than on CI going red.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -1080,13 +1073,13 @@ other:
 4. ☐ Hover the row again for each of **View <name> details**, **Edit <name>**, **Download <name>** — `expectNotGatedByGitOps`:
    - ✅ *(UI)* Visible, unwrapped, enabled.
 5. ☐ Click **Edit <name>**.
-   - ✅ *(UI)* The Edit profile modal opens; **Update profile** is gated (wrapper, disabled, tooltip).
+   - ✅ *(UI)* The Edit profile page opens; **Update profile** is gated (wrapper, disabled, tooltip).
 6. ☐ Click **Cancel**.
-   - ✅ *(UI)* The modal closes.
+   - ✅ *(UI)* Back on the profile list (the form is gone, the list heading shows).
 
 **Assessment**
 - *Value:* a profile row's Delete check together with its over-gating half. Edit is left open *by design* (the modal is the only place to read a profile's targets), and the test proves the lock moved into the modal rather than vanished.
-- *Coverage gaps:* Apple only; a Windows or Android profile row renders the same component. The upload modal's own controls aren't reached (Add profile is gated before it opens).
+- *Coverage gaps:* Apple only; a Windows or Android profile row renders the same component. The Add profile page's own controls aren't reached (Add profile is gated before it opens).
 - *Redundancy:* none.
 - *Efficiency / smells:* the row's buttons render only while the row is hovered, and every tooltip check ends by moving the pointer away, so the test re-hovers before each check (four hovers), and passes the row as the tooltip check's `reveal`. Branch run 37667485374 failed this test once at **Add profile**'s tooltip: the status cards above load after the page does, and the single hover was left over nothing. The tooltip check now retries its hover.
 
@@ -1263,7 +1256,7 @@ an assertion, failing a test that passes in isolation.
 | Fleet settings | **Add hosts** |
 | Org settings › Advanced | **Save**, `Domain`, `Verify SSL certs`, `Enable STARTTLS` (the page is only partly gated) |
 | Controls › Variables | **Delete `<name>`** |
-| Controls › OS settings › Profiles | **View**, **Edit**, **Download** per row (Edit's modal gates *Update profile*) |
+| Controls › OS settings › Profiles | **View**, **Edit**, **Download** per row (the Edit page gates *Update profile*) |
 | Controls › Scripts | **Download** and the name link; **Edit is disabled** here, unlike profiles (a script's editor is its content) |
 | Software inventory and library | **Add software** and the whole page: zero wrappers |
 | Software title details | **Edit software** (its modal's Save is gated), **All hosts**, version links |
@@ -1319,7 +1312,7 @@ needs the URL typed); and roles (a non-admin sees the navbar indicator as plain 
 | Over-gating (must stay enabled) | GITOPS-05, 07, 08, 09, 24 (profile View / Edit / Download), 25 (Delete a variable), 26 (Live report) | Hosts list actions (Run script on a selection); a batch's Cancel |
 | Escape hatch (Change management never gated) | GITOPS-09 (mode on), GITOPS-19 (mode off), GITOPS-27 (the mode turned off through the UI), GITOPS-28 (an exception ticked through the UI) | Turning the mode *on* through the UI (it needs the URL typed, which the specs never do) |
 | `exceptions.labels` | GITOPS-10 (gated), GITOPS-11 (excepted) | The `/labels/manage` row **Delete** action (a fifth DOM shape: `aria-disabled` on a role-less option); **Edit label** / **Delete label** on `/hosts/manage/labels/:id` |
-| `exceptions.secrets` | GITOPS-12 (both directions, one test) | GITOPS-13 skipped — the only documented entry point ignores the exception ([fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218)) |
+| `exceptions.secrets` | GITOPS-12 (both directions, one test) | — (GITOPS-13 covers the fleet settings entry point since [fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218) was fixed in 4.94) |
 | `exceptions.software` | GITOPS-22 (both directions, one test, the Fleet-maintained app form) | The Library accordion's **Delete this version**, the title's Actions menu, the VPP / Play forms: same `entityType`, dropped as breadth |
 | Teardown / recovery | GITOPS-14 (API), 15–19 (UI), plus `gitops-mode-teardown` (the flag and the pinned exceptions, asserted), `cleanup-setup` (the flag) and the exception restore before every premium gitops apply | `repository_url` is read back only by GITOPS-27, not after the teardown |
 | Free-tier premium gate | GITOPS-20, 21 | The API-side gate (`PATCH /config` with a `gitops` subtree on free) is unasserted |
@@ -1330,7 +1323,7 @@ needs the URL typed); and roles (a non-admin sees the navbar indicator as plain 
 1. **GITOPS-01 vs GITOPS-15.** The same two assertions on the same page, fifteen tests apart. GITOPS-15 earns its place as the teardown verifier; GITOPS-01 is a "before" baseline on the one page where neither assertion discriminates.
 2. **The gated/ungated mirror pairs.** GITOPS-03↔16, 05↔17, 06↔18, 09↔19. This is the design working as intended — one control per gating pattern, asserted in both directions — but it does mean eight of the nineteen premium tests are the same four pages twice.
 3. **GITOPS-08 vs GITOPS-12 step 3.** `addSecretButton` is asserted gated twice per run, in two files, under the same config.
-4. **GITOPS-07 vs GITOPS-13.** Same button on the same page; one asserts it gated, the other (skipped) would assert it un-gated under an exception.
+4. **GITOPS-07 vs GITOPS-13.** Same button on the same page; one asserts it gated, the other un-gated under an exception.
 5. **The tooltip mechanics** (absent → hover, stepped away from and retried until the tip opens, since a page still settling can move the control from under the pointer → visible → `href` → move away → absent) run inside every one of the twelve `expectGatedByGitOps` calls. Correct and cheap, but a manual re-runner should know they are re-testing the same tooltip twelve times.
 
 **UI-vs-API balance**
@@ -1344,7 +1337,7 @@ needs the URL typed); and roles (a non-admin sees the navbar indicator as plain 
 
 Three findings came out of the design work; all three are worth knowing before you conclude a manual run found something new:
 
-- [fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218) — `Manage enroll secrets` ignores `exceptions.secrets`. **Open**, GITOPS-13 skipped for it.
+- [fleetdm/fleet#48218](https://github.com/fleetdm/fleet/issues/48218) — `Manage enroll secrets` ignores `exceptions.secrets`. **Fixed in 4.94**; GITOPS-13 runs.
 - [fleetdm/fleet#54168](https://github.com/fleetdm/fleet/issues/54168) — the `ActionButtons` "More options" bypass at ~900 px. **Open**, worked around by a visibility filter in GITOPS-07.
 - fleetdm/fleet#54169 — "`exceptions.software` leaves the Install-software form unsavable". **Withdrawn and closed as not reproducible** (2026-09-28). The re-check found that form's controls are disabled with GitOps mode entirely *off* too, so whatever disables it is unrelated. The original evidence was a dotted underline (TooltipWrapper styling), which says nothing about enabled state. **Do not re-file without a DOM check across all three states** (exception on / exception off / GitOps mode off).
 

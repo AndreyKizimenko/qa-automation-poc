@@ -81,7 +81,8 @@ skew was silently costing real coverage in three ways.
    predates DDM assets support (4.90.0), so it never took the failing branch — **FCTL-24 and
    FCTL-25 passed for two months against a command that is broken on this tier**, and so did the
    nightly chain's FCTL-26…30 on Free, until CI's own fleetctl install stopped falling back to 4.85.0
-   (2026-09-28). Upgrading the client is what surfaced it; all seven now skip on Free behind #53965.
+   (2026-09-28). Upgrading the client is what surfaced it; all seven skipped on Free behind #53965
+   until its client-side fix shipped in `fleetctl` 4.93.0 (un-skipped 2026-10-15).
 
 **The fix when the released client is behind the server.** `npm install -g fleetctl@<version>` only
 works for a version that has shipped; against an RC it will not. Build one from the Fleet checkout
@@ -131,8 +132,8 @@ client is old. That is the mechanism by which two specs passed for the wrong rea
 | FCTL-21 | `cli/free/licensing.spec.ts` | get fleets is refused | CLI | ☐ |
 | FCTL-22 | `cli/free/licensing.spec.ts` | get teams (deprecated alias) is refused | CLI | ☐ |
 | FCTL-23 | `cli/free/licensing.spec.ts` | get mdm-apple-bm is refused | CLI | ☐ |
-| FCTL-24 | `cli/free/licensing.spec.ts` | generate-gitops omits premium-only SSO fields **(skipped — #53965)** | CLI | ☐ |
-| FCTL-25 | `cli/free/licensing.spec.ts` | generate-gitops omits software, which is premium-only **(skipped — #53965)** | CLI | ☐ |
+| FCTL-24 | `cli/free/licensing.spec.ts` | generate-gitops omits premium-only SSO fields | CLI | ☐ |
+| FCTL-25 | `cli/free/licensing.spec.ts` | generate-gitops omits software, which is premium-only | CLI | ☐ |
 | FCTL-31 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` refuses a `{darwin,windows}` host with MDM off (6) | CLI + API | ☐ |
 | FCTL-32 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` reports an unknown host identifier (3) | CLI | ☐ |
 | FCTL-33 | `cli/premium/mdm-lock-wipe.spec.ts` | `{lock,unlock,wipe}` requires the --host flag (3) | CLI | ☐ |
@@ -145,11 +146,11 @@ client is old. That is the mechanism by which two specs passed for the wrong rea
 | FCTL-40 | `cli/shared/gitops-dry-run.spec.ts` | reports a missing config file | CLI | ☐ |
 | FCTL-41 | `cli/premium/gitops-dry-run.spec.ts` | processes fleet configs; `--delete-other-fleets` (2) | CLI | ☐ |
 | FCTL-42 | `cli/free/gitops-skips-teams.spec.ts` | skips every fleet file in the scaffold | CLI | ☐ |
-| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set **(skipped on Free — #53965)** | CLI | ☐ |
-| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set **(skipped on Free — #53965)** | CLI | ☐ |
-| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set **(skipped on Free — #53965)** | CLI | ☐ |
-| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name **(skipped on Free — #53965)** | CLI | ☐ |
-| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure **(skipped on Free — #53965)** | CLI | ☐ |
+| FCTL-26 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied label set | CLI | ☐ |
+| FCTL-27 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global policy set | CLI | ☐ |
+| FCTL-28 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied global report set | CLI | ☐ |
+| FCTL-29 | `cli/nightly/generate-gitops.spec.ts` | reproduces the applied org name | CLI | ☐ |
+| FCTL-30 | `cli/nightly/generate-gitops.spec.ts` | emits the tier-appropriate file structure | CLI | ☐ |
 | FCTL-43 | `cli/nightly/gitops-idempotence.spec.ts` | dry-run of the applied config proposes no deletions | CLI | ☐ |
 
 Shared across **FCTL-01..25** unless an entry says otherwise:
@@ -947,38 +948,29 @@ other:
 - **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts) (L38)
 - **Grep:** `-g "generate-gitops omits premium-only SSO fields"`
 - **Project:** free · **Mode:** CLI
-- **Status:** **`test.skip(true, …)` — blocked by [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)** (P1, milestone 4.93.0). Logged in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) with a matching `TODO(fleetdm/fleet#53965)` on the skip.
+- **Guards:** [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965) — `generate-gitops`
+  exited 1 on Free whenever Apple MDM was configured (`generateControls` called `generateAssets`
+  unconditionally, and `GET /assets` 402s on Free), so it wrote nothing. The fix is client-side and
+  shipped in `fleetctl` 4.93.0; this entry and FCTL-25 were skipped until then. A client older than
+  that still fails here — see the
+  [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
 
-**Why it is skipped.** `generate-gitops` **exits 1 on Free whenever Apple MDM is configured**, so it
-writes nothing and neither premium-omission assertion can run. The mechanism: `generateControls`
-calls `generateAssets` unconditionally, and `GET /assets` 402s on Free. This instance has Apple MDM
-on, so it fails every time — the skip is unconditional (`test.skip(true, …)`) rather than gated on
-instance state, because on a Free instance with Apple MDM configured there is no passing path.
-
-**This was invisible until the client caught up.** fleetctl 4.85.1 predates DDM assets support
-(added in 4.90.0), so the old client never took the failing branch and this entry passed for two
-months against a broken command. Upgrading to a 4.93-matching client surfaced it. See the
-[version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
-
-**Unblock condition:** `generate-gitops` succeeds on Free with Apple MDM configured — i.e. the
-assets fetch is skipped on Free. Then delete both skips (this entry and FCTL-25) and re-run.
-
-**Flow** *(what it asserts when un-skipped)*
+**Flow**
 
 1. ☐ Run `fleetctl generate-gitops --key org_settings.sso_settings` on free.
    - ✅ *(CLI)* Exit code is `0`.
    - ✅ *(CLI)* stdout does **not** contain `enable_jit_provisioning`.
    - ✅ *(CLI)* stdout **does** contain `enable_sso` — proving the command ran and produced SSO output, not nothing.
 
-**Manual repro** — on free today: `fleetctl generate-gitops --key org_settings.sso_settings` exits
-**1** and writes nothing (that is the bug, and the quickest confirmation of whether #53965 is still
-live). Once fixed, run on free, then premium, and diff: only `enable_jit_provisioning` differs.
+**Manual repro** — run `fleetctl generate-gitops --key org_settings.sso_settings` on free, then
+premium, and diff: only `enable_jit_provisioning` differs. An exit of **1** with nothing written on
+free means the client predates the #53965 fix.
 
 **Assessment**
-- *Value:* high **when it runs** — the **free half** of the pair with FCTL-16, and a well-constructed negative test. The `enable_sso` positive assertion is what keeps it honest: without it, a command that output nothing at all would pass. That positive assertion is also, ironically, what would have caught #53965 had the client been current.
-- *Coverage gaps:* dark today, so the free half of the JIT-provisioning pair is currently uncovered, and FCTL-16 (premium) asserts only its own side. Two other premium-only omissions on this path are unasserted — `microsoft_graph_credentials` (`generate_gitops.go:930`) and the Google Workspace IdP entry in `integrations` (`:976`). Both are one-line additions in the same shape.
-- *Redundancy:* FCTL-30's free branch (nightly) asserts the *structural* tier contract on the generated tree and does not go through `--key`, so it is the nearest thing to cover for this while the skip stands — but it runs only in the nightly chain, and it is subject to the same `generate-gitops` failure on Free, so ⚠️ **check whether FCTL-30's free branch is also broken by #53965** rather than assuming it covers the gap.
-- *Efficiency / smells:* the skip is correctly narrow (two tests, not the describe) and correctly recorded per `CLAUDE.md` — issue filed first, row in `blocked-by-product-bugs.md`, `TODO(fleetdm/fleet#53965)` comment on the skip. The `test.skip(true, …)` form sits *inside* the test body, so the assertions below it remain type-checked and reviewable, which is the right shape for a temporary block.
+- *Value:* high — the **free half** of the pair with FCTL-16, and a well-constructed negative test. The `enable_sso` positive assertion is what keeps it honest: without it, a command that output nothing at all would pass. That positive assertion is also what would have caught #53965 had the client been current.
+- *Coverage gaps:* FCTL-16 (premium) asserts only its own side. Two other premium-only omissions on this path are unasserted — `microsoft_graph_credentials` (`generate_gitops.go:930`) and the Google Workspace IdP entry in `integrations` (`:976`). Both are one-line additions in the same shape.
+- *Redundancy:* FCTL-30's free branch (nightly) asserts the *structural* tier contract on the generated tree and does not go through `--key`; it runs only in the nightly chain.
+- *Efficiency / smells:* seconds.
 
 **Notes (Andrey)**
 ```
@@ -995,28 +987,22 @@ other:
 - **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts) (L52)
 - **Grep:** `-g "generate-gitops omits software, which is premium-only"`
 - **Project:** free · **Mode:** CLI
-- **Status:** **`test.skip(true, …)` — blocked by [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965)**, same cause and same unblock condition as FCTL-24. One fix un-skips both.
+- **Guards:** [fleetdm/fleet#53965](https://github.com/fleetdm/fleet/issues/53965), as FCTL-24.
 
-**Why it is skipped.** Identical to FCTL-24: `generate-gitops` exits 1 on Free with Apple MDM
-configured (`generateControls` → `generateAssets` → `GET /assets` 402s on Free), so the command
-produces no output for the assertion to inspect. Also masked by fleetctl 4.85.1 until 2026-09-27 —
-see the [version-skew warning](#the-client-must-stay-within-a-minor-of-the-server--read-this-first).
-
-**Flow** *(what it asserts when un-skipped)*
+**Flow**
 
 1. ☐ Run `fleetctl generate-gitops --key software` on free.
    - ✅ *(CLI)* Exit code is `0`.
    - ✅ *(CLI)* Output contains `Key software not found`.
 
-**Manual repro** — on free today the command exits **1** and prints nothing usable. Once #53965 is
-fixed: `generate_gitops.go:2077` hard-returns `nil` for software on the free tier, so the key never
-appears in the generated tree.
+**Manual repro** — `generate_gitops.go` hard-returns `nil` for software on the free tier, so the key
+never appears in the generated tree.
 
 **Assessment**
-- *Value:* moderate **when it runs**. Covers a clean, explicit licence branch. Dark today.
-- *Coverage gaps:* `Key software not found` is also what you would get on **premium** for a fleet with no installable software — so this assertion does not actually distinguish "omitted because free" from "empty because nothing installed". On free that ambiguity is harmless (the branch is unconditional), but the test does not prove what its name claims. FCTL-30's structural check is the stronger form. ⚠️ Note this entry is the **weaker** of the two skipped here: FCTL-24's `enable_sso` positive assertion would have failed loudly on #53965, whereas this one asserts only the absence of a key — so had the client been current, this test would have failed on its *exit-code* assertion rather than telling anyone what was wrong.
-- *Redundancy:* overlaps FCTL-30's free branch, which asserts `default.yml` has no `software` key at all — but see the ⚠️ under FCTL-24: FCTL-30's free branch drives the same `generate-gitops` command and may be broken by the same bug, so it cannot be assumed to be covering this gap. Worth checking the last nightly free run before deciding.
-- *Efficiency / smells:* the ambiguity above is the one thing worth fixing in this entry — asserting on the generated tree rather than the `--key` miss would remove it, and would also survive #53965 differently. Skip is correctly narrow and correctly recorded.
+- *Value:* moderate. Covers a clean, explicit licence branch.
+- *Coverage gaps:* `Key software not found` is also what you would get on **premium** for a fleet with no installable software — so this assertion does not actually distinguish "omitted because free" from "empty because nothing installed". On free that ambiguity is harmless (the branch is unconditional), but the test does not prove what its name claims. FCTL-30's structural check is the stronger form. This entry is the **weaker** of the pair: FCTL-24's `enable_sso` positive assertion fails loudly on a client that writes nothing, whereas this one asserts only the absence of a key, so it fails on its *exit-code* assertion without saying what was wrong.
+- *Redundancy:* overlaps FCTL-30's free branch, which asserts `default.yml` has no `software` key at all.
+- *Efficiency / smells:* the ambiguity above is the one thing worth fixing in this entry — asserting on the generated tree rather than the `--key` miss would remove it.
 
 **Notes (Andrey)**
 ```
@@ -1824,13 +1810,10 @@ to spend review time.
    cert and FCTL-23's premium counterpart would read ABM; both print a renew date (May 2027 on
    these instances) and neither asserts it is in the future. An expired APNs cert breaks MDM
    enrolment across the whole suite, and nothing else in the suite would catch it early.
-3. **Three tier pairs are complete on paper; two are half-built in practice.** 14↔21 (fleets),
+3. **Three tier pairs are complete on paper; one is half-built in practice.** 14↔21 (fleets),
    16↔24 (JIT), 17↔30 (controls scoping) each assert both sides. But `get mdm-apple-bm` has only the
-   free denial (FCTL-23) with no premium positive, and **16↔24 is currently one-sided too** —
-   FCTL-24 is skipped for [#53965](https://github.com/fleetdm/fleet/issues/53965), so the JIT pair
-   is premium-only until that closes. FCTL-25 is dark for the same reason, and ⚠️ FCTL-30's *free*
-   branch drives the same broken command, so the "covered elsewhere" argument for both skips needs
-   checking against a real nightly free run rather than assumed.
+   free denial (FCTL-23) with no premium positive. (16↔24 was one-sided while FCTL-24 was skipped for
+   [#53965](https://github.com/fleetdm/fleet/issues/53965); it runs again since `fleetctl` 4.93.0.)
 4. **Exit-0-on-error is a real product wart, pinned in three places.** FCTL-18/19/20 all assert
    message content because the command returns nil. If Fleet fixes this, all three need updating
    to assert exit 1 — they should not be "fixed" by loosening.

@@ -170,11 +170,11 @@ for (const osKey of OS_KEYS) {
     await softwareTitleDetail.clickFirstVersionWithVulnerabilities();
 
     await softwareVersionDetail.waitForReady();
-    // Fleet links every CVE it has matched to this version, but 404s the
-    // detail page for any the vulnerability feeds carry no metadata for yet,
-    // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
-    // one the detail endpoint can serve, so this covers the click-through
-    // rather than racing NVD enrichment.
+    // Fleet links every CVE it has matched to this version, but its detail
+    // page shows nothing for one not yet in its host counts, and the newest
+    // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+    // endpoint can serve, so this covers the click-through rather than racing
+    // Fleet's aggregation.
     const cveText = await findRenderableCve(
       request,
       await softwareVersionDetail.cveNames(),
@@ -182,7 +182,7 @@ for (const osKey of OS_KEYS) {
     );
     test.skip(
       !cveText,
-      'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+      'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
     );
     await softwareVersionDetail.clickCve(cveText!);
 
@@ -397,11 +397,11 @@ for (const osKey of OS_KEYS) {
     await softwareTitleDetail.clickVersion(version);
 
     await softwareVersionDetail.waitForReady();
-    // Fleet links every CVE it has matched to this version, but 404s the
-    // detail page for any the vulnerability feeds carry no metadata for yet,
-    // and the newest match sorts to the top (fleetdm/fleet#49913). Drill into
-    // one the detail endpoint can serve, so this covers the click-through
-    // rather than racing NVD enrichment.
+    // Fleet links every CVE it has matched to this version, but its detail
+    // page shows nothing for one not yet in its host counts, and the newest
+    // match sorts to the top (fleetdm/fleet#49913). Drill into one the detail
+    // endpoint can serve, so this covers the click-through rather than racing
+    // Fleet's aggregation.
     const cveText = await findRenderableCve(
       request,
       await softwareVersionDetail.cveNames(),
@@ -409,7 +409,7 @@ for (const osKey of OS_KEYS) {
     );
     test.skip(
       !cveText,
-      'Every CVE on this version 404s its detail page — fleetdm/fleet#49913',
+      'No CVE on this version has a renderable detail page — fleetdm/fleet#49913',
     );
     await softwareVersionDetail.clickCve(cveText!);
 
@@ -425,8 +425,8 @@ for (const osKey of OS_KEYS) {
  * assertion, together with the filter pill naming the version.
  *
  * The CVE is resolved through `findRenderableCve`, not read off the top of the
- * list: Fleet matches CVEs faster than its feeds enrich them and 404s the detail
- * page for any it has no metadata for, with the newest match sorting first
+ * list: Fleet matches CVEs faster than it counts their hosts and shows an empty
+ * detail page for any it hasn't counted yet, with the newest match sorting first
  * (fleetdm/fleet#49913).
  *
  * Summing every row's host count and comparing it to "Affected hosts" is not a

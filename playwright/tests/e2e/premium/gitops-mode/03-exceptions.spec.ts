@@ -118,16 +118,8 @@ test.describe('Premium • gitops mode — exceptions', () => {
     request,
     workstationsFleetId,
   }) => {
-    // TODO(fleetdm/fleet#48218): "Manage enroll secrets" on a fleet's settings
-    // page is wrapped without an `entityType`, so `exceptions.secrets` never
-    // reaches it and the button stays disabled — leaving the exception
-    // unreachable from the only documented way into the modal it governs.
-    // Unblocks when that wrapper carries entityType="secrets".
-    test.skip(
-      true,
-      'fleetdm/fleet#48218 — Manage enroll secrets ignores exceptions.secrets',
-    );
-
+    // "Manage enroll secrets" is the only documented way into the modal the
+    // exception governs, so the exception has to reach it.
     await setGitOpsException(request, 'secrets', true);
     await page.goto(`/settings/fleets/settings?fleet_id=${workstationsFleetId}`);
 
