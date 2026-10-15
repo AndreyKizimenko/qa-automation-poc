@@ -1,6 +1,6 @@
 ---
 name: fleet-story-qa
-description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, propose a tighter test plan, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a short manager-level sign-off comment. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write a test plan from scratch.
+description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, check the plan is current (fleet-test-plan writes it) and flag stale rows, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a short manager-level sign-off comment. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write or update a story's test plan (fleet-test-plan).
 ---
 
 # Fleet story QA — partner mode
@@ -144,36 +144,50 @@ from. For each changed code path, ask:
 - **Docs vs code**: the REST API reference (docs branch for the release) vs the
   actual response shape; field names taken from code, never from ticket prose.
 
-Name the file:line for each risk. Risks become targeted checks in step 3 — this is
-the one place it's worth adding a test-plan row. A risk read from code is a
+Name the file:line for each risk. A risk the plan doesn't cover becomes a targeted
+check in step 3 and an addition in the step-2 proposal. A risk read from code is a
 hypothesis: say what you expect ("second call likely fails on the unique key")
 without asserting the exact status or message until a live check shows it —
 error mapping layers often turn a raw DB error into something else.
 
-### 2. Propose a tighter test plan — don't grow it
+### 2. Check the plan is current, and don't re-trim it
 
-The plan in the ticket is a starting point, and it may be long, stale, or written
-by someone who hadn't seen the code. Propose changes **in chat only**; never edit
-the ticket body (a separate skill will own test planning).
+**fleet-test-plan** writes and updates the ticket's plan, once from the design and again once
+the PR is up. It sizes the plan for this split on purpose: rows you can run are thorough, and
+rows the engineer runs are lean and batched. Trimming it again here is how earlier plans lost the
+entry points and roles nobody else was going to check. Propose changes **in chat only**, and
+never edit the ticket body.
 
-- **Collapse** rows that exercise the same code path: five UI variations of the
-  same endpoint call are one API check plus one UI glance.
-- **Flag stale rows**: behavior the implementation changed (a check that now
-  refuses before the external call, a field renamed, a flow moved).
-- **Don't answer rows from code.** Code shows which rows are really one path
-  (collapse them) and where the risk sits; it doesn't pass a row. When a row's
-  live check needs something only the engineer can do — Apple MDM off to prove a
-  Windows feature has no Apple gate, Free to see the tier gating — it goes in the
-  ask. They may decide the row isn't worth it and drop it; that's their decision
-  to make, not yours.
-- **Add** only a row that covers a risk from step 1 nothing else covers. If you
-  can't name the file:line risk, don't add it.
+- **Is it current?** It's current when it reflects the merged PRs: the PR pass ran (look for
+  `<QA workspace>/test-plan-<N>/changes.md` newer than the last merged PR), or its rows clearly
+  cover what the diff added. If the plan predates the PR, is still template TODOs, or was never
+  through a PR pass, say so and recommend running fleet-test-plan first. It takes about 15
+  minutes and saves rework. Don't rewrite the plan yourself.
+- **Run it as written.** Collapsing is already done. If two rows turn out to be one path, run
+  it once and mark both. Don't drop rows from the run.
+- **Flag stale or wrong rows** with the evidence: behavior the implementation changed (a check
+  that now refuses before the external call, a renamed field, a moved flow), or an input that
+  can't work (an enum value the API doesn't accept). Don't silently skip a row or change what it
+  checks.
+- **Don't answer rows from code.** Code shows which rows are really one path and where the risk
+  sits; it doesn't pass a row. When a row's live check needs something only the engineer can do
+  (Apple MDM off to prove a Windows feature has no Apple gate, Free to see the tier gating), it
+  goes in the ask. They may decide the row isn't worth it and drop it. That's their decision to
+  make, not yours.
+- **Add** a check only for a risk from step 1 that the plan doesn't cover, with its file:line.
+  It runs in this pass. Whether it joins the ticket's plan is the user's call, through the next
+  fleet-test-plan pass.
 
-Keep the proposal to one screen: which rows you'll take and how (what you'll
-simulate, with what), which are the human's, which collapse, any additions with
-their risk.
+Keep the proposal to one screen: which rows you'll take and how (what you'll simulate, with
+what), which are the human's, stale or wrong rows with their evidence, and additions with their
+risk.
 
 ### 3. Split the work, then run your share
+
+A plan from fleet-test-plan already marks the split. `Device:` rows and the global-switch
+sections (Premium gating, Feature in isolation, Upgrade) are theirs, the rest are yours, and its
+Setup says what each needs. Its `notes.md` in `<QA workspace>/test-plan-<N>/` holds the QA-only
+methods for your rows (simulated hosts, mocks, DB checks), which the public plan leaves out.
 
 **Yours** — anything driven from outside a device:
 - API on all prefixes; role matrix with API-only users per global and fleet role
