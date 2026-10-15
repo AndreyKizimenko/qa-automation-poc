@@ -3,10 +3,12 @@
 Feature: [fleetdm/fleet#43757](https://github.com/fleetdm/fleet/issues/43757), shipped in 4.87.
 Applies to **free and premium**; a few items are premium-gated.
 
-Source read for this plan: `frontend/components/CommandPalette/` on `rc-minor-fleet-v4.90.0`
-(what both QA instances run today — `4.90.0-rc.2608060128`). The palette on that branch is
-identical to `main` except three files: `settings.ts` renames "Certificate enrollment" →
-"Certificate authorities", and the Report/Policy pickers switch to normalized `Tag` badges.
+Source read for this plan: `frontend/components/CommandPalette/` (paths below are relative to it),
+first on `rc-minor-fleet-v4.90.0` and last checked against `rc-minor-fleet-v4.93.0`, which both QA
+instances run. Since 4.90 the palette renamed "Certificate enrollment" → "Certificate authorities",
+moved the Report/Policy picker badges to `Tag`, and added `Manage host activity automations`
+(premium, fleet or Unassigned, `?manage_activity_automations=1` on Hosts), `Edit Microsoft Graph`
+(premium) and `Android zero-touch` (premium, Android MDM on).
 
 ## Scope decision
 
@@ -25,8 +27,8 @@ Playwright earns its keep on the six things JSDOM and mocked props cannot do:
    rides along.
 3. **Real backend pickers** — server-side search, debounce, empty-state copy, badges
    (Inherited / Critical / Patch / observer-can-run), install icons.
-4. **Deep-link modals** — 10 query params consumed by 8 different pages, each stripping
-   the param afterwards. All "not tested" today.
+4. **Deep-link modals** — 11 deep links over 9 destination pages, each consuming its flag
+   and stripping it afterwards.
 5. **Real role and tier gating** — from a live session's AppContext, not props.
 6. **Dialog/keyboard mechanics** — Escape layering (capture-phase `stopImmediatePropagation`),
    overlay click, focus management, keyboard-vs-pointer auto-expand.
@@ -35,11 +37,34 @@ Everything else stays with Jest. Explicit non-goals are listed at the bottom.
 
 ## Status
 
-Delivered and green on both tiers (38 tests): `pages/components/CommandPalette.ts`, the
-`palette` fixture in `fixtures.ts`, and the three shared specs `open-close` (#1–#9),
-`search-and-navigate` (#10–#24, including #21b) and `pickers` (#25–#37). Remaining: the deep-links,
-commands and role-access shared specs, plus the four premium specs and the free
-tier-gating spec.
+Built on `pages/components/CommandPalette.ts` and the `palette` fixture in `fixtures.ts` — 65 tests
+on free and 67 on premium:
+
+| Spec | Cases | Tests |
+|---|---|---|
+| `shared/command-palette/open-close.spec.ts` | #1–#9, #92 | 10 |
+| `shared/command-palette/search-and-navigate.spec.ts` | #10–#24 incl. #21b (#13's shared keywords only) | 16 |
+| `shared/command-palette/pickers.spec.ts` | #25–#37, #91 (the shared halves of #26, #30–#33) | 14 |
+| `shared/command-palette/deep-links.spec.ts` | #39–#44, #49 | 7 |
+| `shared/command-palette/commands.spec.ts` | #50–#54 (one test per #53/#54 row) | 8 |
+| `shared/command-palette/role-access.spec.ts` | #55, #56 (tier-shared half), #57 | 3 |
+| `free/command-palette/deep-links.spec.ts` | #45, #46 (free) | 2 |
+| `free/command-palette/role-access.spec.ts` | #56 (Controls half, free) | 1 |
+| `free/command-palette/tier-gating.spec.ts` | #80, #81, #82, #82b | 4 |
+| `premium/command-palette/fleet-switcher.spec.ts` | #87, #88 (also #62's accessible name, #64) | 2 |
+| `premium/command-palette/role-access.spec.ts` | #86 (2 tests), #56 (Controls half, premium) | 3 |
+| `premium/command-palette/deep-links.spec.ts` | #89, #45, #46 (premium) | 3 |
+| `premium/command-palette/items.spec.ts` | #90 | 1 |
+
+#44 (`Manage software automations`) is skipped on fleetdm/fleet#55672, a Fleet race rather than
+the test: Software's inventory table rewrites the page's query on its first render and drops
+`manage_automations` before the deep-link effect, which waits for the software config, reads it
+(`SoftwareInventoryTable.tsx` `onQueryChange`, `SoftwarePage.tsx`). From the Dashboard the modal
+opened in 2 of 11 scripted probes on the 4.93 RC, and the test failed 8 of 16 runs on the 4.94 RC
+(29ffbd6).
+
+Not built, and not cut: #38, #47, #48, #47b, #58–#61, #62–#73 except as noted, #74–#78, #83–#85,
+and the premium halves of #13, #26/#62b and #30–#33.
 
 ## Suite placement
 
@@ -51,14 +76,18 @@ tests/e2e/shared/command-palette/
   pickers.spec.ts
   deep-links.spec.ts
   commands.spec.ts
-  role-access.spec.ts
+  role-access.spec.ts                          # observer, maintainer, admin: the tier-shared rows
 tests/e2e/premium/command-palette/
   fleet-switcher.spec.ts
-  team-context.spec.ts
-  premium-items.spec.ts
-  role-access.spec.ts                          # technician, observer+, team roles
+  role-access.spec.ts                          # host-picker authorization, maintainer in a fleet
+  deep-links.spec.ts                           # the fleet-carrying deep links
+  items.spec.ts                                # rows sharing a label
+  team-context.spec.ts                         # planned (#74–#78)
+  premium-items.spec.ts                        # planned (#83–#85)
 tests/e2e/free/command-palette/
   tier-gating.spec.ts
+  deep-links.spec.ts                           # Add script, Add custom variable
+  role-access.spec.ts                          # maintainer's Controls group
 ```
 
 The palette renders in `CoreLayout`, so it is reachable from any authenticated page — specs
@@ -124,21 +153,24 @@ so no rule element exists in the DOM.
   open palette — i.e. it passes for the wrong reason until it doesn't.
 - **Host names are random on the simulated pool** — resolve a host via the API first, then
   search the picker for that name. Never assume a name.
-- **Picker data**: policies are stable (22 global on each tier), but **there are no reports in
-  the global scope on either instance** — `GET /queries` with no `team_id` returns
-  `count: 0`. Premium's three gitops reports live on Workstations only; free has none
-  anywhere. A global-scope report test must seed its own report and delete it in the same
-  test; the gitops reports are only reachable from a fleet-scoped premium spec. Software
-  library content is wiped by the cleanup projects, so a library-picker test must upload its
-  own package as a precondition and clean up in the same test.
+- **Picker data**: there are no global policies or reports at run time — `cleanup-setup` drains
+  both before the first test (`setup/cleanup.steps.ts`), so a global-scope picker test seeds its
+  own and deletes it in the same test (as `pickers.spec.ts` does). The Reports and Policies
+  deep links need the same seed: both pages open their automations modal only when the scope
+  holds something to automate. Between runs premium's gitops reports sit on Workstations (3, from
+  the min config), VMs (`pw-host-report-results`) and Compliance; free has none. Software library
+  content is wiped by the cleanup projects, so a library-picker test uploads its own package as a
+  precondition and cleans up in the same test.
 - **Picker searches go straight to the server**, so a name that matches its siblings
   ("Battery healthy" hits both the macOS and Windows policy) leaves the row lookup ambiguous
   under strict mode. Resolve a name the server narrows to exactly one row, and skip software
   titles carrying a `display_name` — the picker renders the display name, not `name`.
-- **MDM group is config-dependent.** On both QA boxes Apple and Windows MDM are configured and
-  Android is not; premium has ABM configured. So expect "Edit Apple…", "Edit Windows MDM",
-  "Turn on Android MDM". Read `/config` in the test rather than hardcoding, or the specs break
-  the day someone turns Android on.
+- **MDM group is config-dependent.** Both QA instances have Apple, Windows and Android MDM on,
+  and premium has ABM. Live on the 4.93 RC, free offers `Edit Apple (macOS, iOS, iPadOS) MDM`,
+  `Edit Windows MDM`, `Windows automatic enrollment (Entra)` and `Edit Android MDM`; premium adds
+  `Edit Apple Business (AB)`, `Add Volume Purchasing Program (VPP)`, `Edit Microsoft Graph` and
+  `Android zero-touch`. Read `/config` in the test rather than hardcoding: every Turn on / Edit and
+  Add / Edit pair flips with the instance's settings.
 - **Theme toggle** is per-context localStorage (same as `shared/account/theme.spec.ts`), so it
   can't leak into stored auth state.
 - **Escape is inert for one render after the dialog paints.** Radix's `DismissableLayer`
@@ -152,16 +184,19 @@ so no rule element exists in the DOM.
   while several suites hammered the instance concurrently, and does not reproduce on an idle
   machine, so treat the anchor as load-insurance rather than something a local run will prove.
   `Cmd+K` (Fleet's own document listener) and overlay click are unaffected.
-- **Entering a fleet scope in a premium palette spec** is awkward: `DashboardPage` exposes no
-  team dropdown, and `hostsList.goto({ fleetId })` blocks on a first row — Workstations has
-  **0 hosts**, so it never gets one. `reportsList.goto({ fleetId })` +
-  `reportsList.teamDropdown.select('Workstations')` is the working entry point: that page
-  object anchors on "row or empty", so it renders whether or not cleanup wiped the fleet's
-  reports.
+- **Entering a fleet scope in a premium palette spec**: the built specs use
+  `reportsList.goto({ fleetId })` + `reportsList.teamDropdown.select('Workstations')`, which anchors
+  on "row or empty", so it renders whether or not cleanup wiped the fleet's reports.
+  `DashboardPage` also has `goto({ fleetId })` and a `teamDropdown`, and `hostsList.goto({
+  fleetId, mayBeEmpty: true })` anchors on Export hosts for a fleet with no hosts, like
+  Workstations. The Reports page drops `fleet_id=0` (it lands on All fleets), so it can't enter
+  Unassigned.
 - **`shared/` specs run on premium in the All-fleets scope**, where the whole Controls group,
-  `View software library` and the four software-add commands are hidden (they need
-  `hasTeamOrUnassigned`). Anything scope-dependent — including the `filevault` and `fma`
-  keyword rows — belongs in the premium spec, not the shared one.
+  `View software library`, the five software-add commands (FMA, VPP, Android app store, custom
+  package, self-service category), `Add script` and `Add custom variable` are hidden (they need
+  `hasTeamOrUnassigned`, which free always has). Anything scope-dependent — including the
+  `filevault` and `fma` keyword rows — belongs in a premium spec with a free sibling, not in a
+  shared one.
 
 ## Cases
 
@@ -212,7 +247,7 @@ having. **P3** = nice to have. Tier column: S = shared spec, P = premium, F = fr
 | 27 | Selecting a host navigates to `/hosts/:id/details` **without** `fleet_id` | P1 | S |
 | 28 | Junk query → `No hosts match "<junk>".`; empty query with results shows rows, not the empty state | P1 | S |
 | 29 | Debounce: fast typing issues one `/hosts` request for the final value, not one per keystroke | P2 | S |
-| 30 | `View report` finds a gitops report by name and selects into `/reports/:id` (+`fleet_id` when scoped) | P1 | S |
+| 30 | `View report` finds a seeded report by name and selects into `/reports/:id` (+`fleet_id` when scoped) | P1 | S |
 | 31 | Report picker empty state suffix — **no** suffix at premium's default All fleets and on free (`getFleetSuffix` returns `""` for both), `... in Workstations.` on a fleet, `... in this fleet.` on Unassigned. Only the unsuffixed case is reachable from a shared spec | P1 | S/P |
 | 32 | `View policy` finds and opens a policy; on a specific fleet a global policy shows the `Inherited` tag | P1 / P2 | S / P |
 | 33 | `View software inventory` finds an installed title and opens `/software/titles/:id` — bare at All fleets / on free, `+fleet_id` only from a specific fleet | P1 | S/P |
@@ -226,19 +261,21 @@ having. **P3** = nice to have. Tier column: S = shared spec, P = premium, F = fr
 
 Each case = palette item → destination page renders the right modal → the query param is
 stripped from the URL. These specs assert *the deep link*, not the modal's behaviour — the
-modals already have owners elsewhere in the suite.
+modals already have owners elsewhere in the suite. The shared spec holds the S rows; #45 and #46
+are in the premium (from Workstations) and free deep-link specs, and the P rows in the premium one.
 
 | # | Case | Pri | Tier |
 |---|---|---|---|
 | 39 | `Add hosts` → Add hosts modal on `/hosts/manage`, `add_hosts` stripped | P1 | S |
 | 40 | `Manage enroll secrets` → enroll-secrets modal, param stripped | P1 | S |
 | 41 | `Manage activity automations` → Dashboard modal, param stripped | P1 | S |
-| 42 | `Manage report automations` → Reports modal, param stripped | P1 | S |
+| 42 | `Manage report automations` → Reports modal, param stripped (needs ≥1 report in scope) | P1 | S |
 | 43 | `Manage policy automations` → Policies modal, param stripped (needs ≥1 policy in scope) | P1 | S |
-| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium) | P1 | S |
-| 45 | `Add script` → Scripts library add modal, param stripped | P2 | S |
-| 46 | `Add custom variable` → Variables add modal, param stripped | P2 | S |
+| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium). Skipped on fleetdm/fleet#55672, see Status | P1 | S |
+| 45 | `Add script` → Scripts library add modal, param stripped; on premium from a fleet, which `fleet_id` keeps | P2 | P + F |
+| 46 | `Add custom variable` → Variables add modal (the bare route redirects to Global variables), param stripped | P2 | P + F |
 | 47 | `Add self-service category` → categories add modal, param stripped | P2 | P |
+| 47b | `Manage host activity automations` (fleet-scoped) → Hosts modal, `manage_activity_automations` stripped, `fleet_id` kept | P2 | P |
 | 48 | `Add fleet` → `/settings/fleets` with the Add fleet modal, `create_fleet` stripped | P1 | P |
 | 49 | Reloading after a deep-linked modal opens does **not** reopen it (proves the strip, not just a cosmetic URL edit) | P2 | S |
 
@@ -250,7 +287,7 @@ modals already have owners elsewhere in the suite.
 | 51 | Changing the theme from My account flips the palette label live (`fleet-theme-change`), no reload | P2 | S |
 | 52 | `Sign out` ends the session and lands on the login page (`pageHealth.disable()`) | P1 | S |
 | 53 | `Add report` / `Add policy` / `Add label` land on their new-resource pages | P2 | S |
-| 54 | `Run live report` / `Run live policy` land on the live-run entry points | P2 | S |
+| 54 | `Run live report` / `Run live policy` land on the live-run entry points — the same `/reports/new` and `/policies/new` editors as #53 | P2 | S |
 
 ### `shared/command-palette/role-access.spec.ts` (+ premium counterpart)
 
@@ -258,8 +295,8 @@ Driven with `withStaticUser`, same pattern as `premium/labels/role-access.spec.t
 
 | # | Case | Pri | Tier |
 |---|---|---|---|
-| 55 | Global observer: Pages group only — no `Add hosts`, no Settings / MDM / Automations groups; `View host` / `View report` / `View policy` still available | P1 | S |
-| 56 | Global maintainer: Controls items and write Commands present; Settings, MDM, `Add user`, `Manage software automations` absent | P1 | S |
+| 55 | Global observer: Pages, Software and Commands groups only — no Controls / Settings / MDM / Automations groups and no `Add hosts`; `View host` / `View report` / `View policy` still available | P1 | S |
+| 56 | Global maintainer: write Commands present; Settings, MDM, Automations, `Add user`, `Manage software automations` absent (S). The Controls group and `Add script`: on free everywhere (F), on premium only inside a fleet (P) | P1 | S + P + F |
 | 57 | Global admin: Settings, MDM and Automations groups all present | P1 | S |
 | 58 | Technician: Controls reachable, but `Certificates` / `Passwords` / `Host names` sub-items and `Add script` are absent | P1 | P |
 | 59 | Observer+: `Run live report` present, `Run live policy` absent | P1 | P |
@@ -292,7 +329,7 @@ deferred.
 
 | # | Case | Pri | Tier |
 |---|---|---|---|
-| 62 | Switcher button shows the current fleet name, renders the `⌘ ⇧ F` pills, and those pills are `aria-hidden` so they stay out of its accessible name (the `kbd` pills exist only inside this premium-only button, so the shared spec can't cover them) | P1 | P |
+| 62 | Switcher button shows the current fleet name, renders the shortcut pills (`⌘ ⇧ F` on macOS, `Ctrl ⇧ F` elsewhere), and those pills are `aria-hidden` so they stay out of its accessible name (the `kbd` pills exist only inside this premium-only button, so the shared spec can't cover them) | P1 | P |
 | 62b | Host picker renders the team column (premium, non-Primo); it is absent on free — lifted out of the shared pickers spec, which must not branch on tier | P2 | P |
 | 63 | `Cmd/Ctrl+Shift+F` from **closed** opens straight onto switch-fleet; placeholder `Search a fleet...` | P1 | P |
 | 64 | `Cmd/Ctrl+Shift+F` from **open root** jumps to switch-fleet | P1 | P |
@@ -329,13 +366,13 @@ item has a `teamName` any more. Verified live: on All fleets, no row renders a c
 
 | # | Case | Pri | Tier |
 |---|---|---|---|
-| 80 | Free: premium-gated items are absent — Disk encryption, Certificates, Passwords, Host names, Setup experience, Software library, `View software library`, `Add Fleet-maintained app`, `Add VPP app`, `Add Android app store app`, `Add custom package`, `Add self-service category`, Settings → Fleets, `Add fleet`, Conditional access, Calendar events, Change management, Certificate enrollment, ABM, VPP | P1 | F |
+| 80 | Free: premium-gated items are absent, even when searched for — Disk encryption, Assets, Certificates, Passwords, Host names, Software library, Self-service categories, `View software library`, `Add Fleet-maintained app`, `Add VPP app`, `Add Android app store app`, `Add custom package`, `Add self-service category`, Settings → Fleets, `Add fleet`, Calendar events, Change management, Conditional access, Certificate authorities, User mapping, SSO for end users, ABM, VPP, `Edit Microsoft Graph`, `Android zero-touch`, `Manage host activity automations` | P1 | F |
 | 81 | Free: no fleet-switcher button, and `Ctrl+Shift+F` does nothing | P1 | F |
 | 82 | Free: non-premium items are present — OS settings, Configuration profiles, Scripts, Variables, `Add script`, `Add custom variable`, Vulnerabilities, `Add label`, `Add user`, `Add API-only user` | P1 | F |
 | 82b | Free: the `Controls` Pages row is absent (its landing tab, OS updates, is Premium) while the Controls **group** still lists the free sub-pages — the intended shape, see finding 1. Also covers `OS updates` and `Setup experience` being absent | P1 | F |
 | 83 | Premium on a specific fleet: every item from #80 is present | P1 | P |
-| 84 | Premium: `View software library` and the four software-add commands are hidden on All fleets, shown on Unassigned and on Workstations | P1 | P |
-| 85 | MDM group matches live config — read `/config` first, then assert (today: `Edit Apple (macOS, iOS, iPadOS) MDM`, `Edit Windows MDM`, `Turn on Android MDM`, premium `Edit Apple Business (AB)`) | P2 | S/P |
+| 84 | Premium: `View software library` and the five software-add commands are hidden on All fleets, shown on Unassigned and on Workstations | P1 | P |
+| 85 | MDM group matches live config — read `/config` first, then assert (today, see the MDM bullet under Mechanics) | P2 | S/P |
 
 ## Findings to resolve before writing the specs
 
@@ -354,10 +391,11 @@ item has a `teamName` any more. Verified live: on All fleets, no row renders a c
 3. **Best-match ordering** is a scored ladder with near-tie alphabetical fallback. Assert only
    "exact label promotes to first row" (#11); don't assert relative order of near-ties — that
    contract belongs to `helpers.tests.ts`.
-4. **Primo Mode and GitOps Mode are uncoverable here.** Neither QA instance runs Primo, and
-   `gitops_mode_enabled` is false on both. The story flags both as needing manual verification
-   (`Add fleet` hiding, chip suppression, switcher hiding). Standing coverage gap → `TODO.md`,
-   not a skip.
+4. **Primo Mode is uncoverable here** — neither QA instance runs it, and the story flags it for
+   manual verification (`Add fleet` hiding, chip suppression, switcher hiding). **GitOps mode is
+   reachable**: the `gitops-mode` project (`tests/e2e/premium/gitops-mode/`) turns it on for
+   premium, so "`Add fleet` is hidden in GitOps mode" belongs there. Both are rows in `TODO.md`'s
+   coverage backlog, not skips.
 5. **No no-access static user exists**, so "palette doesn't render for no-access" stays with Jest.
 6. **The Controls chip is unreachable code.** `groups/pages.ts` renders the Controls row only
    when `hasTeamOrUnassigned` is true, and `deriveContext`'s `getDefaultTeamName()` returns
