@@ -11,7 +11,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-01, HOST-02, HOST-03 | real macOS VM (`liveMacosHost`) |
 | HOST-05, HOST-06 | real macOS VM (`liveMacosHost`) — HOST-06 does not actually need it |
 | HOST-15, HOST-16 | real macOS VM (`liveMacosHost`) — **mandatory**: a simulation reports no certificates, so the card never mounts |
-| HOST-17 | real macOS VM (`liveMacosHost`) — **mandatory**: the Applications filter is macOS-only and a simulation reports no application paths |
+| HOST-17 | real macOS VM (`liveMacosHost`) — **mandatory**: the macOS app default is macOS-only and a simulation reports no application paths |
 | HOST-18 | real macOS VM (`liveMacosHost`) — host id only; does not actually need it |
 | HOST-04 | first host by name reporting software — in practice a simulation |
 | HOST-07, HOST-08, HOST-09, HOST-10, HOST-11 | no specific host; whatever tops/fills the list |
@@ -42,7 +42,7 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-14 | `free/hosts/mdm-actions-availability.spec.ts` | Ubuntu (no MDM) offers none of Lock, Wipe or Turn off MDM | UI | ☐ |
 | HOST-15 | `shared/hosts/host-certificates.spec.ts` | Host details — the certificates card lists every reported certificate | UI+API | ☐ |
 | HOST-16 | `shared/hosts/host-certificates.spec.ts` | Host details — a certificate row opens its full details | UI+API | ☐ |
-| HOST-17 | `shared/hosts/host-software.spec.ts` | Hosts — the Applications view narrows the inventory to top-level applications | UI | ☐ |
+| HOST-17 | `shared/hosts/host-software.spec.ts` | Hosts — the macOS app type narrows a Mac's inventory to top-level applications | UI | ☐ |
 | HOST-18 | `shared/hosts/host-reports-tab.spec.ts` | Host details — the results-recency sorts keep reports awaiting results last | UI | ☐ |
 | HOST-19 | `shared/hosts/host-run-script.spec.ts` | Run script › a script changes the host, and a report run by that host reads the change back | UI+API | ☐ |
 | HOST-20 | `shared/hosts/host-run-script.spec.ts` | Run script › a script that exits non-zero reads as an error, with the output it recorded | UI+API | ☐ |
@@ -173,7 +173,7 @@ other:
    - ✅ *(API)* Such a host exists.
 2. ☐ Open `/hosts/:id` via URL, click the **Software** tab.
    - ✅ *(UI)* The software table settles to either rows **or** its empty state — `openSoftwareTab()` uses `rowOrEmpty()` ([`pages/hosts/HostDetailsPage.ts:158`](../../pages/hosts/HostDetailsPage.ts)), so an empty table satisfies this wait.
-3. ☐ Switch the software view dropdown to **Full inventory** (macOS hosts default to "Applications"; the method silently no-ops on Windows/Linux, where the dropdown doesn't exist).
+3. ☐ List every software type (`showFullInventory`): on a macOS host, untick the default **macOS app** type in the Filters modal; a no-op on Windows/Linux, which open on every type.
    - ✅ *(UI)* On macOS, the URL gains `macos_applications=false`.
 4. ☐ Read the Name-column links.
    - ✅ *(UI)* At least one software title is listed.
@@ -660,13 +660,13 @@ other:
 
 ---
 
-### HOST-17 · Hosts — the Applications view narrows the inventory to top-level applications
+### HOST-17 · Hosts — the macOS app type narrows a Mac's inventory to top-level applications
 
 - **File:** [`playwright/tests/e2e/shared/hosts/host-software.spec.ts`](../../tests/e2e/shared/hosts/host-software.spec.ts)
-- **Grep:** `npx playwright test -g "the Applications view narrows the inventory to top-level applications"`
+- **Grep:** `npx playwright test -g "the macOS app type narrows a Mac's inventory to top-level applications"`
 - **Project:** premium + free (shared) · **Scopes:** n/a
 - **Mode:** UI · **Isolation:** standalone, read-only; second test in the file and independent of HOST-04 (different host, different entry)
-- **Preconditions:** **the real macOS VM** (`liveMacosHost`), unlike HOST-04 which takes an API-chosen host. macOS hosts default the Software tab to **Applications** (top-level apps only) and offer **Full inventory**; the filter is **platform-gated, not tier-gated** (`HostSoftwareTable.tsx`, `showApplicationsFilter`), which is why this runs on both tiers rather than premium-only. A simulation reports a synthetic inventory with no application paths, so the narrowing against one would be meaningless. The VM must report ≥1 top-level application **and** ≥1 non-application package that lands on page 1 of Full inventory (see the smell below).
+- **Preconditions:** **the real macOS VM** (`liveMacosHost`), unlike HOST-04 which takes an API-chosen host. A macOS host opens its Inventory on the **macOS app** type with **Show helpers** off — top-level apps in `/Applications` only (`HostSoftware.tsx` writes `types=macos_app` into the URL) — and clearing the type in the Filters modal lists every type. The default is **platform-gated, not tier-gated**, which is why this runs on both tiers rather than premium-only. A simulation reports a synthetic inventory with no application paths, so the narrowing against one would be meaningless. The VM must report ≥1 top-level application **and** ≥1 non-application package that lands on page 1 of the full inventory (see the smell below).
 - **Data created:** none
 
 **Flow**
@@ -674,18 +674,21 @@ other:
 1. ☐ Open the VM at `/hosts/:id` via URL → ✅ *(UI)* **Disk space available** visible.
 2. ☐ Click the **Software** tab.
    - ✅ *(UI)* the table settles to rows **or** its empty state (`openSoftwareTab`).
-   - ✅ *(UI)* the view dropdown's value reads **Applications** — macOS's default, asserted nowhere else in the suite.
+   - ✅ *(UI)* the URL carries `types=macos_app` — macOS's default, asserted nowhere else in the suite.
+   - ✅ *(UI)* the **Show helpers** switch is visible and off.
    - ✅ *(UI)* the first Name-column link is visible.
-3. ☐ Read the **N items** count and the Name-column links of the Applications view.
+3. ☐ Read the **N items** count and the Name-column links of the macOS app type.
    - ✅ *(UI)* at least one top-level application is listed.
-4. ☐ Switch the view dropdown to **Full inventory**.
-   - ✅ *(UI)* the URL gains `macos_applications=false` (asserted inside `selectSoftwareView`).
-   - ✅ *(UI)* the **N items** count **polls** to a value **strictly greater** than the Applications count — the strict-subset claim, and the headline assertion of this test. Polled rather than read once: Fleet keeps the previous view's rows under a translucent loading overlay for the whole round trip.
+4. ☐ Click **Filtered**, untick **macOS app** in Types, click **Apply** (`showFullInventory` → `setSoftwareTypes([])`).
+   - ✅ *(UI)* the URL's `types` becomes `none` (asserted inside `setSoftwareTypes`).
+   - ✅ *(UI)* the **N items** count **polls** to a value **strictly greater** than the macOS app count — the strict-subset claim, and the headline assertion of this test. Polled rather than read once: Fleet keeps the previous view's rows under a translucent loading overlay for the whole round trip.
+   - ✅ *(UI)* **Show helpers** is gone — it refines only the macOS app type.
 5. ☐ *(no user action)* derive a subject.
-   - ✅ *(derived guard)* the full inventory lists a title the Applications view does not ("expected the full inventory to list something the Applications view does not").
-6. ☐ Type that title into **Search by name or vulnerability (CVE)** (still under Full inventory).
+   - ✅ *(derived guard)* the full inventory lists a title the macOS app type does not ("expected the full inventory to list something the macOS app type does not").
+6. ☐ Type that title into **Search by name or vulnerability (CVE)** (still on every type).
    - ✅ *(UI)* its Name link is visible.
-7. ☐ Switch the view back to **Applications**, search the same term.
+7. ☐ Tick **macOS app** again in the Filters modal (`setSoftwareTypes(['macOS app'])`), search the same term.
+   - ✅ *(UI)* **Show helpers** is off.
    - ✅ *(UI)* the software table's `.empty-state` is visible.
    - ✅ *(UI)* its Name link has count 0 — the entry is reported by the host but is **not** a top-level application.
 8. ☐ Search for the application captured in step 3.
@@ -693,10 +696,10 @@ other:
 
 **Assessment**
 - *Value:* good. The claim is genuinely two-sided — a count inequality *plus* a named title that resolves in one view and not the other, plus a control search proving the narrowed view still finds things. Asserted as set membership rather than on fixed titles, and both subjects are searched for explicitly in each view, so the *searches* don't depend on which page a title lands on.
-- *Coverage gaps:* the reverse membership is never asserted — that an application appears under **both** views (step 8 searches only under Applications); no Windows/Linux assertion that the dropdown is **absent**, so `selectSoftwareView`'s silent no-op branch stays unobserved on both tiers; the `.empty-state` **copy** is not asserted, only its presence; the view filter is never combined with the **Vulnerable** filter or with pagination; `macos_applications=true` on the way back is asserted inside the POM but not re-checked after the search.
+- *Coverage gaps:* the reverse membership is never asserted — that an application appears under **both** views (step 8 searches only under macOS app); **Show helpers** is asserted off but never turned on, so the helper apps outside `/Applications` are uncovered; no Windows/Linux assertion that the Inventory opens on every type, so `showFullInventory`'s no-op branch stays unobserved; the `.empty-state` **copy** is not asserted, only its presence; the type filter is never combined with the **Vulnerable** filter or with pagination.
 - *Redundancy:* shares the file, the tab entry and `showFullInventory()` with HOST-04 — but HOST-04 runs against an API-chosen (simulated) host and this one against the VM, so the two never observe the same inventory. This test answers, for macOS only, the "which branch did `showFullInventory` take?" smell recorded against HOST-04.
 - *Efficiency / smells:*
-  - ⚠️ **The subject derivation is page-1-bound, and this is the test's real fragility.** `packageOnly` is the first *Full-inventory page 1* name absent from the *Applications page 1* names. If the VM ever reports more applications than one page holds, an application that sorts onto Applications page 2 is indistinguishable from a package, gets picked as the subject, and step 7's `.empty-state` assertion then **fails on correct product behaviour**. The searches are pagination-proof; the choice of subject is not. The spec's own header claims pagination-independence, which is true of the assertions and not of the derivation.
+  - ⚠️ **The subject derivation is page-1-bound, and this is the test's real fragility.** `packageOnly` is the first *full-inventory page 1* name absent from the *macOS app page 1* names. If the VM ever reports more applications than one page holds, an application that sorts onto macOS app page 2 is indistinguishable from a package, gets picked as the subject, and step 7's `.empty-state` assertion then **fails on correct product behaviour**. The searches are pagination-proof; the choice of subject is not. The spec's own header claims pagination-independence, which is true of the assertions and not of the derivation.
   - `expect.poll(() => hostDetails.softwareItemCount())` — `softwareItemCount()` **throws** on an unparseable count string rather than returning null, and a throw inside `expect.poll` is not retried away. In practice the count keeps its previous value under the loading overlay so it parses; the hazard is latent rather than live.
   - `.empty-state` is a raw class locator reached straight off `softwareTable` in the spec ([`host-software.spec.ts:115`](../../tests/e2e/shared/hosts/host-software.spec.ts)) rather than through the page object, which already owns `softwareRowOrEmpty()`.
   - Costs a second real-VM page load in a file whose other test deliberately avoids the VM.
@@ -1161,7 +1164,7 @@ other:
 | Refetch | HOST-01 | no in-flight/disabled state, no offline-host path |
 | Local user accounts card | HOST-02 | no empty state, no clear-search, other columns unasserted |
 | **User** card (host end user / IdP username) | HOST-24 (free: *Add user* opens the Premium message) | premium add / edit / remove is area 03 (HOSTP-13…15); the free observer's view of the button; the modal's close path |
-| Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS Applications/Full-inventory filter is covered (HOST-17) but the *absence* of that dropdown on Windows/Linux is not |
+| Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS app default type is covered (HOST-17) but Windows/Linux opening on every type is not |
 | Host reports tab | HOST-06, HOST-18 | "don't store results" toggle behaviour and card Actions untested; the Newest/Oldest sorts are covered only as an "awaiting results sorts last" partition, so the recency ordering itself is unasserted (and vacuous on free) |
 | Host live report | HOST-05 | Stop/cancel, Errors tab, results CSV, 0%-responded path |
 | Host Actions menu | HOST-12/13/14 (presence/absence only); **Run script** fired by HOST-19…22 on both tiers | Transfer/Delete from details on free untested; Lock/Wipe/Unlock **commands never fired** (deliberate: never on a real VM, availability asserted instead); Run script's *disabled* state is covered by [CTL-26](11-controls-profiles-scripts-variables.md) |
@@ -1200,7 +1203,7 @@ API use elsewhere is **precondition/setup only** (host resolution, report seedin
 4. Add one positive option assertion (e.g. **Transfer** present) to HOST-13 and HOST-14 ([`mdm-actions-availability.spec.ts:72`](../../tests/e2e/free/hosts/mdm-actions-availability.spec.ts)) so the all-absent cases can't pass on a half-rendered menu.
 5. In HOST-04, replace the filter-pill `firstToken` substring check with the full title text, and assert the filtered hosts list actually contains the host the test drilled from ([`host-software.spec.ts:55`](../../tests/e2e/shared/hosts/host-software.spec.ts)).
 6. Harden HOST-15's two row assertions ([`host-certificates.spec.ts:66-67`](../../tests/e2e/shared/hosts/host-certificates.spec.ts)): guard the issuer against `''` before asserting it (`toContainText('')` always passes), and read **Scope** out of its own cell instead of matching `System`/`User` anywhere in the row. Both are one-line changes and both currently admit a silent pass.
-7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* Full-inventory result rather than from page 1, or assert first that the Applications view is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
+7. Make HOST-17's subject derivation pagination-proof ([`host-software.spec.ts:102`](../../tests/e2e/shared/hosts/host-software.spec.ts)) — pick `packageOnly` from a *searched* full-inventory result rather than from page 1, or assert first that the macOS app type is a single page. As written, a VM that grows past one page of applications fails the test on correct product behaviour.
 8. Give HOST-21's agent-options restore an `afterEach` twin ([`host-run-script.spec.ts:320`](../../tests/e2e/shared/hosts/host-run-script.spec.ts)) — Playwright skips `finally` on a test timeout, and on free the stranded 60s cap is **global**. Alternatively have `cleanup-setup` drop a `script_execution_timeout` of 60 the way it re-enables script execution.
 9. ~~Tie HOST-23's dashboard assertion to this run~~ — done: the feed is filtered to *Ran custom MDM command*, and the row's modal is checked for this command's UUID.
 

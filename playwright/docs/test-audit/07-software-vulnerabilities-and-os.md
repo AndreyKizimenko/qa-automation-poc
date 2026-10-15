@@ -394,9 +394,9 @@ other:
 1. ☐ Open the host's page via URL `/hosts/:id`.
    - ✅ *(UI)* "Disk space available" vitals label visible — `HostDetailsPage.goto`.
 2. ☐ Click the **Software** tab.
-   - ✅ *(UI)* Table settles to rows **or** empty state (macOS defaults to the Applications view, which can be empty) — `openSoftwareTab`.
-3. ☐ On macOS, switch the software-view dropdown to **Full inventory** (no-op on Windows/Linux, where the dropdown doesn't render).
-   - ✅ *(UI)* The software search box is visible before the dropdown presence check — guards a silent no-op ([`HostDetailsPage.ts:172-190`](../../pages/hosts/HostDetailsPage.ts)).
+   - ✅ *(UI)* Table settles to rows **or** empty state (macOS opens on the macOS app type, which can be empty) — `openSoftwareTab`.
+3. ☐ On macOS, untick the default **macOS app** type in the Filters modal to list every type (no-op on Windows/Linux, which open on every type).
+   - ✅ *(UI)* The software search box is visible before the URL's `types` is read — Fleet shows a spinner until the default type is in the URL, so the read can't race it (`HostDetailsPage.showFullInventory`).
    - ✅ *(UI)* URL contains `macos_applications=false`.
    - ✅ *(UI)* A first row is visible (retrying — deliberately not `isVisible()`, which used to skip on a false negative).
 4. ☐ Click **Add filters** → **Vulnerable software** → **Apply**.
@@ -670,7 +670,7 @@ Identical to SWV-07:
 
 1. ☐ Open `/hosts/:id` (via URL) — ✅ *(UI)* vitals "Disk space available" visible.
 2. ☐ Click **Software** — ✅ *(UI)* rows-or-empty settled.
-3. ☐ macOS: switch to **Full inventory** — ✅ *(UI)* search box visible first; URL `macos_applications=false`; ✅ *(UI)* first row visible.
+3. ☐ macOS: untick **macOS app** in the Filters modal — ✅ *(UI)* search box visible first; URL `types=none`; ✅ *(UI)* first row visible.
 4. ☐ **Add filters** → **Vulnerable software** → **Apply** — ✅ *(UI)* URL `vulnerable=true`; first row visible.
 5. ☐ Click the first software title → the version this host has installed (`hostVulnerableVersions`) → a CVE whose detail page answers.
    - ✅ *(API)* the host reports a vulnerable version of that title (else the test fails).
@@ -888,7 +888,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/software/vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts) (L379)
 - **Grep:** `npx playwright test --project=premium -g "the severity filter lists the CVSS bands from Critical down"`
-- **Project:** premium **only** — `SoftwareFiltersModal` renders the severity control behind `isPremiumTier`, so there is no free counterpart and there should not be one
+- **Project:** premium **only** — `SoftwareFiltersModal` renders the severity control behind `isPremiumTier` (collapsed under **Advanced**), so there is no free counterpart and there should not be one
 - **Scope:** Unassigned
 - **Mode:** UI · **Isolation:** independent; the modal is **cancelled**, so the list underneath is left unfiltered for whatever runs next
 - **Preconditions:** premium license; the Inventory list has enough rows for **Add filters** to be enabled (`FilterModal.open()` asserts the trigger is enabled first, so an empty table fails loudly rather than hanging)
@@ -901,20 +901,21 @@ other:
 2. ☐ Click **Add filters**.
    - ✅ *(UI)* The trigger was enabled before the click — `FilterModal.open()`.
    - ✅ *(UI)* The `.software-filters-modal` dialog is visible.
-3. ☐ Look at the **Severity** dropdown with the vulnerable toggle still off.
+3. ☐ Click **Advanced** (`FilterModal.showAdvanced()`), and look at the **Severity** dropdown with the vulnerable toggle still off.
+   - ✅ *(UI)* The severity trigger is visible — the section mounts collapsed.
    - ✅ *(UI)* The severity trigger carries `is-disabled` — Fleet passes `disabled={!vulnSoftwareFilterEnabled}`, so severity is unusable until the list is narrowed to vulnerable software.
 4. ☐ Click the **Vulnerable software** toggle.
    - ✅ *(UI)* The severity trigger **loses** `is-disabled`.
    - ✅ *(UI)* Its rendered value reads exactly **"Any severity"** — the default.
 5. ☐ Open the severity dropdown and read every option.
-   - ✅ *(UI)* The option list equals, **in order**: `Any severity CVSS score 0-10`, `Critical severity CVSS score 9.0-10`, `High severity CVSS score 7.0-8.9`, `Medium severity CVSS score 4.0-6.9`, `Low severity CVSS score 0.1-3.9`, `Custom severity Custom CVSS score range` — each entry is the label plus its help text with the newline collapsed. Ordering **is** the behaviour here: a band rendered out of sequence would still satisfy a membership check.
+   - ✅ *(UI)* The option list equals, **in order**: `Any severity CVSS score 0-10`, `Critical severity CVSS score 9.0-10`, `High severity CVSS score 7.0-8.9`, `Medium severity CVSS score 4.0-6.9`, `Low severity CVSS score 0.1-3.9` — each entry is the label plus its help text with the newline collapsed. **Custom** is not an option: a custom range is typed into the min/max score fields, which always show, and "Custom severity" only labels a saved range that matches no band. Ordering **is** the behaviour here: a band rendered out of sequence would still satisfy a membership check.
    - ✅ *(UI)* The menu is dismissed afterwards (`toHaveCount(0)`) — `severityOptions()` re-clicks the trigger rather than pressing Escape, because Fleet's `Modal` closes on Escape and would take the whole dialog down with the menu.
 6. ☐ Click **Cancel**.
    - ✅ *(UI)* The modal is hidden — `FilterModal.cancel()`.
 
 **Assessment**
 - *Value:* fills the area's most-cited gap — the premium severity/CVSS filter had **no** coverage at all, and `FilterModal` exposed only the vulnerable switch. Three things get pinned at once: that severity is premium-gated, that it is *disabled* until the vulnerable filter is on (a real interaction rule, not just a render), and the exact band boundaries. Asserting the full ordered list is the right instrument for a control whose whole meaning is a ranked scale, and the CVSS ranges are product copy a manual tester would otherwise have to eyeball.
-- *Coverage gaps:* **nothing is ever applied.** Selecting Critical and checking the list narrows (or that `min_cvss_score`/`max_cvss_score` land in the URL) is not covered, so this proves the menu renders, not that the filter works. The **Custom** band's numeric range inputs are never opened. No free-tier assertion that the control is **absent** — the premium-gating claim in the spec comment is sourced from Fleet's code, not verified from the free side (contrast SWV-21, which does assert absence for the OS columns). The exploited filter (SWV-05) and this one are never combined.
+- *Coverage gaps:* **nothing is ever applied.** Selecting Critical and checking the list narrows (or that `min_cvss_score`/`max_cvss_score` land in the URL) is not covered, so this proves the menu renders, not that the filter works. The min/max score inputs are never filled. No free-tier assertion that the control is **absent** — the premium-gating claim in the spec comment is sourced from Fleet's code, not verified from the free side (contrast SWV-21, which does assert absence for the OS columns). The exploited filter (SWV-05) and this one are never combined.
 - *Redundancy:* none.
 - *Efficiency / smells:*
   - Class-based locators throughout (`.severity-filter__dropdown .react-select__control`, `is-disabled`) — documented as unavoidable for react-select, but `toHaveClass(/is-disabled/)` is a **styling** assertion standing in for a state assertion; a refactor that renamed the class would read as "not disabled" and pass step 4 while silently breaking step 3.
@@ -1125,7 +1126,7 @@ other:
 | Exploited-vulnerabilities filter | SWV-05 | rows never verified to be exploited; no reset to **All vulnerabilities** |
 | Severity / CVSS filter (premium) | SWV-19 (options list + disabled-until-vulnerable rule) | **never applied** — no narrowed list, no `min_cvss_score`/`max_cvss_score` in the URL, no **Custom** range inputs, no free-side absence check |
 | Vulnerabilities list pagination + tab reset | SWV-06, SWV-13 | conditional; no column/sort assertions |
-| Host-details Software tab vulnerable filter + Applications↔Full inventory | SWV-07, SWV-14 | narrowing not asserted; host software search untested; no real MDM host variant |
+| Host-details Software tab vulnerable filter + macOS app type ↔ every type | SWV-07, SWV-14 | narrowing not asserted; host software search untested; no real MDM host variant |
 | Vulnerability-automations webhook | SWV-08, SWV-15 (on → stored → re-read, then off → stored with the URL kept → re-read) | ticket workflow, invalid URL, tier-difference assertions, delivery; **Automations** disabled outside All fleets is SWL-12 (area 06) |
 | OS tab platform filter | SWV-09 (premium only) | Linux/ChromeOS/iOS/iPadOS/Android, **All platforms** reset, pagination; free has no platform-filter test (by design — its spec covers only the scope-independent cases) |
 | OS → Hosts hand-off | SWV-10 | URL params, count agreement, pill clearing — all three of which SWV-18 does properly for the CVE hand-off |

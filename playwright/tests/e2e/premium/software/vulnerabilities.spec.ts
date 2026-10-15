@@ -371,8 +371,8 @@ for (const osKey of OS_KEYS) {
 
     await hostDetails.goto(host.id);
     await hostDetails.openSoftwareTab();
-    // macOS hosts default to the "Applications" view, which hides non-app
-    // packages (most vulnerable items); switch to the full list.
+    // macOS hosts open on the "macOS app" type, which hides packages and
+    // extensions (most vulnerable items); switch to every type.
     await hostDetails.showFullInventory();
 
     // Retrying waits, not `isVisible()` reads. The host is chosen via the API
@@ -478,9 +478,12 @@ test('Vulnerabilities — a CVE hands off to the hosts running each affected ver
 
 /**
  * The vulnerable-software filter's severity dropdown, which is premium-only
- * (`SoftwareFiltersModal` renders it behind `isPremiumTier`). Fleet builds the
- * list from `SEVERITY_DROPDOWN_OPTIONS` — "Any" first, then the CVSS bands from
- * Critical down, then "Custom" — and each option carries its band as help text.
+ * (`SoftwareFiltersModal` renders it behind `isPremiumTier`, collapsed under
+ * "Advanced"). Fleet builds the list from `SEVERITY_DROPDOWN_OPTIONS` — "Any"
+ * first, then the CVSS bands from Critical down — and each option carries its
+ * band as help text. A custom range is typed into the min/max score fields,
+ * which always show, so "Custom" is never an option: it only labels a saved
+ * range that matches no band.
  * The whole list is asserted in order, because the ordering *is* the behaviour:
  * a band appearing out of sequence would still pass a membership check.
  *
@@ -493,7 +496,6 @@ const SEVERITY_OPTIONS = [
   'High severity CVSS score 7.0-8.9',
   'Medium severity CVSS score 4.0-6.9',
   'Low severity CVSS score 0.1-3.9',
-  'Custom severity Custom CVSS score range',
 ];
 
 test('Software Titles — the severity filter lists the CVSS bands from Critical down', async ({
@@ -504,6 +506,7 @@ test('Software Titles — the severity filter lists the CVSS bands from Critical
 
   await softwareTitles.filter.open();
   await expect(softwareTitles.filter.modal).toBeVisible();
+  await softwareTitles.filter.showAdvanced();
 
   // The severity controls only become usable once the list is narrowed to
   // vulnerable software — Fleet passes `disabled={!vulnSoftwareFilterEnabled}`.

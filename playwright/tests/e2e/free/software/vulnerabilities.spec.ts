@@ -184,8 +184,8 @@ test.describe('Software vulnerabilities', () => {
 
       await hostDetails.goto(host.id);
       await hostDetails.openSoftwareTab();
-      // macOS hosts default to the "Applications" view, which hides non-app
-      // packages (most vulnerable items); switch to the full list.
+      // macOS hosts open on the "macOS app" type, which hides packages and
+      // extensions (most vulnerable items); switch to every type.
       await hostDetails.showFullInventory();
 
       // Retrying waits, not `isVisible()` reads. The host is chosen via the API

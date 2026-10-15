@@ -53,7 +53,7 @@ export class MyWidget {
 | `DataTable` | Every list page | `<table>` rows, primary-link first row, cell lookup by column, empty state |
 | `ContentList` | Profiles, Certs, Scripts, Variables | `<li>` lists with timestamps (not `<table>`) |
 | `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's link text changes (the whole row's text on a table with no links, like Labels) |
-| `FilterModal` | Software Titles, Host Details > Software | "Add filters" modal for vulnerable software + severity |
+| `FilterModal` | Software Titles, Host Details > Software | "Add filters" modal: the Types picker (`typeCheckbox(name)`, `selectTypes(names)` leaves exactly those ticked), the Vulnerable software switch (`applyVulnerable()`), and on premium the severity controls under **Advanced** (`showAdvanced()`, `severityOptions()`) |
 | `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger). `openMenu()` waits for the menu's "Filter by label name" box (`searchBox`), beside which a role that may add labels gets `addLabelButton`; `selectLabel(name)` types the name up to its first space and picks the exact option |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
 | `TeamDropdown` | Most pages; Save as new's "Fleet" field | Team / fleet picker in the page header, or scoped to a container for the same dropdown as a form field |
