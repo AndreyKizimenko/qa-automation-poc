@@ -95,7 +95,7 @@ other:
 1. ☐ *(beforeEach)* Open `/login` via URL.
    - ✅ *(UI)* **Email** field visible.
 2. ☐ Fill **Email** = `nonexistent@example.com`, **Password** = `SomePassword123!`, click **Log in**.
-   - ✅ *(UI)* Text **"Authentication failed"** is visible.
+   - ✅ *(UI)* Text **"Authentication failed"** is visible, in an error toast.
    - ✅ *(UI)* URL still matches `/\/login/`.
 
 **Assessment**
@@ -126,7 +126,7 @@ other:
 
 1. ☐ *(beforeEach)* Open `/login` via URL. ✅ *(UI)* **Email** field visible.
 2. ☐ Fill the real admin **Email** with **Password** = `WrongPassword999!`, click **Log in**.
-   - ✅ *(UI)* Text **"Authentication failed"** is visible — identical copy to AUTH-02.
+   - ✅ *(UI)* Text **"Authentication failed"** is visible in an error toast — identical copy to AUTH-02.
    - ✅ *(UI)* URL still matches `/\/login/`.
 
 **Assessment**
@@ -219,8 +219,8 @@ other:
 
 1. ☐ *(beforeEach)* Open `/login` via URL. ✅ *(UI)* **Email** field visible.
 2. ☐ Click **Log in** with both fields untouched.
-   - ✅ *(UI)* **"Email field must be completed"** is visible.
-   - ✅ *(UI)* **"Password field must be completed"** is visible.
+   - ✅ *(UI)* **"Enter your email"** is visible.
+   - ✅ *(UI)* **"Enter your password"** is visible.
 
 **Assessment**
 - *Value:* Low-moderate. Client-side form validation copy; cheap and stable, catches a broken validation wiring after a form refactor.
@@ -249,7 +249,7 @@ other:
 
 1. ☐ *(beforeEach)* Open `/login` via URL. ✅ *(UI)* **Email** field visible.
 2. ☐ Fill **Password** = `SomePassword123!`, leave **Email** blank, click **Log in**.
-   - ✅ *(UI)* **"Email field must be completed"** is visible.
+   - ✅ *(UI)* **"Enter your email"** is visible.
 
 **Assessment**
 - *Value:* Marginal on its own.
@@ -278,7 +278,7 @@ other:
 
 1. ☐ *(beforeEach)* Open `/login` via URL. ✅ *(UI)* **Email** field visible.
 2. ☐ Fill **Email** with the admin address, leave **Password** blank, click **Log in**.
-   - ✅ *(UI)* **"Password field must be completed"** is visible.
+   - ✅ *(UI)* **"Enter your password"** is visible.
 
 **Assessment**
 - *Value:* Marginal on its own.
@@ -307,7 +307,7 @@ other:
 
 1. ☐ *(beforeEach)* Open `/login` via URL. ✅ *(UI)* **Email** field visible.
 2. ☐ Fill **Email** = `notanemail`, **Password** = `SomePassword123!`, click **Log in** — `LoginPage.login()`.
-   - ✅ *(UI)* Text **"Email must be a valid email address"** is visible.
+   - ✅ *(UI)* Text **"Enter a valid email"** is visible.
 
 **Assessment**
 - *Value:* Moderate — distinct message from the "must be completed" family, so it's the only test of Fleet's email-format validator on this form.

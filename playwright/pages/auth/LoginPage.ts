@@ -15,6 +15,7 @@ export class LoginPage {
   readonly ssoTooltip: Locator;
   readonly authFailedMessage: Locator;
   readonly emailRequiredMessage: Locator;
+  readonly emailInvalidMessage: Locator;
   readonly passwordRequiredMessage: Locator;
 
   constructor(page: Page) {
@@ -27,8 +28,11 @@ export class LoginPage {
     // Names the configured IdP; rendered only while the SSO button is hovered.
     this.ssoTooltip = page.getByRole('tooltip');
     this.authFailedMessage = page.getByText('Authentication failed');
-    this.emailRequiredMessage = page.getByText('Email field must be completed');
-    this.passwordRequiredMessage = page.getByText('Password field must be completed');
+    // A field's error replaces its label text (`InputFieldWithIcon` renders
+    // `error || label`), so each message is matched whole.
+    this.emailRequiredMessage = page.getByText('Enter your email', { exact: true });
+    this.emailInvalidMessage = page.getByText('Enter a valid email', { exact: true });
+    this.passwordRequiredMessage = page.getByText('Enter your password', { exact: true });
   }
 
   async goto(): Promise<void> {
