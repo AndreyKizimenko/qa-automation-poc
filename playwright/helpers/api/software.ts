@@ -436,10 +436,9 @@ export async function listVulnerabilityHosts(
  * The software-version page links every CVE Fleet's matcher has attached to the
  * version, but `GET /vulnerabilities/:cve` answers **204** for one that
  * `vulnerability_host_counts` hasn't counted yet — the aggregate refreshes on its
- * own schedule — and the page renders that as "Vulnerability not detected"
- * ([fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) fixed the
- * other half, a CVE NVD hadn't published, in 4.94). So a flow that clicks the
- * top row can land on that empty state.
+ * own schedule — and the page renders that as "Vulnerability not detected". A
+ * CVE NVD hasn't published yet renders normally; only the host count matters.
+ * So a flow that clicks the top row can land on that empty state.
  *
  * The condition is a race with Fleet's aggregation rather than a property of any
  * platform: a CVE matched in the last few hours has no count and the same CVE
@@ -460,9 +459,9 @@ export async function listVulnerabilityHosts(
  * Probes sequentially and stops at the first hit — the renderable CVE is
  * usually the first or second row, and these run against a shared QA instance.
  *
- * TODO(fleetdm/fleet#49913): drop this probe and click the first row again once
- * the version page lists only CVEs the detail page can show. Tracked in
- * docs/blocked-by-product-bugs.md.
+ * Both gaps are Fleet's aggregates refreshing on their own schedules rather than
+ * defects, so the probe is part of how these flows pick a CVE, not a workaround
+ * waiting on a fix.
  */
 export async function findRenderableCve(
   request: APIRequestContext,

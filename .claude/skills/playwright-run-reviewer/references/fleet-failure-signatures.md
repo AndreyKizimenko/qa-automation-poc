@@ -131,8 +131,10 @@ the heading was never going to render; Fleet was showing an empty state. What
 would confirm it: re-derive the CVE via the API and hit the CVE-detail endpoint
 directly to see whether affected-hosts is genuinely 0, and check whether vuln
 processing recomputed between the software query and the page load. The bug is
-worth filing against Fleet with the snapshot as evidence. (It is filed as
-fleetdm/fleet#49913, still open; the suite now drills into a CVE that
+worth filing against Fleet with the snapshot as evidence. (It was filed as
+fleetdm/fleet#49913 and fixed in 4.94: a CVE NVD hasn't published now renders.
+A CVE Fleet hasn't counted hosts for yet still shows this empty state — that's
+aggregation timing, not a defect — so the suite drills into a CVE that
 `findRenderableCve` confirms renders.)
 
 **The lesson generalized:** a timeout on `toBeVisible` is only a flake if the

@@ -45,9 +45,8 @@ and skips when the instance has none.
 | SWV-24 | `free/software/vulnerabilities.spec.ts` | Software vulnerabilities › Vulnerabilities — a CVE's View all hosts lists hosts it affects | UI+API | ☐ |
 
 † these seven entries resolve which CVE to open through `findRenderableCve`
-rather than clicking the top row — the standing workaround for
-[fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913). See
-[the workaround note](#the-findrenderablecve-workaround-fleetdmfleet49913) below.
+rather than clicking the top row: a freshly matched CVE's detail page is empty
+until Fleet counts its hosts. See [the probe note](#the-findrenderablecve-probe) below.
 The `Linux (deb)` variants are **no longer skipped on premium** — that pair of
 skips was replaced by the workaround (2026-09-22).
 
@@ -94,7 +93,7 @@ SWV-12 (and SWV-01 when un-skipped) — there a 500 surfaces as an empty table p
 `hosts/:id/software?vulnerable=true` probes per platform, but **swallows** failures
 (`return null` / `continue`) → SWV-07/SWV-14 silently *skip* instead of failing.
 
-### The `findRenderableCve` workaround (fleetdm/fleet#49913)
+### The `findRenderableCve` probe
 
 **Seven entries never click the CVE the UI puts in front of them.** SWV-03, SWV-07,
 SWV-12, SWV-14, SWV-18 and SWV-20 all call
@@ -102,15 +101,16 @@ SWV-12, SWV-14, SWV-18 and SWV-20 all call
 identifiers in page order, issues `GET /vulnerabilities/<cve>` for each, and returns
 the first that answers — and then click **that** one.
 
-The reason is a live product bug. Fleet matches a CVE onto a software version
-(`software_cve`) and links it from the version-detail page, but the CVE **detail**
-endpoint inner-joins `cve_meta` and 404s for any CVE the vulnerability feeds have
-not enriched yet, rendering *"Vulnerability not detected"*. The version-detail table
-sorts **newest match first**, which is exactly the row most likely to be
-un-enriched — so clicking the top row dead-ends on an empty state for a window of
-hours after each match. Recorded in
-[`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) under
-**Worked around in the suite**, with the full mechanism in its notes.
+The reason is timing in Fleet's aggregation. Fleet matches a CVE onto a software
+version (`software_cve`) and links it from the version-detail page, but the CVE
+**detail** endpoint answers **204** until `vulnerability_host_counts` has counted the
+CVE's hosts, and the page renders that as *"Vulnerability not detected"*. The
+version-detail table sorts **newest match first**, which is exactly the row most
+likely not to be counted yet, so clicking the top row can dead-end on an empty state
+for a window of hours after each match. Until 4.94 the endpoint also 404'd any CVE
+NVD hadn't published ([fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913),
+fixed by #54159); that case renders now. The history is in
+[`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) (**Resolved**, and its notes).
 
 What this means when auditing these entries:
 
@@ -118,14 +118,15 @@ What this means when auditing these entries:
   CVE page the entry asserts on. Reproducing a failure by hand means probing
   `GET /vulnerabilities/<cve>` for the CVEs listed, not picking the first one.
 - **Each entry carries a second skip**, distinct from the data-availability one:
-  `test.skip(!cveText, 'Every CVE on this version 404s its detail page —
-  fleetdm/fleet#49913')`. It fires only in the genuine dead end, but it means a
-  fully-unenriched instance turns these into silent no-ops.
+  `test.skip(!cveText, 'No CVE on this version has a renderable detail page yet')`.
+  It fires only in the genuine dead end, but it means an instance whose counts lag
+  every listed CVE turns these into silent no-ops.
 - **The probe costs one API request per un-renderable CVE.** On a version carrying
   dozens of fresh matches that is dozens of sequential round-trips before the first
   click.
-- **Unblock condition:** the detail endpoint renders matched-but-unenriched CVEs.
-  Then drop `findRenderableCve` and click the first row.
+- **Permanent, not a workaround:** both remaining gaps (the host-count lag, and the
+  fleet-scope 204 below) are aggregates refreshing on their own schedules, so the
+  probe is how these flows choose a CVE.
 
 **The probe asks the page's scope (2026-09-29).** The CVE page requests
 `GET /vulnerabilities/<cve>?fleet_id=<scope>`, and Fleet answers **204** when the CVE is
@@ -242,7 +243,7 @@ other:
    - ✅ *(UI)* Throws `No version with vulnerabilities found on this software title` if every version reads `---` — `clickFirstVersionWithVulnerabilities` ([`SoftwareTitleDetailPage.ts:56`](../../pages/software/SoftwareTitleDetailPage.ts)).
 5. ☐ On the version page, read **every** CVE link, then click one whose detail page actually answers.
    - ✅ *(UI)* CVE table has a row and each link text matches `^CVE-\d{4}-\d+$` — `SoftwareVersionDetailPage.cveNames`.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order and returns the first that answers 200 — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order and returns the first that answers 200 — see [the probe note](#the-findrenderablecve-probe). **`test.skip` if no listed CVE renders yet.**
    - ☐ Click that CVE — `SoftwareVersionDetailPage.clickCve(cveText)`.
 6. ☐ Land on the CVE detail page.
    - ✅ *(UI)* URL matches `/software/vulnerabilities/CVE-`.
@@ -256,7 +257,7 @@ other:
 - *Value:* the core vulnerability drill-down for all three platforms — proves title → version → CVE routing, that the version's CVE list is populated, and that the CVE page hydrates and links out correctly. Also the only test that exercises the real NVD link.
 - *Coverage gaps:* premium's paid CVE fields are never asserted — severity/CVSS, probability of exploit, published date and the premium-only description (`CveDetailPage.description` is defined and never used); SWV-16 now asserts the same three premium-only *columns* on the OS detail page, so the CVE summary is the last unasserted premium enrichment surface. No breadcrumb/back navigation; no check that the CVE page's software table actually contains the title we drilled from.
 - *Redundancy:* SWV-12 is the same flow on free. Steps 4–6 are duplicated by SWV-07/SWV-14, which reach the same pages from the host side.
-- *Efficiency / smells:* clicking out to nvd.nist.gov makes the test depend on an external site. `searchByName`'s weak wait (`SoftwareTitlesPage.ts:96-99`) can race the next click. Discovery in `beforeAll` uses raw `fetch` instead of the sanctioned `withRequest` hook helper (`helpers/api/core.ts:71`). The `findRenderableCve` probe adds one sequential API request per un-renderable CVE before the click, and its skip can turn the whole variant into a no-op — see the [workaround note](#the-findrenderablecve-workaround-fleetdmfleet49913).
+- *Efficiency / smells:* clicking out to nvd.nist.gov makes the test depend on an external site. `searchByName`'s weak wait (`SoftwareTitlesPage.ts:96-99`) can race the next click. Discovery in `beforeAll` uses raw `fetch` instead of the sanctioned `withRequest` hook helper (`helpers/api/core.ts:71`). The `findRenderableCve` probe adds one sequential API request per un-renderable CVE before the click, and its skip can turn the whole variant into a no-op — see the [probe note](#the-findrenderablecve-probe).
 
 **Notes (Andrey)**
 ```
@@ -384,7 +385,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/software/vulnerabilities.spec.ts`](../../tests/e2e/premium/software/vulnerabilities.spec.ts) (L246-298, `for (const osKey of OS_KEYS)`)
 - **Grep:** `npx playwright test --project=premium -g "macOS host — vulnerable software → version → CVE flow"` (swap `Windows`; `Linux \(deb\)` needs the escapes)
-- **Project:** premium · **Variants:** macOS, Linux deb, Windows — **all three run** ([#49913](https://github.com/fleetdm/fleet/issues/49913) is now worked around, not skipped) · **Scope:** n/a (host detail)
+- **Project:** premium · **Variants:** macOS, Linux deb, Windows — **all three run** (a CVE is chosen through `findRenderableCve`, not skipped) · **Scope:** n/a (host detail)
 - **Mode:** UI (API used for host discovery only) · **Isolation:** independent; reads `hostByOS` from `beforeAll`
 - **Preconditions:** `findHostByPlatform` returned a host of that platform whose `hosts/:id/software?vulnerable=true` is non-empty; otherwise `test.skip('No <OS> host with vulnerable software')`. Hosts are osquery-perf simulations with random names — resolved by platform, never by name.
 - **Data created:** none
@@ -406,7 +407,7 @@ other:
 6. ☐ On the title page, click the version **this host** has installed (the vulnerable one); on the version page read every CVE link and click one whose detail page answers.
    - ✅ *(API)* `hostVulnerableVersions` reads the host's vulnerable versions of the title it clicked (`GET /hosts/:id/software?vulnerable=true`); the test fails if the host reports none. The title page lists every version in the fleet's scope, which can include hosts only passing through the fleet.
    - ✅ *(UI)* That version's link is on the title page; versions and CVE tables rendered; every CVE link matches the CVE pattern — `cveNames()`.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — see [the probe note](#the-findrenderablecve-probe). **`test.skip` if no listed CVE renders yet.**
 7. ☐ Land on the CVE detail page.
    - ✅ *(UI)* URL `/software/vulnerabilities/CVE-`; `<h1>` = CVE; **Detected** + **Affected hosts**; **Visit NVD page** href exact; vulnerable-software table has a row (no NVD click).
 
@@ -414,7 +415,7 @@ other:
 - *Value:* the only coverage of the host-details Software tab's vulnerable filter and of the Applications-vs-Full-inventory view switch — plus a second, host-side route into the CVE pages.
 - *Coverage gaps:* the vulnerable filter isn't verified to have actually narrowed the list (no count/row-content check); the host's software search box, per-row CVE counts, and "1 filter" button label are untested; no MDM/live-host variant.
 - *Redundancy:* steps 6–7 duplicate SWV-03 steps 4–6 exactly; SWV-14 is the same test on free.
-- *Efficiency / smells:* the title reached depends on whichever vulnerable package sorts first for that host, so the CVE landed on varies run to run — and `findRenderableCve` adds a second axis of non-determinism on top (which CVE on that version happens to be enriched today). Host discovery swallows API errors → silent skip, and the #49913 probe adds a second silent-skip path.
+- *Efficiency / smells:* the title reached depends on whichever vulnerable package sorts first for that host, so the CVE landed on varies run to run — and `findRenderableCve` adds a second axis of non-determinism on top (which CVE on that version Fleet has counted hosts for yet). Host discovery swallows API errors → silent skip, and the CVE probe adds a second silent-skip path.
 
 **Notes (Andrey)**
 ```
@@ -598,7 +599,7 @@ Identical to SWV-03 with the team-dropdown step removed:
    - ✅ *(UI)* A row is visible after typing (⚠️ not asserted to be the searched title).
 3. ☐ Click the first version whose **Vulnerabilities** cell isn't `---`; read every CVE link and click one whose detail page answers.
    - ✅ *(UI)* Versions table rendered; every CVE link matches the CVE pattern; throws if no vulnerable version.
-   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probes `GET /vulnerabilities/<cve>?fleet_id=<the page's scope>` in page order, 200 only — see [the probe note](#the-findrenderablecve-probe). **`test.skip` if no listed CVE renders yet.**
 4. ☐ CVE detail page.
    - ✅ *(UI)* URL `/software/vulnerabilities/CVE-`; `<h1>` = CVE; **Detected** + **Affected hosts** labels; **Visit NVD page** href exact; **macOS variant** clicks it and asserts the new tab's URL; CVE-page software table has a row.
 
@@ -606,7 +607,7 @@ Identical to SWV-03 with the team-dropdown step removed:
 - *Value:* free-tier drill-down parity across all three platforms.
 - *Coverage gaps:* the free CVE page's *reduced* content is never asserted as reduced — nothing verifies the premium-only description/severity block is absent on free, which is the tier difference a manual tester would check here. **SWV-21 now does exactly that for the OS detail page** (`PREMIUM_ONLY_COLUMNS` asserted at count 0), so the pattern exists in the area and this entry simply hasn't adopted it.
 - *Redundancy:* duplicate of SWV-03 modulo the dropdown.
-- *Efficiency / smells:* the free/premium asymmetry this entry used to carry (deb skipped on premium, not on free) is **gone** — both tiers now run all three variants behind `findRenderableCve`, which is the correct instrument: the #49913 trigger is the *newest* CVE, not any platform, and the free Windows case is what proved it. External NVD click on the macOS variant duplicates SWV-03's.
+- *Efficiency / smells:* the free/premium asymmetry this entry used to carry (deb skipped on premium, not on free) is **gone** — both tiers now run all three variants behind `findRenderableCve`, which is the correct instrument: the trigger is the *newest* CVE, not any platform, and the free Windows case is what proved it. External NVD click on the macOS variant duplicates SWV-03's.
 
 **Notes (Andrey)**
 ```
@@ -675,14 +676,14 @@ Identical to SWV-07:
 5. ☐ Click the first software title → the version this host has installed (`hostVulnerableVersions`) → a CVE whose detail page answers.
    - ✅ *(API)* the host reports a vulnerable version of that title (else the test fails).
    - ✅ *(UI)* Tables rendered at each hop; the host's version is linked on the title page; every CVE link matches the pattern.
-   - ☐ *(no user action)* `findRenderableCve` probe — the [#49913 workaround](#the-findrenderablecve-workaround-fleetdmfleet49913). **`test.skip` if every listed CVE 404s.**
+   - ☐ *(no user action)* `findRenderableCve` probe — see [the probe note](#the-findrenderablecve-probe). **`test.skip` if no listed CVE renders yet.**
 6. ☐ CVE detail — ✅ *(UI)* URL, heading, **Detected**, **Affected hosts**, NVD href, software-table row.
 
 **Assessment**
 - *Value:* free-tier host-software vulnerable-filter parity.
 - *Coverage gaps:* same as SWV-07 — filter narrowing never verified; no tier-difference assertion.
 - *Redundancy:* duplicate of SWV-07, now variant-for-variant (both tiers run all three platforms).
-- *Efficiency / smells:* two silent-skip paths — `findHostByPlatform` swallowing API errors, and the #49913 probe finding nothing renderable; target title is instance-order dependent.
+- *Efficiency / smells:* two silent-skip paths — `findHostByPlatform` swallowing API errors, and the CVE probe finding nothing renderable; target title is instance-order dependent.
 
 **Notes (Andrey)**
 ```
@@ -835,7 +836,7 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "a CVE hands off to the hosts running each affected version"` (matches the free copy too — `--project` is mandatory)
 - **Project:** premium · **Scope:** Unassigned
 - **Mode:** UI (API used only to pick a renderable CVE) · **Isolation:** independent, read-only
-- **Preconditions:** CVEs listed under Unassigned, **and at least one of them has a renderable detail page** — otherwise `test.skip('No listed CVE has a renderable detail page — fleetdm/fleet#49913')`. See [the workaround note](#the-findrenderablecve-workaround-fleetdmfleet49913).
+- **Preconditions:** CVEs listed under Unassigned, **and at least one of them has a renderable detail page** — otherwise `test.skip('No listed CVE has a renderable detail page yet')`. See [the probe note](#the-findrenderablecve-probe).
 - **Data created:** none
 - **Cross-link:** free mirror = **SWV-20**
 
@@ -938,7 +939,7 @@ other:
 - **Grep:** `npx playwright test --project=free -g "a CVE hands off to the hosts running each affected version"`
 - **Project:** free · **Scope:** single (no team dropdown)
 - **Mode:** UI (API used only to pick a renderable CVE) · **Isolation:** independent, read-only
-- **Preconditions:** CVEs listed on the free instance with at least one renderable detail page — otherwise skipped for [#49913](https://github.com/fleetdm/fleet/issues/49913)
+- **Preconditions:** CVEs listed on the free instance with at least one renderable detail page — otherwise skipped (see [the probe note](#the-findrenderablecve-probe))
 - **Data created:** none
 - **Cross-link:** premium mirror = **SWV-18**
 
@@ -1119,7 +1120,7 @@ other:
 |---|---|---|
 | Inventory `vulnerable=true` filter | SWV-01/02, SWV-11 | item-count, sorting by Vulnerabilities, page-1 restore; premium every-row integrity blocked (#50059) |
 | Vulnerabilities column rendering (single CVE, "N vulnerabilities" tooltip) | SWV-02, SWV-11 | both legs `if`-guarded; tooltip contents not matched to the row's real CVEs |
-| Title → version → CVE drill-down | SWV-03, SWV-12 (all three platforms, both tiers) | no back-navigation; no check the CVE page lists the originating title; which CVE is opened is non-deterministic (#49913 workaround) |
+| Title → version → CVE drill-down | SWV-03, SWV-12 (all three platforms, both tiers) | no back-navigation; no check the CVE page lists the originating title; which CVE is opened is non-deterministic (`findRenderableCve`) |
 | CVE detail page | `assertOk` in SWV-03/06/07/12/13/14; **Affected hosts** read as a number in SWV-18/SWV-20 | **premium summary enrichment still never asserted** — severity/CVSS, probability of exploit, published date, `CveDetailPage.description` (defined, unused), and no free-side absence check for them |
 | CVE → hosts running an affected version | SWV-18, SWV-20 | landed list only checked non-empty, not that it contains hosts on that version; first affected version only; Affected-hosts total never related to the table below it |
 | Vulnerabilities tab search | SWV-04 (premium only) | no free equivalent; no partial-match or empty-state case |
@@ -1148,7 +1149,7 @@ other:
 
 Only SWV-08/SWV-15 assert via API, and it is justified — `GET /config` is the authoritative, race-free check that a modal save persisted, and the UI re-read is still performed. For the second (off) save it is also the only completion signal: the first save's identical toast can still be on screen, so the test polls `GET /config` until the switch reads off. Everything else validates through the browser. The API is used heavily for **discovery** instead: `findVulnerableSoftwareBySources` (up to 5 paged `vulnerable=true` sweeps) and `findHostByPlatform` (up to 50 per-host vulnerable-software probes per platform) run in `beforeAll` for both vulnerability specs — correct in principle (UI scraping would be slower and flakier) but currently the area's biggest reliability liability: the sweep re-runs once per worker under `fullyParallel`, throws the whole chunk on a 500, and the host lookup converts API failures into silent skips. Both use raw `fetch` rather than the sanctioned `withRequest` hook wrapper.
 
-`findRenderableCve` is a third kind of API use again: not discovery of *what* to test but a probe for **which instance data is navigable at all**, because Fleet links CVEs its own detail endpoint cannot render (#49913). It is the right concession — the alternative is six tests that fail on a product bug they are not about — but it has two costs the entries above record: the assertion target becomes non-deterministic run to run, and a fully-unenriched version turns the test into a silent skip. It is also the area's only API call made from inside a test body rather than a hook.
+`findRenderableCve` is a third kind of API use again: not discovery of *what* to test but a probe for **which instance data is navigable at all**, because Fleet links CVEs its own detail page can't show yet (not counted yet, or not in this fleet). It is the right instrument — the alternative is six tests that fail on aggregation timing they are not about — but it has two costs the entries above record: the assertion target becomes non-deterministic run to run, and a version whose every CVE is uncounted turns the test into a silent skip. It is also the area's only API call made from inside a test body rather than a hook.
 
 **The area's two exact-count comparisons disagree with each other.** SWV-16/SWV-21 assert list-row counts equal detail-page counts exactly; SWV-18/SWV-20 explicitly refuse the analogous comparison (`expect.poll(...).toBeGreaterThan(0)`) with a written rationale about the shared, concurrently-mutating host population — and the free one had an exact comparison *removed* for that reason. Both positions cannot be right about the same instance. Worth one verdict for the area rather than two per-entry ones.
 
@@ -1160,7 +1161,7 @@ Only SWV-08/SWV-15 assert via API, and it is justified — `GET /config` is the 
 4. Cache the `beforeAll` discovery per worker (or move it to a worker-scoped fixture) so the `vulnerable=true` sweep runs once per project rather than once per worker per file — directly reduces the "table is full" 500 exposure.
 5. Delete or rewrite the stale isolation exception at [`tests/README.md:154`](../../tests/README.md) — `softwareByOS` is not accumulated across tests, and the line makes people believe these tests can't be run individually.
 6. Apply the severity filter in SWV-19 instead of only listing its options: select **Critical**, click **Apply**, and assert `min_cvss_score=9` reaches the URL. One extra click turns a render check into a filter check.
-7. Lift the six copies of the `findRenderableCve` comment + skip into one helper (`openRenderableCve(versionDetailPage, request)`), so the workaround has a single place to be deleted when #49913 closes.
+7. Lift the six copies of the `findRenderableCve` comment + skip into one helper (`openRenderableCve(versionDetailPage, request)`), so the probe and its skip live in one place.
 8. Settle the exact-vs-loose count question (see **UI-vs-API balance**) and make SWV-16/SWV-21 and SWV-18/SWV-20 agree.
 
 **Bigger bets**
