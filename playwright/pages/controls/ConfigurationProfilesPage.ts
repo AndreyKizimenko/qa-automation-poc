@@ -7,7 +7,7 @@ import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
 
 /**
- * A profile's custom target, as the Add / Edit profile modal sets it. Omit it for
+ * A profile's custom target, as the Add / Edit profile page sets it. Omit it for
  * "All hosts". Profiles exclude "any" of their Exclude labels; there is no mode.
  */
 export interface ProfileTarget {
@@ -20,11 +20,14 @@ export interface ProfileTarget {
  * configuration profiles uploaded for a fleet (.mobileconfig for Apple,
  * .json for Apple/Android, .xml for Windows).
  *
- * Upload uses an `Add profile` modal whose file input has the id
- * `upload-profile` (different from the FileUploader component used
- * elsewhere in the app, which uses `upload-file`). Selecting a file does
- * not auto-submit; the modal stages the file and a separate "Add profile"
- * button submits.
+ * Adding and editing happen on a page of their own, not in a modal:
+ * "Add profile" opens `configuration-profiles/new` and a row's "Edit <name>"
+ * opens `configuration-profiles/<uuid>`, both rendering `ProfileForm` under an
+ * "Add profile" / "Edit profile" heading. Its file input has the id
+ * `upload-profile` (the FileUploader used elsewhere in the app uses
+ * `upload-file`); choosing a file loads it into the form's editor without
+ * submitting, and a separate "Add profile" / "Update profile" button submits.
+ * A saved form, and Cancel, return to the list.
  *
  * Each profile row is a `.profile-list-item` with details, edit, download
  * and trash buttons, each named for the profile ("Edit <name>"); the trash
@@ -32,8 +35,8 @@ export interface ProfileTarget {
  * premium a targeted row also shows "N labels", with a warning icon when one
  * of them is broken.
  *
- * On premium both modals carry the label target — see
- * {@link TargetLabelSelector}. Free renders neither.
+ * On premium the form carries the label target — see
+ * {@link TargetLabelSelector}. Free renders none.
  */
 export class ConfigurationProfilesPage {
   readonly page: Page;
@@ -46,16 +49,15 @@ export class ConfigurationProfilesPage {
   readonly addProfileButton: Locator;
   readonly listItem: Locator;
 
-  readonly uploadModal: Locator;
+  /** The Add / Edit profile page's form. */
+  readonly profileForm: Locator;
+  /** The page's "Add profile" or "Edit profile" heading. */
+  readonly formHeading: Locator;
   readonly uploadInput: Locator;
-  readonly uploadConfirmButton: Locator;
-
-  readonly uploadTargets: TargetLabelSelector;
-
-  readonly editModal: Locator;
-  readonly editTargets: TargetLabelSelector;
-  readonly editUpdateButton: Locator;
-  readonly editCancelButton: Locator;
+  readonly addProfileSubmitButton: Locator;
+  readonly updateProfileButton: Locator;
+  readonly formCancelButton: Locator;
+  readonly formTargets: TargetLabelSelector;
 
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -70,24 +72,20 @@ export class ConfigurationProfilesPage {
     // Exact: a fleet with no profiles also shows a "No configuration profiles" heading.
     this.heading = page.getByRole('heading', { name: 'Configuration profiles', exact: true });
     // The "Add profile" button label is shared between the empty-state card
-    // and the populated-list heading; both open the same modal.
+    // and the populated-list heading; both open the Add profile page.
     this.addProfileButton = page.getByRole('button', { name: 'Add profile' }).first();
     this.listItem = page.locator('.profile-list-item');
 
-    // Fleet's Modal component renders as a <div> with no role/aria-modal
-    // (catalogued in the reviewer skill as a legitimate class fallback);
-    // scope by container class plus the modal's heading text.
-    this.uploadModal = page.locator('.modal__modal_container').filter({ hasText: 'Add profile' });
-    this.uploadInput = page.locator('input#upload-profile');
-    // The modal's submit button shares its label with the page-level
-    // "Add profile" button — scope the locator inside the modal.
-    this.uploadConfirmButton = this.uploadModal.getByRole('button', { name: 'Add profile' });
-    this.uploadTargets = new TargetLabelSelector(this.uploadModal);
-
-    this.editModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit profile' });
-    this.editTargets = new TargetLabelSelector(this.editModal);
-    this.editUpdateButton = this.editModal.getByRole('button', { name: 'Update profile', exact: true });
-    this.editCancelButton = this.editModal.getByRole('button', { name: 'Cancel', exact: true });
+    // A <form> has no role without an accessible name and Fleet gives this one
+    // none, so its class (`ProfileForm`'s base) is the scope. It keeps the
+    // submit button apart from the list's "Add profile" button of the same name.
+    this.profileForm = page.locator('form.profile-form');
+    this.formHeading = page.getByRole('heading', { name: /^(Add|Edit) profile$/, level: 1 });
+    this.uploadInput = this.profileForm.locator('input#upload-profile');
+    this.addProfileSubmitButton = this.profileForm.getByRole('button', { name: 'Add profile', exact: true });
+    this.updateProfileButton = this.profileForm.getByRole('button', { name: 'Update profile', exact: true });
+    this.formCancelButton = this.profileForm.getByRole('button', { name: 'Cancel', exact: true });
+    this.formTargets = new TargetLabelSelector(this.profileForm);
 
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete configuration profile' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
@@ -108,18 +106,46 @@ export class ConfigurationProfilesPage {
     return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
+  /** Opens the Add profile page from the list. */
+  async openAddProfile(): Promise<void> {
+    await this.addProfileButton.click();
+    await expect(this.page).toHaveURL(/\/configuration-profiles\/new/);
+    await expect(this.formHeading).toHaveText('Add profile');
+    await expect(this.profileForm).toBeVisible();
+  }
+
   /**
-   * Uploads a profile through the Add profile modal, custom-targeted when
-   * `target` is given (premium only).
+   * Chooses `filePath` on the open Add profile page. The submit button stays
+   * disabled until the form has read the file, so its enabling is the wait.
+   */
+  private async chooseProfileFile(filePath: string): Promise<void> {
+    await this.uploadInput.setInputFiles(filePath);
+    await expect(this.addProfileSubmitButton).toBeEnabled();
+  }
+
+  /**
+   * Uploads a profile through the Add profile page, custom-targeted when
+   * `target` is given (premium only), and waits to be back on the list.
    */
   async uploadProfile(filePath: string, target?: ProfileTarget): Promise<void> {
-    await this.addProfileButton.click();
-    await expect(this.uploadModal).toBeVisible();
-    await this.uploadInput.setInputFiles(filePath);
-    if (target) await this.setTarget(this.uploadTargets, target);
-    await this.uploadConfirmButton.click();
+    await this.openAddProfile();
+    await this.chooseProfileFile(filePath);
+    if (target) await this.setTarget(this.formTargets, target);
+    await this.addProfileSubmitButton.click();
     await this.toast.expectSuccess('Successfully uploaded.');
-    await expect(this.uploadModal).toBeHidden();
+    await this.expectBackOnList();
+  }
+
+  /** The form is gone and the list's heading shows: a save or Cancel returned to the list. */
+  private async expectBackOnList(): Promise<void> {
+    await expect(this.profileForm).toBeHidden();
+    await expect(this.heading).toBeVisible();
+  }
+
+  /** Leaves the Add / Edit profile page through Cancel, saving nothing. */
+  async cancelProfileForm(): Promise<void> {
+    await this.formCancelButton.click();
+    await this.expectBackOnList();
   }
 
   private async setTarget(selector: TargetLabelSelector, target: ProfileTarget): Promise<void> {
@@ -151,26 +177,27 @@ export class ConfigurationProfilesPage {
   }
 
   /**
-   * Opens a profile's Edit profile modal, where its target is read and changed.
+   * Opens a profile's Edit profile page, where its target is read and changed.
    * Like download and delete, the button only renders while the row is hovered.
    */
   async openEdit(name: string): Promise<void> {
     const row = this.itemByName(name);
     await clickHoverAction(row, row.getByRole('button', { name: `Edit ${name}`, exact: true }));
-    await expect(this.editModal).toBeVisible();
+    await expect(this.formHeading).toHaveText('Edit profile');
+    await expect(this.profileForm).toBeVisible();
   }
 
-  /** Replaces the open Edit modal's target with `target` and saves it. */
+  /** Replaces the open Edit page's target with `target`, saves it, and waits to be back on the list. */
   async updateTarget(target: ProfileTarget | 'All hosts'): Promise<void> {
     if (target === 'All hosts') {
-      await this.editTargets.chooseAllHosts();
+      await this.formTargets.chooseAllHosts();
     } else {
-      await this.clearTicked(this.editTargets);
-      await this.setTarget(this.editTargets, target);
+      await this.clearTicked(this.formTargets);
+      await this.setTarget(this.formTargets, target);
     }
-    await this.editUpdateButton.click();
+    await this.updateProfileButton.click();
     await this.toast.expectSuccess('Successfully updated profile.');
-    await expect(this.editModal).toBeHidden();
+    await this.expectBackOnList();
   }
 
   /**
@@ -195,15 +222,14 @@ export class ConfigurationProfilesPage {
   }
 
   /**
-   * Stages a profile in the Add-profile modal and submits without asserting
+   * Chooses a profile on the Add profile page and submits without asserting
    * success — for negative-path uploads where the caller asserts the
-   * rejection message Fleet renders.
+   * rejection message Fleet toasts. A refused upload leaves the page open.
    */
   async submitProfileUpload(filePath: string): Promise<void> {
-    await this.addProfileButton.click();
-    await expect(this.uploadModal).toBeVisible();
-    await this.uploadInput.setInputFiles(filePath);
-    await this.uploadConfirmButton.click();
+    await this.openAddProfile();
+    await this.chooseProfileFile(filePath);
+    await this.addProfileSubmitButton.click();
   }
 
   /** Triggers a download for the profile and returns the Download handle. */

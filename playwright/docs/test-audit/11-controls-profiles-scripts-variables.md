@@ -112,14 +112,14 @@ host-execution specs build their script content at run time with a per-run nonce
 3. ☐ Select the scope in the team dropdown (idempotent; skipped if already showing it).
    - ✅ *(UI)* Dropdown value equals the scope label — `TeamDropdown.selectByLabel`.
 4. ☐ If a `.profile-list-item` whose title text exactly equals the display name is already visible, delete it first (hover row → trash → **Delete** in the "Delete configuration profile" modal → *Successfully deleted.* toast).
-5. ☐ Click **Add profile** → the "Add profile" modal opens → choose the fixture file on `input#upload-profile` → click **Add profile** inside the modal.
+5. ☐ Click **Add profile** → the **Add profile** page opens (`/configuration-profiles/new`) → choose the fixture file on `input#upload-profile` (the form's **Add profile** button enables once the file is read) → click **Add profile** in the form.
    - ✅ *(UI)* Success toast *"Successfully uploaded."* — `ConfigurationProfilesPage.uploadProfile`.
-   - ✅ *(UI)* The upload modal is hidden afterwards.
+   - ✅ *(UI)* Back on the list: the form is gone and the **Configuration profiles** heading shows.
    - ✅ *(UI)* A profile row whose title text exactly equals the display name is visible.
    - ✅ *(API)* `GET /activities` (paged, ≤5×100 desc) contains `created_macos_profile` / `created_windows_profile` with `details.profile_name === <displayName>`, and `actor_email === FLEET_ADMIN_EMAIL` — `assertActivity`.
 
 **Assessment**
-- *Value:* Catches a broken profile-upload path (modal wiring, file input id, parser accepting a valid mobileconfig/SyncML, and the profile appearing in the right fleet's list).
+- *Value:* Catches a broken profile-upload path (the Add profile page's wiring, file input id, parser accepting a valid mobileconfig/SyncML, and the profile appearing in the right fleet's list).
 - *Coverage gaps:* Nothing asserts the row's **platform tag**, checksum/date column, or the profile's payload identifier. No label-scoped profile (include/exclude by label), no duplicate-identifier conflict, no `.json` (Apple DDM / Android) profile case, no per-profile **delivery status** to a host (Verified/Verifying/Pending/Failed) — the `OsSettingsPage.statusLinks` counters are only ever touched by the loadtest spec. No `$FLEET_SECRET_*` / `$FLEET_VAR_*` variable interpolation inside a profile.
 - *Redundancy:* Near-identical to **CTL-15** (free mirror; only difference is the missing dropdown step and the tier-specific activity suffix). The API activity check here is re-verified through the UI in **CTL-04**.
 - *Efficiency / smells:*
@@ -254,7 +254,7 @@ other:
 **Flow**
 
 1. ☐ Dashboard → **Controls** → **OS settings** tab → **Configuration profiles** sidebar link → select **Unassigned**.
-2. ☐ Click **Add profile**, choose the signed fixture, click **Add profile** in the modal (no success assertion — `submitProfileUpload`).
+2. ☐ Click **Add profile**, choose the signed fixture, click **Add profile** in the form (no success assertion — `submitProfileUpload`).
    - ✅ *(UI)* An **error** toast (`.toast-notification__card--error`) matching `/Configuration profiles can't be signed/`.
 
 **Assessment**
@@ -631,8 +631,8 @@ other:
 1. ☐ Dashboard → **Controls** → **OS settings** tab → **Configuration profiles** sidebar link. (On free the OS-settings root renders the Premium paywall for Disk encryption; the sidebar still offers Configuration profiles.)
    - ✅ *(UI)* URL `/controls` → `/controls/os-settings` → `/controls/os-settings/configuration-profiles`.
 2. ☐ Delete a leftover profile with the same display name if present.
-3. ☐ Click **Add profile** → modal → choose the fixture → **Add profile**.
-   - ✅ *(UI)* *"Successfully uploaded."* toast; modal hidden.
+3. ☐ Click **Add profile** → the Add profile page → choose the fixture → **Add profile**.
+   - ✅ *(UI)* *"Successfully uploaded."* toast; back on the list.
    - ✅ *(UI)* Row with the exact display name is visible.
    - ✅ *(API)* `created_macos_profile` / `created_windows_profile` with matching `profile_name`, admin actor.
 
