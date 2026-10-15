@@ -172,11 +172,38 @@ with the template's reminder line as-is:
 > Make sure to go through [the list](https://github.com/fleetdm/fleet/blob/main/docs/Contributing/guides/ui/design-qa-considerations.md) and consider all events that might be related to this story, so we catch edge cases earlier.
 ```
 
-**Sections**, in this order, only the ones that apply: **Setup**, **Core flow**, **API** (and
-fleetctl), **GitOps**, **Validation** (when input rules are the story), **Edge cases**, **UI** (states,
-long names, widths, when the UI is substantial), **Permissions**, **Premium gating**, **Feature in
-isolation**, **Upgrade**, **Docs**. Global-switch sections (Free, MDM off, upgrade) go late because
-they disrupt the instance.
+**Sections: the story template's, nothing else.** Engineers, PMs and QA all know these sections,
+and a plan with its own sections ("Validation", "Clearing", "Docs") ends up checking the same thing
+in two places. Use only the sections that apply, in this order:
+
+| Section | What belongs here |
+|---|---|
+| Setup | Not rows: what's needed, named once (see below). It's the one block the template doesn't have. |
+| Core flow | The story's happy path end to end, on the surfaces the story names, including what the device shows. Each step once. |
+| Edge cases | Everything unusual: input the feature rejects or accepts at the boundary (the full value matrix), missing config, deleted or changed related objects, lifecycle (transfer, re-enroll, delete), concurrency, external failures, open bugs the path will hit. |
+| UI | Only what the UI adds beyond the API: states (loading, empty, error), where an error shows, long names, widths, guide-vs-page checks. |
+| API | The endpoints' contract: each new or changed endpoint and parameter, prefixes, malformed parameters (unknown ids, wrong types), response vs the REST docs, the API-only endpoint catalog. |
+| GitOps (generate + run) | `fleetctl gitops` apply, dry-run and clearing, and the `generate-gitops` round trip. |
+| Permissions | The role matrix, or the one row confirming an unchanged gate. |
+| Premium gating | Free, backend and frontend. |
+| Upgrade / data migration | Behavior on a server upgraded with existing data. |
+| Feature in isolation | One platform's MDM only, other MDM off, GitOps mode, including destructive switches like turning Android MDM off. |
+
+Global-switch sections (Premium gating, Upgrade, Feature in isolation) come last because they
+disrupt the instance.
+
+**Every check lives in exactly one row.** Before writing, list each check as behavior × entry point
+× input and give it one home using the table. The overlaps that crept into earlier plans:
+
+- **The full input matrix on every entry point.** Run the full matrix of values on one entry point
+  (Edge cases). Add one more row that sends one representative bad input through every other entry
+  point (API, add, batch, GitOps, the UI). Never repeat the cross product, and never repeat an
+  input/entry-point pair.
+- **The same outcome checked in Core flow, API and Edge cases.** "Hosts get the value", "the value
+  doesn't leak" and "activities logged" each belong in one row that lists the surfaces it checks.
+- **Product's rows plus a parallel copy.** When Product's row covers a check, make their row
+  concrete (inputs, surface, observable result) instead of adding your own beside it.
+- **A UI row repeating the API row.** The UI row checks only what the UI adds.
 
 **Setup** names everything once, so rows can refer to it: tier, which MDM is on, the fleets ("Fleet
 A", "Fleet B"), the test objects (apps, profiles, labels), which hosts can be simulated and which must
@@ -199,8 +226,8 @@ name the rows that need it. If device rows involve resets, give the order that s
 - **Matrices are one row:** "API: global maintainer, observer, observer+, technician; Fleet B admin →
   403" rather than five rows that each say 403, and rather than one "permissions work" row that
   hides which roles were checked.
-- **One API matrix plus one UI glance.** Validation cases go through the API, all of them. The UI
-  gets one row showing where and how the error appears.
+- **One matrix plus one UI glance.** Every rejected-input case runs once, on one entry point. The
+  UI gets one row showing where and how the error appears.
 - **A row that depends on an open question** says so inline: "→ allowed through the API. Confirm
   with PM that this is intended."
 - **A row that sets a deliberately bad or conflicting value** restores it in the same row ("…, then
@@ -243,10 +270,13 @@ An illustrative excerpt (made-up story: require a reason when locking a host):
 - [ ] UI: enter "Lost at airport" → Lock → the host shows "Lock pending"; the `locked_host` activity includes the reason.
 - [ ] Device: the real Mac locks and its lock screen shows "Lost at airport".
 
+#### Edge cases
+- [ ] API: reason missing, `""`, spaces only, 1,001 characters → rejected with a message naming `reason`; the host isn't locked.
+- [ ] fleetctl: `fleetctl mdm lock` without `--reason`, and the UI with an empty field → the same rejection; nothing sent.
+
 #### API
 - [ ] API: `POST /api/v1/fleet/hosts/:id/lock` with `{"reason":"Lost"}` on the macOS, Windows and iPhone hosts, on `/api/v1` and `/api/latest` → 204, `GET /hosts/:id` shows the pending lock and the reason.
-- [ ] API: reason missing, `""`, spaces only, 1,001 characters → rejected with a message naming `reason`; the host isn't locked.
-- [ ] fleetctl: `fleetctl mdm lock --host <host> --reason "Lost"` → locked with the reason. Without `--reason` → an error naming the flag.
+- [ ] fleetctl: `fleetctl mdm lock --host <host> --reason "Lost"` → locked with the reason.
 
 #### Permissions
 - [ ] API: global and Fleet A admin, maintainer, technician → allowed. Global and Fleet A observer, observer+; Fleet B admin → 403.
@@ -302,7 +332,10 @@ In chat:
    refuses because the body changed (someone ticked a box or edited the story), re-read it, fold the
    change into the plan, and preview again.
 
-Before you deliver, reread `notes.md` against `plan.md`. If `notes.md` says a row can't happen as
+Before you deliver, do a dedupe pass. Read the plan once, row by row, and for each row ask whether
+another row already checks the same behavior through the same entry point with the same input. If
+one does, merge the two, keep every distinct input, and note the merge in `changes.md`. Then reread
+`notes.md` against `plan.md`. If `notes.md` says a row can't happen as
 written, or will behave differently, change the row (or flag it with a question) instead of leaving
 the finding in your notes only.
 
