@@ -52,6 +52,7 @@ covers the same rule for the hand-run tooling.
 | skill | for |
 |---|---|
 | `fleet-bug-qa` | QA a bug or security fix: reproduce on a pre-fix instance, verify on the fixed one |
+| `fleet-test-plan` | write a story's test plan from the design, then update it once the PR is up |
 | `fleet-story-qa` | QA a user story alongside the engineer |
 | `fleet-quickwin-qa` | QA a small change end to end |
 | `fleet-bug-file` | file a bug from a finding, and record how to retest it |
