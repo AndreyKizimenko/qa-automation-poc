@@ -107,9 +107,8 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
     }
 
     await profiles.openEdit(name);
-    await expectGatedByGitOps(profiles.editUpdateButton, repoUrl);
-    await profiles.editCancelButton.click();
-    await expect(profiles.editModal).toBeHidden();
+    await expectGatedByGitOps(profiles.updateProfileButton, repoUrl);
+    await profiles.cancelProfileForm();
   });
 
   test('Variables — Add variable is gated, Delete stays open', async ({ variables, request }) => {

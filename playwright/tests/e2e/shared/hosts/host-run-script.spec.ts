@@ -285,14 +285,10 @@ test.describe('Shared • Hosts • Run script', () => {
       await expect(hostDetails.runScriptModal.status(scriptName)).toHaveText('Error');
       await hostDetails.runScriptModal.showRunDetails(scriptName);
       await details.expectOpen();
-      // `RunScriptDetailsModal` fills in "after N seconds" only when it finds that
-      // phrase in the script's *output* — never from the configured timeout — so
-      // for a script that doesn't print it the line carries no duration. This
-      // script's output is kept free of "seconds" so the copy stays fixed.
-      // TODO(fleetdm/fleet#54262): once the modal reads the server's message,
-      // this line reads "…after 60 seconds…" — assert `timeoutSeconds` in it.
+      // `RunScriptDetailsModal` reads the duration from the server's message,
+      // which names the timeout the host ran under: the fleet's lowered one.
       await expect(details.statusMessage).toHaveText(
-        'Error: Timeout. Fleet stopped the script to protect host performance.',
+        `Error: Timeout. Fleet stopped the script after ${timeoutSeconds} seconds to protect host performance.`,
       );
       // Killed mid-run: what it printed before the sleep was kept, what came
       // after never ran, and orbit records the kill.

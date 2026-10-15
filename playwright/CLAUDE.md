@@ -224,8 +224,9 @@ On premium it also clears any version pin on the QA and VMs fleets' Fleet-mainta
 
 It also brings the real VMs to their resting state before the first test and after the last: it cancels the
 suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
-uninstalls any durable fixture a dead run left installed. A VM that's offline is only logged — its specs fail
-on it with their own message.
+returns every durable fixture to rest — uninstalled, with no failed install or uninstall on record, which
+Fleet otherwise keeps as the title's status and which the Library then offers as Retry or Reinstall instead of
+Install. A VM that's offline is only logged — its specs fail on it with their own message.
 
 The `loadtest` project depends only on `loadtest-setup`; `loadtest-api` depends on nothing (it sends the bearer token from `FLEET_API_TOKEN`, logging in with the admin credentials when that token is stale). Each project's setup chain is otherwise independent — no cross-project sharing.
 
@@ -278,7 +279,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | **a run's reports** | a `QA — Nightly` or `QA — Branch run` run uploads one HTML report per Playwright job: `playwright-report-{premium,free}` (the suites — the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report), twelve `gitops-verify-report-*` (premium verifies its no-team config, Workstations, Compliance, QA and VMs after each of its two applies, the QA and VMs ones suffixed `-baseline` / `-min`; free verifies its no-team config after each) and two `gitops-nightly-cli-report-*` |
 | **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail |
 | **the instances' gitops state** | every gitops chain (the nightly, a branch run) applies the full config, verifies it, then applies the **min** config (`gitops/premium-fleetqa-min`, `free-fleetqa-min`) and ends there; the suite's cleanup then wipes every global report, policy, script and profile and Workstations' policies, profiles, scripts and software. So between runs an instance holds **min's org settings, labels and custom host vitals, Workstations' reports (3 of its 5), everything on QA, VMs and Compliance (min's version of it)**, and none of the rest until the next chain. Before calling a declared item missing, check which of those it is; a spec reads an item both configs declare and the cleanup keeps ("Collect default browser on macOS") |
-| **the instances' build** | both redeploy the 4.93 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
+| **the instances' build** | both redeploy the 4.94 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
 
 ## Pre-PR check
 

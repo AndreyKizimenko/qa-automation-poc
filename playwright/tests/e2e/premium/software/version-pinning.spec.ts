@@ -69,8 +69,8 @@ const SCOPE = 'QA';
 const PIN_SHAPES_APP = { name: 'Postman', platform: 'darwin' } as const;
 
 const TYPE_CELL: Record<string, string> = {
-  darwin: 'Application (macOS)',
-  windows: 'Application (Windows)',
+  darwin: 'macOS app',
+  windows: 'Windows app',
 };
 
 /** Fails with the recreation path rather than a bare "undefined" further down. */

@@ -38,7 +38,7 @@ export { EnrollSecretModal } from './components/EnrollSecretModal';
 export { AccessDenied } from './components/AccessDenied';
 export { AddHostsModal } from './components/AddHostsModal';
 export { DataSet } from './components/DataSet';
-export { EditConfigurationModal } from './components/EditConfigurationModal';
+export { EditVersionModal } from './components/EditVersionModal';
 export { FileUploader } from './components/FileUploader';
 export { SelectReportModal } from './components/SelectReportModal';
 export { SoftwareInstallerCard } from './components/SoftwareInstallerCard';

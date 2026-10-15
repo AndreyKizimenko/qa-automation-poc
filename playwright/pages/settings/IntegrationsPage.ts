@@ -108,12 +108,8 @@ export class IntegrationsPage {
     // only one on the page, so the BEM class is the handle.
     this.eulaListItem = page.locator('.eula-list-item');
     this.eulaName = this.eulaListItem.locator('.eula-list-item__list-item-name');
-    // The delete control is an icon-only Button (no text, no aria-label); it's
-    // distinguished from the sibling "open" button by its trash Icon, which
-    // Fleet's Icon renders with data-testid="trash-icon".
-    this.eulaDeleteButton = this.eulaListItem
-      .locator('.eula-list-item__list-item-button')
-      .filter({ has: page.locator('[data-testid="trash-icon"]') });
+    // An icon-only Button that Fleet names through its aria-label.
+    this.eulaDeleteButton = this.eulaListItem.getByRole('button', { name: 'Delete EULA', exact: true });
 
     this.deleteEulaModal = page
       .locator('.modal__modal_container')

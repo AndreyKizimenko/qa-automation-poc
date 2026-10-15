@@ -162,9 +162,11 @@ two things for this area, in this order (both after the step that clears strande
   scripts), removes a `script_execution_timeout` override from the agent options (the VMs fleet's on premium,
   the global ones on free — the host-run-script timeout case lowers it to 60 s), and on each online real VM
   **cancels the suite's own queued upcoming activities**: `pw-` scripts, `fleet-pw-` packages and the durable
-  fixtures' installs and uninstalls. On premium it then **uninstalls any durable fixture it finds installed**
-  (`ensureVmFixtureUninstalled`, which waits for the inventory to agree). A VM that's offline is only logged; its
-  specs then fail on it with their own message.
+  fixtures' installs and uninstalls. On premium it then **returns every durable fixture to rest**
+  (`ensureVmFixtureUninstalled`): it uninstalls one it finds installed, clears a failed install or uninstall on
+  record by installing and uninstalling it, and believes an inventory listing with no install on record only once
+  a fresh collection still shows it; then it waits for the inventory to agree. A VM that's offline is only
+  logged; its specs then fail on it with their own message.
 
 So by hand:
 
@@ -261,7 +263,7 @@ two on a day it runs. The CI workflows share a concurrency group with their tier
 - **File:** [`playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts) · the fixture list and its helpers: [`helpers/vm-fixtures.ts`](../../helpers/vm-fixtures.ts)
 - **Grep:** `npm run test:premium -- -g "VM and uninstalls again"` (six runtime tests: `a macOS .pkg installs on the darwin VM and uninstalls again`, `a Windows .msi installs on the windows VM and uninstalls again`, `a Windows .exe installs on the windows VM and uninstalls again`, `a Linux .deb installs on the linux VM and uninstalls again`, `a macOS Fleet-maintained app installs on the darwin VM and uninstalls again`, `a Windows Fleet-maintained app installs on the windows VM and uninstalls again`)
 - **Project:** premium · **Scope:** the **VMs** fleet (no fleet dropdown — the flow starts on host details, by URL) · **Host:** the real VM of the row's platform
-- **Mode:** UI+API · **Isolation:** parallel, one test per fixture; describe timeout **900 s**; two `test.step`s, **`install`** then **`uninstall`**, so a report names the half that failed. `finally` → `ensureVmFixtureUninstalled` (uninstalls, and waits for the inventory to agree, only if the fixture is still installed). **Never deletes the title** — it's the fleet's, not the test's.
+- **Mode:** UI+API · **Isolation:** parallel, one test per fixture; describe timeout **900 s**; two `test.step`s, **`install`** then **`uninstall`**, so a report names the half that failed. `finally` → `ensureVmFixtureUninstalled` (returns the fixture to rest, as in step 2; a no-op after a pass). **Never deletes the title** — it's the fleet's, not the test's.
 - **Preconditions:** an online real VM of the platform (`requireRealHost`); the fixture's title on the VMs fleet, found by installer file name for a custom package and by name + platform among the fleet's Fleet-maintained titles for an FMA (`findVmFixtureTitle` — *"<label> fixture is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise, and for an FMA *"<label> has no installer on the VMs fleet"*); the title offered to the VM with a library version (*"<title> isn't offered to <host>"*); the fixture **uninstalled** — the preflight's job, and the test calls `ensureVmFixtureUninstalled` once more before it starts (normally a no-op).
 - **Data created:** nothing durable. The fixture is installed and uninstalled on one VM and left at rest; the host's Past activity gains one "installed" and one "uninstalled" item per run, with the same wording every run. A run that dies mid-flow leaves the fixture installed until `cleanup-teardown` (the same run's end) or the next `cleanup-setup` uninstalls it.
 
@@ -289,7 +291,7 @@ installed version and the Inventory row for that state.
 1. ☐ (No user action) Resolve the VM; find the fixture's title; read the title's state for this host (`GET /hosts/:id/software?available_for_install=true`).
    - ✅ *(API)* The title is on the VMs fleet (and, for an FMA, has an installer).
    - ✅ *(API)* It is offered to the VM with a library version.
-2. ☐ (No user action) `ensureVmFixtureUninstalled` — if the VM still has the fixture (a linked title: status `installed` or any installed version; or, for the `.exe` while unlinked, the host's inventory lists `7-Zip 26.01 (arm64)`), uninstall it by API and wait for the inventory to agree.
+2. ☐ (No user action) `ensureVmFixtureUninstalled` — returns the fixture to rest: no install state on record and the inventory agreeing. It waits out a queued install or uninstall of the title first. Status `installed` → uninstall by API. `failed_install` / `failed_uninstall` → install, then uninstall: Fleet keeps a failed result as the title's status until another action replaces it, and an uninstall of software that isn't there fails again. No status but the inventory lists it (an installed version; or, for the `.exe` while unlinked, the host's inventory lists `7-Zip 26.01 (arm64)`) → request a collection, and uninstall only if the listing survives it, since right after a clean uninstall the inventory still lists the software until Fleet's refetch lands. Every uninstall then waits for the inventory to agree.
 
    **`install` step**
 3. ☐ Open the host's details page (via URL `/hosts/<id>`; anchored on **Disk space available**) → **Software** tab → **Library** tab → type the title in **Search by name**.
@@ -297,6 +299,7 @@ installed version and the Inventory row for that state.
    - ✅ *(UI)* **Installed version** reads `---`.
    - ✅ *(UI)* **Library version** equals the version the API reported in step 1.
 4. ☐ Click **Install** on the row.
+   - ✅ *(UI)* The row offers **Install** — `HostSoftwareLibrary.install()` checks the button is visible before it clicks, so a row in another state (Reinstall, Retry) fails within the 10 s `expect` timeout instead of waiting out the 15-min test timeout.
    - ✅ *(UI)* Success toast **"Software is installing. To see details, go to Details > Activity."** — `HostSoftwareLibrary.install()`.
    - ✅ *(API)* The host's status for the title is `pending_install` immediately after the click.
 5. ☐ Wait. By hand: watch the row's Status go from "Installing..." to **Installed**, wait for "Last fetched" to move once on its own, then click **Refetch** and wait for it to move again — `waitForSoftwareSettled(…, 'installed', { inventoryName })` (`inventoryName` set only for the `.exe`).
@@ -319,6 +322,7 @@ installed version and the Inventory row for that state.
 
    **`uninstall` step**
 10. ☐ Reload the host page → **Software** → **Library** → search the title → click **Uninstall**.
+    - ✅ *(UI)* The row offers **Uninstall** (checked before the click, as in step 4).
     - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
     - ✅ *(API)* The host's status for the title is `pending_uninstall`.
 11. ☐ Wait for the status to clear, then as step 5 — `waitForSoftwareSettled(…, null, { inventoryName })`.
@@ -349,6 +353,7 @@ installed version and the Inventory row for that state.
   - The **Details** toggles in both modals (the scripts' output) are never opened. The dashboard-wide activity feed is not checked (only the host's). The Upcoming item is deliberately unasserted (intro §6).
 - *Redundancy:* the Linux row and SWH-06 both install a `.deb` on the Ubuntu VM, wait for the same settle and look at the Inventory tab; SWH-06's unique content is now the pre-install absence, the exact one-row count, and the version and type columns (see Duplication).
 - *Efficiency / smells:*
+  - ~~⚠️ **A failed uninstall on record wedged the Linux row for every run after it.**~~ **Fixed 2026-10-13:** `ensureVmFixtureUninstalled` clears a `failed_install` / `failed_uninstall` by installing and then uninstalling, and checks an inventory listing with no install on record against a fresh collection before it uninstalls. `HostSoftwareLibrary`'s actions check the button is offered before clicking. Original finding: on 2026-10-09 the precondition read the inventory's stale listing straight after a clean uninstall, uninstalled a package that was already gone (apt exit 100) and left `failed_uninstall`. Neither the precondition nor the preflight counted that as off-rest. The Library offered **Reinstall**, so the **Install** click waited out 15 min, twice per run, for six runs (2026-10-09 to 10-13).
   - ~~⚠️ **The Past-activity checks couldn't tell this run's item from last night's.**~~ **Fixed 2026-09-28:** each half baselines the host's newest matching activity through the API before acting and requires a newer one after (server timestamps, so no clock skew), before the UI clicks the newest item. Original finding: The titles are durable, so every run — and every preflight uninstall — writes an item with the same wording and the same modal text. `.first()` takes the newest, which after a settled install *is* this run's in practice, but if Fleet stopped recording the activity the previous run's item would satisfy both steps 8 and 14. The fix is cheap: assert the item's relative time reads "less than a minute ago" / "… minutes ago", or read `GET /hosts/:id/activities` for an entry newer than the click.
   - ~~⚠️ **The Inventory absence check (step 13) could pass before the search landed.**~~ **Fixed 2026-09-28:** it now waits for the table's empty state (`HostDetailsPage.softwareEmptyState`), which a real host's unfiltered table never shows, so it can only pass on the filtered, empty result. Original finding: `openInventory` fills the search box and returns; `softwareRowOrEmpty()` then resolves on the *unfiltered* table's first row, and `toHaveCount(0)` passes at once unless the fixture happens to be on that page. The API wait in step 11 is what really proves absence. Waiting for the search's response (or for the "N items" count to change) before the negative assertion would make it bite. Inherited from the old SWH-04, which had the same code.
   - ~~**The `.exe` row's Library expectations are mostly non-discriminating.**~~ **Partly resolved 2026-09-28:** since Fleet's Windows-title reconcile linked the durable 7-Zip title, its Installed version shows `26.01` after the install and `---` after the uninstall like every other row; only a freshly created (unlinked) title falls back to the DisplayName reading. Original finding: Its Installed version reads `---` before the install, after it and after the uninstall; the **Reinstall** / **Installed** status button after the install and **Install** / no **Uninstall** after the uninstall come from Fleet's install record, not from the host. The host-side proof for this row is the Inventory tab by DisplayName (steps 9 and 13) — so the step-13 race above matters most here.
@@ -552,7 +557,7 @@ other:
    - ✅ *(API)* Installed versions are exactly `['2.4.0']`.
 4. ☐ Reload the host → **Software** → **Inventory** → search the name.
    - ✅ *(UI)* Exactly **one** row whose name link is the package name.
-   - ✅ *(UI)* The row contains **2.4.0** and **Package (deb)**.
+   - ✅ *(UI)* The row contains **2.4.0** and **deb package**.
 5. ☐ (No user action) `finally` — uninstall, delete the title.
 
 **Assessment**

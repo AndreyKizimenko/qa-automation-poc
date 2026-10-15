@@ -27,7 +27,7 @@ export class SoftwareDeploySelector {
   readonly forceInstallCheckbox: Locator;
   readonly patchCheckbox: Locator;
   readonly patchOptions: Locator;
-  /** react-select v5 (`DropdownWrapper` named `end-user-experience`). */
+  /** react-select v5 (`DropdownWrapper`, aria-label "End user experience"). */
   readonly endUserExperience: Locator;
   /** The dropdown's chosen value; react-select renders it in a role-less div. */
   readonly endUserExperienceValue: Locator;
@@ -37,7 +37,7 @@ export class SoftwareDeploySelector {
     this.forceInstallCheckbox = container.getByRole('checkbox', { name: 'force-install', exact: true });
     this.patchCheckbox = container.getByRole('checkbox', { name: 'patch', exact: true });
     this.patchOptions = container.getByRole('radiogroup', { name: 'Patch options' });
-    this.endUserExperience = container.getByRole('combobox', { name: 'end-user-experience' });
+    this.endUserExperience = container.getByRole('combobox', { name: 'End user experience', exact: true });
     // The combobox input sits inside the control; the value and the click
     // target are the control's react-select classes.
     this.endUserExperienceValue = this.patchOptions.locator('.react-select__single-value');

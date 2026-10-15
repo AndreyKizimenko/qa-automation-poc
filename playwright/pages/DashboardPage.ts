@@ -239,12 +239,12 @@ export class DashboardPage {
 
   /** Sets the feed's date filter. */
   async selectActivityDate(label: ActivityDateFilter): Promise<void> {
-    await this.selectActivityDropdown('date-filter', label);
+    await this.selectActivityDropdown('Filter by date', label);
   }
 
   /** Sets the feed's sort order. */
   async selectActivitySort(label: ActivitySort): Promise<void> {
-    await this.selectActivityDropdown('created-at-filter', label);
+    await this.selectActivityDropdown('Filter by activity age', label);
   }
 
   /**
@@ -256,7 +256,7 @@ export class DashboardPage {
   private async selectActivityDropdown(name: string, label: string): Promise<void> {
     const control = this.activityFeedCard
       .locator('.react-select__control')
-      .filter({ has: this.page.getByRole('combobox', { name }) });
+      .filter({ has: this.page.getByRole('combobox', { name, exact: true }) });
     await control.click();
     await this.page.getByTestId('dropdown-option').filter({ hasText: new RegExp(`^${label}$`) }).click();
     await expect(control).toHaveText(label);

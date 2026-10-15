@@ -172,7 +172,7 @@ test.describe("Free • Policies • one policy's automations", () => {
       await dashboard.goto();
       await dashboard.navbar.goToPolicies();
       // The automation filter beside the platform one is premium's alone.
-      await expect(page.getByRole('combobox', { name: 'platform-dropdown' })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Filter by platform', exact: true })).toBeVisible();
       await expect(page.getByRole('combobox', { name: 'Filter by automation' })).toHaveCount(0);
 
       await policiesList.openPolicyAutomations(policyName);

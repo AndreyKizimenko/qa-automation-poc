@@ -46,7 +46,7 @@ export class OsUpdatesPage {
     this.teamDropdown = new TeamDropdown(page);
     this.toast = new Toast(page);
     this.targetHeading = page.getByRole('heading', { name: 'Target', level: 2 });
-    this.noOsVersions = page.getByRole('heading', { name: 'No OS versions detected' });
+    this.noOsVersions = page.getByRole('heading', { name: 'No operating systems detected' });
   }
 
   /** Waits for "Current versions" to settle — its first row, or its empty state. */

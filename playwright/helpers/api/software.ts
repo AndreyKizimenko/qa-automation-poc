@@ -433,19 +433,19 @@ export async function listVulnerabilityHosts(
  * First CVE in `cves` that Fleet's CVE detail endpoint can actually render, or
  * null when none of them can.
  *
- * `GET /vulnerabilities/:cve` 404s ("This is not a known CVE") for a CVE that
- * Fleet's software matcher has attached to a version but that no vulnerability
- * source carries metadata for yet — the detail handler inner-joins `cve_meta`
- * while the rest of the product treats that table as optional
- * ([fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913)). The
- * software-version page links such a CVE regardless, so a flow that clicks the
- * top row lands on Fleet's "Vulnerability not detected" empty state.
+ * The software-version page links every CVE Fleet's matcher has attached to the
+ * version, but `GET /vulnerabilities/:cve` answers **204** for one that
+ * `vulnerability_host_counts` hasn't counted yet — the aggregate refreshes on its
+ * own schedule — and the page renders that as "Vulnerability not detected"
+ * ([fleetdm/fleet#49913](https://github.com/fleetdm/fleet/issues/49913) fixed the
+ * other half, a CVE NVD hadn't published, in 4.94). So a flow that clicks the
+ * top row can land on that empty state.
  *
- * The condition is a race with NVD enrichment rather than a property of any
- * platform: a CVE matched in the last few hours 404s and the same CVE resolves
- * a day later. Whichever row happens to sort first is therefore the *most*
- * likely to be unrenderable, which is why callers pass the CVEs in the order
- * the page renders them and click the one this returns instead of the first.
+ * The condition is a race with Fleet's aggregation rather than a property of any
+ * platform: a CVE matched in the last few hours has no count and the same CVE
+ * resolves a day later. Whichever row happens to sort first is therefore the
+ * *most* likely to be unrenderable, which is why callers pass the CVEs in the
+ * order the page renders them and click the one this returns instead of the first.
  *
  * **Probe the page's scope.** The detail page asks for the CVE within the fleet
  * it's scoped to (`?fleet_id=`), and Fleet answers **204** when the CVE is known
@@ -461,7 +461,7 @@ export async function listVulnerabilityHosts(
  * usually the first or second row, and these run against a shared QA instance.
  *
  * TODO(fleetdm/fleet#49913): drop this probe and click the first row again once
- * the detail endpoint renders matched-but-unenriched CVEs. Tracked in
+ * the version page lists only CVEs the detail page can show. Tracked in
  * docs/blocked-by-product-bugs.md.
  */
 export async function findRenderableCve(
