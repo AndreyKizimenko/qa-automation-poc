@@ -20,8 +20,10 @@ when the fix is a test change.
 ## 1. Locate and load the run
 
 **CI run** (a GitHub Actions URL or run id — the usual case; CI runs with
-`retries: 2`). Look at the run's shape first — it's cheap and it tells you where
-to spend the triage:
+`retries: 2`, except a describe that waits on a real VM, which retries once
+(`HOST_RETRIES`), and the `gitops-mode`, `gitops-verify` and `gitops-nightly`
+projects, which don't retry). Look at the run's shape first — it's cheap and it
+tells you where to spend the triage:
 
 ```bash
 gh run view <id> --repo <owner/repo> --json name,conclusion,jobs \
@@ -36,12 +38,14 @@ tier's suite. **Triage a red gitops job first** — an apply that failed or a
 config that drifted can explain suite failures downstream.
 
 ```bash
-bash <skill>/scripts/fetch_ci_run.sh "<run-url-or-id>" > <scratchpad>/reports.txt
+bash <skill>/scripts/fetch_ci_run.sh "<run-url>" "" <scratchpad>/run-<id> > <scratchpad>/reports.txt
 ```
 
-The script downloads every report artifact via `gh run download` and prints one
-report directory per line, the suites' (`playwright-report-premium` / `-free`)
-first. **Never triage just the first line of a chained run as "the run"** — parse
+Pass `OWNER/REPO` in place of `""` when you have a bare run id rather than a URL.
+The third argument keeps the download in the scratchpad (without it, the script
+uses a `mktemp` dir under `$TMPDIR`). The script downloads every report artifact
+via `gh run download` and prints one report directory per line, the suites'
+(`playwright-report-premium` / `-free`) first. **Never triage just the first line of a chained run as "the run"** — parse
 each suite, plus the report of any job that went red. For extra context on a job
 (trigger, timing, which step failed), `gh run view <id> --log-failed` is cheap.
 
@@ -99,7 +103,9 @@ essentials:
 1. **Let the retry pattern speak first.** `outcome: flaky` (failed then passed) →
    start from the flake hypothesis. `outcome: unexpected` with the *same* error on
    all attempts → deterministic, so it is **not** a timing flake however much it
-   looks like one — dig into test-bug vs product-defect.
+   looks like one — dig into test-bug vs product-defect. A real-VM describe has two
+   attempts, and a `gitops-mode`, `gitops-verify` or `gitops-nightly` test only
+   one: no retry signal, so triage it as you would a local run.
 2. **Read what the page actually showed.** Open the `error-context` markdown (the
    accessibility snapshot at failure) and `Read` the screenshot. The error tells
    you where the assertion gave up; the snapshot tells you *why the page was in
@@ -139,8 +145,9 @@ README's run table for the exact scripts):
   `--project=free` for a free or `shared/` spec, and
   `--project=premium-exclusive <file-name>` for an `exclusive/` one (its own
   invocation; only the login setup and `cleanup-teardown` run around it).
-  **Never `npm run test:<tier> -- <spec>`:** it runs the whole main project and
-  then the exclusive one, with your arguments reaching only the second, so a
+  **Never `npm run test:<tier> -- <spec>`:** npm appends your arguments after the
+  script's final `exit`, so no `playwright test` sees them. You get the whole main
+  project, the exclusive one and, on premium, gitops-mode, then exit 1: a
   one-test check becomes a full suite run on the shared instance.
 - **CI-red vs live-real.** If the *current* local suite **passes** a spec that CI
   failed, the CI failure was a stale snapshot or a transient — not a live product
@@ -157,8 +164,11 @@ Know what a local run costs before you fire it:
 - **Check `gh run list` first.** Two runs on the same VMs corrupt each other, and
   the nightly starts hours after its cron time (CLAUDE.md's facts table).
 - It needs the local `.env.premium` / `.env.free` present (gitignored secrets).
-- A scoped single-spec/single-test re-run is fair game to just run. A broad or
-  full-suite re-run is disruptive to anyone else on the instance — say so first.
+- A scoped single-spec re-run is fair game once `gh run list` is clear. But it
+  runs `cleanup-setup`, which wipes global reports and policies and Unassigned's
+  scripts, packages and profiles, so if another session is using the instance,
+  announce it and wait for their go (as `playwright-test-author` says). Ask before
+  any broad or full-suite re-run.
 
 Never quietly bump a timeout or add a wait to make a red test green — that hides
 product-defects (see the worked CVE example in the reference).

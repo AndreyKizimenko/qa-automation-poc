@@ -21,12 +21,15 @@ would confirm it (re-run, a source line, a manual repro) when you're not sure.
 
 ## Retry pattern is the first discriminator
 
-CI runs with `retries: 2`, so Playwright's own `outcome` is strong evidence:
+CI runs with `retries: 2`, so Playwright's own `outcome` is strong evidence.
+Except: a describe that waits on a real VM retries once (`HOST_RETRIES`, 2
+attempts), and `gitops-mode`, `gitops-verify` and `gitops-nightly` don't retry (one
+attempt, no retry signal: triage it as a local run).
 
 - **`outcome: flaky`** (failed then passed on retry) → almost always `flaky` or a
   genuine race in the product. Start from the flake hypothesis; only escalate to
   product-defect if the transient failure exposes a real race users would hit.
-- **`outcome: unexpected`** with **identical errors across all 3 attempts** →
+- **`outcome: unexpected`** with **identical errors across all its attempts** →
   deterministic. This is *not* a timing flake, no matter how much the error looks
   like a timeout. A deterministic "element not found after 10s" means the element
   was never going to appear in that state — dig into test-bug vs product-defect.
@@ -36,9 +39,9 @@ CI runs with `retries: 2`, so Playwright's own `outcome` is strong evidence:
   often noise.
 
 Locally (`retries: 0`) there is no retry signal — a flake looks identical to a
-real failure. To separate them, re-run the single test a few times (a scoped
-single-test run is fine to just do; see the SKILL's "Re-running locally" section
-for what it costs on the shared instance):
+real failure. To separate them, re-run the single test a few times (once
+`gh run list` is clear and any other session on the instance has given its go; see
+the SKILL's "Re-running locally" section for what it costs on the shared instance):
 
 ```bash
 gh run list --limit 5
@@ -46,8 +49,9 @@ cd playwright && npx playwright test --project=premium <spec-file> -g "<test tit
   --repeat-each=5 --workers=1 --output=<scratchpad>/rerun
 ```
 
-(Not `npm run test:premium -- <spec>`: that also runs the exclusive project, and its
-dependency — the whole premium project — runs in full.)
+(Not `npm run test:premium -- <spec>`: npm appends your arguments after the script's
+final `exit`, so no `playwright test` sees them. You get the whole main project, the
+exclusive one and gitops-mode, then exit 1.)
 
 Mixed pass/fail across repeats → `flaky`. Uniform failure → real; triage further.
 
@@ -87,8 +91,11 @@ The local Fleet checkout is at `~/repositories/fleet`. Use it to adjudicate:
 - **API shape / behavior** → `docs/REST API/rest-api.md` is authoritative; the
   handler lives under `server/service/`. If the test's API-derived expectation no
   longer matches the documented/implemented response, that's the fault line.
-- **Activity-feed assertions** → `server/service/activities/` for the exact verb
-  and payload strings.
+- **Activity-feed assertions** → the type and its `details` keys in
+  `server/fleet/activities.go`; the rendered sentence in
+  `frontend/pages/DashboardPage/cards/ActivityFeed/GlobalActivityItem/GlobalActivityItem.tsx`
+  (host Activity card: `frontend/pages/hosts/details/cards/Activity/`); the suite's
+  expected strings in `helpers/activity-copy.ts`.
 - **Terminology drift** → Fleet renamed *queries → reports* and *teams → fleets*
   in the UI while the API kept the old names. A test asserting UI text "Query"
   where the product now says "Report" is a `test-bug`; the reverse (API still
@@ -101,7 +108,7 @@ change makes it a `test-bug` (the test is stale), not a regression.
 ## Worked example — the CVE-detail failure
 
 **Error surface:** `expect(getByRole('heading', { name: 'CVE-2026-61898', level: 1
-})).toBeVisible()` timed out after 10s at `CveDetailPage.ts:44`. The page-object
+})).toBeVisible()` timed out after 10s in `CveDetailPage.ts`. The page-object
 comment even says "the page hydrates from an enrichment API that's slow on a cold
 cache" — inviting the lazy read *"slow API → flake → bump the timeout."*
 
@@ -124,7 +131,9 @@ the heading was never going to render; Fleet was showing an empty state. What
 would confirm it: re-derive the CVE via the API and hit the CVE-detail endpoint
 directly to see whether affected-hosts is genuinely 0, and check whether vuln
 processing recomputed between the software query and the page load. The bug is
-worth filing against Fleet with the snapshot as evidence.
+worth filing against Fleet with the snapshot as evidence. (It is filed as
+fleetdm/fleet#49913, still open; the suite now drills into a CVE that
+`findRenderableCve` confirms renders.)
 
 **The lesson generalized:** a timeout on `toBeVisible` is only a flake if the
 element was *on its way* to appearing. When the snapshot shows a settled page in
@@ -160,8 +169,8 @@ Each of these looked like something else at first.
   under concurrent `vulnerable=true` software-titles queries → `infra-env`. A
   discovery helper that turns that 500 into `null` turns it into a silent skip.
 - **A real-VM spec fails with the host picker's own message.** `requireRealHost` and
-  `liveMacosHost` say why there's no host: offline since when, online but unreadable, or
-  not MDM-enrolled. Read it before blaming the spec. Both Macs dropped together on
+  `liveMacosHost` say why there's no host: offline since when, online but its details
+  didn't load, or not enrolled at all. Read it before blaming the spec. Both Macs dropped together on
   2026-09-20 and again on 2026-10-05 (32 failures in one nightly) → `infra-env`; check
   the host's `seen_time`, then re-run once it's back.
 - **A tooltip that never appeared on a settled page.** The hover landed, then the page

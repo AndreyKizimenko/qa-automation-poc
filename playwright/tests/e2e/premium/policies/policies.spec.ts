@@ -69,6 +69,8 @@ for (const scope of SCOPES) {
       // refetches on its own, so a list fetched empty just before the create —
       // the run starts with no global policies — stays "No policies apply to
       // all fleets", with the search box disabled, until a full page load.
+      // TODO(fleetdm/fleet#55251): once the list shows a scope's first policy
+      // without a reload, search the list the navbar lands on instead.
       // Re-select the scope (the page preserves the last-used team filter) and
       // search by name (the list is paginated; new policies may not be on page 1).
       await policyDetails.navbar.goToPolicies();

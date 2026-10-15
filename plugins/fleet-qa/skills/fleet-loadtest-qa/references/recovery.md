@@ -31,7 +31,7 @@ Don't scale ECS services, restart osquery-perf, or redeploy as part of a recover
      takes 30 s–3 min under traffic and stalls hosts' label writes while it runs (#55106); with traffic cut it's fast.
    - Settings you changed (webhooks, automations): turn them off first — it's cheaper than deleting.
 4. **Ramp traffic back:** `LT=<lt> scripts/ramp-up.sh 10 25 50 100` (holds each level 8 min, steps back at 70 %
-   memory or lost tasks, retries twice). ~35–45 min total. The reconnect wave (detail/software refresh, buffered-log
+   memory or lost tasks, retries each level once). ~35–45 min total. The reconnect wave (detail/software refresh, buffered-log
    replay) shows as memory 20–45 % and writer 150–200 AAS at 50–100 %; it settles ~30 min after 100 %.
 5. **Confirm and record:** `lt-status.sh 5 60` calm, `lt-stops.sh` shows no new stops, the cause is gone (count the
    objects). Note the recovery timeline in the QA notes. `ramp.sh cleanup` removes the placeholder target group — only

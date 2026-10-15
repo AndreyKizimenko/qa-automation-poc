@@ -35,7 +35,8 @@ At the start of any of these skills, read the file. If it doesn't exist, build i
 The setup changes. An instance gets redeployed at another version, a context is renamed, a container
 restarts under another name. When something in the file doesn't match what you see, update the file,
 say what changed, and carry on. Treat it as a starting point, not ground truth: the skills still check
-versions live (`scripts/env_check.sh`) before relying on them.
+versions live before relying on them — `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/env_check.sh
+<pre-fix-ctx> <fixed-ctx>` for the two-instance skills, `GET /api/v1/fleet/version` for one instance.
 
 ## Template
 
@@ -67,7 +68,7 @@ versions live (`scripts/env_check.sh`) before relying on them.
 - `<context>`: <role> on fleet <name> (id <n>), on <instance>
 
 ## Load test (fleet-loadtest-qa)
-- **Instance:** `LT=<workspace name, e.g. fleet-493loadtest-3>`, fleetctl context `<loadtest>`, region us-east-2, AWS SSO profile <name>
+- **Instance:** `LT=fleet-<terraform_workspace>, e.g. fleet-493loadtest-3`, fleetctl context `<loadtest>`, region us-east-2, AWS SSO profile <name> (`export AWS_PROFILE=<name>` for the scripts)
 - **Current shape:** <build/tag, pool size, hosts and platforms, notable data left on it> (update after each redeploy)
 - **State folder:** `~/.fleet-loadtest/<LT>/` (saved ALB action for ramp.sh, maintenance/ramp logs)
 

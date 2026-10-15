@@ -10,17 +10,18 @@ release candidate's Helm chart can be smoke-tested before it ships.
 > override. So both of these work:
 >
 > ```bash
-> ./fleet-helm-test.sh v4.90.0                        # from anywhere
-> FLEET_REPO=~/work/fleet ./fleet-helm-test.sh v4.90.0 # explicit checkout
+> tools/kubernetes/fleet-helm-test.sh v4.90.0                        # from the repo root; any cwd works
+> FLEET_REPO=~/work/fleet tools/kubernetes/fleet-helm-test.sh v4.90.0 # explicit checkout
 > ```
 >
 > Each run prints which checkout it picked. If none is found the script exits
 > before touching the cluster.
 
-They automate parts 2 and 4–10 of the "Test Fleet Helm Chart With Docker
-Desktop" runbook: switch kube-context, bring up MySQL + Redis via Compose, prep
-the namespace and secret, resolve chart deps, install, wait for readiness, then
-port-forward. Confirming the UI loads is the one manual step left.
+They automate parts 2 and 4–10 of the ["Test Fleet Helm Chart With Docker
+Desktop" runbook](https://github.com/fleetdm/confidential/blob/main/infrastructure/runbooks/test-fleet-helm-chart-with-docker-desktop.md)
+(Fleet-internal; linked from Fleet's release QA template): switch kube-context,
+bring up MySQL + Redis via Compose, prep the namespace and secret, resolve chart
+deps, install, wait for readiness, then port-forward. Confirming the UI loads is the one manual step left.
 
 ## Prerequisites
 

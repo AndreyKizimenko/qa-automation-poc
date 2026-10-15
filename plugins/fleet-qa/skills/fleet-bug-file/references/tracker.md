@@ -19,7 +19,15 @@ One row per bug, newest first:
 ```
 
 Status values: `open` → `fix merged (#PR)` → `verified <branch> (<sha>)` /
-`reopened` / `needs full QA` / `closed without fix`.
+`reopened` / `needs full QA` / `closed without fix`. `fleet-bug-file` writes `open`;
+`fleet-bug-retest` writes the rest. The Issue column must start with `#<N>` (a
+`fleetdm/fleet` issue) for `bug_status.py` to read the row; other repos' bugs
+(`security#<N>`) are checked by hand.
+
+## `<issue>-<slug>/` (one folder per bug)
+
+Next to the `.md` file: the screenshots attached to the issue (`fleet-bug-file`
+step 6), and each retest's `created.txt` cleanup manifest (`fleet-bug-retest` step 4).
 
 ## `<issue>-<slug>.md` (one per bug)
 

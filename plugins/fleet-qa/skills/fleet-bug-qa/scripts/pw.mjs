@@ -44,7 +44,7 @@ export async function open(ctx, opts = {}) {
     ignoreHTTPSErrors: true, reducedMotion: 'reduce',
   });
   const cookies = [];
-  // frontend/utilities/auth_token.ts: __Host-token over https, token over http
+  // frontend/utilities/auth_token/index.ts: __Host-token over https, token over http
   if (!opts.anon) cookies.push({ name: secure ? '__Host-token' : 'token', value: opts.token || token, url: u.origin + '/', secure, sameSite: 'Lax' });
   for (const [name, value] of Object.entries(opts.cookies || {})) cookies.push({ name, value, url: u.origin + '/', secure, sameSite: 'Lax' });
   await context.addCookies(cookies);

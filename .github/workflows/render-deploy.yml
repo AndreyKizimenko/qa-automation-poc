@@ -1,7 +1,8 @@
 name: Render — Nightly deploy
 
 # Triggers a redeploy of the Render-hosted Fleet instances so each night's
-# gitops runs and suites hit the latest Fleet release. The first step of
+# gitops runs and suites hit the newest build of the image each Render service
+# is set to (the current Fleet release candidate). The first step of
 # `QA — Nightly` (qa-nightly.yml), which then waits for the deploys to finish;
 # a hook only queues its deploy.
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Brings device traffic back in steps after a cut:  LT=<lt> ramp-up.sh 10 25 50 100
 # Holds each step ${STEP_MIN:-8} min, sampling every minute. If the hottest task reaches ${MAX_MEM:-70}% memory or
-# fewer than desired − 3 tasks run, it drops back to the previous level, holds 10 min and retries the step (twice at
-# most, then stays at the previous level and exits 2). Log: $LT_STATE/ramp-up.log
+# fewer than desired − 3 tasks run, it drops back to the previous level and holds 10 min. The first failure retries
+# the step once; a second failure stays at the previous level and exits 2. Log: $LT_STATE/ramp-up.log
 D=$(cd "$(dirname "$0")" && pwd); source "$D/lt-env.sh" || exit 1
 export TZ=UTC
 LOG="$LT_STATE/ramp-up.log"

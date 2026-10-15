@@ -20,9 +20,10 @@ their locators.
 
 ## Contract
 
-Same shape as pages — constructor takes `Page`, exposes `readonly`
-locators, and provides action methods for interactions. No side effects
-in the constructor.
+Same shape as pages — constructor takes `Page` (or, for a widget that lives
+inside a modal or form, the container it's scoped to: `TargetLabelSelector`,
+`DataSet`, `TeamDropdown`'s optional `root`), exposes `readonly` locators, and
+provides action methods for interactions. No side effects in the constructor.
 
 ```ts
 import { Page, Locator, expect } from '@playwright/test';
@@ -51,16 +52,16 @@ export class MyWidget {
 |-----------|---------|---------|
 | `Navbar` | Every authenticated page | Top nav: Hosts / Controls / Software / Reports / Policies, user menu, sign-out |
 | `DataTable` | Every list page | `<table>` rows, primary-link first row, cell lookup by column, empty state |
-| `ContentList` | Profiles, Certs, Scripts, Variables | `<li>` lists with timestamps (not `<table>`) |
+| `ContentList` | Profiles, Certificates, Scripts library, Scripts batch progress | `<li>` lists with timestamps (not `<table>`) |
 | `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's link text changes (the whole row's text on a table with no links, like Labels) |
-| `FilterModal` | Software Titles, Host Details > Software | "Add filters" modal: the Types picker (`typeCheckbox(name)`, `selectTypes(names)` leaves exactly those ticked), the Vulnerable software switch (`applyVulnerable()`), and on premium the severity controls under **Advanced** (`showAdvanced()`, `severityOptions()`) |
+| `FilterModal` | Software Titles, Software Versions, Host Details > Software | "Add filters" modal: the Types picker (`typeCheckbox(name)`, `selectTypes(names)` leaves exactly those ticked), the Vulnerable software switch (`applyVulnerable()`), and on premium the severity controls under **Advanced** (`showAdvanced()`, `severityOptions()`) |
 | `LabelFilter` | Hosts list | Label-scoped host filter (react-select v5 trigger). `openMenu()` waits for the menu's "Filter by label name" box (`searchBox`), beside which a role that may add labels gets `addLabelButton`; `selectLabel(name)` types the name up to its first space and picks the exact option |
 | `StatusFilter` | Hosts list | Online / offline / new status filter |
 | `TeamDropdown` | Most pages; Save as new's "Fleet" field | Team / fleet picker in the page header, or scoped to a container for the same dropdown as a form field |
 | `CommandPalette` | Every authenticated page (rendered by `CoreLayout`) | Fleet spotlight (⌘/Ctrl + K). cmdk supplies real roles — `dialog` / `combobox` / `listbox` / `option` / `group` — so rows and groups are role-addressed; only the Radix backdrop and the fleet chip fall back to classes. Resolves the platform modifier at runtime (Cmd on macOS, Ctrl on CI) |
 | `PlatformDropdown` | `/software/add/app-store` | Apple-vs-Android selector for the App Store add-software form (react-select v5) |
 | `Toast` | Anywhere a CRUD action confirms via a Sonner toast | Anchors on `role="alert"` narrowed by `.toast-notification__card--{success,error}`; has `expectSuccess` / `expectError`, and `dismissAll` to clear earlier cards before an action whose own card (or a link inside it) the test then reads |
-| `FileUploader` | Bootstrap, scripts, profiles, custom packages, setup-assistant | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |
+| `FileUploader` | Bootstrap package, setup-experience run script, scripts library, setup assistant, custom packages, Integrations (not profiles — their uploader is `upload-profile`, on `ConfigurationProfilesPage`) | Wraps Fleet's `<input id="upload-file">`; handles auto-submit and manual-submit pages |
 | `SoftwareInstallerCard` | `/software/titles/:id` | The Library section's installer accordion row; exposes the active row, its pin-state badges (Latest / Pinned / Major version), its Edit / Download / Delete actions, and on a multi-version App Store row the **Edit version** icon (`editVersionButton`); the delete modal reads Delete package / version / software by title type; `scopeBadge` / `openScopeEditor()` opens Edit from the label-scope badge whether it reads "All hosts" or a label count |
 | `DataSet` | Detail pages + side panels (host vitals, policy details, my-account) | Fleet's `<dt>`/`<dd>` term-value pairs, which carry no role — looks up a value by its term. Construct with a scoped container |
 | `AddHostsModal` | Hosts list | The "Add hosts" modal; its Advanced tab and "Plain osquery" reveal expose the certificate / enroll-secret / flagfile downloads |
@@ -70,6 +71,9 @@ export class MyWidget {
 | `UpdateEndUserModal` | Host details → User card | *Add user* / *Edit user*: the one *Username (IdP)* field and Save; saving it empty removes the user. On free it shows the Fleet Premium message instead |
 | `RunScriptBatchModal` | Hosts list → select hosts → *Run script* (`HostsListPage.runScriptBatchModal`) | Pick a library script (`pickScript`, hover-revealed), then `runNow`, or `chooseSchedule` + `submitSchedule(date, time)` (UTC; the Date / Time fields appear only once *Schedule for later* is picked, and Fleet's radio input is hidden, so the label takes the click). Both clear earlier toasts first, so `showScriptActivity` / `showSchedule` follow this run's link |
 | `ScriptPreviewModal` | A batch's details page → *Show script* (`ScriptBatchDetailsPage.preview`) | Fleet's `ScriptDetailsModal`: a library script's content, read-only. From a batch it's titled "Script details" and its header's ✕ is the only way out (no footer). Not the suite's `ScriptDetailsModal`, which is one *execution's* result. `expectContent()` compares the shown script with `normalizeScript` |
+| `CertificatesCard` | Host details → Details (`HostDetailsPage.certificates`) | The certificates a real Apple or Windows host reports from its keychains — Fleet mounts the card only when the host reports one, so a simulation never shows it. Scoped by its `certificates-card` class; `row(commonName)`, `cell(commonName, column)`, `waitForReady()`, and the *View details* modal via `openDetails()` / `detailsValue(section, title)` / `closeDetails()` |
+| `RunScriptModal` | Host details → Actions → *Run script* (`HostDetailsPage.runScriptModal`) | The library scripts that apply to the host, one row per script with its latest run's `RunScriptStatus` (`Ran` / `Pending` / `Error`); `run(scriptName, hostName)` goes through the *Run script?* confirmation, `showRunDetails(scriptName)` opens the run's `ScriptDetailsModal` |
+| `ScriptDetailsModal` | Host Past activity, *Run script* → *Show run details* (`HostDetailsPage.scriptDetailsModal`) | One script *execution's* result: the status line (exit code, timeout, or "will run when the host comes online") and the recorded output. Not `ScriptPreviewModal`, which is a library script's content |
 | `RecoveryLockPasswordModal` | Host Actions → Show Recovery Lock password | The escrowed password (masked, *Show secret*), the auto-rotation banner, *Rotate password*. Opening it is a view: Fleet logs it and schedules a rotation |
 | `EditSoftwareModal` | `/software/titles/:id` Library accordion | The edit-package form. Titled "Edit package" on premium custom packages and "Edit software" otherwise, so the container is scoped by whichever is present. Also owns Advanced options — the four Ace editors, told apart by their wrapper ids, plus `normalizeScript` for comparing what they render against what the API stored, and `setScript()` to rewrite one. `setTarget()` scopes the package through its `TargetLabelSelector`, replacing any scope it had |
 | `EditAppearanceModal` | `/software/titles/:id` summary card | Fleet's `EditIconModal`: custom icon + display name behind one Save. The file control swaps between an empty uploader and a staged-file card, so it targets `input[type="file"]` rather than a fixed id |
@@ -84,6 +88,7 @@ export class MyWidget {
 | `MdmCommandDetailsModal` | Host Activity card (activity and command views), dashboard feed (`HostDetailsPage.mdmCommandDetailsModal`, `DashboardPage.mdmCommandDetailsModal`) | One MDM command's request payload and the host's response, and a status line that differs by where it was opened |
 | `setAceValue` / `getAceValue` | Any Ace editor (software Advanced options, the add-package form, Edit configuration) | Not a class — helpers in `aceEditor.ts`. Both go through the editor's own Ace instance: typing lets Ace auto-indent and close quotes and brackets, and the DOM holds only the visible lines, split into token spans |
 | `clickHoverAction` | Any hover-revealed row/card icon (download, trash, refetch) | Not a class — a helper function. Fleet keeps these icons `display: none` until the parent is hovered, and a plain `hover()` + `click()` can lose the hover mid-click |
+| `expectGatedByGitOps` / `expectNotGatedByGitOps` / `expectGitOpsTooltip` / `gitopsWrapperFor` / `gitopsWrappers` | Any control gitops mode can lock (the `gitops-mode` project's specs) | Not a class — helpers in `gitopsMode.ts`, built on the marker span of Fleet's `GitOpsModeTooltipWrapper`, which is in the DOM if and only if gitops mode is in effect for that control (exceptions included). `GitOpsGateOptions.style` tells a native or `Checkbox` control (`control`) from a react-select |
 
 ## Promoting a page-local locator to a component
 

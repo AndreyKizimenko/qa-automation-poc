@@ -116,10 +116,11 @@ names one host + the other host's reset result). Use the user's own screenshots 
 they shared them; otherwise capture with
 `node ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/screenshot.mjs <ctx> <path> <out.png> --clip <sel>`.
 Read each one before sending: it must show the problem, and — this repo is public —
-no enroll secrets, tokens or real user data. Save them in the tracker entry's folder
-(`<QA workspace>/filed-bugs/<N>-<slug>/`). When more than one image goes under the same
+no enroll secrets, tokens or real user data. Save them in `<QA workspace>/filed-bugs/<slug>/`
+while drafting, and rename the folder to the tracker entry's `<N>-<slug>/` once the issue
+exists (step 7). When more than one image goes under the same
 section, combine them into one in reading order —
-`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/stack.py <N>-actual-behavior.png a.png b.png ...`
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/stack.py actual-behavior.png a.png b.png ...`
 (`--side` for narrow clips) — so the section takes a single paste; crop each to the
 region that shows the problem first (fleet name, filter, count) so the stack stays
 legible and carries no unrelated data. Annotate when it helps the developer find the
@@ -162,5 +163,5 @@ In chat:
 - the screenshots, each with where it goes.
 
 If the user asks for changes after filing, edit the issue with
-`gh issue edit <N> --body-file ...` / `--title` / `--add-label` / `--milestone` rather than filing
+`gh issue edit <N> -R fleetdm/fleet --body-file ...` / `--title` / `--add-label` / `--milestone` rather than filing
 a new one, and update the tracker entry to match.

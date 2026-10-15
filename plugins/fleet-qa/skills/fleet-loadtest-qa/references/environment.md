@@ -7,17 +7,21 @@ load-test "bugs" that don't survive review are environment artifacts, and some r
 - Deployed by the **"Deploy Loadtest - Infrastructure"** workflow (`.github/workflows/loadtest-infra.yml`), run from
   `main` (only `main` has the newest inputs). Inputs: `terraform_workspace`, `tag` (Fleet image, usually the RC
   branch), task count / CPU / memory, Aurora size / count, Redis size / count / engine, **`fleet_mysql_max_open_conns`**
-  (since #54680; default `10`), `fleet_redis_max_open_conns` (#55104, if merged; default `500`), MDM mock count,
+  (since #54680; default `10`), `fleet_redis_max_open_conns` (#55104; default `500`), MDM mock count,
   `terraform_action`. To copy a previous run's inputs, read its log:
-  `gh run view <id> -R fleetdm/fleet --log | grep -E 'TF_VAR_[a-z_]+:' | sort -u`.
-- Everything is named after the workspace (`LT`): ECS cluster and service `fleet` (also `osquery_perf`,
-  `fleet-vuln-processing`), Aurora cluster, Redis group, CloudWatch log group, the device ALB `$LT-int`, public URL
-  `https://$LT.loadtest.fleetdm.com`. Region us-east-2. Access is AWS SSO, which expires after several hours — when
-  `aws` calls start failing, ask the user to run `aws sso login`; overnight runs lose AWS visibility when it lapses.
+  `gh run view <id> -R fleetdm/fleet --log | grep -oE 'TF_VAR_[a-z_]+: .*' | sort -u`.
+- Everything is named `fleet-<terraform_workspace>` — that name is `LT` (workspace `493loadtest-3` →
+  `LT=fleet-493loadtest-3`; the terraform's `local.customer`): ECS cluster `$LT` with service `fleet` (also
+  `osquery_perf`, `fleet-vuln-processing`), task definition family, Aurora cluster, Redis group, CloudWatch log group,
+  the device ALB `$LT-int`, public URL `https://$LT.loadtest.fleetdm.com`. Region us-east-2. Access is AWS SSO, which
+  expires after several hours — export `AWS_PROFILE` (the local file names the profile) before running the scripts, and
+  when `aws` calls start failing, ask the user to run `aws sso login --profile <profile>`; overnight runs lose AWS
+  visibility when it lapses.
 - A redeploy (any input change, including the image tag) rolls all Fleet tasks; with migrations, the **migrations
   add-on** scales Fleet to 0, runs `fleet prepare db` as a one-off task, and waits with `aws ecs wait tasks-stopped`,
   which gives up after **10 minutes** and fails the deploy. Time any migration that touches big tables (the
-  `query_results` id widening took 9m32s on 20M rows, ~30 s per 1M rows — 4 s inside the cap).
+  `query_results` id widening took 9m32s on 20M rows, ~30 s per 1M rows — 28 s inside the cap, less the one-off
+  task's start-up time).
 - Upgrading is the user's action (a workflow run). There is usually one load test, so "pre-fix" and "fixed" are the
   same instance before and after an upgrade — capture the whole baseline before asking for the upgrade.
 
@@ -31,7 +35,8 @@ closed "not seen in prod" for exactly that reason. The load-test ALB checks `/he
 10 s timeout and marks a task unhealthy after 5 failures (~75 s); `/healthz` runs `SELECT @@read_only` on the shared
 writer pool with no timeout, so when requests queue for connections the health check queues with them. Run scale investigations at the reference pool (20), and note the
 pool in every run's notes; switch to 10 only for a strict comparison with older baselines. Fleet's binary default is 50.
-Redis: 500 connections per task, no wait (`infra/locals.tf`; Fleet's default is unlimited), so a full pool fails with
+Redis: `fleet_redis_max_open_conns` connections per task (default 500; max idle = max open), no wait
+(`infra/locals.tf`; Fleet's default is unlimited), so a full pool fails with
 `redigo: connection pool exhausted` at once. Read settings from the **running task definition**, not from terraform —
 the root `terraform/ecs.tf` is a legacy module the workflow doesn't use (its Redis "100" once got quoted by mistake):
 `aws ecs describe-task-definition --region us-east-2 --task-definition $LT --query 'taskDefinition.containerDefinitions[0].environment'`.
@@ -52,12 +57,15 @@ the root `terraform/ecs.tf` is a legacy module the workflow doesn't use (its Red
   own any more (the old 45 s response-header timeout is gone).
 
 ## osquery-perf, the simulated fleet
-- ~100k hosts in one fleet (e.g. 60k macOS / 20k Windows / 20k Linux). **Never restart or rescale osquery-perf**: it
-  has no `--seed`, so a restart enrolls another 100k hosts and the old ones linger as offline duplicates.
+- ~100k hosts in one fleet (e.g. 60k macOS / 20k Windows / 20k Linux). **Never restart or rescale osquery-perf**: host
+  UUIDs are random on every start (`uuid.New()`, even with `-seed`), so a restart enrolls another 100k hosts and the
+  old ones linger as offline duplicates.
 - Policies: a query of exactly `SELECT 1` passes and `SELECT 0` fails on every host (`runPolicy` in
-  `cmd/osquery-perf/agent.go`); any other query re-rolls pass/fail with `policy_pass_prob` (0.5) on every report, so
-  every run rewrites `policy_membership` for every host — far more churn than a real fleet. Use `SELECT 1`/`SELECT 0`
-  when you need stable results (a known failing population for automations), random queries for worst-case churn.
+  `cmd/osquery-perf/agent.go`); any other query passes with probability `--policy_pass_prob`, re-rolled on every
+  report. osquery-perf's default is 1.0 (always pass, no churn); only a deploy that passes a lower value through the
+  osquery-perf workflow's `extra_flags` (e.g. `--policy_pass_prob 0.5`; check the running `osquery_perf` task
+  definition) makes every run rewrite `policy_membership` for every host — far more churn than a real fleet. Use `SELECT 1`/`SELECT 0` when you need
+  stable results (a known failing population for automations), random queries for worst-case churn.
 - New policies are due on every host's next check-in, so applying many at once makes a synchronized wave (500
   random-flip policies: writer 334 AAS and healthz timeouts within 7–20 min at pool 20); the hourly repeat is milder.
 - Reports: a newly added report runs on **every host at the same moment** (no splay on first run), then on its interval.
@@ -72,7 +80,8 @@ the root `terraform/ecs.tf` is a legacy module the workflow doesn't use (its Red
   `--software_installer_install_fail_prob` (default 5 %). Set a package's install script to control the outcome.
   **Script packages (`.sh`/`.ps1`/`.py`) never complete**: osquery-perf can't read their metadata, posts no result and
   re-downloads on every config poll — use a `.pkg`/`.deb`/`.msi`. Simulated hosts don't run real osquery SQL — results
-  are canned. Every live query gets the same one-row `deb_packages`-style answer (`runLiveMockQuery`), whatever the SQL.
+  are canned. Live queries: 20 % return no rows (`--live_query_no_results_prob`, default 0.2), the rest the same
+  one-row `deb_packages`-style answer (`runLiveMockQuery`), whatever the SQL (YARA `sigurl` queries aside).
 - ~10 % of hosts have **no hardware serial** (`--empty_serial_prob 0.1`) and ~5 % report `-1`, like real fleets.
   Anything that matches hosts by serial meets ~10k of them (that's how #55116 showed up).
 - API throughput from one laptop is limited: refetching 25k hosts ran 14–40 hosts/s depending on the network, while

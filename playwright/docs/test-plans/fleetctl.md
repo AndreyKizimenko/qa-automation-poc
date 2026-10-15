@@ -5,30 +5,32 @@ free/premium tier separation.
 
 Research basis: `cmd/fleetctl/fleetctl/` on the Fleet checkout, plus live probing of both QA
 instances (`4.91.0-rc.2608131639`) on 2026-08-14 with `fleetctl` 4.85.1. Every licensing claim
-below was observed, not inferred from source alone.
+below was observed, not inferred from source alone. Fleet source line references below are to
+`fleet-v4.93.0`.
 
 ## Scope decision
 
-`fleetctl` already carries **~28,700 lines of Go tests** in `cmd/fleetctl/fleetctl/*_test.go`,
+`fleetctl` already carries **~30,200 lines of Go tests** in `cmd/fleetctl/fleetctl/*_test.go`,
 plus real-server integration tests in `cmd/fleetctl/integrationtest/gitops/`. Re-deriving
 flag parsing, YAML marshalling, or per-key output shape in Playwright buys nothing.
 
 What those tests *cannot* do, and what this section owns:
 
 1. **A real license.** The unit tests drive a `MockClient` whose tier is a struct field.
-   `generate_gitops_test.go` is 3,239 lines and sets `IsFree = true` in exactly **one** test
-   (`TestGenerateGitopsFree`) against a golden directory. Every other premium/free branch in
-   `generate_gitops.go` — and there are ~18 `License.IsPremium()` checks — is exercised on the
+   `generate_gitops_test.go` is 3,602 lines and uses a free client in only **two** tests:
+   `TestGenerateGitopsFree`, against a golden directory, and one `generateControls` case in
+   `TestGenerateControlsDiskEncryption`. Every other premium/free branch in
+   `generate_gitops.go` — and there are 17 `License.IsPremium()` checks — is exercised on the
    premium path only. The free path is effectively one snapshot.
 2. **A real, richly-configured server.** The Go integration test that does exercise
-   `generate-gitops` against a live server (`gitops_enterprise_integration_test.go:6040`) runs
+   `generate-gitops` against a live server (`gitops_enterprise_integration_test.go:6209`) runs
    it for a **single team** with `--fleet <name> --insecure`. Nothing covers a whole-instance
    generate (global + every fleet + unassigned), and nothing covers the free tier live at all.
 3. **Generated output vs. the config that produced the state.** No test compares
    `generate-gitops` output against a known applied config on a live server. Doing it right
    after the min GitOps apply turns the whole command into a checkable contract — see
    [the nightly step](#folding-into-the-nightly-gitops-chain).
-4. **The `fleetctl new` scaffold against a real server.** `new_test.go` (241 lines) checks
+4. **The `fleetctl new` scaffold against a real server.** `new_test.go` (298 lines) checks
    local file emission only. Nobody checks that the repo Fleet ships to new customers actually
    applies.
 5. **Client/server version skew.** Only an E2E harness runs a real binary against a real server.
@@ -46,25 +48,29 @@ Observed on both QA instances. This is the contract the premium/free split must 
 | Command | Free | Premium | Free-tier failure |
 |---|---|---|---|
 | `get fleets` / `get teams` | ❌ | ✅ | `could not list teams: missing or invalid license` |
-| `get mdm-apple-bm` (ABM) | ❌ | ✅ | `could not get Apple BM information: missing or invalid license` |
+| `get mdm-ab` (ABM; `get mdm-apple-bm` is its deprecated alias) | ❌ | ✅ | `could not get Apple Business information: missing or invalid license` |
 | `hosts transfer` | ❌ | ✅ | teams don't exist; client resolves the host first, so the error depends on args |
-| `mdm lock` / `mdm unlock` | ❌ | ✅ | `ErrMissingLicense` — unconditional in `server/service/scripts.go:1266,1295` |
-| `mdm wipe` | ⚠️ Android only | ✅ | non-Android → `ErrMissingLicense` (`scripts.go:1333`) |
+| `mdm lock` / `mdm unlock` | ❌ | ✅ | `ErrMissingLicense` — unconditional in `server/service/scripts.go:1267,1296` |
+| `mdm wipe` | ⚠️ Android only | ✅ | non-Android → `ErrMissingLicense` (`scripts.go:1335`) |
 | `get labels`, `get user_roles`, `get enroll_secret`, `get carves`, `get software`, `get packs`, `get reports`, `get hosts` | ✅ | ✅ | — |
 | `get mdm-apple` (APNs), `get mdm-commands`, `get mdm-command-results` | ✅ | ✅ | — |
 | `debug migrations`, `debug connection`, `trigger` | ✅ | ✅ | — |
 | `user create` / `delete` / `create-users` | ✅ | ✅ | team roles are premium-only; `--global-role` works on both |
-| `run-script` | ✅ | ✅ | saved scripts with `team_id > 0` → `ErrMissingLicense` (`scripts.go:126`) |
+| `run-script` | ✅ | ✅ | saved scripts with `team_id > 0` → `ErrMissingLicense` (`scripts.go:127`) |
 | `new` | ✅ | ✅ | fully local, never contacts a server |
 | `gitops`, `generate-gitops`, `apply`, `delete`, `convert`, `api`, `config` | ✅ | ✅ | behaviour differs — see below |
 
 ### `generate-gitops` output shape
 
-The single most tier-sensitive command. Observed by generating both instances into a temp dir:
+The single most tier-sensitive command. Generating both instances into a temp dir gives one
+premium file per fleet (the standing fleets are Workstations, VMs, QA, Compliance and Mobile,
+plus any throwaway `pw-*` fleet a spec holds at that moment) and a single file on free:
 
 ```
 premium/                     free/
   default.yml                  default.yml
+  fleets/compliance.yml
+  fleets/mobile.yml
   fleets/qa.yml
   fleets/unassigned.yml
   fleets/vms.yml
@@ -83,56 +89,69 @@ Top-level keys:
 | `software` | ❌ | ❌ | ✅ |
 | `name` / `settings` | ❌ | ❌ | ✅ |
 
-`controls` moving from global (free) to per-fleet (premium) comes from `generate_gitops.go:566`.
-`software` is hard-returned `nil` on free at `generate_gitops.go:2077`.
+`controls` moving from global (free) to per-fleet (premium) comes from `generate_gitops.go:582`.
+`software` is hard-returned `nil` on free at `generate_gitops.go:2145`.
 
 Field-level differences inside shared keys:
 
-- `org_settings.sso_settings.enable_jit_provisioning` — premium only (`:1249`). Verified: present
+- `org_settings.sso_settings.enable_jit_provisioning` — premium only (`:946`). Verified: present
   on premium, absent on free.
-- `org_settings.microsoft_graph_credentials` — premium only (`:930`).
-- Google Workspace IdP entry in `integrations` — premium only (`:976`).
-- Policy/report label scoping (`labels_include_any`, `labels_exclude_any`, …) — premium only
-  (`:1852-1861`, `:1926`).
+- `org_settings.microsoft_graph_credentials` — premium only (`:869`).
+- Google Workspace IdP entry in `integrations` — premium only (`:992`).
+- Policy label scoping (`labels_include_any`, `labels_include_all`, `labels_exclude_any`,
+  `labels_exclude_all`) — premium only (`:1898-1907`). On reports only `labels_include_all` is
+  premium-gated (`:1972`); `labels_include_any` is emitted on both tiers (`:1969`).
 - `--fleet` flag is documented "(Premium only)". On free it is silently ignored: the tier check
-  at `:426` short-circuits to global-only, so `--fleet Workstations --key controls` returns
+  at `:444` short-circuits to global-only, so `--fleet Workstations --key controls` returns
   `Key controls not found in fleets/workstations.yml` rather than a licensing error.
 
 ### `fleetctl gitops` tier behaviour
 
 - Free skips team files with an exact, assertable line:
   `[!] skipping team config <path> since teams are only supported for premium Fleet users`
-- Free rejects `microsoft_graph_credentials` in org settings (`gitops.go:403`).
-- `--delete-other-fleets` is a no-op on free (`gitops.go:711`).
+- Free rejects `microsoft_graph_credentials` in org settings (`gitops.go:407`).
+- `--delete-other-fleets` is a no-op on free (`gitops.go:742`).
 - `controls` must be set on global config; premium additionally accepts it on
-  `unassigned.yml`/`no-team.yml`, and the error text differs by tier (`gitops.go:386-395`).
+  `unassigned.yml`/`no-team.yml`, and the error text differs by tier (`gitops.go:387-397`).
 
 ## Status
 
-Delivered and green on both tiers — **34 premium / 27 free** CLI tests in the regular run, plus
-the 5-assertion nightly project:
+Delivered on both tiers — **39 premium / 31 free** CLI tests in the regular run, plus the
+6-test nightly project, which runs on both tiers:
 
 ```
-helpers/fleetctl.ts                        # runner: HOME isolation, banner strip, no-throw
+helpers/fleetctl.ts                        # runner: HOME isolation, banner strip, no-throw,
+                                           #   carryLiveEndUserAuth for scaffold dry-runs
 tests/cli/shared/
   get-read-only.spec.ts                    #  8 · tier-agnostic get + debug migrations
   new.spec.ts                              #  5 · fleetctl new scaffold
+  gitops-dry-run.spec.ts                   #  3 · scaffold dry-run deletes nothing, unknown key,
+                                           #      missing file
 tests/cli/premium/
   fleets.spec.ts                           #  2 · get fleets, hosts transfer
   generate-gitops.spec.ts                  #  5 · JIT, per-fleet controls, flag validation
+  gitops-dry-run.spec.ts                   #  2 · fleet files processed; --delete-other-fleets
+                                           #      proposes the standing fleets by name
   mdm-lock-wipe.spec.ts                    # 12 · lock/unlock/wipe refusals (macOS, Windows)
   mdm-lock-lifecycle.spec.ts               #  2 · real lock → unlock (Ubuntu)
 tests/cli/free/
+  gitops-skips-teams.spec.ts               #  1 · the skip line, verbatim, per fleet file
   licensing.spec.ts                        #  5 · licence denials + premium-key omissions
   mdm-licensing.spec.ts                    #  9 · lock/unlock/wipe denied (macOS, Windows, Linux)
 tests/cli/nightly/                         # nightly-only project (see below)
   _generated.ts                            # runs generate once, parses output
   generate-gitops.spec.ts                  #  5 · entity sets vs. the applied min config
+  gitops-idempotence.spec.ts               #  1 · dry-run of that config proposes no deletions
 ```
 
-Remaining: `config.spec.ts` (context isolation), `user.spec.ts` (create/delete lifecycle),
-`gitops-dry-run.spec.ts` (premium team files applied), and the free
-`gitops-skips-teams.spec.ts` asserting the skip line verbatim.
+The client must match the server. `fleetctl` 4.92.1 can't generate a config on a free instance
+with Apple MDM on (fleetdm/fleet#53965, fixed client-side in 4.93.0), so free's two
+`generate-gitops` licensing tests and the free nightly generate checks fail with it. CI installs the
+server's release; a local run needs the same version on `PATH` or in `FLEETCTL_BIN`.
+
+Remaining: `config.spec.ts` (context isolation), `user.spec.ts` (create/delete lifecycle, Open
+decision 4), `run-script.spec.ts` (Open decision 3), and a client/server version-match check —
+`clientVersion()` and `versionMismatch()` exist in `helpers/fleetctl.ts`, but no spec calls them.
 
 `tests/cli/**` specs import `test`/`expect` from `@playwright/test`, not `@fixtures` — they
 drive a subprocess, never a page, so the auto `pageHealth` fixture doesn't apply. Same exception
@@ -146,8 +165,9 @@ separated the same way `gitops-verify` already is: its own project with a `testD
 `SUITE_AMBIGUOUS_PROJECTS`, and `'**/cli/nightly/**'` added to both browser projects'
 `testIgnore`. It never runs in a regular suite run.
 
-Both Playwright CI workflows gained a step installing `fleetctl` at the server's version, and
-the nightly GitOps orchestrators gained a `verify-generate-gitops` job.
+Both Playwright CI workflows install `fleetctl` at the server's version before the suite runs,
+and both nightly GitOps chains (`nightly-qa-gitops-{premium,free}.yml`) end with a
+`verify-gitops-cli` job, which calls `gitops-nightly-cli.yml` to run the `gitops-nightly` project.
 
 ## Harness design
 
@@ -155,35 +175,39 @@ the nightly GitOps orchestrators gained a `verify-generate-gitops` job.
 
 Three jobs, all of which I hit manually during research:
 
-1. **Isolated config.** `fleetctl config set` writes `~/.fleetctl/config` by default and would
-   clobber the developer's own context. Every invocation must pass
-   `--config <.auth/fleetctl-<suite>.yml>`. A worker fixture writes it once from `FLEET_URL` +
-   `FLEET_API_TOKEN`.
-2. **Binary resolution + version guard.** Local `fleetctl` is 4.85.1 against 4.91 servers; the
-   binary prints a `Warning: Version mismatch.` banner on **every** command, which will wreck
-   naive stdout assertions. The runner strips it, and a dedicated spec asserts client and server
-   versions match so nobody debugs a phantom failure caused by skew.
-   `.github/gitops-action/action.yml` already solves the install side
-   (`npm install -g fleetctl@$SERVER_VERSION`); reuse that step in the Playwright workflows and
-   expose the path via `FLEETCTL_BIN`.
+1. **Isolated config.** `fleetctl` reads and writes `~/.fleet/config`, so an un-isolated call
+   would target the developer's own context and `fleetctl config set` would clobber it. A
+   `--config` flag can't fix that: `mdm lock` / `unlock` / `wipe` don't accept one. Every call
+   therefore runs with `HOME` (and `USERPROFILE`) pointed at `.auth/fleetctl-home-<suite>/`,
+   whose `.fleet/config` `fleetctlHome()` writes from `FLEET_URL` + `FLEET_API_TOKEN`;
+   `withoutConfig` runs `new` and `--version` against an empty home instead.
+2. **Binary resolution + version banner.** A client older than the server prints a
+   `Warning: Version mismatch.` banner on **every** command, which would wreck naive output
+   assertions, so the runner strips it. The binary is `fleetctl` on `PATH`, or `FLEETCTL_BIN`
+   when set. CI copies the install step from `.github/gitops-action/action.yml` into
+   `playwright-{premium,free}.yml` and `gitops-nightly-cli.yml` (the server's release, else the
+   latest). `clientVersion()` and `versionMismatch()` are there for a version-match check, which
+   no spec runs yet.
 3. **A typed result.** `{ code, stdout, stderr }` with the mismatch banner filtered, so specs
    assert on `expect(res.stderr).toContain('missing or invalid license')` rather than regexing
    raw output.
 
-Sketch:
+Signature:
 
 ```ts
-export type FleetctlResult = { code: number; stdout: string; stderr: string };
+export interface FleetctlResult { code: number; stdout: string; stderr: string }
 
-export async function fleetctl(args: string[], opts?: { env?: Record<string, string> }):
-  Promise<FleetctlResult>;
+export async function fleetctl(
+  args: string[],
+  opts?: { env?: Record<string, string>; withoutConfig?: boolean; cwd?: string },
+): Promise<FleetctlResult>;
 ```
 
 Keep it a plain helper, not a page object — there is no page and no UI state to model.
 
 ### Safety rules
 
-These specs share the QA instances with the browser suite running `fullyParallel`. Two rules:
+These specs share the QA instances with the browser suite running `fullyParallel`. Three rules:
 
 - **No spec applies a `fleetctl gitops` config for real.** `--dry-run` only. A real apply is
   declaratively destructive across the whole instance — the `fleetctl new` scaffold dry-run
@@ -192,13 +216,13 @@ These specs share the QA instances with the browser suite running `fullyParallel
   chain (below), which already serialises against the gitops concurrency group.
 - **`generate-gitops --dir` targets a temp dir, never the repo.** With `--insecure` it writes
   live enroll secrets to disk, so the dir must never become a CI artifact.
-
-- **Destructive or host-moving commands target simulated hosts only.** `hosts transfer`, and
-  `mdm lock`/`wipe` if they are ever built, draw from the osquery-perf pool via
-  `findSimulatedHostIds`, which excludes virtualized hardware so a real QA VM can never be
-  selected. Read-only data pulls may use a real VM (`findOnlineHost({ kind: 'real' })`).
-  `tests/cli/premium/fleets.spec.ts` claims offset 30 to stay clear of the slices the browser
-  specs already use (host-delete takes 10 and 20, bulk-transfer takes 0).
+- **Destructive or host-moving commands target simulated hosts only.** `hosts transfer` draws
+  from the osquery-perf pool via `findSimulatedHostIds`, and `mdm lock` / `unlock` / `wipe` via
+  `findSimulatedHostForMdm`; both exclude virtualized hardware, so a real QA VM can never be
+  selected. Read-only data pulls may use a real VM (`findOnlineHost(request, platform,
+  { kind: 'real' })`). `tests/cli/premium/fleets.spec.ts` claims darwin offset 30 to stay clear
+  of the slices the browser specs use (bulk-transfer 0–2, host-delete 10–11 and 20); the slice
+  registry is in `helpers/api/hosts.ts`.
 
 Mutating commands that *are* safe because they're already suite conventions: `user create` /
 `user delete` (cleaned up in the same test, same as the User-management specs) and
@@ -221,15 +245,16 @@ handful of assertions.** That keeps the step read-only and sidesteps the secrets
 at the bottom entirely.
 
 The premium nightly already runs: apply baseline → verify baseline → **apply min** → verify min.
-After the min apply, instance state is known and small (`gitops/premium-fleetqa-min/`: 152-line
-default + 82-line workstations; free-min is a 137-line default). That makes `generate-gitops`
+After the min apply, instance state is known and small (`gitops/premium-fleetqa-min/`: a 253-line
+default plus 82-line `fleets/workstations.yml` and 210-line `fleets/compliance.yml`; free-min is a
+196-line default). That makes `generate-gitops`
 output deterministic enough to assert against, which it never is against the full mutable
 instance.
 
 ### This was validated, not assumed
 
-Generated the live premium instance (currently in min state) and diffed the resolved entity
-sets against `premium-fleetqa-min`:
+On 2026-08-14, generated the live premium instance (then in min state) and diffed the resolved
+entity sets against `premium-fleetqa-min`:
 
 | Entity | Min config declares | Generated output | Result |
 |---|---|---|---|
@@ -237,15 +262,16 @@ sets against `premium-fleetqa-min`:
 | Global policies | 22 | 22 | **exact match** |
 | Global reports | 26 | 0 | drained — see below |
 
-Running the delivered project confirms it: 4 of 5 assertions pass against the live premium
-instance today, and the fifth fails exactly as the ordering constraint predicts. Its failure
-message says so, so nobody misdiagnoses it as a `generate-gitops` regression.
+Run outside the chain, the project's report-set check fails exactly as the ordering constraint
+below predicts, and its failure message says so, so nobody misdiagnoses it as a
+`generate-gitops` regression. The other checks hold in any window.
 
 So equality assertions are achievable, not just superset ones. Two traps found while proving it:
 
-- **Count file refs ≠ count entities.** `premium-fleetqa-min/default.yml` lists 10 label
+- **Count file refs ≠ count entities.** `premium-fleetqa-min/default.yml` lists 12 label
   `path:` refs, but `lib/labels/macs-with-fleet-maintained-apps-installed.yml` alone declares
-  many labels — 10 files resolve to 23 labels. Resolve the lib files (as
+  9 labels (and `windows-with-fleet-maintained-apps-installed.yml` 6) — 12 files resolve to 25
+  labels. Resolve the lib files (as
   `helpers/gitops-yaml.ts` already does for `gitops-verify`); never count `path:` lines.
 - **Byte-diffing the YAML will not work.** `generate-gitops` emits inline content where the
   source config used `path:` refs. Compare resolved entity name sets, not text.
@@ -256,12 +282,14 @@ Global `reports:` came back **empty** from the live generate. That is the Playwr
 `cleanup-setup` project draining every global report before its first test. So the generate
 step must run **inside the nightly gitops chain, immediately after apply-min** — before the
 Playwright nightly touches the instance. Anywhere later and the report assertion is
-meaningless. This is also why it belongs in `nightly-qa-gitops-{premium,free}.yml` rather than
-as a Playwright spec in `tests/cli/`.
+meaningless. This is why it is its own `gitops-nightly` project (`tests/cli/nightly/`), which
+the chains' `verify-gitops-cli` job runs right after the verify-min jobs, and which the regular
+suite never picks up.
 
 ### The assertions
 
-A fifth workflow step after `verify-min`, running `fleetctl generate-gitops --dir $TMP` and then:
+The `verify-gitops-cli` job runs `fleetctl generate-gitops --dir $TMP` once
+(`tests/cli/nightly/_generated.ts`) and then asserts:
 
 1. **Labels** — generated name set equals the min config's resolved set.
 2. **Global policies** — same.
@@ -269,9 +297,11 @@ A fifth workflow step after `verify-min`, running `fleetctl generate-gitops --di
 4. **Scalars gitops owns** — e.g. `org_settings.org_info.org_name` is
    `Premium QA Automation (min)` / the free equivalent. Cheap, and catches a whole class of
    silent generate failures.
-5. **Tier shape** — premium emits `fleets/workstations.yml` with `controls` + `software`; free
-   emits `default.yml` only, with `controls` at global scope and no `software` key.
-6. **`gitops --dry-run` of the same min config proposes no deletions.**
+5. **Tier shape** — premium emits `fleets/workstations.yml`, `fleets/compliance.yml` and
+   `fleets/unassigned.yml`, Workstations with `name` + `controls`, and no `controls` at global
+   scope; free emits `default.yml` only, with `controls` at global scope and no `software` key.
+6. **`gitops --dry-run` of the same min config proposes no deletions**
+   (`gitops-idempotence.spec.ts`).
 
 That last one needs care, because `--dry-run` is **not a diff**: it reports everything it *would
 apply* regardless of current state, so a matching instance still prints a wall of
@@ -282,7 +312,8 @@ freshly-applied instance there should be none. The negative control lives in
 `tests/cli/shared/gitops-dry-run.spec.ts`, which asserts that a *different* config (the
 `fleetctl new` scaffold) does propose deletions against this same instance.
 
-Six assertions per tier. That's the whole step.
+Six tests per tier — five in `generate-gitops.spec.ts`, one in `gitops-idempotence.spec.ts`.
+That's the whole step.
 
 ## Side notes (not blocking this plan)
 
@@ -301,8 +332,10 @@ GitOps file or disable the exception in Fleet settings.
 ```
 
 `generate-gitops` doesn't know about the GitOps secrets-exception setting, so on any instance
-with UI-managed enroll secrets its output is unusable as-is. The same round trip **succeeds on
-free**, where secrets are GitOps-managed. Looks like a real product gap rather than a QA config
+with UI-managed enroll secrets its output is unusable as-is. The same round trip **succeeded on
+free** with the 4.85 client, where secrets are GitOps-managed; `fleetctl` 4.90–4.92 can't
+generate a free instance with Apple MDM on at all (fleetdm/fleet#53965, fixed in 4.93.0).
+Looks like a real product gap rather than a QA config
 problem — worth filing on its own merits, but nothing here waits on it.
 
 **2. Minor, lower confidence.** `fleetctl get reports` on **free** prints
@@ -317,8 +350,8 @@ The behaviour is not uniform, and the differences decide what is testable.
 
 | Platform | `lock` | `unlock` | Recovers? |
 |---|---|---|---|
-| **Linux** | → `locked` at once | script, succeeded first try | ✅ |
-| **Windows** | → `locked` at once | script, **needed 2–3 requests** | ✅ |
+| **Linux** | → `locked` once orbit runs the script (seconds, up to a ~60 s poll) | script, succeeded first try | ✅ |
+| **Windows** | → `locked` once orbit runs the script (seconds, up to a ~60 s poll) | script, **needed 2–3 requests** | ✅ |
 | **macOS** | **502 `bad device token`** — never locks | n/a | ✅ (unlock clears it) |
 
 Three findings shaped the specs:

@@ -12,33 +12,49 @@ tests/
 │   ├── shared/               # Tier-agnostic (both projects)
 │   │   ├── account/          # change-password, theme
 │   │   ├── auth/             # login, logout, SSO, forgot-password
+│   │   ├── command-palette/  # open/close, pickers, search and navigate
+│   │   ├── controls/         # custom-variables, scripts (batch schedule/cancel)
+│   │   ├── dashboard/        # activity feed, platform cards
 │   │   ├── hosts/            # host details, live query, software, columns, CSV export
+│   │   ├── labels/
 │   │   ├── packs/            # packs CRUD (global, no team scope)
-│   │   └── settings/         # host-status webhook, user list search/pagination/row-actions
+│   │   ├── policies/         # live run, autofill, policy hosts
+│   │   ├── reports/          # edit warnings, live report export
+│   │   ├── settings/         # host-status webhook, enroll secrets, Apple MDM, organization, users
+│   │   ├── software/         # titles table
+│   │   └── exclusive/        # global-switch specs (premium-exclusive / free-exclusive only)
 │   ├── premium/              # Premium-only flows (Unassigned + Workstations variants)
 │   │   ├── account/
+│   │   ├── command-palette/
 │   │   ├── controls/
 │   │   │   ├── os-settings/
 │   │   │   ├── scripts/
-│   │   │   ├── setup-experience/
-│   │   │   └── custom-variables.spec.ts
-│   │   ├── dashboard/        # automations activity feed
+│   │   │   └── setup-experience/
+│   │   ├── dashboard/        # automations activity feed, fleet-scoped cards, historical data
 │   │   ├── hosts/            # transfer, delete, report details, CTA + MDM-action availability
 │   │   ├── labels/
 │   │   ├── policies/
 │   │   ├── reports/
 │   │   ├── settings/         # org, integrations, enroll-secrets, users, webhooks
-│   │   └── software/         # library (premium-only, paywalled on free), edit-package, os, vulnerabilities
+│   │   ├── software/         # library (premium-only, paywalled on free), edit-package, os, vulnerabilities
+│   │   ├── exclusive/        # specs that need a VM queue or a global switch to themselves (premium-exclusive only)
+│   │   └── gitops-mode/      # specs that turn gitops mode on (gitops-mode project only)
 │   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs
 ├── api/                      # Pure-API specs (no browser)
 │   ├── config.spec.ts        # Agnostic config-shape checks
 │   ├── activity-copy.spec.ts # Activity-feed copy contract
+│   ├── host-software-payload.spec.ts # `exclude_software=true` drops the software list and nothing else
 │   ├── premium/              # Premium-only API contracts
 │   ├── free/                 # Free-only API contracts
 │   ├── role-access/          # Per-role endpoint allow/deny probes
 │   │   ├── free/             # global roles on free
 │   │   └── premium/          # global, fleet-scoped, multi-fleet, endpoint-allowlisted
 │   └── gitops-verify/        # GitOps drift checks
+├── cli/                      # fleetctl specs (run the fleetctl on PATH, or FLEETCTL_BIN)
+│   ├── shared/               # both tiers
+│   ├── premium/
+│   ├── free/
+│   └── nightly/              # gitops-nightly project only, right after the nightly's min apply
 └── loadtest/                 # Page load / search timing tests (loadtest project, local-only)
     └── api/                  # API timing (loadtest-api project, local-only)
 ```
@@ -66,13 +82,22 @@ Tier-routing rules:
   high-scale data?" Runs in the `loadtest-api` project (no browser).
   `tests/loadtest/api/shapes.ts` lists every endpoint + sort/filter
   combination worth timing; `helpers/perf-api.ts` samples and grades
-  them. Slow is flagged; never-succeeds fails.
+  them. Slow is flagged; a shape with any failed sample fails its family.
 
 - **GitOps verify** — "Does the live instance match the gitops config?"
   Runs in the `gitops-verify` project (no browser, just the request
-  fixture). Loads the gitops target via `_config.ts` and asserts org
-  settings, profiles, policies, scripts, labels, and reports match.
+  fixture). Loads the gitops target via `_config.ts` and asserts org and
+  fleet settings, controls, fleets, custom host vitals, labels, policies,
+  profiles, reports, scripts and software match.
   Driven by the nightly orchestrators between gitops apply steps.
+
+- **CLI** — "Does `fleetctl` behave against a real server?" Specs under
+  `tests/cli/{shared,premium,free}/` run in the `premium` and `free`
+  projects; `tests/cli/nightly/` runs only in the `gitops-nightly` project,
+  right after the nightly's min apply. They need a local `fleetctl` that
+  matches the server's version (`npm i -g fleetctl@<server version>`, or
+  `FLEETCTL_BIN`), as CI installs: an older client fails — 4.92.1's
+  `generate-gitops` exits 1 on free.
 
 ## Writing a new test
 
@@ -88,7 +113,7 @@ test('describe the user scenario', async ({ softwareTitles }) => {
 
 Rules:
 
-1. **Browser specs always import `test` and `expect` from `@fixtures`.** Never from `@playwright/test` — that skips our page-object fixtures (and the auto `pageHealth` fixture). Two exceptions, both of which have no page to monitor: setup specs under `setup/`, and pure-API specs that need neither a page object nor a worker fixture (`tests/api/gitops-verify/**`, `tests/api/activity-copy.spec.ts`). A pure-API spec that *does* want a page object or `workstationsFleetId` imports from `@fixtures` like everything else — most of `tests/api/` does.
+1. **Browser specs always import `test` and `expect` from `@fixtures`.** Never from `@playwright/test` — that skips our page-object fixtures (and the auto `pageHealth` fixture). Three exceptions, none of which has a page to monitor: setup specs under `setup/`, pure-API specs that need neither a page object nor a worker fixture (`tests/api/gitops-verify/**`, `tests/api/activity-copy.spec.ts`, `tests/api/free/*.spec.ts`), and the `fleetctl` specs under `tests/cli/`. A pure-API spec that *does* want a page object or `workstationsFleetId` imports from `@fixtures` like everything else — most of `tests/api/` does.
 2. **Destructure the page objects you need.** `async ({ softwareTitles, cveDetail }) =>` — TypeScript tells you what's available.
 3. **Call page methods, not raw Playwright APIs.** If you find yourself writing `page.getByRole('table').locator('tbody tr')`, the page object is missing a method — add it, don't work around it.
 4. **Web-first assertions.** `await expect(locator).toBeVisible()` auto-retries. Don't `await locator.isVisible()` in assertions.
@@ -97,7 +122,7 @@ Rules:
 ## Page health is automatic
 
 Every test gets the `pageHealth` fixture applied automatically. It monitors
-console errors and 5xx server errors during the run and asserts at teardown
+uncaught page exceptions, console errors and 5xx server errors during the run and asserts at teardown
 that no un-ignored issues occurred. 4xx is not flagged — it's normal app
 behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and
 assertions catch the meaningful ones.
@@ -114,7 +139,10 @@ test('shows error for invalid credentials', async ({ loginPage, pageHealth }) =>
 ```
 
 Console-error ignore patterns live in `@helpers/console`
-(`DEFAULT_IGNORED_CONSOLE_ERRORS`). Add Fleet-wide noise there.
+(`DEFAULT_IGNORED_CONSOLE_ERRORS`). Add Fleet-wide noise there. An uncaught
+exception owed to a filed, cosmetic Fleet defect goes in
+`DEFAULT_IGNORED_PAGE_ERRORS` instead, with its `TODO(fleetdm/fleet#N)` and a
+row in `docs/blocked-by-product-bugs.md`.
 
 ## Anti-patterns to reject in review
 
@@ -170,6 +198,12 @@ Routing is purely by folder — no tags. Each browser project's `testIgnore` in
 | `tests/e2e/shared/**` | yes | yes |
 | `tests/e2e/premium/**` | yes | no (free `testIgnore` excludes `**/premium/**`) |
 | `tests/e2e/free/**` | no (premium `testIgnore` excludes `**/free/**`) | yes |
+| `tests/e2e/{shared,premium,free}/exclusive/**` | no — `premium-exclusive` runs shared + premium | no — `free-exclusive` runs shared + free |
+| `tests/e2e/premium/gitops-mode/**` | no — gitops-mode project only | no |
+| `tests/cli/shared/**` | yes | yes |
+| `tests/cli/premium/**` | yes | no |
+| `tests/cli/free/**` | no | yes |
+| `tests/cli/nightly/**` | no | no — gitops-nightly project only |
 | `tests/api/*.spec.ts` (root) | yes | yes |
 | `tests/api/premium/**` | yes | no |
 | `tests/api/free/**` | no | yes |
