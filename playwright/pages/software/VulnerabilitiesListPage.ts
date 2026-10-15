@@ -79,9 +79,9 @@ export class VulnerabilitiesListPage {
   /**
    * Every CVE identifier on the current page, in row order. Gives a caller a
    * pool to pick from rather than only the top row, which matters because Fleet
-   * matches CVEs faster than its feeds enrich them and 404s the detail page for
-   * any it has no metadata for — and the newest match sorts first
-   * (fleetdm/fleet#49913). Pair with `findRenderableCve`.
+   * matches CVEs faster than it counts their hosts and shows an empty detail
+   * page for any it hasn't counted yet — and the newest match sorts first.
+   * Pair with `findRenderableCve`.
    */
   async cveNames(): Promise<string[]> {
     const links = this.table.table.locator('tbody tr td:first-child a');
