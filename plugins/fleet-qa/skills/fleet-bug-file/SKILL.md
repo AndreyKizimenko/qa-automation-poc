@@ -122,7 +122,12 @@ section, combine them into one in reading order —
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/stack.py <N>-actual-behavior.png a.png b.png ...`
 (`--side` for narrow clips) — so the section takes a single paste; crop each to the
 region that shows the problem first (fleet name, filter, count) so the stack stays
-legible and carries no unrelated data. Send with `SendUserFile` (display `attach`)
+legible and carries no unrelated data. Annotate when it helps the developer find the
+problem at a glance: box the wrong state (and, in a before/after, the right one in another
+color), add a short label beside it, and caption each panel with its build. A before/after
+compares two identical scenarios — same app, input and action on both builds — so only the
+behavior differs. Draw with PIL on the captured PNG, and re-read the result: a box that clips
+the neighbouring line points at the wrong thing. Send with `SendUserFile` (display `attach`)
 after the issue exists, and name where each goes and what order the panels are in.
 `gh` can't upload images, so pasting them is the one manual step.
 
