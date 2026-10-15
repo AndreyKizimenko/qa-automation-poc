@@ -172,7 +172,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 6. ☐ (Automatic) land on the new title's detail page.
    - ✅ *(UI)* The active installer accordion row (`.library-item-accordion` without `--inactive`) is visible.
    - ✅ *(UI)* The title's display heading (`aria-label="software display name"`) has non-empty text — **only** a length check, the expected name is never asserted.
-   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Application (Android)` / `Application (<iOS>)`. Fleet derives it from the title's osquery source (`SOURCE_TYPE_CONVERSION`), so `android_apps` renders "Application (Android)" and `ios_apps` renders "Application (iOS)"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
+   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Android app` / `<iOS> app`. Fleet derives it from the title's osquery source (`formatSoftwareType`), so `android_apps` renders "Android app" and `ios_apps` renders "iOS app"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
 7. ☐ (No user action) API cross-check of the add.
    - ✅ *(API)* `GET /activities` (paged, ≤5×100, newest first) contains `added_software` (custom/FMA) or `added_app_store_app` (VPP/Android) whose `details.software_title` equals the heading text, **and** whose `actor_email` is `FLEET_ADMIN_EMAIL` — `assertActivity`.
    - ✅ *(UI)* Title id parsed from the URL is > 0.
@@ -1271,7 +1271,7 @@ other:
    - ✅ *(API)* The title exists and has ≥1 cached build.
 2. ☐ *(Setup, API)* Read its stored package. ✅ `pinned_version` is `''`.
 3. ☐ Open the dashboard → **Software** → select the **QA** fleet (`selectByLabel`, since QA is outside the typed `TeamScope` matrix) → click the **Library** tab → search "Postman".
-4. ☐ Click the row whose **Type** cell reads **Application (macOS)** — the name alone is ambiguous across the two platform titles.
+4. ☐ Click the row whose **Type** cell reads **macOS app** — the name alone is ambiguous across the two platform titles.
    - ✅ *(UI)* The display heading is visible; its text is captured for the save toasts.
 5. ✅ *(UI)* The installer accordion row carries the **Latest** badge — an unpinned app tracks latest.
 6. ☐ Open **Actions → Versions**.
@@ -1295,7 +1295,7 @@ other:
 - *Efficiency / smells:*
   - The unpinned precondition is a **test failure with an operational cause**: one aborted run leaves this test red until somebody clears the pin by hand. Deliberate and clearly messaged, but worth knowing before triaging it as a flake.
   - It mutates a **shared, durable, gitops-provisioned** resource that no cleanup project touches. The only guard is the `finally`, which doesn't run on a `SIGKILL`.
-  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "Application (macOS)" would also match.
+  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "macOS app" would also match.
   - `PIN_SHAPES_APP` hard-codes "Postman": a `qa.yml` change that drops it breaks this test (with a good message, but it still breaks).
 
 **Notes (Andrey)**
@@ -1372,7 +1372,7 @@ other:
    - ✅ *(UI)* The id parsed out of the URL is > 0.
 4. ✅ *(UI)* On the title detail page, four things at once:
    - the display heading reads exactly `fleet-playwright-script-package`;
-   - the summary card's **Type** line reads **"Script-only package (macOS & Linux)"**;
+   - the summary card's **Type** line reads **"Script-only package (.sh)"**;
    - the header pills are exactly `['Custom package']`;
    - the installer accordion row contains the filename **and** the text **"Added less than a minute ago"**.
 5. ✅ *(API)* `GET /software/titles/:id` → `software_package.install_script` equals the fixture file's contents **byte for byte** (read off disk in the test), and `uninstall_script` is the empty string. This is the defining property of a script-only package: the uploaded file *is* the install script, and Fleet generates no uninstall counterpart.
@@ -1721,7 +1721,7 @@ other:
 2. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (`softwareTitleDetail.goto`) → **Actions** → **Edit configuration**.
    - ✅ *(UI)* **Actions** is visible; the **Edit configuration** modal and its Ace editor are visible.
 3. ☐ Replace the editor's text with `{ "pwUnsupportedKey": true }` (through Ace's API, `setAceValue`) → **Save**.
-   - ✅ *(UI)* Error toast `Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.` — well-formed JSON that Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+   - ✅ *(UI)* Error toast `Unknown top-level key "pwUnsupportedKey".` — well-formed JSON whose key isn't an Android Management API `ApplicationPolicy` field, which Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
    - ✅ *(UI)* The modal stays open.
    - ✅ *(API)* The stored configuration is unchanged.
 4. ☐ Replace the text with `{"managedConfiguration":{"pw_setting":"pw-value"},"workProfileWidgets":"WORK_PROFILE_WIDGETS_ALLOWED"}` → **Save**.

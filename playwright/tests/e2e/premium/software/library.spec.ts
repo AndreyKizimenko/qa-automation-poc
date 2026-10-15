@@ -5,9 +5,9 @@
  * configuration, saved and read back.
  *
  * A Play Store app's configuration (Actions → Edit configuration) is JSON whose
- * top-level keys Fleet limits to `managedConfiguration` and
- * `workProfileWidgets` (`ValidateAndroidAppConfiguration`); the browser checks
- * only that it parses. Premium holds no Android host, so a saved configuration
+ * top-level keys must be Android Management API `ApplicationPolicy` fields other
+ * than `packageName` and `installType`, which Fleet sets itself
+ * (`ValidateAndroidAppConfiguration`); the browser checks only that it parses. Premium holds no Android host, so a saved configuration
  * reaches no device: what's tested is what Fleet stores and what it refuses.
  */
 import * as path from 'path';
@@ -157,13 +157,13 @@ for (const scope of SCOPES) {
         // The summary card's Type line is how an admin tells an App Store or
         // Play Store app apart from a package of the same name once it's added
         // — the only visible difference on the title page. Fleet derives it
-        // from the title's osquery source (`SOURCE_TYPE_CONVERSION`), so
-        // `android_apps` reads "Application (Android)" and `ios_apps` reads
-        // "Application (iOS)".
+        // from the title's osquery source (`formatSoftwareType` in
+        // `interfaces/software.ts`), so `android_apps` reads "Android app" and
+        // `ios_apps` reads "iOS app".
         if (c.kind === 'android') {
-          await expect(softwareTitleDetail.typeValue).toHaveText('Application (Android)');
+          await expect(softwareTitleDetail.typeValue).toHaveText('Android app');
         } else if (c.kind === 'vpp') {
-          await expect(softwareTitleDetail.typeValue).toHaveText(`Application (${c.platform})`);
+          await expect(softwareTitleDetail.typeValue).toHaveText(`${c.platform} app`);
         }
         const activity = await assertActivity(
           request,
@@ -211,12 +211,11 @@ for (const scope of SCOPES) {
           await softwareTitleDetail.goto({ titleId, fleetId });
           await softwareTitleDetail.openEditConfiguration();
 
-          // Well-formed JSON with a key Fleet doesn't support: refused, and nothing changes.
+          // Well-formed JSON with a key that isn't an ApplicationPolicy field:
+          // refused, and nothing changes.
           await modal.fill('{ "pwUnsupportedKey": true }');
           await modal.saveButton.click();
-          await softwareTitleDetail.toast.expectError(
-            'Only "managedConfiguration" and "workProfileWidgets" are supported as top-level keys.',
-          );
+          await softwareTitleDetail.toast.expectError('Unknown top-level key "pwUnsupportedKey".');
           await expect(modal.modal).toBeVisible();
           expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(stored);
 

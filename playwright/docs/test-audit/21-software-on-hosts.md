@@ -557,7 +557,7 @@ other:
    - ✅ *(API)* Installed versions are exactly `['2.4.0']`.
 4. ☐ Reload the host → **Software** → **Inventory** → search the name.
    - ✅ *(UI)* Exactly **one** row whose name link is the package name.
-   - ✅ *(UI)* The row contains **2.4.0** and **Package (deb)**.
+   - ✅ *(UI)* The row contains **2.4.0** and **deb package**.
 5. ☐ (No user action) `finally` — uninstall, delete the title.
 
 **Assessment**
