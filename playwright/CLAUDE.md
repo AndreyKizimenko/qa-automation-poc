@@ -224,8 +224,9 @@ On premium it also clears any version pin on the QA and VMs fleets' Fleet-mainta
 
 It also brings the real VMs to their resting state before the first test and after the last: it cancels the
 suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
-uninstalls any durable fixture a dead run left installed. A VM that's offline is only logged — its specs fail
-on it with their own message.
+returns every durable fixture to rest — uninstalled, with no failed install or uninstall on record, which
+Fleet otherwise keeps as the title's status and which the Library then offers as Retry or Reinstall instead of
+Install. A VM that's offline is only logged — its specs fail on it with their own message.
 
 The `loadtest` project depends only on `loadtest-setup`; `loadtest-api` depends on nothing (it sends the bearer token from `FLEET_API_TOKEN`, logging in with the admin credentials when that token is stale). Each project's setup chain is otherwise independent — no cross-project sharing.
 
