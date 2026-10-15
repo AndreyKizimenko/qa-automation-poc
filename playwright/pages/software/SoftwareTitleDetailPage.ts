@@ -6,7 +6,7 @@ import { SoftwareDeploySelector } from '../components/SoftwareDeploySelector';
 import { SoftwareInstallerCard } from '../components/SoftwareInstallerCard';
 import { EditSoftwareModal } from '../components/EditSoftwareModal';
 import { EditAppearanceModal } from '../components/EditAppearanceModal';
-import { EditConfigurationModal } from '../components/EditConfigurationModal';
+import { EditVersionModal } from '../components/EditVersionModal';
 import { Toast } from '../components/Toast';
 import { VersionsModal } from '../components/VersionsModal';
 
@@ -39,7 +39,7 @@ export class SoftwareTitleDetailPage {
   readonly installerCard: SoftwareInstallerCard;
   readonly editSoftwareModal: EditSoftwareModal;
   readonly editAppearanceModal: EditAppearanceModal;
-  readonly editConfigurationModal: EditConfigurationModal;
+  readonly editVersionModal: EditVersionModal;
   readonly versionsModal: VersionsModal;
   readonly toast: Toast;
   /**
@@ -89,7 +89,7 @@ export class SoftwareTitleDetailPage {
     this.installerCard = new SoftwareInstallerCard(page);
     this.editSoftwareModal = new EditSoftwareModal(page);
     this.editAppearanceModal = new EditAppearanceModal(page);
-    this.editConfigurationModal = new EditConfigurationModal(page);
+    this.editVersionModal = new EditVersionModal(page);
     this.versionsModal = new VersionsModal(page);
     this.toast = new Toast(page);
     this.deployModal = page.locator('.deploy-modal');
@@ -161,11 +161,14 @@ export class SoftwareTitleDetailPage {
     await this.editAppearanceModal.expectOpen();
   }
 
-  /** Actions → Edit configuration. App Store and Play Store apps only. */
-  async openEditConfiguration(): Promise<void> {
-    await expect(this.actionsDropdown).toBeVisible();
-    await this.runAction('Edit configuration');
-    await this.editConfigurationModal.expectOpen();
+  /**
+   * Opens the active Library row's Edit version modal. iOS / iPadOS App Store and
+   * Android Play Store titles only: they hold versions, and edit each one's
+   * configuration there rather than from the Actions menu.
+   */
+  async openEditVersion(): Promise<void> {
+    await this.installerCard.editVersionButton.click();
+    await this.editVersionModal.expectOpen();
   }
 
   /** Actions → Deploy. Fleet-maintained apps and app-store apps only; a custom package has no Actions menu. */

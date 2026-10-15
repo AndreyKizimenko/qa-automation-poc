@@ -4,11 +4,12 @@
  * add + delete, plus one edit for the Play Store case: its managed
  * configuration, saved and read back.
  *
- * A Play Store app's configuration (Actions → Edit configuration) is JSON whose
- * top-level keys must be Android Management API `ApplicationPolicy` fields other
- * than `packageName` and `installType`, which Fleet sets itself
- * (`ValidateAndroidAppConfiguration`); the browser checks only that it parses. Premium holds no Android host, so a saved configuration
- * reaches no device: what's tested is what Fleet stores and what it refuses.
+ * A Play Store app's configuration (its Library row's Edit version modal) is
+ * JSON whose top-level keys must be Android Management API `ApplicationPolicy`
+ * fields other than `packageName` and `installType`, which Fleet sets itself
+ * (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
+ * Premium holds no Android host, so a saved configuration reaches no device:
+ * what's tested is what Fleet stores and what it refuses.
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
@@ -205,17 +206,25 @@ for (const scope of SCOPES) {
       if (c.kind === 'android') {
         test('edit configuration', async ({ softwareTitleDetail, workstationsFleetId, request, page }) => {
           const fleetId = fleetIdFor(scope, workstationsFleetId);
-          const modal = softwareTitleDetail.editConfigurationModal;
+          const modal = softwareTitleDetail.editVersionModal;
           const stored = await getAppStoreAppConfiguration(request, fleetId, titleId);
 
           await softwareTitleDetail.goto({ titleId, fleetId });
-          await softwareTitleDetail.openEditConfiguration();
+          await softwareTitleDetail.openEditVersion();
 
           // Well-formed JSON with a key that isn't an ApplicationPolicy field:
-          // refused, and nothing changes.
+          // refused, and nothing changes. The modal's toast is generic, so the
+          // reason is read off the refused request.
           await modal.fill('{ "pwUnsupportedKey": true }');
+          const refusal = page.waitForResponse(
+            (r) => r.request().method() === 'PATCH' && /\/software\/titles\/\d+\/app_store_app\b/.test(r.url()),
+          );
           await modal.saveButton.click();
-          await softwareTitleDetail.toast.expectError('Unknown top-level key "pwUnsupportedKey".');
+          const refused = await refusal;
+          expect(refused.ok(), 'the configuration was accepted').toBe(false);
+          const { errors } = (await refused.json()) as { errors?: { reason: string }[] };
+          expect(errors?.map((e) => e.reason).join(' ')).toContain('Unknown top-level key "pwUnsupportedKey".');
+          await softwareTitleDetail.toast.expectError("Couldn't update. Please try again.");
           await expect(modal.modal).toBeVisible();
           expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(stored);
 
@@ -248,9 +257,9 @@ for (const scope of SCOPES) {
 
           // Fleet reopens it re-serialised (tab-indented), so it's compared parsed.
           await page.reload();
-          await softwareTitleDetail.openEditConfiguration();
+          await softwareTitleDetail.openEditVersion();
           expect(JSON.parse(await modal.value())).toEqual(configuration);
-          await modal.close();
+          await modal.cancel();
         });
       }
 
@@ -289,19 +298,18 @@ for (const scope of SCOPES) {
 
       test('activity feed shows add → delete', async ({ dashboard }) => {
         await dashboard.goto();
-        const matchers = isAppStore
-          ? [
-              activityCopy.appStoreApp.added({
-                name: titleName,
-                platform: c.kind === 'android' ? 'Android' : c.platform,
-                scope,
-              }),
-              activityCopy.appStoreApp.deleted({
-                name: titleName,
-                platform: c.kind === 'android' ? 'Android' : c.platform,
-                scope,
-              }),
-            ]
+        // The iOS and Android titles hold versions, so their activities name the
+        // one added — Fleet's default, "Default version".
+        const appStoreActivity = isAppStore
+          ? {
+              name: titleName,
+              version: 'Default version',
+              platform: c.kind === 'android' ? 'Android' : c.platform,
+              scope,
+            }
+          : undefined;
+        const matchers = appStoreActivity
+          ? [activityCopy.appStoreApp.added(appStoreActivity), activityCopy.appStoreApp.deleted(appStoreActivity)]
           : [
               activityCopy.software.added({ packageName, scope }),
               activityCopy.software.deleted({ packageName, scope }),

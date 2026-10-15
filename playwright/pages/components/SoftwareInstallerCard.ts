@@ -33,6 +33,11 @@ export class SoftwareInstallerCard {
   readonly pinnedBadge: Locator;
   readonly majorVersionBadge: Locator;
   readonly editSoftwareButton: Locator;
+  /**
+   * A multi-version App Store row's "Edit version" icon, which opens the Edit
+   * version modal. Icon-only, so the collapsed header shows it.
+   */
+  readonly editVersionButton: Locator;
   readonly downloadButton: Locator;
   readonly deleteButton: Locator;
   readonly deleteModal: Locator;
@@ -74,14 +79,20 @@ export class SoftwareInstallerCard {
     this.majorVersionBadge = this.card.getByRole('button', { name: 'Major version', exact: true });
 
     this.editSoftwareButton = this.card.getByRole('button', { name: 'Edit software' });
+    // Exact: the header's accessible name nests it. A row with auto updates on
+    // shows a second "Edit version" icon that opens the same modal, so either
+    // will do.
+    this.editVersionButton = this.card.getByRole('button', { name: 'Edit version', exact: true }).first();
     this.downloadButton = this.card.getByRole('button', { name: 'Download installer' });
     this.deleteButton = this.card.getByRole('button', { name: 'Delete this version' });
 
     // Title is "Delete package" for custom-package titles (which can hold
-    // several packages) and "Delete software" for FMA / App Store / Play Store.
+    // several packages), "Delete version" for iOS / iPadOS App Store and Play
+    // Store titles (which can hold several versions), and "Delete software" for
+    // the rest.
     this.deleteModal = page
       .locator('.modal__modal_container')
-      .filter({ hasText: /Delete (software|package)/ });
+      .filter({ hasText: /Delete (software|package|version)/ });
     // Exact match: the modal also contains a Cancel button.
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: /^delete$/i });
   }
