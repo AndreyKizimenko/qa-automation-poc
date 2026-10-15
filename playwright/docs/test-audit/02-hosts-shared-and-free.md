@@ -420,7 +420,7 @@ other:
 1. ☐ Log in as **global-admin** → `/hosts/manage` via URL.
    - ✅ *(UI)* **Add hosts** and **Export hosts** visible; the gear holds **Enroll secrets** (Escape closes it).
 2. ☐ Once the table settles, open the label filter's menu.
-   - ✅ *(UI)* the "Filter labels by name..." box and the **Add label** "+" beside it.
+   - ✅ *(UI)* the "Filter by label name" box and the **Add label** "+" beside it.
 
 **Assessment**
 - *Value:* the control for HOST-11: without it, a page that rendered no CTAs would pass HOST-11's absences.

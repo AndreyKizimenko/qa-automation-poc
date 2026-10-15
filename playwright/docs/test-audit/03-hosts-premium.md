@@ -446,7 +446,7 @@ other:
 1. ☐ Log in as the role (cached session) → `/hosts/manage` via URL → ✅ *(UI)* a host row with a link.
 2. ☐ ✅ *(UI)* **Export hosts** and **Add hosts** visible.
 3. ☐ Open the **Hosts page settings** gear → ✅ *(UI)* **Enroll secrets**; **Activity automations** for the admin only. Click **Enroll secrets** → ✅ *(UI)* the modal opens; **Done** closes it.
-4. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* its "Filter labels by name..." box, and the **Add label** "+" beside it.
+4. ☐ Once the table settles, open the label filter's menu → ✅ *(UI)* its "Filter by label name" box, and the **Add label** "+" beside it.
 
 **Assessment**
 - *Value:* the write roles' Hosts-list controls, now with the gear's per-role items and Add label.

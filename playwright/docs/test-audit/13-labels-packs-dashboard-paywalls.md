@@ -221,7 +221,7 @@ other:
 - *Value:* the manual-label host picker (search → select → selected table), a distinct Fleet component (`TargetsInput`), and what the label then does: the Hosts list filtered by it lists exactly its members.
 - *Coverage gaps:* the empty-selection 422 path the POM comment describes; the labels table's own host count.
 - *Redundancy:* steps 2, 4, 6, 7 duplicate MISC-01.
-- *Efficiency / smells:* `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. The picker's tables have no accessible names, so `.targets-input__hosts-search-dropdown` / `__hosts-selected-table` tell them apart (documented in the POM). The label filter is typed into: filling its "Filter labels by name..." box closes the menu.
+- *Efficiency / smells:* `pageHealth.disable()` is whole-test, so genuine console errors and 5xx are also suppressed for this test; the underlying Fleet console 4xx has no filed issue. The picker's tables have no accessible names, so `.targets-input__hosts-search-dropdown` / `__hosts-selected-table` tell them apart (documented in the POM). The label filter is typed into: filling its "Filter by label name" box closes the menu.
 
 **Notes (Andrey)**
 ```

@@ -13,7 +13,7 @@ export class LabelFilter {
   readonly page: Page;
   readonly trigger: Locator;
   readonly options: Locator;
-  /** The open menu's "Filter labels by name..." box: what shows the menu is open. */
+  /** The open menu's "Filter by label name" box: what shows the menu is open. */
   readonly searchBox: Locator;
   /** The "+" beside that box, for a role that may add labels. */
   readonly addLabelButton: Locator;
@@ -22,7 +22,7 @@ export class LabelFilter {
     this.page = page;
     this.trigger = page.locator('.label-filter-select__control');
     this.options = page.locator('.label-filter-select__option');
-    this.searchBox = page.getByPlaceholder('Filter labels by name...');
+    this.searchBox = page.getByPlaceholder('Filter by label name');
     this.addLabelButton = page.getByRole('button', { name: 'Add label', exact: true });
   }
 
@@ -51,7 +51,7 @@ export class LabelFilter {
 
   /**
    * Filters by one custom label, typed to narrow the menu so a label past its
-   * fold is reachable. The menu's "Filter labels by name..." box mirrors what is
+   * fold is reachable. The menu's "Filter by label name" box mirrors what is
    * typed into the open select; filling the box itself takes focus from the
    * select, which closes the menu. Only the name up to its first space is typed:
    * react-select takes a space in an open menu as "choose the focused option", so
