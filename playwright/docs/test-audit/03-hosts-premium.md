@@ -399,7 +399,7 @@ other:
 6. ☐ *(no user action)* Read the card's **inline first result** — `reportCardFirstResult` ([`HostDetailsPage.ts:427`](../../pages/hosts/HostDetailsPage.ts)) reads the card's `data-grid` in **one DOM pass**, returning column → value, so a term can't be paired with the wrong value. The grid has no roles of its own (Fleet's `DataSet` emits `<dt>`/`<dd>` inside a role-less wrapper), so it is reached through the card's own class.
    - ✅ *(UI)* the grid is non-empty — the card rendered the report's first result inline rather than a placeholder.
 7. ☐ Open that card's Actions menu → **Show details**.
-   - ✅ *(UI)* the **Back to host details** button is visible (`HostQueryReportPage.waitForReady`).
+   - ✅ *(UI)* the **View report for all hosts** button is visible (`HostQueryReportPage.waitForReady`) — the header renders once the report has loaded.
    - ✅ *(UI)* URL matches `/hosts/<hostId>/reports/<reportId>`.
    - ✅ *(UI)* the page's `h1` equals the **host's** display name (the per-host results page titles itself with the host, not the report).
    - ✅ *(UI)* the first results row contains `bar` — the value the seeded query selects, proving real stored results rather than an empty shell.
@@ -408,9 +408,7 @@ other:
    - ✅ *(UI)* URL matches `/reports/<reportId>`.
    - ✅ *(UI)* the report-details `h1` contains the report name.
 9. ☐ In the report's results, click the Mac's **Host** cell (the walk the other way).
-   - ✅ *(UI)* back on `/hosts/<hostId>/reports/<reportId>`, titled with the host, first row containing `bar`.
-10. ☐ Click **Back to host details**.
-   - ✅ *(UI)* URL `/hosts/<hostId>/details`.
+   - ✅ *(UI)* back on `/hosts/<hostId>/reports/<reportId>`, titled with the host, first row containing `bar`. The page has no link back to the host (removed in 4.94, fleetdm/fleet#55418); the browser's back button is the way out.
 
 **Assessment**
 - *Value:* the only coverage of per-host stored query results and the host↔report navigation pair; catches a broken `Show details` gate, a mis-routed drill-down, or results that render empty. The cell-for-cell comparison is the strongest part: it ties two independent renderings of the same stored row together, so a card previewing a *different* row (or the wrong host's) fails here rather than passing a shape check.

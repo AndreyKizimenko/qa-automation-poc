@@ -15,7 +15,6 @@ export class HostQueryReportPage {
 
   /** The page titles itself with the host's name, not the report's. */
   readonly hostHeading: Locator;
-  readonly backButton: Locator;
   readonly viewAllHostsButton: Locator;
 
   constructor(page: Page) {
@@ -24,12 +23,16 @@ export class HostQueryReportPage {
     this.table = new DataTable(page);
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
-    this.backButton = page.getByRole('button', { name: 'Back to host details' });
     this.viewAllHostsButton = page.getByRole('button', { name: 'View report for all hosts' });
   }
 
+  /**
+   * The header — host name and "View report for all hosts" — renders once the
+   * report has loaded, in place of the spinner. The page offers no link back to
+   * the host; the browser's back button is the way out.
+   */
   async waitForReady(): Promise<void> {
-    await expect(this.backButton).toBeVisible();
+    await expect(this.viewAllHostsButton).toBeVisible();
   }
 
   /** Leaves the browser on the report's own results page, across every host. */
