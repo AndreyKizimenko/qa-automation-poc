@@ -56,12 +56,12 @@ on free and 67 on premium:
 | `premium/command-palette/deep-links.spec.ts` | #89, #45, #46 (premium) | 3 |
 | `premium/command-palette/items.spec.ts` | #90 | 1 |
 
-#44 (`Manage software automations`) fails about half its runs on both tiers, on a Fleet race rather than
+#44 (`Manage software automations`) is skipped on fleetdm/fleet#55672, a Fleet race rather than
 the test: Software's inventory table rewrites the page's query on its first render and drops
 `manage_automations` before the deep-link effect, which waits for the software config, reads it
 (`SoftwareInventoryTable.tsx` `onQueryChange`, `SoftwarePage.tsx`). From the Dashboard the modal
-opened in 2 of 11 scripted probes, and the test passed 5 of 9 runs across both tiers. Not filed
-yet.
+opened in 2 of 11 scripted probes on the 4.93 RC, and the test failed 8 of 16 runs on the 4.94 RC
+(29ffbd6).
 
 Not built, and not cut: #38, #47, #48, #47b, #58–#61, #62–#73 except as noted, #74–#78, #83–#85,
 and the premium halves of #13, #26/#62b and #30–#33.
@@ -271,7 +271,7 @@ are in the premium (from Workstations) and free deep-link specs, and the P rows 
 | 41 | `Manage activity automations` → Dashboard modal, param stripped | P1 | S |
 | 42 | `Manage report automations` → Reports modal, param stripped (needs ≥1 report in scope) | P1 | S |
 | 43 | `Manage policy automations` → Policies modal, param stripped (needs ≥1 policy in scope) | P1 | S |
-| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium). Fails about half its runs on a Fleet race, see Status | P1 | S |
+| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium). Skipped on fleetdm/fleet#55672, see Status | P1 | S |
 | 45 | `Add script` → Scripts library add modal, param stripped; on premium from a fleet, which `fleet_id` keeps | P2 | P + F |
 | 46 | `Add custom variable` → Variables add modal (the bare route redirects to Global variables), param stripped | P2 | P + F |
 | 47 | `Add self-service category` → categories add modal, param stripped | P2 | P |
