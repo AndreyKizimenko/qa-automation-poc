@@ -1,6 +1,6 @@
 ---
 name: fleet-story-qa
-description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, propose a tighter test plan, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a short manager-level sign-off comment. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write a test plan from scratch.
+description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, propose a tighter test plan, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a short manager-level sign-off comment. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write or update a story's test plan (fleet-test-plan).
 ---
 
 # Fleet story QA — partner mode
@@ -154,7 +154,7 @@ error mapping layers often turn a raw DB error into something else.
 
 The plan in the ticket is a starting point, and it may be long, stale, or written
 by someone who hadn't seen the code. Propose changes **in chat only**; never edit
-the ticket body (a separate skill will own test planning).
+the ticket body (fleet-test-plan owns the ticket's plan).
 
 - **Collapse** rows that exercise the same code path: five UI variations of the
   same endpoint call are one API check plus one UI glance.
