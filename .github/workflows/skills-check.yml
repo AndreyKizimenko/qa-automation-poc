@@ -1,0 +1,40 @@
+name: Skills — Check
+
+# Lints the Claude Code skills (the fleet-qa plugin under plugins/ and the repo
+# skills under .claude/skills/): frontmatter, orphan references, plugin manifests,
+# and no instance hostnames or tokens in skill text or docs. The checks and their
+# reasons are in .github/scripts/check-skills.sh.
+#
+# Not a required status check, so it can keep a paths filter (see
+# playwright-check.yml for why a required one can't).
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - '.claude/skills/**'
+      - '.claude-plugin/**'
+      - 'playwright/docs/**'
+      - 'playwright/README.md'
+      - 'README.md'
+      - 'tools/**'
+      - '.github/scripts/check-skills.sh'
+      - '.github/workflows/skills-check.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    timeout-minutes: 5
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: .github/scripts/check-skills.sh
