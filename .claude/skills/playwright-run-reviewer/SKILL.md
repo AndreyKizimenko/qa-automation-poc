@@ -126,7 +126,21 @@ essentials:
    / *teams→fleets* UI-vs-API terminology split.
 
 Setup-project failures (`*-setup`, `cleanup-*`) are infra-env and usually cascade
-— triage those first; downstream failures are often just collateral.
+— triage those first; downstream failures are often just collateral. The run's shape
+says the same thing: many unrelated specs red at once, connection-class errors
+(`ECONNREFUSED`, `ETIMEDOUT`, 502s, MySQL "table is full"), or the same failure on
+both tiers point at the environment before any test, so settle that before reading a
+single spec. Once the environment is ruled out, the signals that split the other
+verdicts: the failing frame is in the spec or page object (test-bug) vs in what Fleet
+sent back (product-defect); the spec changed recently (test-bug) vs Fleet did (a
+deliberate change, or a defect); the sibling tests on the same feature pass
+(test-specific) vs fail together (shared cause).
+
+For a verdict the retry pattern and the snapshot don't settle, write the competing
+hypotheses before re-running anything: two to five, each falsifiable ("if the toast
+matched the earlier save, the API will show the second value unchanged"), ranked,
+and in the triage table when the re-run will take real time. Testing the first
+plausible idea alone is how a flake gets "fixed" with a longer timeout.
 
 ### Re-running locally to settle a verdict
 
@@ -141,7 +155,11 @@ README's run table for the exact scripts):
   cd playwright && npx playwright test --project=premium <spec-file> -g "<title>" \
     --repeat-each=5 --workers=1 --output=<scratchpad>/rerun
   ```
-  Mixed pass/fail → `flaky`. Uniform failure → real; triage further. Use
+  Mixed pass/fail → `flaky`. Uniform failure → real; triage further. A suspected
+  flake that hasn't failed once in 20 repeats isn't reproduced yet: raise the odds
+  (two workers, the siblings that share its state, the VM's queue busy) before
+  calling it "not reproducible". A fix for a flake is proven by a clean run of at
+  least the count that showed the failure, never by one pass. Use
   `--project=free` for a free or `shared/` spec, and
   `--project=premium-exclusive <file-name>` for an `exclusive/` one (its own
   invocation; only the login setup and `cleanup-teardown` run around it).

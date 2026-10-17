@@ -284,7 +284,10 @@ and ask the user to try it.
 List everything that survives — including low-severity quirks. Don't pre-filter by
 whether it seems worth filing; that's the QA engineer's call. For security reports,
 also list any of the report's own suggested fixes that this fix didn't address, so
-the owner can decide whether that's acceptable. **Don't file anything.**
+the owner can decide whether that's acceptable. **Don't file anything.** When the fix's
+neighbourhood looks richer than the halo rows covered (a shared component, sibling
+actions with the same scoping), offer a `fleet-explore` session on it after the
+verdict, seeded with this run's `qa-<N>/`.
 
 ### 8. Report
 

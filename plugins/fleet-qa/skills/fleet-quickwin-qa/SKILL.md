@@ -141,7 +141,10 @@ List everything odd in a **decision list** in chat
 (`# | finding | origin | severity | repro / file:line`), including cosmetic ones —
 the user decides file / mention / drop. Origin is *this change*, *released* (in
 the latest release tag), or *pre-existing*. Search open issues before suggesting a
-new one. File chosen findings with `fleet-bug-file`.
+new one. File chosen findings with `fleet-bug-file`. When the neighbours deserve more
+than the halo rows (the other screen that uses the same component, worst-case data in
+the field the change added), offer a `fleet-explore` session rather than growing the
+matrix.
 
 ### 5. Comment
 

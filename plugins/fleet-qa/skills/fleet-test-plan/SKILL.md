@@ -181,7 +181,7 @@ in two places. Use only the sections that apply, in this order:
 | Setup | Not rows: what's needed, named once (see below). It's the one block the template doesn't have. |
 | Core flow | The story's happy path end to end, on the surfaces the story names, including what the device shows. Each step once. |
 | Edge cases | Everything unusual: input the feature rejects or accepts at the boundary (the full value matrix), missing config, deleted or changed related objects, lifecycle (transfer, re-enroll, delete), concurrency, external failures, open bugs the path will hit. |
-| UI | Only what the UI adds beyond the API: states (loading, empty, error), where an error shows, long names, widths, guide-vs-page checks. |
+| UI | Only what the UI adds beyond the API: states (loading, empty, error), where an error shows, long names and worst-case values (the catalog in `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/tours.md`), widths, guide-vs-page checks. |
 | API | The endpoints' contract: each new or changed endpoint and parameter, prefixes, malformed parameters (unknown ids, wrong types), response vs the REST docs, the API-only endpoint catalog. |
 | GitOps (generate + run) | `fleetctl gitops` apply, dry-run and clearing, and the `generate-gitops` round trip. |
 | Permissions | The role matrix, or the one row confirming an unchanged gate. |
