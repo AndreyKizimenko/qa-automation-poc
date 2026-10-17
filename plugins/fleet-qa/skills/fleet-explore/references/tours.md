@@ -46,9 +46,9 @@ one, it's a QUESTION with your recommendation.
 
 Fleet fields these apply to: fleet, label, policy, report, script, configuration-profile and
 software-title names; policy descriptions and resolutions; user names and emails; IdP usernames;
-host display names (set by what the host reports; osquery-perf templates fix them, so a
-worst-case host name usually needs a real host or the ask); enroll-secret names; CA names; URLs in
-settings; uploaded file names.
+host display names (set by what the host reports; osquery-perf gives each agent a random hostname
+from its template, so a worst-case one means a copied template with a chosen `computer_name`, a real
+host, or the ask); enroll-secret names; CA names; URLs in settings; uploaded file names.
 
 **Names people type**
 
@@ -94,7 +94,7 @@ settings; uploaded file names.
 | `33.333%`, `0%`, `100%`, a value past the bound | Policy compliance, install and profile percentages: rounding, bars past their ends |
 | A count that changes while you watch (`99` → `100`) | Width jump and jitter without tabular figures |
 | `-1`, `NaN`, a string where a number is expected, via the API | Validation and what the UI renders when the server lets it through |
-| A host with 1,600+ software packages (the shared free QA instance has such a simulation) | The host's software tab, inventory diffs, the library's counts, scroll performance |
+| A host with 1,600+ software packages (an osquery-perf Ubuntu simulation reports that many) | The host's software tab, inventory diffs, the library's counts, scroll performance |
 
 **Time**
 
@@ -114,7 +114,7 @@ settings; uploaded file names.
 | 0 items | Does an empty state exist, and does it say what to do next? |
 | 1 item | Grids and cards that look broken with one; "1 of 1" |
 | Exactly 20, and 21 | Page boundaries, as above |
-| 300+ (the simulations) | Scroll and render time, "Showing 20 of 300" copy, bulk-select behaviour |
+| 300+ (osquery-perf with `-host_count 300`, per fleet-gotchas) | Scroll and render time, "Showing 20 of 300" copy, bulk-select behaviour |
 | Every status at once | Hosts online and offline; installs pending, installing, installed, failed; profiles pending, verifying, verified, failed; policies pass, fail and no data; MDM on and off. Badge widths vary and rows misalign |
 | Items with identical names | Lists where the name is the only distinguishing field |
 | One item ten times the size of the others | A card grid or accordion stretched to the tallest |
@@ -123,7 +123,7 @@ settings; uploaded file names.
 
 | State | How to reach it | What it tends to break |
 |---|---|---|
-| Loading | A list with 300 sims, a slow filter | Old rows under the overlay, a spinner that shifts content, a count that reads 0 mid-aggregation |
+| Loading | A list with 300 sims, a slow filter | Old rows under the overlay, a spinner that shifts content, a software count that reads 0 mid-aggregation |
 | Error from the API | A deleted object's URL, `/hosts/999999`, a 403 as a role user | No error state, or a raw error (`TypeError: Cannot read properties of undefined`) |
 | Partial data | A host with no software, no MDM, no policies, no user | Misaligned rows, dashes where the line should be omitted |
 | No permission | The observer role user | Disabled actions: does the row still lay out the same, is the reason explained? |
@@ -209,8 +209,9 @@ Question: what does the feature do when the user doesn't follow the happy path t
 - **The list rewrites its URL** just after loading (the hosts list does): a filter or search chosen
   before that can be undone, and "select all matching" can then take a whole fleet. Choose the
   filter, wait, and check the URL kept it.
-- **A second toast** after saving the same form twice: the first toast is still up, so the second
-  outcome has to be read from the stored state, not the toast.
+- **A second toast** after saving the same form twice: the first card is still up for seconds and
+  the second stacks on it, so read the newest card, or better the stored state, never the first
+  toast you see.
 
 Several of these classes are known and worked around in the Playwright suite; check
 `playwright/docs/blocked-by-product-bugs.md` in the qa-automation checkout and the open issues
@@ -228,8 +229,9 @@ restored everything; the empty state, with and without a filter; the loading sta
 bulk select on page 1 vs "select all matching" (scope it to your own fleet); a truncated cell's
 tooltip; column widths with a worst-case row.
 
-Forms: validation timing (Fleet validates on blur today and is moving to submit-only, so a Save
-button that is enabled with an invalid field is the direction, not a regression); the limit + 1;
+Forms: validation timing (forms differ today, some validating on blur and some on submit, and the
+design direction is submit-only with buttons always enabled, so an enabled Save beside an invalid
+field is a QUESTION, not a BUG, unless the sibling form does otherwise); the limit + 1;
 spaces only; smart quotes pasted from a document; a required field cleared after a successful save;
 Cancel after an edit (does it discard?); where the error appears and whether it clears when the
 field is fixed; the disabled state's tooltip; Save twice.
@@ -248,7 +250,8 @@ filed.
   Windows profiles, add vs edit, the host details card vs the list column, the UI vs `fleetctl get`.
 - **Product consistency:** error messages in the house style, empty states worded like the others,
   toast text, capitalisation, "fleets" and "reports" everywhere the UI was renamed (the API keeps
-  `team_id` and `queries`, which is not a bug).
+  whatever name each endpoint has, `team_id` here and `fleet_id` there, `queries` for reports; a
+  UI-word vs API-name mismatch is not a bug).
 - **Activities:** was it logged, once, by the actor who did it, with details that match, and not
   when the action failed?
 - **Explainability:** if you can't explain the behaviour to someone else in one sentence, it's a
@@ -260,7 +263,8 @@ Question: does the page still work for someone who isn't on a wide screen with a
 
 - `browser_resize` (or a `pw.mjs` viewport) to 1440, 1280, 1024 and 768, with the worst-case data
   on screen; 480 only where the product claims it. Those are the wireframes' breakpoints.
-  Browser zoom at 200% needs a real browser session (text grows, boxes don't).
+  Browser zoom at 200% needs a real browser session; look for fixed heights that clip the grown
+  text.
 - Tab through the page: every control reachable, focus visible, focus returning to the trigger when
   a modal closes, Escape closing it, Enter submitting what it should and nothing else. Hover-only
   row actions reachable without a pointer.
@@ -275,8 +279,8 @@ Question: what happens when two things reach the feature at once, or when the da
   a 409, a 500, or an orphan left by an external call that succeeded before the write failed.
 - The UI open on an object while the API changes it: stale reads, a save that reverts the other
   change.
-- Crons: policy counts and software counts update when `cleanups_then_aggregation` runs and read 0
-  while it does (`fleetctl trigger --context <ctx> --name cleanups_then_aggregation`, then poll); a
+- Crons: software counts read 0 while `cleanups_then_aggregation` runs, and policy counts stay stale
+  until it has (`fleetctl trigger --context <ctx> --name cleanups_then_aggregation`, then poll); a
   refetch re-runs a host's policies at once; `software_updated_at` moves only when inventory
   changes.
 - An action started twice from two sessions (the user's browser and yours): which one the activity
@@ -287,23 +291,27 @@ Question: what happens when two things reach the feature at once, or when the da
 Known behaviours that look like bugs and aren't, or are already filed. Recognise them, log a NOTE
 with the number, and move on:
 
-- **Simulated hosts** answer every live query with the same canned row, pass every policy except
-  `SELECT 0`, and report script runs and installs they never performed, with random outcomes. A
-  difference between what a sim reports and what the feature expected is the simulation, not
-  Fleet. A race that only osquery-perf's burst concurrency reaches is a data quirk to route
-  around, not a bug to draft.
-- Policy and software **counts read 0 mid-aggregation**; a CVE page can answer 204 while host
-  counts lag; unchanged report results refresh `last_fetched` only after ~50 min
-  (fleetdm/fleet#54897).
-- The **Ace editor worker 404** in the console (fleetdm/fleet#54845).
+- **Simulated hosts** (`fleet-gotchas.md` § osquery-perf; `playwright/CLAUDE.md` § Test hosts)
+  answer every live query with the same canned row (or, one time in five, nothing, unless started
+  with `-live_query_no_results_prob 0`), pass every policy except `SELECT 0`, and report script runs
+  and installs they never performed, with random outcomes. A difference between what a sim reports
+  and what the feature expected is the simulation, not Fleet. A race that only osquery-perf's burst
+  concurrency reaches is a data quirk to route around, not a bug to draft.
+- Software **counts read 0 mid-aggregation** and policy counts stay stale until the cron runs
+  (`fleet-gotchas.md` § Counts and crons); a CVE page can answer 204 while host counts lag
+  (`playwright/docs/blocked-by-product-bugs.md`); unchanged report results refresh `last_fetched`
+  only after ~50 min (fleetdm/fleet#54897).
+- The **Ace editor worker 404** in the console (fleetdm/fleet#54845; `playwright/helpers/console.ts`).
 - **The browser pane blocks pop-ups** (a `window.open` button shows the page's own
   "allow pop-ups" message), and **a burst of 502s** from a tunnel usually means the server is
-  restarting.
-- Preinstalled Android apps shown as **Failed** while installed (fleetdm/fleet#52617).
+  restarting (`instance-traps.md` § UI evidence).
+- Preinstalled Android apps shown as **Failed** while installed (fleetdm/fleet#52617;
+  `instance-traps.md` § Android).
 - Whatever `playwright/docs/blocked-by-product-bugs.md` already lists.
 
 ---
 
-The catalog adapts Emil Kowalski's break-ui worst-case catalog (MIT) to Fleet's objects. The
+The catalog adapts Emil Kowalski's break-ui worst-case catalog (Copyright (c) 2026 Emil Kowalski,
+MIT License; the notice is in `third-party-licenses.md` beside this file) to Fleet's objects. The
 charter, tags and debrief follow session-based exploratory testing (Bach and Bolton), with the
 session shape borrowed from petrkindlmann/qa-skills (MIT).

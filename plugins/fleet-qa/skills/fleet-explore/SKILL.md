@@ -1,6 +1,6 @@
 ---
 name: fleet-explore
-description: Run a chartered exploratory-testing session on a live Fleet instance — Claude explores one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keeps a timestamped tagged log, and ends with a debrief: what was covered and what wasn't, a decision list of findings for the QA engineer, questions for product, candidates for the Playwright suite, and what held up. Use whenever the user wants to explore, poke at, stress, break, "kick the tires on" or find edge cases in a Fleet feature, page or area — "explore around the policy automations page", "throw worst-case names at the software library", "what else could be broken near this fix", "kick the tires on the new Android enrollment flow", "do an exploratory pass on Hosts before the release", "what would a real customer's data do to this screen" — and when fleet-story-qa, fleet-quickwin-qa or fleet-bug-qa end and the user wants the neighbours poked. Do NOT use to run a story's test plan (fleet-story-qa), to verify a specific bug fix before/after (fleet-bug-qa), to QA a quick win (fleet-quickwin-qa), to write a test plan (fleet-test-plan), to file a finding (fleet-bug-file), or to write Playwright tests (playwright-test-author).
+description: Run a chartered exploratory-testing session on a live Fleet instance — Claude explores one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keeps a timestamped tagged log, and ends with a debrief: what was covered and what wasn't, a decision list of findings for the QA engineer, questions for product, candidates for the Playwright suite, and what held up. Use whenever the user wants to explore, poke at, stress, break, "kick the tires on" or find edge cases in a Fleet feature, page or area — "explore around the policy automations page", "throw worst-case names at the software library", "what else could be broken near this fix", "kick the tires on the new Android enrollment flow", "do an exploratory pass on Hosts before the release", "what would a real customer's data do to this screen" — and when fleet-story-qa, fleet-quickwin-qa or fleet-bug-qa end and the user wants the neighbours poked. Do NOT use to run a story's test plan (fleet-story-qa), to verify a specific bug fix before/after (fleet-bug-qa), to QA a quick win (fleet-quickwin-qa), to write a test plan (fleet-test-plan), to file a finding (fleet-bug-file), or to write Playwright tests (the suite's playwright-test-author).
 ---
 
 # Fleet exploratory session
@@ -30,6 +30,8 @@ QA workspace, role users); if it doesn't exist, create it per
 (`FLEET_TOKEN=` to act as another user), `screenshot.mjs`, `pw.mjs`, `stack.py`, `cleanup.sh`. Skim
 `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md` and
 `${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md` before creating data.
+The session runs on the instances the local file names, like every skill here, never on the
+Playwright suite's shared CI instances; those have their own rules in `playwright/CLAUDE.md`.
 
 The browser: the Playwright MCP tools when they're available (`browser_navigate`, `browser_snapshot`,
 `browser_click`, `browser_type`, `browser_wait_for`, `browser_find`, `browser_resize`, `browser_tabs`,
@@ -40,8 +42,10 @@ variation (the setup before each probe) becomes a `pw.mjs` driver.
 
 Workspace: next to the ticket's run when there is one, `<QA workspace>/qa-<N>/explore/`, otherwise
 `<QA workspace>/explore/`. One file per session, `explore-<date>-<slug>.md` (charter, log, debrief;
-template in `references/session.md`), `screenshots/` beside it, and `created.txt` in the same
-cleanup-manifest format as every other run.
+template in `references/session.md`), `screenshots/` beside it, and its own `created.txt` in the
+same cleanup-manifest format as every other run. When the session borrows a run's `qa-<N>` fleet, it
+doesn't record the fleet again, and its cleanup runs before the run's: deleting the fleet strands
+the session's hosts in No fleet.
 
 ## Hard lines
 
@@ -67,7 +71,8 @@ And three that are specific to exploring:
 - **Don't fake state.** `page.route` rewriting the license, the viewer's role, a setting or a
   host's state shows how the frontend reacts to data Fleet may never send; a finding from faked
   data isn't a finding. Reach states the real way (a real command against a simulated host, a
-  role user, the `previous` instance for "how did it behave before"), or ask.
+  role user, the `previous` instance, when the local file names one, for "how did it behave
+  before"), or ask.
 - **Stuck means note and move on.** An element that isn't where you expected, a page that won't
   settle, a dialog you can't dismiss: log it (it may be the finding), take a screenshot, and go to
   the next probe. Never loop retrying the same action. The budget is for coverage.
@@ -86,7 +91,7 @@ Start from what the user points at (a story just QA'd, a page, an area, a bug's 
   wasn't: the neighbouring pages, the other platform, the other entry points, the data shapes the
   plan's rows never used.
 - **An area:** the PRs merged into it since the last release
-  (`gh pr list -R fleetdm/fleet --search "<area words>" --state merged --limit 30`, then by date)
+  (`gh pr list -R fleetdm/fleet --state merged --search "<area words> merged:>=<last release date>" --limit 30`)
   and the open bugs in it
   (`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-test-plan/scripts/related_bugs.py -k "<area words>" --fleet <fleet checkout> --out <session dir>/bugs.md`).
   A change is where the risk is; an open bug is something not to find again.
@@ -96,10 +101,11 @@ Start from what the user points at (a story just QA'd, a page, an area, a bug's 
   `${CLAUDE_PLUGIN_ROOT}/skills/fleet-test-plan/references/coverage-lenses.md`. Both are tours in
   waiting.
 
-Then ask the two questions that find the most bugs, "what do you think might break?" (a hunch is a
-valid charter) and "what did the developer say was tricky?", and propose **three to five charters
-in one numbered message**, your recommended first pick marked and each worded so a one-word "yes"
-accepts it. A charter has three lines:
+Then, in one message, ask the two questions that find the most bugs, "what do you think might
+break?" (a hunch is a valid charter) and "what did the developer say was tricky?", and propose
+**three to five charters**, numbered, your recommended first pick marked and each worded so a
+one-word "yes" accepts it. An answer to the questions may replace a charter; that's the point of
+asking. A charter has three lines:
 
 ```
 Explore <target: one page, flow or object type>
@@ -110,16 +116,18 @@ Explore <target: one page, flow or object type>
 A good charter names a target narrow enough to finish (the policy automation run detail page, not
 "policies"), resources concrete enough to set up (a fleet with 21 hosts, a 255-character policy
 name, the fleet-observer role user), and an information goal that's a question ("what the page
-shows while a run is partial"), not a claim ("that it works"). Give each a **budget**: 60 browser
-actions or 45 minutes, whichever comes first, unless the user sets another. Several sessions per
-charter are fine; each gets its own log and debrief.
+shows while a run is partial"), not a claim ("that it works"). Give each a **budget**: 60 actions
+or 45 minutes, whichever comes first, unless the user sets another. An action is one probe (a
+navigate, click or type, with its snapshot and wait); an API call counts one; the repeats that
+reproduce a finding count too. When the two disagree, the clock wins. Several sessions per charter
+are fine; each gets its own log and debrief.
 
 Illustrative charters (made up):
 
 - *New feature, after story QA:* Explore the policy automation run detail page with a fleet of 21
   simulated hosts, a 200-character policy name and a script that fails on half of them, to discover
   what the page shows while a run is partial and what long names do at the page's widths.
-- *An area, before a release:* Explore Software › Library on the premium instance with titles whose
+- *An area, before a release:* Explore Software › Library on the RC instance (Premium) with titles whose
   names are long, one character, CJK and emoji-first, and a host carrying 1,600+ packages, to
   discover where the accordion, search and filters break at the edges.
 - *A bug's neighbourhood:* Explore every action near the fixed Reset-policy dialog that confirms
@@ -133,23 +141,27 @@ and begin.
 
 Walk the happy path once, with ordinary data, to know what "normal" looks like here: the page
 settled, the controls present, the console quiet. Read `browser_console_messages` and note any
-error now, so a later one can be told from the baseline. Known noise (the Ace editor worker 404,
-fleetdm/fleet#54845) is listed in `playwright/helpers/console.ts` under `DEFAULT_IGNORED_PAGE_ERRORS`
-in the qa-automation checkout; don't re-report those.
+error now, so a later one can be told from the baseline. Known noise is listed in
+`helpers/console.ts` in the `playwright/` folder the local file names: `DEFAULT_IGNORED_CONSOLE_ERRORS`
+for console errors (favicon, `net::ERR_*`, ResizeObserver) and `DEFAULT_IGNORED_PAGE_ERRORS` for
+uncaught exceptions (the Ace editor worker 404, fleetdm/fleet#54845); don't re-report those.
 
-Then map the surface, the way break-ui does: every value the page renders and where it comes from
-(names, counts, timestamps, status badges, labels from data, tooltips, button labels, the list
-itself) with its limit from the code (`frontend/` `maxLength`, the server-side validator, the REST
-docs) or "unbounded". A value with no limit anywhere is a RISK row before you've typed anything.
-This table is what the worst-case tour feeds.
+Then map the surface, the way Emil Kowalski's break-ui skill does (credited in
+`references/tours.md`): every value the charter's page renders and where it comes from (names,
+counts, timestamps, status badges, labels from data, tooltips, button labels, the list itself) with
+its limit from the code (a grep for `maxLength` in the component under `frontend/`, one in the
+server-side validator, the REST docs) or "unbounded". Ten minutes at most; what two greps don't find
+is "unbounded". A value with no limit anywhere is a RISK row before you've typed anything. The table
+goes under `## Surface` in the session file, and the worst-case tour feeds on it.
 
 ### 3. Explore, one tour at a time
 
 `references/tours.md` holds the tours and the worst-case catalog, with Fleet-specific probes. Pick
-the ones the charter calls for, in this order unless the charter says otherwise: worst-case data,
-scope and gating, second door, lifecycle, interruption, tables and forms, oracles, width and
-keyboard, concurrency and timing. Say which tour you're on in the log; it's how the debrief can
-state coverage.
+the ones the charter calls for, in this order unless the charter says otherwise: worst-case data
+(at each width), scope and gating, second door, lifecycle, interruption, tables and forms, width and
+keyboard, concurrency and timing. The oracles there (§7) aren't a tour: they're how every row decides
+what "wrong" means, so name the one each BUG row rests on. Say which tour you're on in the log; it's
+how the debrief can state coverage.
 
 **Drive snapshot-first.** `browser_navigate`, `browser_snapshot`, act on an element by its ref,
 `browser_wait_for` the text that should appear or disappear (never a fixed sleep), snapshot again,
@@ -160,8 +172,8 @@ reason over, so narrow first (your `qa-explore-*` fleet, a search that matches o
 finding: keyboard and screen-reader users can't reach it either.
 
 **Log as you go, not at the end.** One row per action that taught you something: time, where, what
-you did with which input, what you saw, a tag, a follow-up. The tags (defined in
-`references/session.md`): **BUG** wrong and reproduced; **QUESTION** can't tell if it's intended;
+you did with which input, what you saw, a tag, a follow-up. The tags (`references/session.md` has
+the full table and where each lands in the debrief): **BUG** wrong and reproduced; **QUESTION** can't tell if it's intended;
 **IDEA** a case the Playwright suite should own; **RISK** nothing broke yet, but it's one realistic
 step away; **NOTE** interesting, not actionable, including what wouldn't reproduce. A session of
 forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
@@ -171,7 +183,8 @@ forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
 1. Stop and look. Read the snapshot, the console and the network messages for that action, not
    just the symptom.
 2. Reproduce it: the same steps, three times. Once is an observation.
-3. Vary one thing at a time: the `previous` instance, another role user, All fleets instead of
+3. Vary one thing at a time: the `previous` instance when the local file names one, another role
+   user, All fleets instead of
    the fleet, the API instead of the UI, ordinary data instead of worst-case. Each variation that
    still fails narrows the cause; each that passes names a condition.
 4. Capture: `screenshot.mjs` clipped to the element (`--caret` for focus bugs), the request and
@@ -179,15 +192,17 @@ forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
    it must show the thing, with no tokens or enroll secrets.
 5. Classify the origin the way the other QA skills do: *this change* (when the session follows a
    story or fix), *released* (`git show fleet-v<latest>:<file>`, or the `previous` instance
-   reproduces it), or *pre-existing but exposed*. Search open issues
+   reproduces it), or *pre-existing but exposed*; in a standalone session, *released* or
+   *unreleased* (on the RC only), decided the way fleet-bug-file does. Search open issues
    (`gh issue list -R fleetdm/fleet --state open --search "<terms>"`) before calling anything new;
    an existing issue becomes a NOTE with its number.
 6. Decide: dig now, or log and continue. Dig when the next probe would change the classification;
    otherwise keep the budget for coverage and mark the follow-up.
 
-Rendering, hover, focus and scroll findings need a real browser before they count. Headless
-Playwright has produced both a false "not reproducible" and a false "reproduces" in earlier runs,
-so ask the user to try the steps in their browser, or use Claude in Chrome.
+Rendering, hover, focus and scroll findings need a headed browser before they count: the in-app
+browser pane or Claude in Chrome do; `screenshot.mjs` and `pw.mjs` are headless and don't. Headless
+Playwright has produced both a false "not reproducible" and a false "reproduces" in earlier runs, so
+when the pane is all you have, ask the user to try the steps in their own browser too.
 
 **Follow leads.** A probe that surfaces something outside the charter is still worth the next
 three actions. Log the deviation ("left charter: following the label count") so the debrief can
@@ -206,12 +221,15 @@ print it in chat. Five parts, in this order; the first is the one people skip:
    **unexplored**, with a phrase of why for anything short of covered ("budget", "needs Free",
    "needs a real device"). Deviations from the charter, and what they found.
 2. **Decisions needed**: the same decision list every QA skill here hands over,
-   `# | finding | origin | severity | repro / file:line`, for every BUG and RISK row, cosmetic ones
-   included. UI findings carry a severity the engineer can act on at a glance: **Broken** (content
-   unreadable, an action unreachable, wrong data shown), **Ugly** (readable but visibly wrong),
-   **Fragile** (fine today, one realistic step from breaking). Behaviour findings use the usual
-   terms. For each the user chooses file / mention / drop; filing goes through `fleet-bug-file`,
-   which gets the session file and screenshots as its evidence.
+   `# | finding | origin | severity | repro / file:line`, for every BUG row, cosmetic ones included.
+   For a UI finding the severity is **Broken** (content unreadable, an action unreachable, wrong
+   data shown) or **Ugly** (readable but visibly wrong); for a behaviour finding, say in a few words
+   what's lost (a count that's wrong, a write that doesn't land, a gate that doesn't hold), and the
+   engineer maps it to Fleet's severity when filing. For each the user chooses file / mention /
+   drop; filing goes through `fleet-bug-file`, which gets the session file and screenshots as its
+   evidence. The RISK rows follow in their own short **Risks** list: there's nothing to file yet
+   (fleet-bug-file wants a reproduction), so each is mention / drop, or a row for the next test
+   plan that touches the area.
 3. **Questions for product**: the QUESTION rows, one line each, as a copiable block the user can
    post or forward.
 4. **Candidates for the suite**: the IDEA rows, each passing the test for automation: the
@@ -223,7 +241,7 @@ print it in chat. Five parts, in this order; the first is the one people skip:
    session was real, tells the user what not to worry about, and is often the longest list.
 
 Then the screenshots: `SendUserFile` (display `attach`), one caption line per image naming its
-log row. Shots that are read together (the input and where it ended up, the same view in two
+log row; if `SendUserFile` isn't available, list the paths. Shots that are read together (the input and where it ended up, the same view in two
 scopes) go out as one image via `stack.py`, cropped to the part that matters first. End with one
 line offering the next charter, built from the unexplored rows.
 
@@ -233,15 +251,15 @@ NOTE because it "might be intended": that's what QUESTION is for.
 
 ### 5. Cleanup
 
-List `created.txt` newest-first and ask before `cleanup.sh --run`. Only what this session
-recorded. Leave the session file and screenshots; they're the evidence trail, and `fleet-bug-file`
+List the session's `created.txt` newest-first and ask before
+`cleanup.sh <session dir>/created.txt --run`. Only what this session recorded. Leave the session file and screenshots; they're the evidence trail, and `fleet-bug-file`
 reads them.
 
 ## Where this sits
 
-- After **fleet-story-qa**, **fleet-quickwin-qa** or **fleet-bug-qa**: their "poke the neighbours"
-  step is this skill, with the run's workspace as input. It's offered, not automatic; the engineer
-  decides whether the change deserves a session.
+- After **fleet-story-qa**, **fleet-quickwin-qa** or **fleet-bug-qa**: their halo rows and the quick
+  poke at the neighbours stay theirs; this is the longer session afterwards, offered with the run's
+  workspace as input. The engineer decides whether the change deserves one.
 - Before a release, for an area with a lot of change: one charter per area, from the merged-PR
   list.
 - Standalone, whenever someone has a hunch.
