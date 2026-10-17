@@ -45,6 +45,14 @@ Rules the log follows:
 - **Follows:** qa-55612 (story QA) · **Setup:** fleet `qa-explore-runs` (id 31), 21 ubuntu sims,
   policy "Compliance – …" (id 412), script `qa-explore-fail-half.sh`
 - **Tours planned:** worst-case data, tables, second door, interruption
+- **Questions:** might break → "the hosts table while the run is partial"; tricky → "the URL params"
+  (or: unasked, autonomous run)
+- **Manifest:** `explore/created.txt` · **Data folder:** `run-detail-data/` (names, diffs, evidence)
+
+### Charters proposed
+1. ★ (this session) The run detail page with partial results and worst-case names.
+2. The same page as the fleet observer and technician, to discover what each can trigger.
+3. Policy automations' list page with 20 and 21 runs, to discover what paging and the counts do.
 
 ## Surface
 
@@ -111,6 +119,11 @@ For each: file it, mention it, or drop it?
 - CJK and emoji-first names sort and search correctly.
 
 Next charter: the same page on Free, plus fleetctl's reset path (the two partial rows).
+
+## Cleanup (14:58)
+
+`cleanup.sh explore/created.txt --run`: 21 hosts, 2 osquery-perf processes, fleet 31, policy 412,
+the script; 0 errors. Instance back to its starting counts. Screenshots and the data folder kept.
 ```
 
 The example is made up. Keep the shape, not the content.

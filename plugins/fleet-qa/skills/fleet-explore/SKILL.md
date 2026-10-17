@@ -35,10 +35,28 @@ Playwright suite's shared CI instances; those have their own rules in `playwrigh
 
 The browser: the Playwright MCP tools when they're available (`browser_navigate`, `browser_snapshot`,
 `browser_click`, `browser_type`, `browser_wait_for`, `browser_find`, `browser_resize`, `browser_tabs`,
-`browser_console_messages`, `browser_network_requests`), or Claude in Chrome when the user prefers
-their own logged-in browser. The browser pane can't save PNGs, so evidence files come from
-`screenshot.mjs` or a `pw.mjs` driver against the same state. A sequence you'll repeat on every
-variation (the setup before each probe) becomes a `pw.mjs` driver.
+`browser_console_messages`, `browser_network_requests`, `browser_take_screenshot`, `browser_evaluate`),
+or Claude in Chrome when the user prefers their own logged-in browser. A sequence you'll repeat on
+every variation (the setup before each probe) becomes a `pw.mjs` driver.
+
+**Getting the pane signed in.** It usually opens on `/login`, and there are three ways in, in this
+order. The engineer signs in there once: ask in one line and carry on with API probes meanwhile.
+Or, with their say-so, session-owned users: created through the API on the session's own fleet, one
+per role you need, with a generated password you never print, signed in through the login form and
+recorded in `created.txt`; a global role is theirs to create or to sign in as (the permission check
+refuses creating one). Never the engineer's token or password through the browser tool or a file it
+loads: the MCP echoes the code it runs, and the permission check refuses materialising a token, then
+tends to refuse the harmless commands that follow. `screenshot.mjs` and `pw.mjs` read the token
+themselves and stay the headless path for evidence.
+
+**Screenshots.** `browser_take_screenshot` with a `filename` saves only under `.playwright-mcp/` in
+the qa-automation checkout (gitignored), the whole viewport or one element by its ref; move the
+files into the session's `screenshots/`. Those are the working record. Evidence for a BUG row is
+made the way `fleet-bug-file` makes it, and before cleanup, because the data a session built is
+gone afterwards and nobody can re-shoot it: clip to the element or crop to the region that shows
+the problem, box the wrong state and label it, caption each panel with the build, stack shots that
+are read together (`stack.py`, `--side` for narrow clips), draw with PIL, and re-read the PNG: it
+must show the thing, with no tokens or enroll secrets. Keep the raw full-page shot beside it.
 
 Workspace: next to the ticket's run when there is one, `<QA workspace>/qa-<N>/explore/`, otherwise
 `<QA workspace>/explore/`. One file per session, `explore-<date>-<slug>.md` (charter, log, debrief;
@@ -55,8 +73,9 @@ is exactly what breaks them:
 - **Never flip global state the human owns**: MDM on or off, the license, GitOps mode, org
   settings, Apple or Android enterprise setup. A tour that needs Free or GitOps mode goes in a
   one-line ask; keep exploring elsewhere meanwhile.
-- **Never type a password, never create or delete human accounts.** API-only users for API checks;
-  the role users in the local file for UI-by-role.
+- **Never type the engineer's password, never create or delete their accounts.** API-only users for
+  API checks; the role users in the local file for UI-by-role; session-owned users on the session's
+  fleet only with the engineer's say-so (see Tooling).
 - **Never post, edit or delete on GitHub.** Findings go to the decision list; filing is
   `fleet-bug-file`, when the user says so.
 - **Explore on objects you created.** A `qa-explore-<slug>` fleet (or the run's `qa-<N>` fleet
@@ -135,7 +154,14 @@ Illustrative charters (made up):
   share the same scoping mistake.
 
 Write the chosen charter and budget at the top of the session file, note the start time (`date`),
-and begin.
+and begin. Two rules for getting from the charter to the first probe:
+
+- **If the user told you to work on your own**, pick the starred charter, record the two questions
+  as unasked in the session file, and go. Otherwise wait for the pick.
+- **Setup counts on the clock.** Build what the API can name first (fleets, labels, policies,
+  reports, scripts, packages, users and their emails); reach for a patched osquery-perf only when
+  the charter is about host names, and then keep the diff and the names files in the session's
+  data folder, so the next session rebuilds in a minute instead of an hour.
 
 ### 2. Orient (the first five actions)
 
@@ -144,7 +170,9 @@ settled, the controls present, the console quiet. Read `browser_console_messages
 error now, so a later one can be told from the baseline. Known noise is listed in
 `helpers/console.ts` in the `playwright/` folder the local file names: `DEFAULT_IGNORED_CONSOLE_ERRORS`
 for console errors (favicon, `net::ERR_*`, ResizeObserver) and `DEFAULT_IGNORED_PAGE_ERRORS` for
-uncaught exceptions (the Ace editor worker 404, fleetdm/fleet#54845); don't re-report those.
+uncaught exceptions (the Ace editor worker 404, fleetdm/fleet#54845); don't re-report those. While
+here, `GET /api/v1/fleet/me` as each role user the local file names: an expired token goes in the
+ask now (`fleetctl login --context <name>`), not when the roles tour starts.
 
 Then map the surface, the way Emil Kowalski's break-ui skill does (credited in
 `references/tours.md`): every value the charter's page renders and where it comes from (names,
@@ -169,7 +197,10 @@ read what changed. The accessibility tree is the record of what the page offered
 evidence for a person. On a page listing hundreds of hosts the snapshot is enormous and slow to
 reason over, so narrow first (your `qa-explore-*` fleet, a search that matches one row) or use
 `browser_find` for a single element. A button with no accessible name in the snapshot is itself a
-finding: keyboard and screen-reader users can't reach it either.
+finding: keyboard and screen-reader users can't reach it either. `browser_evaluate` answers a
+question about the DOM (a computed style, a hidden input, an element's box);
+`browser_run_code_unsafe` is for a multi-step sequence Playwright's API makes short (collect every
+page's rows, load a URL three times), only ever with session-owned credentials.
 
 **Log as you go, not at the end.** One row per action that taught you something: time, where, what
 you did with which input, what you saw, a tag, a follow-up. The tags (`references/session.md` has
@@ -187,9 +218,9 @@ forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
    user, All fleets instead of
    the fleet, the API instead of the UI, ordinary data instead of worst-case. Each variation that
    still fails narrows the cause; each that passes names a condition.
-4. Capture: `screenshot.mjs` clipped to the element (`--caret` for focus bugs), the request and
-   response from `browser_network_requests`, the console line. Read the PNG before relying on it:
-   it must show the thing, with no tokens or enroll secrets.
+4. Capture, ticket-grade, now (Tooling says how): the element or region, boxed and captioned with
+   the build (`screenshot.mjs --caret` for focus bugs), plus the request and response from
+   `browser_network_requests` and the console line.
 5. Classify the origin the way the other QA skills do: *this change* (when the session follows a
    story or fix), *released* (`git show fleet-v<latest>:<file>`, or the `previous` instance
    reproduces it), or *pre-existing but exposed*; in a standalone session, *released* or
