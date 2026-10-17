@@ -6,7 +6,7 @@
     {
       "name": "fleet-qa",
       "source": "./plugins/fleet-qa",
-      "description": "Plan a Fleet story's testing; QA a bug or security fix, a story or a quick win against your own instances, or behavior at scale on a load test; file bugs and retest them."
+      "description": "Plan a Fleet story's testing; QA a bug or security fix, a story or a quick win against your own instances, explore a feature or area for what the plan missed, or QA behavior at scale on a load test; file bugs and retest them."
     }
   ]
 }
