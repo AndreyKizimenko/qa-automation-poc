@@ -1,7 +1,8 @@
 # Local setup — `~/.claude/fleet-qa.local.md`
 
-The Fleet QA skills (the `fleet-qa` plugin: `fleet-bug-qa`, `fleet-story-qa`, `fleet-quickwin-qa`,
-`fleet-bug-retest`, `fleet-bug-file` and `fleet-loadtest-qa`) are shared, and they run in whatever repo you're in. What differs
+The Fleet QA skills (the `fleet-qa` plugin: `fleet-bug-qa`, `fleet-test-plan`, `fleet-story-qa`,
+`fleet-quickwin-qa`, `fleet-explore`, `fleet-bug-retest`, `fleet-bug-file` and `fleet-loadtest-qa`) are
+shared, and they run in whatever repo you're in. What differs
 per engineer goes in one file in your home folder: **`~/.claude/fleet-qa.local.md`**. That covers which
 instances are which, where the Fleet checkout and the QA workspace live, how the servers run, and where
 Playwright is. It belongs to you, not to any repo, so there's nothing to gitignore.
@@ -53,7 +54,7 @@ versions live before relying on them — `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug
 
 ## Paths
 - **Fleet checkout:** <path> (export `FLEET_REPO=<path>` for the scripts if it isn't `~/repositories/fleet`)
-- **QA workspace:** <path, e.g. <fleet checkout>/qa-stuff>. `qa-<N>/` per run, and `filed-bugs/` for the tracker
+- **QA workspace:** <path, e.g. <fleet checkout>/qa-stuff>. `qa-<N>/` per run, `filed-bugs/` for the tracker, and `explore/` for exploratory sessions
 - **fleetctl for the RC:** <e.g. `<fleet checkout>/build/fleetctl`; check `fleetctl --version`>
 - **Server logs:** <path and line format, per instance>
 - **Playwright (screenshots):** <path to a `playwright/` folder with `npm ci` done, e.g. ~/repositories/qa-automation/playwright>

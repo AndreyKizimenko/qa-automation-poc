@@ -15,7 +15,10 @@ review against, and `playwright-test-author` is what the author was told.
 - **Default: the current branch's changes.** `git diff main...HEAD --stat`, then read each changed spec,
   page object, helper, fixture and doc in full (not just the hunks), plus what the change calls into.
 - **A named file or area:** review that, and follow its page objects and helpers far enough to judge them.
-- **The whole suite:** only when asked; it's a different job (sample, then group findings by pattern).
+- **The whole suite:** only when asked; it's a different job (sample, then group findings by pattern,
+  and count the mechanical ones so the audit has numbers: fixed sleeps, `force: true`, class selectors
+  without a comment, skips without a `TODO(fleetdm/fleet#N)`, tests with no assertion on data they
+  created).
 
 Verify before you report. Open the React component or server code a finding depends on
 (`~/repositories/fleet/frontend/`, `server/`, `ee/`, `docs/REST API/rest-api.md`), and probe the live page
@@ -63,6 +66,21 @@ is a question. Say so rather than asserting it.
   becomes a silent pass.
 - Plain `.sort()` on numbers (it sorts as strings), and comparisons that depend on list order the API
   doesn't promise.
+
+**Reads that don't retry.** Web-first assertions retry until they pass or time out; these don't, so a
+test built on them passes or fails on timing:
+- `locator.all()` and `allTextContents()` snapshot the DOM at one instant. Assert the count with
+  `toHaveCount` first, then iterate; compare text with `toHaveText`.
+- `isVisible()` / `isEnabled()` answer for one instant: fine as a guard for an optional element, never
+  as the assertion (`expect(locator).toBeVisible()` is).
+- `page.evaluate()` bypasses auto-waiting and locators; it isn't for assertions.
+- `waitForSelector` returns an `ElementHandle` that goes stale on re-render; use a locator.
+- try/catch as flow control waits out the full timeout and hides the real error.
+- `force: true` skips actionability: acceptable only for a visually hidden control, with the reason in a
+  comment. `nth()` only inside a small, stable container.
+- `getByText('Delete')` also matches *Delete all* and *Undelete*: `exact: true`, or a role with a name.
+- Conditional logic in a test body (`if` on API data, a loop that may run zero times) gives the test more
+  than one shape, and each shape is a case it may silently skip.
 
 **Will it hang, flake or leave state behind?**
 - An action or read on a locator that may not exist (`click`, `fill`, `innerText`, `getAttribute` have no

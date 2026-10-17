@@ -39,6 +39,10 @@ restart, API-only users expire).
 Work in `<QA workspace>/qa-<N>/`: `RESULTS.md` (the lab notebook:
 everything run, with evidence), `created.txt` (cleanup manifest, same line format
 as `cleanup.sh`), drivers, `screenshots/`, `snapshots/`, `issue-comment.md`.
+Write RESULTS.md as you go, one timestamped row per check (where, what with which
+input, what you saw), and tag the rows that need action the way `fleet-explore`'s
+session log does (BUG, QUESTION, IDEA, RISK, NOTE): the decision list in step 4 is
+then a filter over the log, not a reconstruction at the end.
 
 ## Hard lines
 
@@ -212,8 +216,12 @@ methods for your rows (simulated hosts, mocks, DB checks), which the public plan
   and where it lands, a fleet vs "All fleets", two platforms of the same view — go
   out as one image (`stack.py out.png a.png b.png`, `--side` for narrow clips; crop
   each to the part that matters first); shots for different cases stay separate.
-- Exploratory: poke the neighbours of the change — list/detail pages, the same
-  feature on the other platform, what happens on delete/disable of the parent.
+- Exploratory, lightly: poke the neighbours of the change — list/detail pages, the
+  same feature on the other platform, what happens on delete/disable of the parent —
+  and log what you tried. A proper session (worst-case data, every scope and entry
+  point, lifecycle and interruption tours, with a charter and a debrief) is
+  `fleet-explore`'s job: offer it once the plan's rows are done, with this run's
+  workspace as its input, and let the engineer decide whether the change deserves it.
 
 **Theirs** — one batched message: devices (enroll, wipe, factory reset, transfer),
 license, MDM and org-setting toggles, portal/third-party consoles, a real UI login
