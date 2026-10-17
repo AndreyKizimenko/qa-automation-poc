@@ -15,7 +15,7 @@ One tag per row that needs action, none on rows that are just the record.
 | **BUG** | Wrong, and reproduced three times with the same steps | Decisions needed |
 | **QUESTION** | Can't tell whether it's intended; the spec, docs and sibling pages don't settle it | Questions for product |
 | **IDEA** | A case the Playwright suite should own: stable, unambiguous, worth running nightly | Candidates for the suite |
-| **RISK** | Nothing broke, but it's one realistic step away: an unbounded field, no fallback, no limit anywhere | Decisions needed (Fragile) |
+| **RISK** | Nothing broke, but it's one realistic step away: an unbounded field, no fallback, no limit anywhere | Risks (mention / drop, or a test-plan row) |
 | **NOTE** | Interesting and not actionable, including anything that wouldn't reproduce and known issues met again | Stays in the log; one line in chat if it matters |
 
 Rules the log follows:
@@ -45,6 +45,16 @@ Rules the log follows:
 - **Follows:** qa-55612 (story QA) · **Setup:** fleet `qa-explore-runs` (id 31), 21 ubuntu sims,
   policy "Compliance – …" (id 412), script `qa-explore-fail-half.sh`
 - **Tours planned:** worst-case data, tables, second door, interruption
+
+## Surface
+
+| Value | Source | Limit |
+|---|---|---|
+| policy name | form field; `PATCH …/policies/:id` | 255, from the form's `maxLength`; the API accepts more |
+| policy description | form field; API | unbounded (RISK) |
+| host count, pass/fail counts | computed per run | n/a |
+| run started / finished | server timestamps, relative in the UI | n/a |
+| per-host status badge | enum: pending, passed, failed, error | every value at once |
 
 ## Log
 
@@ -84,6 +94,9 @@ Deviations: the policies-list label chip (2 actions, NOTE).
 | C | Cancel + Back leaves the hosts table stale | this change | Ugly | log 14:41; 04 |
 
 For each: file it, mention it, or drop it?
+
+### Risks
+- Policy description has no length limit in the form or the API (log 14:25): mention, or a row for the next test plan that touches policies.
 
 ### Questions for product
 1. A second reset while one is pending creates a second run (log 14:29). Intended, or should it be refused?
