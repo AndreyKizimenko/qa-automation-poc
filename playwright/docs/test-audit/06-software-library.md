@@ -129,11 +129,14 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
   5. `fma` Windows — **7-Zip**
   6. `vpp` iOS — **Bear**
   7. `android` — `com.openai.chatgpt`
-- **Preconditions:** clean instance (`cleanup-setup` runs `deleteAllInstallSoftwareTitles` on `fleet_id=0` and Workstations); premium license; VPP token + Managed Google Play configured on the instance (assumed, never asserted); `Workstations` gitops team exists (`workstationsFleetId` worker fixture)
-- **Data created:** one software title per (scope, case) — deleted by SWL-02; residue swept by `cleanup-teardown`
+- **Preconditions:** clean instance (`cleanup-setup` runs `deleteAllInstallSoftwareTitles` on `fleet_id=0` and Workstations); premium license; a working VPP token (checked by the app-store cases, step 0) + Managed Google Play configured on the instance (assumed, never asserted); `Workstations` gitops team exists (`workstationsFleetId` worker fixture)
+- **Data created:** one software title per (scope, case) — deleted by SWL-02; residue swept by `cleanup-teardown`, or by the retry itself (step 0)
 
 **Flow**
 
+0. ☐ (No user action) What the test restores or checks before the UI flow.
+   - ☐ **On a retry only** — delete any title in the fleet's library that this case adds: a package by its file name, a Fleet-maintained or VPP app by its catalog name and platform, a Play Store app by its application ID (`deleteLibraryTitlesWhere`). A `retry-cleanup` annotation records each removal. The serial describe skips `delete` after a failed `add`, so without this a failure after the title exists makes every retry fail on "already exists". The first attempt removes nothing: a title found then is a finding.
+   - ✅ *(API)* **`vpp` / `android` only** — `GET /software/app_store_apps?fleet_id=<n>` is OK (`expectVppAppsListable`). Both cases pass through the App store tab's Apple view, which lists the fleet's VPP apps; when Apple has revoked the VPP token, Fleet answers 500 with Apple's reason (9625), and the test fails here with it rather than on a list item that never renders (VPP) or on page health (Android).
 1. ☐ Open the dashboard (via URL `/dashboard`).
    - ✅ *(UI)* First dashboard card is visible — `DashboardPage.goto()`.
 2. ☐ Click **Software** in the navbar.
