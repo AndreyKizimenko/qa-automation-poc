@@ -312,6 +312,6 @@ with the number, and move on:
 ---
 
 The catalog adapts Emil Kowalski's break-ui worst-case catalog (Copyright (c) 2026 Emil Kowalski,
-MIT License) to Fleet's objects. The
+MIT License; the notice is in `third-party-licenses.md` beside this file) to Fleet's objects. The
 charter, tags and debrief follow session-based exploratory testing (Bach and Bolton), with the
 session shape borrowed from petrkindlmann/qa-skills (MIT).
