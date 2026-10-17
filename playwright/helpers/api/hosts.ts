@@ -40,6 +40,24 @@ export async function getHostPlatform(request: APIRequestContext, hostId: number
   return (await res.json()).host.platform as string;
 }
 
+/** What the Hosts list shows of a host and searches it by. */
+export interface HostSummary {
+  id: number;
+  displayName: string;
+  /** One of the identifiers the Hosts list search matches, beside the name, hostname, serial and IPs. */
+  uuid: string;
+  /** The raw value the Operating system column shows and sorts by (`os_version`). */
+  osVersion: string;
+}
+
+/** A host's name, UUID and OS version, read from `GET /hosts/:id`. */
+export async function getHostSummary(request: APIRequestContext, hostId: number): Promise<HostSummary> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  const host = (await res.json()).host;
+  return { id: host.id, displayName: host.display_name, uuid: host.uuid, osVersion: host.os_version };
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,
@@ -339,17 +357,21 @@ export async function findMdmSimulations(
  * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 5
  * `premium/software/no-teams-views.spec.ts` (its Library read, never moved), 6–7
  * `shared/policies/policy-hosts.spec.ts` (refetched for a policy's answer, never
- * moved), 10–19 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (batch
- * script runs on Unassigned, never moved; see {@link findScriptableSimulations});
+ * moved), 8–9 `shared/hosts/filters.spec.ts` (a manual label's member and a
+ * search target, read only), 10–19 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (batch
+ * script runs on Unassigned, never moved; see {@link findScriptableSimulations}),
+ * 20–29 `shared/hosts/sort.spec.ts` (a manual label's members, read only);
  * darwin 0–1
  * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
  * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
- * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only),
+ * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only), 7
+ * `shared/hosts/sort.spec.ts` (a manual label's member, read only),
  * 10–39 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (a batch script
  * run on Unassigned, never moved);
  * windows 0–1 `premium/hosts/host-idp-username.spec.ts`
  * (an IdP username set and removed, never moved), 2
- * `shared/policies/policy-hosts.spec.ts` (read only). On free, windows 0 is read
+ * `shared/policies/policy-hosts.spec.ts` (read only), 3
+ * `shared/hosts/sort.spec.ts` (a manual label's member, read only). On free, windows 0 is read
  * by `free/hosts/host-idp-username.spec.ts` and `api/free/license.spec.ts`,
  * both of which write nothing.
  */
@@ -378,7 +400,8 @@ export async function findSimulations(
  * length they need.
  *
  * Claimed: linux, 51, `premium/hosts/bulk-transfer.spec.ts` (staged on a
- * throwaway fleet for "Select all matching hosts").
+ * throwaway fleet for "Select all matching hosts"); darwin, 1,
+ * `shared/hosts/filters.spec.ts` (a manual label's offline member, never moved).
  */
 export async function findOfflineSimulations(
   request: APIRequestContext,

@@ -1,8 +1,8 @@
 # Hosts — shared + free — test audit
 
-**Specs covered:** 15 files · **Test declarations:** 27 entries (25 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **32 executions** · **Projects:** premium + free (the 10 `shared/hosts` specs run in **both** projects), free only (the 5 `free/hosts` specs)
+**Specs covered:** 17 files · **Test declarations:** 31 entries (29 `test()` declarations — `free/hosts/mdm-actions-availability.spec.ts` is one loop over 3 cases, documented as three entries; the interpreter loop in `shared/hosts/host-run-script.spec.ts` is one loop over 4 cases, documented as **one** entry, HOST-22) · **36 executions** · **Projects:** premium + free (the 12 `shared/hosts` specs run in **both** projects), free only (the 5 `free/hosts` specs)
 
-This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The ten `shared/` specs carry no serial describes; tests within a file are independent. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
+This area covers the hosts list (`/hosts/manage`: sorting, the status filter within a label, search, column chooser, CSV export, Add hosts modal, role-gated CTAs) and the single-host detail page (`/hosts/:id`: vitals + refetch, Local user accounts card, Certificates card, Software tab, Reports tab, Activity card, Actions menu, live report against one host, **Run script** on a real device, a custom **MDM command** read back through the Activity card, and the **User** card's *Add user* modal, which shows the Fleet Premium message on free). The twelve `shared/` specs carry no serial describes; tests within a file are independent. HOST-28…30 each create a throwaway global manual label (`pw-hosts-*`) and delete it in an `afterEach`. The one piece of shared mutable state is HOST-21's temporary `script_execution_timeout` write to agent options (the VMs fleet on premium, **global** on free), restored in its `finally`. The three `free/` specs are role/paywall checks that live in `free/` because their expected answer inverts on premium (each has a `premium/hosts/` mirror).
 
 **Host-population split — read this before reproducing anything manually.** There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM.** On premium they sit on the **VMs** fleet (id 103); on free they are in Unassigned. Specs reach them with `findOnlineHost(..., { kind: 'real' })` ([`helpers/api/hosts.ts:202`](../../helpers/api/hosts.ts)), which keys on the reported **hardware model** (`VirtualMac2,1`, `QEMU Virtual Machine`) — **not** on MDM enrollment: since perf-hosts PR #45 roughly 30% of the osquery-perf simulations are MDM-enrolled too, so enrollment no longer tells a real device from a simulation. `liveMacosHost` ([`fixtures.ts:276`](../../fixtures.ts)) is the macOS VM resolved that way (its error message still says "MDM-enrolled"; it does not check). Everything else runs against whatever simulation the API resolver returns. Simulations ignore live-query SQL, report thin/absent vitals, **never execute a script and never acknowledge an MDM command** — which is why HOST-19…HOST-23 are real-VM-only by construction. The macOS VMs lack the Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub; Python is exercised on Linux.
 
@@ -21,6 +21,9 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-20, HOST-21 | real **Ubuntu** VM (`kind: 'real'`) — mandatory |
 | HOST-22 | one real VM per variant: macOS (zsh), Ubuntu (bash, Python), **Windows** (PowerShell) — mandatory |
 | HOST-24 | an online **non-MDM simulated** Windows host (`findSimulations`, slice 0) — read-only, and a simulation keeps it off the free VMs, which sit in Unassigned |
+| HOST-28, HOST-29 | non-MDM simulations at `findSimulations` darwin 7, windows 3 and linux 20–29, one per OS version (4–6 hosts), as a manual label's members — read-only |
+| HOST-30 | an online non-MDM Linux simulation (`findSimulations` linux 8) and the newest **offline** macOS simulation on Unassigned (`findOfflineSimulations`, darwin 1), as a manual label's members — read-only |
+| HOST-31 | an online non-MDM Linux simulation (`findSimulations` linux 9) — read-only |
 
 ## Contents
 
@@ -53,6 +56,10 @@ This area covers the hosts list (`/hosts/manage`: column chooser, CSV export, Ad
 | HOST-25 | `shared/hosts/host-reports-tab.spec.ts` | Host details — reports that don't store results show only with the toggle on | UI+API | ☐ |
 | HOST-26 | `free/hosts/host-actions-role-access.spec.ts` | Free • Hosts • Actions by role › <role> is offered the host actions its role grants (2 roles) | UI | ☐ |
 | HOST-27 | `free/hosts/host-software-tab.spec.ts` | a host's Software tab is its inventory alone, with no Library | UI | ☐ |
+| HOST-28 | `shared/hosts/sort.spec.ts` | Hosts — sorting by Operating system orders the rows by OS version both ways, and a reload keeps it | UI+API | ☐ |
+| HOST-29 | `shared/hosts/sort.spec.ts` | Hosts — sorting by Host orders the rows by host name, descending, then back to ascending | UI+API | ☐ |
+| HOST-30 | `shared/hosts/filters.spec.ts` | Hosts — the status filter narrows a label to its online or its offline host, and a reload keeps both filters | UI+API | ☐ |
+| HOST-31 | `shared/hosts/filters.spec.ts` | Hosts — search finds a host by name or UUID, ignores leading spaces, survives a reload, and shows the empty state when nothing matches | UI+API | ☐ |
 
 `Mode`: **UI** = all validation through the browser · **UI+API** = browser flow with some API assertions · **API** = no meaningful UI validation · **PERF** = timing.
 
@@ -1144,6 +1151,116 @@ other:
 ```
 
 ---
+
+### HOST-28 · Hosts — sorting by Operating system orders the rows by OS version both ways, and a reload keeps it
+
+- **File:** [`playwright/tests/e2e/shared/hosts/sort.spec.ts`](../../tests/e2e/shared/hosts/sort.spec.ts)
+- **Grep:** `npx playwright test -g "sorting by Operating system orders the rows"`
+- **Project:** premium + free (shared) · **Scopes:** All fleets on premium; no-op on free (no dropdown)
+- **Mode:** UI+API · **Isolation:** standalone; its label is deleted in an `afterEach`
+- **Preconditions:** online non-MDM simulations at `findSimulations` darwin 7, windows 3 and linux 20–29 with at least four distinct OS versions between them (the Linux simulations report ~25 Ubuntu releases; macOS and Windows one each).
+- **Data created:** a global manual label `pw-hosts-sort-os-<timestamp>` holding 4–6 simulations, one per OS version.
+
+**Flow**
+
+1. ☐ *(API)* Read the simulations' names and OS versions, keep one host per OS version (the macOS one, the Windows one, up to four Ubuntu releases), and label them. The expected ascending order is the hosts sorted by OS version, case-insensitively.
+2. ☐ Open `/hosts/manage`; on premium select **All fleets**; filter by the label.
+3. ☐ Click the **Operating system** header.
+   - ✅ *(UI)* The URL carries `order_key=os_version&order_direction=asc`.
+   - ✅ *(UI)* The rows' host names are exactly the expected ascending order.
+4. ☐ Click **Operating system** again.
+   - ✅ *(UI)* `order_direction=desc`, and the rows are exactly the reverse.
+5. ☐ Reload the page.
+   - ✅ *(UI)* The URL still carries `order_key=os_version&order_direction=desc`, and the rows are still in descending order.
+
+**Assessment**
+- *Value:* moderate. Header-click sorting end to end (the request, the server's ORDER BY, the render) and the URL as the sort's record across a reload, against one exact expected order.
+- *Coverage gaps:* one sortable column of ~15; page boundaries are deliberately not checked (fleetdm/fleet#55845: a column with repeated values shows some hosts on two pages and skips others); the Fleet column (premium-only) isn't sorted.
+- *Redundancy:* none.
+- *Efficiency / smells:* the label is load-bearing. Each platform's ~200 simulations report one OS version, so the whole list's first page is a single value in either direction and an order check there passes whatever the sort does.
+
+### HOST-29 · Hosts — sorting by Host orders the rows by host name, descending, then back to ascending
+
+- **File:** [`playwright/tests/e2e/shared/hosts/sort.spec.ts`](../../tests/e2e/shared/hosts/sort.spec.ts)
+- **Grep:** `npx playwright test -g "sorting by Host orders the rows"`
+- **Project:** premium + free (shared) · **Scopes:** All fleets on premium; no-op on free
+- **Mode:** UI+API · **Isolation:** standalone; its label is deleted in an `afterEach`
+- **Preconditions:** as HOST-28.
+- **Data created:** a global manual label `pw-hosts-sort-name-<timestamp>` holding the same 4–6 simulations.
+
+**Flow**
+
+1. ☐ *(API)* Label the simulations as in HOST-28. The expected ascending order is their names under a case-insensitive collation (`Intl.Collator('en', { sensitivity: 'base' })`, which matched MySQL's order for every host on both instances).
+2. ☐ Open `/hosts/manage`; on premium select **All fleets**; filter by the label.
+   - ✅ *(UI)* The rows are in ascending name order (the list's default sort).
+3. ☐ Click the **Host** header.
+   - ✅ *(UI)* `order_key=display_name&order_direction=desc`, and the rows are exactly the reverse.
+4. ☐ Click **Host** again.
+   - ✅ *(UI)* `order_direction=asc`, and the rows are back in ascending order.
+
+**Assessment**
+- *Value:* moderate. Pins the default sort and the asc/desc toggle on the column every user sorts by.
+- *Coverage gaps:* names with leading spaces or non-ASCII characters aren't on the instances' simulations, so collation edge cases go untested.
+- *Redundancy:* shares its setup with HOST-28 by design.
+- *Efficiency / smells:* none.
+
+### HOST-30 · Hosts — the status filter narrows a label to its online or its offline host, and a reload keeps both filters
+
+- **File:** [`playwright/tests/e2e/shared/hosts/filters.spec.ts`](../../tests/e2e/shared/hosts/filters.spec.ts)
+- **Grep:** `npx playwright test -g "status filter narrows a label"`
+- **Project:** premium + free (shared) · **Scopes:** All fleets on premium; no-op on free
+- **Mode:** UI+API · **Isolation:** standalone; its label is deleted in an `afterEach`
+- **Preconditions:** an online non-MDM Linux simulation (`findSimulations` linux 8) and an offline macOS simulation on Unassigned (`findOfflineSimulations`: yesterday's abandoned set, offline until host expiry deletes it).
+- **Data created:** a global manual label `pw-hosts-status-<timestamp>` holding the two.
+
+**Flow**
+
+1. ☐ *(API)* Label the online and the offline simulation.
+2. ☐ Open `/hosts/manage`; on premium select **All fleets**; filter by the label.
+   - ✅ *(UI)* The list holds exactly the two hosts.
+3. ☐ Status filter → **Online hosts**.
+   - ✅ *(UI)* `status=online`; only the online host; its Status cell reads *Online*; the count reads 1 host.
+4. ☐ Status filter → **Offline hosts**.
+   - ✅ *(UI)* Only the offline host; its Status cell reads *Offline*.
+5. ☐ Reload the page.
+   - ✅ *(UI)* The path is still `/hosts/manage/labels/<id>` with `status=offline`, and only the offline host is listed.
+6. ☐ Status filter → **All hosts**.
+   - ✅ *(UI)* Both hosts again, and no `status` in the URL.
+
+**Assessment**
+- *Value:* moderate-to-high. Two server-side filters combined, on hosts the test controls, plus the URL as the shareable record of both.
+- *Coverage gaps:* Missing, New, Enrolled and Pending statuses; the Platforms chips (built-in platform labels hold whatever osquery-perf answers, so they can't be asserted on).
+- *Redundancy:* label filtering alone is also in `shared/labels/labels.spec.ts`; this entry is about the status filter on top of it.
+- *Efficiency / smells:* depends on the perf daemons' daily refresh having left offline macOS simulations; a refresh during the run would also take the online host offline.
+
+### HOST-31 · Hosts — search finds a host by name or UUID, ignores leading spaces, survives a reload, and shows the empty state when nothing matches
+
+- **File:** [`playwright/tests/e2e/shared/hosts/filters.spec.ts`](../../tests/e2e/shared/hosts/filters.spec.ts)
+- **Grep:** `npx playwright test -g "search finds a host by name or UUID"`
+- **Project:** premium + free (shared) · **Scopes:** All fleets on premium; no-op on free
+- **Mode:** UI+API · **Isolation:** standalone, read-only
+- **Preconditions:** an online non-MDM Linux simulation (`findSimulations` linux 9).
+- **Data created:** none.
+
+**Flow**
+
+1. ☐ *(API)* Read the simulation's name and UUID.
+2. ☐ Open `/hosts/manage`; on premium select **All fleets**; search for the name.
+   - ✅ *(UI)* `query=<name>`, and the list holds exactly that host.
+3. ☐ Search for the UUID.
+   - ✅ *(UI)* Exactly that host.
+4. ☐ Search for the name with three leading spaces.
+   - ✅ *(UI)* The URL holds the trimmed name, and the list holds exactly that host.
+5. ☐ Reload the page.
+   - ✅ *(UI)* The box shows the name, and the list still holds exactly that host.
+6. ☐ Search for a string no host matches.
+   - ✅ *(UI)* The empty state reads "No hosts match your filters", and the count reads 0 hosts.
+
+**Assessment**
+- *Value:* moderate. Search is the most-used control on the most-used screen; this pins two of its fields, trimming, and URL persistence.
+- *Coverage gaps:* serial number, IP and user email (the other searched fields); straight vs curly apostrophes (fleetdm/fleet#17856); search combined with other filters.
+- *Redundancy:* `searchFor` is used as a step elsewhere (policy-hosts, batch-schedule-cancel), never asserted on its own.
+- *Efficiency / smells:* none.
 
 ## Area observations
 

@@ -177,7 +177,8 @@ A change isn't done until the docs describing it are current, in the same commit
   hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.
 - **The Hosts list rewrites its URL just after it loads** and can undo a filter or search chosen before that
   (a label filter and a search have each been lost, and *Select all matching* once took a whole fleet): use `HostsListPage.searchFor` /
-  `filterTo` / `LabelFilter.selectLabel`, never a bare `search.fill` or filter click.
+  `filterTo` / `filterByStatus` / `sortBy` / `LabelFilter.selectLabel`, never a bare `search.fill`, filter click
+  or header click.
 - **Built-in platform labels are osquery-perf answers** (the macOS label holds the Ubuntu simulations): pick
   hosts by `platform`, and never target a Platforms chip.
 - **Lists page at 20, and searches hit the server.** Act on a row after a search that narrows to exactly

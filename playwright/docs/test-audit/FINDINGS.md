@@ -163,7 +163,8 @@ loadtest project touches them, or nothing does) ✅:
 
 **Within-feature gaps worth filling** (highest value first):
 - Hosts list **filters, search, and pagination** — the component objects exist and are
-  unused. This is the most-used screen in the product.
+  unused. This is the most-used screen in the product. *(2026-10-17: sorting, the status
+  filter within a label, and search are covered by HOST-28…31; paging is not, see fleetdm/fleet#55845.)*
 - Users: endpoint allow-list persistence is never verified anywhere; edit-form hydration.
 - Auth: MFA, session lifecycle, Get API token.
 - Reports/policies: list sort, filter, columns; **Run policy**; policy automations beyond
