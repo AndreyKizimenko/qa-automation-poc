@@ -235,6 +235,59 @@ export async function deleteAllInstallSoftwareTitles(
   );
 }
 
+/** A title in a fleet's library, and the installer or store app that put it there. */
+export interface LibraryTitle {
+  titleId: number;
+  name: string;
+  /** The custom package or Fleet-maintained app, when one added the title. */
+  package?: { name: string; platform: string; fleetMaintained: boolean };
+  /** The App Store or Play Store app, when one added the title. */
+  appStoreApp?: { appStoreId: string; platform: string };
+}
+
+/**
+ * Deletes every title in a fleet's library that `match` picks, and returns how
+ * many it deleted. For a test that must start without its own title in the
+ * library: a retried add, say, which Fleet would refuse as a duplicate.
+ */
+export async function deleteLibraryTitlesWhere(
+  request: APIRequestContext,
+  fleetId: number,
+  match: (title: LibraryTitle) => boolean,
+): Promise<number> {
+  const res = await request.get(apiUrl('software/titles'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId), available_for_install: 'true', per_page: '200' },
+  });
+  await expect(res, `Failed to list the library of fleet ${fleetId}`).toBeOK();
+  const titles = ((await res.json()).software_titles ?? []) as Array<{
+    id: number;
+    name: string;
+    software_package?: { name: string; platform: string; fleet_maintained_app_id?: number | null } | null;
+    app_store_app?: { app_store_id: string | number; platform: string } | null;
+  }>;
+  const matched = titles
+    .map(
+      (t): LibraryTitle => ({
+        titleId: t.id,
+        name: t.name,
+        package: t.software_package
+          ? {
+              name: t.software_package.name,
+              platform: t.software_package.platform,
+              fleetMaintained: !!t.software_package.fleet_maintained_app_id,
+            }
+          : undefined,
+        appStoreApp: t.app_store_app
+          ? { appStoreId: String(t.app_store_app.app_store_id), platform: t.app_store_app.platform }
+          : undefined,
+      }),
+    )
+    .filter(match);
+  for (const title of matched) await deleteSoftwareTitle(request, fleetId, title.titleId);
+  return matched.length;
+}
+
 /** Fetches a single software title's metadata, including its display name. */
 export async function getSoftwareTitle(
   request: APIRequestContext,

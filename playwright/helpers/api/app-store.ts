@@ -11,6 +11,29 @@ interface AddAppStoreAppOpts {
 }
 
 /**
+ * Fails, with Fleet's reason, when Fleet can't list a fleet's VPP apps. Fleet
+ * asks Apple for the list on every request, so a VPP token Apple has revoked
+ * or let expire answers 500 here with Apple's own error (9625 is "The server
+ * has revoked the sToken"). In the UI the same failure is just a list that
+ * never renders, so a spec that goes through the App store tab checks this first.
+ */
+export async function expectVppAppsListable(
+  request: APIRequestContext,
+  fleetId: number,
+): Promise<void> {
+  const res = await request.get(apiUrl('software/app_store_apps'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId) },
+    timeout: 60_000,
+  });
+  await expect(
+    res,
+    `Fleet can't list the VPP apps for fleet ${fleetId}; the reason is in the response below. ` +
+      'A VPP token Apple has revoked or let expire is renewed in Settings → Integrations → MDM → VPP',
+  ).toBeOK();
+}
+
+/**
  * Adds an Apple VPP or Managed Google Play app to a fleet. For Android,
  * `selfService` is required by the API. Returns the resulting
  * `software_title_id`.

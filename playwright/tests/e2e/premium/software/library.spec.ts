@@ -16,8 +16,11 @@ import { test, expect } from '@fixtures';
 import {
   assertActivity,
   assertActivityAfter,
+  deleteLibraryTitlesWhere,
+  expectVppAppsListable,
   getAppStoreAppConfiguration,
   latestActivityId,
+  type LibraryTitle,
 } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
@@ -71,6 +74,33 @@ const caseLabel = (c: SoftwareCase): string => {
   }
 };
 
+const FMA_PLATFORM = { macOS: 'darwin', Windows: 'windows' } as const;
+const VPP_PLATFORM = { macOS: 'darwin', iOS: 'ios', iPadOS: 'ipados' } as const;
+
+/**
+ * Whether a library title is the one a case adds, matched the way the add flow
+ * picks it: a package by its file name, a Fleet-maintained or VPP app by its
+ * catalog name and platform, a Play Store app by its application ID. Fleet
+ * names a Fleet-maintained title after its catalog entry ("7-zip" for the
+ * 7-Zip case), so that name is compared without case.
+ */
+function addedBy(c: SoftwareCase, t: LibraryTitle): boolean {
+  switch (c.kind) {
+    case 'custom':
+      return t.package?.name === path.basename(c.fixture);
+    case 'fma':
+      return (
+        !!t.package?.fleetMaintained &&
+        t.package.platform === FMA_PLATFORM[c.platform] &&
+        t.name.toLowerCase() === c.appName.toLowerCase()
+      );
+    case 'vpp':
+      return t.appStoreApp?.platform === VPP_PLATFORM[c.platform] && t.name.includes(c.appName);
+    case 'android':
+      return t.appStoreApp?.appStoreId === c.applicationId;
+  }
+}
+
 // Narrowed so `fleetIdFor(scope, …)` returns `number` (never `undefined`)
 // at the call sites that feed pages whose `goto({ fleetId })` requires a
 // number (FMA, VPP, the title detail URL builder).
@@ -109,13 +139,35 @@ for (const scope of SCOPES) {
         workstationsFleetId,
         request,
         page,
-      }) => {
+      }, testInfo) => {
         // The add flow runs a server-side installer/CDN fetch plus the library
         // and activity-feed checks; under 4-worker load that can edge past the
         // global 60s budget. 90s caps the whole flow with headroom — each step
         // still ends as soon as its work does; this is only the ceiling.
         test.setTimeout(90_000);
         const fleetId = fleetIdFor(scope, workstationsFleetId);
+
+        // A retry starts over in a library the failed attempt may already have
+        // added to: the serial describe skipped `delete`, and Fleet refuses a
+        // second copy of the same app or package, so the retry would fail on
+        // "already exists" and test nothing. The first attempt removes nothing:
+        // `cleanup-setup` has emptied the library, and a title found then is a
+        // finding, not residue.
+        if (testInfo.retry > 0) {
+          const removed = await deleteLibraryTitlesWhere(request, fleetId, (t) => addedBy(c, t));
+          if (removed) {
+            testInfo.annotations.push({
+              type: 'retry-cleanup',
+              description: `removed ${removed} title(s) the failed attempt left in the library`,
+            });
+          }
+        }
+
+        // Both app-store cases pass through the App store tab's Apple view,
+        // which lists the fleet's VPP apps. When Fleet can't (Apple revoked the
+        // VPP token), the VPP case finds no list and the Android case fails page
+        // health on the 500, so the list is read first to fail with Apple's reason.
+        if (isAppStore) await expectVppAppsListable(request, fleetId);
 
         await dashboard.goto();
         await dashboard.navbar.goToSoftware();
