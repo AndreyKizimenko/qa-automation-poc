@@ -115,6 +115,24 @@ export class DataTable {
   }
 
   /**
+   * The visible text of one column on the current page, in row order. Cells
+   * carry no column name of their own, so the column is found by its header's
+   * position, read once, and every row's cell at that position is taken with
+   * `nth-child`: one read for the page rather than a header scan per cell.
+   * Waits for the table to settle first, so the rows are the current query's;
+   * a caller asserting on the result after a change wraps it in `expect.poll`.
+   */
+  async columnTexts(header: string): Promise<string[]> {
+    await this.waitForSettled();
+    const headers = this.table.locator('thead:not(.active-selection) th');
+    const headerTexts = (await headers.allInnerTexts()).map((t) => t.trim());
+    const index = headerTexts.indexOf(header);
+    if (index === -1) throw new Error(`Column "${header}" not found in table headers: ${headerTexts.join(', ')}`);
+    const cells = this.table.locator(`tbody tr > td:nth-child(${index + 1})`);
+    return (await cells.allInnerTexts()).map((t) => t.trim());
+  }
+
+  /**
    * Find the first row whose given column text matches the regex.
    * Returns the row locator, or `null` if no matching row is on the current page.
    */

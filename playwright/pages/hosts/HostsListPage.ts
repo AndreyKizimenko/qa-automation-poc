@@ -236,10 +236,12 @@ export class HostsListPage {
    * filtered table. The page rewrites its URL from the filters its table last
    * queried with, and a rewrite that lands just after a choice takes it back
    * (it does once the first load settles), so the search is made again until
-   * the settled table still has its `query` param.
+   * the settled table still has its `query` param. `heldAs` is the value that
+   * param should end up holding when it differs from what's typed: the box
+   * trims leading and trailing spaces before it searches.
    */
-  async searchFor(query: string): Promise<void> {
-    const held = () => new URL(this.page.url()).searchParams.get('query') === query;
+  async searchFor(query: string, heldAs: string = query): Promise<void> {
+    const held = () => new URL(this.page.url()).searchParams.get('query') === heldAs;
     await expect(async () => {
       if (!held()) await this.search.fill(query);
       await this.table.waitForSettled(15_000);
@@ -265,6 +267,45 @@ export class HostsListPage {
       await this.table.waitForSettled(15_000);
       expect(onLabel() && onStatus(), `the ${opts.platform} / ${opts.status} filters didn't hold`).toBe(true);
     }).toPass({ timeout: 60_000 });
+  }
+
+  /**
+   * Sorts the list by a column and waits until the settled table's URL carries
+   * the sort. Fleet's table sorts a column ascending on its first click and
+   * flips it on every click after (it never clears a sort), writing the result
+   * into `order_key` / `order_direction`. The header is clicked again only while
+   * the URL doesn't hold the wanted sort, so a click that has already landed
+   * isn't flipped back.
+   */
+  async sortBy(header: string, orderKey: string, direction: 'asc' | 'desc'): Promise<void> {
+    const held = () => {
+      const params = new URL(this.page.url()).searchParams;
+      return params.get('order_key') === orderKey && params.get('order_direction') === direction;
+    };
+    const button = this.columnHeader(header, { exact: true }).getByRole('button', { name: header, exact: true });
+    await expect(async () => {
+      if (!held()) {
+        await button.click({ timeout: 10_000 });
+        await this.table.waitForSettled(15_000);
+      }
+      expect(held(), `the ${header} sort didn't reach ${orderKey} ${direction}`).toBe(true);
+    }).toPass({ timeout: 45_000 });
+  }
+
+  /**
+   * Filters by host status and waits until the settled table's URL carries it:
+   * `status=online` / `status=offline`, or no `status` for All hosts. As with
+   * {@link searchFor}, the page's URL rewrite can undo a choice made just after
+   * a load, so the choice is made again until it holds.
+   */
+  async filterByStatus(option: 'All hosts' | 'Online hosts' | 'Offline hosts'): Promise<void> {
+    const want = option === 'All hosts' ? '' : option.split(' ')[0].toLowerCase();
+    const held = () => (new URL(this.page.url()).searchParams.get('status') ?? '') === want;
+    await expect(async () => {
+      if (!held()) await this.statusFilter.selectByName(option);
+      await this.table.waitForSettled(15_000);
+      expect(held(), `the ${option} filter didn't hold`).toBe(true);
+    }).toPass({ timeout: 45_000 });
   }
 
   async selectAllOnPage(): Promise<void> {

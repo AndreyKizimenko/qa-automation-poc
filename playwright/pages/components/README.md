@@ -51,7 +51,7 @@ export class MyWidget {
 | Component | Used on | Purpose |
 |-----------|---------|---------|
 | `Navbar` | Every authenticated page | Top nav: Hosts / Controls / Software / Reports / Policies, user menu, sign-out |
-| `DataTable` | Every list page | `<table>` rows, primary-link first row, cell lookup by column, empty state |
+| `DataTable` | Every list page | `<table>` rows, primary-link first row, cell lookup by column, one column's texts in row order (`columnTexts`), empty state |
 | `ContentList` | Profiles, Certificates, Scripts library, Scripts batch progress | `<li>` lists with timestamps (not `<table>`) |
 | `Pagination` | Most paginated lists | Next / Previous controls; asserts the first row's link text changes (the whole row's text on a table with no links, like Labels) |
 | `FilterModal` | Software Titles, Software Versions, Host Details > Software | "Add filters" modal: the Types picker (`typeCheckbox(name)`, `selectTypes(names)` leaves exactly those ticked), the Vulnerable software switch (`applyVulnerable()`), and on premium the severity controls under **Advanced** (`showAdvanced()`, `severityOptions()`) |

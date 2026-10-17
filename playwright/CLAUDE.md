@@ -126,8 +126,9 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Each page object's `goto()` must anchor on a stable element so callers don't need their own readiness wait.
 - **The Hosts list rewrites its own URL** from the filters its table last queried with, so a filter or search
   chosen just after the page loads can be silently undone, and *Select all matching* then takes every host on the
-  fleet. Choose them through `HostsListPage.searchFor`, `HostsListPage.filterTo` or `LabelFilter.selectLabel`,
-  which remake a choice until the settled table's URL still carries it.
+  fleet. Choose them through `HostsListPage.searchFor`, `HostsListPage.filterTo`, `HostsListPage.filterByStatus`,
+  `HostsListPage.sortBy` or `LabelFilter.selectLabel`, which remake a choice until the settled table's URL still
+  carries it.
 
 ## Imports + fixtures
 
