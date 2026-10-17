@@ -83,7 +83,9 @@ Each one has shipped more than once. If the story touches the area, a row should
 - **Read after write.** Reading from the replica right after a write returns stale data (MySQL
   primary/replica setups).
 - **Long names and narrow widths.** Fleet names, software titles and profile names overflowing
-  pickers, tables and modals.
+  pickers, tables and modals. Concrete values for a row come from the worst-case catalog in
+  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/tours.md`: plausible, schema-backed ones (a
+  one-character name, CJK, emoji-first, a count of exactly 1, 21 items at a page size of 20).
 
 ## 4. Who can run what (row cost)
 

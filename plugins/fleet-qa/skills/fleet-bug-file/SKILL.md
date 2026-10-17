@@ -17,7 +17,8 @@ The instances and the QA workspace (where the tracker lives) come from
 ## 1. Pin the facts
 
 Work from what's already established in the conversation (a QA run's RESULTS.md,
-the user's screenshots, a repro they just did). Before writing, make sure you know:
+an exploratory session's log and screenshots, the user's screenshots, a repro they
+just did). Before writing, make sure you know:
 
 - **What's wrong, concretely** — the observed behavior and why it's wrong
   (contradicts its own UI copy, the docs, another path that does it right).
@@ -25,8 +26,24 @@ the user's screenshots, a repro they just did). Before writing, make sure you kn
   second-hand, reproduce it once now — an issue that doesn't reproduce wastes the
   developer's first hour. Use the `fleet-bug-qa` scripts for this
   (`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh`, `screenshot.mjs`).
+  For anything timing-related, count: "3 of 10 attempts" in the steps is worth more
+  than "sometimes". If it won't reproduce, say which of these it is before deciding
+  with the user whether to file at all: *intermittent* (same build, same steps,
+  passes and fails — keep trying with the timing or load that showed it),
+  *environment* (only on one instance or config — name the difference), *data* (only
+  with a specific object or account — find which property), or *not reproducible*
+  (record what was tried; never file a bare "cannot reproduce").
 - **The mechanism, if you actually found it** — file:line of the code responsible.
   Only what you confirmed; see "More info" below.
+
+**Facts are yours to find; decisions are the user's.** Builds, the product group,
+whether it reproduces, duplicates, the responsible code: look those up (the steps
+below say how) rather than asking. What only the user knows — what they expected and
+why, which role they were, whether a customer hit it, how it should rank — goes in
+**one numbered round** of questions, each with your recommended answer so a one-word
+"yes" accepts it, skipping anything the conversation already settled. A question
+whose answer depends on a fact you haven't looked up yet waits for the fact. Don't
+walk the template one field at a time.
 
 **Security?** If the finding lets someone cross a trust boundary (read or change
 data they shouldn't, bypass auth), it must not go in the public `fleetdm/fleet`
@@ -97,7 +114,10 @@ these rules per field:
 - **🧑‍💻 Steps to reproduce** — only steps that lead specifically to the bug,
   including non-obvious setup it depends on (a failing policy with a script
   automation on 2+ hosts; 50 hosts for a pagination bug; a specific CA). Leave out
-  the obvious — spinning up Fleet, opening a browser, logging in. Tick the "confirmed
+  the obvious — spinning up Fleet, opening a browser, logging in. Minimise by
+  removing one step or condition at a time and re-checking after each cut: a step
+  that can go without losing the bug isn't a step, and a condition that can't go is
+  one to name. Tick the "confirmed
   in multiple Fleet instances" box only if it reproduced on two instances; otherwise
   the other one.
 - **🕯️ More info** — yours. The root cause with file:line if you confirmed it; the
