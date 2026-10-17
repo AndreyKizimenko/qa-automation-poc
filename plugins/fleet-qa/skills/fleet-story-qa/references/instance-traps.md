@@ -26,7 +26,8 @@ here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
   - Don't delete these users in cleanup.
   - If a token is rejected, ask the user to rerun `fleetctl login --context <name>`.
 - `fleetapi.sh` reads tokens from `~/.fleet/config`. In shell one-liners, zsh doesn't word-split
-  `$var`, so `set -- $x` tricks break: loop over arrays, or quote.
+  `$var`, so `set -- $x` tricks break: loop over arrays, or quote. And `echo =====` fails in zsh (`=cmd`
+  expansion), so use `---` as a separator.
 
 ## Android
 
@@ -57,8 +58,9 @@ RESULTS.md what it skips.
 
 ## UI evidence
 
-- The browser pane can't save PNGs. Capture evidence with `screenshot.mjs`, or a `pw.mjs` driver,
-  against the real state.
+- The browser pane's `browser_take_screenshot` saves only under `.playwright-mcp/` in the qa-automation
+  checkout (gitignored), the whole viewport or one element by ref, unannotated. Ticket-grade evidence
+  (clips, boxes, captions) comes from `screenshot.mjs`, or a `pw.mjs` driver, against the real state.
 - Don't fake states with `page.route` (license, role, settings, host state); ask for the real setup
   instead. The one legitimate use is rendering an error nobody can trigger, once the engineer has
   agreed. Label it in RESULTS.md, and never show it as a bare ✅.

@@ -89,7 +89,7 @@ host, or the ask); enroll-secret names; CA names; URLs in settings; uploaded fil
 |---|---|
 | `0` | Zero states: "0 hosts", an empty progress bar, division by zero in a percentage, "0 of 0" |
 | `1` | Plurals: "1 hosts", "1 days ago", "1 of 1" |
-| `19`, `20`, `21` | The page size: off-by-one in "Showing 20 of 21", an empty second page, "select all" vs "select all matching" |
+| The page size − 1, the page size, the page size + 1 (20 on most lists, 50 on Hosts: read the page's `DEFAULT_PAGE_SIZE`) | Off-by-one in "Showing 20 of 21", an empty second page, "select all" vs "select all matching" |
 | `1284`, `100000` | Thousands separators; the width of a count badge; a compact form (`100K`) where precision doesn't matter |
 | `33.333%`, `0%`, `100%`, a value past the bound | Policy compliance, install and profile percentages: rounding, bars past their ends |
 | A count that changes while you watch (`99` → `100`) | Width jump and jitter without tabular figures |
