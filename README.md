@@ -58,7 +58,7 @@ covers the same rule for the hand-run tooling.
 | `fleet-bug-file` | file a bug from a finding, and record how to retest it |
 | `fleet-bug-retest` | retest the bugs you filed once their fix is in a build |
 | `fleet-loadtest-qa` | QA and investigate behavior at scale on a 100k-host load test |
-| `fleet-explore` | run a chartered exploratory session on a feature, page or area: worst-case data, every scope and entry point, lifecycle and interruption tours, with a tagged log and a debrief |
+| `fleet-explore` | run a chartered exploratory session on a feature, page or area: worst-case data, every scope and entry point, lifecycle and interruption tours, with a tagged log, a debrief and a findings page (every finding's evidence and screenshots) |
 
 Install it once:
 

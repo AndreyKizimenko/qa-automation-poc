@@ -1,6 +1,6 @@
 ---
 name: fleet-explore
-description: Run a chartered exploratory-testing session on a live Fleet instance — Claude explores one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keeps a timestamped tagged log, and ends with a debrief: what was covered and what wasn't, a decision list of findings for the QA engineer, questions for product, candidates for the Playwright suite, and what held up. Use whenever the user wants to explore, poke at, stress, break, "kick the tires on" or find edge cases in a Fleet feature, page or area — "explore around the policy automations page", "throw worst-case names at the software library", "what else could be broken near this fix", "kick the tires on the new Android enrollment flow", "do an exploratory pass on Hosts before the release", "what would a real customer's data do to this screen" — and when fleet-story-qa, fleet-quickwin-qa or fleet-bug-qa end and the user wants the neighbours poked. Do NOT use to run a story's test plan (fleet-story-qa), to verify a specific bug fix before/after (fleet-bug-qa), to QA a quick win (fleet-quickwin-qa), to write a test plan (fleet-test-plan), to file a finding (fleet-bug-file), or to write Playwright tests (the suite's playwright-test-author).
+description: Run a chartered exploratory-testing session on a live Fleet instance — Claude explores one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keeps a timestamped tagged log, and ends with a debrief (what was covered and what wasn't, a decision list of findings for the QA engineer, questions for product, candidates for the Playwright suite, what held up) published as a private findings page with every finding's evidence and screenshots inline. Use whenever the user wants to explore, poke at, stress, break, "kick the tires on" or find edge cases in a Fleet feature, page or area — "explore around the policy automations page", "throw worst-case names at the software library", "what else could be broken near this fix", "kick the tires on the new Android enrollment flow", "do an exploratory pass on Hosts before the release", "what would a real customer's data do to this screen" — and when fleet-story-qa, fleet-quickwin-qa or fleet-bug-qa end and the user wants the neighbours poked. Do NOT use to run a story's test plan (fleet-story-qa), to verify a specific bug fix before/after (fleet-bug-qa), to QA a quick win (fleet-quickwin-qa), to write a test plan (fleet-test-plan), to file a finding (fleet-bug-file), or to write Playwright tests (the suite's playwright-test-author).
 ---
 
 # Fleet exploratory session
@@ -60,7 +60,8 @@ must show the thing, with no tokens or enroll secrets. Keep the raw full-page sh
 
 Workspace: next to the ticket's run when there is one, `<QA workspace>/qa-<N>/explore/`, otherwise
 `<QA workspace>/explore/`. One file per session, `explore-<date>-<slug>.md` (charter, log, debrief;
-template in `references/session.md`), `screenshots/` beside it, and its own `created.txt` in the
+template in `references/session.md`), `screenshots/` beside it, the findings page's `findings.json`
+and rendered `page/` (step 5), and its own `created.txt` in the
 same cleanup-manifest format as every other run. When the session borrows a run's `qa-<N>` fleet, it
 doesn't record the fleet again, and its cleanup runs before the run's: deleting the fleet strands
 the session's hosts in No fleet.
@@ -271,19 +272,49 @@ print it in chat. Five parts, in this order; the first is the one people skip:
 5. **What held up.** The worst cases and probes the feature handled correctly. It shows the
    session was real, tells the user what not to worry about, and is often the longest list.
 
-Then the screenshots: `SendUserFile` (display `attach`), one caption line per image naming its
-log row; if `SendUserFile` isn't available, list the paths. Shots that are read together (the input and where it ended up, the same view in two
-scopes) go out as one image via `stack.py`, cropped to the part that matters first. End with one
-line offering the next charter, built from the unexplored rows.
+Then the screenshots: every one goes on the findings page (step 5); in chat, the ticket-grade ones
+go out with `SendUserFile` (display `attach`), one caption line per image naming its log row, or as
+a list of paths when `SendUserFile` isn't available. Shots that are read together (the input and
+where it ended up, the same view in two scopes) go out as one image via `stack.py`, cropped to the
+part that matters first. End with the page's link and one line offering the next charter, built
+from the unexplored rows.
 
 The log is the engineer's to read when they want detail; the debrief has to stand on its own.
 Don't pad it with mechanics (which tools, how many snapshots), and don't soften a Broken into a
 NOTE because it "might be intended": that's what QUESTION is for.
 
-### 5. Cleanup
+### 5. The findings page
+
+Every session ends with one, short sessions included. It's what the engineer opens, filters and
+forwards: every finding with its steps, raw evidence and screenshots inline, the questions with a
+copy button, risks, suite candidates, what held up, a screenshot gallery and coverage. Build it
+before cleanup, while the evidence still matches the instance. `references/findings-page.md` has the
+schema and what goes in.
+
+1. Write `findings.json` next to the session file from the debrief you just wrote, not from memory:
+   each BUG row under the decision list's id, its steps, the exact evidence from the log (requests,
+   responses, timelines), its screenshots; then the questions, risks, candidates, what held up,
+   known issues and coverage.
+2. Render it with `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/scripts/findings_page.py
+   <session dir>/findings.json --out <session dir>/page`, adding `--out <scratchpad>/<slug>-page`
+   when the session has a scratchpad: the Artifact tool publishes only files under the working
+   directory or the scratchpad. The script refuses token-shaped strings and missing files; fix the
+   JSON and run it again.
+3. Publish it as a private Artifact when the Artifact tool is available, following the tool's own
+   rules for a new page: the rendered `index.html` with the `root` and `files` the script printed, a
+   one-word icon (`bug`), and a one-sentence description. Record the URL in the session file's
+   header (`**Page:**`). Later changes (a finding dropped, a bug filed) go to the same URL: edit the
+   JSON, render again, and publish the same file path in this conversation, or pass the URL as `url`
+   from another one.
+4. Without the Artifact tool, give the path of `<session dir>/page/index.html`; it opens from disk.
+5. When a finding may be security-sensitive, set the JSON's `banner`, and say in chat that the page
+   is private and stays internal until the finding is routed. Sharing it is the engineer's call.
+
+### 6. Cleanup
 
 List the session's `created.txt` newest-first and ask before
-`cleanup.sh <session dir>/created.txt --run`. Only what this session recorded. Leave the session file and screenshots; they're the evidence trail, and `fleet-bug-file`
+`cleanup.sh <session dir>/created.txt --run`. Only what this session recorded. Leave the session
+file, screenshots, `findings.json` and `page/`; they're the evidence trail, and `fleet-bug-file`
 reads them.
 
 ## Where this sits

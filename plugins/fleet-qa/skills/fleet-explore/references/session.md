@@ -48,6 +48,7 @@ Rules the log follows:
 - **Questions:** might break → "the hosts table while the run is partial"; tricky → "the URL params"
   (or: unasked, autonomous run)
 - **Manifest:** `explore/created.txt` · **Data folder:** `run-detail-data/` (names, diffs, evidence)
+- **Page:** https://claude.ai/artifact/… (private; `findings.json` and `page/` beside this file)
 
 ### Charters proposed
 1. ★ (this session) The run detail page with partial results and worst-case names.
