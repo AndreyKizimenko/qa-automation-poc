@@ -1,8 +1,8 @@
 # Instance traps
 
-Things that cost time in earlier story and quick-win runs. What's specific to one engineer's machine
-(which server is which, container names, log paths, role users) is in `~/.claude/fleet-qa.local.md`, not
-here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
+Things that cost time in earlier story, quick-win, bug and explore runs; every QA skill here reads
+this file. What's specific to one engineer's machine (which server is which, container names, log
+paths, role users) is in `~/.claude/fleet-qa.local.md`, not here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
 
 ## Which server is which
 
@@ -25,6 +25,15 @@ here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
   - Never log out in the UI as these users: that deletes the token.
   - Don't delete these users in cleanup.
   - If a token is rejected, ask the user to rerun `fleetctl login --context <name>`.
+- **Signing the browser pane in.** It usually opens on `/login`, and there are three ways in, in this
+  order. The engineer signs in there once: ask in one line and carry on with API checks meanwhile. Or,
+  with their say-so, session-owned users: created through the API on the run's own fleet (`qa-<N>` or
+  `qa-explore-<slug>`), one per role you need, with a generated password you never print, signed in
+  through the login form and recorded in `created.txt`; a global role is theirs to create or to sign in
+  as (the permission check refuses creating one). Never the engineer's token or password through the
+  browser tool or a file it loads: the MCP echoes the code it runs, and the permission check refuses
+  materialising a token, then tends to refuse the harmless commands that follow. `screenshot.mjs` and
+  `pw.mjs` read the token themselves and stay the headless path for evidence.
 - `fleetapi.sh` reads tokens from `~/.fleet/config`. In shell one-liners, zsh doesn't word-split
   `$var`, so `set -- $x` tricks break: loop over arrays, or quote. And `echo =====` fails in zsh (`=cmd`
   expansion), so use `---` as a separator.
@@ -70,3 +79,29 @@ RESULTS.md what it skips.
 - A burst of 502s from a tunnel or proxy in front of an instance usually means the server is restarting
   (the user may be switching tiers). Check `ps` before reading anything into it.
 - Read every PNG before sending. For public tickets, crop out tokens, enroll secrets and DPC extras.
+
+## Fleet UI that misleads a check
+
+Behaviour that has produced a false finding or a false pass in earlier runs and tests: a save that
+looks lost, a filter that looks ignored, an error that looks new. Recognise it, read the stored state
+(`GET` it back) rather than the screen, and check `playwright/docs/blocked-by-product-bugs.md` in the
+qa-automation checkout and the open issues before reporting anything like it as new.
+
+- **Stacked toasts.** Saving the same form twice puts the second toast on top of the first, which is
+  still up for seconds. Read the newest card, or better the stored state, never the first toast you see.
+- **The hosts list rewrites its own URL** from the filters its table last queried with, just after it
+  loads. A filter or search chosen before that can be silently undone, and *Select all matching* then
+  takes every host on the fleet. Choose the filter, wait for the table to settle, check the URL still
+  carries it, and keep bulk actions on your own fleet.
+- **The report edit form fills itself twice**: from state that survives client-side navigation, then
+  from its own fetch. An edit typed right after it opens can be overwritten and save nothing. Wait for
+  the fetch before typing.
+- **Forms validate at different times**, some on blur and some on submit, and the design direction is
+  submit-only with buttons always enabled. An enabled Save beside an invalid field is a QUESTION, not a
+  BUG, unless a sibling form does otherwise.
+- **UI words vs API names.** The UI says "fleets" and "reports"; the API keeps whatever name each
+  endpoint has (`team_id` here, `fleet_id` there, `queries` for reports). That mismatch isn't a bug; a
+  UI string still saying "team" or "query" is a consistency finding.
+- **The Ace editor worker 404** on pages with a code editor (fleetdm/fleet#54845), an uncaught error.
+  It's in `DEFAULT_IGNORED_PAGE_ERRORS` in the checkout's `playwright/helpers/console.ts`, beside the
+  console noise in `DEFAULT_IGNORED_CONSOLE_ERRORS` (favicon, `net::ERR_*`, ResizeObserver).
