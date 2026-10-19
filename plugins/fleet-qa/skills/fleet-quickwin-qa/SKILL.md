@@ -29,14 +29,17 @@ workspace and the role users. If it doesn't exist, create it before anything els
 per `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. Skim
 `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md` and
 `${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md` before creating test
-data.
+data; its § Auth says how to get the browser pane signed in. Edge values and probes come from
+fleet-explore's `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/tours.md` (cited below as
+tours.md §N): take the one or two values a row needs, not the tour.
 
 Work in `<QA workspace>/qa-<N>/` with `RESULTS.md`, `created.txt`
 (cleanup manifest), `screenshots/`, `issue-comment.md`.
 
 Hard lines, same as every QA skill here: don't flip global settings (MDM, license,
-GitOps mode, org settings) — ask; don't type passwords or create/delete human
-accounts (API-only users are fine); don't post on GitHub unless asked; scratch code
+GitOps mode, org settings) — ask; don't type the engineer's password or create/delete
+their accounts (API-only users are fine, and so are session-owned users per
+`instance-traps.md` § Auth); don't post on GitHub unless asked; scratch code
 never stays in the repo. Put test data on objects you create (osquery-perf hosts, a
 `qa-<N>` fleet) — never edit a real host's mapping, labels or fleet, even
 temporarily; those are the engineer's devices. Some GET endpoints create state
@@ -101,7 +104,12 @@ others can't:
 - **Core** — the change as the issue describes it, on each entry point, plus the
   one or two edge inputs that matter for this kind of change (empty/absent,
   invalid value, false vs true, a host/fleet with no data, both platforms if the
-  field is per-platform).
+  field is per-platform). Pick them by what the change touches: a new API field →
+  omitted, `null` and an invalid value (tours.md §3, payload shapes); a count, or
+  copy with a number in it → 0, 1 and the page size ± 1 (§1, Numbers); a new name,
+  column or text field → a long name and a one-character one, at 1440 and 768 (§1
+  catalog, §8). For a new field, note its limit from the form and the validator;
+  none anywhere is a Risk (step 4).
 - **Regression** — what the change could plausibly break: default behavior when
   the new option isn't used, response size/shape for existing callers, the other
   screen that uses the same component or string.
@@ -111,6 +119,9 @@ others can't:
 For copy changes, core = the exact new strings in every place the issue lists
 (compare character for character against the issue/PR, including punctuation and
 casing), regression = the other places the old string or component still appears.
+Judge the new copy against the house style too (tours.md §7, product consistency:
+capitalisation, toast and empty-state wording, "fleets" and "reports" wherever the UI
+was renamed); the API keeping its old names isn't a finding.
 
 Share the matrix outline in one short message and proceed without waiting. If
 some rows need the user (a device, a setting flip, a real UI login as a role),
@@ -125,7 +136,8 @@ record every object in `created.txt` as you create it.
 
 For performance-sensitive API changes (a list endpoint that now populates more
 data), compare response time and size with and without the option on the largest
-realistic page — that's the regression a quick win most often ships.
+realistic page (300 osquery-perf hosts, or an Ubuntu simulation's 1,600+ packages:
+tours.md §1, Numbers) — that's the regression a quick win most often ships.
 
 If a surface only appears under a global setting that's off (report storage, a
 feature flag, the other license tier) or in a state you can't reach through a
@@ -141,10 +153,17 @@ List everything odd in a **decision list** in chat
 (`# | finding | origin | severity | repro / file:line`), including cosmetic ones —
 the user decides file / mention / drop. Origin is *this change*, *released* (in
 the latest release tag), or *pre-existing*. Search open issues before suggesting a
-new one. File chosen findings with `fleet-bug-file`. When the neighbours deserve more
-than the halo rows (the other screen that uses the same component, worst-case data in
-the field the change added), offer a `fleet-explore` session rather than growing the
-matrix.
+new one. Before a row goes on the list, vary one thing (another role, the API instead
+of the UI, ordinary data instead of the edge value) to narrow the condition, say what
+it's wrong against (the issue, the docs, a sibling page, house style: tours.md §7),
+and capture it ticket-grade before cleanup, the way `fleet-bug-file` makes evidence
+(clipped, the wrong state boxed, captioned with the build): the data is gone
+afterwards. Behaviour you can't call right or wrong goes in a short **Questions for
+product** block, one copiable line each; what hasn't broken but is one realistic step
+away (an unbounded field) goes in **Risks**, mention / drop. File chosen findings with
+`fleet-bug-file`. When the neighbours deserve more than the halo rows (the other
+screen that uses the same component, worst-case data in the field the change added),
+offer a `fleet-explore` session rather than growing the matrix.
 
 ### 5. Comment
 

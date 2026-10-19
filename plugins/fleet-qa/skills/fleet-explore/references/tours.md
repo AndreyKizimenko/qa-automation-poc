@@ -6,6 +6,11 @@ debrief. The probes name Fleet objects and the traps earlier runs met, so most o
 up with `fleetapi.sh`, osquery-perf hosts and the role users from the local file. Where a probe
 needs a global switch or a real device, it goes in the ask, not in the session.
 
+Other QA skills borrow single sections at the step that needs them: fleet-bug-qa, fleet-quickwin-qa
+and fleet-story-qa for edge values, payload shapes, probes and oracles; fleet-test-plan for concrete
+row values. They take the values and probes a check needs, not the tour. Running the tours is
+fleet-explore's job.
+
 Contents: 1 Worst-case data (with the catalog) · 2 Scope and gating · 3 Second door · 4 Lifecycle ·
 5 Interruption · 6 Tables and forms · 7 Oracles · 8 Width and keyboard · 9 Concurrency and timing ·
 Not findings.
@@ -204,16 +209,12 @@ Question: what does the feature do when the user doesn't follow the happy path t
 - **Double submit:** click Save twice fast; press Enter in a text field inside a multi-field form
   (one bug class: Enter silently saved the first script of a batch).
 - **Reopen immediately** after closing a modal: does it show the saved state or the pre-save one?
-  The report edit form fills itself twice, from state that survives client-side navigation and
-  then from its own fetch, so an edit made right away can be overwritten and save nothing.
-- **The list rewrites its URL** just after loading (the hosts list does): a filter or search chosen
-  before that can be undone, and "select all matching" can then take a whole fleet. Choose the
-  filter, wait, and check the URL kept it.
-- **A second toast** after saving the same form twice: the first card is still up for seconds and
-  the second stacks on it, so read the newest card, or better the stored state, never the first
-  toast you see.
+- **Choose a filter before the list settles**, then check the URL kept it.
 
-Several of these classes are known and worked around in the Playwright suite; check
+Three Fleet behaviours meet these probes and look like findings: the report edit form filling
+itself twice, the hosts list rewriting its URL, and stacked toasts after a second save.
+`instance-traps.md` § Fleet UI that misleads a check says what each looks like. Several of these
+classes are known and worked around in the Playwright suite; check
 `playwright/docs/blocked-by-product-bugs.md` in the qa-automation checkout and the open issues
 before calling one new.
 
@@ -229,9 +230,8 @@ restored everything; the empty state, with and without a filter; the loading sta
 bulk select on page 1 vs "select all matching" (scope it to your own fleet); a truncated cell's
 tooltip; column widths with a worst-case row.
 
-Forms: validation timing (forms differ today, some validating on blur and some on submit, and the
-design direction is submit-only with buttons always enabled, so an enabled Save beside an invalid
-field is a QUESTION, not a BUG, unless the sibling form does otherwise); the limit + 1;
+Forms: validation timing (an enabled Save beside an invalid field is a QUESTION, not a BUG, unless
+the sibling form does otherwise: `instance-traps.md` § Fleet UI that misleads a check); the limit + 1;
 spaces only; smart quotes pasted from a document; a required field cleared after a successful save;
 Cancel after an edit (does it discard?); where the error appears and whether it clears when the
 field is fixed; the disabled state's tooltip; Save twice.
@@ -249,9 +249,8 @@ filed.
 - **Comparable:** the sibling that does the same thing: fleet policies vs global policies, macOS vs
   Windows profiles, add vs edit, the host details card vs the list column, the UI vs `fleetctl get`.
 - **Product consistency:** error messages in the house style, empty states worded like the others,
-  toast text, capitalisation, "fleets" and "reports" everywhere the UI was renamed (the API keeps
-  whatever name each endpoint has, `team_id` here and `fleet_id` there, `queries` for reports; a
-  UI-word vs API-name mismatch is not a bug).
+  toast text, capitalisation, "fleets" and "reports" everywhere the UI was renamed (the API keeping
+  its own names is not a bug: `instance-traps.md` § Fleet UI that misleads a check).
 - **Activities:** was it logged, once, by the actor who did it, with details that match, and not
   when the action failed?
 - **Explainability:** if you can't explain the behaviour to someone else in one sentence, it's a
@@ -301,7 +300,9 @@ with the number, and move on:
   (`fleet-gotchas.md` § Counts and crons); a CVE page can answer 204 while host counts lag
   (`playwright/docs/blocked-by-product-bugs.md`); unchanged report results refresh `last_fetched`
   only after ~50 min (fleetdm/fleet#54897).
-- The **Ace editor worker 404** in the console (fleetdm/fleet#54845; `playwright/helpers/console.ts`).
+- The **Ace editor worker 404** (fleetdm/fleet#54845), **stacked toasts**, the **hosts list
+  rewriting its URL** and the **report edit form filling itself twice** (`instance-traps.md`
+  § Fleet UI that misleads a check).
 - **The browser pane blocks pop-ups** (a `window.open` button shows the page's own
   "allow pop-ups" message), and **a burst of 502s** from a tunnel usually means the server is
   restarting (`instance-traps.md` § UI evidence).

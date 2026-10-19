@@ -34,7 +34,10 @@ before anything else, per `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/
 Before building test data, skim `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md`
 and `references/instance-traps.md` (this skill). The second covers the instance
 traps that cost earlier story runs time (which server is which, Free needs a
-restart, API-only users expire).
+restart, API-only users expire, signing the browser pane in, the Fleet UI that
+misleads a check). Edge values and Fleet-specific probes come from fleet-explore's
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/tours.md` (cited below as
+tours.md §N): borrow what a check needs, not whole tours.
 
 Work in `<QA workspace>/qa-<N>/`: `RESULTS.md` (the lab notebook:
 everything run, with evidence), `created.txt` (cleanup manifest, same line format
@@ -52,10 +55,12 @@ These come from real corrections — each one cost a user something once.
   license (`--dev_license`), GitOps mode, Apple/Android enterprise setup, org
   settings. Turning Android MDM off deletes the enterprise and every Android app in
   every fleet. Ask; the human does it.
-- **Never type a password** or create/delete human accounts. For API role checks
-  use API-only users (they return a token). They can't open the UI, so for UI-by-role
-  use the real role users with fleetctl contexts listed in
-  `~/.claude/fleet-qa.local.md`, or ask the human to sign in as that role.
+- **Never type the engineer's password**, and never create or delete their
+  accounts. For API role checks use API-only users (they return a token). They
+  can't open the UI, so for UI-by-role use the real role users with fleetctl
+  contexts listed in `~/.claude/fleet-qa.local.md`, ask the human to sign in as that
+  role, or, with their say-so, a session-owned user on your `qa-<N>` fleet
+  (`references/instance-traps.md` § Auth).
 - **Never post, edit or delete on GitHub unless asked in this conversation.** Give
   comments as copiable blocks. Ticking test-plan boxes on the ticket is fine only
   once the user has asked you to keep them updated — and only tick what was
@@ -148,6 +153,10 @@ from. For each changed code path, ask:
 - **Docs vs code**: the REST API reference (docs branch for the release) vs the
   actual response shape; field names taken from code, never from ticket prose.
 
+tours.md §2 (scope and gating), §4 (lifecycle) and §9 (concurrency and timing)
+turn these questions into Fleet setups: which scopes and roles to try, what to
+delete or rename underneath the feature, how to fire two writes at once.
+
 Name the file:line for each risk. A risk the plan doesn't cover becomes a targeted
 check in step 3 and an addition in the step-2 proposal. A risk read from code is a
 hypothesis: say what you expect ("second call likely fails on the unique key")
@@ -184,7 +193,9 @@ never edit the ticket body.
 
 Keep the proposal to one screen: which rows you'll take and how (what you'll simulate, with
 what), which are the human's, stale or wrong rows with their evidence, and additions with their
-risk.
+risk. In the same message, ask the two questions that find the most bugs: what does the engineer
+think might break, and what did the developer say was tricky (read the PR conversations first and
+ask only what they don't answer). An answer can move a risk to the top of your share.
 
 ### 3. Split the work, then run your share
 
@@ -205,7 +216,8 @@ methods for your rows (simulated hosts, mocks, DB checks), which the public plan
   revoked token, a stopped proxy, a throwaway integration) before falling back to a
   mocked scratch test.
 - UI: the obvious states in the in-app browser (render, empty, error, premium,
-  role-gated, narrow width); evidence PNGs via `screenshot.mjs`/`pw.mjs`. A state
+  role-gated, narrow width: tours.md §1 States says how to reach each, §8 the
+  breakpoints); evidence PNGs via `screenshot.mjs`/`pw.mjs`. A state
   the instance can't produce without a global change (Free, a setting that's off,
   another role's view) goes in the ask, not into an intercepted response.
   A PNG sitting in `screenshots/` is evidence only you have: read each one (it must
@@ -217,9 +229,10 @@ methods for your rows (simulated hosts, mocks, DB checks), which the public plan
   out as one image (`stack.py out.png a.png b.png`, `--side` for narrow clips; crop
   each to the part that matters first); shots for different cases stay separate.
 - Exploratory, lightly: poke the neighbours of the change — list/detail pages, the
-  same feature on the other platform, what happens on delete/disable of the parent —
-  and log what you tried. A proper session (worst-case data, every scope and entry
-  point, lifecycle and interruption tours, with a charter and a debrief) is
+  same feature on the other platform, what happens on delete/disable of the parent
+  (tours.md §4 has the Fleet probes for that) — and log what you tried. A proper
+  session (worst-case data, every scope and entry point, lifecycle and interruption
+  tours, with a charter and a debrief) is
   `fleet-explore`'s job: offer it once the plan's rows are done, with this run's
   workspace as its input, and let the engineer decide whether the change deserves it.
 
@@ -251,10 +264,23 @@ For every unexpected behavior, establish:
   isn't a Fleet bug, but it may belong in the feature guide.
 - **Could Fleet even know?** Before calling stale state a bug, ask what signal
   Fleet has. A device moved elsewhere looks exactly like one powered off.
+- **Wrong against what?** There's no "before" for a story, so name the oracle
+  (tours.md §7): the story and its comments, the REST and YAML docs, Figma, the
+  sibling that does the same thing, house style. "Looks odd" can't be filed; when
+  nothing settles it, it's a QUESTION.
 
-Put everything in a **decision list** in chat (`# | finding | origin | severity |
+Before a finding goes on the list, vary one thing at a time (another role, All
+fleets instead of the fleet, the API instead of the UI) to narrow the condition,
+and capture it ticket-grade before cleanup, the way `fleet-bug-file` makes evidence
+(clipped, the wrong state boxed, captioned with the build): the run's data is gone
+afterwards, and nobody can re-shoot it.
+
+Put every BUG row in a **decision list** in chat (`# | finding | origin | severity |
 repro / file:line`) and let the user choose file / mention / drop. File chosen
-ones with the `fleet-bug-file` skill.
+ones with the `fleet-bug-file` skill. The other tags land beside it: QUESTION rows
+as **Questions for product**, one copiable line each; RISK rows as a short
+**Risks** list (mention / drop, or a row for the next fleet-test-plan pass); IDEA
+rows as one line each offering them to `playwright-test-author`.
 
 ### 5. Sign off
 
