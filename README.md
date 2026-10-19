@@ -70,7 +70,8 @@ claude plugin install fleet-qa@qa-automation --scope user
 Update it with `claude plugin marketplace update qa-automation && claude plugin update fleet-qa@qa-automation`,
 or turn on auto-update for the marketplace under `/plugin` → Marketplaces. Invoke a skill as
 `/fleet-qa:fleet-bug-qa` (or just `/fleet-bug-qa` when nothing else has that name), or let Claude pick it up
-from the request.
+from the request. To install from your own clone, try a branch's skills before they merge, or change a
+plugin, see [`plugins/README.md`](plugins/README.md).
 
 Both sets are linted by `skills-check.yml` on every PR that touches them (see CI below).
 
