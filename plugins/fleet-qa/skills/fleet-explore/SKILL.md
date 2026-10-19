@@ -39,15 +39,11 @@ The browser: the Playwright MCP tools when they're available (`browser_navigate`
 or Claude in Chrome when the user prefers their own logged-in browser. A sequence you'll repeat on
 every variation (the setup before each probe) becomes a `pw.mjs` driver.
 
-**Getting the pane signed in.** It usually opens on `/login`, and there are three ways in, in this
-order. The engineer signs in there once: ask in one line and carry on with API probes meanwhile.
-Or, with their say-so, session-owned users: created through the API on the session's own fleet, one
-per role you need, with a generated password you never print, signed in through the login form and
-recorded in `created.txt`; a global role is theirs to create or to sign in as (the permission check
-refuses creating one). Never the engineer's token or password through the browser tool or a file it
-loads: the MCP echoes the code it runs, and the permission check refuses materialising a token, then
-tends to refuse the harmless commands that follow. `screenshot.mjs` and `pw.mjs` read the token
-themselves and stay the headless path for evidence.
+**Getting the pane signed in.** It usually opens on `/login`. The three ways in, in order, are in
+`instance-traps.md` § Auth, shared with the other QA skills: the engineer signs in once (ask in one
+line and carry on with API probes meanwhile); or, with their say-so, session-owned users on the
+session's fleet; never the engineer's token or password through the browser tool or a file it
+loads.
 
 **Screenshots.** `browser_take_screenshot` with a `filename` saves only under `.playwright-mcp/` in
 the qa-automation checkout (gitignored), the whole viewport or one element by its ref; move the

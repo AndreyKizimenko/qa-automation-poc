@@ -63,7 +63,12 @@ any repo, and holds no tokens.
 
 Read `references/fleet-gotchas.md` once before building test data — it covers
 osquery-perf behavior, count aggregation, shared instances and other traps that
-cost earlier runs time.
+cost earlier runs time. Skim
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md` too: signing
+the browser pane in (§ Auth), UI evidence, and the Fleet UI that has misled earlier
+checks. Concrete edge values and Fleet-specific probes come from fleet-explore's
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/tours.md` (cited below as
+tours.md §N): borrow the values and probes a row needs, not whole tours.
 
 Work in `<QA workspace>/qa-<N>/` (the local file names the workspace): drivers, `plan.md`
 (step 3), `RESULTS.md`, `issue-comment.md`, `screenshots/`, and `created.txt` (the cleanup manifest).
@@ -155,9 +160,14 @@ Write it to `qa-<N>/plan.md`. Three kinds of rows. Aim for coverage, not count �
 each row should be able to catch something the others can't.
 
 - **Core** — the issue's repro as written, then variants attacking the same
-  mechanism: each entry point from step 1, edge inputs (empty, malformed, max
-  length, unicode, duplicates), each relevant platform, global vs fleet vs "no
-  fleet", each role. For security fixes: the report's exploit verbatim, then
+  mechanism: each entry point from step 1, edge inputs (empty, malformed, the
+  limit and the limit + 1, unicode, duplicates: plausible values from the catalog
+  in tours.md §1, including the API pushing past what the form allows), alternate
+  payload shapes (the optional field omitted, `null` vs missing, `fleet_id=0` vs
+  no param: tours.md §3), each relevant platform, global vs fleet vs "no fleet",
+  each role. For a bug in a form or modal, the interruption probes too (tours.md
+  §5): Save twice fast, Enter inside a multi-field form, Back or reopen right
+  after saving. For security fixes: the report's exploit verbatim, then
   bypass attempts (other endpoints reaching the same data, other roles, team-scoped
   users against other teams, ID guessing, encoding). When the fix introduces a
   token or session, probe its lifecycle: unknown, expired, reused after it should
@@ -198,7 +208,9 @@ the line format), including hosts, background PIDs, worktrees and containers. Fo
 role testing create **API-only users** (`POST /api/v1/fleet/users/api_only`) — they
 return a token directly, so no password is typed. (They can't log into the UI; for
 UI-by-role use the real role users with fleetctl contexts listed in
-`~/.claude/fleet-qa.local.md`, or ask the user to sign in as that role. Never rewrite `/me` in the browser to fake a role.)
+`~/.claude/fleet-qa.local.md`, ask the user to sign in as that role, or, with their
+say-so, a session-owned user on your `qa-<N>` fleet (`instance-traps.md` § Auth).
+Never rewrite `/me` in the browser to fake a role.)
 
 ### 4. Prove the problem is captured
 
@@ -246,9 +258,11 @@ regression and halo rows need the pre-fix baseline too, to tell "broke" from
 ### 6. UI verification and screenshots
 
 Explore and drive flows with the in-app browser (or Claude in Chrome if the user
-asks). For evidence files, use `screenshot.mjs` — the browser tools can't save
-PNGs. Prefer `--clip` on the relevant element over `--full`; use `--caret` for
-caret/focus bugs; write a `pw.mjs` driver for longer click flows.
+asks); `instance-traps.md` § Auth says how to get it signed in. For evidence files,
+use `screenshot.mjs`: the pane's `browser_take_screenshot` saves only unannotated
+shots under `.playwright-mcp/`, a working record, not ticket evidence. Prefer
+`--clip` on the relevant element over `--full`; use `--caret` for caret/focus bugs;
+write a `pw.mjs` driver for longer click flows.
 
 Pair them (same number, `prefix`/`fixed`, e.g. `01-prefix-transfer-modal.png`).
 Read every PNG before sending: it must show the thing (not a spinner, a login page
@@ -280,6 +294,16 @@ an "unconfirmed" label. A UI finding seen only in headless Playwright isn't a
 finding yet: confirm it by hand in a real browser first (a headless-only focus-loss
 "bug" once turned out not to reproduce for a person), or list it with that caveat
 and ask the user to try it.
+
+Before a finding goes on the list, vary one thing at a time (another role, All
+fleets instead of the fleet, the API instead of the UI, ordinary data instead of
+the edge value): each variation that still fails narrows the cause, and each that
+passes names a condition of the repro. Say what it's wrong against (tours.md §7:
+the docs, a sibling page, house style, the pre-fix instance), because "looks odd"
+can't be filed. Then capture it ticket-grade now, the way `fleet-bug-file` makes
+evidence (clipped to the element, the wrong state boxed, captioned with the
+build): cleanup removes the data, and nobody can re-shoot it if the engineer
+later says "file it".
 
 List everything that survives — including low-severity quirks. Don't pre-filter by
 whether it seems worth filing; that's the QA engineer's call. For security reports,
@@ -343,6 +367,12 @@ showing the bug, `✅` baseline, `➖ n/a` when the case can't exist pre-fix.
 
 For each: file it, mention it in the comment, or drop it?
 ```
+
+Two short lists follow it when the run produced them: **Questions for product**,
+one copiable line each, for behaviour the issue, the docs and the sibling pages
+don't settle as right or wrong; and **Risks**, for what hasn't broken but is one
+realistic step away (a field with no length limit anywhere), each mention / drop,
+or a row for the next test plan in the area.
 
 For any the user says to file, use the `fleet-bug-file` skill — it writes the issue,
 and records the setup from this QA run so the fix can be retested later.
