@@ -1724,8 +1724,7 @@ other:
 2. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (`softwareTitleDetail.goto`) → the Library row's **Edit version** icon (`openEditVersion`). An Android title holds versions, and each version's configuration is edited there, not from **Actions**.
    - ✅ *(UI)* The **Edit version** modal and its Configuration Ace editor are visible.
 3. ☐ Replace the editor's text with `{ "pwUnsupportedKey": true }` (through Ace's API, `setAceValue`) → **Save**.
-   - ✅ *(API)* The save's `PATCH /software/titles/:id/app_store_app` is refused, its reason reading `Unknown top-level key "pwUnsupportedKey".` — well-formed JSON whose key isn't an Android Management API `ApplicationPolicy` field, which Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses.
-   - ✅ *(UI)* Error toast `Couldn't update. Please try again.` — the modal shows only a generic message; the reason rides in the response.
+   - ✅ *(UI)* Error toast carrying Fleet's reason, `Unknown top-level key "pwUnsupportedKey".` (in full: `Couldn't update configuration. Unknown top-level key "pwUnsupportedKey".`) — well-formed JSON whose key isn't an Android Management API `ApplicationPolicy` field, which Fleet refuses (`ValidateAndroidAppConfiguration`); the browser checks only that it parses. The generic `Couldn't update. Please try again.` shows only when the server sends no reason, so it doesn't match.
    - ✅ *(UI)* The modal stays open.
    - ✅ *(API)* The stored configuration is unchanged.
 4. ☐ Replace the text with `{"managedConfiguration":{"pw_setting":"pw-value"},"workProfileWidgets":"WORK_PROFILE_WIDGETS_ALLOWED"}` → **Save**.

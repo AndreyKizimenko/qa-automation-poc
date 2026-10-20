@@ -265,20 +265,13 @@ for (const scope of SCOPES) {
           await softwareTitleDetail.openEditVersion();
 
           // Well-formed JSON with a key that isn't an ApplicationPolicy field:
-          // refused, and nothing changes. The modal's toast is generic, so the
-          // reason is read off the refused request.
-          // TODO(fleetdm/fleet#55614): assert the reason in the toast once the
-          // Edit version modal shows it.
+          // refused, and nothing changes. The toast carries the server's reason
+          // (`ValidateAndroidAppConfiguration`), and shows Fleet's generic
+          // "Couldn't update. Please try again." only when there's none, so the
+          // reason is what's asserted.
           await modal.fill('{ "pwUnsupportedKey": true }');
-          const refusal = page.waitForResponse(
-            (r) => r.request().method() === 'PATCH' && /\/software\/titles\/\d+\/app_store_app\b/.test(r.url()),
-          );
           await modal.saveButton.click();
-          const refused = await refusal;
-          expect(refused.ok(), 'the configuration was accepted').toBe(false);
-          const { errors } = (await refused.json()) as { errors?: { reason: string }[] };
-          expect(errors?.map((e) => e.reason).join(' ')).toContain('Unknown top-level key "pwUnsupportedKey".');
-          await softwareTitleDetail.toast.expectError("Couldn't update. Please try again.");
+          await softwareTitleDetail.toast.expectError('Unknown top-level key "pwUnsupportedKey".');
           await expect(modal.modal).toBeVisible();
           expect(await getAppStoreAppConfiguration(request, fleetId, titleId)).toEqual(stored);
 
