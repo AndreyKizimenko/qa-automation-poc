@@ -13,6 +13,13 @@
  * `enable_analytics` on premium is whatever the YAML says only because Fleet
  * forces it on for a premium license, so the YAML has to say true.
  *
+ * The ABM list `GET /config` returns is the list the apply sent, so the tokens
+ * themselves are read from `GET /abm_tokens` too: every token there has to be
+ * declared, with the default and fleets the config gives it. With more than one
+ * token, an apply that marks none `default` leaves Fleet without a default
+ * token, and a token added by hand that the config doesn't name would go
+ * unnoticed.
+ *
  * Enroll secrets are compared as sets and never printed: the messages carry
  * counts only.
  */
@@ -86,6 +93,27 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
         expectSubset(`VPP token "${declared.location}"`, token, declared);
       }
       expect.soft(liveVpp, 'VPP token count').toHaveLength(vpp.length);
+    }
+  });
+
+  test('every ABM token on the instance is declared, with its default and fleets', async ({ request }) => {
+    const mdm = org().mdm ?? {};
+    const abm = (mdm.apple_business_manager ?? mdm.apple_business) as Array<Record<string, any>> | undefined;
+    test.skip(!abm, 'the config declares no ABM tokens');
+    const tokens = ((await getJson(request, 'abm_tokens')).abm_tokens ?? []) as Array<Record<string, any>>;
+    expect(tokens.length, 'ABM tokens on the instance').toBeGreaterThan(0);
+    for (const token of tokens) {
+      const name = token.org_name as string;
+      const declared = abm!.find((d) => d.organization_name === name);
+      expect.soft(declared, `ABM token "${name}" is declared`).toBeTruthy();
+      if (!declared) continue;
+      expect.soft(token.default === true, `ABM token "${name}" is the default`).toBe(declared.default === true);
+      // An undeclared fleet is Unassigned, which the token reports as fleet 0.
+      for (const key of ['macos_fleet', 'ios_fleet', 'ipados_fleet', 'byod_fleet']) {
+        const live = token[key]?.fleet_id ? token[key].name : '';
+        const want = declared[key] ?? declared[key.replace(/_fleet$/, '_team')] ?? '';
+        expect.soft(live, `ABM token "${name}" ${key}`).toBe(want);
+      }
     }
   });
 

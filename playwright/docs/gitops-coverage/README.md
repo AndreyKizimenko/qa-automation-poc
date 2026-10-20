@@ -277,7 +277,7 @@ The coverage-branch column says whether its example is the starting point.
 | `secrets` | free: already **1** verify via `GET /spec/enroll_secret`; premium **—** | excepted on premium | — |
 | `sso_settings` (6 keys) | **1** verify all six | `metadata_url` compared to the env var | — |
 | `mdm.end_user_authentication` | **1** premium verify | entity_id, idp_name, metadata_url | — |
-| `mdm.apple_business_manager` | **1** premium verify | org name + the three fleet mappings | — |
+| `mdm.apple_business_manager` | **1** premium verify | both tokens: org name, `default` and the fleet mappings, in `GET /config` and against `GET /abm_tokens`, where every token must be declared | — |
 | `mdm.volume_purchasing_program` | **1** premium verify | location + fleets | — |
 | `mdm.apple_server_url`, `only_allow_apple_business_enrollment` | **—** | saving `server_url`/`apple_server_url` re-syncs DEP (author skill); declaring the live `""`/`false` adds nothing a verify can't read anyway | — |
 | `mdm.end_user_license_agreement` | **3** | needs a hosted PDF; `automatic-enrollment.spec.ts` uploads and deletes the EULA → conflict to resolve first | — |
