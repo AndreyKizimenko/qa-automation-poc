@@ -103,11 +103,15 @@ fails the next verify:
   `webhook_settings` (declared and off, with example destinations; no `policy_ids`, which Fleet keeps when the key
   is omitted), and the `gitops` block (`gitops_mode_enabled: false` and the repository URL the gitops-mode specs
   read; the exceptions can't be declared).
-- `org_settings.mdm`: the end-user authentication IdP, the ABM token's three default fleets and
+- `org_settings.mdm`: the end-user authentication IdP; the first ABM token's three default fleets and
   `windows_automatic_enrollment.default_fleet`, all pointing at **Compliance** — an automated enrollment lands on
   the fleet nothing depends on, never on Workstations, which half a dozen specs need hostless (Fleet moves only a
   host whose record was created by that enrollment, so the fleetd-enrolled VMs stay where their secret put
-  them) — and the VPP token on all fleets.
+  them); the second ABM token, which names no fleets, so its enrollments land on Unassigned; and the VPP token on
+  all fleets. Both ABM tokens are listed (`FLEET_ABM_ORG_NAME`, `FLEET_ABM_ORG_NAME_2`) and the first is marked
+  `default`: with more than one token, an apply that marks none `default` leaves Fleet with no default token,
+  and one the list leaves out drops out of `GET /config`. A token added in the UI needs an entry here too —
+  `gitops-verify` fails on any token `GET /abm_tokens` lists that the config doesn't declare.
 - The global MDM flags under `controls`: `windows_enabled_and_configured`, `android_enabled_and_configured`,
   `windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`, each
   at the value the instance has (flipping one changes how the real Windows VMs or Apple DEP enroll, so the min

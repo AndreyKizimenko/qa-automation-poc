@@ -68,4 +68,5 @@ jobs:
           FLEET_SSO_METADATA_URL: ${{ secrets.FLEET_PREMIUM_SSO_METADATA_URL }}
           FLEET_EUA_METADATA_URL: ${{ secrets.FLEET_EUA_METADATA_URL }}
           FLEET_ABM_ORG_NAME:     ${{ secrets.FLEET_ABM_ORG_NAME }}
+          FLEET_ABM_ORG_NAME_2:   ${{ secrets.FLEET_ABM_ORG_NAME_2 }}
           FLEET_VPP_LOCATION:     ${{ secrets.FLEET_VPP_LOCATION }}

@@ -65,11 +65,15 @@ org_settings:
       entity_id: fleet-eua
       idp_name: Okta
       metadata_url: $FLEET_EUA_METADATA_URL
+    # Both AB tokens, the first one the default, as in the baseline config (its
+    # comment says why every token is listed).
     apple_business:
       - organization_name: $FLEET_ABM_ORG_NAME
+        default: true
         macos_fleet: Compliance
         ios_fleet: Compliance
         ipados_fleet: Compliance
+      - organization_name: $FLEET_ABM_ORG_NAME_2
     windows_automatic_enrollment:
       default_fleet: Compliance
     volume_purchasing_program:

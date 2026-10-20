@@ -182,7 +182,7 @@ Instance + gitops:
 | `FLEET_PREMIUM_ADMIN_EMAIL`, `FLEET_PREMIUM_ADMIN_PASSWORD` | playwright-premium |
 | `FLEET_FREE_SSO_METADATA_URL` | gitops-free(-min), gitops-verify, gitops-nightly-cli |
 | `FLEET_PREMIUM_SSO_METADATA_URL` | gitops-premium(-min), gitops-verify, gitops-nightly-cli |
-| `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_VPP_LOCATION` | gitops-premium(-min), gitops-verify, gitops-nightly-cli |
+| `FLEET_EUA_METADATA_URL`, `FLEET_ABM_ORG_NAME`, `FLEET_ABM_ORG_NAME_2`, `FLEET_VPP_LOCATION` | gitops-premium(-min), gitops-verify, gitops-nightly-cli |
 | `FLEET_SSO_LOGIN_USERNAME`, `FLEET_SSO_LOGIN_PASSWORD` | playwright (admin SSO login spec, both tiers) |
 | `RENDER_FREE_DEPLOY_HOOK`, `RENDER_PREMIUM_DEPLOY_HOOK` | render-deploy |
 | `RENDER_API_KEY`, `RENDER_FREE_SERVICE_ID`, `RENDER_PREMIUM_SERVICE_ID` | qa-nightly's deploy wait (optional: without them it is a fixed 30-min sleep) |

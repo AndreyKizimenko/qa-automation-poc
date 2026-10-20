@@ -76,11 +76,19 @@ org_settings:
     # nothing in the suite depends on; Workstations has to stay hostless for
     # half a dozen specs. fleetctl creates a fleet named here before it sets
     # the token's assignment, so a first apply works.
+    #
+    # Premium holds two AB tokens and both are listed. With more than one token,
+    # an apply that marks none `default` leaves Fleet with no default token, and
+    # a token the list leaves out drops out of the ABM list `GET /config` returns.
+    # The second token names no fleets, so its automated enrollments land on
+    # Unassigned.
     apple_business:
       - organization_name: $FLEET_ABM_ORG_NAME
+        default: true
         macos_fleet: Compliance
         ios_fleet: Compliance
         ipados_fleet: Compliance
+      - organization_name: $FLEET_ABM_ORG_NAME_2
     windows_automatic_enrollment:
       default_fleet: Compliance
     volume_purchasing_program:
