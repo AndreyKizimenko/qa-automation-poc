@@ -12,8 +12,9 @@ import { Toast } from './Toast';
  *
  * The browser checks only that Android JSON parses; what the keys may be is
  * Fleet's to decide, so a well-formed configuration Fleet refuses comes back as
- * a generic "Couldn't update. Please try again." toast (the server's reason
- * rides only in the response) and the modal stays open. A saved Android
+ * an error toast carrying the server's reason (`Couldn't update configuration.
+ * Unknown top-level key "…".`; the generic "Couldn't update. Please try again."
+ * only when the server gives none) and the modal stays open. A saved Android
  * configuration reopens as Fleet re-serialises it, tab indented, so compare it
  * parsed rather than as text.
  */
