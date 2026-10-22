@@ -120,7 +120,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Unassigned) — Custom package — macOS › add"` (one describe per scope × case; see the case list below)
 - **Project:** premium · **Scopes:** Unassigned, Workstations
-- **Mode:** UI+API · **Isolation:** serial describe, step 1 of 3 — of 4 in the Android case, where SWL-39 edits the configuration before the delete (shares `titleName` / `titleId` / `packageName` with the later steps) · `test.setTimeout(90_000)`
+- **Mode:** UI+API · **Isolation:** serial describe, step 1 of 3 — of 4 in the Android case, where SWL-39 edits the configuration before the delete (shares `titleName` / `titleId` / `activityTitle`, plus `packageName` for packages or `appStoreId` / `appStorePlatform` for app-store apps, with the later steps) · `test.setTimeout(90_000)`
 - **Cases (7, each × 2 scopes = 14 describes):**
   1. `custom` macOS — [`gh_2.92.0_macOS_universal.pkg`](../../test-data/apple/macos/software/) (**27 MB**)
   2. `custom` Windows — `npp.8.9.4.Installer.x64.msi` (7.7 MB)
@@ -177,9 +177,9 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
    - ✅ *(UI)* The title's display heading (`aria-label="software display name"`) has non-empty text — **only** a length check, the expected name is never asserted.
    - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Android app` / `<iOS> app`. Fleet derives it from the title's osquery source (`formatSoftwareType`), so `android_apps` renders "Android app" and `ios_apps` renders "iOS app"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
 7. ☐ (No user action) API cross-check of the add.
-   - ✅ *(API)* `GET /activities` (paged, ≤5×100, newest first) contains `added_software` (custom/FMA) or `added_app_store_app` (VPP/Android) whose `details.software_title` equals the heading text, **and** whose `actor_email` is `FLEET_ADMIN_EMAIL` — `assertActivity`.
    - ✅ *(UI)* Title id parsed from the URL is > 0.
-   - ✅ *(API)* For custom/FMA only: the activity carries a non-empty `details.software_package` (the installer filename, saved for SWL-03).
+   - ✅ *(API)* An `added_software` (custom/FMA) or `added_app_store_app` (VPP/Android) activity newer than the id taken before the add, whose `details.software_title_id` is that title id and whose `details.fleet_id` is the scope's (a missing id read as Unassigned), by `FLEET_ADMIN_EMAIL` (`latestActivityId` → `assertActivityAfter`). It's matched by id, not by the heading's name: Fleet keeps a title's first name, while an app-store activity records the store's current one, and the two part when the vendor renames the app (Bear on 2026-10-22: heading "Bear - Markdown Notes", activity "Bear Markdown Notes & Journal"). Its non-empty `details.software_title` is kept as `activityTitle` for SWL-03.
+   - ✅ *(API)* For custom/FMA: the activity carries a non-empty `details.software_package` (the installer filename, kept for SWL-02 and SWL-03). For VPP/Android: a non-empty `details.app_store_id`, and `details.platform` is the case's (`ios` / `android`), both kept for SWL-02.
 8. ☐ Open the **Library** tab via URL `/software/library?fleet_id=<n>`, re-select the scope, search the title name.
    - ✅ *(UI)* **Library** tab is `aria-selected`; a data row or the empty state is present — `SoftwareLibraryPage.goto()`.
    - ✅ *(UI)* A row containing the title name is visible.
@@ -217,7 +217,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Workstations) — FMA — 7-Zip (Windows) › delete"`
 - **Project:** premium · **Scopes:** Unassigned, Workstations · same 7 cases as SWL-01
-- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 3 (3 of 4 in the Android case) — depends on `titleId` / `titleName` from SWL-01 (fails on a bare `-g "delete"` run)
+- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 3 (3 of 4 in the Android case) — depends on `titleId` / `titleName` and the add activity's `packageName` or `appStoreId` / `appStorePlatform` from SWL-01 (fails on a bare `-g "delete"` run)
 - **Preconditions:** SWL-01 passed in the same worker
 - **Data created:** none — this *is* the cleanup step
 
@@ -228,7 +228,7 @@ other:
    - ✅ *(UI)* A modal whose title matches `Delete software`, `Delete package` or `Delete version` (an iOS / iPadOS App Store or Play Store title, which holds versions) is visible before confirming.
    - ✅ *(UI)* After confirming, the active accordion row is hidden (Fleet redirects to the library list when the last installer is removed) — `SoftwareInstallerCard.delete()`.
 3. ☐ (No user action) API cross-check.
-   - ✅ *(API)* `GET /activities` contains `deleted_software` / `deleted_app_store_app` with `details.software_title === titleName`, actor = suite admin.
+   - ✅ *(API)* A `deleted_software` / `deleted_app_store_app` activity newer than the id taken before the delete, on the scope's fleet, by the suite admin (`assertActivityAfter`). A delete activity carries no title id, so an app-store app's is matched on the `app_store_id` and `platform` its add recorded, and a package's on its `software_package`.
 4. ☐ Open **Library** via URL `/software/library?fleet_id=<n>`, re-select the scope.
    - ✅ *(UI)* Library tab `aria-selected`; a row or the empty state is visible (asserted twice — once inside `goto()`, once again at [:202](../../tests/e2e/premium/software/library.spec.ts#L202)).
    - ✅ *(UI)* No row containing the title name (`toHaveCount(0)`) — no search is applied first, deliberately (the search box is disabled when the table is empty).
@@ -262,7 +262,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test -g "Software library lifecycle (Unassigned) — VPP — Bear (iOS) › activity feed shows add → delete"`
 - **Project:** premium · **Scopes:** Unassigned, Workstations · same 7 cases
-- **Mode:** UI · **Isolation:** serial describe, step 3 of 3 (4 of 4 in the Android case) — needs `packageName` (custom/FMA) or `titleName` (VPP/Android) from SWL-01
+- **Mode:** UI · **Isolation:** serial describe, step 3 of 3 (4 of 4 in the Android case) — needs `packageName` (custom/FMA) or `activityTitle` (VPP/Android, the name Fleet recorded in the add activity) from SWL-01
 - **Preconditions:** SWL-01 + SWL-02 passed in the same worker
 - **Data created:** none
 
@@ -275,9 +275,9 @@ other:
      - **VPP / Android:** `added <Title> (<iOS|Android>) to <the No team fleet|the Workstations fleet>.` and `deleted <Title> (<platform>) from <unassigned|the Workstations fleet>.` — the Unassigned suffix is deliberately **asymmetric** (Fleet populates `team_name="No team"` on add and `null` on delete), encoded in [`activity-copy.ts:74`](../../helpers/activity-copy.ts#L74).
 
 **Assessment**
-- *Value:* the only place the rendered activity *copy* (verb + subject + scope suffix) is checked for software; the API-side `assertActivity` in SWL-01/02 would not catch a broken renderer or a wrong scope suffix. The asymmetric No-team suffix is a genuine product quirk this pins down.
+- *Value:* the only place the rendered activity *copy* (verb + subject + scope suffix) is checked for software; the API-side activity checks in SWL-01/02 would not catch a broken renderer or a wrong scope suffix. The asymmetric No-team suffix is a genuine product quirk this pins down.
 - *Coverage gaps:* the feed row is matched by text only — the actor avatar/name, the timestamp, and the click-through detail modal (which for software shows the install script / query) are not asserted. `edited_software` never appears here (the custom and FMA lifecycles have no edit), and the Android case's `edited_app_store_app` (SWL-39) is asserted through the API only — the feed check stays add → delete.
-- *Redundancy:* moderate against SWL-01/02's `assertActivity` — same two activities, different layer. Justified (contract vs. rendering), but the *existence* half is asserted twice.
+- *Redundancy:* moderate against SWL-01/02's API activity checks — same two activities, different layer. Justified (contract vs. rendering), but the *existence* half is asserted twice.
 - *Efficiency / smells:* runs 14 times (2 scopes × 7 cases) to validate 4 distinct copy templates; the `custom` × 3 permutations produce identical matchers modulo the filename. `dashboard.expectActivities` can reload the dashboard 10× before failing, so a genuinely missing activity costs ~10 dashboard loads per case.
 
 **Notes (Andrey)**
@@ -1713,7 +1713,7 @@ other:
 - **File:** [`playwright/tests/e2e/premium/software/library.spec.ts`](../../tests/e2e/premium/software/library.spec.ts)
 - **Grep:** `npx playwright test --project=premium library -g "Android — com.openai.chatgpt"` (both scopes' Android describes — the step needs SWL-01's title)
 - **Project:** premium · **Scopes:** Unassigned, Workstations · the `android` case only (`com.openai.chatgpt`): 1 declaration → **2 runtime tests**
-- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` / `titleName` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its fleet and the configuration it records.
+- **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its title id, its fleet and the configuration it records.
 - **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
 - **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
 - **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the editor throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).

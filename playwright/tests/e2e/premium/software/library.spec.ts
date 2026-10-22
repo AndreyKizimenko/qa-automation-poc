@@ -14,7 +14,6 @@
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import {
-  assertActivity,
   assertActivityAfter,
   deleteLibraryTitlesWhere,
   expectVppAppsListable,
@@ -101,6 +100,15 @@ function addedBy(c: SoftwareCase, t: LibraryTitle): boolean {
   }
 }
 
+/**
+ * Whether an activity's details name the fleet a case runs on. Fleet records
+ * Unassigned as `fleet_id: 0` on most software activities and as `null` on
+ * `deleted_software`, so a missing id reads as Unassigned.
+ */
+function onFleet(d: Record<string, unknown>, fleetId: number): boolean {
+  return (d.fleet_id ?? 0) === fleetId;
+}
+
 // Narrowed so `fleetIdFor(scope, …)` returns `number` (never `undefined`)
 // at the call sites that feed pages whose `goto({ fleetId })` requires a
 // number (FMA, VPP, the title detail URL builder).
@@ -118,13 +126,24 @@ for (const scope of SCOPES) {
       const addActivity = isAppStore ? 'added_app_store_app' : 'added_software';
       const deleteActivity = isAppStore ? 'deleted_app_store_app' : 'deleted_software';
 
-      // Captured during 'add' for use in 'delete' and 'activity feed'.
+      // Captured during 'add' for the later steps. `titleName` is what the
+      // title page and the Library render: the title's name from when Fleet
+      // first created it. `activityTitle` is what Fleet records in this run's
+      // activities, which for an app-store app is the store's current name.
+      // They part once the vendor renames the app (Bear became "Bear Markdown
+      // Notes & Journal" while its title kept "Bear - Markdown Notes"), so the
+      // activities are matched by id and the feed by the recorded name.
       let titleName: string;
+      let activityTitle: string;
       let titleId: number;
-      // Installer file name (Fleet's activity `software_package` detail) —
-      // populated for custom/FMA cases only; app-store cases feed
-      // titleName + platform directly into the appStoreApp matchers.
+      // Installer file name (Fleet's activity `software_package` detail),
+      // custom/FMA cases only: the feed renders it in place of the title, and
+      // a package's delete activity is matched on it.
       let packageName: string;
+      // An app-store app's store id and platform as its add activity records
+      // them: its delete activity carries no title id, so it's matched on these.
+      let appStoreId: string;
+      let appStorePlatform: string;
 
       test('add', async ({
         dashboard,
@@ -168,6 +187,10 @@ for (const scope of SCOPES) {
         // VPP token), the VPP case finds no list and the Android case fails page
         // health on the 500, so the list is read first to fail with Apple's reason.
         if (isAppStore) await expectVppAppsListable(request, fleetId);
+
+        // The other scope's copy, an earlier attempt and earlier runs log the
+        // same activity for the same title, so only newer ones count.
+        const beforeAdd = await latestActivityId(request);
 
         await dashboard.goto();
         await dashboard.navbar.goToSoftware();
@@ -218,21 +241,33 @@ for (const scope of SCOPES) {
         } else if (c.kind === 'vpp') {
           await expect(softwareTitleDetail.typeValue).toHaveText(`${c.platform} app`);
         }
-        const activity = await assertActivity(
-          request,
-          addActivity,
-          (d) => d.software_title === titleName,
-        );
-
         titleId = Number(page.url().match(/\/software\/titles\/(\d+)/)?.[1]);
         expect(titleId).toBeGreaterThan(0);
 
-        // Custom/FMA cases need the installer filename for the activity-feed
-        // matcher (Fleet renders software_package, not the title). App-store
-        // cases use titleName + the case's platform label directly.
+        const activity = await assertActivityAfter(
+          request,
+          addActivity,
+          beforeAdd,
+          (d) => d.software_title_id === titleId && onFleet(d, fleetId),
+          { actor: process.env.FLEET_ADMIN_EMAIL },
+        );
+        const details = activity.details as {
+          software_title?: string;
+          software_package?: string;
+          app_store_id?: string;
+          platform?: string;
+        };
+        activityTitle = details.software_title ?? '';
+        expect(activityTitle.length).toBeGreaterThan(0);
+
         if (c.kind === 'custom' || c.kind === 'fma') {
-          packageName = (activity.details as { software_package?: string }).software_package ?? '';
+          packageName = details.software_package ?? '';
           expect(packageName.length).toBeGreaterThan(0);
+        } else {
+          appStoreId = details.app_store_id ?? '';
+          appStorePlatform = details.platform ?? '';
+          expect(appStoreId.length).toBeGreaterThan(0);
+          expect(appStorePlatform).toBe(c.kind === 'android' ? 'android' : VPP_PLATFORM[c.platform]);
         }
 
         // Verify on the Library tab (installer-managed software only) —
@@ -293,7 +328,7 @@ for (const scope of SCOPES) {
               // Compared field by field: Fleet records the keys in its own order.
               const recorded = d.configuration as Partial<typeof configuration> | undefined;
               return (
-                d.software_title === titleName &&
+                d.software_title_id === titleId &&
                 d.fleet_id === fleetId &&
                 recorded?.workProfileWidgets === configuration.workProfileWidgets &&
                 recorded?.managedConfiguration?.pw_setting === configuration.managedConfiguration.pw_setting
@@ -322,8 +357,21 @@ for (const scope of SCOPES) {
         const fleetId = fleetIdFor(scope, workstationsFleetId);
 
         await page.goto(`/software/titles/${titleId}?fleet_id=${fleetId}`);
+        const beforeDelete = await latestActivityId(request);
         await softwareTitleDetail.installerCard.delete();
-        await assertActivity(request, deleteActivity, (d) => d.software_title === titleName);
+        // A delete activity carries no title id: an app-store app's names its
+        // store id and platform, a package's its installer file.
+        await assertActivityAfter(
+          request,
+          deleteActivity,
+          beforeDelete,
+          (d) =>
+            onFleet(d, fleetId) &&
+            (isAppStore
+              ? d.app_store_id === appStoreId && d.platform === appStorePlatform
+              : d.software_package === packageName),
+          { actor: process.env.FLEET_ADMIN_EMAIL },
+        );
 
         await softwareLibrary.goto({ fleetId });
         await softwareLibrary.teamDropdown.select(scope);
@@ -349,7 +397,7 @@ for (const scope of SCOPES) {
         // one added — Fleet's default, "Default version".
         const appStoreActivity = isAppStore
           ? {
-              name: titleName,
+              name: activityTitle,
               version: 'Default version',
               platform: c.kind === 'android' ? 'Android' : c.platform,
               scope,
