@@ -1,6 +1,6 @@
 ---
 name: fleet-story-qa
-description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, check the plan is current (fleet-test-plan writes it) and flag stale rows, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a short manager-level sign-off comment. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write or update a story's test plan (fleet-test-plan).
+description: Partner with the QA engineer on a Fleet user story (label `story`) — read the story, its test plan and every PR, map the diff to what's risky, check the plan is current (fleet-test-plan writes it) and flag stale rows, then split the work — Claude takes API, fleetctl, GitOps, role matrices, obvious UI and exploratory checks on the live RC instance, and hands the human one batched list of device, license and settings actions to run; findings go to a decision list, and the end is a sign-off comment that ticks the ticket's own test-plan checklist. Use whenever the user wants to QA, test, verify, "go through the test plan of", or sign off a Fleet story or feature issue — even if they just paste a story link and say "let's QA this", ask which test-plan rows are left, or want help with a story's API/permissions/GitOps checks. Do NOT use for bug fixes or security fixes that need a before/after repro (fleet-bug-qa), for small ~quick-win issues Claude can drive alone (fleet-quickwin-qa), to file a bug (fleet-bug-file), or to write or update a story's test plan (fleet-test-plan).
 ---
 
 # Fleet story QA — partner mode
@@ -41,7 +41,8 @@ tours.md §N): borrow what a check needs, not whole tours.
 
 Work in `<QA workspace>/qa-<N>/`: `RESULTS.md` (the lab notebook:
 everything run, with evidence), `created.txt` (cleanup manifest, same line format
-as `cleanup.sh`), drivers, `screenshots/`, `snapshots/`, `issue-comment.md`.
+as `cleanup.sh`), drivers, `screenshots/`, `snapshots/`, `results.json` and
+`issue-comment.md` (step 5).
 Write RESULTS.md as you go, one timestamped row per check (where, what with which
 input, what you saw), and tag the rows that need action the way `fleet-explore`'s
 session log does (BUG, QUESTION, IDEA, RISK, NOTE): the decision list in step 4 is
@@ -285,30 +286,42 @@ rows as one line each offering them to `playwright-test-author`.
 ### 5. Sign off
 
 When the user asks, give a copiable comment (saved to `issue-comment.md`,
-four-backtick fence) — the reader is a manager asking "is it done, and how broadly
-was it checked?":
+four-backtick fence). The test plan is what the team agreed to check, so the
+sign-off reports against its rows: the same checkboxes, ticked, in the same
+order. Don't summarize them into a new table. `scripts/plan_comment.py` builds it
+from the issue body:
 
-````markdown
-QA **<Pass | Pass with notes | Fail>** on `<branch>`. <one sentence of scope>
+```bash
+gh issue view <N> -R fleetdm/fleet --json body --jq .body > body.md
+python3 scripts/plan_comment.py --list body.md         # numbered rows, Setup excluded
+python3 scripts/plan_comment.py body.md results.json issue-comment.md
+```
 
-| # | Area | Case | Result |
-|---|---|---|---|
-| 1 | Core | <grouped cases, user terms> | ✅ |
-| 2 | API | <case> | ❌ #<issue> |
+`results.json` has the verdict line, one `[status, note]` per row in `--list`
+order, and the issues table (the script's docstring shows the shape). Statuses:
 
-**Issues found**
-| Issue | Origin | Severity |
-|---|---|---|
-````
+- `pass`: `[x]`. Add a note only when the reader needs it: the device showed other
+  wording, the row ran on a stand-in fleet or role, `--dry-run` only, or the
+  row's open question no longer applies.
+- `fail`: `[ ]` with **❌ #issue**, including known bugs the row names.
+- `wait`: `[ ]` with **⏳ <what>**, for a row blocked on something unmerged (a docs PR).
+- `skip`: `[ ]` with **Not run:** and the reason, for a row the engineer dropped
+  or one that can't work as written (the stale rows from step 2).
 
-Group the matrix by area, one row per area-case, not one per test-plan line.
-Mark human-run rows the same as yours (it's a team sign-off) but only include
-rows someone actually ran — if the user ticked boxes you didn't see, ask before
+The script keeps every row's text and sub-bullets, so the comment reads like the
+plan the reader already knows. It adds `QA **<Pass | Pass with notes | Fail>** on
+\`<branch>\` (<sha>), <devices or one line of scope>` on top and **Issues found**
+(issue, origin, severity) at the bottom. For stories QA'd together, write one
+comment per ticket, each from its own plan (`issue-comment-<N>.md`).
+
+Tick human-run rows the same as yours (it's a team sign-off), but only rows
+someone actually ran. If the user ticked boxes you didn't see, ask before
 claiming them. A ✅ means the row ran live, for real or through a full-path
 simulation; there's no "simulated" or "verified in code" result. A row backed only
-by a workaround the engineer approved stays in RESULTS.md unless they want it in
-the comment, labeled with how it was checked. No setup, mechanism,
-"not covered" list or test-coverage commentary.
+by a workaround the engineer approved stays `[ ]` unless they want it ticked, and
+then the note says how it was checked. Notes are results, not method: no setup,
+mechanism, "not covered" list or test-coverage commentary. Ticking the boxes in
+the ticket body itself is separate, and only when the user asks.
 Put the smaller observations (pre-existing quirks the user didn't choose to file)
 in RESULTS.md, and mention them in one line in chat.
 
