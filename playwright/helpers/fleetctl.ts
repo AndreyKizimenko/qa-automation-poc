@@ -59,6 +59,13 @@ function suite(): string {
  * The file mirrors what `fleetctl config set --address --token` produces, written
  * directly rather than shelled out to so it costs no subprocess.
  *
+ * Every worker writes this one file before each command while other workers'
+ * `fleetctl`s read it. Writing it in place truncates it first, and a `fleetctl`
+ * that reads it in that instant finds no address and exits 1 with "set the
+ * Fleet API address". So each process writes a temp file of its own and renames
+ * it over `config`: the rename swaps the whole file in one step, and a reader
+ * sees either the previous copy or the new one, never a partial file.
+ *
  * Note the directory is `.fleet/config`, not `.fleetctl/` — the latter is only
  * where the binary is commonly installed.
  */
@@ -69,9 +76,11 @@ export function fleetctlHome(): string {
   if (!address) throw new Error('FLEET_URL is required to build the fleetctl context');
   if (!token) throw new Error('FLEET_API_TOKEN is required to build the fleetctl context');
 
-  fs.mkdirSync(path.join(home, '.fleet'), { recursive: true });
+  const configDir = path.join(home, '.fleet');
+  const staged = path.join(configDir, `config.${process.pid}.tmp`);
+  fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
-    path.join(home, '.fleet', 'config'),
+    staged,
     [
       'contexts:',
       '  default:',
@@ -86,6 +95,7 @@ export function fleetctlHome(): string {
     ].join('\n'),
     { mode: 0o600 },
   );
+  fs.renameSync(staged, path.join(configDir, 'config'));
   return home;
 }
 
