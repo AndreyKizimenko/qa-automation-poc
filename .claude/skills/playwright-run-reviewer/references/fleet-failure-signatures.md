@@ -73,7 +73,8 @@ locally**, the problem is live; triage it as product/test/infra.
 3. **The failing line** — open the page object / spec at the reported line. Is the
    locator what the current Fleet React source emits? Is the expected value
    derived from live data or hardcoded?
-4. **Trace (.zip, on first retry only)** — deepest source. Unzip it; `*.network`
+4. **Trace (.zip, on first retry only; on a failed `gitops-mode` test, its only
+   attempt)** — deepest source. Unzip it; `*.network`
    entries show the API calls and their status/response. Use when you need to
    know whether an API returned an error, empty data, or the wrong shape. A 5xx
    on a core request → product-defect or infra; a 200 with empty results where

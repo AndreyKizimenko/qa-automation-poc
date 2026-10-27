@@ -296,6 +296,9 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
+        // With no retries, the suite's `on-first-retry` would never record a
+        // trace here, so a failure keeps the trace of its only attempt.
+        trace: 'retain-on-failure',
       },
       dependencies: ['premium-setup'],
       teardown: 'gitops-mode-teardown',

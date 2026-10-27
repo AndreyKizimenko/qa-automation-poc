@@ -118,7 +118,8 @@ essentials:
    value came from live data or a stale hardcode. Cross-check API shape against
    `~/repositories/fleet/docs/REST API/rest-api.md` when relevant.
 4. **Mine the trace only when you need the network truth.** The trace zip (first
-   retry only) contains `*.network` entries — unzip and inspect when the verdict
+   retry only; a failed `gitops-mode` test's only attempt) contains `*.network`
+   entries — unzip and inspect when the verdict
    hinges on whether an API 5xx'd, returned empty, or returned the wrong shape.
 5. **Rule out intentional product change.** Before calling product-defect, check
    Fleet's recent merged PRs / git log for a deliberate change that would make the
