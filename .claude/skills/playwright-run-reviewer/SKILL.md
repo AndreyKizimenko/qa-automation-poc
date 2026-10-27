@@ -32,9 +32,8 @@ gh run view <id> --repo <owner/repo> --json name,conclusion,jobs \
 
 A chained run (`QA — Nightly`, `QA — Branch run`) is several Playwright jobs:
 per tier, a gitops chain (applies plus `gitops-verify` checks and fleetctl CLI
-checks, each its own Playwright report) and then the suite. In the nightly the
-suite runs whatever gitops did; in a branch run a red gitops step skips that
-tier's suite. **Triage a red gitops job first** — an apply that failed or a
+checks, each its own Playwright report) and then the suite, which runs whatever
+gitops did. **Triage a red gitops job first** — an apply that failed or a
 config that drifted can explain suite failures downstream.
 
 ```bash
@@ -118,7 +117,8 @@ essentials:
    value came from live data or a stale hardcode. Cross-check API shape against
    `~/repositories/fleet/docs/REST API/rest-api.md` when relevant.
 4. **Mine the trace only when you need the network truth.** The trace zip (first
-   retry only) contains `*.network` entries — unzip and inspect when the verdict
+   retry only; a failed `gitops-mode` test's only attempt) contains `*.network`
+   entries — unzip and inspect when the verdict
    hinges on whether an API 5xx'd, returned empty, or returned the wrong shape.
 5. **Rule out intentional product change.** Before calling product-defect, check
    Fleet's recent merged PRs / git log for a deliberate change that would make the

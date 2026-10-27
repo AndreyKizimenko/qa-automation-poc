@@ -3,8 +3,10 @@ name: QA — Branch run
 # nightly gitops sequence (baseline → verify → min → verify → fleetctl checks)
 # and then that tier's Playwright suite — so, like the nightly, the suite runs
 # against the min config. The tiers are separate instances, so the two chains
-# run side by side; each chain runs in order, and a red gitops step stops its
-# tier's suite.
+# run side by side; each chain runs in order. A tier's suite runs once its
+# gitops chain has finished, green or red, as in the nightly: a red gitops step
+# still fails the run, and the suite's results come in beside it instead of
+# waiting for another dispatch.
 #
 #   gh workflow run "QA — Branch run" -f branch=<branch>
 #   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial
@@ -43,6 +45,7 @@ jobs:
 
   playwright-premium:
     needs: gitops-premium
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/playwright-premium.yml
     with:
       ref: ${{ inputs.branch }}
@@ -57,6 +60,7 @@ jobs:
 
   playwright-free:
     needs: gitops-free
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/playwright-free.yml
     with:
       ref: ${{ inputs.branch }}
