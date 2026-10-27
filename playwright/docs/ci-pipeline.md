@@ -62,9 +62,10 @@ fixtures). Applying first makes that true every night. After each apply, `gitops
 that apply carried — on premium the no-team config, Workstations, Compliance, QA and VMs, with the QA and VMs
 files verified after both the baseline and the min apply, since both carry them unchanged; the second pass
 proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
-control, so its verify is the only place those are checked. In the nightly the suite runs even if a gitops step is
-red, because a failed apply is its own signal and the night's test results are still wanted; in a branch run a
-red gitops step stops that tier's suite, because the branch is what is being judged. The fleetctl checks
+control, so its verify is the only place those are checked. The suite runs even if a gitops step is red, in the
+nightly and in a branch run alike: a failed apply or check is its own signal and already fails the run, and the
+suite's results are still wanted. A branch run that stopped there would leave the branch's tests unjudged until a
+second dispatch, even when the gitops failure has nothing to do with them. The fleetctl checks
 (`generate-gitops`, `gitops --dry-run`) sit inside the gitops chain on purpose: the suite's `cleanup-setup`
 drains every global report and policy, after which neither comparison means anything.
 

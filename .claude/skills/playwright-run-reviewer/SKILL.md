@@ -32,9 +32,8 @@ gh run view <id> --repo <owner/repo> --json name,conclusion,jobs \
 
 A chained run (`QA — Nightly`, `QA — Branch run`) is several Playwright jobs:
 per tier, a gitops chain (applies plus `gitops-verify` checks and fleetctl CLI
-checks, each its own Playwright report) and then the suite. In the nightly the
-suite runs whatever gitops did; in a branch run a red gitops step skips that
-tier's suite. **Triage a red gitops job first** — an apply that failed or a
+checks, each its own Playwright report) and then the suite, which runs whatever
+gitops did. **Triage a red gitops job first** — an apply that failed or a
 config that drifted can explain suite failures downstream.
 
 ```bash
