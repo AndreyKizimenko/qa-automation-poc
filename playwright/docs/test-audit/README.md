@@ -43,7 +43,7 @@ files · ~350 test declarations · 4 projects**.
 
 **557 entries** covering every test in the suite. An entry can expand into several
 runtime tests — a parameterized loop is documented once, with its variants listed in
-the entry header. The widest expansions: area 06 (39 entries → 92 executions), area 11 (43 → 108), area
+the entry header. The widest expansions: area 06 (39 entries → 93 executions), area 11 (43 → 108), area
 17 (11 → 73), area 08 (34 → 43), area 13 (36 → 57). Specs under
 `tests/e2e/shared/` and `tests/api/` root also run **twice**, once per tier project.
 

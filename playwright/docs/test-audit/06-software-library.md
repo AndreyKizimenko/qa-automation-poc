@@ -1,6 +1,6 @@
 # Software library & packages — test audit
 
-**Specs covered:** 16 files · **Test declarations:** 39 (→ 92 runtime tests after parameterisation) · **Projects:** premium / free
+**Specs covered:** 16 files · **Test declarations:** 39 (→ 93 runtime tests after parameterisation) · **Projects:** premium / free
 
 This area covers everything an admin *adds* to Fleet's software library — custom
 packages (`.pkg` / `.msi` / `.deb` / `.sh`), Fleet-maintained apps (FMA), Apple VPP
@@ -15,7 +15,7 @@ persistence across the navbar, and role/scope gating on **Add software** and the
 `library.spec.ts` is still the lifecycle workhorse: a double loop (2 scopes × 7
 add cases) around a serial `add → delete → activity feed` describe — the Android
 case adds an `edit configuration` step between add and delete — i.e. 45 of
-the 92 runtime tests in this area. Around it sit two newer rings. The **shape**
+the 93 runtime tests in this area. Around it sit two newer rings. The **shape**
 specs each seed one distinctly-named title and inspect one property of it
 (`script-only-package`, `package-scripts`, `custom-icons`, `display-name`,
 `version-pinning`). The **read-only** specs touch no state at all
@@ -1059,10 +1059,10 @@ other:
 ### SWL-24 · Premium • Software • Add software validation › a `.<ext>` is refused before anything is uploaded
 
 - **File:** [`playwright/tests/e2e/premium/software/add-software-validation.spec.ts`](../../tests/e2e/premium/software/add-software-validation.spec.ts)
-- **Grep:** `npx playwright test -g "a .png is refused before anything is uploaded"` (also `.dmg`)
+- **Grep:** `npx playwright test -g "a .png is refused before anything is uploaded"` (also `.dmg`, `.zip`)
 - **Project:** premium · **Scope:** Unassigned (`FLEET_ID = 0` — the form needs a fleet scope and this one needs no id resolved)
-- **Mode:** UI · **Isolation:** independent, 1 declaration → **2 runtime tests**
-- **Cases:** `pw-not-an-installer.png` (`image/png`, reason `unsupported file extension: png`) and `pw-not-an-installer.dmg` (`application/octet-stream`, reason `unsupported file extension: dmg` — a plausible-looking macOS installer that trips the *uninstall*-script branch of the same validation). Both are in-memory payloads (`Buffer.from('not a real installer')`) — **no fixture on disk**.
+- **Mode:** UI · **Isolation:** independent, 1 declaration → **3 runtime tests**
+- **Cases:** `pw-not-an-installer.png` (`image/png`) and `pw-not-an-installer.dmg` (`application/octet-stream` — a disk image, the way most macOS apps ship) both have no default *install* script; `pw-not-an-installer.zip` (`application/zip`) gets an empty install script and has no default *uninstall* script, so it covers the second of the two lookups. All three are in-memory payloads (`Buffer.from('not a real installer')`) — **no fixture on disk**.
 - **Preconditions:** premium license (the Custom package tab is paywalled on free)
 - **Data created:** none — nothing is uploaded, which is exactly why these live here rather than inside `library.spec`'s add/delete lifecycle
 
@@ -1071,14 +1071,14 @@ other:
 1. ☐ Open `/software/add/package?fleet_id=0` via URL.
    - ✅ *(UI)* **Add software** heading and the **Custom package** tab are visible — `expectLoaded()`.
    - ✅ *(UI)* **Add software** is disabled (nothing staged yet).
-2. ☐ Choose the file in the uploader. `setInputFiles` on the hidden `input#upload-file` bypasses the input's `accept` list exactly as a drag-and-drop or an "All files" picker would — which is the path this validation exists to catch.
-3. ✅ *(UI)* An **error** toast reading **"Couldn't add."** appears, and its collapsed raw-response panel — reached by clicking **Expand error details**, a `role="region"` named "Error details" — contains the reason — `FileUploader.expectRejected()`. Asserting the toast alone would also pass for a *server-side* rejection that did upload, which is the distinction this test exists to draw: Fleet refuses in `PackageForm.onFileSelect`, where `getDefaultInstallScript` throws on an extension it has no recipe for.
+2. ☐ Choose the file in the uploader. `setInputFiles` on the hidden `input#upload-file` hands it a file the input's `accept` list would hide, as an "All files" picker does — the picked-file path this validation exists to catch. (A *dropped* file meets the uploader's own `accept` check first, which shows the same words.)
+3. ✅ *(UI)* The uploader's card shows **"File type isn't supported"** in place of its title — `FileUploader.expectInlineError()`, scoped to the card (`.file-uploader`, which has no role), so a toast with the same words wouldn't satisfy it. Fleet refuses in `PackageForm.onFileSelect`, where `getDefaultInstallScript` or `getDefaultUninstallScript` throws on an extension it has no recipe for.
 4. ✅ *(UI)* The **Choose file** button is still showing — a rejected file is never staged.
 5. ✅ *(UI)* **Add software** is still disabled.
 
 **Assessment**
-- *Value:* the only negative path in the entire add flow, and the three-part assertion (toast reason + uploader unchanged + button still disabled) is what proves "refused in the browser" rather than "uploaded then rejected". Cheap: no upload, no cleanup.
-- *Coverage gaps:* no **server-side** rejection case (a valid extension with a corrupt payload); no oversized-file path; no duplicate-add rejection; the unused `.exe`, `.rpm` and `.tar.gz` fixtures in `test-data/` would each be a one-line case here; no negative path on the FMA / VPP / Android tabs (an invalid Android application ID is the obvious one). Also untested: that the form is still usable afterwards — a valid file staged *after* a rejection.
+- *Value:* the only negative path in the entire add flow, and the three-part assertion (inline error + uploader unchanged + button still disabled) is what proves "refused in the browser" rather than "uploaded then rejected". Cheap: no upload, no cleanup. Fleet reports the same words for every unsupported extension, so the per-case difference is which lookup refuses it, not what the page says.
+- *Coverage gaps:* no **server-side** rejection case (a valid extension with a corrupt payload); no duplicate-add rejection (the oversized-file path is `large-upload.spec.ts`); no *drop* of an unsupported file, which the uploader refuses before PackageForm sees it; the unused `.exe`, `.rpm` and `.tar.gz` fixtures in `test-data/` would each be a one-line *positive* staging check; no negative path on the FMA / VPP / Android tabs (an invalid Android application ID is the obvious one). Also untested: that the form is still usable afterwards — a valid file staged *after* a rejection.
 - *Redundancy:* none. The header explicitly hands the "Add software disabled under All fleets" half to SWL-04.
 - *Efficiency / smells:* the test title's extension is derived from the fixture name, so renaming a case silently renames the test and its grep.
 
