@@ -1,0 +1,70 @@
+# loglab's on-demand log sinks. Compose project "loglab" only — bin/loglab refuses any other project name.
+# Each service sits behind its own profile so `loglab up <service>` starts just that one.
+# Ports are outside Fleet Hangar's scheme (8080/8090, 3306+20n, 6379+10n, 9000+20n, 8081, 9080, 2016) and ssolab's (18100, 18180).
+# Memory is capped so a spike kills a loglab container, not Hangar's MySQL.
+name: loglab
+
+services:
+  localstack:            # Kinesis Data Streams + Firehose (→ S3) emulator; 4.5 predates LocalStack's auth-token requirement
+    image: localstack/localstack:4.5
+    profiles: ["localstack"]
+    ports: ["127.0.0.1:18566:4566"]
+    environment:
+      SERVICES: kinesis,firehose,s3,sts,iam,lambda,logs,sns,scheduler,resourcegroupstaggingapi   # all but kinesis/firehose/s3: `loglab aws … --localstack` self-tests
+      EAGER_SERVICE_LOADING: "0"
+      PERSISTENCE: "0"
+      DEBUG: "0"
+    mem_limit: 900m
+    restart: "no"
+
+  redpanda:              # Kafka API + Pandaproxy (Kafka REST proxy, v2 API) for Fleet's kafkarest plugin
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.4
+    profiles: ["redpanda"]
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=400M
+      - --reserve-memory=0M
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+      - --pandaproxy-addr=0.0.0.0:8082
+      - --advertise-pandaproxy-addr=127.0.0.1:18082
+    ports: ["127.0.0.1:18082:8082"]
+    mem_limit: 700m
+    restart: "no"
+
+  nats:
+    image: nats:2.10.22-alpine
+    profiles: ["nats"]
+    command: ["-js", "-m", "8222"]
+    ports: ["127.0.0.1:18422:4222"]
+    mem_limit: 96m
+    restart: "no"
+
+  pubsub:                # Google Cloud Pub/Sub emulator; Fleet reaches it only through PUBSUB_EMULATOR_HOST (Hangar env row)
+    image: thekevjames/gcloud-pubsub-emulator:587.0.0
+    profiles: ["pubsub"]
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    ports: ["127.0.0.1:18085:8681"]
+    mem_limit: 512m
+    restart: "no"
+
+  splunk:                # real Splunk Enterprise on the Free license (no expiry) for the splunk-local destination.
+                         # amd64-only image: runs under Docker Desktop's x86 emulation on Apple Silicon, slow first start.
+                         # Nothing is accepted here: loglab passes the acceptance flags only when the user set
+                         # LOGLAB_ACCEPT_SPLUNK_LICENSE=1 in lab.env (https://www.splunk.com/en_us/legal/splunk-general-terms.html).
+    image: splunk/splunk:9.4.3
+    platform: linux/amd64
+    profiles: ["splunk"]
+    environment:
+      SPLUNK_START_ARGS: ${LOGLAB_SPLUNK_START_ARGS:-}
+      SPLUNK_GENERAL_TERMS: ${LOGLAB_SPLUNK_GENERAL_TERMS:-}
+      SPLUNK_LICENSE_URI: Free
+      SPLUNK_PASSWORD: ${LOGLAB_SPLUNK_PASSWORD:?run through loglab up splunk}
+      SPLUNK_HEC_TOKEN: ${LOGLAB_SPLUNK_HEC_TOKEN:?run through loglab up splunk}
+    ports: ["127.0.0.1:18088:8088", "127.0.0.1:18000:8000", "127.0.0.1:18089:8089"]
+    mem_limit: 3g
+    restart: "no"

@@ -1,0 +1,8 @@
+# loglab's data normally lives in $LOGLAB_DATA, outside the repo; these cover pointing it here.
+SECRETS.env
+config/*.yml
+state/
+sinks/
+created.txt
+__pycache__/
+*.bak-*

@@ -58,3 +58,19 @@ tools/windows-mdm-loadtest/profiles_*/
 tools/windows-mdm-loadtest/batch_*.json
 # Host-ID cache written by transfer_hosts.sh.
 tools/windows-mdm-loadtest/ids_*.txt
+
+# QA lab tools (tools/vm, ssolab, loglab, qalab). Per-engineer config and every
+# data dir stay out; each tool ships *.example templates instead.
+tools/qalab/lab.env
+tools/*/LOGINS.md
+tools/*/created.txt
+tools/*/state/
+tools/ssolab/profiles/*.conf
+tools/ssolab/saml/authsources.php
+tools/ssolab/saml/sp-remote.php
+tools/ssolab/authentik/.env
+tools/ssolab/metadata/*.xml
+tools/loglab/SECRETS.env
+tools/loglab/config/*.yml
+tools/loglab/sinks/
+*.bak-*

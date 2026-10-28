@@ -1,0 +1,15 @@
+# Auth0 — copy to $SSOLAB_DATA/profiles/auth0.conf, or let `ssolab auth0 connect` write it for you.
+# Non-secret: IdP app identifiers only. Keys: <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file
+# (file in $SSOLAB_DATA/metadata/). Instance names come from INSTANCES in lab.env (rc/prev here).
+console = https://manage.auth0.com
+idp_name = Auth0
+jit = no
+org_url = https://<tenant>.<region>.auth0.com
+prev.eua.entity_id = urn:fleetqa:prev:mdm
+prev.eua.metadata_url = https://<tenant>.<region>.auth0.com/samlp/metadata/<client-id-prev-eua>
+prev.sso.entity_id = urn:fleetqa:prev:admin
+prev.sso.metadata_url = https://<tenant>.<region>.auth0.com/samlp/metadata/<client-id-prev-sso>
+rc.eua.entity_id = urn:fleetqa:rc:mdm
+rc.eua.metadata_url = https://<tenant>.<region>.auth0.com/samlp/metadata/<client-id-rc-eua>
+rc.sso.entity_id = urn:fleetqa:rc:admin
+rc.sso.metadata_url = https://<tenant>.<region>.auth0.com/samlp/metadata/<client-id-rc-sso>

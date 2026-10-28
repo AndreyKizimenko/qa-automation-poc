@@ -1,0 +1,12 @@
+# Local SAML IdP for ssolab (`ssolab saml up`): every instance x feature is a trusted SP in sp-remote.php (generated).
+# ssolab runs this with --project-directory $SSOLAB_DATA/saml, so the ./ paths below are in the data dir.
+services:
+  idp:
+    image: fleetdm/docker-idp:latest
+    ports:
+      - "127.0.0.1:18180:8080"
+    volumes:
+      - ./authsources.php:/var/www/simplesamlphp/config/authsources.php:ro
+      - ./sp-remote.php:/var/www/simplesamlphp/metadata/saml20-sp-remote.php:ro
+    restart: unless-stopped
+    mem_limit: 256m

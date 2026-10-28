@@ -1,0 +1,10 @@
+# Per-user data belongs in $SSOLAB_DATA, not here. Guard against copies landing in the code dir.
+LOGINS.md
+created.txt
+state/
+metadata/
+profiles/*.conf
+saml/authsources.php
+saml/sp-remote.php
+authentik/.env
+bin/__pycache__/

@@ -1,0 +1,9 @@
+# Per-engineer data belongs in $VM_DATA, but never commit it if it lands here.
+inventory.tsv
+LOGINS.md
+lab.env
+golden/
+hosts/
+isos/
+scratch/
+*.utm

@@ -1,0 +1,15 @@
+# Okta — copy to $SSOLAB_DATA/profiles/okta.conf, or let `ssolab okta connect` write it for you.
+# Non-secret: IdP app identifiers only. Keys: <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file
+# (file in $SSOLAB_DATA/metadata/). Instance names come from INSTANCES in lab.env (rc/prev here).
+console = https://<org>-admin.okta.com/admin/apps/active
+idp_name = Okta
+jit = no
+org_url = https://<org>.okta.com
+prev.eua.entity_id = urn:fleetqa:prev:mdm
+prev.eua.metadata_url = https://<org>.okta.com/app/<idp-key-prev-eua>/sso/saml/metadata
+prev.sso.entity_id = urn:fleetqa:prev:admin
+prev.sso.metadata_url = https://<org>.okta.com/app/<idp-key-prev-sso>/sso/saml/metadata
+rc.eua.entity_id = urn:fleetqa:rc:mdm
+rc.eua.metadata_url = https://<org>.okta.com/app/<idp-key-rc-eua>/sso/saml/metadata
+rc.sso.entity_id = urn:fleetqa:rc:admin
+rc.sso.metadata_url = https://<org>.okta.com/app/<idp-key-rc-sso>/sso/saml/metadata

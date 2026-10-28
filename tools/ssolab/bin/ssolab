@@ -1,0 +1,2548 @@
+#!/usr/bin/env -S python3 -I
+"""ssolab — switch the identity provider (IdP) each Fleet lab instance uses. See ../README.md.
+
+<inst> is one of INSTANCES from lab.env (e.g. rc, prev).
+
+  ssolab                                  interactive view: instances, active IdP, providers; Enter → switch
+  ssolab status [--json]                  instances (up, version, license, admin SSO, end-user auth) + providers
+  ssolab doctor                           check lab.env, python, docker, fleetctl contexts, data dir, LOGINS.md
+  ssolab switch <inst> <provider|off> [--only sso|eua] [--jit|--no-jit] [--gitops|--no-gitops] [--yes]
+                                          point admin SSO + MDM end-user auth at that provider's IdP apps, then verify
+  ssolab test <inst>                      re-run the checks: metadata reachable, Fleet → IdP redirect accepted
+  ssolab why [inst] [N]                   explain the last N (5) SSO sign-ins from the server log (INSTANCE_<i>_SERVER_LOG):
+                                          who got in, and for failures the likely cause + fix
+  ssolab setup <provider>                 walkthrough: what to enter in the IdP console, collect metadata → profiles/
+  ssolab sp [inst]                        the service-provider values (ACS URLs, entity IDs) to paste into an IdP
+  ssolab creds [provider]                 list saved logins (passwords hidden)
+  ssolab creds add <provider> [label]     save a login to LOGINS.md (and 1Password, if SSOLAB_OP_VAULT is set)
+  ssolab creds show <provider> <label>    print one login, password included
+  ssolab creds sync                       push logins that aren't in 1Password yet
+  ssolab user create --provider P --username U [--label L] [--email E] [--role R] [--team NAME]
+                     [--fleet inst,inst] [--mfa|--no-mfa] [--notes N] --password-stdin|--generate
+                                          one IdP test user end to end: IdP + LOGINS/1Password + Fleet (the view's New user form)
+  ssolab users [provider]                 SSO test users and whether each exists in Fleet on each instance
+  ssolab users sync <provider> [inst|both] [--label L] [--role R] [--team NAME] [--yes]
+                                          create the missing ones in Fleet (SSO-only, no password)
+  ssolab saml up|down|status|sync         local SimpleSAMLphp IdP on :18180 (knows every instance);
+                                          sync = write LOGINS.md saml users into its user list (live)
+  ssolab okta connect|provision|user <email> [--mfa|--no-mfa]|mfa [<email> on|off]|status
+                                          Okta via its API (org URL + API token): creates the SAML apps, assigns
+                                          them to Everyone, creates test users (`ssolab setup okta --manual` = by hand)
+  ssolab entra connect|provision|user <name>|mfa [on|off]|status
+                                          Entra via Microsoft Graph (tenant + app registration): creates the SAML apps
+                                          (open to every tenant user), creates users; mfa = tenant security defaults
+  ssolab auth0 connect|provision|user <email>|status
+                                          Auth0 via its Management API (domain + M2M client): creates the SAML apps,
+                                          enables them on the database connection, creates test users
+  ssolab authentik up|down|status|provision|user <email>
+                                          self-hosted authentik on :18100; provision creates the SAML apps
+  ssolab gitops show|write <inst>|clear
+                                          optional: mirror an instance's live IdP settings into SSOLAB_GITOPS_DEFAULT
+  Providers: okta auth0 entra google authentik saml
+
+Config: lab.env ($QALAB_ENV, tools/qalab/lab.env, ~/.config/qalab/lab.env). Per-user data: $SSOLAB_DATA.
+Only talks to Fleet through the API; only runs its own ssolab-* compose projects (memory-capped, ports 18180/18100).
+"""
+import datetime
+import getpass
+import json
+import os
+import re
+import secrets
+import shutil
+import socket
+import ssl
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+LAB_EXAMPLE = os.path.join(os.path.dirname(ROOT), "qalab", "lab.env.example")
+
+
+def load_lab_env():
+    """-> (values, path, error). $QALAB_ENV, then tools/qalab/lab.env, then ~/.config/qalab/lab.env."""
+    if os.environ.get("QALAB_ENV"):
+        cands = [os.path.expanduser(os.environ["QALAB_ENV"])]
+    else:
+        cands = [os.path.join(os.path.dirname(ROOT), "qalab", "lab.env"), os.path.expanduser("~/.config/qalab/lab.env")]
+    path = next((c for c in cands if os.path.isfile(c)), None)
+    if not path:
+        return {}, None, (f"no lab config: looked for {' and '.join(cands)}. Copy {LAB_EXAMPLE} "
+                          "to one of those (or point QALAB_ENV at it) and fill it in.")
+    d = {}
+    for line in open(path):
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        v = v.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        d[k.strip()] = os.path.expanduser(v) if v.startswith("~") else v
+    return d, path, ""
+
+
+LAB, LAB_PATH, LAB_ERR = load_lab_env()
+DATA = LAB.get("SSOLAB_DATA", "")
+PROFILES = os.path.join(DATA, "profiles")
+METADATA = os.path.join(DATA, "metadata")
+STATE = os.path.join(DATA, "state")
+LOGINS = os.path.join(DATA, "LOGINS.md")
+HISTORY = os.path.join(STATE, "history.log")
+GITOPS_DEFAULT = LAB.get("SSOLAB_GITOPS_DEFAULT", "")   # empty = gitops commands off
+FLEET_CONFIG = os.path.expanduser("~/.fleet/config")
+VAULT = LAB.get("SSOLAB_OP_VAULT", "")                  # empty = no 1Password sync
+
+# name -> fallback public URL (the live server_url wins; ACS URLs are built from it)
+INSTANCES = {i: LAB.get(f"INSTANCE_{i}_URL", "") for i in LAB.get("INSTANCES", "").split()}
+
+
+def inst_opt(inst, key, default=""):
+    return LAB.get(f"INSTANCE_{inst}_{key}") or default
+
+
+def inst_context(inst):
+    return inst_opt(inst, "CONTEXT", inst)
+
+
+def inst_fleetctl(inst):
+    return inst_opt(inst, "FLEETCTL") or shutil.which("fleetctl") or ""
+
+
+def first_inst():
+    return next(iter(INSTANCES), "")
+
+
+def require_lab():
+    if LAB_ERR:
+        die(LAB_ERR)
+    if not INSTANCES:
+        die(f"INSTANCES is empty in {LAB_PATH} (see {LAB_EXAMPLE})")
+    if not DATA:
+        die(f"SSOLAB_DATA isn't set in {LAB_PATH}: point it at a folder for your logins and profiles (see {LAB_EXAMPLE})")
+
+
+def need(cmd, hint=""):
+    if not shutil.which(cmd):
+        die(f"{cmd} not found on PATH{' — ' + hint if hint else ''}")
+
+
+def saved_to():
+    return "LOGINS.md + 1Password" if VAULT else "LOGINS.md"
+
+
+FEATURES = {
+    "sso": ("Admin SSO", "/api/v1/fleet/sso/callback", "admin"),
+    "eua": ("End-user auth", "/api/v1/fleet/mdm/sso/callback", "mdm"),
+}
+SAML_PORT, AUTHENTIK_PORT = 18180, 18100   # off the usual Fleet dev ports (8080, 3306, 9000…)
+SAML_METADATA_URL = f"http://localhost:{SAML_PORT}/simplesaml/saml2/idp/metadata.php"
+AUTHENTIK_URL = f"http://localhost:{AUTHENTIK_PORT}"
+AUTHENTIK_IMAGE = "ghcr.io/goauthentik/server:2026.8.1"
+
+PROVIDERS = {
+    "okta": dict(name="Okta", kind="cloud", console="https://<org>-admin.okta.com/admin/apps/active", steps=[
+        "Applications → Applications → Create App Integration → SAML 2.0. One app per row below",
+        "  (name it e.g. 'Fleet rc admin'). Single sign-on URL = ACS URL, tick 'Use this for Recipient and",
+        "  Destination URL'. Audience URI (SP Entity ID) = Entity ID. Name ID format = EmailAddress,",
+        "  Application username = Email. Finish, then Assignments → assign your test users.",
+        "Sign On tab → SAML 2.0 → 'Metadata URL' (https://<org>.okta.com/app/<id>/sso/saml/metadata).",
+    ]),
+    "entra": dict(name="Microsoft Entra ID", kind="cloud", console="https://entra.microsoft.com", steps=[
+        "Enterprise applications → New application → Create your own application → 'Integrate any other",
+        "  application you don't find in the gallery (Non-gallery)'. One app can serve all four rows:",
+        "  Single sign-on → SAML → Basic SAML Configuration → add every Entity ID under 'Identifier' and",
+        "  every ACS URL under 'Reply URL'. (Or one app per row if you want them separated.)",
+        "Attributes & Claims: keep the default Unique User Identifier = user.userprincipalname (Fleet users",
+        "  then sign in with their UPN, e.g. name@tenant.onmicrosoft.com — user.mail is often empty).",
+        "Users and groups → add your test users.",
+        "SAML Certificates → copy 'App Federation Metadata Url'.",
+    ]),
+    "google": dict(name="Google Workspace", kind="cloud", console="https://admin.google.com/ac/apps/unified", steps=[
+        "Apps → Web and mobile apps → Add app → Add custom SAML app. One app per row (Google allows one",
+        "  ACS URL + Entity ID per app). On 'Google Identity Provider details' click DOWNLOAD METADATA",
+        "  and save the XML (setup asks for the file path; Google has no metadata URL).",
+        "Service provider details: ACS URL, Entity ID, Name ID format = EMAIL, Name ID = Basic Information",
+        "  > Primary email. Then User access → ON for everyone (or your test OU).",
+    ]),
+    "auth0": dict(name="Auth0", kind="cloud", console="https://manage.auth0.com", steps=[
+        "Driven through the Management API: `ssolab auth0 connect` (domain + machine-to-machine client ID/secret)",
+        "creates the four SAML apps and enables them on the Username-Password-Authentication database.",
+    ]),
+    "authentik": dict(name="authentik", kind="local", console=f"{AUTHENTIK_URL}/if/admin/", steps=[
+        "Self-hosted: `ssolab authentik up` starts it and provisions all four SAML apps (no manual steps).",
+        "Add test users with `ssolab authentik user <email>`.",
+    ]),
+    "saml": dict(name="SimpleSAMLphp", kind="local", console=f"http://localhost:{SAML_PORT}/simplesaml/", steps=[
+        "Local test IdP: `ssolab saml up` starts it with both instances registered (no manual steps).",
+        "Users: Fleet's public test fixtures (fleet/tools/saml/users.php): sso_user, sso_user2, … (user123#).",
+    ]),
+}
+
+
+# ---------------------------------------------------------------- small helpers
+class Fail(Exception):
+    pass
+
+
+def die(msg):
+    print(f"ssolab: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+C = sys.stdout.isatty()
+def col(s, code):
+    return f"\033[{code}m{s}\033[0m" if C else s
+ok_ = lambda s: col(s, "32")
+warn_ = lambda s: col(s, "33")
+bad_ = lambda s: col(s, "31")
+dim_ = lambda s: col(s, "2")
+bold_ = lambda s: col(s, "1")
+
+
+def ask(prompt, default=""):
+    try:
+        v = input(f"{prompt}{f' [{default}]' if default else ''}: ").strip()
+    except EOFError:
+        v = ""
+    return v or default
+
+
+def yes(prompt, default=False):
+    v = ask(f"{prompt} [{'Y/n' if default else 'y/N'}]").lower()
+    return default if not v else v.startswith("y")
+
+
+def now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log_history(line):
+    os.makedirs(STATE, exist_ok=True)
+    with open(HISTORY, "a") as f:
+        f.write(f"{now()}  {line}\n")
+
+
+def http(method, url, body=None, headers=None, insecure=False, timeout=20, follow=True):
+    """-> (status, text, final_url). Never raises for HTTP errors; raises Fail for network errors."""
+    data = None
+    hdrs = dict(headers or {})
+    if body is not None:
+        data = body if isinstance(body, bytes) else json.dumps(body).encode()
+        hdrs.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    handlers = [urllib.request.HTTPSHandler(context=ssl._create_unverified_context() if insecure else ssl.create_default_context())]
+    if not follow:
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        handlers.append(NoRedirect())
+    else:
+        handlers.append(urllib.request.HTTPCookieProcessor())  # IdPs bounce through cookie-setting redirects
+    opener = urllib.request.build_opener(*handlers)
+    try:
+        with opener.open(req, timeout=timeout) as r:
+            return r.status, r.read().decode("utf-8", "replace"), r.geturl()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace"), e.geturl() if hasattr(e, "geturl") else url
+    except Exception as e:  # URLError, timeouts, TLS
+        raise Fail(f"{url}: {getattr(e, 'reason', e)}")
+
+
+# ---------------------------------------------------------------- Fleet instances
+def fleet_ctx(inst):
+    """address + token for a fleetctl context, read from ~/.fleet/config (same parsing as fleetapi.sh)."""
+    addr = tok = None
+    cur = None
+    ctx = inst_context(inst)
+    try:
+        lines = open(FLEET_CONFIG).read().splitlines()
+    except OSError:
+        raise Fail(f"no {FLEET_CONFIG} — `fleetctl login --context {ctx}` (needs an admin API token)")
+    for line in lines:
+        m = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if m:
+            cur = m.group(1)
+            continue
+        if cur == ctx:
+            m = re.match(r"^\s+address:\s*(\S*)", line)
+            if m:
+                addr = m.group(1)
+            m = re.match(r"^\s+token:\s*(\S*)", line)
+            if m:
+                tok = m.group(1)
+    if not addr:
+        raise Fail(f"no fleetctl context '{ctx}' in {FLEET_CONFIG} (`fleetctl login --context {ctx}`, or set INSTANCE_{inst}_CONTEXT)")
+    return addr.rstrip("/"), tok
+
+
+def fleet_api(inst, method, path, body=None, timeout=20):
+    addr, tok = fleet_ctx(inst)
+    st, text, _ = http(method, addr + path, body, {"Authorization": f"Bearer {tok}"}, insecure=True, timeout=timeout)
+    try:
+        js = json.loads(text) if text else {}
+    except ValueError:
+        js = {"raw": text[:300]}
+    return st, js
+
+
+def fleet_errors(js):
+    errs = js.get("errors") or []
+    out = [f"{e.get('name', '')}: {e.get('reason', '')}".strip(": ") for e in errs]
+    return "; ".join(out) or js.get("message") or json.dumps(js)[:300]
+
+
+def get_config(inst):
+    st, js = fleet_api(inst, "GET", "/api/v1/fleet/config")
+    if st != 200:
+        raise Fail(f"{inst}: GET /config → {st} {fleet_errors(js)}")
+    return js
+
+
+def public_url(inst, cfg=None):
+    try:
+        cfg = cfg or get_config(inst)
+        return (cfg.get("server_settings", {}).get("server_url") or INSTANCES[inst]).rstrip("/")
+    except Fail:
+        return INSTANCES[inst].rstrip("/")
+
+
+def need_inst(inst):
+    if inst not in INSTANCES:
+        die(f"instance must be one of: {', '.join(INSTANCES)}")
+
+
+def need_provider(p, allow_off=False):
+    if p in PROVIDERS or (allow_off and p == "off"):
+        return
+    die(f"provider must be one of: {', '.join(PROVIDERS)}{', off' if allow_off else ''}")
+
+
+# ---------------------------------------------------------------- profiles (profiles/<provider>.conf, key = value)
+def default_entity(inst, feat):
+    return f"urn:fleetqa:{inst}:{FEATURES[feat][2]}"
+
+
+def load_profile(p):
+    d = {}
+    path = os.path.join(PROFILES, f"{p}.conf")
+    if os.path.exists(path):
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                d[k.strip()] = v.strip()
+    d.setdefault("idp_name", PROVIDERS[p]["name"])
+    d.setdefault("jit", "no")
+    return d
+
+
+def save_profile(p, d):
+    os.makedirs(PROFILES, exist_ok=True)
+    path = os.path.join(PROFILES, f"{p}.conf")
+    with open(path, "w") as f:
+        f.write(f"# {PROVIDERS[p]['name']} — written by `ssolab`. Non-secret: IdP app identifiers only. Edit freely.\n")
+        f.write("# <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file (file in ../metadata/)\n")
+        for k in sorted(d, key=lambda k: (k.count("."), k)):
+            f.write(f"{k} = {d[k]}\n")
+
+
+def prof_feature(p, inst, feat, prof=None):
+    """-> dict(entity_id, metadata_url, metadata, metadata_file, ready, why)."""
+    prof = prof or load_profile(p)
+    pre = f"{inst}.{feat}."
+    ent = prof.get(pre + "entity_id") or ""
+    url = prof.get(pre + "metadata_url") or ""
+    mfile = prof.get(pre + "metadata_file") or ""
+    xml = ""
+    if mfile:
+        path = mfile if os.path.isabs(mfile) else os.path.join(METADATA, mfile)
+        try:
+            xml = open(path).read().strip()
+        except OSError:
+            return dict(entity_id=ent, metadata_url=url, metadata="", metadata_file=mfile, ready=False,
+                        why=f"missing {path}")
+    ready = bool(ent and (url or xml))
+    why = "" if ready else ("no entity_id" if not ent else "no metadata")
+    return dict(entity_id=ent, metadata_url="" if xml else url, metadata=xml, metadata_file=mfile, ready=ready, why=why)
+
+
+def match_provider(section, inst, feat):
+    """Which profile matches what's configured on the server (entity ID + metadata source)."""
+    ent = (section or {}).get("entity_id") or ""
+    if not ent:
+        return None
+    for p in PROVIDERS:
+        pf = prof_feature(p, inst, feat)
+        if pf["entity_id"] != ent:
+            continue
+        if pf["metadata_url"] and pf["metadata_url"] == section.get("metadata_url"):
+            return p
+        if pf["metadata"] and pf["metadata"].strip() == (section.get("metadata") or "").strip():
+            return p
+    return None
+
+
+# ---------------------------------------------------------------- metadata + verification
+NS = {"md": "urn:oasis:names:tc:SAML:2.0:metadata"}
+
+
+def parse_metadata(xml):
+    """-> (idp entityID, SSO URL). Raises Fail if it isn't IdP metadata."""
+    try:
+        root = ET.fromstring(xml.encode() if isinstance(xml, str) else xml)
+    except ET.ParseError as e:
+        raise Fail(f"not XML ({e})")
+    ed = root if root.tag.endswith("EntityDescriptor") else root.find(".//md:EntityDescriptor", NS)
+    if ed is None:
+        raise Fail("no EntityDescriptor")
+    sso = None
+    for s in ed.findall(".//md:IDPSSODescriptor/md:SingleSignOnService", NS):
+        if sso is None or s.get("Binding", "").endswith("HTTP-Redirect"):
+            sso = s.get("Location")
+    if not sso:
+        raise Fail("no IDPSSODescriptor/SingleSignOnService (is this SP metadata?)")
+    return ed.get("entityID"), sso
+
+
+def check_metadata(pf):
+    """-> (ok, text)."""
+    try:
+        if pf["metadata"]:
+            ent, sso = parse_metadata(pf["metadata"])
+            return True, f"inline XML → IdP {ent}, SSO {sso}"
+        st, text, _ = http("GET", pf["metadata_url"], timeout=15)
+        if st != 200:
+            return False, f"metadata URL → HTTP {st}"
+        ent, sso = parse_metadata(text)
+        return True, f"metadata URL OK → IdP {ent}, SSO {sso}"
+    except Fail as e:
+        return False, f"metadata: {e}"
+
+
+IDP_ERRORS = ["AADSTS", "app_not_configured", "app_not_enabled", "Error 400", "Error 403", "invalid_request",
+              "Metadata not found", "Unable to find metadata", "NOSTATE", "Sorry, you can't access",
+              "is not a valid", "Invalid assertion consumer", "SAML Error", "unable to process"]
+
+
+def probe_idp(url):
+    """Follow Fleet's AuthnRequest redirect to the IdP; -> (ok, text). OK = a login page, not an error page."""
+    try:
+        st, text, final = http("GET", url, timeout=20, insecure=url.startswith("https://localhost"))
+    except Fail as e:
+        return False, f"IdP unreachable: {e}"
+    host = re.sub(r"^https?://([^/]+).*", r"\1", final)
+    hit = next((k for k in IDP_ERRORS if k.lower() in text.lower()), None)
+    if st >= 400 or hit:
+        snippet = ""
+        m = re.search(r"(AADSTS\d+[^<\"]{0,120})", text)
+        if m:
+            snippet = m.group(1)
+        return False, f"IdP {host} answered with an error (HTTP {st}{', ' + hit if hit else ''}) {snippet}".strip()
+    return True, f"IdP {host} accepted the AuthnRequest (HTTP {st}, login page)"
+
+
+def verify(inst, feats, cfg=None):
+    cfg = cfg or get_config(inst)
+    results = []
+    if "sso" in feats:
+        s = cfg.get("sso_settings") or {}
+        if not s.get("enable_sso"):
+            results.append(("sso", None, "admin SSO is off"))
+        else:
+            st, js = fleet_api(inst, "POST", "/api/v1/fleet/sso", {"relay_url": "/"})
+            if st != 200 or not js.get("url"):
+                results.append(("sso", False, f"Fleet couldn't start SSO: HTTP {st} {fleet_errors(js)}"))
+            else:
+                results.append(("sso",) + probe_idp(js["url"]))
+    if "eua" in feats:
+        e = (cfg.get("mdm") or {}).get("end_user_authentication") or {}
+        if not e.get("entity_id"):
+            results.append(("eua", None, "end-user auth IdP is empty"))
+        else:
+            src = dict(metadata=e.get("metadata") or "", metadata_url=e.get("metadata_url") or "")
+            okm, txt = check_metadata(src)
+            st, js = fleet_api(inst, "POST", "/api/v1/fleet/mdm/sso", {})
+            if st == 200 and js.get("url"):
+                okp, ptxt = probe_idp(js["url"])
+                results.append(("eua", okm and okp, f"{txt}; {ptxt}"))
+            else:
+                results.append(("eua", okm, f"{txt}; redirect not tested (Fleet: HTTP {st}, needs MDM)"))
+    return results
+
+
+def print_results(results):
+    for feat, okv, txt in results:
+        mark = dim_("–") if okv is None else (ok_("✓") if okv else bad_("✗"))
+        print(f"  {mark} {FEATURES[feat][0]:<14} {txt}")
+
+
+# ---------------------------------------------------------------- status
+def local_service(p):
+    """-> 'running' | 'stopped' | '' for providers we host."""
+    if p == "saml":
+        try:
+            return "running" if http("GET", SAML_METADATA_URL, timeout=3)[0] == 200 else "stopped"
+        except Fail:
+            return "stopped"
+    if p == "authentik":
+        try:
+            return "running" if http("GET", f"{AUTHENTIK_URL}/-/health/ready/", timeout=3)[0] in (200, 204) else "stopped"
+        except Fail:
+            return "stopped"
+    return ""
+
+
+def gitops_marker():
+    """-> instance name if default.yml carries a managed block, else ''."""
+    if not GITOPS_DEFAULT:
+        return ""
+    try:
+        m = re.search(r"# >>> ssolab \w+ \(from (\w+)", open(GITOPS_DEFAULT).read())
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
+def inst_status(inst):
+    out = dict(name=inst, up=False, error="", version="", license="", public=INSTANCES[inst],
+               sso=dict(enabled=False, idp_name="", provider=None, entity_id="", jit=False),
+               eua=dict(idp_name="", provider=None, entity_id="", required=False))
+    try:
+        addr, _ = fleet_ctx(inst)
+        out["local"] = addr
+        st, _, _ = http("GET", addr + "/healthz", insecure=True, timeout=5)
+        out["up"] = st == 200
+        if not out["up"]:
+            out["error"] = f"/healthz → {st}"
+            return out
+        st, js = fleet_api(inst, "GET", "/api/v1/fleet/version", timeout=10)
+        out["version"] = js.get("version", "") if st == 200 else ""
+        cfg = get_config(inst)
+    except Fail as e:
+        out["error"] = str(e)
+        return out
+    out["license"] = (cfg.get("license") or {}).get("tier", "")
+    out["public"] = public_url(inst, cfg)
+    s = cfg.get("sso_settings") or {}
+    out["sso"] = dict(enabled=bool(s.get("enable_sso")), idp_name=s.get("idp_name", ""), entity_id=s.get("entity_id", ""),
+                      provider=match_provider(s, inst, "sso"), jit=bool(s.get("enable_jit_provisioning")))
+    mdm = cfg.get("mdm") or {}
+    e = mdm.get("end_user_authentication") or {}
+    out["eua"] = dict(idp_name=e.get("idp_name", ""), entity_id=e.get("entity_id", ""),
+                      provider=match_provider(e, inst, "eua"),
+                      required=bool((mdm.get("macos_setup") or {}).get("enable_end_user_authentication")))
+    return out
+
+
+def provider_status(p):
+    prof = load_profile(p)
+    ready = {i: [f for f in FEATURES if prof_feature(p, i, f, prof)["ready"]] for i in INSTANCES}
+    return dict(key=p, name=PROVIDERS[p]["name"], idp_name=prof["idp_name"], kind=PROVIDERS[p]["kind"],
+                service=local_service(p), ready=ready, jit=prof.get("jit") == "yes",
+                creds=len([r for r in read_logins() if r["provider"] == p]))
+
+
+def describe(sec, feat):
+    if feat == "sso" and not sec["enabled"]:
+        return "off" + (f" (was {sec['idp_name']})" if sec["idp_name"] else "")
+    if not sec["entity_id"]:
+        return "off"
+    p = sec["provider"]
+    return PROVIDERS[p]["name"] if p else f"{sec['idp_name'] or '?'} (not a saved profile)"
+
+
+def cmd_status(args):
+    insts = [inst_status(i) for i in INSTANCES]
+    provs = [provider_status(p) for p in PROVIDERS]
+    gm = gitops_marker()
+    if "--json" in args:
+        print(json.dumps(dict(instances=insts, providers=provs, gitops=gm, gitops_file=GITOPS_DEFAULT)))
+        return
+    print(bold_(f"{'INSTANCE':<9}{'STATE':<7}{'VERSION':<20}{'LICENSE':<9}{'ADMIN SSO':<28}{'END-USER AUTH':<28}PUBLIC URL"))
+    for s in insts:
+        if not s["up"]:
+            print(f"{s['name']:<9}{bad_('down   ')}{dim_(s['error'])}")
+            continue
+        a, e = describe(s["sso"], "sso"), describe(s["eua"], "eua")
+        print(f"{s['name']:<9}{ok_('up     ')}{s['version'][:19]:<20}{s['license']:<9}{a[:27]:<28}{e[:27]:<28}{s['public']}")
+    print()
+    print(bold_(f"{'PROVIDER':<11}{'IdP NAME':<28}{'SERVICE':<10}{'READY FOR':<34}LOGINS"))
+    for p in provs:
+        ready = "  ".join(f"{i}:{'+'.join(fs)}" for i, fs in p["ready"].items() if fs)
+        ready = f"{ready:<34}" if ready else warn_(f"{'not set up → ssolab setup ' + p['key']:<36} ")
+        svc = {"running": ok_, "stopped": warn_}.get(p["service"], dim_)(f"{p['service'] or 'cloud':<10}")
+        print(f"{p['key']:<11}{p['idp_name'][:27]:<28}{svc}{ready}{p['creds']}")
+    print()
+    if not GITOPS_DEFAULT:
+        print(dim_("GitOps: off (SSOLAB_GITOPS_DEFAULT isn't set in lab.env)."))
+    elif gm:
+        print(warn_(f"GitOps: default.yml carries IdP settings from {gm} (applies to BOTH servers on the next gitops run)."))
+    else:
+        print(dim_("GitOps: default.yml has no sso_settings, so a gitops run resets admin SSO + end-user auth to empty."))
+
+
+# ---------------------------------------------------------------- switch
+def cmd_switch(args):
+    pos = [a for a in args if not a.startswith("--")]
+    if len(pos) < 2:
+        die("usage: ssolab switch <inst> <provider|off> [--only sso|eua] [--jit|--no-jit] [--gitops|--no-gitops] [--yes]")
+    inst, p = pos[0], pos[1]
+    need_inst(inst)
+    need_provider(p, allow_off=True)
+    feats = list(FEATURES)
+    if "--only" in args:
+        i = args.index("--only")
+        o = args[i + 1] if i + 1 < len(args) else ""
+        if o not in FEATURES:
+            die("--only takes sso or eua")
+        feats = [o]
+    assume = "--yes" in args or "-y" in args
+    cfg = get_config(inst)
+    cur_sso = cfg.get("sso_settings") or {}
+    cur_eua = (cfg.get("mdm") or {}).get("end_user_authentication") or {}
+    eua_required = bool(((cfg.get("mdm") or {}).get("macos_setup") or {}).get("enable_end_user_authentication"))
+
+    payload, plan = {}, []
+    if p == "off":
+        if "sso" in feats:
+            payload["sso_settings"] = {"enable_sso": False}
+            plan.append(("sso", cur_sso.get("idp_name") if cur_sso.get("enable_sso") else "off", "off (settings kept, enable_sso=false)"))
+        if "eua" in feats:
+            if eua_required:
+                print(warn_("End-user authentication is turned on in Controls → Setup experience; Fleet will refuse to clear the IdP."))
+            payload["mdm"] = {"end_user_authentication": {"idp_name": "", "entity_id": "", "metadata_url": "", "metadata": ""}}
+            plan.append(("eua", cur_eua.get("idp_name") or "off", "cleared"))
+    else:
+        prof = load_profile(p)
+        jit = prof.get("jit") == "yes"
+        if "--jit" in args:
+            jit = True
+        if "--no-jit" in args:
+            jit = False
+        print(bold_(f"Pre-flight: {PROVIDERS[p]['name']} for {inst}"))
+        if PROVIDERS[p]["kind"] == "local" and local_service(p) != "running":
+            die(f"{p} isn't running — start it with `ssolab {p} up`")
+        for f in feats:
+            pf = prof_feature(p, inst, f, prof)
+            if not pf["ready"]:
+                die(f"profile {p} has no {inst} {FEATURES[f][0]} app ({pf['why']}) — run `ssolab setup {p}`")
+            okm, txt = check_metadata(pf)
+            print(f"  {ok_('✓') if okm else bad_('✗')} {FEATURES[f][0]:<14} entity {pf['entity_id']}  {txt}")
+            if not okm and not (assume or yes("  Metadata check failed. Apply anyway?")):
+                die("aborted")
+            prov = {"idp_name": prof["idp_name"], "entity_id": pf["entity_id"],
+                    "metadata_url": pf["metadata_url"], "metadata": pf["metadata"]}
+            if f == "sso":
+                payload["sso_settings"] = dict(prov, enable_sso=True, idp_image_url=prof.get("image_url", ""),
+                                               enable_jit_provisioning=jit,
+                                               enable_sso_idp_login=prof.get("idp_login") == "yes",
+                                               sso_server_url=cur_sso.get("sso_server_url", ""))
+                was = (cur_sso.get("idp_name") or "?") if cur_sso.get("enable_sso") else "off"
+                plan.append(("sso", was, f"{prof['idp_name']}  (JIT {'on' if jit else 'off'})"))
+            else:
+                payload["mdm"] = {"end_user_authentication": prov}
+                plan.append(("eua", cur_eua.get("idp_name") or "off", prof["idp_name"]))
+
+    print(bold_(f"\nChange on {inst} ({public_url(inst, cfg)}):"))
+    for f, was, new in plan:
+        print(f"  {FEATURES[f][0]:<14} {was or 'off'}  →  {new}")
+    if not assume and not yes("Apply?", default=True):
+        die("aborted, nothing changed")
+    st, js = fleet_api(inst, "PATCH", "/api/v1/fleet/config", payload, timeout=60)
+    if st != 200:
+        die(f"Fleet rejected it (HTTP {st}): {fleet_errors(js)}")
+    log_history(f"switch {inst} → {p} ({'+'.join(feats)})")
+    print(ok_("Applied.") + " Checking…")
+    time.sleep(1)
+    res = verify(inst, feats)
+    print_results(res)
+    want = "--gitops" in args or (GITOPS_DEFAULT and not assume and "--no-gitops" not in args and sys.stdin.isatty()
+                                  and yes(f"Also write these IdP settings to {GITOPS_DEFAULT}?"))
+    if want and not GITOPS_DEFAULT:
+        print(warn_("--gitops ignored: SSOLAB_GITOPS_DEFAULT isn't set in lab.env."))
+    elif want:
+        gitops_write(inst)
+    if p != "off" and "sso" in feats and sso_rows(p):
+        have = fleet_users(inst)
+        missing = [r["label"] for r in sso_rows(p) if r["email"].lower() not in have]
+        if missing:
+            jit = payload.get("sso_settings", {}).get("enable_jit_provisioning")
+            print(warn_(f"{len(missing)} {PROVIDERS[p]['name']} user(s) have no Fleet account on {inst}"
+                        + (" (JIT will create them on first login)." if jit else " and JIT is off, so they can't sign in yet.")))
+            if not jit and not assume and sys.stdin.isatty():
+                users_sync(p, [inst], missing)
+            elif not jit:
+                print(dim_(f"  `ssolab users sync {p} {inst}`"))
+    if any(r[1] is False for r in res):
+        sys.exit(2)
+
+
+SSO_CAUSES = [  # (pattern in Fleet's callback log line, plain-language cause + fix)
+    (r"account_invalid.*was not found", "no Fleet user with that email and JIT is off → `ssolab users sync <provider> {inst}`"),
+    (r"InResponseTo.*does not match",
+     "the IdP answered an older login request than the one Fleet expects in that browser (double-clicked "
+     "'Sign in with SSO', a second tab, or an old IdP login page via Back) → close extra tabs, start again from "
+     "{url}/login and click SSO once"),
+    (r"(?i)signature|certificate", "IdP signing cert doesn't match the metadata Fleet has (IdP app recreated?) → re-run `ssolab switch {inst} <provider>`"),
+    (r"(?i)audience|entity", "audience / entity ID mismatch between the IdP app and Fleet → compare `ssolab sp` with the IdP app"),
+    (r"(?i)expired|NotOnOrAfter|NotBefore", "assertion expired or clock skew → retry; check the Mac/Docker clock"),
+    (r"(?i)destination|recipient", "ACS URL in the IdP app doesn't match Fleet's server_url → compare `ssolab sp` with the IdP app"),
+    (r"(?i)user.*disabled|sso.*not enabled", "the Fleet user exists but isn't allowed to use SSO → enable SSO on the user in Fleet"),
+]
+
+
+def cmd_why(args):
+    """Explain the latest SSO sign-ins on an instance from its server log (read-only)."""
+    inst = args[0] if args else first_inst()
+    need_inst(inst)
+    path = inst_opt(inst, "SERVER_LOG")
+    if not path:
+        die(f"no server log for {inst}: set INSTANCE_{inst}_SERVER_LOG in {LAB_PATH} (the file `fleet serve` logs to)")
+    try:
+        lines = [l for l in open(path, errors="replace") if "uri=/api/v1/fleet/sso/callback" in l or "uri=/api/v1/fleet/mdm/sso/callback" in l]
+    except OSError as e:
+        die(f"can't read {path}: {e}")
+    if not lines:
+        return print(f"No SSO sign-ins in {inst}'s log yet.")
+    url = public_url(inst)
+    print(bold_(f"Last SSO sign-ins on {inst} (from {os.path.basename(path)}):"))
+    for l in lines[-int(args[1]) if len(args) > 1 and args[1].isdigit() else -5:]:
+        f = l.rstrip("\n").split("\t")
+        msg = f[-1]
+        ts = re.search(r"ts=(\S+)", msg)
+        when = ts.group(1).replace("T", " ").rstrip("Z") if ts else "?"
+        em = re.search(r"email=(\S+)", msg)
+        if " err=" not in msg and " internal=" not in msg:
+            print(f"  {ok_('✓')} {when}  {em.group(1) if em else '?'} signed in")
+            continue
+        err = re.search(r'(?:err|internal)="(.*?)"(?: uuid=| \w+=|$)', msg)
+        err = err.group(1) if err else msg[-200:]
+        cause = next((c for pat, c in SSO_CAUSES if re.search(pat, err)), "unrecognised — see the raw error")
+        who = re.search(r"email=([^\s\"]+)", err)
+        print(f"  {bad_('✗')} {when}  {who.group(1) if who else ''}".rstrip())
+        print(f"      Fleet: {err[:160]}")
+        print(f"      Why:   {cause.format(inst=inst, url=url)}")
+
+
+def cmd_test(args):
+    if not args:
+        die("usage: ssolab test <inst>")
+    need_inst(args[0])
+    res = verify(args[0], list(FEATURES))
+    print(bold_(f"{args[0]}:"))
+    print_results(res)
+    if any(r[1] is False for r in res):
+        sys.exit(2)
+
+
+# ---------------------------------------------------------------- setup + SP values
+def sp_rows(insts=None):
+    rows = []
+    for inst in insts or INSTANCES:
+        pub = public_url(inst)
+        for f, (label, path, _) in FEATURES.items():
+            rows.append((inst, f, label, pub + path))
+    return rows
+
+
+def cmd_sp(args, p=None):
+    insts = [a for a in args if a in INSTANCES] or list(INSTANCES)
+    prof = load_profile(p) if p else {}
+    print(bold_(f"{'ROW':<10}{'FEATURE':<15}{'ENTITY ID (Audience / Identifier)':<34}ACS URL (Reply / Single sign-on URL)"))
+    for inst, f, label, acs in sp_rows(insts):
+        ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+        print(f"{inst + '.' + f:<10}{label:<15}{ent:<34}{acs}")
+    print(dim_("Name ID: the user's email address (format urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress)."))
+
+
+def cmd_setup(args):
+    if not args:
+        die(f"usage: ssolab setup <{'|'.join(PROVIDERS)}>")
+    p = args[0]
+    need_provider(p)
+    info = PROVIDERS[p]
+    if p == "saml":
+        return saml_up()
+    if p == "authentik":
+        return authentik_cmd(["up"])
+    if p == "okta" and "--manual" not in args:
+        return okta_cmd(["connect"])
+    if p == "auth0":
+        return auth0_cmd(["connect"])
+    if p == "entra" and "--manual" not in args:
+        return entra_cmd(["connect"])
+    prof = load_profile(p)
+    print(bold_(f"\n{info['name']} — IdP setup for Fleet") + f"   console: {prof.get('console', info['console'])}\n")
+    for s in info["steps"]:
+        print("  " + s)
+    print()
+    cmd_sp([], p)
+    print()
+    prof["idp_name"] = ask("Name on Fleet's 'Sign in with …' button", prof["idp_name"])
+    if p == "okta":
+        prof["console"] = ask("Okta admin URL", prof.get("console", "https://<org>-admin.okta.com"))
+    if p == "entra":
+        prof["tenant_id"] = ask("Entra tenant ID (for your notes)", prof.get("tenant_id", ""))
+    if p == "google":
+        prof["domain"] = ask("Workspace primary domain (for your notes)", prof.get("domain", ""))
+    insts = ask(f"Set up which instances ({', '.join(INSTANCES)})", " ".join(INSTANCES)).split()
+    last = ""
+    for inst in insts:
+        if inst not in INSTANCES:
+            continue
+        for f, (label, _, _) in FEATURES.items():
+            key = f"{inst}.{f}."
+            print(bold_(f"\n{inst} {label}"))
+            if not yes("  Configure this one?", default=True):
+                continue
+            prof[key + "entity_id"] = ask("  Entity ID used in the IdP app", prof.get(key + "entity_id") or default_entity(inst, f))
+            cur = prof.get(key + "metadata_url") or prof.get(key + "metadata_file") or last
+            hint = "metadata URL, or path to a downloaded metadata .xml"
+            src = ask(f"  {hint}", cur)
+            if not src:
+                continue
+            src = os.path.expanduser(src)
+            if src.startswith("http"):
+                prof[key + "metadata_url"] = src
+                prof.pop(key + "metadata_file", None)
+            else:
+                if os.path.exists(src) and os.path.dirname(os.path.abspath(src)) != METADATA:
+                    os.makedirs(METADATA, exist_ok=True)
+                    dest = f"{p}-{inst}-{f}.xml"
+                    shutil.copy(src, os.path.join(METADATA, dest))
+                    src = dest
+                prof[key + "metadata_file"] = os.path.basename(src)
+                prof.pop(key + "metadata_url", None)
+            last = src
+            okm, txt = check_metadata(prof_feature(p, inst, f, prof))
+            print(f"  {ok_('✓') if okm else bad_('✗')} {txt}")
+    prof["jit"] = "yes" if yes("\nCreate Fleet users on first SSO login (JIT provisioning)?", prof.get("jit") == "yes") else "no"
+    save_profile(p, prof)
+    print(ok_(f"\nSaved profiles/{p}.conf."))
+    if yes(f"Save the tenant admin login now ({saved_to()})?", default=True):
+        creds_add(p, "admin", url=prof.get("console", info["console"]))
+    print(f"Next: `ssolab switch {first_inst()} {p}`")
+
+
+# ---------------------------------------------------------------- credentials: LOGINS.md + 1Password
+LOGIN_COLS = ["provider", "label", "username", "password", "url", "notes", "1password", "email"]
+TENANT_LABELS = ("admin", "akadmin", "api-token")   # IdP console logins, not people who sign into Fleet
+
+
+def read_logins():
+    rows = []
+    if not os.path.exists(LOGINS):
+        return rows
+    for line in open(LOGINS):
+        if not line.startswith("|") or line.startswith("|---") or line.startswith("| provider"):
+            continue
+        cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+        cells += [""] * (len(LOGIN_COLS) - len(cells))
+        rows.append(dict(zip(LOGIN_COLS, cells)))
+    return rows
+
+
+def write_logins(rows):
+    os.makedirs(DATA, exist_ok=True)
+    sync = f"Kept in sync with the 1Password vault \"{VAULT}\" by `ssolab creds sync`. " if VAULT else ""
+    with open(LOGINS + ".tmp", "w") as f:
+        f.write(f"# SSO lab logins\n\nOwner-only (chmod 600). {sync}Never commit or copy elsewhere.\n\n")
+        f.write("| " + " | ".join(LOGIN_COLS) + " |\n|" + "---|" * len(LOGIN_COLS) + "\n")
+        for r in rows:
+            f.write("| " + " | ".join(r.get(c, "").replace("|", "\\|") for c in LOGIN_COLS) + " |\n")
+    os.chmod(LOGINS + ".tmp", 0o600)
+    os.replace(LOGINS + ".tmp", LOGINS)
+
+
+def upsert_login(row):
+    rows = [r for r in read_logins() if not (r["provider"] == row["provider"] and r["label"] == row["label"])]
+    rows.append(row)
+    rows.sort(key=lambda r: (list(PROVIDERS).index(r["provider"]) if r["provider"] in PROVIDERS else 99, r["label"]))
+    write_logins(rows)
+
+
+def creds_add(p, label=None, url=None, username=None, password=None, notes="", quiet=False, email=None):
+    label = label or ask("Label (admin, test-user, api-token…)", "admin")
+    if username is None:
+        username = ask(f"{p}/{label} username")
+    if password is None:
+        while True:
+            password = getpass.getpass(f"{p}/{label} password (hidden): ")
+            if password == getpass.getpass("again: "):
+                break
+            print("didn't match, try again")
+    if url is None:
+        url = ask("URL", load_profile(p).get("console", PROVIDERS[p]["console"]))
+    if notes == "" and not quiet:
+        notes = ask("Notes (optional)")
+    if email is None:
+        guess = username if "@" in username and label not in TENANT_LABELS else ""
+        email = "" if quiet else ask("Email this user signs into Fleet with (blank = not a Fleet SSO user, e.g. tenant admin)", guess)
+    row = dict(provider=p, label=label, username=username, password=password, url=url, notes=notes, email=email,
+               **{"1password": "pending"})
+    upsert_login(row)
+    print(ok_(f"Saved {p}/{label} to LOGINS.md."))
+    op_push([row])
+    if email:
+        idp_add_user(p, row, quiet)
+        offer_fleet(p, [label])
+
+
+def idp_add_user(p, row, quiet=False):
+    """The login is a person who signs in through the IdP: make sure the IdP has them too."""
+    if p == "saml":
+        saml_sync_users()
+        print(ok_(f"Added {row['username']} to SimpleSAMLphp") + dim_(" (saml/authsources.php, live — no restart)."))
+    elif p == "authentik" and not quiet:          # quiet = called from `authentik user`, which already did it
+        if local_service("authentik") != "running":
+            print(warn_("authentik isn't running: start it (`ssolab authentik up`), then `ssolab authentik user "
+                        f"{row['email']}` to create the user there."))
+        else:
+            ak_ensure_user(row["email"], row["password"])
+    elif p == "okta" and all(okta_cfg()):
+        okta_ensure_user(row["email"], row["password"], row["label"])
+    elif p == "auth0" and all(auth0_cfg()):
+        auth0_ensure_user(row["email"], row["password"], row["label"])
+    elif p == "entra" and all(entra_cfg()):
+        entra_ensure_user(row["username"], row["password"], row["label"])
+    elif PROVIDERS[p]["kind"] == "cloud":
+        print(warn_(f"Make sure {row['email']} exists in {PROVIDERS[p]['name']} and is assigned to the Fleet apps "
+                    "(ssolab can't create cloud IdP users)."))
+
+
+def op_state():
+    """-> '' if 1Password CLI is usable, else a reason."""
+    if not VAULT:
+        return "off (SSOLAB_OP_VAULT isn't set in lab.env)"
+    if not shutil.which("op"):
+        return "1Password CLI not installed (brew install 1password-cli, then 1Password → Settings → Developer → Integrate with 1Password CLI)"
+    r = subprocess.run(["op", "vault", "list", "--format", "json"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return "1Password CLI isn't signed in: " + (r.stderr.strip().splitlines() or ["?"])[-1]
+    return ""
+
+
+def op_push(rows):
+    if not VAULT:
+        return
+    why = op_state()
+    if why:
+        print(warn_(f"1Password: skipped — {why}. `ssolab creds sync` pushes it later."))
+        return
+    if subprocess.run(["op", "vault", "get", VAULT], capture_output=True).returncode != 0:
+        if not (sys.stdin.isatty() and yes(f"1Password vault '{VAULT}' doesn't exist. Create it?", default=True)):
+            print(warn_("1Password: skipped (no vault)."))
+            return
+        r = subprocess.run(["op", "vault", "create", VAULT], capture_output=True, text=True)
+        if r.returncode != 0:
+            print(bad_(f"1Password: couldn't create the vault: {r.stderr.strip()}"))
+            return
+    done = []
+    for row in rows:
+        title = f"SSO · {PROVIDERS.get(row['provider'], {}).get('name', row['provider'])} · {row['label']}"
+        item = {"title": title, "category": "LOGIN", "tags": ["fleet-sso", row["provider"]],
+                "urls": [{"href": row["url"], "primary": True}] if row["url"] else [],
+                "fields": [
+                    {"id": "username", "type": "STRING", "purpose": "USERNAME", "label": "username", "value": row["username"]},
+                    {"id": "password", "type": "CONCEALED", "purpose": "PASSWORD", "label": "password", "value": row["password"]},
+                    {"id": "notesPlain", "type": "STRING", "purpose": "NOTES", "label": "notesPlain",
+                     "value": (row["notes"] + "\n" if row["notes"] else "") + "Saved by ssolab."}]}
+        os.makedirs(STATE, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=STATE, suffix=".json")  # template file, not argv: keeps the password out of `ps`
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(item, f)
+            exists = subprocess.run(["op", "item", "get", title, "--vault", VAULT], capture_output=True).returncode == 0
+            cmd = ["op", "item", "edit", title, "--vault", VAULT, "--template", tmp] if exists else \
+                  ["op", "item", "create", "--vault", VAULT, "--template", tmp]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            os.remove(tmp)
+        if r.returncode == 0:
+            print(ok_(f"1Password: {'updated' if exists else 'created'} '{title}' in {VAULT}."))
+            done.append((row["provider"], row["label"]))
+        else:
+            print(bad_(f"1Password: '{title}' failed: {r.stderr.strip()}"))
+    if done:
+        rows_all = read_logins()
+        for r in rows_all:
+            if (r["provider"], r["label"]) in done:
+                r["1password"] = "synced " + datetime.date.today().isoformat()
+        write_logins(rows_all)
+
+
+def cmd_creds(args):
+    sub = args[0] if args else ""
+    if sub == "add":
+        if len(args) < 2:
+            die("usage: ssolab creds add <provider> [label]")
+        need_provider(args[1])
+        return creds_add(args[1], args[2] if len(args) > 2 else None)
+    if sub == "show":
+        if len(args) < 3:
+            die("usage: ssolab creds show <provider> <label>")
+        r = next((r for r in read_logins() if r["provider"] == args[1] and r["label"] == args[2]), None)
+        if not r:
+            die("no such login")
+        for c in LOGIN_COLS[2:]:
+            print(f"{c:<10} {r[c]}")
+        return
+    if sub == "sync":
+        if not VAULT:
+            die("1Password sync is off: set SSOLAB_OP_VAULT in lab.env (and install the op CLI)")
+        pend = [r for r in read_logins() if not r["1password"].startswith("synced")]
+        if not pend:
+            print("Everything in LOGINS.md is already in 1Password.")
+            return
+        return op_push(pend)
+    rows = [r for r in read_logins() if not sub or r["provider"] == sub]
+    if not rows:
+        print("No logins saved yet. `ssolab creds add <provider>`.")
+        return
+    print(bold_(f"{'PROVIDER':<11}{'LABEL':<30}{'USERNAME':<34}{'1PASSWORD':<18}URL"))
+    for r in rows:
+        onep = f"{r['1password'] or 'pending':<18}" if VAULT else dim_(f"{'off':<18}")
+        onep = onep if not VAULT else ok_(onep) if r["1password"].startswith("synced") else warn_(onep)
+        print(f"{r['provider']:<11}{r['label'][:29]:<30}{r['username'][:33]:<34}{onep}{r['url']}")
+    print(dim_("Passwords hidden: `ssolab creds show <provider> <label>`."))
+
+
+# ---------------------------------------------------------------- SSO test users ↔ Fleet users
+GLOBAL_ROLES = ("admin", "maintainer", "observer", "observer_plus", "technician", "gitops")
+
+
+def default_role(label):
+    """Role implied by the name (sso_user_3_global_admin → admin, …_global_observer → observer), else observer."""
+    l = label.lower()
+    for r in ("observer_plus", "technician", "maintainer", "observer", "admin", "gitops"):
+        if f"global_{r}" in l:
+            return r
+    return "observer"
+
+
+def fleet_users(inst):
+    st, js = fleet_api(inst, "GET", "/api/v1/fleet/users?per_page=1000")
+    if st != 200:
+        raise Fail(f"{inst}: GET /users → {st} {fleet_errors(js)}")
+    return {(u.get("email") or "").lower(): u for u in js.get("users") or []}
+
+
+def fleet_role_text(u):
+    if not u:
+        return ""
+    r = u.get("global_role") or ",".join(f"{t.get('name', '?')}:{t.get('role', '')}" for t in u.get("teams") or []) or "no role"
+    return r + ("" if u.get("sso_enabled") else ", password login")
+
+
+def record_created(line):
+    os.makedirs(DATA, exist_ok=True)
+    with open(os.path.join(DATA, "created.txt"), "a") as f:
+        f.write(f"{line}   ({datetime.date.today()})\n")
+
+
+def sso_rows(p, labels=None):
+    return [r for r in read_logins() if r["provider"] == p and r.get("email") and (not labels or r["label"] in labels)]
+
+
+def active_instances(p):
+    out = []
+    for inst in INSTANCES:
+        try:
+            s = get_config(inst).get("sso_settings") or {}
+        except Fail:
+            continue
+        if s.get("enable_sso") and match_provider(s, inst, "sso") == p:
+            out.append(inst)
+    return out
+
+
+def team_id(inst, name):
+    st, js = fleet_api(inst, "GET", "/api/v1/fleet/teams?per_page=500")
+    t = next((t for t in (js.get("teams") or []) if t.get("name") == name), None)
+    if not t:
+        raise Fail(f"{inst}: no fleet named '{name}'")
+    return t["id"]
+
+
+def users_sync(p, insts, labels=None, role=None, team=None, assume=False):
+    """Create the provider's SSO test users in Fleet (sso_enabled, no password) where they're missing.
+    Only ever creates: never modifies or deletes existing Fleet users (admin@example.com, role users with tokens)."""
+    rows = sso_rows(p, labels)
+    if not rows:
+        print(f"No {p} users with an email saved (`ssolab creds add {p}`).")
+        return
+    if role and role not in GLOBAL_ROLES:
+        raise Fail(f"--role must be one of {', '.join(GLOBAL_ROLES)}")
+    plan = []
+    for inst in insts:
+        have = fleet_users(inst)
+        tid = team_id(inst, team) if team else None
+        for r in rows:
+            u = have.get(r["email"].lower())
+            if u:
+                print(f"  {ok_('✓')} {inst:<5} {r['email']:<44} already in Fleet ({fleet_role_text(u)})")
+            else:
+                plan.append((inst, r, role or default_role(r["label"]), tid))
+    if not plan:
+        print(ok_("All of them already exist in Fleet."))
+        return
+    print(bold_(f"To create in Fleet ({PROVIDERS[p]['name']} users, sign in via SSO only):"))
+    for inst, r, rl, tid in plan:
+        where = f"{team}: {rl}" if tid else f"global {rl}"
+        note = "  (a fleet-role user in the IdP; --team NAME gives it that fleet role)" if "team_" in r["label"] and not tid else ""
+        print(f"  + {inst:<5} {r['email']:<44} {where}{dim_(note)}")
+    if not assume and not yes(f"Create {len(plan)} user{'s' if len(plan) != 1 else ''}?", default=True):
+        print("Skipped.")
+        return
+    for inst, r, rl, tid in plan:
+        body = {"name": r["username"] or r["label"], "email": r["email"], "sso_enabled": True}
+        if tid:
+            body["teams"] = [{"id": tid, "role": rl}]
+        else:
+            body["global_role"] = rl
+        st, js = fleet_api(inst, "POST", "/api/v1/fleet/users/admin", body)
+        if st in (200, 201):
+            print(f"  {ok_('✓')} {inst:<5} created {r['email']} ({rl})")
+            record_created(f"fleet-user {inst} {r['email']} role={rl}{' fleet=' + team if tid else ''} (ssolab users sync {p})")
+            log_history(f"fleet user {inst} {r['email']} ({rl})")
+        else:
+            print(f"  {bad_('✗')} {inst:<5} {r['email']}: HTTP {st} {fleet_errors(js)}")
+
+
+def offer_fleet(p, labels=None):
+    """After users are added on the IdP side: offer to create them in Fleet too (interactive only)."""
+    if not sys.stdin.isatty():
+        print(dim_(f"Create them in Fleet with `ssolab users sync {p}`."))
+        return
+    act = active_instances(p)
+    default = " ".join(act) or first_inst()
+    who = labels[0] if labels and len(labels) == 1 else "these users"
+    using = f"{' and '.join(act)} use{'s' if len(act) == 1 else ''} {PROVIDERS[p]['name']} now" if act else \
+        f"no instance uses {PROVIDERS[p]['name']} yet"
+    ans = ask(f"Also create {who} in Fleet — {using}. Instances ({' '.join(INSTANCES)}, none)", default)
+    insts = [i for i in ans.split() if i in INSTANCES]
+    if insts:
+        users_sync(p, insts, labels, assume=True)
+
+
+def cmd_users(args):
+    pos, opts, i = [], {}, 0
+    while i < len(args):
+        if args[i] in ("--label", "--role", "--team") and i + 1 < len(args):
+            opts.setdefault(args[i], []).append(args[i + 1])
+            i += 2
+            continue
+        if not args[i].startswith("--"):
+            pos.append(args[i])
+        i += 1
+    if pos[:1] == ["sync"]:
+        if len(pos) < 2:
+            die("usage: ssolab users sync <provider> [inst|both] [--label L] [--role R] [--team NAME] [--yes]")
+        p = pos[1]
+        need_provider(p)
+        want = pos[2] if len(pos) > 2 else ""
+        insts = list(INSTANCES) if want == "both" else [want] if want in INSTANCES else (active_instances(p) or [first_inst()])
+        return users_sync(p, insts, opts.get("--label"), (opts.get("--role") or [None])[0],
+                          (opts.get("--team") or [None])[0], "--yes" in args)
+    provs = [pos[0]] if pos else list(PROVIDERS)
+    have = {}
+    for inst in INSTANCES:
+        try:
+            have[inst] = fleet_users(inst)
+        except Fail:
+            have[inst] = None
+    print(bold_(f"{'PROVIDER':<11}{'LABEL':<30}{'EMAIL (Fleet user)':<44}" + "".join(f"{i.upper():<24}" for i in INSTANCES)))
+    n = 0
+    for p in provs:
+        for r in sso_rows(p):
+            n += 1
+            cells = ""
+            for inst in INSTANCES:
+                if have[inst] is None:
+                    cells += f"{'?':<24}"
+                    continue
+                u = have[inst].get(r["email"].lower())
+                cells += ok_(f"{('✓ ' + fleet_role_text(u))[:23]:<24}") if u else warn_(f"{'– missing':<24}")
+            print(f"{p:<11}{r['label'][:29]:<30}{r['email'][:43]:<44}{cells}")
+    if not n:
+        print("No SSO test users saved yet.")
+    else:
+        print(dim_("Create missing ones: `ssolab users sync <provider> [inst|both]`."))
+
+
+def gen_password():
+    """Meets Okta's default policy (8+, upper, lower, digit) and is fine for every other IdP."""
+    while True:
+        pw = "Qa-" + secrets.token_urlsafe(12)
+        if re.search(r"[A-Z]", pw) and re.search(r"[a-z]", pw) and re.search(r"\d", pw):
+            return pw
+
+
+def cmd_user_create(args):
+    """Non-interactive: everything for one IdP test user in one go (used by the interactive view's New user form).
+    ssolab user create --provider P --username U [--label L] [--email E] [--role R] [--team NAME]
+                       [--fleet inst,inst|none] [--mfa|--no-mfa] [--notes N] [--password-stdin | --generate]"""
+    o, i = {}, 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--provider", "--username", "--label", "--email", "--role", "--team", "--fleet", "--notes") and i + 1 < len(args):
+            o[a[2:]] = args[i + 1]
+            i += 2
+            continue
+        o[a[2:]] = True
+        i += 1
+    p, user = o.get("provider", ""), (o.get("username") or "").strip()
+    need_provider(p)
+    if not user:
+        die("--username is required")
+    if p == "entra" and "@" not in user:   # Entra sign-in names are UPNs in the tenant's domain
+        dom = load_profile("entra").get("domain", "")
+        if not dom:
+            die("Entra isn't connected — `ssolab entra connect`")
+        user = f"{user}@{dom}"
+    label = (o.get("label") or user).strip()
+    email = (o.get("email") or (user if "@" in user else "")).strip()
+    if p == "entra":
+        email = user   # Entra sends the UPN as the SAML NameID; Fleet must use the same address
+    if not re.match(r"[^@\s]+@[^@\s]+$", email):
+        die("needs an email the user signs into Fleet with (--email)")
+    if p in ("okta", "authentik", "auth0") and "@" not in user:
+        die(f"{PROVIDERS[p]['name']} usernames are emails")
+    if p == "saml" and ":" in user:
+        die("SimpleSAMLphp usernames can't contain ':'")
+    role = o.get("role") or default_role(label)
+    if role not in GLOBAL_ROLES:
+        die(f"--role must be one of {', '.join(GLOBAL_ROLES)}")
+    pw = sys.stdin.readline().rstrip("\n") if o.get("password-stdin") else gen_password() if o.get("generate") else ""
+    if not pw:
+        die("no password (--password-stdin or --generate)")
+    fleet = [x for x in (o.get("fleet") or "").replace(" ", ",").split(",") if x in INSTANCES]
+    mfa = bool(o.get("mfa"))
+    url = {"okta": okta_cfg()[0], "authentik": f"{AUTHENTIK_URL}/if/user/",
+           "auth0": load_profile("auth0").get("org_url", ""),
+           "entra": "https://myapps.microsoft.com"}.get(p) or load_profile(p).get("console", PROVIDERS[p]["console"])
+    notes = o.get("notes") or "test user"
+    if p == "okta":
+        notes += "" if mfa else ", password only"
+    row = dict(provider=p, label=label, username=user, password=pw, url=url, notes=notes, email=email,
+               **{"1password": "pending"})
+    print(bold_(f"New {PROVIDERS[p]['name']} user {user} → Fleet {', '.join(fleet) or '(none)'} as {role}"
+                + (f" in fleet '{o['team']}'" if o.get("team") else "")))
+    # 1. IdP first for the cloud/API ones, so a rejected password doesn't leave a half-made user behind
+    if p == "okta":
+        if not all(okta_cfg()):
+            die("Okta isn't connected — `ssolab okta connect`")
+        okta_ensure_user(email, pw, label)
+        okta_set_mfa(email, mfa)
+    elif p == "authentik":
+        if local_service("authentik") != "running":
+            die("authentik isn't running — `ssolab authentik up`")
+        ak_ensure_user(email, pw)
+    elif p == "auth0":
+        if not all(auth0_cfg()):
+            die("Auth0 isn't connected — `ssolab auth0 connect`")
+        auth0_ensure_user(email, pw, label)
+    elif p == "entra":
+        if not all(entra_cfg()):
+            die("Entra isn't connected — `ssolab entra connect`")
+        entra_ensure_user(user, pw, label)
+    # 2. save (LOGINS.md + 1Password); SimpleSAMLphp reads its users from LOGINS.md, so it syncs after the save
+    upsert_login(row)
+    print(ok_(f"Saved {p}/{label} to LOGINS.md."))
+    if p == "saml":
+        saml_sync_users()
+        print(ok_(f"Added {user} to SimpleSAMLphp (live)."))
+    elif PROVIDERS[p]["kind"] == "cloud" and p not in ("okta", "auth0", "entra"):
+        print(warn_(f"Create {email} in {PROVIDERS[p]['name']} and assign it to the Fleet apps (ssolab can't do that one)."))
+    op_push([row])
+    # 3. Fleet
+    if fleet:
+        users_sync(p, fleet, [label], role, o.get("team") if isinstance(o.get("team"), str) and o.get("team") else None, assume=True)
+    print(ok_("Done.") + f" Sign in: {', '.join(public_url(i) + '/login' for i in fleet) or 'Fleet'} → Sign in with SSO → {user}")
+
+
+# ---------------------------------------------------------------- local SimpleSAMLphp
+SAML_DIR = os.path.join(DATA, "saml")
+SAML_DIST = os.path.join(ROOT, "saml", "authsources.dist.php")
+AUTHENTIK_NEEDS_MB = 2100                  # server + worker + postgres, capped in authentik/docker-compose.yml
+
+
+def compose(project, sub, *args):
+    """The compose file is in the code dir; the project directory is the data dir, so relative bind mounts and
+    .env resolve there (and project/container names stay ssolab-saml / ssolab-authentik)."""
+    if not project.startswith("ssolab-"):
+        raise Fail(f"refusing to run docker compose on project '{project}' (only ssolab-* stacks)")
+    need("docker", "install Docker Desktop (or another docker CLI + engine) to run the local IdPs")
+    d = os.path.join(DATA, sub)
+    os.makedirs(d, exist_ok=True)
+    return subprocess.call(["docker", "compose", "-p", project, "--project-directory", d,
+                            "-f", os.path.join(ROOT, sub, "docker-compose.yml")] + list(args))
+
+
+def port_owner(port):
+    """-> None if nothing listens on 127.0.0.1:port, else the compose project (or '?') publishing it."""
+    with socket.socket() as sk:
+        sk.settimeout(1)
+        if sk.connect_ex(("127.0.0.1", port)) != 0:
+            return None
+    if not shutil.which("docker"):
+        return "?"
+    out = subprocess.run(["docker", "ps", "--filter", f"publish={port}", "--format",
+                          '{{.Label "com.docker.compose.project"}}'], capture_output=True, text=True).stdout.split()
+    return out[0] if out else "?"
+
+
+def ensure_port(port, project):
+    owner = port_owner(port)
+    if owner not in (None, project):
+        raise Fail(f"port {port} is already used by {'compose project ' + owner if owner != '?' else 'another program'}"
+                   f" — not starting {project} (change the port in {project.split('-', 1)[1]}/docker-compose.yml + bin/ssolab)")
+
+
+def docker_headroom_mb():
+    """Docker VM memory minus what running containers use now (MB), or None if unknown."""
+    try:
+        total = int(subprocess.run(["docker", "info", "--format", "{{.MemTotal}}"], capture_output=True,
+                                   text=True, timeout=20).stdout.strip()) / 2**20
+        used = 0.0
+        out = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}"], capture_output=True,
+                             text=True, timeout=60).stdout
+        for line in out.splitlines():
+            m = re.match(r"\s*([\d.]+)\s*([KMG]i?B)", line)
+            if m:
+                used += float(m.group(1)) * {"K": 1 / 1024, "M": 1, "G": 1024}[m.group(2)[0]]
+        return int(total - used)
+    except Exception:
+        return None
+
+
+SAML_USERS = os.path.join(SAML_DIR, "authsources.php")
+SAML_BEGIN = "        // >>> ssolab users — generated from LOGINS.md by `ssolab creds add saml`; edit there, not here"
+SAML_END = "        // <<< ssolab users"
+
+
+def saml_seed():
+    """First use: start authsources.php from the committed template (Fleet's public fixture users)."""
+    if not os.path.exists(SAML_USERS):
+        os.makedirs(SAML_DIR, exist_ok=True)
+        shutil.copyfile(SAML_DIST, SAML_USERS)
+
+
+def saml_strip_managed(src):
+    return re.sub(r"\n[ \t]*// >>> ssolab users.*?// <<< ssolab users[^\n]*", "", src, flags=re.S)
+
+
+def php_str(v):
+    return "'" + v.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def saml_sync_users():
+    """Mirror every non-fixture saml login with an email into authsources.php (a marked block in the UserPass source).
+    Written in place, not replaced: the file is bind-mounted, and PHP re-reads it per request, so it's live at once."""
+    saml_seed()
+    src = saml_strip_managed(open(SAML_USERS).read())
+    fixtures = {u for u, _ in re.findall(r"'([A-Za-z0-9_.-]+):([^'/][^']*)' => array", src)}
+    rows = [r for r in read_logins() if r["provider"] == "saml" and r.get("email") and r["username"] not in fixtures]
+    block = [SAML_BEGIN]
+    for r in rows:
+        if ":" in r["username"]:
+            print(warn_(f"skipping {r['username']}: SimpleSAMLphp usernames can't contain ':'"))
+            continue
+        block += [f"        {php_str(r['username'] + ':' + r['password'])} => array(",
+                  f"            'uid' => array({php_str(r['username'])}),",
+                  f"            'email' => {php_str(r['email'])},",
+                  f"            'displayname' => array({php_str(r['label'])}),",
+                  "        ),"]
+    block.append(SAML_END)
+    anchor = "'exampleauth:UserPass',"
+    i = src.find(anchor)
+    if i < 0:
+        raise Fail(f"couldn't find {anchor} in {SAML_USERS}")
+    i = src.index("\n", i) + 1
+    new = src[:i] + "\n".join(block) + "\n" + src[i:]
+    with open(SAML_USERS, "r+") as f:
+        f.seek(0)
+        f.write(new)
+        f.truncate()
+    if local_service("saml") == "running" and shutil.which("docker"):
+        r = subprocess.run(["docker", "exec", "ssolab-saml-idp-1", "php", "-l", "/var/www/simplesamlphp/config/authsources.php"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise Fail(f"authsources.php doesn't parse after the edit: {r.stdout.strip()} {r.stderr.strip()}")
+
+
+def saml_write_sp():
+    prof = load_profile("saml")
+    out = ["<?php", "// Generated by `ssolab saml up` — every Fleet lab instance x feature. Re-run to regenerate.", ""]
+    for inst in INSTANCES:
+        pub = public_url(inst)
+        try:
+            local = fleet_ctx(inst)[0]
+        except Fail:
+            local = ""
+        for f, (label, path, _) in FEATURES.items():
+            ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+            acs = [pub + path] + ([local + path] if local else [])
+            out += [f"// {inst} {label}", f"$metadata['{ent}'] = array(",
+                    "    'AssertionConsumerService' => [" + ", ".join(f"'{a}'" for a in acs) + "],",
+                    "    'NameIDFormat' => 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',",
+                    "    'simplesaml.nameidattribute' => 'email',", ");", ""]
+    os.makedirs(SAML_DIR, exist_ok=True)
+    with open(os.path.join(SAML_DIR, "sp-remote.php"), "w") as f:
+        f.write("\n".join(out))
+    return prof
+
+
+def saml_up():
+    need("docker", "install Docker Desktop (or another docker CLI + engine) to run the local IdPs")
+    saml_seed()
+    prof = saml_write_sp()
+    ensure_port(SAML_PORT, "ssolab-saml")
+    if compose("ssolab-saml", "saml", "up", "-d", "--force-recreate") != 0:
+        die("docker compose failed")
+    for _ in range(30):
+        if local_service("saml") == "running":
+            break
+        time.sleep(1)
+    else:
+        die(f"IdP didn't answer on {SAML_METADATA_URL}")
+    for inst in INSTANCES:
+        for f in FEATURES:
+            prof.setdefault(f"{inst}.{f}.entity_id", default_entity(inst, f))
+            prof[f"{inst}.{f}.metadata_url"] = SAML_METADATA_URL
+    prof["idp_name"] = prof.get("idp_name") or "SimpleSAMLphp"
+    save_profile("saml", prof)
+    okm, txt = check_metadata(prof_feature("saml", first_inst(), "sso", prof))
+    print(f"{ok_('✓') if okm else bad_('✗')} {txt}")
+    saml_sync_users()
+    have = {r["label"]: r for r in read_logins() if r["provider"] == "saml"}
+    src = saml_strip_managed(open(SAML_USERS).read())   # public test fixtures from fleet/tools/saml/users.php
+    for m in re.finditer(r"'([A-Za-z0-9_.-]+):([^'/][^']*)' => array\((.*?)\n\s*\),", src, re.S):
+        u, pw = m.group(1), m.group(2)
+        em = re.search(r"'email' => '([^']+)'", m.group(3))
+        email = em.group(1) if em else f"{u}@example.com"
+        if u not in have or have[u].get("email") != email:
+            upsert_login(dict(provider="saml", label=u, username=u, password=pw, url=PROVIDERS["saml"]["console"],
+                              notes=f"fixture, signs in as {email}", email=email,
+                              **{"1password": have[u]["1password"] if u in have else "pending"}))
+    print(ok_("Local SAML IdP ready.") + f" Switch with `ssolab switch {first_inst()} saml`. Users: sso_user / user123# (more in {SAML_USERS}).")
+    offer_fleet("saml")
+
+
+def cmd_saml(args):
+    sub = args[0] if args else "status"
+    if sub == "up":
+        return saml_up()
+    if sub == "sync":   # LOGINS.md saml users → authsources.php, no restart
+        saml_sync_users()
+        n = len([r for r in read_logins() if r["provider"] == "saml" and r.get("email")])
+        return print(ok_(f"SimpleSAMLphp users in sync with LOGINS.md ({n} with an email)."))
+    if sub == "down":
+        return compose("ssolab-saml", "saml", "down")
+    print(f"local SAML IdP: {local_service('saml')}  ({SAML_METADATA_URL})")
+
+
+# ---------------------------------------------------------------- self-hosted authentik
+AK_DIR = os.path.join(DATA, "authentik")
+AK_ENV = os.path.join(AK_DIR, ".env")
+
+
+def ak_env():
+    d = {}
+    if os.path.exists(AK_ENV):
+        for line in open(AK_ENV):
+            if "=" in line and not line.startswith("#"):
+                k, v = line.rstrip("\n").split("=", 1)
+                d[k] = v
+    return d
+
+
+def ak_api(method, path, body=None):
+    tok = ak_env().get("AUTHENTIK_BOOTSTRAP_TOKEN")
+    if not tok:
+        raise Fail("no authentik/.env — run `ssolab authentik up`")
+    st, text, _ = http(method, f"{AUTHENTIK_URL}/api/v3{path}", body, {"Authorization": f"Bearer {tok}"}, timeout=30)
+    try:
+        js = json.loads(text) if text else {}
+    except ValueError:
+        js = {"raw": text[:300]}
+    if st >= 400:
+        raise Fail(f"authentik {method} {path} → {st}: {json.dumps(js)[:400]}")
+    return js
+
+
+def ak_first(path):
+    res = ak_api("GET", path).get("results") or []
+    return res[0] if res else None
+
+
+def authentik_up():
+    need("docker", "install Docker Desktop (or another docker CLI + engine) to run the local IdPs")
+    if not os.path.exists(AK_ENV):
+        os.makedirs(AK_DIR, exist_ok=True)
+        env = {
+            "PG_PASS": secrets.token_urlsafe(32),
+            "AUTHENTIK_SECRET_KEY": secrets.token_urlsafe(50),
+            "AUTHENTIK_BOOTSTRAP_PASSWORD": secrets.token_urlsafe(18),
+            "AUTHENTIK_BOOTSTRAP_TOKEN": secrets.token_urlsafe(40),
+            "AUTHENTIK_BOOTSTRAP_EMAIL": "akadmin@example.com",
+            "AUTHENTIK_IMAGE": AUTHENTIK_IMAGE,
+            "AUTHENTIK_PORT": str(AUTHENTIK_PORT),
+        }
+        with open(AK_ENV, "w") as f:
+            f.write("# Generated by `ssolab authentik up`. Owner-only. Bootstrap values only apply on the first start.\n")
+            f.writelines(f"{k}={v}\n" for k, v in env.items())
+        os.chmod(AK_ENV, 0o600)
+        print(ok_("Generated authentik/.env (secret key, DB password, akadmin bootstrap password + API token)."))
+    ensure_port(AUTHENTIK_PORT, "ssolab-authentik")
+    if local_service("authentik") != "running":
+        free = docker_headroom_mb()
+        if free is not None and free < AUTHENTIK_NEEDS_MB and "--force" not in sys.argv:
+            raise Fail(f"Docker has ~{free} MB free and authentik needs up to {AUTHENTIK_NEEDS_MB} MB; starting it could "
+                       "squeeze other containers (e.g. your Fleet servers' MySQL). Raise Docker Desktop's memory limit (Settings → Resources) "
+                       "or stop something, or re-run with --force.")
+    if compose("ssolab-authentik", "authentik", "up", "-d") != 0:
+        die("docker compose failed")
+    print("Waiting for authentik to be ready (first start runs migrations, ~1–3 min)…", flush=True)
+    for _ in range(120):
+        if local_service("authentik") == "running":
+            try:
+                ak_api("GET", "/core/users/me/")
+                break
+            except Fail:
+                pass
+        time.sleep(3)
+    else:
+        die(f"authentik didn't come up — `docker compose -p ssolab-authentik logs server worker`")
+    env = ak_env()
+    if not any(r["provider"] == "authentik" and r["label"] == "akadmin" for r in read_logins()):
+        creds_add("authentik", "akadmin", url=PROVIDERS["authentik"]["console"], username="akadmin",
+                  password=env["AUTHENTIK_BOOTSTRAP_PASSWORD"], notes="bootstrap admin", quiet=True)
+        creds_add("authentik", "api-token", url=f"{AUTHENTIK_URL}/api/v3/", username="akadmin",
+                  password=env["AUTHENTIK_BOOTSTRAP_TOKEN"], notes="bootstrap API token (ssolab provision uses it)", quiet=True)
+    authentik_provision()
+
+
+def ak_wait_defaults(timeout=300):
+    """The API answers before the worker has applied authentik's default blueprints (flows, SAML mappings, cert):
+    wait for the bits provisioning needs instead of failing on a fresh install."""
+    end, said = time.time() + timeout, False
+    while True:
+        flow = ak_first("/flows/instances/?slug=default-provider-authorization-implicit-consent")
+        certs = ak_api("GET", "/crypto/certificatekeypairs/?has_key=true").get("results") or []
+        if flow and certs:
+            return flow
+        if time.time() > end:
+            raise Fail("authentik's default flows/certificate never appeared — check "
+                       "`docker compose -p ssolab-authentik logs worker`")
+        if not said:
+            print("Waiting for authentik's default flows (worker applies them after first start)…", flush=True)
+            said = True
+        time.sleep(5)
+
+
+def authentik_provision():
+    flow = ak_wait_defaults()
+    inv = ak_first("/flows/instances/?slug=default-provider-invalidation-flow")
+    certs = ak_api("GET", "/crypto/certificatekeypairs/?has_key=true").get("results") or []
+    cert = next((c for c in certs if c.get("name") == "authentik Self-signed Certificate"), certs[0] if certs else None)
+    maps = []
+    for path in ("/propertymappings/provider/saml/?page_size=200", "/propertymappings/saml/?page_size=200"):
+        try:
+            maps = ak_api("GET", path).get("results") or []
+            break
+        except Fail:
+            continue
+    managed = {m.get("managed"): m["pk"] for m in maps if m.get("managed")}
+    email_map = managed.get("goauthentik.io/providers/saml/email")
+    pm = [pk for k, pk in managed.items() if k.startswith("goauthentik.io/providers/saml/") and "ms-windows" not in k]
+    prof = load_profile("authentik")
+    for inst in INSTANCES:
+        pub = public_url(inst)
+        for f, (label, path, _) in FEATURES.items():
+            name = f"fleet-{inst}-{f}"
+            ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+            body = {"name": name, "authorization_flow": flow["pk"], "acs_url": pub + path, "audience": ent,
+                    "issuer": f"{AUTHENTIK_URL}/fleetqa", "sp_binding": "post", "property_mappings": pm,
+                    "sign_assertion": True, "sign_response": True}
+            if inv:
+                body["invalidation_flow"] = inv["pk"]
+            if cert:
+                body["signing_kp"] = cert["pk"]
+            if email_map:
+                body["name_id_mapping"] = email_map
+            existing = ak_first(f"/providers/saml/?name={name}")
+            prov = ak_api("PATCH", f"/providers/saml/{existing['pk']}/", body) if existing else ak_api("POST", "/providers/saml/", body)
+            if not ak_first(f"/core/applications/?slug={name}"):
+                ak_api("POST", "/core/applications/", {"name": f"Fleet {inst} {label}", "slug": name, "provider": prov["pk"]})
+            url = f"{AUTHENTIK_URL}/api/v3/providers/saml/{prov['pk']}/metadata/?download"
+            try:
+                anon = http("GET", url, timeout=10)
+            except Fail:
+                anon = (0, "", "")
+            prof[f"{inst}.{f}.entity_id"] = ent
+            if anon[0] == 200 and "EntityDescriptor" in anon[1]:
+                prof[f"{inst}.{f}.metadata_url"] = url
+                prof.pop(f"{inst}.{f}.metadata_file", None)
+            else:  # metadata needs auth on this version: store it inline
+                xml = ak_api("GET", f"/providers/saml/{prov['pk']}/metadata/").get("metadata", "")
+                fn = f"authentik-{inst}-{f}.xml"
+                os.makedirs(METADATA, exist_ok=True)
+                with open(os.path.join(METADATA, fn), "w") as fh:
+                    fh.write(xml)
+                prof[f"{inst}.{f}.metadata_file"] = fn
+                prof.pop(f"{inst}.{f}.metadata_url", None)
+            print(f"  {ok_('✓')} {name}: ACS {pub + path}, audience {ent}")
+    prof["idp_name"] = prof.get("idp_name") or "authentik"
+    prof["console"] = PROVIDERS["authentik"]["console"]
+    save_profile("authentik", prof)
+    print(ok_("authentik ready.") + f" Add a test user: `ssolab authentik user <email>`. Then `ssolab switch {first_inst()} authentik`.")
+
+
+def ak_ensure_user(email, pw):
+    u = ak_first(f"/core/users/?email={email}")
+    if not u:
+        u = ak_api("POST", "/core/users/", {"username": email, "name": email.split("@")[0], "email": email,
+                                             "is_active": True, "path": "users"})
+        print(ok_(f"Created authentik user {email}."))
+    ak_api("POST", f"/core/users/{u['pk']}/set_password/", {"password": pw})
+    return u
+
+
+def authentik_user(email):
+    if not email and sys.stdin.isatty():
+        email = ask("Test user email")
+    if not re.match(r"[^@\s]+@[^@\s]+$", email or ""):
+        die("usage: ssolab authentik user <email>")
+    u = ak_first(f"/core/users/?email={email}")
+    if not u:
+        u = ak_api("POST", "/core/users/", {"username": email, "name": email.split("@")[0], "email": email,
+                                             "is_active": True, "path": "users"})
+        print(ok_(f"Created authentik user {email}."))
+    while True:
+        pw = getpass.getpass(f"Password for {email} (hidden): ")
+        if pw and pw == getpass.getpass("again: "):
+            break
+        print("empty or didn't match")
+    ak_api("POST", f"/core/users/{u['pk']}/set_password/", {"password": pw})
+    creds_add("authentik", email, url=f"{AUTHENTIK_URL}/if/user/", username=email, password=pw, notes="test user",
+              quiet=True, email=email)
+
+
+def authentik_cmd(args):
+    sub = args[0] if args else "status"
+    try:
+        if sub == "up":
+            return authentik_up()
+        if sub == "provision":
+            return authentik_provision()
+        if sub == "user":
+            return authentik_user(args[1] if len(args) > 1 else "")
+    except Fail as e:
+        die(str(e))
+    if sub == "down":
+        return compose("ssolab-authentik", "authentik", "down")
+    print(f"authentik: {local_service('authentik')}  ({AUTHENTIK_URL}, admin UI {PROVIDERS['authentik']['console']})")
+
+
+# ---------------------------------------------------------------- Okta (API-driven, like authentik)
+def okta_cfg():
+    """-> (org URL, API token) or blanks. Token lives in LOGINS.md as okta/api-token."""
+    org = load_profile("okta").get("org_url", "").rstrip("/")
+    tok = next((r["password"] for r in read_logins() if r["provider"] == "okta" and r["label"] == "api-token"), "")
+    return org, tok
+
+
+def okta_api(method, path, body=None):
+    org, tok = okta_cfg()
+    if not org or not tok:
+        raise Fail("Okta isn't connected — `ssolab okta connect`")
+    st, text, _ = http(method, org + path, body, {"Authorization": f"SSWS {tok}", "Accept": "application/json"}, timeout=30)
+    try:
+        js = json.loads(text) if text.strip() else {}
+    except ValueError:
+        js = {"raw": text[:300]}
+    if st >= 400:
+        detail = js.get("errorSummary", js) if isinstance(js, dict) else js
+        causes = "; ".join(c.get("errorSummary", "") for c in (js.get("errorCauses") or [])) if isinstance(js, dict) else ""
+        raise Fail(f"Okta {method} {path.split('?')[0]} → {st}: {detail}{' — ' + causes if causes else ''}")
+    return js
+
+
+def okta_connect():
+    prof = load_profile("okta")
+    print(bold_("Connect ssolab to your Okta org") + dim_("  (one time; ssolab then manages the Fleet apps through the API)"))
+    print("  1. Org URL: the address you sign into, e.g. https://integrator-1234567.okta.com")
+    print("  2. API token: Admin Console → Security → API → Tokens → Create token (name it 'ssolab').")
+    org = ask("Okta org URL", prof.get("org_url", "")).strip().rstrip("/")
+    if not org:
+        die("no org URL")
+    org = re.sub(r"^(?!https://)", "https://", org).replace("-admin.okta.com", ".okta.com")
+    org = re.sub(r"(\.okta(preview)?\.com).*$", r"\1", org)
+    prof.update(org_url=org, idp_name=prof.get("idp_name") or "Okta",
+                console=org.replace(".okta.com", "-admin.okta.com") + "/admin/apps/active")
+    save_profile("okta", prof)
+    org_, tok = okta_cfg()
+    if not tok or yes("Replace the saved Okta API token?"):
+        tok = getpass.getpass("Okta API token (hidden): ").strip()
+        if not tok:
+            die("no token")
+        creds_add("okta", "api-token", url=org + "/api/v1/", username="ssolab", password=tok,
+                  notes="Okta SSWS API token used by `ssolab okta provision` / `okta user`", quiet=True, email="")
+    me = okta_api("GET", "/api/v1/users/me")
+    print(ok_(f"Connected to {org} as {me.get('profile', {}).get('login', '?')}."))
+    okta_provision()
+    if not any(r["provider"] == "okta" and r["label"] == "admin" for r in read_logins()) and \
+            yes(f"Save your Okta admin login too ({saved_to()})?", default=True):
+        creds_add("okta", "admin", url=prof["console"], username=me.get("profile", {}).get("login"), email="")
+
+
+def okta_app_body(inst, f, ent, acs, label):
+    return {
+        "label": label, "signOnMode": "SAML_2_0",
+        "visibility": {"autoSubmitToolbar": False, "hide": {"iOS": True, "web": True}},
+        "settings": {"signOn": {
+            "defaultRelayState": "", "ssoAcsUrl": acs, "recipient": acs, "destination": acs, "audience": ent,
+            "idpIssuer": "http://www.okta.com/${org.externalKey}",
+            "subjectNameIdTemplate": "${user.email}",
+            "subjectNameIdFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+            "responseSigned": True, "assertionSigned": True,
+            "signatureAlgorithm": "RSA_SHA256", "digestAlgorithm": "SHA256",
+            "honorForceAuthn": True, "requestCompressed": False,
+            "authnContextClassRef": "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+            "attributeStatements": [{"type": "EXPRESSION", "name": "email", "values": ["user.email"],
+                                     "namespace": "urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified"}],
+        }},
+    }
+
+
+def okta_provision():
+    prof = load_profile("okta")
+    org = prof["org_url"]
+    groups = okta_api("GET", "/api/v1/groups?q=Everyone&limit=10")
+    everyone = next((g for g in groups if g.get("profile", {}).get("name") == "Everyone"), None)
+    for inst in INSTANCES:
+        pub = public_url(inst)
+        for f, (flabel, path, _) in FEATURES.items():
+            label = f"Fleet {inst} {flabel}"
+            ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+            body = okta_app_body(inst, f, ent, pub + path, label)
+            found = okta_api("GET", f"/api/v1/apps?q={urllib.parse.quote(label)}&limit=50")
+            app = next((a for a in found if a.get("label") == label and a.get("status") != "DELETED"), None)
+            if app:
+                app = okta_api("PUT", f"/api/v1/apps/{app['id']}", dict(body, name=app["name"]))
+            else:
+                app = okta_api("POST", "/api/v1/apps", body)
+                record_created(f"okta-app {org} {label} id={app['id']}")
+            if everyone:
+                try:
+                    okta_api("PUT", f"/api/v1/apps/{app['id']}/groups/{everyone['id']}", {})
+                except Fail as e:
+                    print(warn_(f"  couldn't assign {label} to Everyone ({e}); assign users in the Okta console"))
+            # the public metadata URL is keyed by the app's IdP key (exk…, the tail of its IdP entityID), not the app id
+            _, tok = okta_cfg()
+            st, xml, _ = http("GET", f"{org}/api/v1/apps/{app['id']}/sso/saml/metadata",
+                              headers={"Authorization": f"SSWS {tok}", "Accept": "application/xml"})
+            key = ""
+            try:
+                key = parse_metadata(xml)[0].rsplit("/", 1)[-1] if st == 200 else ""
+            except Fail:
+                pass
+            url = f"{org}/app/{key}/sso/saml/metadata" if key else ""
+            try:
+                st, text, _ = http("GET", url, timeout=15) if url else (0, "", "")
+            except Fail:
+                st, text = 0, ""
+            prof[f"{inst}.{f}.entity_id"] = ent
+            if st == 200 and "EntityDescriptor" in text:
+                prof[f"{inst}.{f}.metadata_url"] = url
+                prof.pop(f"{inst}.{f}.metadata_file", None)
+            else:   # fall back to the authenticated metadata endpoint, stored inline
+                _, tok = okta_cfg()
+                st, text, _ = http("GET", f"{org}/api/v1/apps/{app['id']}/sso/saml/metadata",
+                                   headers={"Authorization": f"SSWS {tok}", "Accept": "application/xml"})
+                if st != 200:
+                    raise Fail(f"couldn't get metadata for {label} (HTTP {st})")
+                fn = f"okta-{inst}-{f}.xml"
+                os.makedirs(METADATA, exist_ok=True)
+                with open(os.path.join(METADATA, fn), "w") as fh:
+                    fh.write(text)
+                prof[f"{inst}.{f}.metadata_file"] = fn
+                prof.pop(f"{inst}.{f}.metadata_url", None)
+            print(f"  {ok_('✓')} {label}: ACS {pub + path}, audience {ent}" + (", assigned to Everyone" if everyone else ""))
+    save_profile("okta", prof)
+    okta_nomfa_setup()   # keeps the per-user Okta Verify toggle attached to (re)created apps
+    print(f"  {ok_('✓')} apps use policy '{OKTA_APP_POLICY}': password only for '{OKTA_GROUP}' members, 2FA for others")
+    print(ok_("Okta ready.") + f" Add a test user: `ssolab okta user <email>`. Then `ssolab switch {first_inst()} okta`.")
+
+
+OKTA_GROUP = "ssolab-password-only"
+OKTA_APP_POLICY = "ssolab - Fleet apps"
+OKTA_ENROLL_POLICY = "ssolab - password-only enrollment"
+
+
+def okta_find_policy(ptype, name):
+    return next((p for p in okta_api("GET", f"/api/v1/policies?type={ptype}") if p.get("name") == name), None)
+
+
+def okta_nomfa_setup():
+    """Per-user Okta Verify toggle. Members of OKTA_GROUP sign into the Fleet apps with a password only and aren't
+    asked to enroll Okta Verify; everyone else keeps two factors. Okta's own default policies are left untouched.
+    -> group id."""
+    g = next((g for g in okta_api("GET", f"/api/v1/groups?q={OKTA_GROUP}&limit=10")
+              if g.get("profile", {}).get("name") == OKTA_GROUP), None)
+    if not g:
+        g = okta_api("POST", "/api/v1/groups", {"profile": {"name": OKTA_GROUP,
+                     "description": "ssolab: members sign into the Fleet apps with a password only (no Okta Verify)"}})
+        record_created(f"okta-group {OKTA_GROUP} id={g['id']}")
+    gid = g["id"]
+    pol = okta_find_policy("ACCESS_POLICY", OKTA_APP_POLICY)
+    if not pol:
+        pol = okta_api("POST", "/api/v1/policies", {"type": "ACCESS_POLICY", "name": OKTA_APP_POLICY,
+                       "description": "ssolab: password only for ssolab-password-only members, 2FA for everyone else"})
+        record_created(f"okta-policy ACCESS_POLICY '{OKTA_APP_POLICY}' id={pol['id']}")
+    rules = okta_api("GET", f"/api/v1/policies/{pol['id']}/rules")
+    rule = {"name": "ssolab password only", "priority": 1, "type": "ACCESS_POLICY",
+            "conditions": {"people": {"groups": {"include": [gid]}}},
+            "actions": {"appSignOn": {"access": "ALLOW", "verificationMethod": {
+                "factorMode": "1FA", "type": "ASSURANCE", "reauthenticateIn": "PT12H",
+                "constraints": [{"knowledge": {"types": ["password"]}}]}}}}
+    have = next((r for r in rules if r.get("name") == rule["name"]), None)
+    if have:
+        okta_api("PUT", f"/api/v1/policies/{pol['id']}/rules/{have['id']}", rule)
+    else:
+        okta_api("POST", f"/api/v1/policies/{pol['id']}/rules", rule)
+    for a in okta_api("GET", "/api/v1/apps?q=Fleet&limit=50"):
+        if re.match(f"Fleet ({'|'.join(map(re.escape, INSTANCES))}) ", a.get("label", "")) and a.get("status") == "ACTIVE":
+            okta_api("PUT", f"/api/v1/apps/{a['id']}/policies/{pol['id']}", {})
+    try:   # nice-to-have: skip the "set up Okta Verify (optional)" screen for group members
+        ep = okta_find_policy("MFA_ENROLL", OKTA_ENROLL_POLICY)
+        body = {"type": "MFA_ENROLL", "name": OKTA_ENROLL_POLICY, "priority": 1,
+                "conditions": {"people": {"groups": {"include": [gid]}}},
+                "settings": {"type": "AUTHENTICATORS", "authenticators": [
+                    {"key": "okta_password", "enroll": {"self": "REQUIRED"}},
+                    {"key": "okta_verify", "enroll": {"self": "NOT_ALLOWED"}},
+                    {"key": "okta_email", "enroll": {"self": "NOT_ALLOWED"}}]}}
+        if ep:
+            okta_api("PUT", f"/api/v1/policies/{ep['id']}", dict(body, id=ep["id"]))
+        else:
+            ep = okta_api("POST", "/api/v1/policies", body)
+            record_created(f"okta-policy MFA_ENROLL '{OKTA_ENROLL_POLICY}' id={ep['id']}")
+            okta_api("POST", f"/api/v1/policies/{ep['id']}/rules", {
+                "name": "ssolab", "type": "MFA_ENROLL",
+                "conditions": {"people": {"users": {"exclude": []}}, "network": {"connection": "ANYWHERE"}},
+                "actions": {"enroll": {"self": "CHALLENGE"}}})
+    except Fail as e:
+        print(warn_(f"  (enrollment policy not set: {e} — members may see an optional 'set up Okta Verify' screen; Skip works)"))
+    return gid
+
+
+def okta_set_mfa(email, required):
+    gid = okta_nomfa_setup()
+    u = okta_api("GET", f"/api/v1/users/{urllib.parse.quote(email)}")
+    okta_api("DELETE" if required else "PUT", f"/api/v1/groups/{gid}/users/{u['id']}", None if required else {})
+    print(ok_(f"{email}: Okta Verify {'required (2 factors)' if required else 'off — password only'} for the Fleet apps."))
+
+
+def okta_mfa_status():
+    """-> {email: required?} for saved Okta users."""
+    gid = next((g["id"] for g in okta_api("GET", f"/api/v1/groups?q={OKTA_GROUP}&limit=10")
+                if g.get("profile", {}).get("name") == OKTA_GROUP), None)
+    members = {u["profile"]["login"].lower() for u in okta_api("GET", f"/api/v1/groups/{gid}/users?limit=200")} if gid else set()
+    return {r["email"]: r["email"].lower() not in members for r in sso_rows("okta")}
+
+
+def okta_ensure_user(email, pw, label=""):
+    try:
+        u = okta_api("GET", f"/api/v1/users/{urllib.parse.quote(email)}")
+    except Fail as e:
+        if "→ 404" not in str(e):
+            raise
+        u = None
+    if not u:
+        first = (label if label and "@" not in label else email.split("@")[0])[:50]
+        okta_api("POST", "/api/v1/users?activate=true", {
+            "profile": {"firstName": first, "lastName": "SSO test", "email": email, "login": email},
+            "credentials": {"password": {"value": pw}}})
+        record_created(f"okta-user {email}")
+        print(ok_(f"Created Okta user {email} (active; the Fleet apps are assigned to Everyone)."))
+    else:
+        okta_api("POST", f"/api/v1/users/{u['id']}", {"credentials": {"password": {"value": pw}}})
+        print(ok_(f"Okta user {email} already existed; password updated."))
+
+
+def okta_cmd(args):
+    sub = args[0] if args else "status"
+    try:
+        if sub == "connect":
+            return okta_connect()
+        if sub == "provision":
+            return okta_provision()
+        if sub == "user":
+            email = args[1] if len(args) > 1 else (ask("Test user email") if sys.stdin.isatty() else "")
+            if not re.match(r"[^@\s]+@[^@\s]+$", email or ""):
+                die("usage: ssolab okta user <email>")
+            while True:
+                pw = getpass.getpass(f"Password for {email} (hidden; Okta wants 8+ chars, upper, lower, number): ")
+                if pw and pw == getpass.getpass("again: "):
+                    break
+                print("empty or didn't match")
+            mfa = True if "--mfa" in args else False if "--no-mfa" in args else \
+                (yes("Require Okta Verify (2 factors) for this user?") if sys.stdin.isatty() else False)
+            creds_add("okta", email, url=okta_cfg()[0], username=email, password=pw,
+                      notes="test user" + ("" if mfa else ", password only"), quiet=True, email=email)
+            return okta_set_mfa(email, mfa)
+        if sub == "mfa":
+            if len(args) < 2:
+                for em, req in okta_mfa_status().items():
+                    print(f"  {em:<40} {'Okta Verify required' if req else 'password only'}")
+                return print(dim_("Change: `ssolab okta mfa <email> on|off`."))
+            if len(args) < 3 or args[2] not in ("on", "off"):
+                die("usage: ssolab okta mfa [<email> on|off]")
+            return okta_set_mfa(args[1], args[2] == "on")
+    except Fail as e:
+        die(str(e))
+    org, tok = okta_cfg()
+    if not org or not tok:
+        return print("Okta: not connected — `ssolab okta connect`.")
+    try:
+        me = okta_api("GET", "/api/v1/users/me")
+        print(f"Okta: connected to {org} as {me.get('profile', {}).get('login')}")
+    except Fail as e:
+        print(bad_(f"Okta: {org} — {e}"))
+
+
+# ---------------------------------------------------------------- Auth0 (Management API, like Okta)
+AUTH0_DB = "Username-Password-Authentication"
+_auth0_tok = {}
+
+
+def auth0_cfg():
+    """-> (domain URL, client id, client secret) or blanks. The M2M client lives in LOGINS.md as auth0/m2m-client."""
+    org = load_profile("auth0").get("org_url", "").rstrip("/")
+    r = next((r for r in read_logins() if r["provider"] == "auth0" and r["label"] == "m2m-client"), None)
+    return (org, r["username"], r["password"]) if r else (org, "", "")
+
+
+def auth0_token():
+    org, cid, sec = auth0_cfg()
+    if not (org and cid and sec):
+        raise Fail("Auth0 isn't connected — `ssolab auth0 connect`")
+    if _auth0_tok.get("exp", 0) > time.time() + 60:
+        return _auth0_tok["tok"]
+    st, text, _ = http("POST", org + "/oauth/token", {"grant_type": "client_credentials", "client_id": cid,
+                                                       "client_secret": sec, "audience": org + "/api/v2/"})
+    try:
+        js = json.loads(text)
+    except ValueError:
+        js = {"raw": text[:200]}
+    if st != 200:
+        raise Fail(f"Auth0 token request → {st}: {js.get('error_description') or js}"
+                   " (is the M2M app authorized for the Auth0 Management API?)")
+    _auth0_tok.update(tok=js["access_token"], exp=time.time() + int(js.get("expires_in", 3600)))
+    return js["access_token"]
+
+
+def auth0_api(method, path, body=None):
+    org = auth0_cfg()[0]
+    st, text, _ = http(method, org + "/api/v2" + path, body, {"Authorization": f"Bearer {auth0_token()}"}, timeout=30)
+    try:
+        js = json.loads(text) if text.strip() else {}
+    except ValueError:
+        js = {"raw": text[:300]}
+    if st >= 400:
+        msg = js.get("message", js) if isinstance(js, dict) else js
+        hint = " — grant that scope to the ssolab M2M app (Applications → APIs → Auth0 Management API → Machine To Machine)" \
+            if st == 403 else ""
+        raise Fail(f"Auth0 {method} {path.split('?')[0]} → {st}: {msg}{hint}")
+    return js
+
+
+def auth0_connect():
+    prof = load_profile("auth0")
+    print(bold_("Connect ssolab to your Auth0 tenant") + dim_("  (one time; ssolab then manages the Fleet apps through the API)"))
+    print("  Domain: e.g. dev-abc123.us.auth0.com   ·   Client ID / Secret: Applications → ssolab (Machine to Machine) → Settings")
+    dom = ask("Auth0 domain", prof.get("org_url", "").replace("https://", "")).strip().rstrip("/")
+    if not dom:
+        die("no domain")
+    dom = re.sub(r"^https?://", "", dom)
+    if "." not in dom:            # just the tenant name: Auth0 tenants live under a region
+        dom += ".us.auth0.com"
+    org = "https://" + dom
+    prof.update(org_url=org, idp_name=prof.get("idp_name") or "Auth0", console="https://manage.auth0.com")
+    save_profile("auth0", prof)
+    _, cid, sec = auth0_cfg()
+    if not cid or yes("Replace the saved Auth0 client ID/secret?"):
+        cid = ask("Client ID").strip()
+        sec = getpass.getpass("Client Secret (hidden): ").strip()
+        if not cid or not sec:
+            die("need both")
+        creds_add("auth0", "m2m-client", url=org, username=cid, password=sec,
+                  notes="Machine-to-machine app for the Auth0 Management API (ssolab auth0 provision/user)", quiet=True, email="")
+    _auth0_tok.clear()
+    auth0_token()
+    print(ok_(f"Connected to {org}."))
+    auth0_provision()
+    if not any(r["provider"] == "auth0" and r["label"] == "admin" for r in read_logins()) and \
+            yes(f"Save your Auth0 dashboard login too ({saved_to()})?", default=True):
+        creds_add("auth0", "admin", url="https://manage.auth0.com", email="")
+
+
+def auth0_enable_on_db(client_id):
+    conns = auth0_api("GET", f"/connections?name={urllib.parse.quote(AUTH0_DB)}")
+    c = conns[0] if conns else None
+    if not c:
+        print(warn_(f"  no '{AUTH0_DB}' connection — enable a connection for the Fleet apps in the dashboard"))
+        return
+    try:      # current API
+        auth0_api("PATCH", f"/connections/{c['id']}/clients", [{"client_id": client_id, "status": True}])
+    except Fail:   # older tenants: enabled_clients on the connection
+        ec = set(c.get("enabled_clients") or []) | {client_id}
+        auth0_api("PATCH", f"/connections/{c['id']}", {"enabled_clients": sorted(ec)})
+
+
+def auth0_provision():
+    prof = load_profile("auth0")
+    org = prof["org_url"]
+    clients = auth0_api("GET", "/clients?fields=client_id,name&include_fields=true&per_page=100")
+    for inst in INSTANCES:
+        pub = public_url(inst)
+        for f, (flabel, path, _) in FEATURES.items():
+            name = f"Fleet {inst} {flabel}"
+            ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+            acs = pub + path
+            body = {"name": name, "app_type": "regular_web", "callbacks": [acs],
+                    "addons": {"samlp": {
+                        "audience": ent, "recipient": acs, "destination": acs,
+                        "mappings": {"email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"},
+                        "nameIdentifierFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+                        "nameIdentifierProbes": ["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"],
+                        "signResponse": True, "createUpnClaim": False,
+                        "passthroughClaimsWithNoMapping": False, "mapUnknownClaimsAsIs": False}}}
+            have = next((c for c in clients if c.get("name") == name), None)
+            if have:
+                cl = auth0_api("PATCH", f"/clients/{have['client_id']}", body)
+            else:
+                cl = auth0_api("POST", "/clients", body)
+                record_created(f"auth0-app {org} {name} client_id={cl['client_id']}")
+            auth0_enable_on_db(cl["client_id"])
+            url = f"{org}/samlp/metadata/{cl['client_id']}"
+            prof[f"{inst}.{f}.entity_id"] = ent
+            prof[f"{inst}.{f}.metadata_url"] = url
+            okm, txt = check_metadata(prof_feature("auth0", inst, f, prof))
+            print(f"  {ok_('✓') if okm else bad_('✗')} {name}: ACS {acs}, audience {ent}" + ("" if okm else f" — {txt}"))
+    save_profile("auth0", prof)
+    print(ok_("Auth0 ready.") + f" Add a test user (New user form, or `ssolab auth0 user <email>`), then `ssolab switch {first_inst()} auth0`.")
+
+
+def auth0_ensure_user(email, pw, label=""):
+    found = auth0_api("GET", f"/users-by-email?email={urllib.parse.quote(email)}")
+    u = next((x for x in found if any(i.get("connection") == AUTH0_DB for i in x.get("identities", []))), None)
+    if not u:
+        auth0_api("POST", "/users", {"connection": AUTH0_DB, "email": email, "password": pw, "email_verified": True,
+                                      "name": label or email, "verify_email": False})
+        record_created(f"auth0-user {email}")
+        print(ok_(f"Created Auth0 user {email} (database {AUTH0_DB}, email marked verified)."))
+    else:
+        auth0_api("PATCH", f"/users/{urllib.parse.quote(u['user_id'])}", {"password": pw, "connection": AUTH0_DB})
+        print(ok_(f"Auth0 user {email} already existed; password updated."))
+
+
+def auth0_cmd(args):
+    sub = args[0] if args else "status"
+    try:
+        if sub == "connect":
+            return auth0_connect()
+        if sub == "provision":
+            return auth0_provision()
+        if sub == "user":
+            email = args[1] if len(args) > 1 else (ask("Test user email") if sys.stdin.isatty() else "")
+            if not re.match(r"[^@\s]+@[^@\s]+$", email or ""):
+                die("usage: ssolab auth0 user <email>")
+            while True:
+                pw = getpass.getpass(f"Password for {email} (hidden; 8+ chars, upper, lower, number): ")
+                if pw and pw == getpass.getpass("again: "):
+                    break
+                print("empty or didn't match")
+            return creds_add("auth0", email, url=auth0_cfg()[0], username=email, password=pw, notes="test user",
+                             quiet=True, email=email)
+        org = auth0_cfg()[0]
+        if not all(auth0_cfg()):
+            return print("Auth0: not connected — `ssolab auth0 connect`.")
+        auth0_token()
+        print(f"Auth0: connected to {org}")
+    except Fail as e:
+        die(str(e))
+
+
+# ---------------------------------------------------------------- Microsoft Entra ID (Microsoft Graph)
+ENTRA_TEMPLATE = "8adf8e6e-67b2-4cf2-a259-e3dc5476c621"   # Graph application template: custom non-gallery app
+GRAPH = "https://graph.microsoft.com/v1.0"
+_entra_tok = {}
+
+
+def entra_cfg():
+    """-> (tenant id, client id, client secret). App registration lives in LOGINS.md as entra/app-registration."""
+    tid = load_profile("entra").get("tenant_id", "")
+    r = next((r for r in read_logins() if r["provider"] == "entra" and r["label"] == "app-registration"), None)
+    return (tid, r["username"], r["password"]) if r else (tid, "", "")
+
+
+def entra_token():
+    tid, cid, sec = entra_cfg()
+    if not (tid and cid and sec):
+        raise Fail("Entra isn't connected — `ssolab entra connect`")
+    if _entra_tok.get("exp", 0) > time.time() + 60:
+        return _entra_tok["tok"]
+    form = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": cid, "client_secret": sec,
+                                   "scope": "https://graph.microsoft.com/.default"}).encode()
+    st, text, _ = http("POST", f"https://login.microsoftonline.com/{tid}/oauth2/v2.0/token", form,
+                       {"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        js = json.loads(text)
+    except ValueError:
+        js = {"raw": text[:200]}
+    if st != 200:
+        raise Fail(f"Entra token request → {st}: {js.get('error_description', js)}".split("\r\n")[0])
+    _entra_tok.update(tok=js["access_token"], exp=time.time() + int(js.get("expires_in", 3600)))
+    return js["access_token"]
+
+
+def graph(method, path, body=None, retry_404=0):
+    for attempt in range(retry_404 + 1):
+        st, text, _ = http(method, GRAPH + path, body, {"Authorization": f"Bearer {entra_token()}"}, timeout=30)
+        if st == 404 and attempt < retry_404:   # new objects take a few seconds to replicate
+            time.sleep(3)
+            continue
+        break
+    try:
+        js = json.loads(text) if text.strip() else {}
+    except ValueError:
+        js = {"raw": text[:300]}
+    if st >= 400:
+        err = js.get("error", {}) if isinstance(js, dict) else {}
+        hint = " — grant that permission to the ssolab app registration and click 'Grant admin consent'" \
+            if st == 403 or err.get("code") == "Authorization_RequestDenied" else ""
+        raise Fail(f"Graph {method} {path.split('?')[0]} → {st}: {err.get('message', js)}{hint}")
+    return js
+
+
+def entra_connect():
+    prof = load_profile("entra")
+    print(bold_("Connect ssolab to your Entra tenant") + dim_("  (one time; ssolab then manages the Fleet apps through Microsoft Graph)"))
+    print("  Entra admin center → App registrations → ssolab → Overview: Directory (tenant) ID + Application (client) ID;")
+    print("  Certificates & secrets → client secret Value. Needs Graph application permissions Application.ReadWrite.All +")
+    print("  User.ReadWrite.All (+ Policy.Read.All, Policy.ReadWrite.ConditionalAccess for `entra mfa`), admin consent granted.")
+    tid = ask("Directory (tenant) ID", prof.get("tenant_id", "")).strip()
+    if not tid:
+        die("no tenant ID")
+    prof["tenant_id"] = tid
+    save_profile("entra", prof)
+    _, cid, sec = entra_cfg()
+    if not cid or yes("Replace the saved Entra app registration (client ID/secret)?"):
+        cid = ask("Application (client) ID").strip()
+        sec = getpass.getpass("Client secret Value (hidden): ").strip()
+        if not cid or not sec:
+            die("need both")
+        exp = ask("Secret expiry date (for your notes, e.g. 2028-10-10)", "")
+        creds_add("entra", "app-registration", url="https://entra.microsoft.com", username=cid, password=sec,
+                  notes=f"Graph app registration for ssolab{'; secret expires ' + exp if exp else ''}", quiet=True, email="")
+    _entra_tok.clear()
+    org = graph("GET", "/organization").get("value", [{}])[0]
+    dom = next((d["name"] for d in org.get("verifiedDomains", []) if d.get("isDefault")), "")
+    prof.update(tenant_id=org.get("id", tid), domain=dom, tenant_name=org.get("displayName", ""),
+                idp_name=prof.get("idp_name") or "Microsoft Entra ID", console="https://entra.microsoft.com")
+    save_profile("entra", prof)
+    print(ok_(f"Connected to {org.get('displayName')} ({dom}, tenant {prof['tenant_id']})."))
+    entra_provision()
+    if not any(r["provider"] == "entra" and r["label"] == "admin" for r in read_logins()) and \
+            yes(f"Save your Entra admin login too ({saved_to()})?", default=True):
+        creds_add("entra", "admin", url="https://entra.microsoft.com", email="")
+
+
+def entra_provision():
+    prof = load_profile("entra")
+    tid = prof["tenant_id"]
+    for inst in INSTANCES:
+        pub = public_url(inst)
+        for f, (flabel, path, _) in FEATURES.items():
+            name = f"Fleet {inst} {flabel}"
+            ent = prof.get(f"{inst}.{f}.entity_id") or default_entity(inst, f)
+            acs = pub + path
+            apps = graph("GET", "/applications?$filter=" + urllib.parse.quote(f"displayName eq '{name}'")).get("value", [])
+            if apps:
+                app = apps[0]
+                sp = (graph("GET", "/servicePrincipals?$filter=" + urllib.parse.quote(f"appId eq '{app['appId']}'"))
+                      .get("value") or [None])[0]
+            else:
+                made = graph("POST", f"/applicationTemplates/{ENTRA_TEMPLATE}/instantiate", {"displayName": name})
+                app, sp = made["application"], made["servicePrincipal"]
+                record_created(f"entra-app {tid} {name} appId={app['appId']}")
+            if not sp:
+                raise Fail(f"{name}: no enterprise application (service principal) found")
+            # SAML mode, open to every user in the tenant (no per-user assignment, which Free can only do one by one)
+            graph("PATCH", f"/servicePrincipals/{sp['id']}",
+                  {"preferredSingleSignOnMode": "saml", "appRoleAssignmentRequired": False}, retry_404=10)
+            graph("PATCH", f"/applications/{app['id']}", {"identifierUris": [ent], "web": {"redirectUris": [acs]}},
+                  retry_404=10)
+            sp = graph("GET", f"/servicePrincipals/{sp['id']}?$select=id,preferredTokenSigningKeyThumbprint")
+            if not sp.get("preferredTokenSigningKeyThumbprint"):
+                end = (datetime.datetime.utcnow() + datetime.timedelta(days=3 * 365)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                cert = graph("POST", f"/servicePrincipals/{sp['id']}/addTokenSigningCertificate",
+                             {"displayName": f"CN={name}", "endDateTime": end})
+                graph("PATCH", f"/servicePrincipals/{sp['id']}", {"preferredTokenSigningKeyThumbprint": cert["thumbprint"]})
+            prof[f"{inst}.{f}.entity_id"] = ent
+            prof[f"{inst}.{f}.metadata_url"] = (f"https://login.microsoftonline.com/{tid}/federationmetadata/"
+                                                f"2007-06/federationmetadata.xml?appid={app['appId']}")
+            okm, txt = check_metadata(prof_feature("entra", inst, f, prof))
+            print(f"  {ok_('✓') if okm else bad_('✗')} {name}: ACS {acs}, identifier {ent}, open to all tenant users"
+                  + ("" if okm else f" — {txt}"))
+    save_profile("entra", prof)
+    print(ok_("Entra ready.") + f" Add a user (New user form, or `ssolab entra user <name>`), then `ssolab switch {first_inst()} entra`.")
+
+
+def entra_ensure_user(upn, pw, label=""):
+    try:
+        u = graph("GET", f"/users/{urllib.parse.quote(upn)}")
+    except Fail as e:
+        if "→ 404" not in str(e):
+            raise
+        u = None
+    profile = {"forceChangePasswordNextSignIn": False, "password": pw}
+    if not u:
+        graph("POST", "/users", {"accountEnabled": True, "displayName": label or upn.split("@")[0],
+                                 "mailNickname": re.sub(r"[^A-Za-z0-9]", "", upn.split("@")[0])[:60] or "ssolab",
+                                 "userPrincipalName": upn, "passwordProfile": profile})
+        record_created(f"entra-user {upn}")
+        print(ok_(f"Created Entra user {upn} (no forced password change)."))
+    else:
+        graph("PATCH", f"/users/{u['id']}", {"passwordProfile": profile})
+        print(ok_(f"Entra user {upn} already existed; password updated."))
+
+
+def entra_security_defaults(enable=None):
+    path = "/policies/identitySecurityDefaultsEnforcementPolicy"
+    if enable is None:
+        return graph("GET", path).get("isEnabled")
+    graph("PATCH", path, {"isEnabled": enable})
+    return enable
+
+
+def entra_cmd(args):
+    sub = args[0] if args else "status"
+    try:
+        if sub == "connect":
+            return entra_connect()
+        if sub == "provision":
+            return entra_provision()
+        if sub == "user":
+            dom = load_profile("entra").get("domain", "")
+            name = args[1] if len(args) > 1 else (ask(f"User name (becomes name@{dom})") if sys.stdin.isatty() else "")
+            if not name:
+                die("usage: ssolab entra user <name or name@domain>")
+            upn = name if "@" in name else f"{name}@{dom}"
+            while True:
+                pw = getpass.getpass(f"Password for {upn} (hidden; 8+ chars, 3 of upper/lower/number/symbol): ")
+                if pw and pw == getpass.getpass("again: "):
+                    break
+                print("empty or didn't match")
+            return creds_add("entra", upn, url="https://myapps.microsoft.com", username=upn, password=pw,
+                             notes="test user", quiet=True, email=upn)
+        if sub == "mfa":
+            cur = entra_security_defaults()
+            if len(args) < 2:
+                return print(f"Entra security defaults (tenant-wide MFA registration): {'ON' if cur else 'off'}. "
+                             "Change: `ssolab entra mfa on|off`.")
+            want = args[1] == "on"
+            print(warn_("This is tenant-wide: security defaults make every user register Microsoft Authenticator "
+                        "(skippable for 14 days). Entra Free has no per-user exception (that needs Conditional Access/P1)."))
+            if not yes(f"Turn security defaults {'ON' if want else 'OFF'} for the whole tenant?"):
+                return print("Unchanged.")
+            entra_security_defaults(want)
+            log_history(f"entra security defaults {'on' if want else 'off'}")
+            return print(ok_(f"Security defaults {'ON' if want else 'off'}."))
+        tid, cid, sec = entra_cfg()
+        if not (tid and cid and sec):
+            return print("Entra: not connected — `ssolab entra connect`.")
+        prof = load_profile("entra")
+        print(f"Entra: connected to {prof.get('tenant_name', '?')} ({prof.get('domain', '?')})")
+    except Fail as e:
+        die(str(e))
+
+
+# ---------------------------------------------------------------- optional GitOps mirror
+def gitops_blocks(inst, cfg):
+    s = cfg.get("sso_settings") or {}
+    e = (cfg.get("mdm") or {}).get("end_user_authentication") or {}
+    p = match_provider(s, inst, "sso") or match_provider(e, inst, "eua") or "?"
+    q = lambda v: json.dumps(v or "").replace("$", "\\$")   # gitops expands $VARS in the raw file
+
+    def provider_lines(sec, ind):
+        out = [f"{ind}idp_name: {q(sec.get('idp_name'))}", f"{ind}entity_id: {q(sec.get('entity_id'))}"]
+        if sec.get("metadata"):
+            out.append(f"{ind}metadata: |")
+            out += [f"{ind}  {l}".replace("$", "\\$") for l in sec["metadata"].splitlines()]
+        else:
+            out.append(f"{ind}metadata_url: {q(sec.get('metadata_url'))}")
+        return out
+
+    tag = f"(from {inst}: {PROVIDERS[p]['name'] if p in PROVIDERS else p}, {datetime.date.today()})"
+    sso = [f"  # >>> ssolab sso_settings {tag} — remove with `ssolab gitops clear`", "  sso_settings:",
+           f"    enable_sso: {'true' if s.get('enable_sso') else 'false'}"] + provider_lines(s, "    ") + [
+           f"    enable_jit_provisioning: {'true' if s.get('enable_jit_provisioning') else 'false'}",
+           f"    enable_sso_idp_login: {'true' if s.get('enable_sso_idp_login') else 'false'}",
+           "  # <<< ssolab sso_settings"]
+    eua = [f"    # >>> ssolab end_user_authentication {tag}", "    end_user_authentication:"] + \
+          provider_lines(e, "      ") + ["    # <<< ssolab end_user_authentication"]
+    return sso, eua
+
+
+def gitops_strip(lines):
+    out, skip = [], False
+    for l in lines:
+        if "# >>> ssolab" in l:
+            skip = True
+            continue
+        if "# <<< ssolab" in l:
+            skip = False
+            continue
+        if not skip:
+            out.append(l)
+    return out
+
+
+def gitops_backup():
+    d = os.path.join(STATE, "gitops-backups")
+    os.makedirs(d, exist_ok=True)
+    dest = os.path.join(d, f"default.yml.{datetime.datetime.now():%Y%m%d-%H%M%S-%f}")
+    shutil.copy(GITOPS_DEFAULT, dest)
+    return dest
+
+
+def gitops_check(inst=None):
+    """Hard prerequisites for touching the GitOps file: it's configured, exists, and (for a write) fleetctl is there."""
+    if not GITOPS_DEFAULT:
+        die("GitOps is off: set SSOLAB_GITOPS_DEFAULT in lab.env to the default.yml ssolab may edit")
+    if not os.path.isfile(GITOPS_DEFAULT):
+        die(f"SSOLAB_GITOPS_DEFAULT points at {GITOPS_DEFAULT}, which doesn't exist")
+    if inst:
+        fc = inst_fleetctl(inst)
+        if not fc or not os.access(fc, os.X_OK):
+            die(f"no fleetctl for {inst} ({fc or 'not on PATH'}): the edit is validated with `fleetctl gitops --dry-run` "
+                f"— install fleetctl or set INSTANCE_{inst}_FLEETCTL")
+
+
+def gitops_write(inst):
+    gitops_check(inst)
+    cfg = get_config(inst)
+    lines = gitops_strip(open(GITOPS_DEFAULT).read().splitlines())
+    if any(re.match(r"^  sso_settings:", l) for l in lines) or any(re.match(r"^    end_user_authentication:", l) for l in lines):
+        die("default.yml already has its own sso_settings / end_user_authentication (not written by sso) — edit it by hand")
+    sso, eua = gitops_blocks(inst, cfg)
+    try:
+        i_org = next(i for i, l in enumerate(lines) if l.startswith("org_settings:"))
+        i_mdm = next(i for i, l in enumerate(lines) if i > i_org and l.startswith("  mdm:"))
+    except StopIteration:
+        die("couldn't find org_settings: / mdm: in default.yml")
+    # after the commented-out examples when they're there, else right under the parent key
+    i_sso = max([i for i in range(i_org, i_mdm) if re.match(r"^  #   entity_id:", lines[i])], default=i_org)
+    nxt = next((i for i in range(i_mdm + 1, len(lines)) if re.match(r"^  \S", lines[i])), len(lines))
+    i_eua = min([i for i in range(i_mdm, nxt) if re.match(r"^    #   entity_id:", lines[i])], default=i_mdm)
+    lines[i_eua + 1:i_eua + 1] = eua
+    lines[i_sso + 1:i_sso + 1] = sso
+    bak = gitops_backup()
+    with open(GITOPS_DEFAULT, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    okv, why = gitops_dry_run(inst)
+    if not okv:
+        shutil.copy(bak, GITOPS_DEFAULT)
+        raise Fail(f"fleetctl gitops --dry-run rejected the edited default.yml, so it was put back as it was:\n{why}")
+    print(ok_("✓") + f" fleetctl gitops --dry-run against {inst} accepts the edited file")
+    log_history(f"gitops write from {inst}")
+    print(ok_(f"Wrote {inst}'s IdP settings into {GITOPS_DEFAULT}") + dim_(f" (backup {bak})"))
+    other = [i for i in INSTANCES if i != inst]
+    print(warn_(f"default.yml is applied to every server: a gitops run against {', '.join(other)} will push {inst}'s "
+                f"entity IDs there too. `ssolab gitops clear` removes the block."))
+
+
+def gitops_dry_run(inst):
+    """Validate default.yml the way you apply it (that instance's fleetctl). Read-only. -> (ok, text)."""
+    d = os.path.dirname(GITOPS_DEFAULT)
+    fc = inst_fleetctl(inst)
+    if not fc or not os.access(fc, os.X_OK):
+        return False, f"no fleetctl for {inst} ({fc or 'not on PATH'})"
+    fd = os.path.join(d, "fleets")
+    fleets = sorted(os.path.join("fleets", f) for f in os.listdir(fd) if f.endswith(".yml")) if os.path.isdir(fd) else []
+    cmd = [fc, "gitops", "--context", inst_context(inst), "-f", os.path.basename(GITOPS_DEFAULT)] + sum([["-f", f] for f in fleets], []) + ["--dry-run"]
+    r = subprocess.run(cmd, cwd=d, capture_output=True, text=True, timeout=300,
+                       env=dict(os.environ, FLEET_URL=public_url(inst)))
+    out = (r.stdout + r.stderr).strip().splitlines()
+    return r.returncode == 0, "\n".join(out[-8:])
+
+
+def cmd_gitops(args):
+    sub = args[0] if args else "show"
+    if not GITOPS_DEFAULT and sub == "show":
+        return print("GitOps is off: set SSOLAB_GITOPS_DEFAULT in lab.env to the default.yml ssolab may edit.")
+    if sub == "write":
+        if len(args) < 2:
+            die("usage: ssolab gitops write <inst>")
+        need_inst(args[1])
+        return gitops_write(args[1])
+    gitops_check()
+    if sub == "clear":
+        txt = open(GITOPS_DEFAULT).read()
+        if "# >>> ssolab" not in txt:
+            print("default.yml has no ssolab block.")
+            return
+        bak = gitops_backup()
+        with open(GITOPS_DEFAULT, "w") as f:
+            f.write("\n".join(gitops_strip(txt.splitlines())) + "\n")
+        log_history("gitops clear")
+        print(ok_("Removed the ssolab blocks from default.yml.") + dim_(f" (backup {bak})"))
+        return
+    block, inside = [], False
+    for l in open(GITOPS_DEFAULT).read().splitlines():
+        inside = inside or "# >>> ssolab" in l
+        if inside:
+            block.append(l)
+        if "# <<< ssolab" in l:
+            inside = False
+    print("\n".join(block) if block else "default.yml has no ssolab block (gitops runs reset SSO + end-user auth to empty).")
+
+
+# ---------------------------------------------------------------- doctor (read-only)
+def cmd_doctor(args):
+    bad = 0
+
+    def line(okv, what, txt):
+        nonlocal bad
+        bad += okv is False
+        mark = dim_("–") if okv is None else (ok_("✓") if okv else bad_("✗"))
+        print(f"  {mark} {what:<14} {txt}")
+
+    print(bold_("ssolab doctor"))
+    line(sys.version_info >= (3, 9), "python", f"{sys.version.split()[0]} ({sys.executable})")
+    if LAB_ERR:
+        line(False, "lab.env", LAB_ERR)
+        sys.exit(1)
+    line(True, "lab.env", LAB_PATH)
+    line(bool(INSTANCES) or False, "instances", " ".join(INSTANCES) or "INSTANCES is empty")
+    if not DATA:
+        line(False, "data dir", "SSOLAB_DATA isn't set")
+    elif not os.path.isdir(DATA):
+        line(None, "data dir", f"{DATA} doesn't exist yet (created on first save; `mkdir -p` it now if you like)")
+    else:
+        line(os.access(DATA, os.W_OK), "data dir", DATA)
+    if DATA and os.path.exists(LOGINS):
+        mode = os.stat(LOGINS).st_mode & 0o777
+        line(True if mode & 0o077 == 0 else None, "LOGINS.md",
+             f"{len(read_logins())} login(s)" + ("" if mode & 0o077 == 0 else f", mode {mode:o} — `chmod 600 {LOGINS}`"))
+    else:
+        line(None, "LOGINS.md", f"none yet — copy {os.path.join(ROOT, 'LOGINS.example.md')} or let ssolab create it")
+    profs = [p for p in PROVIDERS if os.path.exists(os.path.join(PROFILES, f"{p}.conf"))]
+    line(None if not profs else True, "profiles", ", ".join(profs) or "none yet (`ssolab setup <provider>`, or copy profiles/*.conf.example)")
+    dk = shutil.which("docker")
+    if not dk:
+        line(None, "docker", "not on PATH — only needed for the local IdPs (saml, authentik)")
+    else:
+        try:
+            r = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True, timeout=15)
+            line(r.returncode == 0 or None, "docker", f"engine {r.stdout.strip()}" if r.returncode == 0 else
+                 "CLI found, engine not running — only needed for the local IdPs")
+        except subprocess.TimeoutExpired:
+            line(None, "docker", "engine didn't answer in 15 s")
+    for inst in INSTANCES:
+        fc = inst_fleetctl(inst)
+        line(True if fc and os.access(fc, os.X_OK) else None, f"{inst} fleetctl",
+             fc if fc and os.access(fc, os.X_OK) else f"{fc or 'not on PATH'} — only needed for `ssolab gitops write`")
+        try:
+            addr, tok = fleet_ctx(inst)
+            st, js = fleet_api(inst, "GET", "/api/v1/fleet/version", timeout=10)
+            line(st == 200, f"{inst} context", f"'{inst_context(inst)}' → {addr}: " +
+                 (f"Fleet {js.get('version', '?')}" if st == 200 else f"HTTP {st} {fleet_errors(js)}"))
+        except Fail as e:
+            line(False, f"{inst} context", str(e))
+        log = inst_opt(inst, "SERVER_LOG")
+        line(None if not log else os.access(log, os.R_OK) or None, f"{inst} log",
+             (log + ("" if os.access(log, os.R_OK) else " (not readable)")) if log else
+             f"INSTANCE_{inst}_SERVER_LOG not set — `ssolab why` is off")
+    if not GITOPS_DEFAULT:
+        line(None, "gitops", "off (SSOLAB_GITOPS_DEFAULT not set)")
+    else:
+        line(os.path.isfile(GITOPS_DEFAULT), "gitops", GITOPS_DEFAULT + ("" if os.path.isfile(GITOPS_DEFAULT) else " — missing"))
+    if not VAULT:
+        line(None, "1Password", "off (SSOLAB_OP_VAULT not set)")
+    else:
+        line(bool(shutil.which("op")) or None, "1Password", f"vault '{VAULT}'" + (", op CLI found (sign-in not checked)"
+             if shutil.which("op") else " — op CLI not installed (brew install 1password-cli)"))
+    if bad:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------- main
+def main():
+    a = sys.argv[1:]
+    cmd = a[0] if a else ""
+    rest = a[1:]
+    if cmd in ("-h", "--help", "help"):
+        return print(__doc__.strip())
+    if cmd == "doctor":
+        return cmd_doctor(rest)
+    require_lab()
+    try:
+        if cmd == "":
+            if sys.stdin.isatty() and sys.stdout.isatty():
+                os.execv(sys.executable, [sys.executable, "-I", os.path.join(ROOT, "bin", "ssolab-tui.py")])
+            return cmd_status([])
+        if cmd == "status":
+            return cmd_status(rest)
+        if cmd == "switch":
+            return cmd_switch(rest)
+        if cmd == "test":
+            return cmd_test(rest)
+        if cmd == "why":
+            return cmd_why(rest)
+        if cmd == "setup":
+            return cmd_setup(rest)
+        if cmd == "sp":
+            return cmd_sp(rest, next((x for x in rest if x in PROVIDERS), None))
+        if cmd == "creds":
+            return cmd_creds(rest)
+        if cmd == "users":
+            return cmd_users(rest)
+        if cmd == "user" and rest[:1] == ["create"]:
+            return cmd_user_create(rest[1:])
+        if cmd == "genpw":   # used by the interactive view's New user form
+            return print(gen_password())
+        if cmd == "saml":
+            return cmd_saml(rest)
+        if cmd == "okta":
+            return okta_cmd(rest)
+        if cmd == "auth0":
+            return auth0_cmd(rest)
+        if cmd == "entra":
+            return entra_cmd(rest)
+        if cmd == "authentik":
+            return authentik_cmd(rest)
+        if cmd == "gitops":
+            return cmd_gitops(rest)
+        die(f"unknown command '{cmd}' (ssolab help)")
+    except Fail as e:
+        die(str(e))
+    except KeyboardInterrupt:
+        print()
+        sys.exit(130)
+
+
+if __name__ == "__main__":
+    main()

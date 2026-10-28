@@ -1,0 +1,14 @@
+# authentik — copy to $SSOLAB_DATA/profiles/authentik.conf, or let `ssolab authentik up` write it for you.
+# Non-secret: IdP app identifiers only. Keys: <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file
+# (file in $SSOLAB_DATA/metadata/). Instance names come from INSTANCES in lab.env (rc/prev here).
+console = http://localhost:18100/if/admin/
+idp_name = authentik
+jit = no
+prev.eua.entity_id = urn:fleetqa:prev:mdm
+prev.eua.metadata_url = http://localhost:18100/api/v3/providers/saml/<pk-prev-eua>/metadata/?download
+prev.sso.entity_id = urn:fleetqa:prev:admin
+prev.sso.metadata_url = http://localhost:18100/api/v3/providers/saml/<pk-prev-sso>/metadata/?download
+rc.eua.entity_id = urn:fleetqa:rc:mdm
+rc.eua.metadata_url = http://localhost:18100/api/v3/providers/saml/<pk-rc-eua>/metadata/?download
+rc.sso.entity_id = urn:fleetqa:rc:admin
+rc.sso.metadata_url = http://localhost:18100/api/v3/providers/saml/<pk-rc-sso>/metadata/?download
