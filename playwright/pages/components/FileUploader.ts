@@ -17,12 +17,11 @@ export class FileUploader {
   /** The widget's own control — present whenever no file is staged. */
   readonly chooseFileButton: Locator;
   /**
-   * The expandable panel on an error toast, carrying Fleet's raw response.
-   * Rendered as `role="region"` labelled "Error details"; only present once
-   * {@link expandErrorDetails} has opened it.
+   * The uploader's card: the graphic, its title or error line, the message and
+   * the button. Fleet renders it as a `Card` with no role or accessible name,
+   * so it's located by the `file-uploader` class the component gives it.
    */
-  readonly errorDetails: Locator;
-  readonly expandErrorDetailsButton: Locator;
+  readonly card: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -30,24 +29,18 @@ export class FileUploader {
     this.toast = new Toast(page);
 
     this.chooseFileButton = page.getByRole('button', { name: 'Choose file' });
-    this.expandErrorDetailsButton = page.getByRole('button', { name: 'Expand error details' });
-    this.errorDetails = page.getByRole('region', { name: 'Error details' });
+    this.card = page.locator('.file-uploader');
   }
 
   /**
-   * Assert a staged file was refused, and why. Fleet raises a short error toast
-   * (the Add software flow's is "Couldn't add.") and keeps the reason in the
-   * toast's collapsed "Raw response" panel, so the reason is only assertable
-   * after expanding it — asserting the toast alone would pass for any failure
-   * at all.
+   * Assert the uploader is showing an error in its own card. Fleet puts the
+   * error in place of the card's title: a dropped file the `accept` list
+   * refuses, or a picked one the page rejects (the Custom package form's
+   * "File type isn't supported"). Scoped to the card so an error toast with
+   * the same words can't satisfy it.
    */
-  async expectRejected(
-    reason: string | RegExp,
-    message: string | RegExp = "Couldn't add.",
-  ): Promise<void> {
-    await this.toast.expectError(message);
-    await this.expandErrorDetailsButton.click();
-    await expect(this.errorDetails).toContainText(reason);
+  async expectInlineError(text: string | RegExp): Promise<void> {
+    await expect(this.card.getByText(text)).toBeVisible();
   }
 
   /**
