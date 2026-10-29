@@ -1,7 +1,9 @@
 // Bulk-delete helpers used by the suite-level teardown to leave no-team
 // in a known-empty state. Each helper is safe to call on an already
-// empty scope and silently skips individual failures so one stuck item
-// doesn't abort the rest of the cleanup.
+// empty scope. The query and pack wipes skip individual failures so one
+// stuck item doesn't abort the rest of the cleanup; the policy wipes throw
+// on a non-OK answer, because a policy left behind also keeps the titles
+// and scripts its automations use.
 import { APIRequestContext } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders } from './core';
 
@@ -74,23 +76,38 @@ export async function deleteAllGlobalPolicies(request: APIRequestContext): Promi
   }
 }
 
-/** Deletes every policy scoped to a specific team in a single bulk call. */
-export async function deleteAllTeamPolicies(
+/**
+ * Deletes every policy a fleet owns in a single bulk call, the global policies
+ * it inherits aside. Fleet id 0 is Unassigned, whose own policies are neither
+ * global nor any named fleet's, so nothing else removes them. Call it before
+ * the fleet's software and scripts go: Fleet refuses (409) to delete a title or
+ * a script a policy automation uses, and "Automatic install" on an added title
+ * creates exactly such a policy. A non-OK answer throws, as the global wipe
+ * does, so a policy wipe that stops working fails the run rather than leaving
+ * those titles in place.
+ */
+export async function deleteAllFleetPolicies(
   request: APIRequestContext,
-  teamId: number,
+  fleetId: number,
 ): Promise<void> {
-  const res = await request.get(apiUrl(`teams/${teamId}/policies`), {
+  const url = apiUrl(`fleets/${fleetId}/policies`);
+  const res = await request.get(url, {
     headers: authHeaders(),
     params: { per_page: '500' },
   });
-  if (!res.ok()) return;
+  if (!res.ok()) {
+    throw new Error(`[cleanup fleet ${fleetId} policies] GET ${url} → HTTP ${res.status()}: ${await res.text()}`);
+  }
   const body = await res.json();
   const ids = ((body.policies ?? []) as Array<{ id: number }>).map((p) => p.id);
   if (ids.length === 0) return;
-  await request
-    .post(apiUrl(`teams/${teamId}/policies/delete`), {
-      headers: authHeaders(),
-      data: { ids },
-    })
-    .catch((err) => console.warn(`[cleanup team ${teamId} policies]`, err));
+  const del = await request.post(`${url}/delete`, {
+    headers: authHeaders(),
+    data: { ids },
+  });
+  if (!del.ok()) {
+    throw new Error(
+      `[cleanup fleet ${fleetId} policies] POST ${url}/delete → HTTP ${del.status()}: ${await del.text()}`,
+    );
+  }
 }

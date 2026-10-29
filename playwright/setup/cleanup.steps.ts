@@ -23,7 +23,7 @@ import {
   deleteAllQueries,
   deleteAllScripts,
   deleteVariablesMatching,
-  deleteAllTeamPolicies,
+  deleteAllFleetPolicies,
   deleteLabelsWithPrefix,
   deleteFleetPolicies,
   deleteFleetsWithPrefix,
@@ -59,9 +59,9 @@ const WORKSTATIONS_FLEET = 'Workstations';
 // Queries and packs are global on the Fleet API (no per-team endpoint),
 // so deleting them with the unassigned wipe also drains anything created
 // from the "All fleets" UI scope. Policies are either global
-// (deleteAllGlobalPolicies) or team-scoped (deleteAllTeamPolicies on
-// Workstations); the "All fleets" UI view is the union of both, so the
-// two calls together cover it.
+// (deleteAllGlobalPolicies) or a fleet's own (deleteAllFleetPolicies, here for
+// Unassigned and below for Workstations); the "All fleets" UI view is the
+// union of global and Workstations' policies, so those two calls cover it.
 test('wipe unassigned state', async ({ request }) => {
   // Every helper here is safe on both tiers. The MDM-related ones
   // (resetSetupExperience and its sub-helpers in helpers/api/mdm.ts)
@@ -84,6 +84,11 @@ test('wipe unassigned state', async ({ request }) => {
   // exclusive spec turns it off, and nothing else in the suite turns it back on.
   await enableScriptExecution(request);
   await resetSetupExperience(request, 0);
+  // Unassigned's own policies go before its software and scripts: Fleet refuses
+  // to delete a title or script that a policy automation uses, so a title added
+  // with "Automatic install", by a spec or by hand, would otherwise outlive
+  // every wipe.
+  await deleteAllFleetPolicies(request, 0);
   await Promise.all([
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
@@ -138,14 +143,15 @@ test('wipe Workstations team state', async ({ request }) => {
     );
   }
 
-  // Clear Setup Experience before the software wipe (see the unassigned step).
+  // Clear Setup Experience, then the policies, before the software and scripts
+  // (see the unassigned step for why each must go first).
   await resetSetupExperience(request, workstations.id);
+  await deleteAllFleetPolicies(request, workstations.id);
   // Its reports are gitops's, so only the ones specs save here go, by exact
   // prefix: the role specs' Save-as-new copy and `save-as-new.spec`'s copy into
   // this fleet, each deleted by its own test unless the test died first.
   const reports = await listReports(request, workstations.id);
   await Promise.all([
-    deleteAllTeamPolicies(request, workstations.id),
     deleteAllInstallSoftwareTitles(request, workstations.id),
     deleteAllConfigurationProfiles(request, workstations.id),
     deleteAllScripts(request, workstations.id),
