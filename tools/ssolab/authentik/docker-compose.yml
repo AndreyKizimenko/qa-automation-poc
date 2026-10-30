@@ -1,0 +1,56 @@
+# Self-hosted authentik for ssolab (`ssolab authentik up`). Secrets in $SSOLAB_DATA/authentik/.env (generated,
+# chmod 600; ssolab runs this with --project-directory $SSOLAB_DATA/authentik, which is where compose reads .env).
+# Memory-capped (≈2 GB total) so it can't starve other containers (e.g. Fleet's MySQL) in the shared Docker VM.
+# UI/API on http://localhost:18100 only (no tunnel): Fleet and the Mac's browser reach it on localhost.
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASS:?run ssolab authentik up}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - database:/var/lib/postgresql/data
+
+  server:
+    image: ${AUTHENTIK_IMAGE}
+    restart: unless-stopped
+    command: server
+    mem_limit: 1g
+    environment: &env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+    ports:
+      - "127.0.0.1:${AUTHENTIK_PORT:-18100}:9000"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+
+  worker:
+    image: ${AUTHENTIK_IMAGE}
+    restart: unless-stopped
+    command: worker
+    mem_limit: 768m
+    environment: *env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+
+volumes:
+  database:

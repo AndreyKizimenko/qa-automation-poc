@@ -1,0 +1,17 @@
+# Microsoft Entra ID — copy to $SSOLAB_DATA/profiles/entra.conf, or let `ssolab entra connect` write it for you.
+# Non-secret: IdP app identifiers only. Keys: <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file
+# (file in $SSOLAB_DATA/metadata/). Instance names come from INSTANCES in lab.env (rc/prev here).
+console = https://entra.microsoft.com
+domain = <tenant>.onmicrosoft.com
+idp_name = Microsoft Entra ID
+jit = no
+tenant_id = <directory-tenant-id>
+tenant_name = <tenant display name>
+prev.eua.entity_id = urn:fleetqa:prev:mdm
+prev.eua.metadata_url = https://login.microsoftonline.com/<directory-tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-id-prev-eua>
+prev.sso.entity_id = urn:fleetqa:prev:admin
+prev.sso.metadata_url = https://login.microsoftonline.com/<directory-tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-id-prev-sso>
+rc.eua.entity_id = urn:fleetqa:rc:mdm
+rc.eua.metadata_url = https://login.microsoftonline.com/<directory-tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-id-rc-eua>
+rc.sso.entity_id = urn:fleetqa:rc:admin
+rc.sso.metadata_url = https://login.microsoftonline.com/<directory-tenant-id>/federationmetadata/2007-06/federationmetadata.xml?appid=<app-id-rc-sso>

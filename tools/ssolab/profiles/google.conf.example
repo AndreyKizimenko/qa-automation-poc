@@ -1,0 +1,14 @@
+# Google Workspace — copy to $SSOLAB_DATA/profiles/google.conf, or let `ssolab setup google` write it for you.
+# Non-secret: IdP app identifiers only. Keys: <instance>.<sso|eua>.entity_id / .metadata_url / .metadata_file
+# (file in $SSOLAB_DATA/metadata/). Instance names come from INSTANCES in lab.env (rc/prev here).
+domain = <your-workspace-domain>
+idp_name = Google
+jit = no
+prev.eua.entity_id = urn:fleetqa:prev:mdm
+prev.eua.metadata_file = google-prev-eua.xml
+prev.sso.entity_id = urn:fleetqa:prev:admin
+prev.sso.metadata_file = google-prev-sso.xml
+rc.eua.entity_id = urn:fleetqa:rc:mdm
+rc.eua.metadata_file = google-rc-eua.xml
+rc.sso.entity_id = urn:fleetqa:rc:admin
+rc.sso.metadata_file = google-rc-sso.xml

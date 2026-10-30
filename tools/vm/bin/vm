@@ -1,0 +1,727 @@
+#!/bin/bash
+# vm — UTM test VMs for Fleet QA. See ../README.md. Config: lab.env (vm config, vm doctor).
+#
+#   vm                             interactive view (arrow keys): every VM, on/off, fleetd instance, Fleet status;
+#                                  Enter on a VM → start/stop, switch fleetd between instances, park/unpark
+#   vm up [<instance>|<name>...]   start every active test host (never goldens), wait for IPs
+#   vm down [<instance>|<name>...] clean shutdown of running hosts (forced after 90s)
+#   vm status                      hosts: active?, UTM state, IP
+#   vm park|unpark <name>          take a host out of / back into `vm up` without deleting it
+#   vm ls                          inventory vs disk vs UTM, with sizes
+#   vm check [<instance>...]       ls + match hosts against Fleet (fleetctl), flag drift
+#   vm clone <golden> <name> [purpose...]
+#                                  APFS-clone a golden image into hosts/, new identity, register in UTM
+#   vm enroll <name> <instance>    (re)enroll a host's fleetd to that instance: wipes fleetd + its state, installs
+#                                  the newest package from $INSTALLERS_DIR/<instance>/ (Linux, macOS, Windows)
+#   vm install <instance>          vm enroll every running test host to that instance, in parallel
+#   vm rename <old> <new>          rename a VM everywhere (UTM, bundle, inventory, LOGINS, guest hostname);
+#                                  asks you to Remove the old entry in UTM midway
+#   vm golden <name> [os arch purpose user password]  register a VM you built in UTM's library as a golden image (moves it here)
+#   vm rm <name>                   stop, move bundle to Trash, drop from inventory
+#   vm exec <name> '<shell cmd>'   run a command in a running guest (Linux: sh -c, Windows: cmd /c, macOS: sudo sh -c over SSH)
+#   vm start|stop|ip <name>        single VM (stop = clean shutdown, forced after 90s)
+#   vm config [KEY]                resolved lab.env settings (KEY=VALUE), or one value
+#   vm doctor                      check prerequisites, permissions and config
+#   Logins for every VM: $VM_DATA/LOGINS.md (kept in sync by clone/golden/rm)
+set -euo pipefail
+
+# the tool's own dir, through symlinks (so `ln -s .../bin/vm /usr/local/bin/vm` works)
+self="$0"
+while [ -L "$self" ]; do
+  d="$(cd "$(dirname "$self")" && pwd)"; self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$d/$self" ;; esac
+done
+TOOL="$(cd "$(dirname "$self")/.." && pwd)"
+TOOLS="$(dirname "$TOOL")"
+
+usage() { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$self"; }
+
+# lab.env: plain KEY=VALUE, never sourced. Values land in CFG_<KEY>; read them with cfg KEY.
+CFG_KEYS=""
+cfg() { local v="CFG_$1"; printf '%s' "${!v:-}"; }
+cfg_set() { case " $CFG_KEYS " in *" $1 "*) ;; *) CFG_KEYS="$CFG_KEYS $1" ;; esac; printf -v "CFG_$1" '%s' "$2"; }
+LAB_ENV=""
+find_config() {
+  if [ -n "${QALAB_ENV:-}" ]; then [ -f "$QALAB_ENV" ] && LAB_ENV="$QALAB_ENV"; return 0; fi
+  local c; for c in "$TOOLS/qalab/lab.env" "$HOME/.config/qalab/lab.env"; do
+    [ -f "$c" ] && { LAB_ENV="$c"; return 0; }
+  done
+  return 0
+}
+config_hint() {
+  if [ -n "${QALAB_ENV:-}" ]; then echo "QALAB_ENV=$QALAB_ENV doesn't exist"; return; fi
+  echo "no lab.env in $TOOLS/qalab/ or ~/.config/qalab/. Create one:"
+  echo "  cp $TOOLS/qalab/lab.env.example $TOOLS/qalab/lab.env   # then edit it (or set QALAB_ENV=/path/to/lab.env)"
+}
+load_config() {
+  find_config
+  [ -n "$LAB_ENV" ] || { echo "vm: $(config_hint)" >&2; exit 1; }
+  local line key val
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"; line="${line%"${line##*[![:space:]]}"}"
+    case "$line" in ''|'#'*) continue ;; esac
+    line="${line#export }"
+    key="${line%%=*}"; [ "$key" != "$line" ] || continue
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    val="${line#*=}"
+    case "$val" in \"*\") val="${val:1:${#val}-2}" ;; \'*\') val="${val:1:${#val}-2}" ;; esac
+    case "$val" in "~") val="$HOME" ;; "~/"*) val="$HOME/${val:2}" ;; esac
+    cfg_set "$key" "$val"
+  done < "$LAB_ENV"
+  local k d
+  for k in VM_DATA:"$HOME/qalab/vm" INSTALLERS_DIR:"$HOME/qalab/installers" SSH_KEY:"$HOME/.ssh/qalab_ed25519" \
+           GUEST_USER:qa UTMCTL:/Applications/UTM.app/Contents/MacOS/utmctl; do
+    d="${k#*:}"; k="${k%%:*}"; [ -n "$(cfg "$k")" ] || cfg_set "$k" "$d"
+  done
+  INSTANCES="$(cfg INSTANCES)"
+  [ -n "$INSTANCES" ] || { echo "vm: INSTANCES is empty in $LAB_ENV" >&2; exit 1; }
+  for k in $INSTANCES; do
+    [[ "$k" =~ ^[A-Za-z0-9_]+$ ]] || { echo "vm: instance name '$k' in $LAB_ENV: use letters, digits and _ only" >&2; exit 1; }
+    [ -n "$(inst_cfg "$k" CONTEXT)" ] || cfg_set "INSTANCE_${k}_CONTEXT" "$k"
+    d="$(inst_cfg "$k" FLEETCTL)"; d="${d:-fleetctl}"
+    cfg_set "INSTANCE_${k}_FLEETCTL" "$(command -v "$d" 2>/dev/null || echo "$d")"
+  done
+  VM_DATA="$(cfg VM_DATA)"; INSTALLERS="$(cfg INSTALLERS_DIR)"; KEY="$(cfg SSH_KEY)"
+  GUEST="$(cfg GUEST_USER)"; UTMCTL="$(cfg UTMCTL)"
+  INV="$VM_DATA/inventory.tsv"
+  LOGINS="$VM_DATA/LOGINS.md"
+}
+inst_cfg() { cfg "INSTANCE_$1_$2"; }
+is_instance() { case " $INSTANCES " in *" $1 "*) return 0 ;; esac; return 1; }
+need_instance() { is_instance "${1:-}" || die "instance must be one of: $INSTANCES (INSTANCES in $LAB_ENV)"; }
+need_data() {
+  [ -d "$VM_DATA" ] || die "VM_DATA ($VM_DATA) doesn't exist. Create it: mkdir -p '$VM_DATA' && head -1 '$TOOL/inventory.example.tsv' > '$INV'"
+  [ -f "$INV" ] || die "no inventory at $INV. Start one: head -1 '$TOOL/inventory.example.tsv' > '$INV'"
+}
+
+die() { echo "vm: $*" >&2; exit 1; }
+need_utm() { [ -x "$UTMCTL" ] || die "no utmctl at $UTMCTL (brew install --cask utm, or fix UTMCTL in $LAB_ENV)"; }
+
+# inventory helpers (TSV: name role os arch backend server purpose created active)
+inv_rows() { tail -n +2 "$INV" | grep -v '^[[:space:]]*$' || true; }
+inv_field() { inv_rows | awk -F'\t' -v n="$1" -v f="$2" '$1==n {print $f}'; }
+inv_has() { [ -n "$(inv_field "$1" 1)" ]; }
+bundle_path() { # golden/<n>.utm or hosts/<n>.utm, by role
+  case "$(inv_field "$1" 2)" in
+    golden) echo "$VM_DATA/golden/$1.utm" ;;
+    host)   echo "$VM_DATA/hosts/$1.utm" ;;
+    *)      echo "" ;;
+  esac
+}
+utm_status() { # name -> started|stopped|paused|... or "not-in-utm"
+  [ -x "$UTMCTL" ] || { echo "no-utm"; return; }
+  # utmctl launches UTM when it's closed; with UTM closed nothing can be running, so don't wake it just to ask
+  pgrep -xq UTM || { echo stopped; return; }
+  "$UTMCTL" status "$1" 2>/dev/null || echo "not-in-utm"
+}
+utm_register() { # open a bundle in place (plain `open -a UTM` is ignored for bundles outside UTM's library)
+  osascript -e "tell application \"UTM\" to open (POSIX file \"$1\")" >/dev/null
+}
+# LOGINS.md rows: | vm | user | password | notes |
+login_row() { [ -f "$LOGINS" ] && awk -F'|' -v n="$1" '{v=$2; gsub(/^ +| +$/,"",v)} v==n {print; exit}' "$LOGINS"; }
+login_has() { [ -n "$(login_row "$1")" ]; }
+login_add() { # name user password notes
+  [ -f "$LOGINS" ] || { printf '# VM logins\n\n| vm | user | password | notes |\n|---|---|---|---|\n' > "$LOGINS"; chmod 600 "$LOGINS"; }
+  login_has "$1" && return 0
+  printf '| %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4" >> "$LOGINS"
+}
+login_del() {
+  [ -f "$LOGINS" ] || return 0
+  awk -F'|' -v n="$1" '{v=$2; gsub(/^ +| +$/,"",v)} v!=n' "$LOGINS" > "$LOGINS.tmp" && cat "$LOGINS.tmp" > "$LOGINS" && rm "$LOGINS.tmp"
+}
+login_field() { login_row "$1" | awk -F'|' -v f="$2" '{v=$(f+2); gsub(/^ +| +$/,"",v); print v}'; }  # 1=user 2=password
+
+active_hosts() { # [instance|name...] -> names of active hosts matching the filter
+  inv_rows | awk -F'\t' '$2=="host" && $9!="no" {print $1"\t"$6}' | while IFS=$'\t' read -r n srv; do
+    if [ $# -eq 0 ]; then echo "$n"; continue; fi
+    for f in "$@"; do if [ "$f" = "$srv" ] || [ "$f" = "$n" ]; then echo "$n"; break; fi; done
+  done
+  return 0   # a non-matching last row must not fail the pipeline (set -e + pipefail)
+}
+running_hosts() { # [instance|name...] -> hosts (active or parked) that UTM reports running
+  inv_rows | awk -F'\t' '$2=="host" {print $1"\t"$6}' | while IFS=$'\t' read -r n srv; do
+    case "$(utm_status "$n")" in started|paused|starting|resuming) ;; *) continue ;; esac
+    if [ $# -eq 0 ]; then echo "$n"; continue; fi
+    for f in "$@"; do if [ "$f" = "$srv" ] || [ "$f" = "$n" ]; then echo "$n"; break; fi; done
+  done
+  return 0   # a non-matching last row must not fail the pipeline (set -e + pipefail)
+}
+is_macos() { [ "$(inv_field "$1" 5)" = apple ] && [[ "$(inv_field "$1" 3)" == mac* ]]; }
+vm_ip() {
+  if [ "$(inv_field "$1" 5)" = apple ]; then apple_ip "$1"; return; fi
+  "$UTMCTL" ip-address "$1" 2>/dev/null | grep -E '^[0-9]+\.' | head -1 || true
+}
+apple_ip() { # Apple-backend VMs have no guest agent: find the IP by MAC in the host's DHCP leases, then ARP
+  local b mac; b="$(bundle_path "$1")"
+  mac="$(/usr/libexec/PlistBuddy -c 'Print :Network:0:MacAddress' "$b/config.plist" 2>/dev/null | tr 'A-Z' 'a-z')"
+  [ -n "$mac" ] || return 0
+  local short; short="$(echo "$mac" | awk -F: '{for(i=1;i<=NF;i++){sub(/^0/,"",$i)}; OFS=":"; $1=$1; print}')"
+  # A MAC can hold several leases (macOS opens a second vmnet subnet when many VMs run at once), so prefer the
+  # address the ARP table confirms, then the newest lease.
+  local arp_ip; arp_ip="$(arp -an | awk -v m="$short" '$4==m {gsub(/[()]/,"",$2); print $2; exit}')"
+  [ -n "$arp_ip" ] && { echo "$arp_ip"; return; }
+  [ -r /var/db/dhcpd_leases ] && awk -v m="1,$short" '
+    /^{/{ip="";hw="";ls=""} /ip_address=/{split($0,a,"=");ip=a[2]} /hw_address=/{split($0,a,"=");hw=a[2]}
+    /lease=/{split($0,a,"=");ls=a[2]} /^}/{if(hw==m) print ls, ip}' /var/db/dhcpd_leases | sort -r | awk 'NR==1{print $2}'
+  return 0
+}
+vm_ssh() { # name cmd — SSH as $GUEST_USER (macOS and Windows guests)
+  local ip; ip="$(vm_ip "$1")"; [ -n "$ip" ] || die "no IP for $1 (is it running?)"
+  ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10 -o BatchMode=yes "$GUEST@$ip" "$2"
+}
+wait_ssh() { local i; for i in $(seq 1 120); do vm_ssh "$1" hostname >/dev/null 2>&1 && return 0; sleep 3; done; return 1; }
+guest_poweroff() { # ask the guest agent to power off (desktops answer UTM's power-button request with a dialog)
+  local exe args
+  case "$(inv_field "$1" 3)" in
+    win*) exe='C:\\Windows\\System32\\shutdown.exe'; args='{"/s", "/t", "0"}' ;;
+    mac*) vm_ssh "$1" 'sudo -n true && (sudo shutdown -h +0 >/dev/null 2>&1 &) && echo issued' 2>/dev/null | grep -q issued; return $? ;;   # SSH; detached so ssh returns at once
+    *)    exe='/usr/bin/systemctl'; args='{"poweroff"}' ;;
+  esac
+  osascript -e "tell application \"UTM\" to execute virtual machine named \"$1\" at \"$exe\" with arguments $args" >/dev/null 2>&1
+}
+shutdown_vms() { # names... : ask guests to shut down, force any still up after 90s
+  [ $# -gt 0 ] || { echo "nothing running"; return 0; }
+  for n in "$@"; do echo "-> shutting down $n"; guest_poweroff "$n" || "$UTMCTL" stop "$n" --request >/dev/null 2>&1 || true; done
+  local start left; start=$(date +%s)
+  while :; do
+    left=""; for n in "$@"; do [ "$(utm_status "$n")" = stopped ] || left="$left $n"; done
+    [ -z "$left" ] && break
+    # wall clock, not a sleep counter: the status checks take time too
+    if [ $(( $(date +%s) - start )) -ge 90 ]; then
+      for n in $left; do echo "   $n didn't shut down in 90s; forcing power off"; "$UTMCTL" stop "$n" --force >/dev/null 2>&1 || true; done
+      break
+    fi
+    sleep 3
+  done
+  echo "-> stopped: $*"
+}
+
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,14}$ ]]; }  # <=15: Windows NetBIOS hostname limit
+
+cmd_ls() {
+  printf '%-16s %-7s %-8s %-6s %-6s %-12s %8s  %s\n' NAME ROLE OS ARCH SERVER UTM SIZE PURPOSE
+  inv_rows | while IFS=$'\t' read -r name role os arch backend server purpose created active; do
+    b="$(bundle_path "$name")"
+    if [ -d "$b" ]; then size="$(du -sh "$b" 2>/dev/null | cut -f1)"; else size="MISSING"; fi
+    printf '%-16s %-7s %-8s %-6s %-6s %-12s %8s  %s\n' \
+      "$name" "$role" "$os" "$arch" "$server" "$(utm_status "$name")" "$size" "$purpose"
+  done
+  # drift: bundles on disk that the inventory doesn't know about
+  for b in "$VM_DATA"/golden/*.utm "$VM_DATA"/hosts/*.utm; do
+    [ -e "$b" ] || continue
+    n="$(basename "$b" .utm)"
+    inv_has "$n" || echo "DRIFT  untracked bundle on disk: ${b#$VM_DATA/}  (add to inventory.tsv or vm rm)"
+  done
+  # drift: every VM needs a row in LOGINS.md
+  inv_rows | cut -f1 | while read -r n; do
+    login_has "$n" || echo "DRIFT  no login for '$n' in LOGINS.md"
+  done
+  # drift: VMs UTM knows about that aren't ours (e.g. created straight into UTM's library)
+  if [ -x "$UTMCTL" ] && pgrep -xq UTM; then
+    "$UTMCTL" list 2>/dev/null | tail -n +2 | awk '{ $1=""; $2=""; sub(/^  /,""); print }' | while read -r n; do
+      [ -n "$n" ] || continue
+      inv_has "$n" || echo "DRIFT  UTM has a VM not in inventory: '$n'  (vm golden '$n', or delete it in UTM)"
+    done
+  fi
+  echo "Total on disk: $(du -sh "$VM_DATA" 2>/dev/null | cut -f1)   (clones share blocks with their golden; real usage is lower)"
+}
+
+fleet_hosts() { # instance -> TSV hostname status seen_time orbit_version uuid
+  local fc; fc="$(inst_cfg "$1" FLEETCTL)"
+  [ -x "$fc" ] || { echo "vm: fleetctl not found: $fc (set INSTANCE_$1_FLEETCTL or put fleetctl on PATH)" >&2; return 1; }
+  "$fc" get hosts --context "$(inst_cfg "$1" CONTEXT)" --json 2>/dev/null \
+    | jq -r 'select(.spec) | .spec | [(.hostname|ascii_downcase|split(".")[0]), .status, .seen_time, (.orbit_version // "-"), .uuid] | @tsv'
+}
+
+cmd_check() {
+  local servers="${*:-$INSTANCES}" s
+  for s in $servers; do need_instance "$s"; done
+  cmd_ls
+  for s in $servers; do
+    echo
+    echo "== Fleet: $s"
+    local fh
+    fh="$(fleet_hosts "$s")" || { echo "   (couldn't query — is the $s server up and logged in? fleetctl login --context $(inst_cfg "$s" CONTEXT))"; continue; }
+    inv_rows | awk -F'\t' -v s="$s" '$2=="host" && $6==s {print $1}' | while read -r name; do
+      m="$(printf '%s\n' "$fh" | awk -F'\t' -v n="$name" '$1==n')"
+      c="$(printf '%s\n' "$m" | grep -c . || true)"
+      if [ "$c" -eq 0 ]; then
+        echo "   MISSING  $name — not enrolled (or guest hostname isn't '$name')"
+      elif [ "$c" -gt 1 ]; then
+        echo "   DUP      $name — $c Fleet hosts share this hostname (stale record or cloned identity); delete extras in Fleet"
+      else
+        IFS=$'\t' read -r _ st seen ov uuid <<<"$m"
+        echo "   OK       $name  $st  seen $seen  fleetd $ov  uuid $uuid"
+      fi
+    done
+    # hosts we own that are enrolled here but the inventory says belong elsewhere (left behind after vm enroll)
+    inv_rows | awk -F'\t' -v s="$s" '$2=="host" && $6!=s {print $1}' | while read -r name; do
+      printf '%s\n' "$fh" | awk -F'\t' -v n="$name" '$1==n' | grep -q . \
+        && echo "   STALE    $name — old record here; it's enrolled to $(inv_field "$name" 6) now. Delete it in $s's Fleet UI"
+    done
+    # same hardware UUID on several hosts = a clone kept its golden's identity
+    printf '%s\n' "$fh" | awk -F'\t' 'NF{print $5}' | sort | uniq -d | while read -r u; do
+      echo "   COLLIDE  uuid $u reported by: $(printf '%s\n' "$fh" | awk -F'\t' -v u="$u" '$5==u{printf "%s ", $1}')"
+    done
+  done
+}
+
+patch_identity() { # bundle name backend
+  local cfg="$1/config.plist" name="$2" backend="$3" mac_id="" gen_id=""
+  [ -f "$cfg" ] || die "no config.plist in $1"
+  if [ "$backend" = apple ]; then
+    mac_id="$(swift "$TOOL/bin/new-machine-id.swift" mac)" || die "couldn't generate machine id"
+    gen_id="$(swift "$TOOL/bin/new-machine-id.swift" generic)" || die "couldn't generate machine id"
+  fi
+  NAME="$name" MAC_ID="$mac_id" GEN_ID="$gen_id" /usr/bin/python3 - "$cfg" <<'PY'
+import base64, os, plistlib, random, sys, uuid
+path = sys.argv[1]
+with open(path, "rb") as f:
+    cfg = plistlib.load(f)
+cfg.setdefault("Information", {})["Name"] = os.environ["NAME"]
+cfg["Information"]["UUID"] = str(uuid.uuid4()).upper()
+def mac():  # locally administered, unicast
+    b = [random.randint(0, 255) for _ in range(6)]
+    b[0] = (b[0] & 0xFC) | 0x02
+    return ":".join(f"{x:02X}" for x in b)
+changed = []
+def walk(node, parent=""):
+    if isinstance(node, dict):
+        for k, v in list(node.items()):
+            if k == "MacAddress" and isinstance(v, str):
+                node[k] = mac(); changed.append("MacAddress")
+            elif k == "MachineIdentifier":
+                new = os.environ["MAC_ID"] if "Mac" in parent else os.environ["GEN_ID"]
+                if new:
+                    node[k] = base64.b64decode(new); changed.append(f"{parent}.MachineIdentifier")
+            else:
+                walk(v, k)
+    elif isinstance(node, list):
+        for v in node:
+            walk(v, parent)
+walk(cfg)
+with open(path, "wb") as f:
+    plistlib.dump(cfg, f)
+print("   new UUID, " + (", ".join(changed) or "no NICs/machine ids found"))
+PY
+}
+
+cmd_exec() { # name cmd — runs via guest agent (macOS: sudo over SSH), prints output
+  local name="$1" cmd="$2" exe flag
+  if is_macos "$name"; then vm_ssh "$name" "sudo sh -c $(printf '%q' "$cmd")" 2>&1 || echo "[exit $?]"; return 0; fi
+  case "$(inv_field "$name" 3)" in win*) exe='C:\\Windows\\System32\\cmd.exe'; flag=/c ;; *) exe=/bin/sh; flag=-c ;; esac
+  CMD="$cmd" osascript - "$name" "$exe" "$flag" <<'OSA'
+on run argv
+  set {vmName, exe, flag} to argv
+  set cmd to system attribute "CMD"
+  tell application "UTM"
+    set p to execute of (virtual machine named vmName) at exe with arguments {flag, cmd} with output capturing
+    repeat 600 times
+      set r to get result of p
+      if exited of r then exit repeat
+      delay 0.5
+    end repeat
+    if not (exited of r) then error "timed out after 5 min"
+    set out to (output text of r) & (error text of r)
+    if (exit code of r) is not 0 then set out to out & linefeed & "[exit " & (exit code of r) & "]"
+  end tell
+  return out
+end run
+OSA
+}
+
+set_inv_field() { # name field value
+  { head -1 "$INV"; inv_rows | awk -F'\t' -v OFS='\t' -v n="$1" -v f="$2" -v v="$3" '$1==n {$f=v} {print}'; } > "$INV.tmp" && mv "$INV.tmp" "$INV"
+}
+wait_agent() {
+  if is_macos "$1"; then wait_ssh "$1"; return; fi
+  local i; for i in $(seq 1 60); do cmd_exec "$1" true >/dev/null 2>&1 && return 0; sleep 3; done; return 1
+}
+
+cmd_enroll() {
+  [ $# -eq 2 ] || die "usage: vm enroll <name> <instance>   (instances: $INSTANCES)"
+  local name="$1" server="$2" os pkgglob mgr
+  need_utm
+  [ "$(inv_field "$name" 2)" = host ] || die "'$name' isn't a host in inventory.tsv"
+  need_instance "$server"
+  os="$(inv_field "$name" 3)"
+  case "$os" in
+    ubuntu*|debian*) pkgglob='fleet-osquery*_arm64.deb'; mgr=apt ;;
+    fedora*|rhel*)   pkgglob='fleet-osquery*.aarch64.rpm'; mgr=dnf ;;
+  esac
+  # x86 Linux guests (emulated) take the amd64 / x86_64 packages
+  if [ "$(inv_field "$name" 4)" = x86 ]; then case "$os" in
+    ubuntu*|debian*) pkgglob='fleet-osquery*_amd64.deb' ;;
+    fedora*|rhel*)   pkgglob='fleet-osquery*.x86_64.rpm' ;;
+  esac; fi
+  case "$os" in
+    ubuntu*|debian*|fedora*|rhel*) ;;
+    mac*)            pkgglob='fleet-osquery*.pkg'; mgr=pkg ;;
+    win*)            pkgglob='fleet-osquery-arm64.msi'; mgr=msi ;;
+    *) die "vm enroll doesn't handle $os yet; enroll it by hand, then set its server column in inventory.tsv" ;;
+  esac
+  [ "$mgr" = pkg ] || [ "$mgr" = msi ] || [ "$(inv_field "$name" 4)" = arm ] || [ "$(inv_field "$name" 4)" = x86 ] || die "only arm and x86 guests handled"
+  local pkg; pkg="$(ls -t "$INSTALLERS/$server"/$pkgglob 2>/dev/null | head -1 || true)"
+  [ -n "$pkg" ] || die "no $pkgglob in $INSTALLERS/$server/ — build one (fleetctl package, or $server's UI: Hosts → Add hosts) and save it there"
+  pkg="$(basename "$pkg")"
+  if [ "$(utm_status "$name")" != started ]; then echo "-> starting $name"; "$UTMCTL" start "$name" >/dev/null; fi
+  wait_agent "$name" || die "guest agent on $name didn't answer"
+  if [ $mgr = msi ]; then enroll_windows "$name" "$server" "$pkg"; return; fi
+  # hostname = VM name (vm check matches on it); clones start with their golden's hostname
+  if is_macos "$name"; then
+    cmd_exec "$name" "scutil --set ComputerName $name; scutil --set LocalHostName $name; scutil --set HostName $name" >/dev/null
+  else
+    cmd_exec "$name" "hostnamectl set-hostname $name && grep -q ' $name\\b' /etc/hosts || echo '127.0.1.1 $name' >> /etc/hosts" >/dev/null
+  fi
+  echo "-> $name: hostname set; removing any existing fleetd, installing $server/$pkg"
+  local rm_cmd in_cmd
+  if [ $mgr = pkg ]; then   # steps from fleet/it-and-security/lib/macos/scripts/uninstall-fleetd-macos.sh
+    local ip; ip="$(vm_ip "$name")"
+    scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes \
+      "$INSTALLERS/$server/$pkg" "$GUEST@$ip:/tmp/vm-enroll.pkg" || die "couldn't copy $pkg to $name"
+    cmd_exec "$name" "set -e
+launchctl bootout system/com.fleetdm.orbit 2>/dev/null || true
+pkill fleet-desktop 2>/dev/null || true
+rm -rf /Library/LaunchDaemons/com.fleetdm.orbit.plist /var/lib/orbit /usr/local/bin/orbit /var/log/orbit /opt/orbit
+pkgutil --forget com.fleetdm.orbit.base.pkg >/dev/null 2>&1 || true
+installer -pkg /tmp/vm-enroll.pkg -target / >/var/log/vm-enroll.log 2>&1 || { tail -20 /var/log/vm-enroll.log; exit 1; }
+for i in \$(seq 1 30); do launchctl print system/com.fleetdm.orbit >/dev/null 2>&1 && break; sleep 2; done
+launchctl print system/com.fleetdm.orbit | awk '/state =/ {print \"orbit \" \$0; exit}'
+/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:ORBIT_FLEET_URL' /Library/LaunchDaemons/com.fleetdm.orbit.plist
+rm -f /tmp/vm-enroll.pkg" | sed 's/^/   /'
+    set_inv_field "$name" 6 "$server"
+    echo "-> inventory: $name enrolled to $server. Give it a minute, then: vm check $server"
+    return
+  fi
+  if [ $mgr = apt ]; then
+    rm_cmd='DEBIAN_FRONTEND=noninteractive apt-get purge -y -q fleet-osquery >/dev/null 2>&1 || true'
+    in_cmd="DEBIAN_FRONTEND=noninteractive apt-get install -y -q /mnt/installers/$server/$pkg"
+  else
+    rm_cmd='dnf remove -y -q fleet-osquery >/dev/null 2>&1 || true'
+    in_cmd="dnf install -y -q /mnt/installers/$server/$pkg"
+  fi
+  cmd_exec "$name" "set -e
+mountpoint -q /mnt/installers || mount /mnt/installers
+systemctl stop orbit 2>/dev/null || true
+$rm_cmd
+rm -rf /opt/orbit /etc/default/orbit   # old enroll secret, node keys and TUF state; otherwise orbit keeps the old server
+$in_cmd >/var/log/vm-enroll.log 2>&1 || { tail -20 /var/log/vm-enroll.log; exit 1; }
+for i in \$(seq 1 30); do systemctl is-active -q orbit && break; sleep 2; done
+systemctl is-active orbit
+grep -o 'ORBIT_FLEET_URL=.*' /etc/default/orbit" | sed 's/^/   /'
+  set_inv_field "$name" 6 "$server"
+  echo "-> inventory: $name enrolled to $server. Give it a minute, then: vm check $server"
+}
+
+enroll_windows() { # name server pkg — over SSH (OpenSSH server set up in the golden)
+  local name="$1" server="$2" pkg="$3" ip
+  wait_ssh "$name" || die "no SSH on $name"
+  ip="$(vm_ip "$name")"
+  local cur; cur="$(vm_ssh "$name" 'hostname' | tr -d '\r' | tr 'A-Z' 'a-z')"
+  if [ "$cur" != "$name" ]; then   # Windows applies a rename only after a reboot
+    echo "-> $name: renaming guest ($cur → $name) and rebooting"
+    vm_ssh "$name" "powershell -NoProfile -Command \"Rename-Computer -NewName $name -Force; shutdown /r /t 2\"" >/dev/null 2>&1 || true
+    sleep 20; wait_ssh "$name" || die "$name didn't come back after the rename"
+  fi
+  echo "-> $name: removing any existing fleetd, installing $server/$pkg"
+  scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes \
+    "$INSTALLERS/$server/$pkg" "$GUEST@$(vm_ip "$name"):C:/Windows/Temp/vm-enroll.msi" || die "couldn't copy $pkg to $name"
+  mkdir -p "$VM_DATA/scratch"
+  cat > "$VM_DATA/scratch/vm-enroll-$name.ps1" <<'PS'
+$ErrorActionPreference = 'Continue'
+Get-CimInstance Win32_Product -Filter "Name LIKE 'Fleet osquery%'" | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Uninstall | Out-Null }
+Remove-Item -Recurse -Force 'C:\Program Files\Orbit' -ErrorAction SilentlyContinue   # old enroll secret, node keys, TUF state
+$p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i C:\Windows\Temp\vm-enroll.msi /qn /norestart /l*v C:\Windows\Temp\vm-enroll.log'
+if ($p.ExitCode -ne 0) { "msiexec exit $($p.ExitCode); see C:\Windows\Temp\vm-enroll.log"; exit 1 }
+for ($i = 0; $i -lt 30 -and (Get-Service 'Fleet osquery' -ErrorAction SilentlyContinue).Status -ne 'Running'; $i++) { Start-Sleep 2 }
+'orbit service: ' + (Get-Service 'Fleet osquery' -ErrorAction SilentlyContinue).Status
+Remove-Item C:\Windows\Temp\vm-enroll.msi, C:\Windows\Temp\vm-enroll.ps1 -Force -ErrorAction SilentlyContinue
+PS
+  scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes \
+    "$VM_DATA/scratch/vm-enroll-$name.ps1" "$GUEST@$(vm_ip "$name"):C:/Windows/Temp/vm-enroll.ps1"
+  rm -f "$VM_DATA/scratch/vm-enroll-$name.ps1"
+  vm_ssh "$name" 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\vm-enroll.ps1' | tr -d '\r' | sed 's/^/   /'
+  set_inv_field "$name" 6 "$server"
+  echo "-> inventory: $name enrolled to $server. Give it a minute, then: vm check $server"
+}
+
+cmd_install() { # server — enroll all running hosts to it, in parallel, output prefixed with the VM name
+  [ $# -eq 1 ] || die "usage: vm install <instance>   (instances: $INSTANCES)"
+  local server="$1"; need_instance "$server"
+  need_utm
+  local names; names="${VM_INSTALL_ONLY:-$(running_hosts)}"
+  [ -n "$names" ] || { echo "no test hosts are running (vm up first)"; return 0; }
+  echo "-> installing $server's fleetd on: $(echo $names)"
+  local tmp; tmp="$(mktemp -d)"
+  # SSH guests (macOS, Windows) run in parallel. Guest-agent guests (Linux) queue one after another in one
+  # background job: UTM rejects concurrent guest-agent sessions from separate osascript processes (error -600).
+  local agent_q=""
+  for n in $names; do
+    case "$(inv_field "$n" 3)" in
+      mac*|win*) ( "$0" enroll "$n" "$server" 2>&1; echo $? > "$tmp/$n" ) | sed -u "s/^/[$n] /" & ;;
+      *) agent_q="$agent_q $n" ;;
+    esac
+  done
+  if [ -n "$agent_q" ]; then
+    ( for n in $agent_q; do ( "$0" enroll "$n" "$server" 2>&1; echo $? > "$tmp/$n" ) | sed -u "s/^/[$n] /"; done ) &
+  fi
+  wait
+  local ok="" failed=""
+  for n in $names; do [ "$(cat "$tmp/$n" 2>/dev/null)" = 0 ] && ok="$ok $n" || failed="$failed $n"; done
+  rm -rf "$tmp"
+  echo
+  [ -n "$ok" ] && echo "-> enrolled to $server:$ok"
+  [ -n "$failed" ] && { echo "-> FAILED:$failed (see the lines tagged with their names above)"; return 1; }
+  echo "   Give fleetd a minute, then: vm check $server"
+}
+
+cmd_rename() {
+  [ $# -eq 2 ] || die "usage: vm rename <old> <new>"
+  local old="$1" new="$2"
+  need_utm
+  inv_has "$old" || die "'$old' not in inventory"
+  inv_has "$new" && die "'$new' already in inventory"
+  valid_name "$new" || die "name must be lowercase a-z 0-9 -, max 15 chars"
+  local role ob nb; role="$(inv_field "$old" 2)"; ob="$(bundle_path "$old")"
+  [ "$role" = golden ] && nb="$VM_DATA/golden/$new.utm" || nb="$VM_DATA/hosts/$new.utm"
+  [ -e "$nb" ] && die "$nb already exists"
+  if [ "$role" = host ]; then   # hostname = VM name; change it in the guest first
+    if [ "$(utm_status "$old")" != started ]; then "$UTMCTL" start "$old" >/dev/null; fi
+    wait_agent "$old" || die "guest agent on $old didn't answer"
+    local out
+    if is_macos "$old"; then
+      out="$(cmd_exec "$old" "scutil --set ComputerName $new && scutil --set LocalHostName $new && scutil --set HostName $new && scutil --get LocalHostName")"
+    else
+      out="$(cmd_exec "$old" "hostnamectl set-hostname $new && sed -i 's/\\b$old\\b/$new/g' /etc/hosts && hostname")"
+    fi
+    [ "$(printf '%s' "$out" | tr -d '[:space:]')" = "$new" ] || die "couldn't set guest hostname (nothing renamed): $out"
+    echo "   guest hostname: $new"
+  fi
+  [ "$(utm_status "$old")" = stopped ] || shutdown_vms "$old"
+  # UTM doesn't follow a moved bundle, and re-opening it while the old entry exists gets it a NEW UUID
+  # (= new hardware UUID = a new host in Fleet). So the old entry has to be removed first, by hand:
+  # utmctl delete would erase the files.
+  echo "-> In UTM, right-click '$old' → Remove (NOT Delete). Press Enter when done."
+  read -r _
+  "$UTMCTL" status "$old" >/dev/null 2>&1 && die "'$old' is still in UTM; remove it and re-run (guest hostname is already '$new')"
+  /usr/libexec/PlistBuddy -c "Set :Information:Name $new" "$ob/config.plist"
+  mv "$ob" "$nb"
+  utm_register "$nb"
+  set_inv_field "$old" 1 "$new"
+  if login_has "$old"; then
+    awk -F'|' -v OFS='|' -v o="$old" -v n="$new" '{v=$2; gsub(/^ +| +$/,"",v)} v==o {$2=" " n " "} {print}' "$LOGINS" > "$LOGINS.tmp" && cat "$LOGINS.tmp" > "$LOGINS" && rm "$LOGINS.tmp"
+  fi
+  sleep 2
+  echo "-> renamed $old → $new (UTM: $(utm_status "$new"), UUID unchanged: $(/usr/libexec/PlistBuddy -c 'Print :Information:UUID' "$nb/config.plist"))"
+}
+
+cmd_status() {
+  printf '%-16s %-6s %-7s %-10s %s\n' NAME SERVER ACTIVE UTM IP
+  inv_rows | awk -F'\t' '$2=="host" {print $1"\t"$6"\t"($9=="no"?"parked":"yes")}' | while IFS=$'\t' read -r n srv act; do
+    st="$(utm_status "$n")"; ip="-"; [ "$st" = started ] && ip="$(vm_ip "$n")"
+    printf '%-16s %-6s %-7s %-10s %s\n' "$n" "$srv" "$act" "$st" "${ip:--}"
+  done
+}
+
+cmd_up() {
+  need_utm
+  local names; names="$(active_hosts "$@")"
+  [ -n "$names" ] || die "no active hosts match '${*:-all}' (vm status)"
+  local macs=0 n
+  for n in $names; do is_macos "$n" && macs=$((macs + 1)); done
+  [ "$macs" -gt 2 ] && echo "warning: $macs macOS hosts selected; Apple allows only 2 running at once (park one: vm park <name>)"
+  for n in $names; do
+    st="$(utm_status "$n")"
+    case "$st" in
+      started) echo "   $n already running" ;;
+      paused)  echo "-> resuming $n"; "$UTMCTL" start "$n" >/dev/null ;;
+      stopped) echo "-> starting $n"; "$UTMCTL" start "$n" >/dev/null ;;
+      *)       echo "   skipping $n (UTM status: $st)" ;;
+    esac
+  done
+  echo "-> waiting up to 2 min for guest agents to report IPs"
+  local t=0 pending
+  while [ $t -lt 120 ]; do
+    pending=""; for n in $names; do [ -n "$(vm_ip "$n")" ] || pending="$pending $n"; done
+    [ -z "$pending" ] && break
+    sleep 5; t=$((t + 5))
+  done
+  cmd_status
+}
+
+cmd_down() {
+  need_utm
+  shutdown_vms $(running_hosts "$@")
+}
+
+cmd_park() { # park|unpark name
+  local mode="$1" name="${2:-}"
+  [ -n "$name" ] || die "usage: vm $mode <name>"
+  [ "$(inv_field "$name" 2)" = host ] || die "'$name' isn't a host in inventory.tsv"
+  local val; [ "$mode" = park ] && val=no || val=yes
+  { head -1 "$INV"; inv_rows | awk -F'\t' -v OFS='\t' -v n="$name" -v v="$val" '$1==n {$9=v} {print}'; } > "$INV.tmp" && mv "$INV.tmp" "$INV"
+  echo "-> $name: $([ $val = no ] && echo "parked (vm up skips it)" || echo "active (vm up starts it)")"
+}
+
+cmd_clone() {
+  [ $# -ge 2 ] || die "usage: vm clone <golden> <name> [purpose...]   (then: vm enroll <name> <instance>)"
+  local golden="$1" name="$2" server="-"; shift 2
+  local purpose="${*:--}"
+  need_utm
+  [ "$(inv_field "$golden" 2)" = golden ] || die "'$golden' isn't a golden image in inventory.tsv"
+  valid_name "$name" || die "name must be lowercase a-z 0-9 -, max 15 chars (it becomes the guest hostname)"
+  inv_has "$name" && die "'$name' already in inventory"
+  local src="$VM_DATA/golden/$golden.utm" dst="$VM_DATA/hosts/$name.utm"
+  [ -d "$src" ] || die "missing $src"
+  [ -e "$dst" ] && die "$dst already exists"
+  st="$(utm_status "$golden")"
+  case "$st" in stopped|not-in-utm) ;; *) die "stop '$golden' first (status: $st)" ;; esac
+
+  echo "-> APFS clone $golden -> hosts/$name.utm"
+  mkdir -p "$VM_DATA/hosts"
+  cp -cR "$src" "$dst"
+  patch_identity "$dst" "$name" "$(inv_field "$golden" 5)"
+  printf '%s\thost\t%s\t%s\t%s\t%s\t%s\t%s\tyes\n' "$name" "$(inv_field "$golden" 3)" "$(inv_field "$golden" 4)" \
+    "$(inv_field "$golden" 5)" "$server" "$purpose" "$(date +%F)" >> "$INV"
+  login_add "$name" "$(login_field "$golden" 1)" "$(login_field "$golden" 2)" "clone of $golden"
+  utm_register "$dst"
+  # shared folders are tracked per VM UUID in UTM, so the clone needs its own. Not for Apple-backend VMs:
+  # UTM only accepts a folder picked in its UI there (a scripted one stops the VM from starting); vm enroll uses scp.
+  if [ "$(inv_field "$golden" 5)" = apple ]; then
+    osascript -e "tell application \"UTM\" to update registry of virtual machine named \"$name\" with {}" >/dev/null 2>&1 || true
+  else osascript -e "tell application \"UTM\" to update registry of virtual machine named \"$name\" with {POSIX file \"$INSTALLERS\"}" >/dev/null \
+    || echo "   (couldn't attach $INSTALLERS as shared folder; set it in UTM → $name → Sharing)"
+  fi
+  echo "-> registered in UTM, installers folder shared. Next: vm enroll $name <instance>"
+}
+
+cmd_golden() {
+  [ $# -ge 1 ] || die "usage: vm golden <name> [os arch purpose user password]   (the VM's name in UTM; rename it there first if needed)"
+  local name="$1"
+  need_utm
+  valid_name "$name" || die "name must be lowercase a-z 0-9 -, max 15 chars"
+  inv_has "$name" && die "'$name' already in inventory"
+  local dst="$VM_DATA/golden/$name.utm"
+  local st; st="$(utm_status "$name")"
+  [ "$st" = stopped ] || die "'$name' must exist in UTM and be stopped (status: $st)"
+  [ -e "$dst" ] && die "$dst already exists"
+  local backend os arch
+  os="${2:-}"; arch="${3:-}"; purpose="${4:-}"
+  [ -n "$os" ]      || read -r -p "os (e.g. macos26, win11, ubuntu24, fedora44): " os
+  [ -n "$arch" ]    || read -r -p "arch (arm|x86): " arch
+  [ -n "$purpose" ] || read -r -p "purpose: " purpose
+  local luser="${5:-}" lpass="${6:-}"
+  login_has "$name" || {
+    [ -n "$luser" ] || read -r -p "guest login user: " luser
+    [ -n "$lpass" ] || read -r -p "guest login password: " lpass
+  }
+  # macOS blocks reading UTM's private library, so let UTM export the bundle here, then drop its library copy
+  mkdir -p "$VM_DATA/golden"
+  echo "-> exporting from UTM's library (copies the disk; can take a minute)"
+  osascript -e "tell application \"UTM\" to export virtual machine named \"$name\" to POSIX file \"$dst\"" \
+    || die "export failed"
+  [ -f "$dst/config.plist" ] || die "export didn't produce $dst"
+  backend="$(/usr/libexec/PlistBuddy -c 'Print :Backend' "$dst/config.plist" 2>/dev/null | tr 'A-Z' 'a-z')"
+  "$UTMCTL" delete "$name" >/dev/null   # removes UTM's library copy only; ours is in golden/
+  printf '%s\tgolden\t%s\t%s\t%s\t-\t%s\t%s\t-\n' "$name" "$os" "$arch" "${backend:-qemu}" "${purpose:--}" "$(date +%F)" >> "$INV"
+  login_add "$name" "$luser" "$lpass" "golden"
+  utm_register "$dst"
+  echo "-> golden/$name.utm registered. Don't enroll it; clone it with: vm clone $name <name>, then vm enroll <name> <instance>"
+}
+
+cmd_rm() {
+  [ $# -eq 1 ] || die "usage: vm rm <name>"
+  local name="$1" b; b="$(bundle_path "$name")"
+  [ -n "$b" ] || die "'$name' not in inventory"
+  if [ "$(inv_field "$name" 2)" = golden ] && inv_rows | awk -F'\t' '$2=="host"' | grep -q .; then
+    echo "note: clones share blocks with this golden; removing it frees less than its size suggests"
+  fi
+  [ "$(utm_status "$name")" = stopped ] || shutdown_vms "$name"
+  [ -d "$b" ] && mv "$b" "$HOME/.Trash/$name-$(date +%s).utm"
+  { head -1 "$INV"; inv_rows | awk -F'\t' -v n="$name" '$1!=n'; } > "$INV.tmp" && mv "$INV.tmp" "$INV"
+  login_del "$name"
+  echo "-> moved to Trash and dropped from inventory. In UTM, right-click '$name' -> Remove if it's still listed."
+  echo "   If it was enrolled, delete the host in Fleet too (Hosts -> $name -> Delete)."
+}
+
+cmd_config() {
+  if [ $# -ge 1 ]; then
+    [ "$1" = LAB_ENV ] && { echo "$LAB_ENV"; return; }
+    case " $CFG_KEYS " in *" $1 "*) cfg "$1"; echo ;; *) die "'$1' isn't set in $LAB_ENV" ;; esac
+    return
+  fi
+  echo "LAB_ENV=$LAB_ENV"
+  local k; for k in $CFG_KEYS; do echo "$k=$(cfg "$k")"; done
+}
+
+cmd_doctor() {
+  local bad=0
+  local g="" r="" y="" z=""; [ -t 1 ] && { g=$'\033[32m'; r=$'\033[31m'; y=$'\033[33m'; z=$'\033[0m'; }
+  ok()   { printf '  %s✓%s %s\n' "$g" "$z" "$1"; }
+  no()   { printf '  %s✗%s %s\n      fix: %s\n' "$r" "$z" "$1" "$2"; bad=1; }
+  meh()  { printf '  %s-%s %s\n' "$y" "$z" "$1"; }
+  find_config
+  if [ -z "$LAB_ENV" ]; then printf '  %s✗%s lab.env not found\n' "$r" "$z"; config_hint | sed 's/^/      /'; return 1; fi
+  ( load_config ) || { no "lab.env unreadable: $LAB_ENV" "see the error above"; return 1; }
+  load_config
+  ok "lab.env: $LAB_ENV"
+  local app="${UTMCTL%/Contents/MacOS/utmctl}"
+  if [ -x "$UTMCTL" ]; then
+    ok "UTM $(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?') ($app)"
+    local err; if err="$("$UTMCTL" list 2>&1 >/dev/null)"; then ok "utmctl can talk to UTM (Automation permission)"
+    else no "utmctl list failed: ${err:-no output}" "System Settings → Privacy & Security → Automation: allow your terminal to control UTM"; fi
+  else no "no utmctl at $UTMCTL" "brew install --cask utm (tested with UTM 5.0), or fix UTMCTL in lab.env"; fi
+  if xcode-select -p >/dev/null 2>&1; then
+    /usr/bin/python3 -c 'import curses, plistlib' >/dev/null 2>&1 && ok "python3 ($(/usr/bin/python3 -V 2>&1))" \
+      || no "/usr/bin/python3 doesn't run" "xcode-select --install"
+    swift --version >/dev/null 2>&1 && ok "swift (clones of Apple-backend VMs)" || no "swift doesn't run" "xcode-select --install"
+  else no "Xcode Command Line Tools missing (python3, swift)" "xcode-select --install"; fi
+  command -v jq >/dev/null && ok "jq" || no "jq not found" "brew install jq"
+  local s fc ctx
+  for s in $INSTANCES; do
+    fc="$(inst_cfg "$s" FLEETCTL)"; ctx="$(inst_cfg "$s" CONTEXT)"
+    [ -d "$INSTALLERS/$s" ] && ok "$s: installers folder $INSTALLERS/$s" \
+      || no "no installers folder $INSTALLERS/$s" "mkdir -p '$INSTALLERS/$s' and save $s's fleetd packages there"
+    if [ ! -x "$fc" ]; then no "$s: no fleetctl ($fc)" "install fleetctl (npm i -g fleetctl) or set INSTANCE_${s}_FLEETCTL"; continue; fi
+    if "$fc" get config --context "$ctx" >/dev/null 2>&1; then ok "$s: fleetctl context '$ctx' reaches the server"
+    else no "$s: fleetctl get config --context $ctx failed" "fleetctl config set --context $ctx --address <url>; fleetctl login --context $ctx"; fi
+  done
+  if [ -f "$KEY" ] && [ -f "$KEY.pub" ]; then ok "SSH key $KEY (+ .pub)"
+  else no "SSH key $KEY or $KEY.pub missing" "ssh-keygen -t ed25519 -N '' -f '$KEY' (then put the .pub in your goldens)"; fi
+  [ -d "$VM_DATA" ] && ok "VM_DATA $VM_DATA" || no "VM_DATA $VM_DATA doesn't exist" "mkdir -p '$VM_DATA'"
+  [ -f "$INV" ] && ok "inventory $INV ($(tail -n +2 "$INV" | grep -c . || true) VMs)" \
+    || no "no inventory $INV" "head -1 '$TOOL/inventory.example.tsv' > '$INV'"
+  [ -f "$LOGINS" ] && ok "logins $LOGINS" || meh "no $LOGINS yet (vm golden creates it; format: $TOOL/LOGINS.example.md)"
+  command -v vm >/dev/null && ok "vm on PATH ($(command -v vm))" || meh "vm isn't on PATH: ln -s '$TOOL/bin/vm' /usr/local/bin/vm"
+  [ $bad = 0 ] && echo "All good." || return 1
+}
+
+case "${1:-}" in
+  -h|--help|help) usage; exit 0 ;;
+  doctor) cmd_doctor; exit $? ;;
+esac
+load_config
+[ "${1:-}" = config ] || need_data
+
+case "${1:-}" in
+  "")     if [ -t 0 ] && [ -t 1 ]; then exec /usr/bin/python3 "$TOOL/bin/vm-tui.py"; else cmd_ls; fi ;;  # interactive view
+  ls)     cmd_ls ;;
+  up)     shift; cmd_up "$@" ;;
+  down)   shift; cmd_down "$@" ;;
+  status) cmd_status ;;
+  park|unpark) need_utm; cmd_park "$1" "${2:-}" ;;
+  check)  shift; cmd_check "$@" ;;
+  clone)  shift; cmd_clone "$@" ;;
+  golden) shift; cmd_golden "$@" ;;
+  rm)     shift; cmd_rm "$@" ;;
+  start)  need_utm; [ $# -ge 2 ] || die "usage: vm start <name>"; "$UTMCTL" start "$2" ;;
+  stop)   need_utm; [ $# -ge 2 ] || die "usage: vm stop <name>"; shutdown_vms "$2" ;;
+  enroll) shift; cmd_enroll "$@" ;;
+  rename) shift; cmd_rename "$@" ;;
+  install) shift; cmd_install "$@" ;;
+  _enroll_some) shift; srv="$1"; shift; VM_INSTALL_ONLY="$*" cmd_install "$srv" ;;   # used by the interactive view
+  exec)   need_utm; [ $# -ge 3 ] || die "usage: vm exec <name> '<cmd>'"; cmd_exec "$2" "$3" ;;
+  ip)     need_utm; [ $# -ge 2 ] || die "usage: vm ip <name>"; vm_ip "$2" ;;   # agent for QEMU guests, DHCP leases for macOS guests
+  config) shift; cmd_config "$@" ;;
+  *) die "unknown command '$1' (vm help)" ;;
+esac

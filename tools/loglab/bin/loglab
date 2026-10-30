@@ -1,0 +1,3402 @@
+#!/usr/bin/env -S python3 -I
+"""loglab — switch where each Fleet lab instance sends its osquery result/status logs and audit logs. See ../README.md.
+
+  loglab                                  interactive view: instances, live vs configured destination, sinks; Enter → switch
+  loglab status [--json]                  instances (up, version, Hangar wiring, configured vs live, restart needed) + sinks
+  loglab path <inst>                      the config file to pass to `fleet serve --config` (created if missing)
+  loglab switch <inst> <dest|default> [--only result,status,audit] [--yes]
+                                          send all log types (result, status, audit) to that destination: writes
+                                          config/<inst>.yml, validated with the instance's own `fleet config_dump`;
+                                          you restart the server (Fleet Hangar or your own fleet serve) to apply.
+                                          --only (advanced) moves just those types and leaves the others where they are
+  loglab test <inst> [--no-write]         live server vs file, Hangar wiring, each destination reachable (+ a marked test
+                                          record unless --no-write), log-writer errors in the server log since start
+  loglab fire <inst> [--status-from <vm>] [--minutes 4] [--keep]
+                                          generate logs now: a temporary global report (60 s, automations on) makes every
+                                          host send result logs, creating/deleting it makes audit events; --status-from
+                                          restarts osquery on that VM for status logs. Watches, then deletes the report.
+  loglab fire <inst> --audit [--minutes 8]
+                                          API-only audit check: create + delete a report that never runs (no hosts
+                                          touched), wait for both activities at the audit destination (≤ ~6 min)
+  loglab fire <inst> --cleanup            delete leftover fire reports (if a run was killed)
+  loglab view <inst> [--type result,status,audit] [--raw] [--from-start] [--grep TEXT]
+                                          stream the logs back from wherever they are going now (Ctrl-C to stop)
+  loglab up|down <receiver|localstack|redpanda|nats|pubsub|splunk|all>
+                                          start/stop a local sink (up also creates the streams/topics for every instance)
+  loglab aws guard install [--dry-run] [--update]|status|run [--all] [--dry-run]|down
+                                          cost safeguards, ONE per AWS account shared by every loglab user: a reaper
+                                          Lambda that deletes expired loglab resources every 15 min (from inside AWS,
+                                          Mac off or not), a monthly budget (email at $5, delete-all at $20) and anomaly
+                                          emails. install leaves an existing guard alone; --update rolls out this reaper
+  loglab aws up [kinesis|firehose|lambda] [--ttl 4h]
+                                          real-AWS resources for kinesis-aws / firehose-aws / lambda-aws; refuses
+                                          without the guard; tagged owner=$LOGLAB_OWNER and expires-at (default 4h, max 24h)
+  loglab aws status|extend <2h>|down [--all] [--include-unowned]|login
+                                          loglab resources in AWS (yours, others', unowned) and when they expire / add
+                                          time / delete yours now (--all: also bucket + roles)
+  loglab show <inst>                      the generated YAML (secrets masked)
+  loglab env <inst>                       the same settings as FLEET_* env rows (alternative to --config)
+  loglab hangar                           one-time Hangar wiring: which Config file each server must point at (n/a
+                                          without Hangar: use `loglab path <inst>` with fleet serve --config)
+  loglab dests                            every destination, what it needs, what it supports
+  Destinations: filesystem stdout webhook splunk splunk-cloud kinesis kinesis-aws firehose firehose-aws lambda-aws
+                pubsub kafkarest nats splunk-local   ("default" = no logging keys: Fleet's built-in filesystem in $TMPDIR, audit off)
+
+Config: lab.env (INSTANCES, INSTANCE_<i>_*, LOGLAB_DATA, LOGLAB_OWNER, HANGAR); see tools/qalab/README.md.
+Only writes its data dir ($LOGLAB_DATA: config/<inst>.yml, sinks/, state/); reads Fleet Hangar's settings.json,
+running.json and server logs if you use Hangar, never restarts a server; docker only on compose project "loglab"
+with memory-capped containers on ports Hangar and ssolab don't use.
+"""
+import base64
+import datetime
+import hashlib
+import hmac
+import json
+import os
+import re
+import secrets
+import shutil
+import socket
+import ssl
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+import xml.etree.ElementTree as ET
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))   # code (committed)
+TOOLS = os.path.dirname(ROOT)
+
+
+def load_lab_env():
+    """KEY=VALUE from $QALAB_ENV, <tools>/qalab/lab.env, or ~/.config/qalab/lab.env (first that exists)."""
+    cands = [os.environ.get("QALAB_ENV"), os.path.join(TOOLS, "qalab", "lab.env"), os.path.expanduser("~/.config/qalab/lab.env")]
+    path = next((p for p in cands if p and os.path.isfile(os.path.expanduser(p))), None)
+    if not path:
+        if sys.argv[1:2] in (["help"], ["-h"], ["--help"]):
+            print(__doc__.strip())
+            sys.exit(0)
+        print("loglab: no lab config. Copy tools/qalab/lab.env.example to tools/qalab/lab.env (or ~/.config/qalab/lab.env, "
+              "or point QALAB_ENV at it) and fill it in.", file=sys.stderr)
+        sys.exit(1)
+    env = {}
+    for line in open(os.path.expanduser(path)).read().splitlines():
+        m = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$", line)
+        if m and not line.lstrip().startswith("#"):
+            v = m.group(2)
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+                v = v[1:-1]
+            env[m.group(1)] = os.path.expanduser(v) if v.startswith("~") else v
+    env["_PATH"] = path
+    return env
+
+
+LAB = load_lab_env()
+DATA = os.path.expanduser(os.environ.get("LOGLAB_DATA") or LAB.get("LOGLAB_DATA", ""))
+if not DATA:
+    print(f"loglab: set LOGLAB_DATA (the folder for loglab's secrets, config files and state) in {LAB['_PATH']}",
+          file=sys.stderr)
+    sys.exit(1)
+OWNER = re.sub(r"[^a-z0-9-]", "", (LAB.get("LOGLAB_OWNER") or os.environ.get("USER") or "").lower())[:16]
+SPLUNK_LICENSE_OK = LAB.get("LOGLAB_ACCEPT_SPLUNK_LICENSE", "0").strip() == "1"
+SPLUNK_LICENSE_URL = "https://www.splunk.com/en_us/legal/splunk-general-terms.html"
+CONFIG_DIR = os.path.join(DATA, "config")
+SINKS = os.path.join(DATA, "sinks")
+STATE = os.path.join(DATA, "state")
+DOCKER_DIR = os.path.join(ROOT, "docker")
+SECRETS = os.path.join(DATA, "SECRETS.env")
+SECRETS_EXAMPLE = os.path.join(ROOT, "SECRETS.env.example")
+CREATED = os.path.join(DATA, "created.txt")
+HISTORY = os.path.join(STATE, "history.log")
+HEC_TOKEN = os.path.join(STATE, "hec.token")
+SPLUNK_ENV = os.path.join(STATE, "splunk.env")   # local Splunk's admin password + HEC token, generated on first use
+RECEIVER_PID = os.path.join(STATE, "receiver.pid")
+RECEIVER_LOG = os.path.join(STATE, "receiver.log")
+FLEET_CONFIG = os.path.expanduser("~/.fleet/config")
+HANGAR_DIR = os.path.expanduser("~/Library/Application Support/com.fleetdm.fleet-hangar")
+HANGAR_LOGS = os.path.expanduser("~/Library/Logs/com.fleetdm.fleet-hangar")
+_hangar = LAB.get("HANGAR", "auto").strip().lower()
+HANGAR = _hangar in ("1", "yes", "true") or (_hangar in ("auto", "") and os.path.isfile(os.path.join(HANGAR_DIR, "settings.json")))
+
+
+def _inst(name):
+    g = lambda k: LAB.get(f"INSTANCE_{name}_{k}", "").strip()
+    hid = g("HANGAR_ID") if HANGAR else ""
+    log = g("SERVER_LOG") or (os.path.join(HANGAR_LOGS, f"fleet-serve-{hid}.log") if hid else "")
+    return dict(context=g("CONTEXT") or name, src=g("SRC"), fleet_bin=g("FLEET_BIN"), server_log=log, server=hid)
+
+
+INSTANCES = {i: _inst(i) for i in LAB.get("INSTANCES", "").split()}
+TYPES = ("result", "status", "audit")
+PROJECT = "loglab"
+HANGAR_PROJECTS = {"fleet", "fleet-s2", "fleet-s3"}   # Hangar's own compose projects: never touch
+
+RECEIVER_PORT = 18200
+LS_URL = "http://127.0.0.1:18566"
+KAFKA_PROXY = "http://127.0.0.1:18082"
+NATS_URL = "nats://127.0.0.1:18422"
+PUBSUB_HOST = "127.0.0.1:18085"
+PUBSUB_PROJECT = "loglab"
+FIREHOSE_BUCKET = "loglab-firehose"
+SPLUNK_HEC = "https://127.0.0.1:18088"
+SPLUNK_MGMT = "https://127.0.0.1:18089"
+SPLUNK_WEB = "http://127.0.0.1:18000"
+LOCAL_AWS = dict(key="test", secret="test", token="", region="us-east-1", endpoint=LS_URL)
+
+# service -> host port, memory cap (MB, from docker-compose.yml), what it backs
+SERVICES = {
+    "receiver": dict(port=RECEIVER_PORT, mem=0, what="webhook + Splunk HEC mock (python, not docker)"),
+    "localstack": dict(port=18566, mem=900, what="Kinesis Data Streams + Firehose→S3 (LocalStack 4.5)"),
+    "redpanda": dict(port=18082, mem=700, what="Kafka + REST proxy (Redpanda)"),
+    "nats": dict(port=18422, mem=96, what="NATS server"),
+    "pubsub": dict(port=18085, mem=512, what="Google Pub/Sub emulator"),
+    "splunk": dict(port=18088, mem=3072, what="Splunk Enterprise, Free license (HEC :18088, web :18000)"),
+}
+
+ALL = TYPES
+DESTS = {
+    "filesystem": dict(name="Filesystem", plugin="filesystem", service=None, types=ALL,
+                       note="files under $LOGLAB_DATA/sinks/<inst>/filesystem/ (one folder per instance)"),
+    "stdout": dict(name="Stdout", plugin="stdout", service=None, types=ALL,
+                   note="JSON lines in the server log (INSTANCE_<i>_SERVER_LOG; Hangar: fleet-serve-sN.log)"),
+    "webhook": dict(name="Webhook", plugin="webhook", service="receiver", types=("result", "status"),
+                    note="local receiver :18200; Fleet has no audit webhook URL"),
+    "splunk": dict(name="Splunk HEC (local mock)", plugin="splunk", service="receiver", types=ALL, section="splunk",
+                   note="HEC-compatible endpoint in the local receiver (token in state/hec.token)"),
+    "splunk-local": dict(name="Splunk Enterprise (local docker)", plugin="splunk", service="splunk", types=ALL,
+                         section="splunk", note="real Splunk; index main, source fleet-<inst>; web UI :18000"),
+    "splunk-cloud": dict(name="Splunk HEC (real)", plugin="splunk", service="cloud", types=ALL, section="splunk",
+                         secrets=["SPLUNK_URL", "SPLUNK_TOKEN"], note="your Splunk/Splunk Cloud HEC; view logs in Splunk"),
+    "kinesis": dict(name="Kinesis Data Streams (LocalStack)", plugin="kinesis", service="localstack", types=ALL,
+                    section="kinesis", note="streams fleet-<inst>-<type>"),
+    "kinesis-aws": dict(name="Kinesis Data Streams (AWS)", plugin="kinesis", service="cloud", types=ALL,
+                        section="kinesis", secrets=["AWS_REGION"], note="streams <KINESIS_STREAM_PREFIX><inst>-<type>"),
+    "firehose": dict(name="Firehose → S3 (LocalStack)", plugin="firehose", service="localstack", types=ALL,
+                     section="firehose", note="delivery streams fleet-<inst>-<type> → s3://loglab-firehose/<inst>/<type>/"),
+    "firehose-aws": dict(name="Firehose (AWS)", plugin="firehose", service="cloud", types=ALL, section="firehose",
+                         secrets=["AWS_REGION"], note="viewable (bucket from `loglab aws up`, or FIREHOSE_S3_BUCKET); also the Snowflake path"),
+    "lambda-aws": dict(name="Lambda (AWS)", plugin="lambda", service="cloud", types=ALL, section="lambda",
+                       secrets=["AWS_REGION"], note="one invocation per log line; no local emulator (no endpoint_url)"),
+    "pubsub": dict(name="Google Pub/Sub (emulator)", plugin="pubsub", service="pubsub", types=ALL, section="pubsub",
+                   env={"PUBSUB_EMULATOR_HOST": PUBSUB_HOST},
+                   note="needs env PUBSUB_EMULATOR_HOST on fleet serve (config files can't set it)"),
+    "kafkarest": dict(name="Kafka REST proxy (Redpanda)", plugin="kafkarest", service="redpanda", types=ALL,
+                      section="kafkarest", note="topics fleet-<inst>-<type>, JSON v2 content type"),
+    "nats": dict(name="NATS", plugin="nats", service="nats", types=ALL, section="nats",
+                 note="subjects fleet.<inst>.<type>"),
+}
+# Plugins that contact the destination while fleet serve starts: a missing stream/topic/server = server exits.
+STARTUP_CHECKED = {"kinesis", "firehose", "kafkarest", "nats"}
+LOG_ENV_PREFIXES = ("FLEET_OSQUERY_STATUS_LOG_PLUGIN", "FLEET_OSQUERY_RESULT_LOG_PLUGIN", "FLEET_ACTIVITY_ENABLE_AUDIT_LOG",
+                    "FLEET_ACTIVITY_AUDIT_LOG_PLUGIN", "FLEET_FILESYSTEM_", "FLEET_WEBHOOK_", "FLEET_FIREHOSE_",
+                    "FLEET_KINESIS_", "FLEET_LAMBDA_", "FLEET_PUBSUB_", "FLEET_KAFKAREST_", "FLEET_NATS_", "FLEET_SPLUNK_")
+
+
+# ---------------------------------------------------------------- small helpers
+class Fail(Exception):
+    pass
+
+
+def die(msg):
+    print(f"loglab: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+NEED_HINT = {"docker": "install Docker Desktop (https://www.docker.com/products/docker-desktop/) and start it",
+             "aws": "brew install awscli"}
+
+
+def need(cmd):
+    if not shutil.which(cmd):
+        raise Fail(f"`{cmd}` isn't on PATH — {NEED_HINT.get(cmd, 'install it first')}")
+
+
+C = sys.stdout.isatty()
+def col(s, code):
+    return f"\033[{code}m{s}\033[0m" if C else s
+ok_ = lambda s: col(s, "32")
+warn_ = lambda s: col(s, "33")
+bad_ = lambda s: col(s, "31")
+dim_ = lambda s: col(s, "2")
+bold_ = lambda s: col(s, "1")
+TYPE_COLOR = {"result": "36", "status": "35", "audit": "33", "test": "32"}
+
+
+def ask(prompt, default=""):
+    try:
+        v = input(f"{prompt}{f' [{default}]' if default else ''}: ").strip()
+    except EOFError:
+        v = ""
+    return v or default
+
+
+def yes(prompt, default=False):
+    v = ask(f"{prompt} [{'Y/n' if default else 'y/N'}]").lower()
+    return default if not v else v.startswith("y")
+
+
+def now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log_history(line):
+    os.makedirs(STATE, exist_ok=True)
+    with open(HISTORY, "a") as f:
+        f.write(f"{now()}  {line}\n")
+
+
+def record_created(line):
+    """created.txt lists what loglab made outside its own folder's files, for cleanup. Each line once."""
+    try:
+        have = open(CREATED).read().splitlines()
+    except OSError:
+        have = []
+    if any(l.split("  ", 1)[-1] == line for l in have):
+        return
+    with open(CREATED, "a") as f:
+        f.write(f"{now()}  {line}\n")
+
+
+def ago(ts):
+    if not ts:
+        return "never"
+    s = int(time.time() - ts)
+    return f"{s}s ago" if s < 120 else f"{s // 60}m ago" if s < 7200 else f"{s // 3600}h ago"
+
+
+def http(method, url, body=None, headers=None, insecure=False, timeout=20):
+    """-> (status, bytes). Never raises for HTTP errors; raises Fail for network errors."""
+    hdrs = dict(headers or {})
+    data = None
+    if body is not None:
+        data = body if isinstance(body, bytes) else json.dumps(body).encode()
+        hdrs.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    ctx = ssl._create_unverified_context() if insecure else ssl.create_default_context()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except Exception as e:
+        raise Fail(f"{url}: {getattr(e, 'reason', e)}")
+
+
+def jload(b):
+    try:
+        return json.loads(b) if b else {}
+    except ValueError:
+        return {"raw": b[:300].decode("utf-8", "replace") if isinstance(b, bytes) else str(b)[:300]}
+
+
+def test_record(inst, typ):
+    return {"loglab_test": True, "instance": inst, "type": typ, "sent_at": datetime.datetime.now().astimezone().isoformat(),
+            "note": "loglab test record - not from Fleet"}
+
+
+def need_inst(inst):
+    if not INSTANCES:
+        die(f"no instances: set INSTANCES and INSTANCE_<name>_CONTEXT in {LAB['_PATH']}")
+    if inst not in INSTANCES:
+        die(f"instance must be one of: {', '.join(INSTANCES)}")
+
+
+def parse_types(s):
+    ts = [t.strip() for t in s.split(",") if t.strip()]
+    bad = [t for t in ts if t not in TYPES]
+    if bad or not ts:
+        die(f"--only/--type takes a comma list of: {', '.join(TYPES)}")
+    return ts
+
+
+def opt(args, name, default=None):
+    if name in args:
+        i = args.index(name)
+        if i + 1 >= len(args):
+            die(f"{name} needs a value")
+        v = args[i + 1]
+        del args[i:i + 2]
+        return v
+    return default
+
+
+def flag(args, name):
+    if name in args:
+        args.remove(name)
+        return True
+    return False
+
+
+# ---------------------------------------------------------------- secrets (real cloud destinations)
+
+
+def read_secrets():
+    if not os.path.exists(SECRETS):
+        os.makedirs(DATA, exist_ok=True)
+        fd = os.open(SECRETS, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f, open(SECRETS_EXAMPLE) as ex:
+            f.write(ex.read())
+    out = {}
+    for line in open(SECRETS).read().splitlines():
+        m = re.match(r"^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$", line)
+        if m and not line.lstrip().startswith("#"):
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def dest_env(dest):
+    """Env vars fleet serve needs for a destination (Hangar env rows: one-time, harmless while unused)."""
+    env = dict(DESTS[dest].get("env", {}))
+    if dest.endswith("-aws"):
+        s = read_secrets()
+        if s.get("AWS_PROFILE") and not s.get("AWS_ACCESS_KEY_ID"):
+            env["AWS_PROFILE"] = s["AWS_PROFILE"]   # Fleet's SDK reads the SSO profile + token cache itself
+    return env
+
+
+def missing_secrets(dest):
+    s = read_secrets()
+    return [k for k in DESTS[dest].get("secrets", []) if not s.get(k)]
+
+
+def hec_token():
+    os.makedirs(STATE, exist_ok=True)
+    if not os.path.exists(HEC_TOKEN):
+        with open(HEC_TOKEN, "w") as f:
+            f.write(secrets.token_hex(16) + "\n")
+        os.chmod(HEC_TOKEN, 0o600)
+    return open(HEC_TOKEN).read().strip()
+
+
+# ---------------------------------------------------------------- Fleet instances
+def fleet_ctx(inst):
+    """address + token for the instance's fleetctl context, read from ~/.fleet/config (any indentation)."""
+    ctx = INSTANCES[inst]["context"]
+    addr = tok = cur = None
+    try:
+        lines = open(FLEET_CONFIG).read().splitlines()
+    except OSError:
+        raise Fail(f"no {FLEET_CONFIG} (fleetctl login --context {ctx})")
+    ctx_indent = None
+    for line in lines:
+        m = re.match(r"^(\s+)([A-Za-z0-9_.-]+):\s*$", line)
+        if m and line.strip() != "contexts:" and (ctx_indent is None or len(m.group(1)) <= ctx_indent):
+            ctx_indent, cur = len(m.group(1)), m.group(2)
+            continue
+        if cur == ctx:
+            m = re.match(r"^\s+address:\s*(\S*)", line)
+            if m:
+                addr = m.group(1)
+            m = re.match(r"^\s+token:\s*(\S*)", line)
+            if m:
+                tok = m.group(1)
+    if not addr:
+        raise Fail(f"no fleetctl context '{ctx}' in {FLEET_CONFIG}")
+    return addr.strip("'\"").rstrip("/"), (tok or "").strip("'\"")
+
+
+def fleet_api(inst, method, path, body=None, timeout=15):
+    addr, tok = fleet_ctx(inst)
+    st, b = http(method, addr + path, body, headers={"Authorization": f"Bearer {tok}"}, insecure=True, timeout=timeout)
+    return st, jload(b)
+
+
+def live_state(inst):
+    """-> dict(up, version, logging, error). logging = GET /config's `logging` (what the running server uses)."""
+    try:
+        st, js = fleet_api(inst, "GET", "/api/v1/fleet/config")
+        if st != 200:
+            hst, _ = http("GET", fleet_ctx(inst)[0] + "/healthz", insecure=True, timeout=10)
+            if hst != 200:
+                return dict(up=False, error=f"unhealthy (/healthz {hst}, usually its MySQL/Redis stack is down)")
+            return dict(up=False, error=f"GET /config → {st}")
+        _, ver = fleet_api(inst, "GET", "/api/v1/fleet/version")
+        return dict(up=True, version=ver.get("version", "?"), logging=js.get("logging") or {},
+                    license=(js.get("license") or {}).get("tier", "?"))
+    except Fail as e:
+        return dict(up=False, error=str(e).split(": ", 1)[-1])
+
+
+_plugins_cache = {}
+def supported_plugins(inst):
+    """Plugins this instance's source knows (case labels in server/logging/logging.go)."""
+    if inst not in _plugins_cache:
+        try:
+            src = open(os.path.join(INSTANCES[inst]["src"] or "/nonexistent", "server", "logging", "logging.go")).read()
+            _plugins_cache[inst] = set(re.findall(r'case "([a-z]+)":', src))
+        except OSError:
+            _plugins_cache[inst] = set(d["plugin"] for d in DESTS.values())
+    return _plugins_cache[inst]
+
+
+# ---------------------------------------------------------------- Hangar (optional, read-only)
+def uses_hangar(inst):
+    return bool(INSTANCES[inst]["server"])
+
+
+def hangar_settings():
+    try:
+        return json.load(open(os.path.join(HANGAR_DIR, "settings.json")))
+    except (OSError, ValueError):
+        return {}
+
+
+def hangar_server(inst):
+    sid = INSTANCES[inst]["server"]
+    if not sid:
+        return None
+    return next((s for s in hangar_settings().get("servers", []) if s.get("id") == sid), None)
+
+
+def config_path(inst):
+    return os.path.join(CONFIG_DIR, f"{inst}.yml")
+
+
+def hangar_wiring(inst):
+    """-> dict(config_path=Hangar's value, wired=bool, overrides=[enabled FLEET_* log env rows], env={enabled rows}).
+    Without Hangar: hangar=False, wired=None (unknown: loglab can't see fleet serve's flags)."""
+    if not uses_hangar(inst):
+        return dict(hangar=False, config_path=None, wired=None, overrides=[], env={}, name="")
+    srv = hangar_server(inst) or {}
+    fs = srv.get("fleet_serve") or {}
+    cp = (fs.get("config_path") or "").strip()
+    wired = bool(cp) and os.path.realpath(os.path.expanduser(cp)) == os.path.realpath(config_path(inst))
+    env = {e.get("key", "").strip(): e.get("value", "") for e in fs.get("env", []) if e.get("enabled", True)}
+    overrides = sorted(k for k in env if k.startswith(LOG_ENV_PREFIXES))
+    return dict(hangar=True, config_path=cp or None, wired=wired, overrides=overrides, env=env, name=srv.get("name", ""))
+
+
+def hangar_proc(inst):
+    """-> dict(pid, started (epoch), args, with_config=bool) for the running fleet serve, or None."""
+    sid = INSTANCES[inst]["server"]
+    if not sid:
+        return None
+    try:
+        procs = json.load(open(os.path.join(HANGAR_DIR, "running.json")))
+    except (OSError, ValueError):
+        return None
+    p = next((x for x in procs if x.get("id") == f"{sid}:fleet-serve"), None)
+    if not p:
+        return None
+    pid = p.get("pid")
+    try:
+        os.kill(pid, 0)
+    except (OSError, TypeError):
+        return None
+    started = None
+    try:
+        out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True,
+                             env=dict(os.environ, LC_ALL="C")).stdout.strip()
+        started = time.mktime(time.strptime(out, "%a %b %d %H:%M:%S %Y"))
+    except (ValueError, OSError):
+        pass
+    args = p.get("args", [])
+    cfg = args[args.index("--config") + 1] if "--config" in args[:-1] else None
+    with_config = bool(cfg) and os.path.realpath(os.path.join(INSTANCES[inst]["src"], os.path.expanduser(cfg))) \
+        == os.path.realpath(config_path(inst))
+    return dict(pid=pid, started=started, args=args, with_config=with_config)
+
+
+def server_log(inst):
+    return INSTANCES[inst]["server_log"] or None
+
+
+def no_server_log(inst):
+    return (f"loglab can't read {inst}'s stdout: set INSTANCE_{inst}_SERVER_LOG in {LAB['_PATH']} to the file "
+            f"fleet serve's output goes to")
+
+
+def split_log_line(line):
+    """-> (epoch ms or None, stream or None, text). Hangar writes `ms<TAB>stdout|stderr<TAB>text`; a plain
+    `fleet serve > file 2>&1` log is just the text."""
+    parts = line.split("\t", 2) if isinstance(line, str) else line.split(b"\t", 2)
+    if len(parts) == 3 and parts[0].isdigit():
+        st = parts[1].decode() if isinstance(parts[1], bytes) else parts[1]
+        return int(parts[0]), st, parts[2]
+    return None, None, line
+
+
+def tail_lines(path, max_bytes=8 * 2**20):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    lines = data.splitlines()
+    return lines[1:] if size > max_bytes else lines
+
+
+# ---------------------------------------------------------------- selection + config file
+def state_path(inst):
+    return os.path.join(STATE, f"{inst}.json")
+
+
+def load_selection(inst):
+    try:
+        sel = json.load(open(state_path(inst)))
+        return {t: sel.get(t) for t in TYPES}
+    except (OSError, ValueError):
+        return {t: None for t in TYPES}
+
+
+def save_selection(inst, sel):
+    os.makedirs(STATE, exist_ok=True)
+    with open(state_path(inst), "w") as f:
+        json.dump(sel, f, indent=1)
+
+
+def fs_path(inst, typ):
+    return os.path.join(SINKS, inst, "filesystem", f"{typ}.log")
+
+
+def aws_secrets_block(s):
+    out = {"region": s.get("AWS_REGION") or "us-east-1"}
+    if s.get("AWS_ACCESS_KEY_ID"):
+        out["access_key_id"] = s["AWS_ACCESS_KEY_ID"]
+        out["secret_access_key"] = s.get("AWS_SECRET_ACCESS_KEY", "")
+    if s.get("AWS_STS_ASSUME_ROLE_ARN"):
+        out["sts_assume_role_arn"] = s["AWS_STS_ASSUME_ROLE_ARN"]
+        if s.get("AWS_STS_EXTERNAL_ID"):
+            out["sts_external_id"] = s["AWS_STS_EXTERNAL_ID"]
+    return out
+
+
+def target_name(dest, inst, typ):
+    """Stream / topic / subject / function / URL a log type goes to."""
+    s = read_secrets() if dest.endswith(("-aws", "-cloud")) else {}
+    return {
+        "filesystem": lambda: fs_path(inst, typ),
+        "webhook": lambda: f"http://127.0.0.1:{RECEIVER_PORT}/webhook/{inst}/{typ}",
+        "kinesis": lambda: f"fleet-{inst}-{typ}",
+        "kinesis-aws": lambda: f"{name_prefix(s, 'KINESIS_STREAM_PREFIX')}{inst}-{typ}",
+        "firehose": lambda: f"fleet-{inst}-{typ}",
+        "firehose-aws": lambda: f"{name_prefix(s, 'FIREHOSE_STREAM_PREFIX')}{inst}-{typ}",
+        "lambda-aws": lambda: f"{name_prefix(s, 'LAMBDA_FUNCTION_PREFIX')}{inst}-{typ}",
+        "pubsub": lambda: f"fleet-{inst}-{typ}",
+        "kafkarest": lambda: f"fleet-{inst}-{typ}",
+        "nats": lambda: f"fleet.{inst}.{typ}",
+    }.get(dest, lambda: "")()
+
+
+def dest_section(dest, inst, types):
+    """-> (section name or None, {key: value}) for the plugin block this destination needs for these log types."""
+    s = read_secrets() if dest.endswith(("-aws", "-cloud")) else {}
+    per = lambda suffix: {f"{t}_{suffix}": target_name(dest, inst, t) for t in types}
+    if dest == "filesystem":
+        return "filesystem", {f"{t}_log_file": fs_path(inst, t) for t in types}
+    if dest == "stdout":
+        return None, {}
+    if dest == "webhook":
+        return "webhook", {f"{t}_url": target_name(dest, inst, t) for t in types}
+    if dest == "splunk":
+        return "splunk", dict(url=f"http://127.0.0.1:{RECEIVER_PORT}/splunk/{inst}", token=hec_token(),
+                              index=f"fleet-{inst}", source="fleet", source_type="fleet:json")
+    if dest == "splunk-local":
+        return "splunk", dict(url=SPLUNK_HEC, token=splunk_secrets()["hec_token"], index="main",
+                              source=f"fleet-{inst}", source_type="fleet:json", insecure_skip_verify=True)
+    if dest == "splunk-cloud":
+        b = dict(url=s.get("SPLUNK_URL", ""), token=s.get("SPLUNK_TOKEN", ""))
+        for k, sk in (("index", "SPLUNK_INDEX"), ("source", "SPLUNK_SOURCE"), ("source_type", "SPLUNK_SOURCE_TYPE")):
+            if s.get(sk):
+                b[k] = s[sk]
+        if s.get("SPLUNK_INSECURE_SKIP_VERIFY", "").lower() == "true":
+            b["insecure_skip_verify"] = True
+        return "splunk", b
+    if dest in ("kinesis", "firehose"):
+        return dest, dict(region=LOCAL_AWS["region"], endpoint_url=LS_URL, access_key_id="test",
+                          secret_access_key="test", **per("stream"))
+    if dest in ("kinesis-aws", "firehose-aws"):
+        return dest.split("-")[0], dict(aws_secrets_block(s), **per("stream"))
+    if dest == "lambda-aws":
+        return "lambda", dict(aws_secrets_block(s), **per("function"))
+    if dest == "pubsub":
+        return "pubsub", dict(project=PUBSUB_PROJECT, **per("topic"))
+    if dest == "kafkarest":
+        return "kafkarest", dict(proxyhost=KAFKA_PROXY, content_type_value="application/vnd.kafka.json.v2+json",
+                                 timeout=5, **per("topic"))
+    if dest == "nats":
+        return "nats", dict(server=NATS_URL, **per("subject"))
+    raise Fail(f"unknown destination {dest}")
+
+
+def build_config(inst, sel):
+    """-> ordered {section: {key: value}} for a selection {type: dest|None}."""
+    cfg = {}
+    osq = {f"{t}_log_plugin": DESTS[sel[t]]["plugin"] for t in ("status", "result") if sel[t]}
+    if osq:
+        cfg["osquery"] = osq
+    if sel["audit"]:
+        cfg["activity"] = {"enable_audit_log": True, "audit_log_plugin": DESTS[sel["audit"]]["plugin"]}
+    owners = {}
+    for dest in dict.fromkeys(d for d in (sel[t] for t in TYPES) if d):
+        types = [t for t in TYPES if sel[t] == dest]
+        sec, block = dest_section(dest, inst, types)
+        if not sec:
+            continue
+        if sec in owners and owners[sec] != dest:
+            raise Fail(f"{owners[sec]} and {dest} both use Fleet's `{sec}` settings block; one server can't send to both")
+        owners[sec] = dest
+        cfg.setdefault(sec, {}).update(block)
+    return cfg
+
+
+def yaml_scalar(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    return json.dumps(str(v))   # a JSON string is a valid YAML double-quoted scalar
+
+
+SECRET_KEYS = ("token", "secret_access_key", "access_key_id")
+
+
+def render_yaml(inst, sel, cfg, mask=False):
+    lines = [f"# Managed by loglab — `loglab switch {inst} …` rewrites this file.",
+             f"# fleet serve --config points here (Fleet Hangar: Settings → Fleet serve → Config file).",
+             f"# Restart the server after a change. Selection: "
+             + ", ".join(f"{t}={sel[t] or 'default'}" for t in TYPES)]
+    if not cfg:
+        lines.append("# No logging keys: Fleet defaults (filesystem in $TMPDIR, audit log off).")
+        lines.append("{}")
+    for sec, block in cfg.items():
+        lines.append(f"{sec}:")
+        for k, v in block.items():
+            shown = "****" if mask and k in SECRET_KEYS and v and v != "test" else yaml_scalar(v)
+            lines.append(f"  {k}: {shown}")
+    return "\n".join(lines) + "\n"
+
+
+def env_rows(cfg):
+    rows = []
+    for sec, block in cfg.items():
+        for k, v in block.items():
+            rows.append((f"FLEET_{sec.upper()}_{k.upper()}", yaml_scalar(v).strip('"')))
+    return rows
+
+
+def ensure_config_files():
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    for inst in INSTANCES:
+        p = config_path(inst)
+        if not os.path.exists(p):
+            sel = load_selection(inst)
+            write_config(inst, sel, build_config(inst, sel))
+
+
+def write_config(inst, sel, cfg):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    p = config_path(inst)
+    tmp = p + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(render_yaml(inst, sel, cfg))
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, p)
+
+
+def config_dump(inst, text):
+    """Run the instance's own `fleet config_dump` on candidate YAML -> {section: {key: value}} (strings),
+    or None when INSTANCE_<i>_FLEET_BIN isn't set (validation skipped)."""
+    binary = INSTANCES[inst]["fleet_bin"]
+    if not binary:
+        print(warn_(f"  ! INSTANCE_{inst}_FLEET_BIN isn't set: not validating with `fleet config_dump` "
+                    f"(a key this build doesn't know would only fail when the server starts)"))
+        return None
+    if not os.access(binary, os.X_OK):
+        raise Fail(f"{binary} not built — can't validate (INSTANCE_{inst}_FLEET_BIN)")
+    tmp = os.path.join(STATE, f".validate-{inst}.yml")
+    os.makedirs(STATE, exist_ok=True)
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.chmod(tmp, 0o600)
+    try:
+        env = {"HOME": os.environ.get("HOME", ""), "PATH": "/usr/bin:/bin"}   # no FLEET_* from this shell
+        out = subprocess.run([binary, "config_dump", "--config", tmp], capture_output=True, text=True, timeout=60, env=env)
+    finally:
+        os.unlink(tmp)
+    if out.returncode != 0:
+        raise Fail(f"fleet config_dump rejected the file: {(out.stderr or out.stdout).strip()[:400]}")
+    dump, sec = {}, None
+    for line in out.stdout.splitlines():
+        m = re.match(r"^([a-z0-9_]+):\s*$", line)   # digits: the s3 section
+        if m:
+            sec = m.group(1)
+            dump[sec] = {}
+            continue
+        m = re.match(r"^  ([a-z0-9_]+):\s*(.*)$", line)
+        if m and sec:
+            dump[sec][m.group(1)] = m.group(2).strip().strip('"')
+    return dump
+
+
+def verify_dump(cfg, dump):
+    bad = []
+    for sec, block in cfg.items():
+        for k, v in block.items():
+            got = dump.get(sec, {}).get(k)
+            want = yaml_scalar(v).strip('"')
+            if got is None:
+                bad.append(f"{sec}.{k}: not a setting in this build")
+            elif got != want and not (k in SECRET_KEYS):
+                bad.append(f"{sec}.{k}: wanted {want!r}, config_dump says {got!r}")
+    return bad
+
+
+# ---------------------------------------------------------------- live vs configured
+def live_matches(dest, inst, typ, live):
+    """Does the running server's GET /config `logging.<typ>` match destination `dest` (None = default)?"""
+    lp = (live or {}).get(typ) or {}
+    plugin = lp.get("plugin") or ""
+    if dest is None:
+        return plugin in (("",) if typ == "audit" else ("filesystem", ""))
+    if plugin != DESTS[dest]["plugin"]:
+        return False
+    c = lp.get("config") or {}
+    if dest == "filesystem":
+        return c.get(f"{typ}_log_file") == fs_path(inst, typ)
+    if dest == "webhook":
+        return c.get(f"{typ}_url") == target_name(dest, inst, typ)
+    if dest in ("kinesis", "kinesis-aws", "firehose", "firehose-aws") and c.get(f"{typ}_stream") is not None:
+        return c.get(f"{typ}_stream") == target_name(dest, inst, typ)
+    return True
+
+
+def live_label(typ, live):
+    lp = (live or {}).get(typ) or {}
+    p = lp.get("plugin") or ""
+    if typ == "audit" and not p:
+        return "off"
+    c = lp.get("config") or {}
+    if p == "filesystem":
+        f = c.get(f"{typ}_log_file", "")
+        return "filesystem" + ("" if f.startswith(SINKS) else " ($TMPDIR)")
+    for k in (f"{typ}_stream", f"{typ}_topic", f"{typ}_function", f"{typ}_url"):
+        if c.get(k):
+            return f"{p}:{c[k].rsplit('/', 1)[-1]}" if k.endswith("url") else f"{p}:{c[k]}"
+    return p or "filesystem"
+
+
+def inst_status(inst):
+    live = live_state(inst)
+    sel = load_selection(inst)
+    wiring = hangar_wiring(inst)
+    proc = hangar_proc(inst)
+    try:
+        mtime = os.path.getmtime(config_path(inst))
+    except OSError:
+        mtime = None
+    s = dict(name=inst, server=INSTANCES[inst]["server"] or "-", hangar_name=wiring["name"], up=live["up"],
+             error=live.get("error", ""), version=live.get("version", ""), license=live.get("license", ""),
+             file=config_path(inst), selection=sel, wired=wiring["wired"], hangar_config=wiring["config_path"],
+             overrides=wiring["overrides"], proc_started=proc and proc["started"],
+             running_with_config=bool(proc and proc["with_config"]), file_mtime=mtime, types={})
+    for t in TYPES:
+        applied = live["up"] and live_matches(sel[t], inst, t, live.get("logging"))
+        s["types"][t] = dict(configured=sel[t] or "default", live=live_label(t, live.get("logging")) if live["up"] else "",
+                             applied=bool(applied))
+    pending = []
+    if live["up"] and not wiring["hangar"]:
+        if not all(v["applied"] for v in s["types"].values()):
+            pending.append(f"live logging differs from the file — restart fleet serve with --config {config_path(inst)}")
+    elif live["up"]:
+        if not wiring["wired"]:
+            pending.append("Hangar isn't pointing this server at the loglab file (loglab hangar)")
+        elif not s["running_with_config"]:
+            pending.append("server is running without --config <loglab file> — restart it in Hangar")
+        elif not all(v["applied"] for v in s["types"].values()):
+            # a rewrite that lands back on what's already live (e.g. switch → default) needs no restart
+            pending.append("file changed after the server started — restart it in Hangar"
+                           if mtime and proc and proc["started"] and mtime > proc["started"]
+                           else "live logging differs from the file — restart it in Hangar")
+        if wiring["overrides"]:
+            pending.append(f"Hangar env rows override the file: {', '.join(wiring['overrides'])}")
+        for d in sorted(set(x for x in sel.values() if x)):
+            envs = dest_env(d)
+            for k, v in envs.items():
+                if wiring["env"].get(k) != v:
+                    pending.append(f"{d} needs Hangar env row {k}={v} (Settings → Fleet serve → env; one time, leave it on), then restart")
+    s["pending"] = pending
+    s["hangar"] = wiring["hangar"]
+    s["state"] = ("down" if not live["up"] else "unwired" if wiring["wired"] is False
+                  else "restart" if any("restart" in p for p in pending) else "attention" if pending else "applied")
+    if wiring["hangar"]:
+        srv = f"{INSTANCES[inst]['server']} ({wiring['name']})"
+        s["next"] = {
+            "down": f"Fleet {srv} is down: {live.get('error', '')} — start its stack/server in Hangar",
+            "unwired": f"Hangar → Settings → Fleet serve ({srv}) → Config file → {config_path(inst)}, then restart {srv}",
+            "restart": f"Restart {srv} in Hangar to apply the file",
+        }.get(s["state"], "")
+    else:
+        s["next"] = {
+            "down": f"Fleet {inst} is down: {live.get('error', '')}",
+            "restart": f"Restart fleet serve --config {config_path(inst)} to apply the file",
+        }.get(s["state"], "")
+    s["next"] = s["next"] or {"attention": pending[0] if pending else "",
+                              "applied": "Live. f = fire test logs, v = watch them arrive"}[s["state"]]
+    return s
+
+
+# ---------------------------------------------------------------- docker / services
+def splunk_secrets():
+    """-> {"password", "hec_token"} for the local Splunk container, generated once into state/splunk.env."""
+    try:
+        d = dict(l.split("=", 1) for l in open(SPLUNK_ENV).read().splitlines() if "=" in l)
+        if d.get("password") and d.get("hec_token"):
+            return d
+    except OSError:
+        pass
+    d = {"password": "Lg-" + secrets.token_urlsafe(18), "hec_token": str(uuid.uuid4())}
+    os.makedirs(STATE, exist_ok=True)
+    fd = os.open(SPLUNK_ENV, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write("".join(f"{k}={v}\n" for k, v in d.items()))
+    return d
+
+
+def compose(*args, capture=False):
+    cmd = ["docker", "compose", "-p", PROJECT, "--project-directory", DOCKER_DIR,
+           "-f", os.path.join(DOCKER_DIR, "docker-compose.yml")] + list(args)
+    if PROJECT in HANGAR_PROJECTS or not PROJECT.startswith("loglab"):
+        raise Fail("refusing to run docker compose outside the loglab project")
+    need("docker")
+    sp = splunk_secrets()   # the compose file requires these for every command, not just the splunk service
+    env = dict(os.environ, LOGLAB_SPLUNK_PASSWORD=sp["password"], LOGLAB_SPLUNK_HEC_TOKEN=sp["hec_token"])
+    if SPLUNK_LICENSE_OK:   # LOGLAB_ACCEPT_SPLUNK_LICENSE=1 in lab.env; the compose file accepts nothing by itself
+        env.update(LOGLAB_SPLUNK_START_ARGS="--accept-license",
+                   LOGLAB_SPLUNK_GENERAL_TERMS="--accept-sgt-current-at-splunk-com")
+    if capture:
+        return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.call(cmd, env=env)
+
+
+def port_open(port):
+    with socket.socket() as sk:
+        sk.settimeout(1)
+        return sk.connect_ex(("127.0.0.1", port)) == 0
+
+
+def container(svc):
+    """-> (name, state) of the loglab container for a service, or (None, None)."""
+    need("docker")
+    out = subprocess.run(["docker", "ps", "-a", "--filter", f"label=com.docker.compose.project={PROJECT}",
+                          "--filter", f"label=com.docker.compose.service={svc}", "--format", "{{.Names}}\t{{.State}}"],
+                         capture_output=True, text=True, timeout=20).stdout.split("\n")[0].split("\t")
+    return (out[0], out[1]) if len(out) == 2 else (None, None)
+
+
+def receiver_pid():
+    try:
+        pid = int(open(RECEIVER_PID).read().strip())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+def service_state(svc):
+    if svc == "receiver":
+        if receiver_pid() and port_open(RECEIVER_PORT):
+            return "running"
+        return "stopped"
+    if not shutil.which("docker"):
+        return "no docker"
+    try:
+        _, st = container(svc)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if st == "running":
+        return "running" if port_open(SERVICES[svc]["port"]) else "starting"
+    return "stopped"
+
+
+def docker_headroom_mb():
+    """Docker VM memory minus what running containers use now (MB), or None if unknown."""
+    try:
+        total = int(subprocess.run(["docker", "info", "--format", "{{.MemTotal}}"], capture_output=True,
+                                   text=True, timeout=20).stdout.strip()) / 2**20
+        used = 0.0
+        out = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}"], capture_output=True,
+                             text=True, timeout=60).stdout
+        for line in out.splitlines():
+            m = re.match(r"\s*([\d.]+)\s*([KMG]i?B)", line)
+            if m:
+                used += float(m.group(1)) * {"K": 1 / 1024, "M": 1, "G": 1024}[m.group(2)[0]]
+        return int(total - used)
+    except Exception:
+        return None
+
+
+def wait_for(check, what, timeout=120, every=1.0):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            if check():
+                return True
+        except Exception:
+            pass
+        time.sleep(every)
+    raise Fail(f"{what} not ready after {timeout}s")
+
+
+def service_up(svc, quiet=False):
+    if svc == "receiver":
+        if service_state(svc) == "running":
+            return quiet or print(f"receiver already running on 127.0.0.1:{RECEIVER_PORT}")
+        if port_open(RECEIVER_PORT):
+            raise Fail(f"port {RECEIVER_PORT} is in use by something else")
+        hec_token()
+        os.makedirs(STATE, exist_ok=True)
+        log = open(RECEIVER_LOG, "a")
+        p = subprocess.Popen([sys.executable, "-I", os.path.join(ROOT, "bin", "loglab-receiver.py"),
+                              str(RECEIVER_PORT), SINKS, HEC_TOKEN, ",".join(INSTANCES)], stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                             start_new_session=True)
+        with open(RECEIVER_PID, "w") as f:
+            f.write(str(p.pid))
+        wait_for(lambda: port_open(RECEIVER_PORT), "receiver", 15)
+        record_created("process loglab receiver on 127.0.0.1:18200 (loglab down receiver stops it)")
+        log_history(f"up receiver pid {p.pid}")
+        return quiet or print(ok_(f"receiver running on 127.0.0.1:{RECEIVER_PORT} (pid {p.pid}, log state/receiver.log)"))
+    if svc == "splunk" and not SPLUNK_LICENSE_OK:
+        raise Fail("the Splunk Enterprise container needs you to accept Splunk's license and General Terms "
+                   f"({SPLUNK_LICENSE_URL}). If you do, set LOGLAB_ACCEPT_SPLUNK_LICENSE=1 in {LAB['_PATH']}.")
+    need("docker")
+    st = service_state(svc)
+    if st != "running":
+        name, cst = container(svc)
+        if not name:   # a new container: check memory first; a stopped one already fit before
+            cap = SERVICES[svc]["mem"]
+            room = docker_headroom_mb()
+            if room is not None and room < cap + 150:
+                raise Fail(f"Docker has ~{room} MB free; {svc} is capped at {cap} MB (+150 MB margin). Raise Docker "
+                           f"Desktop's memory or stop something (another loglab sink: loglab down <svc>).")
+        if port_open(SERVICES[svc]["port"]) and st == "stopped":
+            raise Fail(f"port {SERVICES[svc]['port']} is in use by something else — not starting {svc}")
+        print(dim_(f"starting {svc} (compose project {PROJECT}) …"))
+        if compose("--profile", svc, "up", "-d", svc) != 0:
+            raise Fail(f"docker compose up {svc} failed")
+        record_created(f"docker container {PROJECT}-{svc}-1 (compose project {PROJECT}; loglab down {svc} removes it)")
+        log_history(f"up {svc}")
+    if svc == "splunk" and not port_open(SERVICES[svc]["port"]):
+        print(dim_("  Splunk's first start under x86 emulation takes a few minutes …"), flush=True)
+    wait_for(lambda: service_ready(svc), svc, 900 if svc == "splunk" else 180)
+    provision(svc)
+    quiet or print(ok_(f"{svc} running on 127.0.0.1:{SERVICES[svc]['port']} — {SERVICES[svc]['what']}"))
+
+
+def service_ready(svc):
+    if not port_open(SERVICES[svc]["port"]):
+        return False
+    if svc == "localstack":
+        st, b = http("GET", f"{LS_URL}/_localstack/health", timeout=5)
+        sv = jload(b).get("services", {})
+        return st == 200 and all(sv.get(x) in ("available", "running") for x in ("kinesis", "firehose", "s3"))
+    if svc == "redpanda":
+        st, _ = http("GET", f"{KAFKA_PROXY}/topics", timeout=5)
+        return st == 200
+    if svc == "pubsub":
+        st, _ = http("GET", f"http://{PUBSUB_HOST}/v1/projects/{PUBSUB_PROJECT}/topics", timeout=5)
+        return st == 200
+    if svc == "splunk":   # the image's own healthcheck turns healthy only after its setup (which restarts splunkd)
+        name, _ = container(svc)
+        health = subprocess.run(["docker", "inspect", "-f", "{{.State.Health.Status}}", name or "-"],
+                                capture_output=True, text=True, timeout=20).stdout.strip()
+        if health != "healthy":
+            return False
+        st, _ = http("GET", f"{SPLUNK_HEC}/services/collector/health", insecure=True, timeout=5)
+        return st == 200
+    return True
+
+
+def service_down(svc):
+    if svc == "receiver":
+        pid = receiver_pid()
+        if pid:
+            os.kill(pid, 15)
+            log_history(f"down receiver pid {pid}")
+        try:
+            os.unlink(RECEIVER_PID)
+        except OSError:
+            pass
+        return print("receiver stopped")
+    users = [i for i in INSTANCES for d in load_selection(i).values() if d and DESTS[d]["service"] == svc]
+    if users:
+        users = sorted(set(users))
+        print(warn_(f"{' and '.join(users)} {'is' if len(users) == 1 else 'are'} configured to log to {svc}: "
+                    + ("the server will fail to start while it's down." if any(
+                        DESTS[d]["plugin"] in STARTUP_CHECKED for i in INSTANCES for d in load_selection(i).values()
+                        if d and DESTS[d]["service"] == svc) else "logs are dropped while it's down.")))
+        if sys.stdin.isatty() and not yes("Stop it anyway?"):
+            return
+    need("docker")
+    compose("--profile", svc, "stop", svc)
+    compose("--profile", svc, "rm", "-f", svc)
+    log_history(f"down {svc}")
+    print(f"{svc} stopped and removed (emulator data is not kept)")
+
+
+def provision(svc, insts=None):
+    """Create every stream/topic loglab's config can point at (every instance × result/status/audit). Idempotent."""
+    insts = insts or list(INSTANCES)
+    pairs = [(i, t) for i in insts for t in TYPES]
+    if svc == "localstack":
+        for i, t in pairs:   # one at a time: kinesis-mock limits streams in CREATING
+            kinesis_call(LOCAL_AWS, "CreateStream", {"StreamName": f"fleet-{i}-{t}", "ShardCount": 1}, ok_codes=(
+                "ResourceInUseException",))
+            wait_for(lambda: kinesis_call(LOCAL_AWS, "DescribeStreamSummary", {"StreamName": f"fleet-{i}-{t}"})
+                     ["StreamDescriptionSummary"]["StreamStatus"] == "ACTIVE", f"kinesis stream fleet-{i}-{t}", 60, 0.3)
+        aws_req(LOCAL_AWS, "s3", "PUT", f"/{FIREHOSE_BUCKET}")
+        for i, t in pairs:
+            firehose_call(LOCAL_AWS, "CreateDeliveryStream", {
+                "DeliveryStreamName": f"fleet-{i}-{t}", "DeliveryStreamType": "DirectPut",
+                "ExtendedS3DestinationConfiguration": {
+                    "BucketARN": f"arn:aws:s3:::{FIREHOSE_BUCKET}", "RoleARN": "arn:aws:iam::000000000000:role/loglab",
+                    "Prefix": f"{i}/{t}/", "BufferingHints": {"SizeInMBs": 1, "IntervalInSeconds": 60}}},
+                ok_codes=("ResourceInUseException",))
+    elif svc == "redpanda":
+        name = docker_exec_target("redpanda")
+        topics = [f"fleet-{i}-{t}" for i, t in pairs]
+        out = subprocess.run(["docker", "exec", name, "rpk", "topic", "create", *topics], capture_output=True, text=True)
+        if out.returncode != 0 and "TOPIC_ALREADY_EXISTS" not in out.stdout + out.stderr:
+            raise Fail(f"rpk topic create: {(out.stdout + out.stderr).strip()[:300]}")
+    elif svc == "pubsub":
+        base = f"http://{PUBSUB_HOST}/v1/projects/{PUBSUB_PROJECT}"
+        for i, t in pairs:
+            st, b = http("PUT", f"{base}/topics/fleet-{i}-{t}", {})
+            if st not in (200, 409):
+                raise Fail(f"pubsub create topic fleet-{i}-{t}: {st} {b[:200]}")
+            st, b = http("PUT", f"{base}/subscriptions/loglab-view-{i}-{t}",
+                         {"topic": f"projects/{PUBSUB_PROJECT}/topics/fleet-{i}-{t}", "ackDeadlineSeconds": 30})
+            if st not in (200, 409):
+                raise Fail(f"pubsub create subscription loglab-view-{i}-{t}: {st} {b[:200]}")
+
+
+def docker_exec_target(svc):
+    name, st = container(svc)
+    if not name or st != "running":
+        raise Fail(f"{svc} isn't running (loglab up {svc})")
+    return name
+
+
+# ---------------------------------------------------------------- AWS (SigV4, stdlib only)
+def aws_endpoint(creds, svc):
+    if creds.get("endpoint"):
+        return creds["endpoint"]
+    if svc in ("iam", "budgets"):   # global services; sign with us-east-1 creds
+        return f"https://{svc}.amazonaws.com"
+    return f"https://{svc}.{creds['region']}.amazonaws.com"
+
+
+def aws_req(creds, svc, method, path, query=None, body=b"", headers=None, timeout=20):
+    """Signed AWS request -> (status, bytes). Works for LocalStack (endpoint set) and real AWS."""
+    base = aws_endpoint(creds, svc)
+    u = urllib.parse.urlparse(base)
+    t = datetime.datetime.now(datetime.timezone.utc)
+    amz, day = t.strftime("%Y%m%dT%H%M%SZ"), t.strftime("%Y%m%d")
+    body = body if isinstance(body, bytes) else body.encode()
+    ph = hashlib.sha256(body).hexdigest()
+    hdrs = {k.lower(): v for k, v in (headers or {}).items()}
+    hdrs.update({"host": u.netloc, "x-amz-date": amz, "x-amz-content-sha256": ph})
+    if creds.get("token"):
+        hdrs["x-amz-security-token"] = creds["token"]
+    q = sorted((query or {}).items())
+    cq = "&".join(f"{urllib.parse.quote(k, safe='-_.~')}={urllib.parse.quote(str(v), safe='-_.~')}" for k, v in q)
+    signed = ";".join(sorted(hdrs))
+    canon = "\n".join([method, urllib.parse.quote(path, safe="/-_.~"), cq,
+                       "".join(f"{k}:{str(hdrs[k]).strip()}\n" for k in sorted(hdrs)), signed, ph])
+    scope = f"{day}/{creds['region']}/{svc}/aws4_request"
+    sts = "\n".join(["AWS4-HMAC-SHA256", amz, scope, hashlib.sha256(canon.encode()).hexdigest()])
+    k = ("AWS4" + creds["secret"]).encode()
+    for part in (day, creds["region"], svc, "aws4_request"):
+        k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+    sig = hmac.new(k, sts.encode(), hashlib.sha256).hexdigest()
+    hdrs["authorization"] = f"AWS4-HMAC-SHA256 Credential={creds['key']}/{scope}, SignedHeaders={signed}, Signature={sig}"
+    url = base + path + (f"?{cq}" if cq else "")
+    req = urllib.request.Request(url, data=body if method in ("POST", "PUT") else None, method=method,
+                                 headers={k: v for k, v in hdrs.items() if k != "host"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except Exception as e:
+        raise Fail(f"{url}: {getattr(e, 'reason', e)}")
+
+
+def aws_json(creds, svc, target, body, ok_codes=()):
+    st, b = aws_req(creds, svc, "POST", "/", body=json.dumps(body),
+                    headers={"Content-Type": "application/x-amz-json-1.1", "X-Amz-Target": target})
+    js = jload(b)
+    if st != 200:
+        code = (js.get("__type") or js.get("code") or "").split("#")[-1]
+        if code in ok_codes:
+            return js
+        raise Fail(f"{target.split('.')[-1]}: {st} {code} {js.get('message') or js.get('Message') or ''}".strip())
+    return js
+
+
+def kinesis_call(creds, op, body, ok_codes=()):
+    return aws_json(creds, "kinesis", f"Kinesis_20131202.{op}", body, ok_codes)
+
+
+def firehose_call(creds, op, body, ok_codes=()):
+    return aws_json(creds, "firehose", f"Firehose_20150804.{op}", body, ok_codes)
+
+
+_profile_creds = {}
+
+
+def aws_creds(dest):
+    if not dest.endswith("-aws"):
+        return LOCAL_AWS
+    s = read_secrets()
+    if s.get("AWS_PROFILE") and not s.get("AWS_ACCESS_KEY_ID"):
+        key = (s["AWS_PROFILE"], s.get("AWS_REGION") or "us-east-1")
+        c = _profile_creds.get(key)
+        if not c or c.get("expires", "9")[:19] <= datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"):
+            c = _profile_creds[key] = aws_profile_creds(*key)
+        return c
+    if not s.get("AWS_ACCESS_KEY_ID"):
+        raise Fail("set AWS_PROFILE (SSO) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in SECRETS.env")
+    return dict(key=s["AWS_ACCESS_KEY_ID"], secret=s.get("AWS_SECRET_ACCESS_KEY", ""),
+                token=s.get("AWS_SESSION_TOKEN", ""), region=s.get("AWS_REGION", "us-east-1"), endpoint="")
+
+
+# ---------------------------------------------------------------- AWS resources (loglab aws up/down/extend)
+LAMBDA_CODE = '''import json
+def handler(event, context):
+    # Fleet invokes once per log line; printing puts it in CloudWatch, where `loglab view` reads it back
+    print(json.dumps(event))
+    return {"ok": True}
+'''
+# Several people can share one AWS account: each one's resources carry owner=<LOGLAB_OWNER> and, by default, the
+# owner in their names; `aws down` only deletes the caller's. The guard is one per account and reaps everyone's.
+BASE_PREFIX = "fleetqa-"           # the shared guard's reaper (and its IAM policy) only reach names under these
+BUCKET_BASE = "fleetqa-loglab-"
+FIREHOSE_ROLE = f"loglab-{OWNER}-firehose"
+LAMBDA_ROLE = f"loglab-{OWNER}-lambda"
+ROLE_PATH = "/loglab/"   # the reaper only deletes roles under this path
+AWS_TAG = {"Key": "created-by", "Value": "loglab"}
+OWNER_TAG = "owner"
+EXPIRES_TAG = "expires-at"
+TTL_HOURS_MAX = 24
+TTL_MAX = datetime.timedelta(hours=TTL_HOURS_MAX)
+LOG_RETENTION_DAYS = 1   # loglab's Lambda log groups and S3 objects; nothing it creates keeps data indefinitely
+AWS_STATE = os.path.join(STATE, "aws.json")   # last known expiry, so status/qalab can warn without calling AWS
+
+# Cost safeguards (`loglab aws guard`): standing, free-while-idle pieces that delete loglab's resources from inside AWS
+GUARD_TAG = {"Key": "created-by", "Value": "loglab-guard"}
+GUARD_PATH = "/loglab-guard/"
+GUARD_FN = "loglab-guard-reaper"
+GUARD_ROLE = "loglab-guard-reaper"
+GUARD_SCHED_ROLE = "loglab-guard-scheduler"
+GUARD_SCHEDULE = "loglab-guard-reaper"
+GUARD_EVERY = "rate(15 minutes)"
+GUARD_TOPIC = "loglab-guard-budget"
+GUARD_BUDGET = "loglab-guard"
+GUARD_ANOMALY = "loglab-guard-services"
+GUARD_LOG_DAYS = 14
+BUDGET_ALERT_USD, BUDGET_CAP_USD, ANOMALY_USD = 5, 20, 5
+# Account-wide on purpose: catches untagged and forgotten resources in these services too, whoever made them
+BUDGET_SERVICES = ["Amazon Kinesis", "Amazon Kinesis Firehose", "AWS Lambda", "AmazonCloudWatch",
+                   "Amazon Simple Storage Service"]
+REAPER_SRC = os.path.join(ROOT, "aws", "reaper.py")
+BASIC_EXEC = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+
+def aws_profile_creds(profile, region):
+    """Temporary credentials for an SSO profile, via the AWS CLI (the SSO login itself is the user's)."""
+    if not shutil.which("aws"):
+        raise Fail("AWS_PROFILE is set but the AWS CLI isn't installed (brew install awscli)")
+    out = subprocess.run(["aws", "configure", "export-credentials", "--profile", profile, "--format", "process"],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        raise Fail(f"no AWS credentials for profile {profile} — run: aws sso login --profile {profile}\n"
+                   f"  ({(out.stderr or out.stdout).strip()[:200]})")
+    js = json.loads(out.stdout)
+    return dict(key=js["AccessKeyId"], secret=js["SecretAccessKey"], token=js.get("SessionToken", ""),
+                region=region, endpoint="", expires=js.get("Expiration", ""))
+
+
+def aws_profile_exists(profile):
+    try:
+        cfg = open(os.path.expanduser("~/.aws/config")).read()
+    except OSError:
+        return False
+    return re.search(rf"^\[(profile )?{re.escape(profile)}\]\s*$", cfg, re.M) is not None
+
+
+def aws_query(creds, svc, action, params, version):
+    """Query-protocol call (IAM, STS, SNS) -> XML root with namespaces stripped."""
+    body = urllib.parse.urlencode(dict(Action=action, Version=version, **params)).encode()
+    st, b = aws_req(creds, svc, "POST", "/", body=body,
+                    headers={"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
+    root = ET.fromstring(b or b"<x/>")
+    for el in root.iter():
+        el.tag = el.tag.split("}", 1)[-1]
+    if st != 200:
+        code = root.findtext(".//Code") or str(st)
+        raise AwsError(code, f"{action}: {st} {code} {root.findtext('.//Message') or ''}".strip())
+    return root
+
+
+class AwsError(Fail):
+    def __init__(self, code, msg):
+        super().__init__(msg)
+        self.code = code
+
+
+def iam_call(glob, action, params, ok_codes=()):
+    try:
+        return aws_query(glob, "iam", action, params, "2010-05-08")
+    except AwsError as e:
+        if e.code in ok_codes:
+            return None
+        raise
+
+
+def rest_call(cr, svc, method, path, body=None, ok_codes=()):
+    """REST-JSON call (Lambda, Scheduler) -> (status, json). Raises on errors not in ok_codes (HTTP status or error type)."""
+    st, b = aws_req(cr, svc, method, path, body=json.dumps(body) if body is not None else b"",
+                    headers={"Content-Type": "application/json"})
+    js = jload(b)
+    if st >= 300:
+        code = (js.get("__type") or js.get("Type") or js.get("code") or "").split("#")[-1] or str(st)
+        if st in ok_codes or code in ok_codes:
+            return st, js
+        raise AwsError(code, f"{method} {svc}{path}: {st} {code} {js.get('Message') or js.get('message') or ''}".strip())
+    return st, js
+
+
+def logs_call(cr, op, body, ok_codes=()):
+    return aws_json(cr, "logs", f"Logs_20140328.{op}", body, ok_codes)
+
+
+_aws_acct = ["?"]   # account id for created.txt lines (000000000000 = LocalStack self-test)
+
+
+def aws_target(local):
+    """-> (creds, iam/sts creds, account, region, settings) for real AWS, or LocalStack with --localstack (self-test)."""
+    s = read_secrets()
+    if local:
+        service_up("localstack", quiet=True)
+        cr = dict(LOCAL_AWS)
+        _aws_acct[0] = "000000000000 LocalStack"
+        return cr, cr, "000000000000", cr["region"], s
+    if not OWNER:
+        raise Fail(f"set LOGLAB_OWNER in {LAB['_PATH']} (tags your AWS resources so others' aren't touched)")
+    cr = aws_creds("kinesis-aws")
+    glob = dict(cr, region="us-east-1")   # IAM, Budgets and Cost Explorer are global and sign as us-east-1
+    acct = aws_query(cr, "sts", "GetCallerIdentity", {}, "2011-06-15").findtext(".//Account")
+    _aws_acct[0] = acct
+    return cr, glob, acct, cr["region"], s
+
+
+def name_prefix(s, key):
+    """SECRETS.env's prefix for this kind of resource, else fleetqa-<owner>-."""
+    return s.get(key) or f"{BASE_PREFIX}{OWNER}-"
+
+
+def aws_names(s, acct, region):
+    insts_types = [(i, t) for i in INSTANCES for t in TYPES]
+    fns = [f"{name_prefix(s, 'LAMBDA_FUNCTION_PREFIX')}{i}-{t}" for i, t in insts_types]
+    return dict(
+        kinesis=[f"{name_prefix(s, 'KINESIS_STREAM_PREFIX')}{i}-{t}" for i, t in insts_types],
+        firehose=[(f"{name_prefix(s, 'FIREHOSE_STREAM_PREFIX')}{i}-{t}", f"{i}/{t}/") for i, t in insts_types],
+        bucket=s.get("FIREHOSE_S3_BUCKET") or f"{BUCKET_BASE}{OWNER}-{acct}-{region}",
+        functions=fns,
+        log_groups=[f"/aws/lambda/{f}" for f in fns],
+    )
+
+
+# ---- expiry (TTL) helpers
+def utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def iso_z(dt):
+    return dt.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_iso(v):
+    try:
+        return datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+
+
+def parse_ttl(v):
+    m = re.fullmatch(r"(\d+)([hm]?)", (v or "").strip().lower())
+    if not m or int(m.group(1)) == 0:
+        raise Fail(f"a duration is e.g. 4h or 90m (got {v!r})")
+    n = int(m.group(1))
+    return datetime.timedelta(minutes=n) if m.group(2) == "m" else datetime.timedelta(hours=n)
+
+
+def cap_expiry(exp):
+    limit = utcnow() + TTL_MAX
+    if exp > limit:
+        print(warn_(f"  expiry capped at the {TTL_HOURS_MAX}h maximum"))
+        return limit
+    return exp
+
+
+def until(exp):
+    secs = int((exp - utcnow()).total_seconds())
+    if secs <= 0:
+        return f"expired {(-secs) // 3600}h{(-secs) % 3600 // 60:02d}m ago"
+    return f"in {secs // 3600}h{secs % 3600 // 60:02d}m"
+
+
+def local_hm(exp):
+    return exp.astimezone().strftime("%a %H:%M")
+
+
+def load_aws_state():
+    try:
+        return json.load(open(AWS_STATE))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_aws_state(st):
+    os.makedirs(STATE, exist_ok=True)
+    if st:
+        json.dump(st, open(AWS_STATE, "w"), indent=1)
+    elif os.path.exists(AWS_STATE):
+        os.remove(AWS_STATE)
+
+
+def aws_local_summary():
+    """For `loglab status` / qalab, without calling AWS: what loglab last left in real AWS and when it expires."""
+    st = load_aws_state()
+    exp = parse_iso(st.get("expires_at"))
+    if not exp:
+        return None
+    return dict(account=st.get("account"), region=st.get("region"), expires_at=st["expires_at"],
+                expired=exp <= utcnow(), text=f"AWS resources in {st.get('account')} {st.get('region')} "
+                + (f"auto-delete {local_hm(exp)} ({until(exp)})" if exp > utcnow()
+                   else f"{until(exp)}; the guard deletes them within 15 min (loglab aws status to confirm)"))
+
+
+def own_tags(exp):
+    return {AWS_TAG["Key"]: AWS_TAG["Value"], OWNER_TAG: OWNER, EXPIRES_TAG: iso_z(exp)}
+
+
+def split_owners(items):
+    """-> (mine, others, unowned). Unowned = no owner tag (made before loglab tagged owners)."""
+    return ([i for i in items if i["owner"] == OWNER], [i for i in items if i["owner"] and i["owner"] != OWNER],
+            [i for i in items if not i["owner"]])
+
+
+def tag_list(tags):
+    return [{"Key": k, "Value": v} for k, v in tags.items()]
+
+
+def tag_query(tags, prefix="Tags.member"):
+    out = {}
+    for i, (k, v) in enumerate(tags.items(), 1):
+        out[f"{prefix}.{i}.Key"], out[f"{prefix}.{i}.Value"] = k, v
+    return out
+
+
+def s3_put_sub(cr, bucket, sub, xml):
+    body = xml.encode()
+    st, out = aws_req(cr, "s3", "PUT", f"/{bucket}", query={sub: ""}, body=body,
+                      headers={"Content-Type": "application/xml",
+                               "Content-MD5": base64.b64encode(hashlib.md5(body).digest()).decode()})
+    if st not in (200, 204):
+        raise Fail(f"s3 {sub} on {bucket}: {st} {out[:200]!r}")
+
+
+def s3_tag_bucket(cr, bucket, tags):
+    s3_put_sub(cr, bucket, "tagging", "<Tagging><TagSet>" + "".join(
+        f"<Tag><Key>{k}</Key><Value>{v}</Value></Tag>" for k, v in tags.items()) + "</TagSet></Tagging>")
+
+
+def iam_role(glob, name, service, policy_arn=None, inline=None, path=ROLE_PATH, tags=None, refresh=True):
+    """Create (or reuse) a role; with refresh, an existing role gets its tags and policies (re)applied."""
+    tags = tags or {AWS_TAG["Key"]: AWS_TAG["Value"], OWNER_TAG: OWNER}
+    trust = json.dumps({"Version": "2012-10-17", "Statement": [
+        {"Effect": "Allow", "Principal": {"Service": service}, "Action": "sts:AssumeRole"}]})
+    r = iam_call(glob, "CreateRole", {"RoleName": name, "Path": path, "AssumeRolePolicyDocument": trust,
+                                      **tag_query(tags)}, ok_codes=("EntityAlreadyExists",))
+    if r is not None:
+        record_created(f"AWS [{_aws_acct[0]}] IAM role {path}{name} (loglab {'aws guard down' if path == GUARD_PATH else 'aws down --all'} deletes it)")
+        print(ok_(f"  created IAM role {path}{name}"))
+    else:
+        r = iam_call(glob, "GetRole", {"RoleName": name})
+        if not refresh:
+            return r.findtext(".//Arn")
+        iam_call(glob, "TagRole", {"RoleName": name, **tag_query(tags, "Tags.member")})
+    if policy_arn:
+        iam_call(glob, "AttachRolePolicy", {"RoleName": name, "PolicyArn": policy_arn})
+    if inline:
+        iam_call(glob, "PutRolePolicy", {"RoleName": name, "PolicyName": "loglab", "PolicyDocument": json.dumps(inline)})
+    return r.findtext(".//Arn")
+
+
+def iam_delete_role(glob, name):
+    """-> True if it existed. Detaches/deletes its policies first."""
+    r = iam_call(glob, "ListAttachedRolePolicies", {"RoleName": name}, ok_codes=("NoSuchEntity",))
+    if r is None:
+        return False
+    for arn in [e.text for e in r.iter("PolicyArn")]:
+        iam_call(glob, "DetachRolePolicy", {"RoleName": name, "PolicyArn": arn})
+    for pol in [e.text for e in iam_call(glob, "ListRolePolicies", {"RoleName": name}).iter("member")]:
+        iam_call(glob, "DeleteRolePolicy", {"RoleName": name, "PolicyName": pol})
+    iam_call(glob, "DeleteRole", {"RoleName": name})
+    return True
+
+
+def retry_new_role(fn, what):
+    """IAM roles take a few seconds to become assumable by other services."""
+    for i in range(20):
+        try:
+            return fn()
+        except Fail as e:
+            if i == 19 or not re.search(r"role|assume|InvalidParameterValue|InvalidArgument", str(e), re.I):
+                raise
+            time.sleep(3)
+    raise Fail(f"{what}: role never became usable")
+
+
+def zip_bytes(files):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, text in files.items():
+            zi = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))   # fixed date: same code -> same hash
+            zi.external_attr = 0o644 << 16
+            z.writestr(zi, text)
+    return buf.getvalue()
+
+
+def lambda_zip():
+    return base64.b64encode(zip_bytes({"index.py": LAMBDA_CODE})).decode()
+
+
+def ensure_log_group(cr, name, days, tags, refresh=True):
+    js = logs_call(cr, "CreateLogGroup", {"logGroupName": name, "tags": tags}, ok_codes=("ResourceAlreadyExistsException",))
+    if js.get("__type") and not refresh:
+        return False
+    if js.get("__type"):
+        logs_call(cr, "TagLogGroup", {"logGroupName": name, "tags": tags})
+    logs_call(cr, "PutRetentionPolicy", {"logGroupName": name, "retentionInDays": days})
+    return not js.get("__type")
+
+
+def aws_users():
+    """Instances whose loglab file points at an AWS destination (deleting it would break their next start)."""
+    return sorted({i for i in INSTANCES for d in load_selection(i).values() if d and d.endswith("-aws")})
+
+
+def aws_inventory(cr, glob, n):
+    """Every loglab resource in the account/region, anyone's -> ([dict(kind, name, arn, expires, owner)], tagging_api_ok).
+    Lists each service by loglab's name prefixes (what the reaper does), plus anything else the tagging API knows is
+    tagged created-by=loglab (a renamed prefix, say)."""
+    s = read_secrets()
+    roots = {BASE_PREFIX} | {name_prefix(s, k) for k in ("KINESIS_STREAM_PREFIX", "FIREHOSE_STREAM_PREFIX", "LAMBDA_FUNCTION_PREFIX")}
+    p = tuple(r for r in roots if not any(r != o and r.startswith(o) for o in roots))
+    bp = tuple({BUCKET_BASE, n["bucket"]})
+    found = {}
+
+    def add(kind, name, arn, tags):
+        if tags.get(AWS_TAG["Key"]) == AWS_TAG["Value"]:
+            found[(kind, name)] = dict(kind=kind, name=name, arn=arn, expires=tags.get(EXPIRES_TAG),
+                                       owner=tags.get(OWNER_TAG) or None)
+
+    body = {}
+    while True:
+        js = kinesis_call(cr, "ListStreams", body)
+        for name in js.get("StreamNames", []):
+            if name.startswith(p):
+                tags = {t["Key"]: t["Value"] for t in kinesis_call(cr, "ListTagsForStream", {"StreamName": name}).get("Tags", [])}
+                add("kinesis", name, "", tags)
+        if not js.get("HasMoreStreams") or not js.get("StreamNames"):
+            break
+        body = {"ExclusiveStartStreamName": js["StreamNames"][-1]}
+    body = {"Limit": 100}
+    while True:
+        js = firehose_call(cr, "ListDeliveryStreams", body)
+        for name in js.get("DeliveryStreamNames", []):
+            if name.startswith(p):
+                tags = {t["Key"]: t["Value"] for t in
+                        firehose_call(cr, "ListTagsForDeliveryStream", {"DeliveryStreamName": name}).get("Tags", [])}
+                add("firehose", name, "", tags)
+        if not js.get("HasMoreDeliveryStreams") or not js.get("DeliveryStreamNames"):
+            break
+        body = {"Limit": 100, "ExclusiveStartDeliveryStreamName": js["DeliveryStreamNames"][-1]}
+    marker = ""
+    while True:
+        _, js = rest_call(cr, "lambda", "GET", "/2015-03-31/functions/" + (f"?Marker={urllib.parse.quote(marker)}" if marker else ""))
+        for f in js.get("Functions", []):
+            if f["FunctionName"].startswith(p):
+                _, t = rest_call(cr, "lambda", "GET", f"/2017-03-31/tags/{urllib.parse.quote(f['FunctionArn'], safe='')}")
+                add("lambda", f["FunctionName"], f["FunctionArn"], t.get("Tags") or {})
+        marker = js.get("NextMarker")
+        if not marker:
+            break
+    for root in p:
+        body = {"logGroupNamePrefix": f"/aws/lambda/{root}"}
+        while True:
+            js = logs_call(cr, "DescribeLogGroups", body)
+            for g in js.get("logGroups", []):
+                tags = logs_call(cr, "ListTagsLogGroup", {"logGroupName": g["logGroupName"]}).get("tags") or {}
+                add("logs", g["logGroupName"], g.get("arn", ""), tags)
+            if not js.get("nextToken"):
+                break
+            body = dict(body, nextToken=js["nextToken"])
+    st, out = aws_req(cr, "s3", "GET", "/")
+    if st == 200:
+        root = ET.fromstring(out)
+        for el in root.iter():
+            el.tag = el.tag.split("}", 1)[-1]
+        for name in [e.text for e in root.iter("Name")]:
+            if name and name.startswith(bp):
+                st, t = aws_req(cr, "s3", "GET", f"/{name}", query={"tagging": ""})
+                tags = {}
+                if st == 200:
+                    tr = ET.fromstring(t)
+                    for el in tr.iter():
+                        el.tag = el.tag.split("}", 1)[-1]
+                    tags = {x.findtext("Key"): x.findtext("Value") for x in tr.iter("Tag")}
+                add("s3", name, f"arn:aws:s3:::{name}", tags)
+    r = iam_call(glob, "ListRoles", {"PathPrefix": ROLE_PATH})
+    for m in r.iter("member"):
+        name = m.findtext("RoleName")
+        if name:
+            tags = {t.findtext("Key"): t.findtext("Value")
+                    for t in iam_call(glob, "ListRoleTags", {"RoleName": name}).iter("member")}
+            add("iam", name, m.findtext("Arn"), tags)
+    by_tag = True
+    try:
+        tok = ""
+        while True:
+            js = aws_json(cr, "tagging", "ResourceGroupsTaggingAPI_20170126.GetResources",
+                          {"TagFilters": [{"Key": AWS_TAG["Key"], "Values": [AWS_TAG["Value"]]}],
+                           **({"PaginationToken": tok} if tok else {})})
+            for res in js.get("ResourceTagMappingList", []):
+                arn = res["ResourceARN"]
+                svc, rest = arn.split(":", 5)[2], arn.split(":", 5)[5]
+                name = re.sub(r"^(stream/|deliverystream/|function:|log-group:)", "", rest).removesuffix(":*")
+                if (svc, name) not in found and not name.startswith(p) and not name.startswith(tuple(f"/aws/lambda/{x}" for x in p)) \
+                        and not name.startswith(bp):   # by-prefix listing is authoritative there (the tagging API lags deletes)
+                    add(svc, name, arn, {t["Key"]: t["Value"] for t in res.get("Tags", [])})
+            tok = js.get("PaginationToken")
+            if not tok:
+                break
+    except Fail:
+        by_tag = False
+    return sorted(found.values(), key=lambda x: (x["kind"], x["name"])), by_tag
+
+
+def adoptable(items, n):
+    """Mine, plus unowned resources under my own names (an earlier loglab made them for this config)."""
+    names = set(n["kinesis"]) | {f for f, _ in n["firehose"]} | set(n["functions"]) | set(n["log_groups"]) \
+        | {n["bucket"], FIREHOSE_ROLE, LAMBDA_ROLE}
+    mine, _, unowned = split_owners(items)
+    return mine + [i for i in unowned if i["name"] in names]
+
+
+def aws_retag(cr, glob, items, tags):
+    """(Re)apply tags (incl. owner and expires-at) to these inventory items. -> count."""
+    count = 0
+    for it in items:
+        kind, name = it["kind"], it["name"]
+        if kind == "kinesis":
+            js = kinesis_call(cr, "AddTagsToStream", {"StreamName": name, "Tags": tags}, ok_codes=("ResourceNotFoundException",))
+        elif kind == "firehose":
+            js = firehose_call(cr, "TagDeliveryStream", {"DeliveryStreamName": name, "Tags": tag_list(tags)},
+                               ok_codes=("ResourceNotFoundException",))
+        elif kind == "lambda" and it["arn"]:
+            rest_call(cr, "lambda", "POST", f"/2017-03-31/tags/{urllib.parse.quote(it['arn'], safe='')}", {"Tags": tags})
+            js = {}
+        elif kind == "logs":
+            js = logs_call(cr, "TagLogGroup", {"logGroupName": name, "tags": tags}, ok_codes=("ResourceNotFoundException",))
+        elif kind == "s3":
+            s3_tag_bucket(cr, name, tags)
+            js = {}
+        elif kind == "iam":
+            js = {} if iam_call(glob, "TagRole", {"RoleName": name, **tag_query(tags)}, ok_codes=("NoSuchEntity",)) is not None \
+                else {"__type": "NoSuchEntity"}
+        else:
+            continue
+        count += not js.get("__type")
+    return count
+
+
+def cmd_aws(args):
+    local = flag(args, "--localstack")
+    sub = args[0] if args else "status"
+    s = read_secrets()
+    if sub == "status":
+        return aws_status(local)
+    if sub == "up":
+        ttl = parse_ttl(opt(args, "--ttl", "4h"))
+        if ttl > TTL_MAX:
+            raise Fail(f"--ttl can be at most {TTL_HOURS_MAX}h (loglab aws extend adds time later)")
+        what = set(args[1:]) or {"kinesis", "firehose", "lambda"}
+        bad = what - {"kinesis", "firehose", "lambda"}
+        if bad:
+            die("usage: loglab aws up [kinesis] [firehose] [lambda] [--ttl 4h]")
+        return aws_up(local, what, ttl)
+    if sub == "extend":
+        if len(args) < 2:
+            die("usage: loglab aws extend <2h|90m>")
+        return aws_extend(local, parse_ttl(args[1]))
+    if sub == "down":
+        everything = flag(args, "--all")
+        unowned = flag(args, "--include-unowned")
+        force = flag(args, "--force")
+        users = aws_users()
+        if users and not force and not local:
+            raise Fail(f"{' and '.join(users)} log to AWS: switch {'them' if len(users) > 1 else 'it'} away first "
+                       f"(a server on kinesis-aws/firehose-aws exits on start when its stream is gone), or --force")
+        return aws_down(local, everything, unowned)
+    if sub == "guard":
+        return cmd_guard(args[1:], local)
+    if sub == "login":
+        p = s.get("AWS_PROFILE")
+        if not p:
+            raise Fail("set AWS_PROFILE in SECRETS.env first")
+        os.execvp("aws", ["aws", "sso", "login", "--profile", p])
+    die("usage: loglab aws status | up [kinesis|firehose|lambda] [--ttl 4h] | extend <2h> | "
+        "down [--all] [--include-unowned] | guard install|status|run|down | login")
+
+
+def aws_status(local):
+    cr, glob, acct, region, s = aws_target(local)
+    n = aws_names(s, acct, region)
+    print(f"AWS account {acct}  region {region}  owner {OWNER}"
+          + (f"  credentials expire {cr['expires']}" if cr.get("expires") else ""))
+    if not local:
+        guard_report(cr, glob, acct, region, s, brief=True, local=local)
+    items, by_tag = aws_inventory(cr, glob, n)
+    mine, others, unowned = split_owners(items)
+    print(bold_(f"your loglab resources (created-by=loglab, owner={OWNER}):"))
+    if not mine:
+        print(ok_("  none — nothing of yours can bill"))
+    soonest = None
+
+    def row(it):
+        exp = parse_iso(it["expires"])
+        when = (f"expires {local_hm(exp)} ({until(exp)})" if exp
+                else bad_("no expires-at tag: the guard deletes it at its next run"))
+        print(f"  {it['kind']:<9} {it['name']:<44} {when}")
+        return exp
+
+    for it in mine:
+        exp = row(it)
+        soonest = exp if exp and (not soonest or exp < soonest) else soonest
+    if unowned:
+        print(warn_(f"unowned (no {OWNER_TAG} tag; made before loglab tagged owners) — the guard deletes them at expiry, "
+                    "or: loglab aws down --all --include-unowned"))
+        for it in unowned:
+            row(it)
+    if others:
+        by = {}
+        for it in others:
+            by[it["owner"]] = by.get(it["owner"], 0) + 1
+        print(dim_("other owners (theirs to manage; the guard deletes them at their expiry): "
+                   + ", ".join(f"{o} {c}" for o, c in sorted(by.items()))))
+    if mine:
+        print(dim_("Delete yours now: loglab aws down [--all].  More time: loglab aws extend 2h."))
+    if not local:
+        save_aws_state(dict(account=acct, region=region, expires_at=iso_z(soonest)) if soonest else {})
+
+
+def aws_up(local, what, ttl):
+    cr, glob, acct, region, s = aws_target(local)
+    n = aws_names(s, acct, region)
+    print(f"AWS account {acct}  region {region}")
+    guard_reach(s, n)
+    if not local:
+        missing = guard_missing(cr, glob, acct, region)
+        if missing:
+            raise Fail(f"the cost safeguards aren't installed in {acct} ({', '.join(missing)}): "
+                       f"run `loglab aws guard install` first (once per account)")
+    exp = cap_expiry(utcnow() + ttl)
+    tags = own_tags(exp)
+    print(f"  everything is tagged {EXPIRES_TAG}={iso_z(exp)} ({local_hm(exp)} local)")
+    if not local:   # recorded before creating anything, so status/qalab warn even if this run dies halfway
+        save_aws_state(dict(account=acct, region=region, expires_at=iso_z(exp)))
+    if "kinesis" in what:
+        active = lambda name: kinesis_call(cr, "DescribeStreamSummary", {"StreamName": name})[
+            "StreamDescriptionSummary"]["StreamStatus"] == "ACTIVE"
+        for i, name in enumerate(n["kinesis"]):
+            while True:   # Kinesis caps streams in CREATING at once: on that limit, let the earlier ones finish
+                js = kinesis_call(cr, "CreateStream", {"StreamName": name, "ShardCount": 1, "Tags": tags},
+                                  ok_codes=("ResourceInUseException", "LimitExceededException"))
+                if "LimitExceeded" not in js.get("__type", ""):
+                    break
+                for prev in n["kinesis"][:i]:
+                    wait_for(lambda: active(prev), f"kinesis stream {prev}", 180, 2)
+            if not js:
+                record_created(f"AWS [{_aws_acct[0]}] Kinesis stream {name} ({region}; expires-at tag; loglab aws down deletes it)")
+                print(ok_(f"  created kinesis stream {name}"))
+        for name in n["kinesis"]:
+            wait_for(lambda: active(name), f"kinesis stream {name}", 180, 2)
+        print(ok_(f"  kinesis: {len(n['kinesis'])} streams ACTIVE"))
+    if "firehose" in what:
+        b = n["bucket"]
+        st, _ = aws_req(cr, "s3", "HEAD", f"/{b}")
+        if st != 200:
+            body = b"" if region == "us-east-1" else (
+                f'<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                f"<LocationConstraint>{region}</LocationConstraint></CreateBucketConfiguration>").encode()
+            st, out = aws_req(cr, "s3", "PUT", f"/{b}", body=body)
+            if st not in (200, 409):
+                raise Fail(f"create bucket {b}: {st} {out[:200]!r}")
+            record_created(f"AWS [{_aws_acct[0]}] S3 bucket {b} ({region}; expires-at tag; loglab aws down --all empties and deletes it)")
+            print(ok_(f"  created S3 bucket {b}"))
+        s3_tag_bucket(cr, b, tags)
+        s3_put_sub(cr, b, "lifecycle", (
+            "<LifecycleConfiguration><Rule><ID>loglab-expire</ID><Filter><Prefix></Prefix></Filter><Status>Enabled</Status>"
+            f"<Expiration><Days>{LOG_RETENTION_DAYS}</Days></Expiration><AbortIncompleteMultipartUpload>"
+            "<DaysAfterInitiation>1</DaysAfterInitiation></AbortIncompleteMultipartUpload></Rule></LifecycleConfiguration>"))
+        arn = iam_role(glob, FIREHOSE_ROLE, "firehose.amazonaws.com", tags=tags, inline={"Version": "2012-10-17", "Statement": [{
+            "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetBucketLocation", "s3:ListBucket",
+                                          "s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads"],
+            "Resource": [f"arn:aws:s3:::{b}", f"arn:aws:s3:::{b}/*"]}]})
+        for name, prefix in n["firehose"]:
+            def create(name=name, prefix=prefix):
+                return firehose_call(cr, "CreateDeliveryStream", {
+                    "DeliveryStreamName": name, "DeliveryStreamType": "DirectPut",
+                    "ExtendedS3DestinationConfiguration": {
+                        "BucketARN": f"arn:aws:s3:::{b}", "RoleARN": arn, "Prefix": prefix,
+                        "ErrorOutputPrefix": f"errors/{prefix}",
+                        "BufferingHints": {"SizeInMBs": 1, "IntervalInSeconds": 60}},
+                    "Tags": tag_list(tags)}, ok_codes=("ResourceInUseException",))
+            if not retry_new_role(create, f"firehose {name}").get("__type"):
+                record_created(f"AWS [{_aws_acct[0]}] Firehose delivery stream {name} → s3://{b}/{prefix} (expires-at tag; loglab aws down deletes it)")
+        for name, _ in n["firehose"]:
+            wait_for(lambda: firehose_call(cr, "DescribeDeliveryStream", {"DeliveryStreamName": name})
+                     ["DeliveryStreamDescription"]["DeliveryStreamStatus"] == "ACTIVE", f"firehose {name}", 300, 3)
+        print(ok_(f"  firehose: {len(n['firehose'])} delivery streams ACTIVE → s3://{b}/ (objects expire after {LOG_RETENTION_DAYS} day)"))
+    if "lambda" in what:
+        arn = iam_role(glob, LAMBDA_ROLE, "lambda.amazonaws.com", policy_arn=BASIC_EXEC, tags=tags)
+        code = lambda_zip()
+        for name, group in zip(n["functions"], n["log_groups"]):
+            if ensure_log_group(cr, group, LOG_RETENTION_DAYS, tags):   # before the function, so it never logs into an unmanaged group
+                record_created(f"AWS [{_aws_acct[0]}] CloudWatch log group {group} ({region}; expires-at tag; loglab aws down deletes it)")
+            st, _ = aws_req(cr, "lambda", "GET", f"/2015-03-31/functions/{name}")
+            if st == 200:
+                continue
+            def create(name=name):
+                rest_call(cr, "lambda", "POST", "/2015-03-31/functions", {
+                    "FunctionName": name, "Runtime": "python3.12", "Role": arn, "Handler": "index.handler",
+                    "Code": {"ZipFile": code}, "Timeout": 10, "MemorySize": 128,
+                    "Description": "loglab: prints each Fleet log line to CloudWatch", "Tags": tags})
+            retry_new_role(create, f"lambda {name}")
+            record_created(f"AWS [{_aws_acct[0]}] Lambda function {name} ({region}; expires-at tag; loglab aws down deletes it)")
+            print(ok_(f"  created lambda function {name}"))
+        print(ok_(f"  lambda: {len(n['functions'])} functions (logs kept {LOG_RETENTION_DAYS} day)"))
+    # one expiry for everything of yours here, incl. kinds made by an earlier up
+    count = aws_retag(cr, glob, adoptable(aws_inventory(cr, glob, n)[0], n), tags)
+    log_history(f"aws up {','.join(sorted(what))} account {acct} {region} expires {iso_z(exp)}")
+    print(bold_(f"\n{count} loglab resources of {OWNER}'s expire {local_hm(exp)} ({until(exp)})."))
+    if not local:
+        print(f"After that {GUARD_FN} deletes them within 15 min, from inside AWS, even if this Mac is off.\n"
+              f"More time: loglab aws extend 2h   Delete now: loglab aws down")
+
+
+def aws_extend(local, more):
+    cr, glob, acct, region, s = aws_target(local)
+    n = aws_names(s, acct, region)
+    items, _ = aws_inventory(cr, glob, n)
+    own = adoptable(items, n)
+    if not own:
+        raise Fail(f"no loglab resources of {OWNER}'s exist here; nothing to extend")
+    current = min((parse_iso(i["expires"]) for i in own if parse_iso(i["expires"])), default=utcnow())
+    exp = cap_expiry(max(current, utcnow()) + more)
+    count = aws_retag(cr, glob, own, own_tags(exp))
+    if not local:
+        save_aws_state(dict(account=acct, region=region, expires_at=iso_z(exp)))
+    log_history(f"aws extend account {acct} {region} expires {iso_z(exp)}")
+    print(ok_(f"{count} loglab resources now expire {local_hm(exp)} ({until(exp)})"))
+    for i in split_owners(items)[2]:
+        if i not in own:
+            print(warn_(f"  ! {i['kind']} {i['name']} has no {OWNER_TAG} tag and isn't one of your names: not extended "
+                        f"(the guard deletes it when its own expiry passes)"))
+
+
+def aws_down(local, everything, include_unowned=False):
+    """Delete the caller's own resources (owner tag); unowned ones only with include_unowned."""
+    cr, glob, acct, region, s = aws_target(local)
+    n = aws_names(s, acct, region)
+    print(f"AWS account {acct}  region {region}  owner {OWNER}")
+    items, _ = aws_inventory(cr, glob, n)
+    mine, others, unowned = split_owners(items)
+    targets = mine + (unowned if include_unowned else [])
+    if not everything:
+        targets = [i for i in targets if i["kind"] not in ("s3", "iam")]
+    order = ["lambda", "firehose", "kinesis", "logs", "s3", "iam"]
+    targets.sort(key=lambda i: order.index(i["kind"]) if i["kind"] in order else 99)
+    for it in targets:
+        kind, name = it["kind"], it["name"]
+        if kind == "kinesis":
+            gone = kinesis_call(cr, "DeleteStream", {"StreamName": name, "EnforceConsumerDeletion": True},
+                                ok_codes=("ResourceNotFoundException",)).get("__type")
+        elif kind == "firehose":
+            gone = firehose_call(cr, "DeleteDeliveryStream", {"DeliveryStreamName": name},
+                                 ok_codes=("ResourceNotFoundException",)).get("__type")
+        elif kind == "lambda":
+            gone = aws_req(cr, "lambda", "DELETE", f"/2015-03-31/functions/{name}")[0] not in (200, 204)
+        elif kind == "logs":
+            gone = logs_call(cr, "DeleteLogGroup", {"logGroupName": name}, ok_codes=("ResourceNotFoundException",)).get("__type")
+        elif kind == "s3":
+            while True:   # a bucket must be empty before it can go
+                st, out = aws_req(cr, "s3", "GET", f"/{name}", query={"list-type": "2", "max-keys": "1000"})
+                if st != 200:
+                    break
+                root = ET.fromstring(out)
+                keys = [e.text for e in root.iter() if e.tag.endswith("}Key") or e.tag == "Key"]
+                if not keys:
+                    break
+                for k in keys:
+                    aws_req(cr, "s3", "DELETE", f"/{name}/{urllib.parse.quote(k)}")
+            gone = aws_req(cr, "s3", "DELETE", f"/{name}")[0] not in (200, 204)
+        elif kind == "iam":
+            gone = not iam_delete_role(glob, name)
+        else:
+            print(warn_(f"  ! {kind} {name}: loglab can't delete this kind; the guard deletes it at expiry"))
+            continue
+        if not gone:
+            record_created(f"AWS [{_aws_acct[0]}] {kind} {name} — deleted")
+            print(ok_(f"  deleted {kind} {name}") + (dim_(" (unowned)") if not it["owner"] else ""))
+    if not targets:
+        print(ok_("  nothing of yours to delete" + ("" if everything else " (bucket and roles: --all)")))
+    if unowned and not include_unowned:
+        print(warn_(f"  {len(unowned)} unowned loglab resource(s) left alone (no {OWNER_TAG} tag): "
+                    "--all --include-unowned deletes them, or the guard at expiry"))
+    if others:
+        print(dim_(f"  {len(others)} resource(s) of other owners left alone"))
+    left, by_tag = aws_inventory(cr, glob, n)
+    left = [i for i in left if i in targets or any(i["kind"] == t["kind"] and i["name"] == t["name"] for t in targets)]
+    if left and by_tag:
+        print(warn_("  still listed (Firehose and Kinesis delete in the background for up to a minute; "
+                    "`loglab aws status` to recheck):"))
+        for i in left:
+            print(warn_(f"    {i['kind']} {i['name']}"))
+    if not local:
+        save_aws_state({})   # what may remain (bucket, roles) doesn't bill and keeps its expires-at for the guard
+    log_history(f"aws down{' --all' if everything else ''}{' --include-unowned' if include_unowned else ''} "
+                f"account {acct} {region} owner {OWNER}")
+
+
+# ---------------------------------------------------------------- cost safeguards (loglab aws guard)
+def guard_reach(s, n):
+    """The shared guard only reaps names under BASE_PREFIX / BUCKET_BASE: refuse to create anything it can't reach."""
+    bad = [f"{k}={name_prefix(s, k)}" for k in ("KINESIS_STREAM_PREFIX", "FIREHOSE_STREAM_PREFIX", "LAMBDA_FUNCTION_PREFIX")
+           if not name_prefix(s, k).startswith(BASE_PREFIX)]
+    if not n["bucket"].startswith(BUCKET_BASE):
+        bad.append(f"FIREHOSE_S3_BUCKET={n['bucket']}")
+    if bad:
+        raise Fail(f"the account's guard only deletes names starting {BASE_PREFIX} (buckets {BUCKET_BASE}); "
+                   f"change or empty these in SECRETS.env: {', '.join(bad)}")
+
+
+def guard_settings(s, acct, region):
+    email = s.get("AWS_ALERT_EMAIL", "")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", email, re.I):
+        raise Fail("set AWS_ALERT_EMAIL in SECRETS.env (budget and anomaly alerts go there)")
+    return dict(prefix=BASE_PREFIX, bucket_prefix=BUCKET_BASE, email=email)
+
+
+def guard_reaper_policy(acct, region, g):
+    """What the reaper may do: delete things with loglab's name prefixes, nothing else."""
+    p, bp, arn = g["prefix"], g["bucket_prefix"], f"{region}:{acct}"
+    return {"Version": "2012-10-17", "Statement": [
+        {"Sid": "List", "Effect": "Allow", "Action": ["kinesis:ListStreams", "firehose:ListDeliveryStreams",
+                                                      "lambda:ListFunctions", "logs:DescribeLogGroups",
+                                                      "s3:ListAllMyBuckets", "iam:ListRoles"], "Resource": "*"},
+        {"Sid": "Kinesis", "Effect": "Allow", "Action": ["kinesis:ListTagsForStream", "kinesis:DescribeStreamSummary",
+                                                         "kinesis:DeleteStream"],
+         "Resource": f"arn:aws:kinesis:{arn}:stream/{p}*"},
+        {"Sid": "Firehose", "Effect": "Allow", "Action": ["firehose:ListTagsForDeliveryStream",
+                                                          "firehose:DescribeDeliveryStream", "firehose:DeleteDeliveryStream"],
+         "Resource": f"arn:aws:firehose:{arn}:deliverystream/{p}*"},
+        {"Sid": "Lambda", "Effect": "Allow", "Action": ["lambda:ListTags", "lambda:DeleteFunction"],
+         "Resource": f"arn:aws:lambda:{arn}:function:{p}*"},
+        {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:ListTagsLogGroup", "logs:ListTagsForResource", "logs:DeleteLogGroup"],
+         "Resource": f"arn:aws:logs:{arn}:log-group:/aws/lambda/{p}*"},
+        {"Sid": "S3", "Effect": "Allow", "Action": ["s3:GetBucketTagging", "s3:ListBucket", "s3:ListBucketVersions",
+                                                    "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:DeleteBucket"],
+         "Resource": [f"arn:aws:s3:::{bp}*", f"arn:aws:s3:::{bp}*/*"]},
+        {"Sid": "Roles", "Effect": "Allow", "Action": ["iam:ListRoleTags", "iam:ListAttachedRolePolicies",
+                                                       "iam:ListRolePolicies", "iam:DetachRolePolicy",
+                                                       "iam:DeleteRolePolicy", "iam:DeleteRole"],
+         "Resource": f"arn:aws:iam::{acct}:role{ROLE_PATH}*"},
+    ]}
+
+
+def guard_budget(acct, email, topic_arn):
+    return {"AccountId": acct, "Budget": {
+        "BudgetName": GUARD_BUDGET, "BudgetType": "COST", "TimeUnit": "MONTHLY",
+        "BudgetLimit": {"Amount": str(BUDGET_CAP_USD), "Unit": "USD"},
+        "CostFilters": {"Service": BUDGET_SERVICES}},
+        "NotificationsWithSubscribers": [
+            {"Notification": {"NotificationType": "ACTUAL", "ComparisonOperator": "GREATER_THAN",
+                              "Threshold": BUDGET_ALERT_USD, "ThresholdType": "ABSOLUTE_VALUE"},
+             "Subscribers": [{"SubscriptionType": "EMAIL", "Address": email}]},
+            {"Notification": {"NotificationType": "ACTUAL", "ComparisonOperator": "GREATER_THAN",
+                              "Threshold": 100, "ThresholdType": "PERCENTAGE"},
+             "Subscribers": [{"SubscriptionType": "EMAIL", "Address": email},
+                             {"SubscriptionType": "SNS", "Address": topic_arn}]}],
+        "ResourceTags": [GUARD_TAG]}
+
+
+def guard_missing(cr, glob, acct, region):
+    """The pieces `aws up` insists on: the reaper, its schedule (enabled) and the budget."""
+    missing = []
+    if aws_req(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}")[0] != 200:
+        missing.append(f"reaper function {GUARD_FN}")
+    st, js = rest_call(cr, "scheduler", "GET", f"/schedules/{GUARD_SCHEDULE}", ok_codes=(404, "ResourceNotFoundException"))
+    if st != 200 or js.get("State") != "ENABLED":
+        missing.append(f"schedule {GUARD_SCHEDULE}" + (" (disabled)" if st == 200 else ""))
+    js = aws_json(glob, "budgets", "AWSBudgetServiceGateway.DescribeBudget",
+                  {"AccountId": acct, "BudgetName": GUARD_BUDGET}, ok_codes=("NotFoundException",))
+    if not js.get("Budget"):
+        missing.append(f"budget {GUARD_BUDGET}")
+    return missing
+
+
+def cmd_guard(args, local):
+    dry = flag(args, "--dry-run")
+    update = flag(args, "--update")
+    sub = args[0] if args else "status"
+    cr, glob, acct, region, s = aws_target(local)
+    if sub in ("install", "up"):
+        return guard_up(cr, glob, acct, region, s, local, dry, update)
+    if sub == "status":
+        return guard_report(cr, glob, acct, region, s, local=local)
+    if sub == "run":
+        return guard_run(cr, "all" if "--all" in args else "expired", dry)
+    if sub == "down":
+        return guard_down(cr, glob, acct, region, s, local, force=("--force" in args), assume_yes=("--yes" in args))
+    die("usage: loglab aws guard install [--dry-run] [--update] | status | run [--all] [--dry-run] | down [--force]")
+
+
+def guard_owner(cr):
+    """-> (exists, owner tag of the reaper function or None)."""
+    st, js = rest_call(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}", ok_codes=(404, "ResourceNotFoundException"))
+    return st == 200, (js.get("Tags") or {}).get(OWNER_TAG) if st == 200 else None
+
+
+def guard_up(cr, glob, acct, region, s, local, dry, update=False):
+    """Install the account's guard. An existing guard (anyone's) is left as it is unless update: then this checkout's
+    reaper code, policy and settings replace it (one guard serves every loglab user in the account)."""
+    exists, by = guard_owner(cr)
+    if exists and not update:
+        missing = guard_missing(cr, glob, acct, region) if not local else []
+        if not missing:
+            print(ok_(f"The cost safeguards are already installed in {acct} (by {by or 'an earlier loglab'}); left as they are."))
+            print(dim_("  loglab aws guard status   ·   to roll out this checkout's reaper: loglab aws guard install --update"))
+            return
+        print(warn_(f"guard partly installed in {acct} (by {by or 'an earlier loglab'}): adding only {', '.join(missing)}"))
+    g = guard_settings(s, acct, region)
+    policy = guard_reaper_policy(acct, region, g)
+    fn_arn = f"arn:aws:lambda:{region}:{acct}:function:{GUARD_FN}"
+    topic_arn = f"arn:aws:sns:{region}:{acct}:{GUARD_TOPIC}"
+    budget = guard_budget(acct, g["email"], topic_arn)
+    tags = {GUARD_TAG["Key"]: GUARD_TAG["Value"], OWNER_TAG: OWNER}
+    refresh = update or not exists
+    src = open(REAPER_SRC).read()
+    print(bold_(f"loglab cost safeguards for AWS account {acct}, region {region}") + (dim_("  (dry run: nothing is created)") if dry else ""))
+
+    def step(title, *detail):
+        print(f"\n{bold_('•')} {title}")
+        for d in detail:
+            print(dim_("    " + d.replace("\n", "\n    ")))
+        return not dry
+
+    if step(f"IAM role {GUARD_PATH}{GUARD_ROLE} for the reaper (Lambda)",
+            "AWS managed policy AWSLambdaBasicExecutionRole (write its own logs) plus this inline policy:",
+            json.dumps(policy, indent=1)):
+        role_arn = iam_role(glob, GUARD_ROLE, "lambda.amazonaws.com", policy_arn=BASIC_EXEC, inline=policy,
+                            path=GUARD_PATH, tags=tags, refresh=refresh)
+    if step(f"CloudWatch log group /aws/lambda/{GUARD_FN}, kept {GUARD_LOG_DAYS} days"):
+        if ensure_log_group(cr, f"/aws/lambda/{GUARD_FN}", GUARD_LOG_DAYS, tags, refresh):
+            record_created(f"AWS [{_aws_acct[0]}] guard: CloudWatch log group /aws/lambda/{GUARD_FN} (loglab aws guard down deletes it)")
+    env = {"NAME_PREFIX": g["prefix"], "BUCKET_PREFIX": g["bucket_prefix"], "ROLE_PATH": ROLE_PATH}
+    if step(f"Lambda function {GUARD_FN} (python3.12, 256 MB, 5 min max) running loglab/aws/reaper.py",
+            f"environment {json.dumps(env)}",
+            "deletes resources tagged created-by=loglab whose expires-at has passed (or have none);",
+            "when the budget alert invokes it, deletes every loglab resource regardless of expiry;",
+            f"never touches anything outside the prefixes above. Source: {REAPER_SRC} ({len(src.splitlines())} lines)"):
+        code = zip_bytes({"reaper.py": src})
+        sha = base64.b64encode(hashlib.sha256(code).digest()).decode()
+        st, js = rest_call(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}", ok_codes=(404, "ResourceNotFoundException"))
+        if st != 200:
+            def create():
+                rest_call(cr, "lambda", "POST", "/2015-03-31/functions", {
+                    "FunctionName": GUARD_FN, "Runtime": "python3.12", "Role": role_arn, "Handler": "reaper.handler",
+                    "Code": {"ZipFile": base64.b64encode(code).decode()}, "Timeout": 300, "MemorySize": 256,
+                    "Description": "loglab-guard: deletes expired loglab resources (see loglab aws guard)",
+                    "Environment": {"Variables": env}, "Tags": tags})
+            retry_new_role(create, GUARD_FN)
+            record_created(f"AWS [{_aws_acct[0]}] guard: Lambda function {GUARD_FN} ({region}; loglab aws guard down deletes it)")
+            print(ok_(f"  created {GUARD_FN}"))
+        elif update:
+            if js["Configuration"].get("CodeSha256") != sha:
+                rest_call(cr, "lambda", "PUT", f"/2015-03-31/functions/{GUARD_FN}/code", {"ZipFile": base64.b64encode(code).decode()})
+                print(ok_(f"  updated {GUARD_FN} code"))
+            wait_for(lambda: rest_call(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}/configuration")[1]
+                     .get("LastUpdateStatus", "Successful") != "InProgress", f"{GUARD_FN} update", 120, 2)
+            have = rest_call(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}/configuration")[1]
+            if (have.get("Role"), (have.get("Environment") or {}).get("Variables"), have.get("Timeout")) != (role_arn, env, 300):
+                rest_call(cr, "lambda", "PUT", f"/2015-03-31/functions/{GUARD_FN}/configuration",
+                          {"Role": role_arn, "Environment": {"Variables": env}, "Timeout": 300})
+                print(ok_(f"  updated {GUARD_FN} settings"))
+        cfg = {}
+        def settled():
+            cfg.update(rest_call(cr, "lambda", "GET", f"/2015-03-31/functions/{GUARD_FN}/configuration")[1])
+            return cfg.get("State", "Active") != "Pending"
+        wait_for(settled, f"{GUARD_FN} active", 120, 2)
+        if cfg.get("State", "Active") != "Active":
+            msg = f"{GUARD_FN} is {cfg.get('State')}: {cfg.get('StateReason', '')}"
+            if not local:
+                raise Fail(msg)
+            print(warn_(f"  {msg} (LocalStack can't run functions here; fine for this self-test)"))
+    sched_policy = {"Version": "2012-10-17", "Statement": [
+        {"Effect": "Allow", "Action": "lambda:InvokeFunction", "Resource": [fn_arn, f"{fn_arn}:*"]}]}
+    if step(f"IAM role {GUARD_PATH}{GUARD_SCHED_ROLE} for EventBridge Scheduler: may only invoke {GUARD_FN}"):
+        sched_role = iam_role(glob, GUARD_SCHED_ROLE, "scheduler.amazonaws.com", inline=sched_policy,
+                              path=GUARD_PATH, tags=tags, refresh=refresh)
+    sched = {"ScheduleExpression": GUARD_EVERY, "FlexibleTimeWindow": {"Mode": "OFF"}, "State": "ENABLED",
+             "Description": "loglab-guard: delete expired loglab resources",
+             "Target": {"Arn": fn_arn, "RoleArn": "<scheduler role>" if dry else sched_role,
+                        "Input": json.dumps({"trigger": "schedule"}), "RetryPolicy": {"MaximumRetryAttempts": 2}}}
+    if step(f"EventBridge schedule {GUARD_SCHEDULE}: runs the reaper {GUARD_EVERY}", json.dumps(sched)):
+        st, _ = rest_call(cr, "scheduler", "POST", f"/schedules/{GUARD_SCHEDULE}", dict(sched, ClientToken=str(uuid.uuid4())),
+                          ok_codes=(409, "ConflictException"))
+        if st == 409 and update:
+            rest_call(cr, "scheduler", "PUT", f"/schedules/{GUARD_SCHEDULE}", dict(sched, ClientToken=str(uuid.uuid4())))
+        else:
+            record_created(f"AWS [{_aws_acct[0]}] guard: EventBridge schedule {GUARD_SCHEDULE} ({region}; loglab aws guard down deletes it)")
+    topic_policy = {"Version": "2012-10-17", "Statement": [{
+        "Sid": "budgets", "Effect": "Allow", "Principal": {"Service": "budgets.amazonaws.com"}, "Action": "SNS:Publish",
+        "Resource": topic_arn, "Condition": {"StringEquals": {"aws:SourceAccount": acct},
+                                             "ArnLike": {"aws:SourceArn": f"arn:aws:budgets::{acct}:*"}}}]}
+    if step(f"SNS topic {GUARD_TOPIC}: only AWS Budgets (this account) may publish; it invokes the reaper in 'delete all' mode",
+            json.dumps(topic_policy)):
+        try:
+            aws_query(cr, "sns", "GetTopicAttributes", {"TopicArn": topic_arn}, "2010-03-31")
+            have_topic = True
+        except AwsError:
+            have_topic = False
+        if not have_topic:   # CreateTopic on an existing topic with other tags (another owner's) fails
+            r = aws_query(cr, "sns", "CreateTopic", {"Name": GUARD_TOPIC, **tag_query(tags)}, "2010-03-31")
+            topic_arn = r.findtext(".//TopicArn")
+            record_created(f"AWS [{_aws_acct[0]}] guard: SNS topic {GUARD_TOPIC} ({region}; loglab aws guard down deletes it)")
+        if refresh or not have_topic:
+            aws_query(cr, "sns", "SetTopicAttributes", {"TopicArn": topic_arn, "AttributeName": "Policy",
+                                                         "AttributeValue": json.dumps(topic_policy)}, "2010-03-31")
+            rest_call(cr, "lambda", "POST", f"/2015-03-31/functions/{GUARD_FN}/policy",
+                      {"StatementId": "loglab-guard-budget", "Action": "lambda:InvokeFunction",
+                       "Principal": "sns.amazonaws.com", "SourceArn": topic_arn}, ok_codes=(409, "ResourceConflictException"))
+            aws_query(cr, "sns", "Subscribe", {"TopicArn": topic_arn, "Protocol": "lambda", "Endpoint": fn_arn}, "2010-03-31")
+    budget["NotificationsWithSubscribers"][1]["Subscribers"][1]["Address"] = topic_arn
+    if local:
+        print(dim_("\n(LocalStack has no Budgets or Cost Explorer: the last two steps are skipped)"))
+        return
+    if step(f"Budget {GUARD_BUDGET}: monthly, ${BUDGET_CAP_USD} on {', '.join(BUDGET_SERVICES)} (whole account, not just loglab)",
+            f"email {g['email']} when actual spend this month passes ${BUDGET_ALERT_USD}",
+            f"email + SNS → reaper deletes ALL loglab resources when it passes ${BUDGET_CAP_USD}",
+            "AWS evaluates budgets a few times a day: this is the backstop, the expiry is the real limit",
+            json.dumps(budget)):
+        js = aws_json(glob, "budgets", "AWSBudgetServiceGateway.CreateBudget", budget, ok_codes=("DuplicateRecordException",))
+        if js.get("__type"):
+            print(dim_(f"  budget {GUARD_BUDGET} already exists; its alert email stays as installed (guard down + install to change it)"))
+        else:
+            record_created(f"AWS [{_aws_acct[0]}] guard: Budget {GUARD_BUDGET} (loglab aws guard down deletes it)")
+            print(ok_(f"  created budget {GUARD_BUDGET}"))
+    monitor = {"AnomalyMonitor": {"MonitorName": GUARD_ANOMALY, "MonitorType": "DIMENSIONAL", "MonitorDimension": "SERVICE"},
+               "ResourceTags": [GUARD_TAG]}
+    sub = {"AnomalySubscription": {"SubscriptionName": GUARD_ANOMALY, "MonitorArnList": ["<monitor>"],
+                                   "Subscribers": [{"Type": "EMAIL", "Address": g["email"]}], "Frequency": "DAILY",
+                                   "ThresholdExpression": {"Dimensions": {"Key": "ANOMALY_TOTAL_IMPACT_ABSOLUTE",
+                                                                          "Values": [str(ANOMALY_USD)],
+                                                                          "MatchOptions": ["GREATER_THAN_OR_EQUAL"]}}},
+           "ResourceTags": [GUARD_TAG]}
+    if step(f"Cost anomaly monitor {GUARD_ANOMALY}: every service in the account; daily email to {g['email']} "
+            f"for anomalies with ≥ ${ANOMALY_USD} impact (free)", json.dumps(monitor), json.dumps(sub)):
+        mons = aws_json(glob, "ce", "AWSInsightsIndexService.GetAnomalyMonitors", {}).get("AnomalyMonitors", [])
+        mine = next((m for m in mons if m.get("MonitorName") == GUARD_ANOMALY), None)
+        other = next((m for m in mons if m.get("MonitorDimension") == "SERVICE"), None)
+        if mine:
+            mon_arn = mine["MonitorArn"]
+        elif other:   # AWS allows one service monitor per account: subscribe to the existing one, don't own it
+            mon_arn = other["MonitorArn"]
+            print(dim_(f"  using the account's existing service monitor {other['MonitorName']}"))
+        else:
+            mon_arn = aws_json(glob, "ce", "AWSInsightsIndexService.CreateAnomalyMonitor", monitor)["MonitorArn"]
+            record_created(f"AWS [{_aws_acct[0]}] guard: Cost anomaly monitor {GUARD_ANOMALY} (loglab aws guard down deletes it)")
+        subs = aws_json(glob, "ce", "AWSInsightsIndexService.GetAnomalySubscriptions", {}).get("AnomalySubscriptions", [])
+        if not any(x.get("SubscriptionName") == GUARD_ANOMALY for x in subs):
+            sub["AnomalySubscription"]["MonitorArnList"] = [mon_arn]
+            aws_json(glob, "ce", "AWSInsightsIndexService.CreateAnomalySubscription", sub)
+            record_created(f"AWS [{_aws_acct[0]}] guard: Cost anomaly subscription {GUARD_ANOMALY} → {g['email']} (loglab aws guard down deletes it)")
+    if dry:
+        print(bold_("\nNothing was created. Run without --dry-run to install."))
+        return
+    log_history(f"aws guard {'update' if update else 'install'} account {acct} {region}")
+    print(ok_("\nSafeguards installed.") + " Check: loglab aws guard status   Try the reaper: loglab aws guard run --dry-run")
+
+
+def guard_last_run(cr):
+    js = logs_call(cr, "FilterLogEvents", {"logGroupName": f"/aws/lambda/{GUARD_FN}", "filterPattern": '"reaper:"',
+                                           "startTime": int((time.time() - 6 * 3600) * 1000)},
+                   ok_codes=("ResourceNotFoundException",))
+    events = js.get("events") or []
+    if not events:
+        return None
+    return jload(events[-1]["message"].split("reaper:", 1)[1].strip())
+
+
+def guard_report(cr, glob, acct, region, s, brief=False, local=False):
+    rows = []
+    exists, by = guard_owner(cr)
+    rows.append(("reaper", exists, f"{GUARD_FN}" + (f" (installed by {by or 'an earlier loglab'}; shared by the account)"
+                                                     if exists else " missing")))
+    st, js = rest_call(cr, "scheduler", "GET", f"/schedules/{GUARD_SCHEDULE}", ok_codes=(404, "ResourceNotFoundException"))
+    rows.append(("schedule", st == 200 and js.get("State") == "ENABLED",
+                 f"{GUARD_SCHEDULE} {js.get('ScheduleExpression', '')} {js.get('State', 'missing')}"))
+    topic = f"arn:aws:sns:{region}:{acct}:{GUARD_TOPIC}"
+    try:
+        aws_query(cr, "sns", "GetTopicAttributes", {"TopicArn": topic}, "2010-03-31")
+        rows.append(("topic", True, f"{GUARD_TOPIC} (budget → reaper)"))
+    except AwsError:
+        rows.append(("topic", False, f"{GUARD_TOPIC} missing"))
+    if not local:
+        b = aws_json(glob, "budgets", "AWSBudgetServiceGateway.DescribeBudget",
+                     {"AccountId": acct, "BudgetName": GUARD_BUDGET}, ok_codes=("NotFoundException", "AccessDeniedException")).get("Budget")
+        spend = ((b or {}).get("CalculatedSpend") or {}).get("ActualSpend", {}).get("Amount") or 0
+        rows.append(("budget", bool(b), f"{GUARD_BUDGET}: this month ${float(spend):.2f} of ${BUDGET_CAP_USD} "
+                     f"(email at ${BUDGET_ALERT_USD}, delete-all at ${BUDGET_CAP_USD})" if b else f"{GUARD_BUDGET} missing"))
+    if not brief and not local:
+        subs = aws_json(glob, "ce", "AWSInsightsIndexService.GetAnomalySubscriptions", {}, ok_codes=("AccessDeniedException",))
+        sub = next((x for x in subs.get("AnomalySubscriptions", []) if x.get("SubscriptionName") == GUARD_ANOMALY), None)
+        rows.append(("anomaly", bool(sub), f"{GUARD_ANOMALY} → {', '.join(x['Address'] for x in sub['Subscribers'])}"
+                     if sub else f"{GUARD_ANOMALY} missing"))
+    print(bold_("cost safeguards:"))
+    for name, good, text in rows:
+        print(f"  {ok_('✓') if good else bad_('✗')} {name:<9} {text}")
+    last = guard_last_run(cr) if rows[0][1] else None
+    if last:
+        print(f"  {ok_('✓') if not last.get('errors') else bad_('✗')} last run  {last.get('at')} ({last.get('trigger')}, "
+              f"{last.get('mode')}): deleted {len(last.get('deleted', []))}, kept {len(last.get('kept', []))}"
+              + (bad_(f", errors: {'; '.join(last['errors'])[:300]}") if last.get("errors") else ""))
+    elif rows[0][1]:
+        print(warn_("  ! no reaper run in the last 6 h (it runs every 15 min): check its CloudWatch log group"))
+    if not all(r[1] for r in rows):
+        print(warn_("  install/repair: loglab aws guard install"))
+
+
+def guard_run(cr, mode, dry):
+    st, b = aws_req(cr, "lambda", "POST", f"/2015-03-31/functions/{GUARD_FN}/invocations",
+                    body=json.dumps({"trigger": "manual", "mode": mode, "dry_run": dry}),
+                    headers={"Content-Type": "application/json"}, timeout=310)
+    js = jload(b)
+    if st != 200 or "errorMessage" in js:
+        raise Fail(f"{GUARD_FN}: {st} {js.get('errorMessage') or js.get('Message') or js}")
+    print(f"reaper ({js.get('mode')}{', dry run' if js.get('dry_run') else ''}) at {js.get('at')}")
+    for k in ("deleted", "gone", "kept", "skipped", "errors"):
+        for x in js.get(k, []):
+            print(f"  {k:<8} {x}")
+    if not any(js.get(k) for k in ("deleted", "kept", "skipped", "errors")):
+        print(ok_("  no loglab resources found"))
+
+
+def guard_down(cr, glob, acct, region, s, local, force, assume_yes):
+    n = aws_names(s, acct, region)
+    items, _ = aws_inventory(cr, glob, n)
+    if items and not force:
+        owners = sorted({i["owner"] or "unowned" for i in items})
+        raise Fail(f"{len(items)} loglab resources still exist ({', '.join(owners)}) and the guard is what deletes them: "
+                   f"each owner runs loglab aws down --all first (or --force)")
+    if not assume_yes and not yes(f"Remove the cost safeguards (reaper, schedule, budget, anomaly alerts) from {acct}? "
+                                  "They are shared by everyone using loglab in this account"):
+        return
+    topic_arn = f"arn:aws:sns:{region}:{acct}:{GUARD_TOPIC}"
+
+    def anomaly_down():
+        for x in aws_json(glob, "ce", "AWSInsightsIndexService.GetAnomalySubscriptions", {}).get("AnomalySubscriptions", []):
+            if x.get("SubscriptionName") == GUARD_ANOMALY:
+                aws_json(glob, "ce", "AWSInsightsIndexService.DeleteAnomalySubscription", {"SubscriptionArn": x["SubscriptionArn"]})
+        for m in aws_json(glob, "ce", "AWSInsightsIndexService.GetAnomalyMonitors", {}).get("AnomalyMonitors", []):
+            if m.get("MonitorName") == GUARD_ANOMALY:
+                aws_json(glob, "ce", "AWSInsightsIndexService.DeleteAnomalyMonitor", {"MonitorArn": m["MonitorArn"]})
+
+    steps = [
+        (f"schedule {GUARD_SCHEDULE}", lambda: rest_call(cr, "scheduler", "DELETE", f"/schedules/{GUARD_SCHEDULE}",
+                                                         ok_codes=(404, "ResourceNotFoundException"))),
+        (f"SNS topic {GUARD_TOPIC}", lambda: aws_query(cr, "sns", "DeleteTopic", {"TopicArn": topic_arn}, "2010-03-31")),
+        (f"function {GUARD_FN}", lambda: rest_call(cr, "lambda", "DELETE", f"/2015-03-31/functions/{GUARD_FN}",
+                                                   ok_codes=(404, "ResourceNotFoundException"))),
+        (f"log group /aws/lambda/{GUARD_FN}", lambda: logs_call(cr, "DeleteLogGroup", {"logGroupName": f"/aws/lambda/{GUARD_FN}"},
+                                                                 ok_codes=("ResourceNotFoundException",))),
+        (f"role {GUARD_SCHED_ROLE}", lambda: iam_delete_role(glob, GUARD_SCHED_ROLE)),
+        (f"role {GUARD_ROLE}", lambda: iam_delete_role(glob, GUARD_ROLE)),
+    ]
+    if not local:
+        steps += [(f"budget {GUARD_BUDGET}", lambda: aws_json(glob, "budgets", "AWSBudgetServiceGateway.DeleteBudget",
+                                                              {"AccountId": acct, "BudgetName": GUARD_BUDGET},
+                                                              ok_codes=("NotFoundException",))),
+                  (f"anomaly monitor {GUARD_ANOMALY}", anomaly_down)]
+    errors = []
+    for what, fn in steps:   # best effort: one failure mustn't leave the rest behind
+        try:
+            fn()
+        except Fail as e:
+            errors.append(f"{what}: {e}")
+    if errors:
+        for e in errors:
+            print(bad_(f"  ✗ {e}"))
+        raise Fail("some safeguards weren't removed; re-run `loglab aws guard down` (it skips what's already gone)")
+    record_created(f"AWS [{_aws_acct[0]}] guard: all safeguards — deleted (loglab aws guard down)")
+    log_history(f"aws guard down account {acct} {region}")
+    print(ok_("cost safeguards removed"))
+
+
+# ---------------------------------------------------------------- NATS (tiny text-protocol client)
+class Nats:
+    def __init__(self, url, timeout=5):
+        u = urllib.parse.urlparse(url)
+        self.sock = socket.create_connection((u.hostname, u.port or 4222), timeout=timeout)
+        self.f = self.sock.makefile("rb")
+        info = self.f.readline()
+        if not info.startswith(b"INFO"):
+            raise Fail(f"{url}: not a NATS server ({info[:60]!r})")
+        self.send(b'CONNECT {"verbose":false,"pedantic":false,"name":"loglab","lang":"python","version":"1"}\r\n')
+
+    def send(self, b):
+        self.sock.sendall(b)
+
+    def ping(self):
+        self.send(b"PING\r\n")
+        while True:
+            line = self.f.readline()
+            if not line:
+                raise Fail("NATS connection closed")
+            if line.startswith(b"PONG"):
+                return True
+            if line.startswith(b"-ERR"):
+                raise Fail(f"NATS: {line.decode().strip()}")
+
+    def pub(self, subject, data):
+        self.send(f"PUB {subject} {len(data)}\r\n".encode() + data + b"\r\n")
+
+    def sub(self, subject, sid):
+        self.send(f"SUB {subject} {sid}\r\n".encode())
+
+    def messages(self):
+        self.sock.settimeout(None)
+        while True:
+            line = self.f.readline()
+            if not line:
+                raise Fail("NATS connection closed")
+            if line.startswith(b"MSG"):
+                parts = line.split()
+                n = int(parts[-1])
+                data = self.f.read(n)
+                self.f.read(2)
+                yield parts[1].decode(), data
+            elif line.startswith(b"PING"):
+                self.send(b"PONG\r\n")
+            elif line.startswith(b"-ERR"):
+                raise Fail(f"NATS: {line.decode().strip()}")
+
+
+# ---------------------------------------------------------------- per-destination checks
+def check_dest(dest, inst, types, write=True):
+    """-> [(ok: True|False|None, text)] for one destination and the log types sent to it. None = info/warning."""
+    res = []
+    add = lambda ok, text: res.append((ok, text))
+    svc = DESTS[dest]["service"]
+    if svc and svc != "cloud":
+        st = service_state(svc)
+        add(st == "running", f"{svc}: {st}" + ("" if st == "running" else f" — loglab up {svc}"))
+        if st != "running":
+            return res
+    miss = missing_secrets(dest) if svc == "cloud" else []
+    if miss:
+        add(False, f"SECRETS.env is missing {', '.join(miss)}")
+        return res
+    try:
+        if dest == "filesystem":
+            for t in types:
+                p = fs_path(inst, t)
+                d = os.path.dirname(p)
+                if not os.path.isdir(d):
+                    os.makedirs(d, exist_ok=True)
+                if os.path.exists(p):
+                    add(True, f"{t}: {p}  {os.path.getsize(p) // 1024} KB, last write {ago(os.path.getmtime(p))}")
+                else:
+                    add(None, f"{t}: {p} not created yet (Fleet creates it on first write after the restart)")
+        elif dest == "stdout":
+            lg = server_log(inst)
+            if not lg:
+                add(None, f"unsupported: {no_server_log(inst)}")
+                return res
+            n, last = 0, 0
+            cutoff = (time.time() - 300) * 1000
+            for line in tail_lines(lg, 4 * 2**20):
+                ms, stream, text = split_log_line(line)
+                if stream in ("stdout", None) and text.startswith("{"):
+                    ms = ms if ms is not None else os.path.getmtime(lg) * 1000   # plain log: no per-line time
+                    if ms >= cutoff:
+                        n += 1
+                        last = max(last, ms / 1000)
+            add(n > 0 or None, f"{n} JSON log lines on stdout in the last 5 min (last {ago(last)}) — {lg}")
+        elif dest == "webhook":
+            for t in types:
+                if write:
+                    st, b = http("POST", target_name(dest, inst, t), {"timestamp": datetime.datetime.now(
+                        datetime.timezone.utc).isoformat(), "details": [test_record(inst, t)]})
+                    add(st == 200, f"{t}: POST {target_name(dest, inst, t)} → {st}")
+                p = os.path.join(SINKS, inst, f"webhook-{t}.jsonl")
+                if os.path.exists(p):
+                    add(None, f"{t}: {p} last write {ago(os.path.getmtime(p))}")
+        elif dest in ("splunk", "splunk-local", "splunk-cloud"):
+            _, b = dest_section(dest, inst, types)
+            ins = bool(b.get("insecure_skip_verify"))
+            st, body = http("GET", b["url"].rstrip("/") + "/services/collector/health", insecure=ins)
+            add(st == 200, f"HEC health {b['url']} → {st} {jload(body).get('text', '')}")
+            if write:
+                ev = json.dumps({"event": test_record(inst, ",".join(types)), "time": time.time(),
+                                 **({"index": b["index"]} if b.get("index") else {}),
+                                 **({"source": b["source"]} if b.get("source") else {}),
+                                 **({"sourcetype": b["source_type"]} if b.get("source_type") else {})}).encode()
+                st, body = http("POST", b["url"].rstrip("/") + "/services/collector/event", ev,
+                                {"Authorization": f"Splunk {b['token']}"}, insecure=ins)
+                add(st == 200, f"HEC event with Fleet's token → {st} {jload(body).get('text', '')}")
+            if dest == "splunk-local":
+                n = len(splunk_search(f"search index=main source=fleet-{inst} earliest=-15m | head 1000"))
+                add(None, f"search: {n} event(s) from source=fleet-{inst} in the last 15 min — {SPLUNK_WEB}")
+        elif dest in ("kinesis", "kinesis-aws"):
+            cr = aws_creds(dest)
+            for t in types:
+                name = target_name(dest, inst, t)
+                s = kinesis_call(cr, "DescribeStreamSummary", {"StreamName": name})["StreamDescriptionSummary"]
+                add(s["StreamStatus"] == "ACTIVE", f"{t}: stream {name} {s['StreamStatus']}, {s.get('OpenShardCount', '?')} shard(s)")
+                if write:
+                    data = base64.b64encode((json.dumps(test_record(inst, t)) + "\n").encode()).decode()
+                    r = kinesis_call(cr, "PutRecord", {"StreamName": name, "Data": data, "PartitionKey": "loglab"})
+                    add(True, f"{t}: PutRecord ok (shard {r.get('ShardId')})")
+        elif dest in ("firehose", "firehose-aws"):
+            cr = aws_creds(dest)
+            for t in types:
+                name = target_name(dest, inst, t)
+                s = firehose_call(cr, "DescribeDeliveryStream", {"DeliveryStreamName": name})["DeliveryStreamDescription"]
+                add(s["DeliveryStreamStatus"] == "ACTIVE", f"{t}: delivery stream {name} {s['DeliveryStreamStatus']}")
+                if write:
+                    data = base64.b64encode((json.dumps(test_record(inst, t)) + "\n").encode()).decode()
+                    firehose_call(cr, "PutRecord", {"DeliveryStreamName": name, "Record": {"Data": data}})
+                    add(True, f"{t}: PutRecord ok (lands in S3 after Firehose buffering, ~60 s)")
+        elif dest == "lambda-aws":
+            cr = aws_creds(dest)
+            for t in types:
+                name = target_name(dest, inst, t)
+                st, b = aws_req(cr, "lambda", "GET", f"/2015-03-31/functions/{name}")
+                js = jload(b)
+                state = (js.get("Configuration") or {}).get("State", js.get("Message", ""))
+                add(st == 200, f"{t}: function {name} → {st} {state}  (not invoked; Fleet invokes it once per log line)")
+        elif dest == "pubsub":
+            base = f"http://{PUBSUB_HOST}/v1/projects/{PUBSUB_PROJECT}"
+            for t in types:
+                name = target_name(dest, inst, t)
+                st, _ = http("GET", f"{base}/topics/{name}")
+                add(st == 200, f"{t}: topic {name} → {st}")
+                if write and st == 200:
+                    data = base64.b64encode(json.dumps(test_record(inst, t)).encode()).decode()
+                    st, _ = http("POST", f"{base}/topics/{name}:publish", {"messages": [{"data": data}]})
+                    add(st == 200, f"{t}: publish → {st}")
+            w = hangar_wiring(inst)
+            env = w["env"]
+            if not w["hangar"]:
+                add(None, f"fleet serve must run with env PUBSUB_EMULATOR_HOST={PUBSUB_HOST} (loglab can't check it "
+                          "without Hangar) or Fleet talks to real Google Cloud")
+                return res
+            add(env.get("PUBSUB_EMULATOR_HOST") == PUBSUB_HOST,
+                f"Hangar env PUBSUB_EMULATOR_HOST = {env.get('PUBSUB_EMULATOR_HOST') or '(not set)'}"
+                + ("" if env.get("PUBSUB_EMULATOR_HOST") == PUBSUB_HOST else
+                   f" — add {PUBSUB_HOST} in Hangar or Fleet talks to real Google Cloud"))
+        elif dest == "kafkarest":
+            st, b = http("GET", f"{KAFKA_PROXY}/topics")
+            have = jload(b) if st == 200 else []
+            for t in types:
+                name = target_name(dest, inst, t)
+                add(name in have, f"{t}: topic {name} {'exists' if name in have else 'missing — loglab up redpanda'}")
+                if write and name in have:
+                    st, b = http("POST", f"{KAFKA_PROXY}/topics/{name}",
+                                 json.dumps({"records": [{"value": test_record(inst, t)}]}).encode(),
+                                 {"Content-Type": "application/vnd.kafka.json.v2+json"})
+                    add(st == 200, f"{t}: produce via REST proxy → {st}")
+        elif dest == "nats":
+            nc = Nats(NATS_URL)
+            nc.ping()
+            add(True, f"connected to {NATS_URL}")
+            if write:
+                for t in types:
+                    nc.pub(target_name(dest, inst, t), json.dumps(test_record(inst, t)).encode())
+                nc.ping()
+                add(True, "published a test message per subject: " + ", ".join(target_name(dest, inst, t) for t in types))
+            nc.sock.close()
+    except Fail as e:
+        add(False, str(e))
+    return res
+
+
+def server_log_errors(inst, since=None, limit=6):
+    """Recent log-writer errors in Hangar's server log (since the server started)."""
+    pat = re.compile(r"(kinesis|firehose|lambda|pubsub|kafka|nats|splunk|webhook|log writer|osquery_status|osquery_result|"
+                     r"result log|status log|audit log|initializing osqueryd)", re.I)
+    out = []
+    lg = server_log(inst)
+    for line in tail_lines(lg) if lg else []:
+        ms, _, text = split_log_line(line)
+        if since and ms is not None and ms / 1000 < since:
+            continue
+        if ("level=error" in text or "level=warn" in text or text.lower().startswith(("error", "fatal")) or "err=" in text) \
+                and pat.search(text) and not text.startswith("{"):
+            out.append((ms / 1000 if ms is not None else 0, text))
+    seen, uniq = set(), []
+    for ts, text in reversed(out):
+        key = re.sub(r"ts=\S+\s*", "", text)[:160]
+        if key not in seen:
+            seen.add(key)
+            uniq.append((ts, text))
+        if len(uniq) >= limit:
+            break
+    return list(reversed(uniq))
+
+
+# ---------------------------------------------------------------- viewing
+def kind_of(obj, hint=None):
+    if not isinstance(obj, dict):
+        return hint or "?"
+    if obj.get("loglab_test"):
+        return "test"
+    if hint:
+        return hint
+    if "severity" in obj and ("filename" in obj or "message" in obj):
+        return "status"
+    if "actor_full_name" in obj or "actor_email" in obj or ("type" in obj and "created_at" in obj):
+        return "audit"
+    return "result"
+
+
+def summarize(obj, typ):
+    if not isinstance(obj, dict):
+        return str(obj)[:200]
+    host = (obj.get("decorations") or {}).get("hostname") or obj.get("hostIdentifier") or ""
+    if typ == "test":
+        return f"loglab test record ({obj.get('instance')}/{obj.get('type')}, sent {obj.get('sent_at', '')[11:19]})"
+    if typ == "status":
+        sev = {0: "INFO", 1: "WARN", 2: "ERROR", 3: "FATAL"}.get(int(obj.get("severity") or 0), obj.get("severity"))
+        return f"{host}  {sev}  {obj.get('filename', '')}:{obj.get('line', '')}  {str(obj.get('message', ''))[:140]}"
+    if typ == "audit":
+        actor = obj.get("actor_email") or obj.get("actor_full_name") or "fleet"
+        det = json.dumps(obj.get("details") or {}, separators=(",", ":"))
+        return f"{obj.get('type', '?')}  by {actor}  {det[:140]}"
+    name = obj.get("name", "")
+    if "snapshot" in obj:
+        rows = obj.get("snapshot") or []
+        return f"{host}  {name}  snapshot {len(rows)} row(s)  {json.dumps(rows[0], separators=(',', ':'))[:100] if rows else ''}"
+    if "diffResults" in obj:
+        d = obj["diffResults"] or {}
+        return f"{host}  {name}  +{len(d.get('added') or [])} -{len(d.get('removed') or [])}"
+    cols = obj.get("columns") or {}
+    brief = " ".join(f"{k}={v}" for k, v in list(cols.items())[:4])
+    return f"{host}  {name}  {obj.get('action', '')}  {brief[:140]}"
+
+
+def log_time(obj):
+    """HH:MM:SS from the log itself (osquery unixTime, audit created_at, test sent_at), else now."""
+    try:
+        if str(obj.get("unixTime", "")).isdigit():
+            return time.strftime("%H:%M:%S", time.localtime(int(obj["unixTime"])))
+        for k in ("created_at", "sent_at", "timestamp"):
+            v = obj.get(k)
+            if isinstance(v, str) and len(v) >= 19:
+                d = datetime.datetime.fromisoformat(v.replace("Z", "+00:00")[:32])
+                return (d.astimezone() if d.tzinfo else d).strftime("%H:%M:%S")
+    except (ValueError, TypeError):
+        pass
+    return time.strftime("%H:%M:%S")
+
+
+class Printer:
+    def __init__(self, inst, types, raw, grep, keep=None):
+        self.inst, self.types, self.raw, self.grep = inst, set(types), raw, grep.lower() if grep else None
+        self.keep = keep   # optional (obj, type) -> bool
+        self.counts = {}
+
+    def emit(self, payload, hint=None):
+        """payload: bytes/str (one or more JSON lines) or an already-parsed object."""
+        if isinstance(payload, (bytes, str)):
+            text = payload.decode("utf-8", "replace") if isinstance(payload, bytes) else payload
+            for line in text.splitlines():
+                line = line.strip()
+                if line:
+                    self.emit(jload(line) if line.startswith("{") else {"raw": line}, hint)
+            return
+        typ = kind_of(payload, hint)
+        if typ != "test" and typ in TYPES and typ not in self.types:
+            return
+        if payload.get("loglab_test") and payload.get("type") in TYPES and payload.get("type") not in self.types:
+            return
+        line = json.dumps(payload, separators=(",", ":")) if self.raw else summarize(payload, typ)
+        if self.grep and self.grep not in json.dumps(payload).lower():
+            return
+        if self.keep and not self.keep(payload, typ):
+            return
+        self.counts[typ] = self.counts.get(typ, 0) + 1
+        stamp = log_time(payload)
+        tag = col(f"{self.inst}/{typ:<6}", TYPE_COLOR.get(typ, "0"))
+        print(f"{dim_(stamp)} {tag} {line}", flush=True)
+
+
+def follow_files(paths_types, from_start, printer, poll=0.5):
+    """tail -F for several files: [(path, type_hint)]. Handles truncation/rotation."""
+    pos = {}
+    for p, _ in paths_types:
+        try:
+            pos[p] = 0 if from_start else os.path.getsize(p)
+        except OSError:
+            pos[p] = 0
+    buf = {p: b"" for p, _ in paths_types}
+    while True:
+        for p, hint in paths_types:
+            try:
+                size = os.path.getsize(p)
+            except OSError:
+                continue
+            if size < pos[p]:
+                pos[p] = 0
+            if size > pos[p]:
+                with open(p, "rb") as f:
+                    f.seek(pos[p])
+                    data = f.read(size - pos[p])
+                pos[p] = size
+                data = buf[p] + data
+                lines = data.split(b"\n")
+                buf[p] = lines.pop()
+                for line in lines:
+                    printer.emit(line, hint)
+        time.sleep(poll)
+
+
+def view_stdout(inst, from_start, printer):
+    lg = server_log(inst)
+    if not lg:
+        raise Fail(f"unsupported: {no_server_log(inst)}")
+    pos = 0 if from_start else (os.path.getsize(lg) if os.path.exists(lg) else 0)
+    rest = b""
+    while True:
+        try:
+            size = os.path.getsize(lg)
+        except OSError:
+            size = 0
+        if size < pos:
+            pos = 0
+        if size > pos:
+            with open(lg, "rb") as f:
+                f.seek(pos)
+                data = rest + f.read(size - pos)
+            pos = size
+            lines = data.split(b"\n")
+            rest = lines.pop()
+            for line in lines:
+                _, stream, text = split_log_line(line)
+                if stream in ("stdout", None) and text.startswith(b"{"):
+                    printer.emit(text)
+        time.sleep(0.5)
+
+
+def view_kinesis(dest, inst, types, from_start, printer):
+    cr = aws_creds(dest)
+    its = []
+    for t in types:
+        name = target_name(dest, inst, t)
+        shards = kinesis_call(cr, "ListShards", {"StreamName": name}).get("Shards", [])
+        for sh in shards:
+            it = kinesis_call(cr, "GetShardIterator", {"StreamName": name, "ShardId": sh["ShardId"],
+                                                       "ShardIteratorType": "TRIM_HORIZON" if from_start else "LATEST"})
+            its.append([t, it["ShardIterator"]])
+    while True:
+        for pair in its:
+            if not pair[1]:
+                continue
+            r = kinesis_call(cr, "GetRecords", {"ShardIterator": pair[1], "Limit": 500})
+            pair[1] = r.get("NextShardIterator")
+            for rec in r.get("Records", []):
+                printer.emit(base64.b64decode(rec["Data"]), pair[0])
+        time.sleep(1)
+
+
+def s3_list(cr, bucket, prefix):
+    keys, token = [], None
+    while True:
+        q = {"list-type": "2", "prefix": prefix}
+        if token:
+            q["continuation-token"] = token
+        st, b = aws_req(cr, "s3", "GET", f"/{bucket}", q)
+        if st != 200:
+            raise Fail(f"S3 list s3://{bucket}/{prefix}: {st} {b[:200]}")
+        root = ET.fromstring(b)
+        ns = root.tag.split("}")[0] + "}" if root.tag.startswith("{") else ""
+        keys += [c.findtext(f"{ns}Key") for c in root.findall(f"{ns}Contents")]
+        token = root.findtext(f"{ns}NextContinuationToken")
+        if not token:
+            return keys
+
+
+def view_firehose(dest, inst, types, from_start, printer):
+    cr = aws_creds(dest)
+    own = read_secrets().get("FIREHOSE_S3_BUCKET")
+    if dest == "firehose":
+        bucket = FIREHOSE_BUCKET
+    elif own:
+        bucket = own
+    else:   # the bucket `loglab aws up` made; its delivery streams write under <inst>/<type>/
+        _, _, acct, region, s = aws_target(False)
+        bucket = aws_names(s, acct, region)["bucket"]
+    prefixes = {t: "" if dest == "firehose-aws" and own else f"{inst}/{t}/" for t in types}
+    seen = set()
+    if not from_start:
+        for p in set(prefixes.values()):
+            seen.update(s3_list(cr, bucket, p))
+    print(dim_(f"watching s3://{bucket}/ — Firehose delivers in batches (~60 s buffer), so expect bursts"), flush=True)
+    while True:
+        for t, p in prefixes.items():
+            for k in s3_list(cr, bucket, p):
+                if k in seen:
+                    continue
+                seen.add(k)
+                st, b = aws_req(cr, "s3", "GET", f"/{bucket}/{k}")
+                if st == 200:
+                    printer.emit(b, t if p else None)
+        time.sleep(5)
+
+
+def splunk_search(query, **params):
+    """Run a search on the local Splunk -> [result dict]. The Free license refuses REST logins from outside the
+    container, so this runs curl inside it against localhost (no auth needed there on Free)."""
+    name = docker_exec_target("splunk")
+    cmd = ["docker", "exec", name, "curl", "-sk", "-w", "\\n%{http_code}", "https://localhost:8089/services/search/jobs/export",
+           "--data-urlencode", f"search={query}", "-d", "output_mode=json"]
+    for k, v in params.items():
+        cmd += ["-d", f"{k}={v}"]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+    body, _, code = out.stdout.rpartition("\n")
+    if out.returncode != 0 or code != "200":
+        raise Fail(f"Splunk search → {code or out.returncode} {(body or out.stderr)[:200]}")
+    return [r for r in (jload(l).get("result") for l in body.splitlines()) if r]
+
+
+def view_splunk_local(inst, from_start, printer):
+    """Poll by index time, so late-arriving events (audit is batched) still show up once."""
+    since = 0 if from_start else int(time.time()) - 5
+    seen = set()
+    while True:
+        rows = splunk_search(f"search index=main source=fleet-{inst} | sort 0 _indextime | fields _raw _indextime _cd",
+                             index_earliest=since, earliest_time=0)
+        for r in rows:
+            key = (r.get("_cd"), r.get("_indextime"))
+            if key in seen:
+                continue
+            seen.add(key)
+            printer.emit(r.get("_raw", "").encode())
+            since = max(since, int(r.get("_indextime") or since))
+        time.sleep(3)
+
+
+def view_lambda(inst, types, from_start, printer):
+    """The loglab function prints each event it gets; read those lines back from CloudWatch Logs."""
+    cr = aws_creds("lambda-aws")
+    since = {t: 0 if from_start else int((time.time() - 5) * 1000) for t in types}
+    seen = set()
+    while True:
+        for t in types:
+            fn = target_name("lambda-aws", inst, t)
+            js = aws_json(cr, "logs", "Logs_20140328.FilterLogEvents",
+                          {"logGroupName": f"/aws/lambda/{fn}", "startTime": since[t], "limit": 500},
+                          ok_codes=("ResourceNotFoundException",))
+            for ev in js.get("events", []):
+                if ev["eventId"] in seen:
+                    continue
+                seen.add(ev["eventId"])
+                since[t] = max(since[t], ev["timestamp"])
+                msg = ev.get("message", "").strip()
+                if msg.startswith("{"):
+                    printer.emit(msg.encode(), t)
+        time.sleep(5)
+
+
+def view_pubsub(inst, types, printer):
+    base = f"http://{PUBSUB_HOST}/v1/projects/{PUBSUB_PROJECT}/subscriptions"
+    while True:
+        got = 0
+        for t in types:
+            st, b = http("POST", f"{base}/loglab-view-{inst}-{t}:pull", {"maxMessages": 200, "returnImmediately": True})
+            msgs = jload(b).get("receivedMessages", []) if st == 200 else []
+            for m in msgs:
+                printer.emit(base64.b64decode(m["message"].get("data", "")), t)
+            if msgs:
+                got += len(msgs)
+                http("POST", f"{base}/loglab-view-{inst}-{t}:acknowledge", {"ackIds": [m["ackId"] for m in msgs]})
+        if not got:
+            time.sleep(1)
+
+
+def view_kafka(inst, types, from_start, printer):
+    name = docker_exec_target("redpanda")
+    topics = [target_name("kafkarest", inst, t) for t in types]
+    p = subprocess.Popen(["docker", "exec", name, "rpk", "topic", "consume", *topics, "-o",
+                          "start" if from_start else "end", "-f", "%t\t%v\n"], stdout=subprocess.PIPE)
+    try:
+        for line in p.stdout:
+            topic, _, val = line.partition(b"\t")
+            printer.emit(val, topic.decode().rsplit("-", 1)[-1])
+    finally:
+        p.terminate()
+
+
+def view_nats(inst, types, printer):
+    nc = Nats(NATS_URL)
+    for n, t in enumerate(types, 1):
+        nc.sub(target_name("nats", inst, t), n)
+    nc.ping()
+    for subject, data in nc.messages():
+        printer.emit(data, subject.rsplit(".", 1)[-1])
+
+
+def run_view(dest, inst, types, from_start, printer):
+    if dest in (None, "filesystem"):
+        if dest is None:   # Fleet's own default: $TMPDIR/osquery_* — shared by every local instance
+            live = live_state(inst).get("logging") or {}
+            cfg = (live.get("result") or {}).get("config") or {}
+            paths = [(cfg.get("result_log_file"), "result"), (cfg.get("status_log_file"), "status")]
+            paths = [(p, t) for p, t in paths if p and t in types]
+            print(warn_("default filesystem logs: every local Fleet instance writes the same $TMPDIR files, so all appear here"))
+        else:
+            paths = [(fs_path(inst, t), t) for t in types]
+        return follow_files(paths, from_start, printer)
+    if dest == "stdout":
+        return view_stdout(inst, from_start, printer)
+    if dest in ("webhook", "splunk"):
+        paths = [(os.path.join(SINKS, inst, f"webhook-{t}.jsonl"), t) for t in types] if dest == "webhook" \
+            else [(os.path.join(SINKS, inst, "splunk.jsonl"), None)]
+        return follow_files(paths, from_start, printer)
+    if dest in ("kinesis", "kinesis-aws"):
+        return view_kinesis(dest, inst, types, from_start, printer)
+    if dest in ("firehose", "firehose-aws"):
+        return view_firehose(dest, inst, types, from_start, printer)
+    if dest == "pubsub":
+        return view_pubsub(inst, types, printer)
+    if dest == "kafkarest":
+        return view_kafka(inst, types, from_start, printer)
+    if dest == "nats":
+        return view_nats(inst, types, printer)
+    if dest == "splunk-local":
+        return view_splunk_local(inst, from_start, printer)
+    if dest == "splunk-cloud":
+        s = read_secrets()
+        raise Fail(f"HEC is write-only; search in Splunk: index={s.get('SPLUNK_INDEX') or '<token default>'} "
+                   f"source={s.get('SPLUNK_SOURCE') or 'fleet'}")
+    if dest == "lambda-aws":
+        return view_lambda(inst, types, from_start, printer)
+    raise Fail(f"no viewer for {dest}")
+
+
+# ---------------------------------------------------------------- commands
+def cmd_status(args):
+    as_json = flag(args, "--json")
+    if not INSTANCES and not as_json:
+        print(warn_(f"no instances: set INSTANCES and INSTANCE_<name>_CONTEXT in {LAB['_PATH']}\n"))
+    ensure_config_files()
+    insts = [inst_status(i) for i in INSTANCES]
+    dests = []
+    svc_states = {s: service_state(s) for s in SERVICES}
+    for k, d in DESTS.items():
+        svc = d["service"]
+        st = svc_states.get(svc) if svc and svc != "cloud" else ("cloud" if not missing_secrets(k) else "no secrets") \
+            if svc == "cloud" else "built-in"
+        dests.append(dict(key=k, name=d["name"], plugin=d["plugin"], service=svc or "", state=st,
+                          types=list(d["types"]), note=d["note"],
+                          supported={i: d["plugin"] in supported_plugins(i) for i in INSTANCES},
+                          used_by=[f"{i}:{t}" for i in INSTANCES for t, v in load_selection(i).items() if v == k]))
+    services = [dict(key=s, state=svc_states[s], port=v["port"], mem=v["mem"], what=v["what"]) for s, v in SERVICES.items()]
+    out = dict(instances=insts, destinations=dests, services=services, aws=aws_local_summary(), data=DATA, hangar=HANGAR)
+    if as_json:
+        return print(json.dumps(out, indent=1))
+    for s in insts:
+        head = f"{bold_(s['name'])} ({s['server']} {s['hangar_name']})" if s["hangar"] else bold_(s["name"])
+        if not s["up"]:
+            print(f"{head}  {bad_('down')}  {s['error']}")
+        else:
+            print(f"{head}  {ok_('up')}  {s['version']}  {s['license']}")
+        print(f"  file    {s['file']}")
+        print(f"  next    {ok_(s['next']) if s['state'] == 'applied' else warn_(s['next'])}")
+        for t in TYPES:
+            v = s["types"][t]
+            mark = ok_("✓") if v["applied"] else warn_("…") if s["up"] else " "
+            print(f"  {t:<7} configured {v['configured']:<14} live {v['live'] or '-':<34} {mark}")
+        for p in s["pending"]:
+            print(f"  {warn_('!')} {p}")
+        print()
+    print(bold_("Sinks"))
+    for sv in services:
+        st = sv["state"]
+        c = ok_ if st == "running" else dim_
+        print(f"  {sv['key']:<11}{c(st):<18} 127.0.0.1:{sv['port']:<6} {sv['what']}")
+    used = [d for d in dests if d["used_by"]]
+    for d in used:
+        if d["service"] and d["service"] != "cloud" and d["state"] != "running":
+            print(warn_(f"  ! {', '.join(d['used_by'])} → {d['key']}, but {d['service']} is {d['state']}"
+                        + (": that server won't start" if d["plugin"] in STARTUP_CHECKED else ": logs are dropped")))
+    if out["aws"]:
+        a = out["aws"]
+        print()
+        print((bad_ if a["expired"] else warn_)(a["text"]))
+
+
+def cmd_dests(args):
+    for k, d in DESTS.items():
+        sup = ",".join(i for i in INSTANCES if d["plugin"] in supported_plugins(i))
+        print(f"{bold_(k):<24} plugin {d['plugin']:<11} types {','.join(d['types']):<20} on {sup:<8} {d['note']}")
+        if d.get("secrets"):
+            print(f"{'':16}needs SECRETS.env: {', '.join(d['secrets'])}")
+
+
+def cmd_switch(args):
+    assume = flag(args, "--yes") or flag(args, "-y")
+    only = opt(args, "--only")
+    if len(args) != 2:
+        die("usage: loglab switch <inst> <dest|default> [--only result,status,audit] [--yes]")
+    inst, dest = args
+    need_inst(inst)
+    if dest not in DESTS and dest != "default":
+        die(f"destination must be one of: {', '.join(DESTS)}, default")
+    if dest != "default" and DESTS[dest]["plugin"] not in supported_plugins(inst):
+        raise Fail(f"{inst}'s build has no `{DESTS[dest]['plugin']}` log plugin")
+    if dest == "splunk-local" and not SPLUNK_LICENSE_OK:
+        raise Fail("splunk-local runs Splunk Enterprise, which needs you to accept Splunk's license and General Terms "
+                   f"({SPLUNK_LICENSE_URL}). If you do, set LOGLAB_ACCEPT_SPLUNK_LICENSE=1 in {LAB['_PATH']}.")
+    if dest == "stdout" and not server_log(inst):
+        print(warn_(f"! {no_server_log(inst)}; loglab test/view won't see these logs"))
+    types = parse_types(only) if only else list(TYPES if dest == "default" else DESTS[dest]["types"])
+    if dest != "default":
+        unsupported = [t for t in types if t not in DESTS[dest]["types"]]
+        if unsupported:
+            raise Fail(f"{dest} can't take {', '.join(unsupported)} logs (supports {', '.join(DESTS[dest]['types'])})")
+    old = load_selection(inst)
+    # Without --only every log type moves together; a type the destination can't take (webhook has no audit
+    # URL) goes back to Fleet's default rather than staying on the previous destination.
+    new = dict(old) if only else {t: None for t in TYPES}
+    for t in types:
+        new[t] = None if dest == "default" else dest
+    cfg = build_config(inst, new)
+
+    # pre-flight: sink running + provisioned, secrets present
+    if dest != "default":
+        svc = DESTS[dest]["service"]
+        if svc == "cloud":
+            miss = missing_secrets(dest)
+            if miss:
+                raise Fail(f"{dest} needs {', '.join(miss)} in {SECRETS}")
+        elif svc:
+            if service_state(svc) != "running":
+                if assume or yes(f"{svc} isn't running. Start it now?", True):
+                    service_up(svc)
+                else:
+                    raise Fail(f"{dest} needs {svc}: loglab up {svc}")
+            else:
+                provision(svc, [inst])
+        if dest == "filesystem":
+            for t in types:
+                os.makedirs(os.path.dirname(fs_path(inst, t)), exist_ok=True)
+                record_created(f"dir {os.path.dirname(fs_path(inst, t))}")
+
+    text = render_yaml(inst, new, cfg)
+    dump = config_dump(inst, text)
+    bad = verify_dump(cfg, dump) if dump is not None else []
+    if bad:
+        raise Fail(f"{inst}'s fleet binary doesn't read the file as intended:\n  " + "\n  ".join(bad))
+
+    print(bold_(f"{inst}: {config_path(inst)}"))
+    for t in TYPES:
+        a, b = old[t] or "default", new[t] or "default"
+        print(f"  {t:<7} {a:<14} → {ok_(b) if a != b else b}")
+    print(dim_("  " + render_yaml(inst, new, cfg, mask=True).replace("\n", "\n  ").rstrip()))
+    if dump is not None:
+        print(dim_(f"  validated with {INSTANCES[inst]['fleet_bin']} config_dump"))
+    if new == old and os.path.exists(config_path(inst)):
+        print("no change")
+    elif not (assume or yes("Write it?", True)):
+        return print("not written")
+    else:
+        write_config(inst, new, cfg)
+        save_selection(inst, new)
+        log_history(f"switch {inst} " + " ".join(f"{t}={new[t] or 'default'}" for t in TYPES))
+        print(ok_("written"))
+
+    if dest != "default":
+        for ok, text_ in check_dest(dest, inst, types, write=False):
+            print(f"  {ok_('✓') if ok else bad_('✗') if ok is False else warn_('·')} {text_}")
+    w = hangar_wiring(inst)
+    print()
+    print(bold_("To apply (manual):"))
+    if not w["hangar"]:
+        step = 1
+        print(f"  {step}. fleet serve for {inst} must run with --config {config_path(inst)}  (one time; or use the env "
+              f"rows from `loglab env {inst}` instead). Env vars beat the file.")
+        for d in set(x for x in new.values() if x):
+            for k, v in dest_env(d).items():
+                step += 1
+                print(f"  {step}. Run fleet serve with env {k}={v}  (config files can't set it)")
+        print(f"  {step + 1}. Restart fleet serve. `loglab status` turns green once GET /config shows the new logging.")
+        print(f"  Then: loglab test {inst}   ·   loglab view {inst}")
+        return
+    srv = f"{INSTANCES[inst]['server']} ({w['name']})"
+    step = 1
+    if not w["wired"]:
+        print(f"  {step}. Fleet Hangar → Settings → Fleet serve (server {srv}) → Config file (--config) → pick\n"
+              f"     {config_path(inst)}   (one time; Hangar currently has: {w['config_path'] or 'none'})")
+        step += 1
+    if w["overrides"]:
+        print(f"  {step}. Disable these Hangar env rows on {srv}; env beats the config file: {', '.join(w['overrides'])}")
+        step += 1
+    for d in set(x for x in new.values() if x):
+        for k, v in dest_env(d).items():
+            if w["env"].get(k) != v:
+                print(f"  {step}. Add Hangar env row on {srv}: {k}={v}  (one time: leave it on for good; config files can't set it)")
+                step += 1
+    print(f"  {step}. Restart {srv} in Fleet Hangar.")
+    print(f"  Then: loglab test {inst}   ·   loglab view {inst}")
+    if any(new[t] and DESTS[new[t]]["plugin"] in STARTUP_CHECKED for t in TYPES):
+        print(dim_("  (kinesis/firehose/kafkarest/nats are checked at startup: keep the sink up or the server exits)"))
+    if new["audit"]:
+        print(dim_("  audit logs need Premium and arrive up to ~5 min after the activity"))
+
+
+def cmd_test(args):
+    write = not flag(args, "--no-write")
+    if len(args) != 1:
+        die("usage: loglab test <inst> [--no-write]")
+    inst = args[0]
+    need_inst(inst)
+    s = inst_status(inst)
+    mark = lambda ok: ok_("✓") if ok else bad_("✗") if ok is False else warn_("·")
+    print(bold_(f"{inst} ({s['server']} {s['hangar_name']})" if s["hangar"] else inst) + f"   next: {s['next']}")
+    print(f"  {mark(s['up'])} server {'up ' + s['version'] if s['up'] else 'down: ' + s['error']}")
+    if s["hangar"]:
+        print(f"  {mark(s['wired'])} Hangar Config file → {s['hangar_config'] or 'none'}")
+    else:
+        print(f"  {mark(None)} Hangar n/a: fleet serve must run with --config {config_path(inst)}; "
+              "applied = GET /config matches the file")
+    if s["up"] and s["hangar"]:
+        print(f"  {mark(s['running_with_config'])} running process "
+              f"{'uses' if s['running_with_config'] else 'does not use'} --config {config_path(inst)}"
+              + (f" (started {ago(s['proc_started'])})" if s["proc_started"] else ""))
+    for t in TYPES:
+        v = s["types"][t]
+        print(f"  {mark(v['applied'] if s['up'] else None)} {t:<7} file: {v['configured']:<14} live: {v['live'] or '-'}")
+    for p in s["pending"]:
+        print(f"  {warn_('!')} {p}")
+    sel = s["selection"]
+    for dest in dict.fromkeys(d for d in (sel[t] for t in TYPES) if d):
+        types = [t for t in TYPES if sel[t] == dest]
+        print(bold_(f"  {dest} ({', '.join(types)})"))
+        for ok, text in check_dest(dest, inst, types, write=write):
+            print(f"    {mark(ok)} {text}")
+    if not any(sel.values()):
+        print(dim_("  no loglab destination selected (Fleet defaults)"))
+    errs = server_log_errors(inst, s["proc_started"])
+    if not server_log(inst):
+        print(dim_(f"  server log: n/a (set INSTANCE_{inst}_SERVER_LOG to scan it for log-writer errors)"))
+    else:
+        print(bold_("  server log: log-writer errors since start") + ("" if errs else ok_("  none")))
+    for ts, text in errs:
+        print(f"    {dim_(time.strftime('%H:%M:%S', time.localtime(ts)))} {text[:220]}")
+    if write and any(sel.values()):
+        print(dim_("  test records are marked {\"loglab_test\": true}; `loglab view` shows them in green"))
+
+
+def cmd_view(args):
+    raw = flag(args, "--raw")
+    from_start = flag(args, "--from-start")
+    grep = opt(args, "--grep")
+    tsel = opt(args, "--type")
+    dest_override = opt(args, "--dest")
+    if len(args) != 1:
+        die("usage: loglab view <inst> [--type result,status,audit] [--raw] [--from-start] [--grep TEXT]")
+    inst = args[0]
+    need_inst(inst)
+    types = parse_types(tsel) if tsel else list(TYPES)
+    sel = load_selection(inst)
+    if dest_override:
+        groups = {dest_override: types}
+    else:
+        groups = {}
+        for t in types:
+            groups.setdefault(sel[t], []).append(t)
+    s = inst_status(inst)
+    if s["state"] != "applied" and not dest_override:
+        print(warn_(f"note: {s['next']} — until then the server isn't sending to the destination shown here"))
+    printer = Printer(inst, types, raw, grep)
+    start_views(inst, groups, from_start, printer)
+    while True:
+        time.sleep(1)
+
+
+def start_views(inst, groups, from_start, printer):
+    """Run one viewer thread per destination in groups {dest: [types]}; errors are printed, not raised."""
+    import threading
+    desc = ", ".join(f"{','.join(ts)} → {d or 'default'}" for d, ts in groups.items())
+    print(dim_(f"{inst}: {desc}   (Ctrl-C to stop)"), flush=True)
+    def worker(d, ts):
+        try:
+            run_view(d, inst, ts, from_start, printer)
+        except Fail as e:
+            print(bad_(f"{d}: {e}"), flush=True)
+    for d, ts in groups.items():
+        threading.Thread(target=worker, args=(d, ts), daemon=True).start()
+
+
+FIRE_SQL = "SELECT 'loglab' AS source, datetime('now') AS fired_at, (SELECT hostname FROM system_info) AS host;"
+OSQUERY_RESTART = {   # by inventory os prefix; vm exec runs cmd.exe on Windows
+    "macos": "launchctl kickstart -k system/com.fleetdm.orbit",
+    "win": 'powershell -NoProfile -Command "Restart-Service -Force \'Fleet osquery\'"',
+    "": "systemctl restart orbit",
+}
+
+
+def vm_data():
+    """The vm tool's data dir (`vm config VM_DATA`), or None when vm isn't installed."""
+    if not shutil.which("vm"):
+        return None
+    try:
+        out = subprocess.run(["vm", "config", "VM_DATA"], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    d = out.stdout.strip().splitlines()[-1:] if out.returncode == 0 else []
+    return os.path.expanduser(d[0]) if d and os.path.isdir(os.path.expanduser(d[0])) else None
+
+
+def vm_inventory():
+    """[(name, os, server)] for active test hosts in the vm tool's inventory.tsv ([] without vm)."""
+    out = []
+    d = vm_data()
+    try:
+        with open(os.path.join(d or "/nonexistent", "inventory.tsv")) as f:
+            header = f.readline().rstrip("\n").split("\t")
+            rows = [dict(zip(header, l.rstrip("\n").split("\t"))) for l in f if l.strip()]
+    except OSError:
+        return out
+    for r in rows:
+        if r.get("role") == "host" and r.get("active") == "yes":
+            out.append((r.get("name", ""), r.get("os", ""), r.get("server", "")))
+    return out
+
+
+def fire_state_path(inst):
+    return os.path.join(STATE, f"fire-{inst}.json")
+
+
+def fire_delete(inst, qid, name):
+    st, js = fleet_api(inst, "DELETE", f"/api/v1/fleet/reports/id/{qid}")
+    if st in (200, 204, 404):
+        log_history(f"fire {inst}: deleted report {qid} '{name}'")
+        record_created(f"{inst} Fleet report id {qid} '{name}' — deleted again")
+        try:
+            left = [x for x in json.load(open(fire_state_path(inst))) if x["id"] != qid]
+            json.dump(left, open(fire_state_path(inst), "w"))
+        except (OSError, ValueError):
+            pass
+        return True
+    print(bad_(f"couldn't delete report {qid} '{name}': {st} {js}"))
+    return False
+
+
+def fire_audit(inst, minutes):
+    """API-only audit check: create + delete a report that never runs, then wait for both activities at the
+    audit destination. Touches no hosts."""
+    s = inst_status(inst)
+    if not s["up"]:
+        raise Fail(s["next"])
+    if not s["selection"]["audit"]:
+        raise Fail(f"{inst}'s audit log is off in the loglab file — switch audit to a destination first "
+                   f"(loglab switch {inst} <dest> --only audit)")
+    if s["state"] != "applied":
+        print(warn_(f"! {s['next']} — the server isn't sending audit logs to {s['selection']['audit']} yet"))
+        if sys.stdin.isatty() and not yes("Fire anyway?"):
+            return
+    name = f"loglab audit {inst} {time.strftime('%H:%M:%S')}"
+    seen = set()
+    def mine(obj, typ):
+        if typ == "audit" and name in json.dumps(obj.get("details") or {}):
+            seen.add(obj.get("type"))
+            return True
+        return typ == "test"
+    printer = Printer(inst, ["audit"], False, None, keep=mine)
+    dest = s["selection"]["audit"]
+    start_views(inst, {dest: ["audit"]}, False, printer)   # before the API calls: see fire's note
+    st, js = fleet_api(inst, "POST", "/api/v1/fleet/reports", {"name": name, "query": "SELECT 1;", "interval": 0,
+                       "description": "loglab fire --audit: created and deleted straight away to make audit events"})
+    q = js.get("report") or js.get("query") or {}
+    if st != 200 or not q.get("id"):
+        raise Fail(f"create report → {st} {js}")
+    record_created(f"{inst} Fleet report id {q['id']} '{name}' (never runs; deleted immediately by loglab fire --audit)")
+    print(ok_(f"POST /reports '{name}' (id {q['id']}) → created_saved_query"))
+    if not fire_delete(inst, q["id"], name):
+        raise Fail(f"report {q['id']} not deleted — loglab fire {inst} --cleanup")
+    print(ok_(f"DELETE /reports/id/{q['id']} → deleted_saved_query"))
+    log_history(f"fire --audit {inst}: report {q['id']} created + deleted")
+
+    extra = " + up to 60 s Firehose buffering" if dest.startswith("firehose") else ""
+    print(dim_(f"  Fleet ships audit logs every 5 min{extra}; waiting up to {minutes:g} min for both events "
+               f"at {dest} (Ctrl-C to stop)"), flush=True)
+    t0, tick = time.time(), [0]
+    try:
+        while time.time() - t0 < minutes * 60 and len(seen) < 2:
+            time.sleep(1)
+            el = int(time.time() - t0)
+            if not seen and el // 30 > tick[0]:
+                tick[0] = el // 30
+                print(dim_(f"  … {el // 60}m{el % 60:02d}s"), flush=True)
+    except KeyboardInterrupt:
+        print()
+    if len(seen) >= 2:
+        print(ok_(f"✓ both audit events arrived at {dest} after {int(time.time() - t0)} s"))
+        return
+    print(warn_(f"got {len(seen)}/2 audit events ({', '.join(sorted(seen)) or 'none'}) after {int(time.time() - t0)} s"))
+    if time.time() - t0 >= minutes * 60:
+        errs = server_log_errors(inst, time.time() - minutes * 60 - 60)
+        for ts, text in errs:
+            print(f"  {dim_(time.strftime('%H:%M:%S', time.localtime(ts)))} {text[:220]}")
+        if not errs:
+            print(dim_("  no log-writer errors in the server log — try a longer wait (--minutes 10) or loglab test"))
+        sys.exit(1)
+
+
+def cmd_fire(args):
+    keep = flag(args, "--keep")
+    cleanup = flag(args, "--cleanup")
+    audit_only = flag(args, "--audit")
+    minutes = float(opt(args, "--minutes", "8" if audit_only else "4"))
+    status_vm = opt(args, "--status-from")
+    if len(args) != 1:
+        die("usage: loglab fire <inst> [--audit] [--status-from <vm>] [--minutes N] [--keep] | --cleanup")
+    inst = args[0]
+    need_inst(inst)
+    if audit_only:
+        return fire_audit(inst, minutes)
+    if cleanup:
+        try:
+            left = json.load(open(fire_state_path(inst)))
+        except (OSError, ValueError):
+            left = []
+        for x in left:
+            fire_delete(inst, x["id"], x["name"])
+        return print(f"{len(left)} leftover loglab fire report(s) deleted on {inst}")
+    s = inst_status(inst)
+    if not s["up"]:
+        raise Fail(s["next"])
+    if s["state"] != "applied":
+        print(warn_(f"! {s['next']}"))
+        print(warn_("  Until then these logs go to the server's current destination: "
+                    + ", ".join(f"{t}={s['types'][t]['live']}" for t in TYPES)))
+        if sys.stdin.isatty() and not yes("Fire anyway?"):
+            return
+    vm = None
+    if status_vm:
+        vm = next((v for v in vm_inventory() if v[0] == status_vm), None)
+        if not vm:
+            raise Fail(f"{status_vm} isn't an active test host in the vm inventory" if vm_data()
+                       else "--status-from needs the vm tool on PATH (with `vm config VM_DATA`)")
+        if vm[2] != inst:
+            print(warn_(f"! inventory says {status_vm} is enrolled to {vm[2]}, not {inst}"))
+
+    def mine(obj, typ):
+        if typ == "result":
+            return "loglab fire" in str(obj.get("name", ""))
+        if typ == "audit":
+            return "loglab fire" in json.dumps(obj.get("details") or {})
+        return True   # status logs only come from real osquery (osquery-perf sends none), so show them all
+    printer = Printer(inst, TYPES, False, None, keep=mine)
+    sel = s["selection"]
+    groups = {}
+    for t in TYPES:
+        groups.setdefault(sel[t], []).append(t)
+    # watch before creating the report: right after a restart Fleet can ship the audit event within the same second
+    start_views(inst, groups, False, printer)
+
+    name = f"loglab fire {inst} {time.strftime('%H:%M:%S')}"
+    st, js = fleet_api(inst, "POST", "/api/v1/fleet/reports", {
+        "name": name, "query": FIRE_SQL, "interval": 60, "logging": "snapshot", "automations_enabled": True,
+        "description": "Temporary report from loglab fire: makes every host send a result log each minute. "
+                       "loglab deletes it when the fire run ends (or: loglab fire <inst> --cleanup)."})
+    q = js.get("report") or js.get("query") or {}
+    if st != 200 or not q.get("id"):
+        raise Fail(f"create report → {st} {js}")
+    qid = q["id"]
+    os.makedirs(STATE, exist_ok=True)
+    try:
+        open_reports = json.load(open(fire_state_path(inst)))
+    except (OSError, ValueError):
+        open_reports = []
+    json.dump(open_reports + [{"id": qid, "name": name}], open(fire_state_path(inst), "w"))
+    record_created(f"{inst} Fleet report id {qid} '{name}' (global, 60 s, automations on; loglab fire deletes it)")
+    log_history(f"fire {inst}: created report {qid} '{name}'")
+    print(ok_(f"created global report '{name}' (id {qid}): every host runs it each 60 s and sends a result log"))
+    print(dim_("  expect: results within ~1–2 min (hosts fetch config every ~1 min; osquery-perf hosts too); audit "
+               "'created_saved_query' within ~5 min; status logs only from real osquery (--status-from <vm>)"))
+    if vm:
+        osk = next(k for k in OSQUERY_RESTART if vm[1].startswith(k))
+        print(dim_(f"  restarting osquery on {vm[0]} for status logs: {OSQUERY_RESTART[osk]}"))
+        rc = subprocess.call(["vm", "exec", vm[0], OSQUERY_RESTART[osk]], stdout=subprocess.DEVNULL)
+        print(ok_("  restarted") if rc == 0 else bad_(f"  vm exec failed (exit {rc})"))
+        log_history(f"fire {inst}: restarted osquery on {vm[0]}")
+
+    deadline = time.time() + minutes * 60
+    try:
+        print(dim_(f"  watching for {minutes:g} min (Ctrl-C to stop early){'' if keep else '; the report is deleted after'}"),
+              flush=True)
+        while time.time() < deadline:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print()
+    finally:
+        got = ", ".join(f"{k} {v}" for k, v in printer.counts.items()) or "nothing yet"
+        print(bold_(f"received: {got}"))
+        if keep:
+            print(f"report {qid} kept — remove with: loglab fire {inst} --cleanup")
+        elif fire_delete(inst, qid, name):
+            print(f"report {qid} deleted (that's a 'deleted_saved_query' audit event too)")
+
+
+def cmd_up_down(cmd, args):
+    if len(args) != 1 or (args[0] not in SERVICES and args[0] != "all"):
+        die(f"usage: loglab {cmd} <{'|'.join(SERVICES)}|all>")
+    svcs = list(SERVICES) if args[0] == "all" else [args[0]]
+    for s in svcs:
+        if cmd == "up":
+            service_up(s)
+        else:
+            if args[0] == "all" and service_state(s) == "stopped":
+                continue
+            service_down(s)
+
+
+def cmd_show(args):
+    if len(args) != 1:
+        die("usage: loglab show <inst>")
+    need_inst(args[0])
+    sel = load_selection(args[0])
+    print(render_yaml(args[0], sel, build_config(args[0], sel), mask=True), end="")
+
+
+def cmd_env(args):
+    if len(args) != 1:
+        die("usage: loglab env <inst>")
+    need_inst(args[0])
+    sel = load_selection(args[0])
+    for k, v in env_rows(build_config(args[0], sel)):
+        shown = "****" if any(x in k.lower() for x in ("token", "secret")) and v not in ("test",) else v
+        print(f"{k}={shown}")
+    for d in set(x for x in sel.values() if x):
+        for k, v in dest_env(d).items():
+            print(f"{k}={v}")
+
+
+def cmd_path(args):
+    if len(args) != 1:
+        die("usage: loglab path <inst>")
+    need_inst(args[0])
+    ensure_config_files()
+    print(config_path(args[0]))
+
+
+def cmd_hangar(args):
+    ensure_config_files()
+    if not any(uses_hangar(i) for i in INSTANCES):
+        print("Fleet Hangar: n/a — " + ("HANGAR=0 in lab.env" if LAB.get("HANGAR", "auto").strip() == "0" else
+              "not installed" if not HANGAR else "no INSTANCE_<name>_HANGAR_ID set") + ".")
+        print("Without Hangar, run each fleet serve with --config <file>:")
+        for inst in INSTANCES:
+            print(f"  {inst}: {config_path(inst)}")
+        return
+    print("loglab writes one Fleet server config file per instance. Point each Hangar server at it once:")
+    print("Fleet Hangar → Settings → Fleet serve → (server) → Config file (--config) → pick the file, then restart.")
+    print("Also add the env row below to each server and leave it on: it only points Fleet's Pub/Sub log client at the\n"
+          "local emulator, so it's harmless while another destination is in use and makes pubsub a plain switch.\n")
+    for inst in INSTANCES:
+        w = hangar_wiring(inst)
+        p = hangar_proc(inst)
+        if not w["hangar"]:
+            print(f"{bold_(inst)}  not a Hangar server (no INSTANCE_{inst}_HANGAR_ID): fleet serve --config {config_path(inst)}")
+            continue
+        print(f"{bold_(inst)}  server {INSTANCES[inst]['server']} ({w['name']})")
+        print(f"  pick:    {config_path(inst)}")
+        print(f"  Hangar:  {w['config_path'] or 'none'}  " + (ok_("✓ wired") if w["wired"] else warn_("not wired")))
+        pub = w["env"].get("PUBSUB_EMULATOR_HOST")
+        print(f"  env row: PUBSUB_EMULATOR_HOST={PUBSUB_HOST}  "
+              + (ok_("✓ set") if pub == PUBSUB_HOST else warn_(f"currently {pub or 'not set'}")))
+        prof = read_secrets().get("AWS_PROFILE")
+        if prof:
+            have = w["env"].get("AWS_PROFILE")
+            print(f"  env row: AWS_PROFILE={prof}  "
+                  + (ok_("✓ set") if have == prof else warn_(f"currently {have or 'not set'}"))
+                  + ("" if aws_profile_exists(prof) else bad_(f"  ✗ no [profile {prof}] in ~/.aws/config — with the row "
+                                                             "set, Fleet's AWS clients (S3 too) fail to start")))
+        if p:
+            print(f"  running: {'with' if p['with_config'] else 'without'} the loglab file (started {ago(p['started'])})")
+        if w["overrides"]:
+            print(warn_(f"  enabled env rows that override the file: {', '.join(w['overrides'])}"))
+    if read_secrets().get("AWS_PROFILE"):
+        print(dim_("\nAWS_PROFILE: Fleet's AWS SDK reads that SSO profile from ~/.aws (credentials refresh while your SSO "
+                   "session is valid).\nAll other Fleet AWS clients have explicit keys here, so they ignore it — but the "
+                   "profile must exist, or they fail to load."))
+    print(dim_("\nUntil you switch, the files hold no logging keys, so wiring them changes nothing (Fleet defaults)."))
+
+
+def main():
+    a = sys.argv[1:]
+    cmd = a[0] if a else ""
+    rest = a[1:]
+    try:
+        if cmd == "":
+            if sys.stdin.isatty() and sys.stdout.isatty():
+                os.execv(sys.executable, [sys.executable, "-I", os.path.join(ROOT, "bin", "loglab-tui.py")])
+            return cmd_status([])
+        handlers = {"status": cmd_status, "switch": cmd_switch, "test": cmd_test, "view": cmd_view, "logs": cmd_view,
+                    "show": cmd_show, "env": cmd_env, "hangar": cmd_hangar, "path": cmd_path, "dests": cmd_dests, "fire": cmd_fire,
+                    "aws": cmd_aws}
+        if cmd in handlers:
+            return handlers[cmd](rest)
+        if cmd in ("up", "down"):
+            return cmd_up_down(cmd, rest)
+        if cmd in ("-h", "--help", "help"):
+            return print(__doc__.strip())
+        die(f"unknown command '{cmd}' (loglab help)")
+    except Fail as e:
+        die(str(e))
+    except KeyboardInterrupt:
+        print()
+        sys.exit(130)
+    except BrokenPipeError:
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

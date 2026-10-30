@@ -1,0 +1,2 @@
+name	role	os	arch	backend	server	purpose	created	active
+ubu24-arm	host	ubuntu24	arm	qemu	rc	Ubuntu 24.04 test host	2026-01-15	yes

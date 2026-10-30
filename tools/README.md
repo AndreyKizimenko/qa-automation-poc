@@ -11,6 +11,10 @@ outside this repo.
 | [`windows-mdm-loadtest/`](windows-mdm-loadtest/README.md) | Drivers for the Windows MDM profile fan-out and team-transfer load-test scenarios | Anywhere with API access to the load-test instance |
 | [`kubernetes/`](kubernetes/README.md) | Deploys a Fleet release to Docker Desktop Kubernetes to smoke-test the Helm chart | Your machine, with a `fleetdm/fleet` clone |
 | [`loadtest-api-audit/`](loadtest-api-audit/README.md) | Checks every request in the Playwright `loadtest-api` matrix against the Fleet source: registered route, decoded parameters | Your machine, with a `fleetdm/fleet` checkout |
+| [`vm/`](vm/README.md) | UTM test VMs: start/stop, clone from goldens, enroll fleetd to a Fleet instance, check hosts against Fleet | Your Mac (Apple Silicon, UTM) |
+| [`ssolab/`](ssolab/README.md) | Switches a Fleet instance's admin SSO and MDM end-user auth between Okta, Entra, Google, Auth0 and local authentik / SimpleSAMLphp | Your Mac, with Docker for the local IdPs |
+| [`loglab/`](loglab/README.md) | Switches a Fleet instance's osquery result/status and audit log destinations (filesystem, webhook, Splunk, Kinesis/Firehose, Pub/Sub, Kafka, NATS — local emulators or real AWS) | Your Mac, with Docker; AWS mode needs a sandbox account |
+| [`qalab/`](qalab/README.md) | Menu over `vm`, `ssolab` and `loglab`, plus the shared `lab.env` they all read | Your Mac |
 
 ## Before you run anything
 
@@ -28,6 +32,10 @@ enroll secret, or API token:
 - The load-test scripts read `FLEET_URL` / `FLEET_TOKEN` from the environment.
 - The MySQL credentials in `kubernetes/` are Fleet's own docker-compose dev
   defaults — local-only, not secrets.
+- `vm/`, `ssolab/`, `loglab/` and `qalab/` read your instances and paths from a
+  gitignored `qalab/lab.env` (copy `lab.env.example`), and keep logins, tokens
+  and generated state in per-tool data dirs outside the repo. Each has a
+  `doctor` or `status` command that checks the setup.
 
 `.gitignore` covers the generated and secret paths. If you add a tool, keep
 credentials in a gitignored file next to it and commit a `.example` alongside.

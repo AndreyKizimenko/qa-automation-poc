@@ -1,0 +1,214 @@
+#!/usr/bin/env -S python3 -I
+"""qalab — one front door for the Fleet QA lab utilities. Each tool still works on its own.
+
+  qalab                     interactive menu: pick a tool to open its interactive view; quitting it comes back here
+  qalab <tool> [args...]    run that tool's CLI exactly as if called directly (qalab vm check = vm check)
+  qalab ls                  the tools and a one-line status each
+  Tools: vm (UTM test VMs), sso / ssolab (identity providers), log / loglab (log destinations)
+
+Tools are found on PATH; a missing one shows as "not installed" and the others keep working.
+Add a tool: append to TOOLS below (name, aliases, hotkey, executable, blurb, optional summary function).
+"""
+import curses
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+def _out(cmd, timeout=30):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+
+
+def _json(cmd):
+    return json.loads(_out(cmd))
+
+
+def vm_summary():
+    """Test VMs from the vm tool's inventory ($VM_DATA/inventory.tsv); which run comes from `vm status`, asked only
+    while UTM is already open (so this never launches UTM)."""
+    d = os.path.expanduser(_out(["vm", "config", "VM_DATA"]).strip())
+    inv = os.path.join(d, "inventory.tsv")
+    if not os.path.exists(inv):
+        return f"no inventory at {inv} — run `vm doctor`", 3
+    with open(inv) as f:
+        header = f.readline().rstrip("\n").split("\t")
+        rows = [dict(zip(header, l.rstrip("\n").split("\t"))) for l in f if l.strip()]
+    hosts = [r for r in rows if r.get("role") == "host"]
+    running = []
+    if subprocess.run(["pgrep", "-xq", "UTM"]).returncode == 0:
+        for line in _out(["vm", "status"], timeout=60).splitlines()[1:]:
+            c = line.split()   # NAME SERVER ACTIVE UTM IP
+            if len(c) >= 4 and c[3] == "started":
+                running.append(f"{c[0]}→{c[1]}")
+    if not running:
+        return f"{len(hosts)} test VMs, none running", 0
+    return f"{len(running)}/{len(hosts)} running: {'  '.join(running)}", 1
+
+
+def sso_summary():
+    parts = []
+    for i in _json(["ssolab", "status", "--json"])["instances"]:
+        if not i.get("up"):
+            parts.append(f"{i['name']} down")
+            continue
+        sso = (i.get("sso") or {}).get("provider") if (i.get("sso") or {}).get("enabled") else None
+        eua = (i.get("eua") or {}).get("provider")
+        parts.append(f"{i['name']}: admin {sso or 'off'}, end-user {eua or 'off'}")
+    return "   ".join(parts), 0
+
+
+def log_summary():
+    parts, attention = [], False
+    st = _json(["loglab", "status", "--json"])
+    for i in st["instances"]:
+        if not i.get("up"):
+            parts.append(f"{i['name']} down")
+            continue
+        dests = sorted({(t.get("configured") or "default") for t in (i.get("types") or {}).values()})
+        pending = i.get("state") != "applied"
+        attention |= pending
+        parts.append(f"{i['name']}: {'/'.join(dests) or 'default'}{' (restart needed)' if pending else ''}")
+    if st.get("aws"):   # live real-AWS resources: always worth seeing
+        parts.append(st["aws"]["text"])
+        attention = True
+    return "   ".join(parts), 3 if attention else 0
+
+
+TOOLS = [
+    # name, aliases, hotkey, executable, blurb, summary
+    ("vm", ("vm",), "v", "vm", "UTM test VMs: start/stop, enroll fleetd to a Fleet instance, check", vm_summary),
+    ("ssolab", ("sso", "ssolab"), "s", "ssolab", "Identity providers for admin SSO and MDM end-user auth", sso_summary),
+    ("loglab", ("log", "logs", "loglab"), "l", "loglab", "Where osquery result/status and audit logs go", log_summary),
+]
+
+
+def find_tool(word):
+    return next((t for t in TOOLS if word in t[1]), None)
+
+
+def installed(tool):
+    return shutil.which(tool[3]) is not None
+
+
+def summary(tool):
+    if not installed(tool):
+        return f"not installed ('{tool[3]}' isn't on PATH; see tools/{tool[0]}/README.md)", 0
+    return tool[5]() if tool[5] else ("", 0)
+
+
+class Summaries:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.text = {}
+        self.refresh()
+
+    def refresh(self):
+        for t in TOOLS:
+            threading.Thread(target=self._fetch, args=(t,), daemon=True).start()
+
+    def _fetch(self, tool):
+        try:
+            result = summary(tool)
+        except Exception as e:
+            result = (f"status unavailable ({type(e).__name__})", 3)
+        with self.lock:
+            self.text[tool[0]] = result
+
+    def get(self, name):
+        with self.lock:
+            return self.text.get(name, ("…", 0))
+
+
+def launch(stdscr, tool):
+    """Leave curses, hand the terminal to the tool's own interactive view, come back when it quits."""
+    if not installed(tool):
+        return
+    curses.def_prog_mode()
+    curses.endwin()
+    subprocess.call([tool[3]])
+    curses.reset_prog_mode()
+    stdscr.clear()
+    stdscr.refresh()
+
+
+def menu(stdscr):
+    curses.curs_set(0)
+    curses.use_default_colors()
+    curses.init_pair(1, curses.COLOR_GREEN, -1)
+    curses.init_pair(3, curses.COLOR_YELLOW, -1)
+    stdscr.timeout(1000)
+    sums = Summaries()
+    sel, polled = 0, time.time()
+    while True:
+        if time.time() - polled > 30:
+            sums.refresh()
+            polled = time.time()
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        put = lambda y, x, s, a=0: stdscr.addnstr(y, x, s, max(0, w - x - 1), a) if 0 <= y < h else None
+        put(0, 1, "QA lab", curses.A_BOLD)
+        put(0, 9, "Fleet QA utilities. Each also runs on its own.", curses.A_DIM)
+        y = 2
+        for i, t in enumerate(TOOLS):
+            name, _, key, _, blurb, _ = t
+            put(y, 1, f"{'›' if i == sel else ' '} {key}  {name:<8}{blurb}".ljust(w - 3),
+                curses.A_REVERSE if i == sel else curses.A_BOLD if installed(t) else curses.A_DIM)
+            text, col = sums.get(name)
+            put(y + 1, 15, text, curses.color_pair(col) if col else curses.A_DIM)
+            y += 3
+        put(h - 1, 1, "↑↓ move  ⏎ open  letter = open that tool  r refresh  q quit", curses.A_DIM)
+        stdscr.refresh()
+        k = stdscr.getch()
+        hot = next((i for i, t in enumerate(TOOLS) if k == ord(t[2])), None)
+        if k in (curses.KEY_UP, ord("k")):
+            sel = (sel - 1) % len(TOOLS)
+        elif k in (curses.KEY_DOWN, ord("j")):
+            sel = (sel + 1) % len(TOOLS)
+        elif k in (10, 13, curses.KEY_ENTER, curses.KEY_RIGHT) or hot is not None:
+            sel = sel if hot is None else hot
+            launch(stdscr, TOOLS[sel])
+            sums.refresh()
+            polled = time.time()
+        elif k == ord("r"):
+            sums.refresh()
+            polled = time.time()
+        elif k in (ord("q"), 27):
+            return
+
+
+def cmd_ls():
+    for t in TOOLS:
+        try:
+            text = summary(t)[0]
+        except Exception as e:
+            text = f"status unavailable ({type(e).__name__})"
+        print(f"{t[0]:<8}{t[4]}\n{'':<8}{text}")
+
+
+def main():
+    a = sys.argv[1:]
+    if not a:
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            os.environ.setdefault("ESCDELAY", "25")
+            return curses.wrapper(menu)
+        return cmd_ls()
+    if a[0] in ("-h", "--help", "help"):
+        return print(__doc__.strip())
+    if a[0] == "ls":
+        return cmd_ls()
+    tool = find_tool(a[0])
+    if not tool:
+        sys.exit(f"qalab: unknown tool '{a[0]}' (qalab help)")
+    if not installed(tool):
+        sys.exit(f"qalab: '{tool[3]}' isn't on PATH — see tools/{tool[0]}/README.md to install it")
+    os.execvp(tool[3], [tool[3]] + a[1:])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
