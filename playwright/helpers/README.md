@@ -67,7 +67,7 @@ that's a page-object responsibility.
 | `users.ts` | `createUser` / `createApiUser`, `updateUser`, `deleteUser`, `findUserByEmail`, `requirePasswordReset`, `deleteUserSessions`, `apiLogin` (a cookie-less `POST /login` that waits out Fleet's suite-wide login throttle), plus `qaTestEmail()` / `deleteAllQaTestUsers()` for disposable test users, and `deleteLeftoverApiTestUsers()` for the API-only ones (Fleet-generated emails, so matched by the specs' `QA API <label> <stamp>` naming — `QA_TEST_API_USER_NAME_RE` — never the static `QA Static API …` users); `getUser`, `listUsers`, `qaTestPassword()` (from `FLEET_TEST_USER_PASSWORD`), `QA_TEST_EMAIL_RE` |
 | `static-users.ts` | The `STATIC_USERS` registry of pre-provisioned accounts (never created by the suite) and the accessors that resolve one to its password, bearer token, or expected role display |
 | `role-access.ts` | `expectAllow` / `expectDeny` plus the per-role `PROBES_*` endpoint sets the role-access specs iterate, and `fleetScopedProbes(fleetId)` (path-style `/fleets/:id/…` probes, which give a clean cross-fleet 403) |
-| `cleanup.ts` | Bulk wipes for queries, packs, and global/team policies — used by `setup/cleanup.steps.ts` |
+| `cleanup.ts` | Bulk wipes for queries, packs, global policies (`deleteAllGlobalPolicies`) and a fleet's own policies (`deleteAllFleetPolicies`, fleet 0 for Unassigned's) — used by `setup/cleanup.steps.ts` |
 
 Specs default to importing from the barrel:
 
