@@ -1719,7 +1719,7 @@ other:
 - **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its title id, its fleet and the configuration it records.
 - **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
 - **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
-- **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the editor throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
+- **Known Fleet defect (fixed in 4.95):** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — opening the editor threw an uncaught `importScripts` error, because Fleet didn't serve Ace's `worker-json.js`; fixed by fleetdm/fleet#55160 (`components/Editor` doesn't start Ace's worker). `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts) is empty, so `pageHealth` fails the test on any uncaught exception the editor throws; the history is under *Resolved* in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
 
 **Flow**
 
@@ -1743,7 +1743,7 @@ other:
 - *Value:* the only coverage of an app's managed configuration: Fleet's top-level-key rule, what it stores, and the modal reopening what was stored, on both scopes. The refusal is checked at both layers (the toast, and nothing stored), and the activity is pinned to its fleet and payload, so the two scopes' parallel runs can't satisfy each other's assertion. It rides on SWL-01's title, so it costs no extra add.
 - *Coverage gaps:* JSON that doesn't parse (Save disabled client-side) isn't tried. Clearing a configuration back to none isn't covered. The iOS / iPadOS configuration (an XML `<dict>`, same modal) isn't: the VPP case (Bear) has no edit step. Values Fleet should refuse *inside* the two allowed keys aren't probed. The `edited_app_store_app` copy in the dashboard feed isn't checked — SWL-03 stays add → delete. A configuration reaching a device is out of reach (no Android host).
 - *Redundancy:* none.
-- *Efficiency / smells:* seconds. The modal is reached by its BEM root (no `role="dialog"`); the row's **Edit version** icon by its aria-label, exact, since the row header's accessible name nests it. The page-error ignore is one substring but suite-wide: any other flow that hits the same `worker-json.js` error passes too, until #54845 is fixed and the entry dropped.
+- *Efficiency / smells:* seconds. The modal is reached by its BEM root (no `role="dialog"`); the row's **Edit version** icon by its aria-label, exact, since the row header's accessible name nests it. No page error is ignored, so an uncaught exception from the Configuration editor fails the test.
 
 **Notes (Andrey)**
 ```

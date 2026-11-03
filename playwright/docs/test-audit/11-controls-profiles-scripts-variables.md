@@ -1372,7 +1372,7 @@ other:
 - **Mode:** UI+API · **Isolation:** as CTL-35 — the `afterEach` deletes the script, then the variable
 - **Preconditions (API):** the variable `PW_VAR_<NONCE>` (`createVariable`) and the script `pw-secret-<nonce>.sh` on Unassigned, which references `$FLEET_SECRET_PW_VAR_<NONCE>` (`uploadScript`)
 - **Data created:** those two, removed by the `afterEach`
-- **Worked around:** the scope part of the refusal is left open for [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621) — on Unassigned Fleet calls the scope `the "No team" team` (and a fleet a "team"). A `TODO(fleetdm/fleet#54621)` in the spec and a row in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md) → *Worked around in the suite*.
+- **Known Fleet defect (fixed in 4.95):** [fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621) — the refusal called Unassigned `the "No team" team` (and a fleet a "team"); fixed in 4.95, so the spec asserts the whole message. The history is under *Resolved* in [`docs/blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
 
 **Flow**
 
@@ -1380,18 +1380,18 @@ other:
    - ✅ *(UI)* The **Global variables** heading is visible.
 2. ☐ Click **Delete `PW_VAR_<NONCE>`** on the row → the **Delete custom variable** modal → **Delete**.
    - ✅ *(UI)* The delete modal closes.
-   - ✅ *(UI)* Error toast matching `Couldn't delete. PW_VAR_<NONCE> is used by the "pw-secret-<nonce>.sh" script in the <…>. Please edit or delete the script and try again.` — a regex built from the two names, with the scope wildcarded (#54621).
+   - ✅ *(UI)* Error toast carrying the whole message `Couldn't delete. PW_VAR_<NONCE> is used by the "pw-secret-<nonce>.sh" script in the "Unassigned" fleet. Please edit or delete the script and try again.`
    - ✅ *(UI)* The variable's row is still listed.
    - ✅ *(API)* `GET /custom_variables` still returns it.
 
 **Assessment**
 - *Value:* High — Fleet's referential guard (a 409) and the message that tells the user which script to fix. With CTL-35 it covers both directions of the script ↔ variable dependency, on both tiers.
-- *Coverage gaps:* the scope wording is unasserted until #54621 is fixed; a library script only — Fleet's delete scan also covers configuration profiles and host-name templates, neither tested; a script on a fleet (Workstations), where the message names a fleet, isn't covered; deleting the script and then the variable successfully isn't asserted — the `afterEach` does it and ignores the response.
+- *Coverage gaps:* a library script only — Fleet's delete scan also covers configuration profiles and host-name templates, neither tested; a script on a fleet (Workstations), where the message names a fleet, isn't covered; deleting the script and then the variable successfully isn't asserted — the `afterEach` does it and ignores the response.
 - *Redundancy:* none.
 - *Efficiency / smells:*
   - Both preconditions are seeded through the API, so the browser is spent only on the delete — the right split.
   - Direct-URL entry, as in CTL-13/14.
-  - The regex is built from the names unescaped except for the script name's dots; safe because a variable name is `[A-Z0-9_]` and the nonce is alphanumeric.
+  - The expected message is a plain string built from the two names; `Toast.expectError` matches it as `hasText`, a case-insensitive substring of the toast.
 
 **Notes (Andrey)**
 ```
@@ -1690,7 +1690,7 @@ other:
 | Batch script execution (Started / Scheduled / Finished tabs, details page) | CTL-24 (3 real VMs → Ran / Errored / Incompatible), CTL-25 (~100 simulations via Select all matching), CTL-37 (scheduled → cancelled: Pending → Canceled, the preview), CTL-38 (Schedule for later from the Hosts list, stored in UTC, started by the worker), CTL-39 (an edit cancels the unreported runs), CTL-40 (empty states, side-nav entry) | cancelling a *started* batch; the schedule form's validation (cut); scheduling by filter; the host-side view of a batch run; every tab's row list at scale; a run queued behind another activity when its script is edited stays Pending ([fleetdm/fleet#54732](https://github.com/fleetdm/fleet/issues/54732)) |
 | Organization-wide **Script execution** switch | CTL-26 (exclusive project) | queued scripts held while disabled (the reason it's exclusive) never observed; batch / policy-automation / setup-experience run paths not checked while disabled |
 | Custom variables — add / list / delete + name validation | CTL-13, CTL-14 (both tiers) | No value edit, no masking check, no duplicate-name rejection, no built-in `$FLEET_VAR_*` list, no per-fleet variables |
-| Custom variables in scripts — an unknown `$FLEET_SECRET_*` refused on upload, a referenced variable refused deletion | CTL-35, CTL-36 (both tiers; library scripts on Unassigned) | **Profiles** referencing a variable (both checks cover them); installer and setup-experience scripts; a script on a fleet, whose message names it; the scope wording in the delete refusal ([fleetdm/fleet#54621](https://github.com/fleetdm/fleet/issues/54621)); the substituted value reaching a host |
+| Custom variables in scripts — an unknown `$FLEET_SECRET_*` refused on upload, a referenced variable refused deletion | CTL-35, CTL-36 (both tiers; library scripts on Unassigned) | **Profiles** referencing a variable (both checks cover them); installer and setup-experience scripts; a script on a fleet, whose message names it; the substituted value reaching a host |
 | OS updates (minimum version enforcement) | CTL-28…30 (macOS on Workstations: save / persist / clear, the save staying on its fleet, validation, View all hosts), CTL-31/32 (refused beside a custom update profile, macOS and Windows) — all `premium-exclusive` | "Latest version" / Days after release; iOS / iPadOS; Windows beyond the conflict check |
 | Certificates / Passwords (OS settings sub-pages) | — | No functional e2e — `CertificatesPage` only in the loadtest spec |
 

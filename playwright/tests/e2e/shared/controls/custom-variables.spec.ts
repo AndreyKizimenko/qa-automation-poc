@@ -133,10 +133,8 @@ test.describe('Shared • Controls • custom variables', () => {
 
     await variables.goto();
     await variables.deleteVariable(name);
-    // TODO(fleetdm/fleet#54621): the message calls Unassigned "the "No team"
-    // team" (and a fleet a team). Once it uses the UI's names, assert it whole.
     await variables.toast.expectError(
-      new RegExp(`Couldn't delete\\. ${name} is used by the "${scriptName.replace(/\./g, '\\.')}" script in the .+\\. Please edit or delete the script and try again\\.`),
+      `Couldn't delete. ${name} is used by the "${scriptName}" script in the "Unassigned" fleet. Please edit or delete the script and try again.`,
     );
     await expect(variables.variableRow(name)).toBeVisible();
     expect((await listVariables(request)).map((v) => v.name)).toContain(name);

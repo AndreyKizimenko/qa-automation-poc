@@ -153,19 +153,12 @@ test.describe('Command palette • deep links', () => {
     }
   });
 
-  // TODO(fleetdm/fleet#55672): the Software page races itself on this link. The
-  // inventory table rewrites the query on its first render, keeping only the
-  // params it knows, while the deep-link effect waits for the software config
-  // before it reads the flag. Coming from the Dashboard the rewrite usually lands
-  // first, so the flag is gone and no modal opens (8 of 16 runs on the 4.94 RC).
-  // Un-skip when the modal opens on every run.
   test('Manage software automations opens the software automations modal and drops its flag', async ({
     palette,
     dashboard,
     softwareTitles,
     page,
   }) => {
-    test.skip(true, 'fleetdm/fleet#55672 — the inventory table strips manage_automations before the page reads it');
     await dashboard.goto();
     await palette.open();
     await palette.selectItem('Manage software automations');

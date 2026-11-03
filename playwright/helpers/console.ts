@@ -32,16 +32,7 @@ export function monitorConsoleErrors(
 
 // Uncaught-exception substrings to ignore. Each one is a filed, cosmetic Fleet
 // defect whose flow still works; see docs/blocked-by-product-bugs.md.
-export const DEFAULT_IGNORED_PAGE_ERRORS = [
-  // TODO(fleetdm/fleet#54845): remove once Fleet serves Ace's JSON and XML
-  // workers or stops asking for them. `components/Editor` starts ace's worker
-  // for its mode from /assets/worker-json.js or /assets/worker-xml.js, which
-  // 404, and the worker's importScripts throws. It backs an app's Edit
-  // configuration modal and the Add / Edit profile page (XML for .mobileconfig
-  // and .xml, JSON for declarations); each still opens and saves.
-  'worker-json.js',
-  'worker-xml.js',
-];
+export const DEFAULT_IGNORED_PAGE_ERRORS: string[] = [];
 
 // Uncaught exceptions inside the page — a React render blowing up, an
 // unhandled rejection reaching the top level. Chromium does not report these
