@@ -108,11 +108,11 @@ export class ScriptsLibraryPage {
   }
 
   itemByName(name: string): Locator {
-    // Match the row whose title button is exactly `name`. `filter({ hasText })`
+    // Match the row whose title text is exactly `name`. `filter({ hasText })`
     // would do a substring match on full row content (filename + platform
     // tag + date), which lets a sibling row match when the platform tag or
     // adjacent text happens to share a substring with another script's name.
-    return this.listItem.filter({ has: this.page.getByRole('button', { name, exact: true }) });
+    return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
   /** `file` is a path on disk, or a `{ name, mimeType, buffer }` built at run time. */
@@ -139,12 +139,13 @@ export class ScriptsLibraryPage {
   }
 
   /**
-   * Opens the edit/preview modal by clicking the script's name link, then
-   * waits for the editor to render its content. Returns the modal locator
-   * so callers can compose further assertions before closing it.
+   * Opens the edit/preview modal by clicking the script's row on its name —
+   * the name is plain text and the row itself takes the click — then waits for
+   * the editor to render its content. Returns the modal locator so callers can
+   * compose further assertions before closing it.
    */
   async openScript(name: string): Promise<Locator> {
-    await this.itemByName(name).getByRole('button', { name }).first().click();
+    await this.itemByName(name).getByText(name, { exact: true }).click();
     await expect(this.editModal).toBeVisible();
     await expect(this.editorContent).not.toBeEmpty();
     return this.editModal;

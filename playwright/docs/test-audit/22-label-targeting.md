@@ -89,13 +89,16 @@ run that timed out with 4 profiles, 4 simulations and 6 labels left behind.
 1. ☐ (No user action) Resolve the VM and the two simulations; move the simulations to the VMs fleet; create the three manual labels.
    - ✅ *(API)* The VM is on the VMs fleet; two simulations were found.
 2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → fleet dropdown **VMs**.
-3. ☐ For each profile in the table: **Add profile** → choose the file → **Custom** → set the target (Include tab: **Any** or **All** + tick labels; **Exclude** tab: tick labels) → **Add profile**.
+3. ☐ For each profile in the table: **Add profile** → choose the file → the bottom bar's **Edit targets** → in the modal, **Custom** → set the target (Include tab: **Any** or **All** + tick labels; **Exclude** tab: tick labels) → **Done** → **Add profile**.
+   - ✅ *(UI)* After **Done** the modal closes and the bottom bar reads *Applies to hosts in custom targets* (nothing is stored until **Add profile**).
    - ✅ *(UI)* *"Successfully uploaded."*; the row appears.
    - ✅ *(UI)* The row reads **2 labels** / **3 labels** / **1 label**.
    - ✅ *(API)* The stored `labels_include_all` / `labels_include_any` / `labels_exclude_any` are exactly the ones ticked.
-4. ☐ Hover `…-any`'s row → **Edit**.
-   - ✅ *(UI)* **Custom** is selected; both tab headings carry the check that marks a tab holding labels; the Include tab's **Any** is selected; a and b are ticked; c is **disabled** on Include.
-   - ✅ *(UI)* On the **Exclude** tab c is ticked and a is **disabled**. **Cancel**.
+4. ☐ Hover `…-any`'s row → **Edit** → the Edit profile page.
+   - ✅ *(UI)* The bottom bar reads *Applies to hosts in custom targets*.
+   - ☐ **Edit targets**.
+   - ✅ *(UI)* In the modal, **Custom** is selected; both tab headings carry the check that marks a tab holding labels; the Include tab's **Any** is selected; a and b are ticked; c is **disabled** on Include.
+   - ✅ *(UI)* On the **Exclude** tab c is ticked and a is **disabled**. **Cancel** the modal, then **Back to profiles**.
 5. ☐ (No user action) Wait for the reconciler.
    - ✅ *(API)* Each profile is listed on exactly the hosts in the table — polled together, ≤ 3 min.
 6. ☐ (No user action) Wait for the VM: both profiles that include it go *verifying*; request a refetch (after any outstanding one lands); both go **verified** (≤ 3 min).
@@ -136,7 +139,8 @@ other:
 **Flow**
 
 1. ☐ (No user action) Resolve the hosts, move the simulations to the VMs fleet, create the labels.
-2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → **VMs** → **Add profile** → choose the file → **Custom** → Include **All** of wa, wb → **Exclude** wc → **Add profile**.
+2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → **VMs** → **Add profile** → choose the file → **Edit targets** → **Custom** → Include **All** of wa, wb → **Exclude** wc → **Done** → **Add profile**.
+   - ✅ *(UI)* After **Done** the bottom bar reads *Applies to hosts in custom targets*.
    - ✅ *(UI)* *"Successfully uploaded."*; the row reads **3 labels**.
    - ✅ *(API)* Stored: include-all wa, wb; exclude-any wc.
    - ✅ *(API)* Listed on exactly the VM — s1 is only in wa; s2 is in both but wc excludes it (≤ 3 min).
@@ -145,7 +149,8 @@ other:
    - ✅ *(API)* It reads `0` — the profile's setting.
 4. ☐ The VM's host page → **Controls** tab.
    - ✅ *(UI)* The profile's row reads **Verified**.
-5. ☐ Back to the profiles list → hover the row → **Edit** → untick everything → **Exclude** wb → **Update profile**.
+5. ☐ Back to the profiles list → hover the row → **Edit** → **Edit targets** → untick everything → **Exclude** wb → **Done** → **Update profile**.
+   - ✅ *(UI)* After **Done** the bottom bar reads *Applies to hosts in custom targets*.
    - ✅ *(UI)* *"Successfully updated profile."*
    - ✅ *(API)* Stored: exclude-any wb only.
    - ✅ *(API)* Now listed on exactly s1 — the VM and s2 are in wb.
@@ -232,7 +237,7 @@ other:
 **Flow**
 
 1. ☐ (No user action) Resolve the hosts, move the simulations to the VMs fleet, create the labels.
-2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → **VMs**; for each row of the table: **Add profile** → choose the `.json` → (for a target) **Custom** + the Include / Exclude labels → **Add profile**.
+2. ☐ Dashboard → **Controls** → **OS settings** → **Configuration profiles** → **VMs**; for each row of the table: **Add profile** → choose the `.json` → (for a target) **Edit targets** → **Custom** + the Include / Exclude labels → **Done**, after which the bottom bar reads *Applies to hosts in custom targets* → **Add profile**.
    - ✅ *(UI)* *"Successfully uploaded."*; the row reads **macOS, iOS, iPadOS (declaration)**; **2 labels** / **1 label**, and no label count for `…-every`.
    - ✅ *(API)* The stored targets are exactly the ones set.
 3. ☐ (No user action) Wait for the reconciler.
@@ -346,8 +351,8 @@ other:
 
 1. ☐ (No user action) Move the simulations, create the labels, upload the package (API).
    - ✅ *(API)* Unscoped, all three hosts are offered it.
-2. ☐ The title's page (VMs fleet) → the row's **All hosts** badge → Edit → Target **Custom** → scope dropdown **Include all** → tick a, b → **Save** → **Save changes?** → **Save**.
-   - ✅ *(UI)* *"Successfully edited fleet-pw-label-<nonce>_1.0.0_all.deb."*
+2. ☐ The title's page (VMs fleet) → the row's **All hosts** badge → the **Edit version** modal → Target **Custom** → scope dropdown **Include all** → tick a, b → **Save** → **Save changes?** → **Save**.
+   - ✅ *(UI)* *"Successfully edited fleet-pw-label-<nonce>_1.0.0_all.deb version."*
    - ✅ *(API)* The package's `labels_include_all` is a, b; only the VM is offered it.
 3. ☐ The Ubuntu VM's host page → **Software** → **Library** → search the package → **Install**.
    - ✅ *(API)* It installs, and the host's inventory agrees; then it's uninstalled and the inventory agrees again.

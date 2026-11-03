@@ -1074,11 +1074,11 @@ other:
    - ✅ *(UI)* Visible, unwrapped, enabled.
 5. ☐ Click **Edit <name>**.
    - ✅ *(UI)* The Edit profile page opens; **Update profile** is gated (wrapper, disabled, tooltip).
-6. ☐ Click **Cancel**.
+6. ☐ Click **Back to profiles** (`leaveProfileForm`).
    - ✅ *(UI)* Back on the profile list (the form is gone, the list heading shows).
 
 **Assessment**
-- *Value:* a profile row's Delete check together with its over-gating half. Edit is left open *by design* (the modal is the only place to read a profile's targets), and the test proves the lock moved into the modal rather than vanished.
+- *Value:* a profile row's Delete check together with its over-gating half. Edit is left open *by design* (the Edit profile page, through its **Edit targets** modal, is the only place to read a profile's targets), and the test proves the lock sits on the page's **Update profile** rather than vanishing.
 - *Coverage gaps:* Apple only; a Windows or Android profile row renders the same component. The Add profile page's own controls aren't reached (Add profile is gated before it opens).
 - *Redundancy:* none.
 - *Efficiency / smells:* the row's buttons render only while the row is hovered, and every tooltip check ends by moving the pointer away, so the test re-hovers before each check (four hovers), and passes the row as the tooltip check's `reveal`. Branch run 37667485374 failed this test once at **Add profile**'s tooltip: the status cards above load after the page does, and the single hover was left over nothing. The tooltip check now retries its hover.
@@ -1257,7 +1257,7 @@ an assertion, failing a test that passes in isolation.
 | Org settings › Advanced | **Save**, `Domain`, `Verify SSL certs`, `Enable STARTTLS` (the page is only partly gated) |
 | Controls › Variables | **Delete `<name>`** |
 | Controls › OS settings › Profiles | **View**, **Edit**, **Download** per row (the Edit page gates *Update profile*) |
-| Controls › Scripts | **Download** and the name link; **Edit is disabled** here, unlike profiles (a script's editor is its content) |
+| Controls › Scripts | **Download** and opening a script from its row (the name is plain text; the row takes the click); **Edit is disabled** here, unlike profiles (a script's editor is its content) |
 | Software inventory and library | **Add software** and the whole page: zero wrappers |
 | Software title details | **Edit software** (its modal's Save is gated), **All hosts**, version links |
 | Labels › Manage | **Add label**, a row's **Edit** (only its **Delete** is gated) |

@@ -112,7 +112,7 @@ host-execution specs build their script content at run time with a per-run nonce
 3. ☐ Select the scope in the team dropdown (idempotent; skipped if already showing it).
    - ✅ *(UI)* Dropdown value equals the scope label — `TeamDropdown.selectByLabel`.
 4. ☐ If a `.profile-list-item` whose title text exactly equals the display name is already visible, delete it first (hover row → trash → **Delete** in the "Delete configuration profile" modal → *Successfully deleted.* toast).
-5. ☐ Click **Add profile** → the **Add profile** page opens (`/configuration-profiles/new`) → choose the fixture file on `input#upload-profile` (the form's **Add profile** button enables once the file is read) → click **Add profile** in the form.
+5. ☐ Click **Add profile** → the Add profile page opens (`/configuration-profiles/new`; it has no heading, so the form and its **Add profile** submit button are the anchor) → choose the fixture file on `input#upload-profile` (the form's **Add profile** button enables once the file is read) → click **Add profile** in the form's bottom bar.
    - ✅ *(UI)* Success toast *"Successfully uploaded."* — `ConfigurationProfilesPage.uploadProfile`.
    - ✅ *(UI)* Back on the list: the form is gone and the **Configuration profiles** heading shows.
    - ✅ *(UI)* A profile row whose title text exactly equals the display name is visible.
@@ -293,7 +293,7 @@ other:
 4. ☐ Open `/controls/os-settings/disk-encryption?fleet_id=0` by URL (lands on macOS again); reselect **Unassigned**.
    - ✅ *(UI)* **Enable disk encryption** reads the flipped value.
 5. ☐ Click the **Linux** tab.
-   - ✅ *(UI)* URL `/linux`, tab selected; **Escrow recovery key with Fleet** still reads the snapshot's value — saving macOS left Linux alone.
+   - ✅ *(UI)* URL `/linux`, tab selected; **Escrow recovery key** (matched by `/^Escrow recovery key/`, since Windows' "Enable disk encryption (BitLocker) and escrow recovery key" contains the phrase) still reads the snapshot's value — saving macOS left Linux alone.
 6. ☐ *(API, `afterAll`)* Restore every platform's setting.
 
 **Assessment**
@@ -329,13 +329,13 @@ other:
    - ✅ *(UI)* URL matches `/controls` then `/controls/scripts`.
 2. ☐ Select the scope in the team dropdown.
    - ✅ *(UI)* Dropdown value equals the scope label.
-3. ☐ If a `.script-list-item` whose title button is exactly the filename exists, delete it (hover → **Delete `<name>`** → confirm **Delete**).
+3. ☐ If a `.script-list-item` whose title text is exactly the filename exists, delete it (hover → **Delete `<name>`** → confirm **Delete**).
 4. ☐ Click **+ Add script** (or **Upload** in the empty state) → the `.script-upload-modal` opens → choose the fixture on `input#upload-file` (`FileUploader.setFile`) → click **Add script** inside the modal.
    - ✅ *(UI)* Success toast *"Successfully uploaded."*
    - ✅ *(UI)* The upload modal is hidden.
    - ✅ *(UI)* A script row titled exactly the filename is visible.
    - ✅ *(API)* `added_script` activity with `details.script_name === <fileName>`, admin actor.
-5. ☐ Click the script's name to open the edit/preview modal.
+5. ☐ Click the script's name to open the edit/preview modal (the name is plain text; the row takes the click).
    - ✅ *(UI)* The `.edit-script-modal` is visible and its Ace `.ace_content` is non-empty (`openScript`).
    - ✅ *(UI)* The editor's trimmed innerText **exactly equals** the trimmed source file — the stored body round-trips.
 6. ☐ Click **Cancel**.
@@ -1343,7 +1343,7 @@ other:
 4. ☐ Click **Add script** in the still-open modal again — the same file, unchanged.
    - ✅ *(UI)* Success toast *"Successfully uploaded."*
    - ✅ *(UI)* The modal closes.
-   - ✅ *(UI)* The library lists `pw-secret-<nonce>.sh` (`itemByName` — an exact match on the row's title button).
+   - ✅ *(UI)* The library lists `pw-secret-<nonce>.sh` (`itemByName` — an exact match on the row's title text).
 
 **Assessment**
 - *Value:* High. The first test in the suite that uses a variable rather than just listing one: Fleet's server-side validation of a script's `$FLEET_SECRET_*` reference, the message the user gets, and — by resending the same upload once the variable exists — proof that the refusal was about the missing variable and nothing else in the file. On both tiers.

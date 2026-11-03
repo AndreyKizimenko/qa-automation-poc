@@ -191,10 +191,15 @@ export class HostsListPage {
     return Number(match[1].replace(/,/g, ''));
   }
 
-  /** Read the display name of the first host in the list. */
+  /**
+   * Read the display name of the first host in the list. The name cell keeps a
+   * hidden tooltip copy of the name, with its `<style>` block, inside the link
+   * for when the name is truncated; `firstRowPrimaryLinkText` reads the rendered
+   * text, which leaves both out.
+   */
   async firstHostName(): Promise<string> {
-    const link = this.table.firstRowWithLink.getByRole('link').first();
-    return (await link.textContent())?.trim() ?? '';
+    await expect(this.table.firstRowPrimaryLink).toBeVisible();
+    return this.table.firstRowPrimaryLinkText();
   }
 
   /** Click the first host in the list — navigates to its detail page. */

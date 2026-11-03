@@ -7,7 +7,7 @@ write raw selectors; they work through these pages.
 ## Why POM
 
 1. **Selectors in one place.** If the "Search" placeholder changes from "Search by name" to "Search", we update `SoftwareTitlesPage` once and every test keeps working.
-2. **High-level API.** Tests read like a user flow: `await hostDetails.applyVulnerableFilter()` instead of `await page.getByRole('button', {...}).click(); await page.locator('form').getByRole('switch').click(); ...`.
+2. **High-level API.** Tests read like a user flow: `await hostDetails.applyVulnerableFilter()` instead of `await page.getByRole('button', {...}).click(); await page.locator('.fleet-slider__wrapper').filter({ hasText: 'Vulnerable software' }).getByRole('switch').click(); ...`.
 3. **TypeScript catches breakage.** If a page rename breaks a field, the compiler flags it before CI does.
 
 ## Structure

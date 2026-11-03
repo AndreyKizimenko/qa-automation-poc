@@ -5,7 +5,7 @@
  * Edit-software modal from the Library accordion row → flip the Self-service
  * slider → Save → confirm the "Save changes?" dialog → verify it persisted via
  * the API → delete. On premium a custom package is a multi-package title, so
- * the edit modal is titled "Edit package" and opens from the accordion row (not
+ * the edit modal is titled "Edit version" and opens from the accordion row (not
  * the summary Actions dropdown). Enabling self-service reveals the categories
  * field, so Fleet treats it as a material change and shows the confirmation.
  *

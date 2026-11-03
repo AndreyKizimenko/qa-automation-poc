@@ -117,7 +117,7 @@ export async function patchSetupExperience(
 }
 
 /**
- * Turns "Install Fleet's agent (fleetd) manually" off for a fleet. While it is
+ * Turns "Deploy custom agent" (install fleetd manually) off for a fleet. While it is
  * on, the fleet's Install software (macOS) and Run script cards are disabled,
  * and deleting the bootstrap package doesn't clear it. Turning it off never
  * needs a package. Silent on 402 so the shared cleanup pipeline can call it on

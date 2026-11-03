@@ -285,9 +285,9 @@ export async function readWindowsPolicyValue(
 }
 
 /**
- * A target as the Add / Edit profile modal sets it (`ProfileTarget` in
- * `ConfigurationProfilesPage`) in the API's terms, sorted — so what the modal
- * sent and what Fleet stored compare with `toEqual`.
+ * A target as the Add / Edit profile page's Edit targets modal sets it
+ * (`ProfileTarget` in `ConfigurationProfilesPage`) in the API's terms, sorted — so
+ * what the page sent and what Fleet stored compare with `toEqual`.
  */
 export function targetsFor(target: {
   include?: { labels: string[]; mode?: 'any' | 'all' };

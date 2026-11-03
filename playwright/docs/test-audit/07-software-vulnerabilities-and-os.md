@@ -395,8 +395,8 @@ other:
 1. ☐ Open the host's page via URL `/hosts/:id`.
    - ✅ *(UI)* "Disk space available" vitals label visible — `HostDetailsPage.goto`.
 2. ☐ Click the **Software** tab.
-   - ✅ *(UI)* Table settles to rows **or** empty state (macOS opens on the macOS app type, which can be empty) — `openSoftwareTab`.
-3. ☐ On macOS, untick the default **macOS app** type in the Filters modal to list every type (no-op on Windows/Linux, which open on every type).
+   - ✅ *(UI)* Table settles to rows **or** empty state (macOS opens on the **App (macOS)** type, which can be empty) — `openSoftwareTab`.
+3. ☐ On macOS, untick the default **App (macOS)** type in the Filters modal to list every type (no-op on Windows/Linux, which open on every type).
    - ✅ *(UI)* The software search box is visible before the URL's `types` is read — Fleet shows a spinner until the default type is in the URL, so the read can't race it (`HostDetailsPage.showFullInventory`).
    - ✅ *(UI)* URL contains `macos_applications=false`.
    - ✅ *(UI)* A first row is visible (retrying — deliberately not `isVisible()`, which used to skip on a false negative).
@@ -671,7 +671,7 @@ Identical to SWV-07:
 
 1. ☐ Open `/hosts/:id` (via URL) — ✅ *(UI)* vitals "Disk space available" visible.
 2. ☐ Click **Software** — ✅ *(UI)* rows-or-empty settled.
-3. ☐ macOS: untick **macOS app** in the Filters modal — ✅ *(UI)* search box visible first; URL `types=none`; ✅ *(UI)* first row visible.
+3. ☐ macOS: untick **App (macOS)** in the Filters modal — ✅ *(UI)* search box visible first; URL `types=none`; ✅ *(UI)* first row visible.
 4. ☐ **Add filters** → **Vulnerable software** → **Apply** — ✅ *(UI)* URL `vulnerable=true`; first row visible.
 5. ☐ Click the first software title → the version this host has installed (`hostVulnerableVersions`) → a CVE whose detail page answers.
    - ✅ *(API)* the host reports a vulnerable version of that title (else the test fails).
@@ -905,7 +905,7 @@ other:
 3. ☐ Click **Advanced** (`FilterModal.showAdvanced()`), and look at the **Severity** dropdown with the vulnerable toggle still off.
    - ✅ *(UI)* The severity trigger is visible — the section mounts collapsed.
    - ✅ *(UI)* The severity trigger carries `is-disabled` — Fleet passes `disabled={!vulnSoftwareFilterEnabled}`, so severity is unusable until the list is narrowed to vulnerable software.
-4. ☐ Click the **Vulnerable software** toggle.
+4. ☐ Click the **Vulnerable software** toggle — not the **AI tools** switch premium shows beside it (`FilterModal.vulnerableSwitch` picks the switch inside the `.fleet-slider__wrapper` whose text is "Vulnerable software", since that switch has no accessible name).
    - ✅ *(UI)* The severity trigger **loses** `is-disabled`.
    - ✅ *(UI)* Its rendered value reads exactly **"Any severity"** — the default.
 5. ☐ Open the severity dropdown and read every option.
@@ -1127,7 +1127,7 @@ other:
 | Exploited-vulnerabilities filter | SWV-05 | rows never verified to be exploited; no reset to **All vulnerabilities** |
 | Severity / CVSS filter (premium) | SWV-19 (options list + disabled-until-vulnerable rule) | **never applied** — no narrowed list, no `min_cvss_score`/`max_cvss_score` in the URL, no **Custom** range inputs, no free-side absence check |
 | Vulnerabilities list pagination + tab reset | SWV-06, SWV-13 | conditional; no column/sort assertions |
-| Host-details Software tab vulnerable filter + macOS app type ↔ every type | SWV-07, SWV-14 | narrowing not asserted; host software search untested; no real MDM host variant |
+| Host-details Software tab vulnerable filter + App (macOS) type ↔ every type | SWV-07, SWV-14 | narrowing not asserted; host software search untested; no real MDM host variant |
 | Vulnerability-automations webhook | SWV-08, SWV-15 (on → stored → re-read, then off → stored with the URL kept → re-read) | ticket workflow, invalid URL, tier-difference assertions, delivery; **Automations** disabled outside All fleets is SWL-12 (area 06) |
 | OS tab platform filter | SWV-09 (premium only) | Linux/ChromeOS/iOS/iPadOS/Android, **All platforms** reset, pagination; free has no platform-filter test (by design — its spec covers only the scope-independent cases) |
 | OS → Hosts hand-off | SWV-10 | URL params, count agreement, pill clearing — all three of which SWV-18 does properly for the CVE hand-off |

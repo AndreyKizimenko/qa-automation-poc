@@ -29,7 +29,6 @@ const ROOT_PLACEHOLDER = 'Search for a page or command...';
 const PREMIUM_ROWS: Array<{ query: string; label: string }> = [
   // Controls (premium sub-items and the premium Setup experience parent)
   { query: 'disk encryption', label: 'Disk encryption' },
-  { query: 'assets', label: 'Assets' },
   { query: 'certificates', label: 'Certificates' },
   { query: 'passwords', label: 'Passwords' },
   { query: 'host names', label: 'Host names' },

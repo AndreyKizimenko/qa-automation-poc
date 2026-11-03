@@ -22,12 +22,13 @@ export interface ProfileTarget {
  *
  * Adding and editing happen on a page of their own, not in a modal:
  * "Add profile" opens `configuration-profiles/new` and a row's "Edit <name>"
- * opens `configuration-profiles/<uuid>`, both rendering `ProfileForm` under an
- * "Add profile" / "Edit profile" heading. Its file input has the id
- * `upload-profile` (the FileUploader used elsewhere in the app uses
+ * opens `configuration-profiles/<uuid>`, both rendering `ProfileForm` below a
+ * "Back to profiles" button. Only the Edit page has a heading ("Edit
+ * profile"); the Add page opens straight onto the form. Its file input has the
+ * id `upload-profile` (the FileUploader used elsewhere in the app uses
  * `upload-file`); choosing a file loads it into the form's editor without
- * submitting, and a separate "Add profile" / "Update profile" button submits.
- * A saved form, and Cancel, return to the list.
+ * submitting, and the bottom bar's "Add profile" / "Update profile" button
+ * submits. A saved form, and Back to profiles, return to the list.
  *
  * Each profile row is a `.profile-list-item` with details, edit, download
  * and trash buttons, each named for the profile ("Edit <name>"); the trash
@@ -35,8 +36,11 @@ export interface ProfileTarget {
  * premium a targeted row also shows "N labels", with a warning icon when one
  * of them is broken.
  *
- * On premium the form carries the label target — see
- * {@link TargetLabelSelector}. Free renders none.
+ * On premium the bottom bar's "Edit targets" opens a modal holding the label
+ * target — see {@link TargetLabelSelector}. Its Done copies the choice back to
+ * the form, which the bar sums up as "Applies to all hosts" or "Applies to
+ * hosts in custom targets"; nothing is stored until the form is submitted. Free
+ * has no Edit targets.
  */
 export class ConfigurationProfilesPage {
   readonly page: Page;
@@ -51,12 +55,20 @@ export class ConfigurationProfilesPage {
 
   /** The Add / Edit profile page's form. */
   readonly profileForm: Locator;
-  /** The page's "Add profile" or "Edit profile" heading. */
-  readonly formHeading: Locator;
+  /** The Edit profile page's heading. The Add page has none. */
+  readonly editHeading: Locator;
+  readonly backToProfilesButton: Locator;
   readonly uploadInput: Locator;
   readonly addProfileSubmitButton: Locator;
   readonly updateProfileButton: Locator;
-  readonly formCancelButton: Locator;
+  /** The bottom bar's summary of the form's target ("Applies to all hosts for VMs."). */
+  readonly appliesTo: Locator;
+  readonly editTargetsButton: Locator;
+  /** The Edit targets modal, where the target is chosen before Done hands it to the form. */
+  readonly targetsModal: Locator;
+  readonly targetsDoneButton: Locator;
+  readonly targetsCancelButton: Locator;
+  /** The target inside {@link targetsModal}; open it with {@link openTargets} first. */
   readonly formTargets: TargetLabelSelector;
 
   readonly deleteModal: Locator;
@@ -80,12 +92,19 @@ export class ConfigurationProfilesPage {
     // none, so its class (`ProfileForm`'s base) is the scope. It keeps the
     // submit button apart from the list's "Add profile" button of the same name.
     this.profileForm = page.locator('form.profile-form');
-    this.formHeading = page.getByRole('heading', { name: /^(Add|Edit) profile$/, level: 1 });
+    this.editHeading = page.getByRole('heading', { name: 'Edit profile', exact: true, level: 1 });
+    this.backToProfilesButton = page.getByRole('button', { name: 'Back to profiles' });
     this.uploadInput = this.profileForm.locator('input#upload-profile');
     this.addProfileSubmitButton = this.profileForm.getByRole('button', { name: 'Add profile', exact: true });
     this.updateProfileButton = this.profileForm.getByRole('button', { name: 'Update profile', exact: true });
-    this.formCancelButton = this.profileForm.getByRole('button', { name: 'Cancel', exact: true });
-    this.formTargets = new TargetLabelSelector(this.profileForm);
+    this.appliesTo = this.profileForm.getByText(/^Applies to /);
+    this.editTargetsButton = this.profileForm.getByRole('button', { name: 'Edit targets', exact: true });
+    // Fleet's Modal renders its title in a role-less <span> (no role="dialog"),
+    // so the container is scoped by class and title. It mounts outside the form.
+    this.targetsModal = page.locator('.modal__modal_container').filter({ hasText: 'Edit targets' });
+    this.targetsDoneButton = this.targetsModal.getByRole('button', { name: 'Done', exact: true });
+    this.targetsCancelButton = this.targetsModal.getByRole('button', { name: 'Cancel', exact: true });
+    this.formTargets = new TargetLabelSelector(this.targetsModal);
 
     this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete configuration profile' });
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
@@ -106,12 +125,12 @@ export class ConfigurationProfilesPage {
     return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
-  /** Opens the Add profile page from the list. */
+  /** Opens the Add profile page from the list. It has no heading, so its form and submit button are the anchor. */
   async openAddProfile(): Promise<void> {
     await this.addProfileButton.click();
     await expect(this.page).toHaveURL(/\/configuration-profiles\/new/);
-    await expect(this.formHeading).toHaveText('Add profile');
     await expect(this.profileForm).toBeVisible();
+    await expect(this.addProfileSubmitButton).toBeVisible();
   }
 
   /**
@@ -130,22 +149,53 @@ export class ConfigurationProfilesPage {
   async uploadProfile(filePath: string, target?: ProfileTarget): Promise<void> {
     await this.openAddProfile();
     await this.chooseProfileFile(filePath);
-    if (target) await this.setTarget(this.formTargets, target);
+    if (target) await this.applyTarget(target);
     await this.addProfileSubmitButton.click();
     await this.toast.expectSuccess('Successfully uploaded.');
     await this.expectBackOnList();
   }
 
-  /** The form is gone and the list's heading shows: a save or Cancel returned to the list. */
+  /** The form is gone and the list's heading shows: a save or Back to profiles returned to the list. */
   private async expectBackOnList(): Promise<void> {
     await expect(this.profileForm).toBeHidden();
     await expect(this.heading).toBeVisible();
   }
 
-  /** Leaves the Add / Edit profile page through Cancel, saving nothing. */
-  async cancelProfileForm(): Promise<void> {
-    await this.formCancelButton.click();
+  /** Leaves the Add / Edit profile page through Back to profiles, saving nothing. */
+  async leaveProfileForm(): Promise<void> {
+    await this.backToProfilesButton.click();
     await this.expectBackOnList();
+  }
+
+  /** Opens the Edit targets modal from the form's bottom bar (premium). */
+  async openTargets(): Promise<void> {
+    await this.editTargetsButton.click();
+    await expect(this.targetsModal).toBeVisible();
+  }
+
+  /** Closes the Edit targets modal through Cancel, leaving the form's target as it was. */
+  async cancelTargets(): Promise<void> {
+    await this.targetsCancelButton.click();
+    await expect(this.targetsModal).toBeHidden();
+  }
+
+  /**
+   * Chooses `target` in the Edit targets modal and hands it to the form with
+   * Done, which the bottom bar's summary then reflects. `replace` unticks the
+   * labels the target already has first, so a new target isn't merged with
+   * the old one. The form still has to be submitted to store it.
+   */
+  private async applyTarget(target: ProfileTarget | 'All hosts', opts: { replace?: boolean } = {}): Promise<void> {
+    await this.openTargets();
+    if (target === 'All hosts') {
+      await this.formTargets.chooseAllHosts();
+    } else {
+      if (opts.replace) await this.clearTicked(this.formTargets);
+      await this.setTarget(this.formTargets, target);
+    }
+    await this.targetsDoneButton.click();
+    await expect(this.targetsModal).toBeHidden();
+    await expect(this.appliesTo).toContainText(target === 'All hosts' ? 'all hosts' : 'hosts in custom targets');
   }
 
   private async setTarget(selector: TargetLabelSelector, target: ProfileTarget): Promise<void> {
@@ -183,18 +233,13 @@ export class ConfigurationProfilesPage {
   async openEdit(name: string): Promise<void> {
     const row = this.itemByName(name);
     await clickHoverAction(row, row.getByRole('button', { name: `Edit ${name}`, exact: true }));
-    await expect(this.formHeading).toHaveText('Edit profile');
+    await expect(this.editHeading).toBeVisible();
     await expect(this.profileForm).toBeVisible();
   }
 
   /** Replaces the open Edit page's target with `target`, saves it, and waits to be back on the list. */
   async updateTarget(target: ProfileTarget | 'All hosts'): Promise<void> {
-    if (target === 'All hosts') {
-      await this.formTargets.chooseAllHosts();
-    } else {
-      await this.clearTicked(this.formTargets);
-      await this.setTarget(this.formTargets, target);
-    }
+    await this.applyTarget(target, { replace: true });
     await this.updateProfileButton.click();
     await this.toast.expectSuccess('Successfully updated profile.');
     await this.expectBackOnList();

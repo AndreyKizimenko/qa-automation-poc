@@ -86,13 +86,12 @@ export class SoftwareInstallerCard {
     this.downloadButton = this.card.getByRole('button', { name: 'Download installer' });
     this.deleteButton = this.card.getByRole('button', { name: 'Delete this version' });
 
-    // Title is "Delete package" for custom-package titles (which can hold
-    // several packages), "Delete version" for iOS / iPadOS App Store and Play
-    // Store titles (which can hold several versions), and "Delete software" for
-    // the rest.
+    // Title is "Delete version" for titles that can hold several versions —
+    // custom packages, iOS / iPadOS App Store and Play Store apps — and "Delete
+    // software" for the rest.
     this.deleteModal = page
       .locator('.modal__modal_container')
-      .filter({ hasText: /Delete (software|package|version)/ });
+      .filter({ hasText: /Delete (software|version)/ });
     // Exact match: the modal also contains a Cancel button.
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: /^delete$/i });
   }

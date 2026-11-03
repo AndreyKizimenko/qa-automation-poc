@@ -4,10 +4,10 @@ import { TargetLabelSelector, type LabelScopeOption } from './TargetLabelSelecto
 
 /**
  * The Edit-software modal opened from a software title's Library accordion row
- * (Fleet's `EditSoftwareModal` → `PackageForm`). Its title is "Edit package"
+ * (Fleet's `EditSoftwareModal` → `PackageForm`). Its title is "Edit version"
  * for premium custom packages (`canActivateMultiplePackages`) and
- * "Edit software" otherwise; both render the same form, so the container is
- * scoped by whichever title is present.
+ * "Edit software" otherwise; both render the same form inside the
+ * `.edit-software-modal` container.
  *
  * The "Self-service" control is a Fleet `<Slider>`, rendered as
  * `<button role="switch">` with no accessible name — the visible "Self-service"
@@ -61,10 +61,10 @@ export class EditSoftwareModal {
     this.page = page;
 
     // Fleet's Modal renders the title in a role-less <span> (no role="dialog"),
-    // so each container is scoped by class + the visible title text.
-    this.modal = page
-      .locator('.modal__modal_container')
-      .filter({ hasText: /Edit (package|software)/ });
+    // and this modal's title ("Edit version" / "Edit software") is shared with the
+    // App Store Edit version modal, so the container is scoped by the class
+    // `EditSoftwareModal` gives it whatever the title.
+    this.modal = page.locator('.edit-software-modal');
 
     this.selfServiceToggle = this.modal.getByRole('switch');
     this.saveButton = this.modal.getByRole('button', { name: 'Save', exact: true });

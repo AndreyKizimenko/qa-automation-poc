@@ -81,7 +81,7 @@ test.describe('Premium • Software • Inventory reflects installs', () => {
       const row = hostDetails.softwareRows.filter({ has: page.getByRole('link', { name, exact: true }) });
       await expect(row).toHaveCount(1);
       await expect(row).toContainText('2.4.0');
-      await expect(row).toContainText('deb package');
+      await expect(row).toContainText('Package (deb)');
     } finally {
       await removeTitleFromHost(request, vmsFleetId, host.id, title.titleId);
     }

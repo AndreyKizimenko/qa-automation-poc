@@ -41,7 +41,9 @@ export class DiskEncryptionPage {
 
     this.heading = page.getByRole('heading', { name: 'Disk encryption', level: 2 });
     this.enforceCheckbox = page.getByRole('checkbox', { name: 'Enable disk encryption' });
-    this.escrowCheckbox = page.getByRole('checkbox', { name: 'Escrow recovery key with Fleet' });
+    // Anchored: Windows' enforcement checkbox ("Enable disk encryption (BitLocker)
+    // and escrow recovery key") also contains the phrase.
+    this.escrowCheckbox = page.getByRole('checkbox', { name: /^Escrow recovery key/ });
     this.bitlockerPinCheckbox = page.getByRole('checkbox', { name: 'Require BitLocker PIN' });
     // Only the selected tab's panel is mounted, so a single Save is unambiguous.
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });

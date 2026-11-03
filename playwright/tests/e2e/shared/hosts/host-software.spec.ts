@@ -10,7 +10,7 @@
  *
  * The full inventory's columns and its paging are read on the way; not its cells, which a simulation leaves partly empty ("Last opened").
  *
- * A macOS host's default "macOS app" type is covered separately at the bottom of
+ * A macOS host's default "App (macOS)" type is covered separately at the bottom of
  * this file, and that one *does* need the real VM — see its own header.
  */
 import { test, expect } from '@fixtures';
@@ -85,7 +85,7 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
 });
 
 /**
- * A macOS host opens its Inventory on the "macOS app" type with "Show helpers"
+ * A macOS host opens its Inventory on the "App (macOS)" type with "Show helpers"
  * off — top-level apps in `/Applications` only (`HostSoftware.tsx` writes
  * `types=macos_app` into the URL) — and clearing the type in the Filters modal
  * lists every reported package. The default is platform-gated, not tier-gated,
@@ -134,7 +134,7 @@ test('Hosts — the macOS app type narrows a Mac\'s inventory to top-level appli
 
   // The same search under the macOS app type returns nothing: the entry is
   // reported by the host but is not a top-level application.
-  await hostDetails.setSoftwareTypes(['macOS app']);
+  await hostDetails.setSoftwareTypes(['App (macOS)']);
   await expect(hostDetails.showHelpersSwitch).not.toBeChecked();
   await hostDetails.searchSoftware(packageOnly!);
   await expect(hostDetails.softwareTable.locator('.empty-state')).toBeVisible();

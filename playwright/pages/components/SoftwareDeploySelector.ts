@@ -4,15 +4,16 @@ import { Locator, expect } from '@playwright/test';
 export type PatchOptionLabel = 'Patch when app is closed' | 'Force patch' | 'End user initiated (manual)';
 
 /** The End user experience dropdown's options (Force patch, macOS only). */
-export type EndUserExperienceLabel = 'Patch immediately' | 'Notify before patching';
+export type EndUserExperienceLabel = 'Deadline' | 'Notify before patching' | 'Patch immediately';
 
 /**
  * Fleet's Deploy choices for a software title (`SoftwareDeploySelector`):
  * **Force install** (a policy that installs the app on every host missing it)
  * and **Patch** (a policy that installs the newest version on every host running
  * an older one — Fleet-maintained apps only). Patch opens three options, and Force
- * patch on a macOS app adds an **End user experience** dropdown — Patch immediately
- * or Notify before patching. Windows gets no dropdown.
+ * patch on a macOS app adds an **End user experience** dropdown — Deadline (the
+ * default Force patch picks), Notify before patching or Patch immediately.
+ * Windows gets no dropdown.
  *
  * Fleet renders the selector in the title's Deploy modal and on the add-software
  * pages, so it's constructed on whichever container holds it.

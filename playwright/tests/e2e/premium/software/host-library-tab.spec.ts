@@ -2,7 +2,7 @@
  * Premium • Software • A host's Library tab, read on each real VM.
  *
  * Host details → Software → Library on the macOS, Windows and Linux VMs: the card
- * is the Library's ("Software available to be installed on this host"), its
+ * is the Library's ("Software available to be installed on this host."), its
  * "N items" is what Fleet offers that host, and **Add software** opens the Add
  * software page for the host's fleet on the tab that suits the host's platform:
  * Fleet-maintained for macOS and Windows, Custom package for Linux

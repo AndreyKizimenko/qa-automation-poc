@@ -77,7 +77,7 @@ starts with the same four actions, written out once here and referenced as *"ope
 
 **Assessment**
 - *Value:* solid. Catches a broken bootstrap upload/store/serve/delete path per scope, including content corruption on the server (the sha256 check) and the singleton-per-fleet contract.
-- *Coverage gaps:* the `BootstrapPackageTable` status summary (Status / Hosts columns + **View all hosts** link filtering by `macos_bootstrap_package`) renders above the list item and is never asserted — the POM even declares `statusTable` ([`BootstrapPackagePage.ts:27`](../../pages/controls/BootstrapPackagePage.ts)) and nothing uses it. **Advanced options** → *Install Fleet's agent (fleetd) manually* is SETUP-09's, on a throwaway fleet (the no-package half of its enable rule; the "setup software or a script already exists" half is untested). No negative uploads: wrong extension, unsigned `.pkg`, non-distribution `.pkg` all have dedicated client-side copy in `BootstrapPackageUploader/helpers.tsx` and none is exercised. No activity-feed assertion although `added_bootstrap_package` / `deleted_bootstrap_package` exist. Downloaded bytes are never compared to the fixture, and the delete's `Successfully deleted.` toast is not asserted.
+- *Coverage gaps:* the `BootstrapPackageTable` status summary (Status / Hosts columns + **View all hosts** link filtering by `macos_bootstrap_package`) renders above the list item and is never asserted — the POM even declares `statusTable` ([`BootstrapPackagePage.ts:27`](../../pages/controls/BootstrapPackagePage.ts)) and nothing uses it. **Advanced options** → *Deploy custom agent* (install fleetd manually) is SETUP-09's, on a throwaway fleet (the no-package half of its enable rule; the "setup software or a script already exists" half is untested). The card's other two checkboxes, *Install during manual enrollment* and *Install during migration* (saved by the same Save), are untested. No negative uploads: wrong extension, unsigned `.pkg`, non-distribution `.pkg` all have dedicated client-side copy in `BootstrapPackageUploader/helpers.tsx` and none is exercised. No activity-feed assertion although `added_bootstrap_package` / `deleted_bootstrap_package` exist. Downloaded bytes are never compared to the fixture, and the delete's `Successfully deleted.` toast is not asserted.
 - *Redundancy:* none within this area.
 - *Efficiency / smells:* `downloadIcon` / `deleteIcon` are page-wide `getByTestId('download-icon')` / `('trash-icon')` ([`BootstrapPackagePage.ts:46-47`](../../pages/controls/BootstrapPackagePage.ts)) rather than scoped to `.bootstrap-package-list-item` — fine while one item exists, latent strict-mode breakage if the status table ever grows icons. Download assertion (`/\.pkg$/`) is the weakest possible form: it would pass on a zero-byte file, and asserting `=== PKG_FILE` costs nothing.
 
@@ -233,7 +233,7 @@ other:
 
 **Assessment**
 - *Value:* modest. Confirms the singleton `.sh` upload/list/delete path renders per scope.
-- *Coverage gaps:* **no API verification at all** — unlike SETUP-01 there is no `GET setup_experience/script` check of the stored name or contents, and `helpers/api/mdm.ts` has no getter to do it with (only `deleteSetupExperienceScript`). The card's **download** button is never clicked even though the POM declares `downloadIcon` — so the download path (API fetch + FileSaver) is untested. The `Script will run during setup:` copy is not asserted. The uploader's disabled state while *Install Fleet's agent (fleetd) manually* is on is SETUP-09's (the **Upload** button only; its tooltip is unread). Non-`.sh` rejection is untested. No activity assertion.
+- *Coverage gaps:* **no API verification at all** — unlike SETUP-01 there is no `GET setup_experience/script` check of the stored name or contents, and `helpers/api/mdm.ts` has no getter to do it with (only `deleteSetupExperienceScript`). The card's **download** button is never clicked even though the POM declares `downloadIcon` — so the download path (API fetch + FileSaver) is untested. The `Script will run during setup:` copy is not asserted. The uploader's disabled state while the bootstrap package's *Deploy custom agent* is on is SETUP-09's (the **Upload** button only; its tooltip is unread). Non-`.sh` rejection is untested. No activity assertion.
 - *Redundancy:* structurally identical to SETUP-01 (upload → assert name → delete → assert empty) but weaker; the pair is a good candidate for one shared helper.
 - *Efficiency / smells:* the reset uses a UI `if (await runScript.listItem.isVisible().catch(() => false))` branch ([`run-script.spec.ts:37`](../../tests/e2e/premium/controls/setup-experience/run-script.spec.ts)) where the sibling spec uses a one-line API delete — swap it for `deleteSetupExperienceScript(request, fleetId)` and the branch (and its swallowed error) disappears. `emptyUploadButton = page.getByRole('button', { name: 'Upload' })` ([`RunScriptPage.ts:36`](../../pages/controls/RunScriptPage.ts)) is unscoped, as are the page-wide download/trash test-ids. `toContainText` rather than `toHaveText` on the name means a rename that appends junk would still pass.
 
@@ -411,12 +411,12 @@ other:
 
 1. ☐ Open `/controls/setup-experience/bootstrap-package?fleet_id=<id>` via URL.
    - ✅ *(UI)* `Bootstrap package` `<h2>` visible (the `goto` anchor); the Controls fleet dropdown reads the fleet's name.
-2. ☐ Click **Advanced options**.
-   - ✅ *(UI)* **Install Fleet's agent (fleetd) manually** is visible and **disabled** — the fleet has no package.
+2. ☐ Click **Advanced options** (the reveal on the card below the uploader).
+   - ✅ *(UI)* **Deploy custom agent** (install fleetd manually) is visible and **disabled** — the fleet has no package.
    - ✅ *(API)* `PATCH /setup_experience` with `macos_manual_agent_install: true` → **422**, the body containing `first specify a macos_bootstrap_package`.
 3. ☐ *(API)* Upload the bootstrap package to the fleet; reload the page.
    - ✅ *(UI)* The list item's name reads exactly `dummy-bootstrap-package.pkg`.
-4. ☐ **Advanced options** → tick **Install Fleet's agent (fleetd) manually** → the form's own **Save**.
+4. ☐ **Advanced options** → tick **Deploy custom agent** → the card's own **Save** (the card also holds *Install during manual enrollment* and *Install during migration*, left as they are).
    - ✅ *(UI)* `Successfully updated.` toast (older toasts cleared first).
    - ✅ *(API)* `macos_setup.manual_agent_install` is `true` (`getMacosSetupSettings` → `GET /teams/:id`).
 5. ☐ *(API)* Upload the macOS package. Click **3. Install software** → **macOS** tab.
@@ -474,7 +474,7 @@ all five.
 | **Require IdP authentication** end-user SSO screen during Setup Assistant, and **Lock end user info** actually locking Account Name / Full name | needs the real Setup Assistant + IdP |
 | EULA display during automatic enrollment | no e2e spec exists at all (only an API body-size test) |
 | `canceled_setup_experience` / failure and retry paths | needs a real enrolment to fail |
-| **Install Fleet's agent (fleetd) manually**: Fleet installs no fleetd, and the bootstrap package's own agent enrolls the host | needs a real DEP enrolment with a package that carries fleetd |
+| **Deploy custom agent** (install fleetd manually): Fleet installs no fleetd, and the bootstrap package's own agent enrolls the host | needs a real DEP enrolment with a package that carries fleetd |
 
 A reasonable ask of this suite is therefore: **maximise assertion density on the authoring
 side** (every field, every gating rule, every negative upload, every activity) and accept that
@@ -487,7 +487,7 @@ which is the real gap — not the DEP part.
 |---|---|---|
 | Wizard subnav (5 numbered steps) | SETUP-01..09 (each clicks its own link) | step ordering/labels never asserted as a set |
 | Bootstrap package upload/list/download/delete | SETUP-01 | status table, negative uploads, activity feed, downloaded bytes |
-| Bootstrap *Install Fleet's agent (fleetd) manually* | SETUP-09 (throwaway fleet: disabled and refused without a package; saved on and off; disables and refuses macOS setup software, disables the setup script's **Upload**) | its disable rule when setup software or a script already exists; the setup script's API refusal; the disabled controls' tooltips |
+| Bootstrap *Deploy custom agent* (install fleetd manually) | SETUP-09 (throwaway fleet: disabled and refused without a package; saved on and off; disables and refuses macOS setup software, disables the setup script's **Upload**) | its disable rule when setup software or a script already exists; the setup script's API refusal; the disabled controls' tooltips |
 | Install software — platform tabs | SETUP-02, SETUP-03 | invalid-platform redirect to `macos` |
 | Install software — select + persist | SETUP-03 (9 kinds × 2 scopes) | multi-select, selected-count, `GET setup_experience/software` cross-check |
 | Install software — **Require all software** (macOS / Windows) | — (SETUP-09 sees macOS's *Cancel setup if software fails* disabled while manual agent install is on) | saving it, either platform, incl. Windows-MDM gate |
@@ -550,8 +550,8 @@ API calls are mostly *setup*, which is the right shape.
    message, and would double as the assertion for the missing empty-state coverage.
 2. **Cover the untested setup-experience settings, then trim SETUP-04.** *Release device
    manually*, *Require all software* (macOS + Windows) and the *local account type* radios are
-   all real DEP-behaviour knobs with zero automated coverage (~~*Install Fleet's agent
-   manually*~~ is SETUP-09's since 2026-10-05, cross-card gating included); SETUP-04 spends 22
+   all real DEP-behaviour knobs with zero automated coverage (~~*Deploy custom agent*
+   (install fleetd manually)~~ is SETUP-09's since 2026-10-05, cross-card gating included); SETUP-04 spends 22
    server-side installer downloads on a generic table widget. Reallocating that budget is a
    straight upgrade in regression value.
 3. **Extract a shared singleton-entity lifecycle helper** for bootstrap package / setup script /
