@@ -5,7 +5,7 @@
  * Edit-software modal from the Library accordion row → flip the Self-service
  * slider → Save → confirm the "Save changes?" dialog → verify it persisted via
  * the API → delete. On premium a custom package is a multi-package title, so
- * the edit modal is titled "Edit package" and opens from the accordion row (not
+ * the edit modal is titled "Edit version" and opens from the accordion row (not
  * the summary Actions dropdown). Enabling self-service reveals the categories
  * field, so Fleet treats it as a material change and shows the confirmation.
  *
@@ -20,7 +20,7 @@
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { assertActivity, getSoftwarePackage } from '@helpers/api';
+import { assertActivity, deleteLibraryTitlesWhere, getSoftwarePackage } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 
 const SCOPE = 'Unassigned' as const;
@@ -42,10 +42,30 @@ test.describe('Software edit — custom package self-service (Unassigned)', () =
     softwareCustomPackage,
     softwareTitleDetail,
     request,
-  }) => {
+  }, testInfo) => {
     // Server-side installer processing plus the activity read can edge past the
     // 60s default under worker load; matches library.spec's headroom.
     test.setTimeout(90_000);
+
+    // A retry starts the serial describe over from here, in a library the
+    // failed attempt may already have added to: `delete` was skipped, and Fleet
+    // refuses a second copy of the same package ("already added (same SHA-256
+    // hash)"), so the retry would fail before reaching the step that failed.
+    // The first attempt removes nothing: `cleanup-setup` has emptied the
+    // library, and a title found then is a finding, not residue.
+    if (testInfo.retry > 0) {
+      const removed = await deleteLibraryTitlesWhere(
+        request,
+        FLEET_ID,
+        (t) => t.package?.name === path.basename(FIXTURE),
+      );
+      if (removed) {
+        testInfo.annotations.push({
+          type: 'retry-cleanup',
+          description: `removed ${removed} title(s) the failed attempt left in the library`,
+        });
+      }
+    }
 
     await dashboard.goto();
     await dashboard.navbar.goToSoftware();

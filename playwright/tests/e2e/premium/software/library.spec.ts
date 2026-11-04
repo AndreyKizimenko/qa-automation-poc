@@ -234,12 +234,12 @@ for (const scope of SCOPES) {
         // Play Store app apart from a package of the same name once it's added
         // — the only visible difference on the title page. Fleet derives it
         // from the title's osquery source (`formatSoftwareType` in
-        // `interfaces/software.ts`), so `android_apps` reads "Android app" and
-        // `ios_apps` reads "iOS app".
+        // `interfaces/software.ts`), so `android_apps` reads "App (Android)" and
+        // `ios_apps` reads "App (iOS)".
         if (c.kind === 'android') {
-          await expect(softwareTitleDetail.typeValue).toHaveText('Android app');
+          await expect(softwareTitleDetail.typeValue).toHaveText('App (Android)');
         } else if (c.kind === 'vpp') {
-          await expect(softwareTitleDetail.typeValue).toHaveText(`${c.platform} app`);
+          await expect(softwareTitleDetail.typeValue).toHaveText(`App (${c.platform})`);
         }
         titleId = Number(page.url().match(/\/software\/titles\/(\d+)/)?.[1]);
         expect(titleId).toBeGreaterThan(0);

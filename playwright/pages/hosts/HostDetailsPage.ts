@@ -150,7 +150,7 @@ export class HostDetailsPage {
   /** "N items" above the inventory table, scoped to the host software card. */
   readonly softwareCount: Locator;
   /**
-   * "Show helpers": shown on a macOS host while the "macOS app" type is
+   * "Show helpers": shown on a macOS host while the "App (macOS)" type is
    * selected. Off, the list holds only top-level apps in `/Applications`; on, it
    * adds the apps outside it. Fleet's Slider names the switch through its
    * aria-label.
@@ -344,7 +344,7 @@ export class HostDetailsPage {
   async openSoftwareTab(): Promise<void> {
     await this.softwareTab.click();
     // Settle on either rows or the empty state — a macOS host opens on the
-    // "macOS app" type, which is empty when the host reports only non-app
+    // "App (macOS)" type, which is empty when the host reports only non-app
     // packages (so rows alone would never resolve; callers switch to every
     // type via showFullInventory() next).
     await expect(this.softwareRowOrEmpty()).toBeVisible();
@@ -388,7 +388,7 @@ export class HostDetailsPage {
   }
 
   /**
-   * Narrows the Inventory to `types` (display names, e.g. `['macOS app']`) through
+   * Narrows the Inventory to `types` (display names, e.g. `['App (macOS)']`) through
    * the Filters modal's Types picker; `[]` lists every type. The selection rides
    * in the URL's `types` param, which reads `none` for an emptied selection on a
    * macOS host and is absent elsewhere. Waits for the narrowed table to settle.

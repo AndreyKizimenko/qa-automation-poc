@@ -1,6 +1,6 @@
 /**
- * MDM Setup Experience — Bootstrap package lifecycle, and its "Install Fleet's
- * agent (fleetd) manually" advanced option.
+ * MDM Setup Experience — Bootstrap package lifecycle, and its "Deploy custom
+ * agent" advanced option (install fleetd manually).
  *
  * Verifying actual delivery onto an enrolled ADE host requires a physical
  * Mac and is left to manual QA. The lifecycle runs once per scope (Unassigned +

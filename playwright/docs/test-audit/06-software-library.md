@@ -175,7 +175,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 6. ☐ (Automatic) land on the new title's detail page.
    - ✅ *(UI)* The active installer accordion row (`.library-item-accordion` without `--inactive`) is visible.
    - ✅ *(UI)* The title's display heading (`aria-label="software display name"`) has non-empty text — **only** a length check, the expected name is never asserted.
-   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `Android app` / `<iOS> app`. Fleet derives it from the title's osquery source (`formatSoftwareType`), so `android_apps` renders "Android app" and `ios_apps` renders "iOS app"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
+   - ✅ *(UI)* **`android` / `vpp` cases only** — the summary card's **Type** line reads `App (Android)` / `App (<iOS>)`. Fleet derives it from the title's osquery source (`formatSoftwareType`), so `android_apps` renders "App (Android)" and `ios_apps` renders "App (iOS)"; it is the only visible difference on the title page between an App Store / Play Store app and a package of the same name. The `custom` and `fma` cases assert no Type line at all (SWL-30 pins the script-only one).
 7. ☐ (No user action) API cross-check of the add.
    - ✅ *(UI)* Title id parsed from the URL is > 0.
    - ✅ *(API)* An `added_software` (custom/FMA) or `added_app_store_app` (VPP/Android) activity newer than the id taken before the add, whose `details.software_title_id` is that title id and whose `details.fleet_id` is the scope's (a missing id read as Unassigned), by `FLEET_ADMIN_EMAIL` (`latestActivityId` → `assertActivityAfter`). It's matched by id, not by the heading's name: Fleet keeps a title's first name, while an app-store activity records the store's current one, and the two part when the vendor renames the app (Bear on 2026-10-22: heading "Bear - Markdown Notes", activity "Bear Markdown Notes & Journal"). Its non-empty `details.software_title` is kept as `activityTitle` for SWL-03.
@@ -225,7 +225,7 @@ other:
 
 1. ☐ Open `/software/titles/<titleId>?fleet_id=<n>` via URL (raw `page.goto` in the spec, not `softwareTitleDetail.goto()`).
 2. ☐ Click the installer accordion row header to expand it, click **Delete this version**, confirm in the modal.
-   - ✅ *(UI)* A modal whose title matches `Delete software`, `Delete package` or `Delete version` (an iOS / iPadOS App Store or Play Store title, which holds versions) is visible before confirming.
+   - ✅ *(UI)* A modal whose title matches `Delete software` or `Delete version` (a custom-package, iOS / iPadOS App Store or Play Store title, which holds versions) is visible before confirming.
    - ✅ *(UI)* After confirming, the active accordion row is hidden (Fleet redirects to the library list when the last installer is removed) — `SoftwareInstallerCard.delete()`.
 3. ☐ (No user action) API cross-check.
    - ✅ *(API)* A `deleted_software` / `deleted_app_store_app` activity newer than the id taken before the delete, on the scope's fleet, by the suite admin (`assertActivityAfter`). A delete activity carries no title id, so an app-store app's is matched on the `app_store_id` and `platform` its add recorded, and a package's on its `software_package`.
@@ -331,10 +331,11 @@ other:
 - **Project:** premium · **Scope:** Unassigned only (`FLEET_ID = 0` hardcoded)
 - **Mode:** UI+API · **Isolation:** serial describe, step 1 of 4 · `test.setTimeout(90_000)`
 - **Preconditions:** clean instance; the fixture is `linux/software/sublime-text_build-4200_amd64.deb` (16 MB) chosen precisely because `library.spec` never uploads it, so a parallel worker on the same Unassigned scope can't collide on the title "Sublime Text"
-- **Data created:** software title "Sublime Text" on `fleet_id=0` — deleted by SWL-07
+- **Data created:** software title "Sublime Text" on `fleet_id=0` — deleted by SWL-07; residue swept by `cleanup-teardown`, or by the retry itself (step 0)
 
 **Flow**
 
+0. ☐ **On a retry only** — delete any title in Unassigned's library whose package is `sublime-text_build-4200_amd64.deb` (`deleteLibraryTitlesWhere`). A `retry-cleanup` annotation records each removal. A retry re-runs the serial describe from this step with `delete` skipped, so without this a failure in SWL-06 makes the retry's upload fail on "already added (same SHA-256 hash)". The first attempt removes nothing: a title found then is a finding.
 1. ☐ Open the dashboard (via URL) → click **Software** in the navbar → select **Unassigned** → click **Add software**.
    - ✅ *(UI)* Same chain of assertions as SWL-01 steps 1–4.
 2. ☐ Click the **Custom package** tab, choose `sublime-text_build-4200_amd64.deb`, click **Add software**.
@@ -376,7 +377,7 @@ other:
 1. ☐ Open `/software/titles/<titleId>?fleet_id=0` (via `SoftwareTitleDetailPage.goto()`).
    - ✅ *(UI)* Active installer accordion row visible.
 2. ☐ Click the **All hosts** label badge in the collapsed accordion header (this is the edit affordance for a package with no custom label scope).
-   - ✅ *(UI)* A modal titled **Edit package** (premium multi-package title) or **Edit software** is visible, and its `role="switch"` Self-service slider is visible — `EditSoftwareModal.expectOpen()`.
+   - ✅ *(UI)* A modal titled **Edit version** (premium multi-package title) or **Edit software** is visible, and its `role="switch"` Self-service slider is visible — `EditSoftwareModal.expectOpen()`.
    - ✅ *(UI)* The Self-service slider reads `aria-checked="false"` — i.e. the freshly added package defaults to *off*.
 3. ☐ Click the **Self-service** slider.
    - ✅ *(UI)* Slider flips to `aria-checked="true"`.
@@ -416,7 +417,7 @@ other:
 **Flow**
 
 1. ☐ Open `/software/titles/<titleId>?fleet_id=0`.
-2. ☐ Expand the installer accordion row, click **Delete this version**, confirm in the **Delete package** modal.
+2. ☐ Expand the installer accordion row, click **Delete this version**, confirm in the **Delete version** modal.
    - ✅ *(UI)* Modal visible before confirm; accordion row hidden after.
 3. ☐ (No user action) API cross-check.
    - ✅ *(API)* `deleted_software` activity with `details.software_title === titleName`, actor = suite admin.
@@ -1274,7 +1275,7 @@ other:
    - ✅ *(API)* The title exists and has ≥1 cached build.
 2. ☐ *(Setup, API)* Read its stored package. ✅ `pinned_version` is `''`.
 3. ☐ Open the dashboard → **Software** → select the **QA** fleet (`selectByLabel`, since QA is outside the typed `TeamScope` matrix) → click the **Library** tab → search "Postman".
-4. ☐ Click the row whose **Type** cell reads **macOS app** — the name alone is ambiguous across the two platform titles.
+4. ☐ Click the row whose **Type** cell reads **App (macOS)** — the name alone is ambiguous across the two platform titles.
    - ✅ *(UI)* The display heading is visible; its text is captured for the save toasts.
 5. ✅ *(UI)* The installer accordion row carries the **Latest** badge — an unpinned app tracks latest.
 6. ☐ Open **Actions → Versions**.
@@ -1298,7 +1299,7 @@ other:
 - *Efficiency / smells:*
   - The unpinned precondition is a **test failure with an operational cause**: one aborted run leaves this test red until somebody clears the pin by hand. Deliberate and clearly messaged, but worth knowing before triaging it as a flake.
   - It mutates a **shared, durable, gitops-provisioned** resource that no cleanup project touches. The only guard is the `finally`, which doesn't run on a `SIGKILL`.
-  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "macOS app" would also match.
+  - `openLibraryTitle()` ends in the same `.first()` link chain as SWL-25/27, with `filter({ hasText: TYPE_CELL[...] })` added; the Type text is matched anywhere in the row, so a title whose *name* contained "App (macOS)" would also match.
   - `PIN_SHAPES_APP` hard-codes "Postman": a `qa.yml` change that drops it breaks this test (with a good message, but it still breaks).
 
 **Notes (Andrey)**
@@ -1382,7 +1383,7 @@ other:
 6. ✅ *(API)* An `added_software` activity with `details.software_title === 'fleet-playwright-script-package'`, actor = the suite admin — `assertActivity`.
 7. ☐ Open `/software/library?fleet_id=0`, re-select **Unassigned**, search the title.
    - ✅ *(UI)* A row with that name is visible.
-8. ☐ Reopen the title detail and delete from the accordion row (expand → **Delete this version** → confirm in the **Delete package** modal).
+8. ☐ Reopen the title detail and delete from the accordion row (expand → **Delete this version** → confirm in the **Delete version** modal).
    - ✅ *(UI)* The delete modal is visible before confirming; the accordion row is hidden afterwards.
    - ✅ *(API)* A `deleted_software` activity for the same title.
 9. ☐ Open the Library again and re-select **Unassigned**.
@@ -1432,7 +1433,7 @@ other:
    - ✅ The downloaded bytes' SHA-256 equals the fixture on disk's SHA-256 — the installer Fleet serves is the one that was uploaded.
    - ✅ *(API)* The same hash equals the `hash_sha256` Fleet recorded at upload. Hashing both ways is deliberate: a mismatch then says whether the wrong **file** was served or the wrong **hash** was stored.
 5. ☐ Click **Edit software** in the expanded accordion row.
-   - ✅ *(UI)* The **Edit package** modal (that title for a premium multi-package title; "Edit software" otherwise) is open with its Self-service switch visible — `expectOpen()`.
+   - ✅ *(UI)* The **Edit version** modal (that title for a premium multi-package title; "Edit software" otherwise) is open with its Self-service switch visible — `expectOpen()`.
 6. ☐ Expand **Advanced options** (idempotent — skipped if the editors already render).
    - ✅ *(UI)* The install- and uninstall-script Ace editors are visible.
 7. ✅ *(UI vs API)* Each of the four editors' rendered code equals the corresponding stored script, field by field: **install**, **uninstall**, **pre-install query**, **post-install**. All four are non-empty — Fleet generated the first two, step 2 wrote the other two. Both sides go through `normalizeScript()` (trailing whitespace stripped, blank lines dropped) because Ace renders one element per line and drops blank lines from its text layer, so `innerText` is never byte-identical to what Fleet stored.
@@ -1513,22 +1514,25 @@ other:
    - ✅ *(API)* no patch policy yet.
 2. ☐ **Actions → Deploy** → tick **Patch**.
    - ✅ *(UI)* **Patch when app is closed** is chosen by default. **Save** → toast `Successfully updated deploy options.`
-   - ✅ *(API)* a `patch` policy for the title, named `macOS - LocalSend up to date`, platform `darwin`, installing the title, `patch_when_closed` and continuous on, `notify_before_patching` off.
-3. ☐ Deploy → **Force patch** → **End user experience** (it opens on *Patch immediately*) → **Notify before patching** → **Save**.
-   - ✅ *(UI)* the modal reopened on Patch ticked and *Patch when app is closed*.
-   - ✅ *(API)* installs, `notify_before_patching` and continuous on, `patch_when_closed` off.
-4. ☐ Deploy → End user experience → **Patch immediately** → **Save**.
+   - ✅ *(API)* a `patch` policy for the title, named `macOS - LocalSend up to date`, platform `darwin`, installing the title, `patch_when_closed` and continuous on, `notify_before_patching` and `patch_deadline` off.
+3. ☐ Deploy → **Force patch** → **Save**, keeping the **End user experience** it opens on.
+   - ✅ *(UI)* the modal reopened on Patch ticked and *Patch when app is closed*; Force patch's End user experience opens on *Deadline* (the other options are *Notify before patching* and *Patch immediately*).
+   - ✅ *(API)* installs, `patch_deadline` and continuous on, `patch_when_closed` and `notify_before_patching` off.
+4. ☐ Deploy → End user experience → **Notify before patching** → **Save**.
+   - ✅ *(UI)* reopened on Force patch with *Deadline*.
+   - ✅ *(API)* installs, `notify_before_patching` and continuous on, `patch_when_closed` and `patch_deadline` off.
+5. ☐ Deploy → End user experience → **Patch immediately** → **Save**.
    - ✅ *(UI)* reopened on Force patch with *Notify before patching*.
-   - ✅ *(API)* installs; all three flags off.
-5. ☐ Deploy → **End user initiated (manual)** → **Save**.
+   - ✅ *(API)* installs; all four flags off.
+6. ☐ Deploy → **End user initiated (manual)** → **Save**.
    - ✅ *(UI)* reopened on Force patch; the End user experience dropdown goes once manual is chosen.
    - ✅ *(API)* the policy stays, with **no install automation** and every flag off.
-6. ☐ Deploy → untick **Patch** → **Save**.
+7. ☐ Deploy → untick **Patch** → **Save**.
    - ✅ *(UI)* reopened on manual; the options go once Patch is unticked.
    - ✅ *(API)* no patch policy for the title.
 
 **Assessment**
-- *Value:* the only coverage of patch policies — a 4.9x feature whose options map onto three policy flags plus whether the policy installs at all, decided in the frontend (`getPatchPolicyFlags`, `DeployModal`) and stored server-side. Each step reopens the modal on what was saved, so a modal that writes one thing and shows another fails.
+- *Value:* the only coverage of patch policies — a 4.9x feature whose options map onto four policy flags plus whether the policy installs at all, decided in the frontend (`getPatchPolicyFlags`, `DeployModal`) and stored server-side. Each step reopens the modal on what was saved, so a modal that writes one thing and shows another fails.
 - *Coverage gaps:* the policy's query (it fails on any version older than the newest Fleet maintains) isn't run on a host; Force install, the other Deploy checkbox, isn't touched; patching from the Add-software page (the same selector) isn't.
 - *Efficiency:* no host; well under a minute, most of it adding the app.
 
@@ -1557,7 +1561,7 @@ other:
 2. ☐ *(API)* `PATCH` the policy with `notify_before_patching: true`.
    - ✅ *(API)* 400 — *"notify_before_patching" is only available for macOS Fleet-maintained apps.*
 3. ☐ *(API)* `PATCH` it with `patch_when_closed` and `notify_before_patching` both true.
-   - ✅ *(API)* 400 — *Only one of "patch_when_closed" or "notify_before_patching" can be set to true*; the policy is as it was.
+   - ✅ *(API)* 400 — *Only one of "patch_when_closed", "notify_before_patching", or "patch_deadline" can be set to true*; the policy is as it was.
 
 **Assessment**
 - *Value:* the platform half of the contract, and the server enforcing what the UI only hides.
@@ -1613,7 +1617,7 @@ other:
 1. ☐ Open the title's page (`/software/titles/:id?fleet_id=0`, via `SoftwareTitleDetailPage.goto()`).
    - ✅ *(UI)* Active installer accordion row visible.
 2. ☐ Expand the active installer row and click its **Edit software** action — `installerCard.expand()`, then `editSoftwareButton`.
-   - ✅ *(UI)* The **Edit package** modal is open with its Self-service switch visible — `expectOpen()`.
+   - ✅ *(UI)* The **Edit version** modal is open with its Self-service switch visible — `expectOpen()`.
 3. ☐ Expand **Advanced options**.
    - ✅ *(UI)* The install- and uninstall-script editors are visible.
 4. ☐ Replace the text of all four editors through Ace's own API — `EditSoftwareModal.setScript()` → `setAceValue()`, since typing would let Ace auto-indent and close quotes:
@@ -1631,7 +1635,7 @@ other:
 
 **Assessment**
 - *Value:* the only test that writes scripts through Fleet's Edit modal and proves Fleet stored them — all four editors in one save, each read back. It closes the largest Edit-modal gap in the area (SWL-06 exercises only Self-service), and with SWL-31 covers scripts set both at add time and on edit.
-- *Coverage gaps:* the read-back is API-only — the reopened modal is never checked (the spec header cites stale config in a reopened modal, the same unfiled defect SWL-06 routes around), so a modal that saves correctly but then shows the old scripts would pass; the pending-install cancellation the confirmation warns about is never observed, since nothing is pending; the toast is a substring regex rather than the full `Successfully edited <name>.`; no activity-feed assertion for the edit (SWL-08 has one for the Self-service edit); no clearing of a field back to empty, and no Cancel/discard of a dirty form; no Fleet-maintained title (deliberate: editing an FMA's install script sets a sticky `install_script_edited` flag that auto-update carries forward); nothing proves Fleet would *run* the edited scripts, since nothing installs the package.
+- *Coverage gaps:* the read-back is API-only — the reopened modal is never checked (the spec header cites stale config in a reopened modal, the same unfiled defect SWL-06 routes around), so a modal that saves correctly but then shows the old scripts would pass; the pending-install cancellation the confirmation warns about is never observed, since nothing is pending; the toast is a substring regex rather than the full `Successfully edited <name> version.`; no activity-feed assertion for the edit (SWL-08 has one for the Self-service edit); no clearing of a field back to empty, and no Cancel/discard of a dirty form; no Fleet-maintained title (deliberate: editing an FMA's install script sets a sticky `install_script_edited` flag that auto-update carries forward); nothing proves Fleet would *run* the edited scripts, since nothing installs the package.
 - *Redundancy:* none — SWL-31 reads the four scripts but never writes them through Edit, and SWL-06 writes only Self-service.
 - *Efficiency / smells:*
   - Enters by direct URL to the title page rather than dashboard → Software → Library → title, against the click-through convention in `playwright/CLAUDE.md`. Cheap and stable, but it skips the route a user takes.
@@ -1716,7 +1720,7 @@ other:
 - **Mode:** UI+API · **Isolation:** serial describe, step 2 of 4 in the Android case — after SWL-01's add, before SWL-02's delete; needs `titleId` from SWL-01. The two scopes' runs edit the same app on different fleets in parallel, so the activity is matched by its title id, its fleet and the configuration it records.
 - **Preconditions:** SWL-01 passed in the same worker; Managed Google Play configured (as SWL-01). Premium holds no Android host, so a saved configuration reaches no device: what's tested is what Fleet stores and what it refuses.
 - **Data created:** the title's managed configuration, gone with the title at SWL-02; Fleet's `edited_app_store_app` activity (permanent)
-- **Known Fleet defect:** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — Fleet doesn't serve Ace's `worker-json.js`, so opening the editor throws an uncaught `importScripts` error. The editor still opens and saves. `pageHealth` ignores that one error through `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts), with a row in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
+- **Known Fleet defect (fixed in 4.95):** [fleetdm/fleet#54845](https://github.com/fleetdm/fleet/issues/54845) — opening the editor threw an uncaught `importScripts` error, because Fleet didn't serve Ace's `worker-json.js`; fixed by fleetdm/fleet#55160 (`components/Editor` doesn't start Ace's worker). `DEFAULT_IGNORED_PAGE_ERRORS` in [`helpers/console.ts`](../../helpers/console.ts) is empty, so `pageHealth` fails the test on any uncaught exception the editor throws; the history is under *Resolved* in [`blocked-by-product-bugs.md`](../blocked-by-product-bugs.md).
 
 **Flow**
 
@@ -1740,7 +1744,7 @@ other:
 - *Value:* the only coverage of an app's managed configuration: Fleet's top-level-key rule, what it stores, and the modal reopening what was stored, on both scopes. The refusal is checked at both layers (the toast, and nothing stored), and the activity is pinned to its fleet and payload, so the two scopes' parallel runs can't satisfy each other's assertion. It rides on SWL-01's title, so it costs no extra add.
 - *Coverage gaps:* JSON that doesn't parse (Save disabled client-side) isn't tried. Clearing a configuration back to none isn't covered. The iOS / iPadOS configuration (an XML `<dict>`, same modal) isn't: the VPP case (Bear) has no edit step. Values Fleet should refuse *inside* the two allowed keys aren't probed. The `edited_app_store_app` copy in the dashboard feed isn't checked — SWL-03 stays add → delete. A configuration reaching a device is out of reach (no Android host).
 - *Redundancy:* none.
-- *Efficiency / smells:* seconds. The modal is reached by its BEM root (no `role="dialog"`); the row's **Edit version** icon by its aria-label, exact, since the row header's accessible name nests it. The page-error ignore is one substring but suite-wide: any other flow that hits the same `worker-json.js` error passes too, until #54845 is fixed and the entry dropped.
+- *Efficiency / smells:* seconds. The modal is reached by its BEM root (no `role="dialog"`); the row's **Edit version** icon by its aria-label, exact, since the row header's accessible name nests it. No page error is ignored, so an uncaught exception from the Configuration editor fails the test.
 
 **Notes (Andrey)**
 ```

@@ -108,7 +108,7 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
 
     await profiles.openEdit(name);
     await expectGatedByGitOps(profiles.updateProfileButton, repoUrl);
-    await profiles.cancelProfileForm();
+    await profiles.leaveProfileForm();
   });
 
   test('Variables — Add variable is gated, Delete stays open', async ({ variables, request }) => {

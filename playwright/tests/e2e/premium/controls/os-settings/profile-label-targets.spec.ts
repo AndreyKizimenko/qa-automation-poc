@@ -155,6 +155,8 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
       // The Edit page reads the target back: Custom, Include "Any" with a and b,
       // Exclude with c — and a label ticked on one tab can't be ticked on the other.
       await configurationProfiles.openEdit(includeAnyExclude.profile.name);
+      await expect(configurationProfiles.appliesTo).toContainText('hosts in custom targets');
+      await configurationProfiles.openTargets();
       const edit = configurationProfiles.formTargets;
       await expect(edit.customRadio).toBeChecked();
       await expect(edit.tabHasSelection('Include')).toBeVisible();
@@ -166,7 +168,8 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
       await edit.excludeTab.click();
       await expect(edit.labelCheckbox(label.c, 'Exclude')).toBeChecked();
       await expect(edit.labelCheckbox(label.a, 'Exclude')).toBeDisabled();
-      await configurationProfiles.cancelProfileForm();
+      await configurationProfiles.cancelTargets();
+      await configurationProfiles.leaveProfileForm();
 
       // Server-side: each profile is listed on exactly the hosts its labels pick.
       const expected = cases.map((c, i) => ({ profile: uploaded[i], hosts: c.expected }));

@@ -161,6 +161,7 @@ export interface FleetPolicyFields {
   patch_software_title_id?: number;
   patch_when_closed?: boolean;
   notify_before_patching?: boolean;
+  patch_deadline?: boolean;
 }
 
 /** A fleet policy as Fleet stores it — the fields the policy specs read back. */
@@ -177,6 +178,7 @@ export interface FleetPolicy {
   continuousAutomationsEnabled: boolean;
   patchWhenClosed: boolean;
   notifyBeforePatching: boolean;
+  patchDeadline: boolean;
   /** The title its install automation installs, or null. */
   installSoftwareTitleId: number | null;
   /** The script its run-script automation runs, or null. */
@@ -196,6 +198,7 @@ interface RawFleetPolicy {
   continuous_automations_enabled?: boolean;
   patch_when_closed?: boolean;
   notify_before_patching?: boolean;
+  patch_deadline?: boolean;
   install_software?: { software_title_id: number } | null;
   run_script?: { id: number; name: string } | null;
   patch_software?: { software_title_id: number } | null;
@@ -213,6 +216,7 @@ function toFleetPolicy(p: RawFleetPolicy): FleetPolicy {
     continuousAutomationsEnabled: p.continuous_automations_enabled ?? false,
     patchWhenClosed: p.patch_when_closed ?? false,
     notifyBeforePatching: p.notify_before_patching ?? false,
+    patchDeadline: p.patch_deadline ?? false,
     installSoftwareTitleId: p.install_software?.software_title_id ?? null,
     runScript: p.run_script ? { id: p.run_script.id, name: p.run_script.name } : null,
     patchSoftwareTitleId: p.patch_software?.software_title_id ?? null,

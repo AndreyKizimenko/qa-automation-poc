@@ -56,12 +56,11 @@ on free and 67 on premium:
 | `premium/command-palette/deep-links.spec.ts` | #89, #45, #46 (premium) | 3 |
 | `premium/command-palette/items.spec.ts` | #90 | 1 |
 
-#44 (`Manage software automations`) is skipped on fleetdm/fleet#55672, a Fleet race rather than
-the test: Software's inventory table rewrites the page's query on its first render and drops
-`manage_automations` before the deep-link effect, which waits for the software config, reads it
-(`SoftwareInventoryTable.tsx` `onQueryChange`, `SoftwarePage.tsx`). From the Dashboard the modal
-opened in 2 of 11 scripted probes on the 4.93 RC, and the test failed 8 of 16 runs on the 4.94 RC
-(29ffbd6).
+#44 (`Manage software automations`) depends on the Software page reading `manage_automations`
+before its inventory table rewrites the query on first render. Through 4.94 it didn't
+(fleetdm/fleet#55672: the modal opened in 2 of 11 scripted probes on the 4.93 RC, and the test
+failed 8 of 16 runs on the 4.94 RC); fixed by fleetdm/fleet#55741 in 4.95, where it passes 16 of 16
+runs on each tier.
 
 Not built, and not cut: #38, #47, #48, #47b, #58–#61, #62–#73 except as noted, #74–#78, #83–#85,
 and the premium halves of #13, #26/#62b and #30–#33.
@@ -271,7 +270,7 @@ are in the premium (from Workstations) and free deep-link specs, and the P rows 
 | 41 | `Manage activity automations` → Dashboard modal, param stripped | P1 | S |
 | 42 | `Manage report automations` → Reports modal, param stripped (needs ≥1 report in scope) | P1 | S |
 | 43 | `Manage policy automations` → Policies modal, param stripped (needs ≥1 policy in scope) | P1 | S |
-| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium). Skipped on fleetdm/fleet#55672, see Status | P1 | S |
+| 44 | `Manage software automations` → Software modal, param stripped (All fleets on premium). See Status for fleetdm/fleet#55672 | P1 | S |
 | 45 | `Add script` → Scripts library add modal, param stripped; on premium from a fleet, which `fleet_id` keeps | P2 | P + F |
 | 46 | `Add custom variable` → Variables add modal (the bare route redirects to Global variables), param stripped | P2 | P + F |
 | 47 | `Add self-service category` → categories add modal, param stripped | P2 | P |
@@ -366,7 +365,7 @@ item has a `teamName` any more. Verified live: on All fleets, no row renders a c
 
 | # | Case | Pri | Tier |
 |---|---|---|---|
-| 80 | Free: premium-gated items are absent, even when searched for — Disk encryption, Assets, Certificates, Passwords, Host names, Software library, Self-service categories, `View software library`, `Add Fleet-maintained app`, `Add VPP app`, `Add Android app store app`, `Add custom package`, `Add self-service category`, Settings → Fleets, `Add fleet`, Calendar events, Change management, Conditional access, Certificate authorities, User mapping, SSO for end users, ABM, VPP, `Edit Microsoft Graph`, `Android zero-touch`, `Manage host activity automations` | P1 | F |
+| 80 | Free: premium-gated items are absent, even when searched for — Disk encryption, Certificates, Passwords, Host names, Software library, Self-service categories, `View software library`, `Add Fleet-maintained app`, `Add VPP app`, `Add Android app store app`, `Add custom package`, `Add self-service category`, Settings → Fleets, `Add fleet`, Calendar events, Change management, Conditional access, Certificate authorities, User mapping, SSO for end users, ABM, VPP, `Edit Microsoft Graph`, `Android zero-touch`, `Manage host activity automations` | P1 | F |
 | 81 | Free: no fleet-switcher button, and `Ctrl+Shift+F` does nothing | P1 | F |
 | 82 | Free: non-premium items are present — OS settings, Configuration profiles, Scripts, Variables, `Add script`, `Add custom variable`, Vulnerabilities, `Add label`, `Add user`, `Add API-only user` | P1 | F |
 | 82b | Free: the `Controls` Pages row is absent (its landing tab, OS updates, is Premium) while the Controls **group** still lists the free sub-pages — the intended shape, see finding 1. Also covers `OS updates` and `Setup experience` being absent | P1 | F |

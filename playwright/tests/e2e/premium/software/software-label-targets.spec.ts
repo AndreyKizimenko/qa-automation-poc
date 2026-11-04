@@ -85,7 +85,7 @@ test.describe('Premium • Software — label-scoped software', () => {
       await softwareTitleDetail.editSoftwareModal.expectOpen();
       await softwareTitleDetail.editSoftwareModal.setTarget(target);
       await softwareTitleDetail.editSoftwareModal.save();
-      await softwareTitleDetail.toast.expectSuccess(`Successfully edited ${fileName}.`);
+      await softwareTitleDetail.toast.expectSuccess(`Successfully edited ${fileName} version.`);
     };
     const offered = () => hostsOfferedTitle(request, ours, titleId!);
 

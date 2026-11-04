@@ -557,7 +557,7 @@ other:
    - ✅ *(API)* Installed versions are exactly `['2.4.0']`.
 4. ☐ Reload the host → **Software** → **Inventory** → search the name.
    - ✅ *(UI)* Exactly **one** row whose name link is the package name.
-   - ✅ *(UI)* The row contains **2.4.0** and **deb package**.
+   - ✅ *(UI)* The row contains **2.4.0** and **Package (deb)**.
 5. ☐ (No user action) `finally` — uninstall, delete the title.
 
 **Assessment**
@@ -893,7 +893,7 @@ other:
 **Flow**
 
 1. ☐ Open the VM's details (`/hosts/<id>`) → **Software** → **Library**.
-   - ✅ *(UI)* URL contains `/software/library`; the card's subheader reads **"Software available to be installed on this host"**.
+   - ✅ *(UI)* URL contains `/software/library`; the card's subheader reads **"Software available to be installed on this host."**
 2. ☐ (Reload until a pair agrees, up to 60 s) Read the card's **"N items"**, and count the titles the host is offered (`GET /hosts/:id/software?available_for_install=true`).
    - ✅ *(API)* the VM is offered at least one title.
    - ✅ *(UI vs API)* **"N items"** equals that count. Other specs add and delete per-run `fleet-pw-*` packages on the VMs fleet meanwhile, so a pair read seconds apart can differ; a reload retries it.

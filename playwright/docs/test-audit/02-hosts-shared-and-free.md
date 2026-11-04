@@ -180,7 +180,7 @@ other:
    - ✅ *(API)* Such a host exists.
 2. ☐ Open `/hosts/:id` via URL, click the **Software** tab.
    - ✅ *(UI)* The software table settles to either rows **or** its empty state — `openSoftwareTab()` uses `rowOrEmpty()` ([`pages/hosts/HostDetailsPage.ts:158`](../../pages/hosts/HostDetailsPage.ts)), so an empty table satisfies this wait.
-3. ☐ List every software type (`showFullInventory`): on a macOS host, untick the default **macOS app** type in the Filters modal; a no-op on Windows/Linux, which open on every type.
+3. ☐ List every software type (`showFullInventory`): on a macOS host, untick the default **App (macOS)** type in the Filters modal; a no-op on Windows/Linux, which open on every type.
    - ✅ *(UI)* On macOS, the URL gains `macos_applications=false`.
 4. ☐ Read the Name-column links.
    - ✅ *(UI)* At least one software title is listed.
@@ -350,7 +350,7 @@ other:
 
 1. ☐ Open `/hosts/manage` via URL; wait for the first host row.
 2. ☐ On premium, select **Unassigned** (no-op on free).
-3. ☐ Read the first row's host-name link text.
+3. ☐ Read the first row's host-name link — its rendered text (`firstHostName` reads `innerText`: the name cell also keeps a hidden tooltip copy of the name, with a `<style>` block, inside the link).
    - ✅ *(UI)* It is non-empty.
 4. ☐ Click **Export hosts** and capture the browser download.
    - ✅ *(UI/file)* The downloaded CSV's text contains the first host's display name.
@@ -359,7 +359,7 @@ other:
 - *Value:* low. It proves the export endpoint fires, returns a file, and the file is not empty of hosts. That's a smoke check.
 - *Coverage gaps:* no header-row/column assertion (the CSV's column set is the thing that breaks); **no assertion that the export respects the current view** — filters, search term, selected team, or the visible column selection (which HOST-07 shows is configurable); no row-count sanity check; the bulk-selection export path ("export N selected") untested.
 - *Redundancy:* the **Export hosts** button's *visibility* is also asserted in HOST-10 and HOST-11 (and their premium mirrors) — three tests touch the same button, only this one clicks it.
-- *Efficiency / smells:* the assertion is the weakest form available (`csv.toContain(name)` on a ~300-row file). Making the export follow a search term (`search=<name>` then assert the CSV has exactly a header + 1 row) would turn this into a real test at the same cost. `firstHostName()` returning `''` on a missing link is guarded by the `length > 0` check, so no silent pass.
+- *Efficiency / smells:* the assertion is the weakest form available (`csv.toContain(name)` on a ~300-row file). Making the export follow a search term (`search=<name>` then assert the CSV has exactly a header + 1 row) would turn this into a real test at the same cost. `firstHostName()` waits for the link to be visible, so a missing link fails there, and the `length > 0` check catches an empty name — no silent pass.
 
 **Notes (Andrey)**
 ```
@@ -673,7 +673,7 @@ other:
 - **Grep:** `npx playwright test -g "the macOS app type narrows a Mac's inventory to top-level applications"`
 - **Project:** premium + free (shared) · **Scopes:** n/a
 - **Mode:** UI · **Isolation:** standalone, read-only; second test in the file and independent of HOST-04 (different host, different entry)
-- **Preconditions:** **the real macOS VM** (`liveMacosHost`), unlike HOST-04 which takes an API-chosen host. A macOS host opens its Inventory on the **macOS app** type with **Show helpers** off — top-level apps in `/Applications` only (`HostSoftware.tsx` writes `types=macos_app` into the URL) — and clearing the type in the Filters modal lists every type. The default is **platform-gated, not tier-gated**, which is why this runs on both tiers rather than premium-only. A simulation reports a synthetic inventory with no application paths, so the narrowing against one would be meaningless. The VM must report ≥1 top-level application **and** ≥1 non-application package that lands on page 1 of the full inventory (see the smell below).
+- **Preconditions:** **the real macOS VM** (`liveMacosHost`), unlike HOST-04 which takes an API-chosen host. A macOS host opens its Inventory on the **App (macOS)** type with **Show helpers** off — top-level apps in `/Applications` only (`HostSoftware.tsx` writes `types=macos_app` into the URL) — and clearing the type in the Filters modal lists every type. The default is **platform-gated, not tier-gated**, which is why this runs on both tiers rather than premium-only. A simulation reports a synthetic inventory with no application paths, so the narrowing against one would be meaningless. The VM must report ≥1 top-level application **and** ≥1 non-application package that lands on page 1 of the full inventory (see the smell below).
 - **Data created:** none
 
 **Flow**
@@ -686,7 +686,7 @@ other:
    - ✅ *(UI)* the first Name-column link is visible.
 3. ☐ Read the **N items** count and the Name-column links of the macOS app type.
    - ✅ *(UI)* at least one top-level application is listed.
-4. ☐ Click **Filtered**, untick **macOS app** in Types, click **Apply** (`showFullInventory` → `setSoftwareTypes([])`).
+4. ☐ Click **Filtered**, untick **App (macOS)** in Types, click **Apply** (`showFullInventory` → `setSoftwareTypes([])`).
    - ✅ *(UI)* the URL's `types` becomes `none` (asserted inside `setSoftwareTypes`).
    - ✅ *(UI)* the **N items** count **polls** to a value **strictly greater** than the macOS app count — the strict-subset claim, and the headline assertion of this test. Polled rather than read once: Fleet keeps the previous view's rows under a translucent loading overlay for the whole round trip.
    - ✅ *(UI)* **Show helpers** is gone — it refines only the macOS app type.
@@ -694,7 +694,7 @@ other:
    - ✅ *(derived guard)* the full inventory lists a title the macOS app type does not ("expected the full inventory to list something the macOS app type does not").
 6. ☐ Type that title into **Search by name or vulnerability (CVE)** (still on every type).
    - ✅ *(UI)* its Name link is visible.
-7. ☐ Tick **macOS app** again in the Filters modal (`setSoftwareTypes(['macOS app'])`), search the same term.
+7. ☐ Tick **App (macOS)** again in the Filters modal (`setSoftwareTypes(['App (macOS)'])`), search the same term.
    - ✅ *(UI)* **Show helpers** is off.
    - ✅ *(UI)* the software table's `.empty-state` is visible.
    - ✅ *(UI)* its Name link has count 0 — the entry is reported by the host but is **not** a top-level application.
@@ -1281,7 +1281,7 @@ other:
 | Refetch | HOST-01 | no in-flight/disabled state, no offline-host path |
 | Local user accounts card | HOST-02 | no empty state, no clear-search, other columns unasserted |
 | **User** card (host end user / IdP username) | HOST-24 (free: *Add user* opens the Premium message) | premium add / edit / remove is area 03 (HOSTP-13…15); the free observer's view of the button; the modal's close path |
-| Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the macOS app default type is covered (HOST-17) but Windows/Linux opening on every type is not |
+| Host software tab | HOST-04, HOST-17 | Vulnerable filter, CVE search, Library sub-tab, self-referential hosts-list check missing; the App (macOS) default type is covered (HOST-17) but Windows/Linux opening on every type is not |
 | Host reports tab | HOST-06, HOST-18 | "don't store results" toggle behaviour and card Actions untested; the Newest/Oldest sorts are covered only as an "awaiting results sorts last" partition, so the recency ordering itself is unasserted (and vacuous on free) |
 | Host live report | HOST-05 | Stop/cancel, Errors tab, results CSV, 0%-responded path |
 | Host Actions menu | HOST-12/13/14 (presence/absence only); **Run script** fired by HOST-19…22 on both tiers | Transfer/Delete from details on free untested; Lock/Wipe/Unlock **commands never fired** (deliberate: never on a real VM, availability asserted instead); Run script's *disabled* state is covered by [CTL-26](11-controls-profiles-scripts-variables.md) |

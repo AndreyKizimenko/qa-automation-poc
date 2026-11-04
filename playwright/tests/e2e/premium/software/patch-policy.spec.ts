@@ -7,12 +7,13 @@
  * does about that (`getPatchPolicyFlags` in `SoftwareDeploySelector.tsx`, and
  * `DeployModal.tsx`, which leaves the install automation off for manual):
  *
- * | option | installs on failure | patch_when_closed | notify_before_patching | continuous |
- * |---|---|---|---|---|
- * | Patch when app is closed | ✓ | ✓ | | ✓ |
- * | Force patch | ✓ | | | |
- * | Force patch + Notify before patching (macOS) | ✓ | | ✓ | ✓ |
- * | End user initiated (manual) | | | | |
+ * | option | installs on failure | patch_when_closed | notify_before_patching | patch_deadline | continuous |
+ * |---|---|---|---|---|---|
+ * | Patch when app is closed | ✓ | ✓ | | | ✓ |
+ * | Force patch + Deadline (macOS, the default) | ✓ | | | ✓ | ✓ |
+ * | Force patch + Notify before patching (macOS) | ✓ | | ✓ | | ✓ |
+ * | Force patch + Patch immediately (Windows' only choice) | ✓ | | | | |
+ * | End user initiated (manual) | | | | | |
  *
  * The macOS test walks one app's patch policy through every option and back off
  * through the Deploy modal, reading what Fleet stored after each save. The
@@ -65,6 +66,7 @@ const contract = (p: FleetPolicy | null) =>
     installs: p.installSoftwareTitleId !== null,
     patchWhenClosed: p.patchWhenClosed,
     notifyBeforePatching: p.notifyBeforePatching,
+    patchDeadline: p.patchDeadline,
     continuous: p.continuousAutomationsEnabled,
   };
 
@@ -97,6 +99,7 @@ test.describe('Premium • Software • Patch policies', () => {
           installs: true,
           patchWhenClosed: true,
           notifyBeforePatching: false,
+          patchDeadline: false,
           continuous: true,
         });
         const policy = (await stored())!;
@@ -106,12 +109,27 @@ test.describe('Premium • Software • Patch policies', () => {
         expect(policy.installSoftwareTitleId).toBe(titleId);
       });
 
-      await test.step('Force patch, notifying the end user first', async () => {
+      await test.step('Force patch, by its default — Deadline', async () => {
         await title.openDeploy();
         await expect(deploy.patchCheckbox).toHaveAttribute('aria-checked', 'true');
         await expect(deploy.patchOption('Patch when app is closed')).toBeChecked();
         await deploy.choosePatchOption('Force patch');
-        await expect(deploy.endUserExperienceValue).toHaveText('Patch immediately');
+        await expect(deploy.endUserExperienceValue).toHaveText('Deadline');
+        await title.saveDeploy();
+        await title.toast.expectSuccess('Successfully updated deploy options.');
+        await expect.poll(async () => contract(await stored())).toEqual({
+          installs: true,
+          patchWhenClosed: false,
+          notifyBeforePatching: false,
+          patchDeadline: true,
+          continuous: true,
+        });
+      });
+
+      await test.step('Force patch, notifying the end user first', async () => {
+        await title.openDeploy();
+        await expect(deploy.patchOption('Force patch')).toBeChecked();
+        await expect(deploy.endUserExperienceValue).toHaveText('Deadline');
         await deploy.chooseEndUserExperience('Notify before patching');
         await title.saveDeploy();
         await title.toast.expectSuccess('Successfully updated deploy options.');
@@ -119,6 +137,7 @@ test.describe('Premium • Software • Patch policies', () => {
           installs: true,
           patchWhenClosed: false,
           notifyBeforePatching: true,
+          patchDeadline: false,
           continuous: true,
         });
       });
@@ -133,6 +152,7 @@ test.describe('Premium • Software • Patch policies', () => {
           installs: true,
           patchWhenClosed: false,
           notifyBeforePatching: false,
+          patchDeadline: false,
           continuous: false,
         });
       });
@@ -147,6 +167,7 @@ test.describe('Premium • Software • Patch policies', () => {
           installs: false,
           patchWhenClosed: false,
           notifyBeforePatching: false,
+          patchDeadline: false,
           continuous: false,
         });
       });
@@ -193,6 +214,7 @@ test.describe('Premium • Software • Patch policies', () => {
         installs: true,
         patchWhenClosed: false,
         notifyBeforePatching: false,
+        patchDeadline: false,
         continuous: false,
       });
       const policy = (await stored())!;
@@ -208,11 +230,14 @@ test.describe('Premium • Software • Patch policies', () => {
           patch_when_closed: true,
           notify_before_patching: true,
         }),
-      ).rejects.toThrow(/400[\s\S]*Only one of \\"patch_when_closed\\" or \\"notify_before_patching\\" can be set to true/);
+      ).rejects.toThrow(
+        /400[\s\S]*Only one of \\"patch_when_closed\\", \\"notify_before_patching\\", or \\"patch_deadline\\" can be set to true/,
+      );
       expect(contract(await stored())).toEqual({
         installs: true,
         patchWhenClosed: false,
         notifyBeforePatching: false,
+        patchDeadline: false,
         continuous: false,
       });
     } finally {

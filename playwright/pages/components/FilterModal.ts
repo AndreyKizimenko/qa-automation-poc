@@ -18,7 +18,7 @@ export class FilterModal {
   readonly vulnerableSwitch: Locator;
   /**
    * The Types picker: a checkbox per software type the list can hold, named by
-   * its display name ("macOS app", "deb package"). `SoftwareTypesPicker` is a
+   * its display name ("App (macOS)", "Package (deb)"). `SoftwareTypesPicker` is a
    * role-less div, so its class is the scope that keeps the KEV checkbox out.
    */
   readonly typesPicker: Locator;
@@ -41,8 +41,14 @@ export class FilterModal {
     this.modal = page.locator('.software-filters-modal');
     // Button text toggles between "Add filters" and "1 filter" depending on state
     this.openButton = page.getByRole('button', { name: /filter/i });
-    // The "Vulnerable software" toggle is rendered as <button role="switch"> by Fleet's Slider component
-    this.vulnerableSwitch = page.locator('form').getByRole('switch');
+    // Fleet's Slider renders a <button role="switch"> beside a label <span> it
+    // doesn't associate, and only premium's "AI tools" switch carries an
+    // aria-label. The Vulnerable software switch has no accessible name, so the
+    // slider's wrapper, picked by its label text, is what tells the two apart.
+    this.vulnerableSwitch = this.modal
+      .locator('.fleet-slider__wrapper')
+      .filter({ hasText: 'Vulnerable software' })
+      .getByRole('switch');
     this.typesPicker = this.modal.locator('.software-types-picker');
     this.advancedToggle = this.modal.getByRole('button', { name: 'Advanced', exact: true });
     this.severityTrigger = page.locator('.severity-filter__dropdown .react-select__control');

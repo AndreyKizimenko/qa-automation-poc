@@ -184,7 +184,7 @@ test.describe('Software vulnerabilities', () => {
 
       await hostDetails.goto(host.id);
       await hostDetails.openSoftwareTab();
-      // macOS hosts open on the "macOS app" type, which hides packages and
+      // macOS hosts open on the "App (macOS)" type, which hides packages and
       // extensions (most vulnerable items); switch to every type.
       await hostDetails.showFullInventory();
 

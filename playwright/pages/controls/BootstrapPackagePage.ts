@@ -8,10 +8,11 @@ import { Toast } from '../components/Toast';
  * Fleet auto-installs on macOS hosts during ADE/Setup Experience.
  * Singleton per fleet: only one package can be active at a time.
  *
- * Below the uploader, an "Advanced options" reveal holds "Install Fleet's agent
- * (fleetd) manually" with its own Save. Fleet disables the checkbox until the
- * fleet has a package, and while it's saved on, the fleet's Install software
- * (macOS) and Run script cards are disabled.
+ * Below the uploader, a card holds "Install during manual enrollment", "Install
+ * during migration" and an "Advanced options" reveal with "Deploy custom agent"
+ * (install fleetd manually), all saved by the card's own Save. Fleet disables the
+ * checkboxes until the fleet has a package, and while Deploy custom agent is saved
+ * on, the fleet's Install software (macOS) and Run script cards are disabled.
  */
 export class BootstrapPackagePage {
   readonly page: Page;
@@ -66,7 +67,7 @@ export class BootstrapPackagePage {
     const advanced = page.locator('.bootstrap-advanced-options');
     this.advancedOptionsButton = advanced.getByRole('button', { name: 'Advanced options' });
     this.manualAgentInstallCheckbox = advanced.getByRole('checkbox', {
-      name: "Install Fleet's agent (fleetd) manually",
+      name: 'Deploy custom agent',
     });
     this.advancedOptionsSaveButton = advanced.getByRole('button', { name: 'Save', exact: true });
   }
