@@ -331,10 +331,11 @@ other:
 - **Project:** premium · **Scope:** Unassigned only (`FLEET_ID = 0` hardcoded)
 - **Mode:** UI+API · **Isolation:** serial describe, step 1 of 4 · `test.setTimeout(90_000)`
 - **Preconditions:** clean instance; the fixture is `linux/software/sublime-text_build-4200_amd64.deb` (16 MB) chosen precisely because `library.spec` never uploads it, so a parallel worker on the same Unassigned scope can't collide on the title "Sublime Text"
-- **Data created:** software title "Sublime Text" on `fleet_id=0` — deleted by SWL-07
+- **Data created:** software title "Sublime Text" on `fleet_id=0` — deleted by SWL-07; residue swept by `cleanup-teardown`, or by the retry itself (step 0)
 
 **Flow**
 
+0. ☐ **On a retry only** — delete any title in Unassigned's library whose package is `sublime-text_build-4200_amd64.deb` (`deleteLibraryTitlesWhere`). A `retry-cleanup` annotation records each removal. A retry re-runs the serial describe from this step with `delete` skipped, so without this a failure in SWL-06 makes the retry's upload fail on "already added (same SHA-256 hash)". The first attempt removes nothing: a title found then is a finding.
 1. ☐ Open the dashboard (via URL) → click **Software** in the navbar → select **Unassigned** → click **Add software**.
    - ✅ *(UI)* Same chain of assertions as SWL-01 steps 1–4.
 2. ☐ Click the **Custom package** tab, choose `sublime-text_build-4200_amd64.deb`, click **Add software**.
