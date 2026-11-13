@@ -67,6 +67,26 @@ below hold the reasoning.
 - [ ] The skills rewrite (branch `playwright/skills-polish`) merges with this document.
 - [ ] The roadmap and decisions D1 to D5 below, to go through one by one. D4 is decided.
 
+**Roadmap items, as they land**
+- [x] 2, lint the contract (2026-11-13). Five `suite/*` rules in `eslint-rules/`, as warnings, each with
+      tests (`npm run lint:rules`, part of `npm run check`); `CLAUDE.md` → *Pre-PR check* says what each
+      flags and what to write instead. A sixth, for toast copy, is written and off until item 9 gives that
+      copy a home. What each found on the day (`npm run lint:contract`), which is the number to bring down:
+
+      | Rule | Places | Files |
+      |---|---|---|
+      | class selector in a spec | 30 | 13 |
+      | `page.getBy*()` in a browser spec | 52 | 32 |
+      | `Date.now()` in a per-run name | 65 | 50 |
+      | `assertActivity` without a baseline | 29 | 11 |
+      | a helper that drops a non-OK response | 22 | 9 |
+      | toast copy typed in a spec (rule off) | 97 | 49 |
+
+- [ ] 2, the ratchet. Warnings stop nothing: `npm run check` printed 42 before these rules and prints 240
+      with them, and a new one is a line among those. Making a new violation fail while the old ones stay
+      quiet is ESLint's bulk suppressions (`eslint --suppress-all` writes the existing ones to a file, and
+      the rules become errors). To decide: whether to turn it on, and for which of the five.
+
 ## Baseline
 
 | | |

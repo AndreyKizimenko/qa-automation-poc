@@ -125,8 +125,10 @@ From `playwright/`:
 | `npm run test:all` | Premium, then free if premium passed (`&&`) |
 | `npm run lint` | Lint specs + page objects + helpers |
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
+| `npm run lint:rules` | Test the suite's own lint rules (`eslint-rules/tests.js`) |
+| `npm run lint:contract` | Count what each of the suite's own rules still finds, per rule |
 | `npm run typecheck` | Run `tsc --noEmit` on the whole project |
-| `npm run check` | Typecheck **and** lint — run this before opening a PR |
+| `npm run check` | Typecheck, the rule tests **and** lint — run this before opening a PR |
 
 ---
 
@@ -141,6 +143,13 @@ practices via `eslint-plugin-playwright`: no `waitForTimeout`, no
 `ElementHandle`, no focused tests, web-first assertions preferred.
 Floating-promise detection is on via `@typescript-eslint`, so missing
 `await`s on `expect()` or locator actions fail the lint check.
+
+The suite's own conventions are rules too, in `eslint-rules/` (`suite/*`):
+a class selector or a `page.getBy*()` locator in a spec, `Date.now()` in a
+per-run name, `assertActivity` without a baseline, and a helper that drops a
+non-OK response. They are warnings, because code written before them still
+carries each pattern; `CLAUDE.md` → *Pre-PR check* says what to write instead,
+and `npm run lint:contract` prints the count per rule.
 
 ---
 
@@ -198,6 +207,7 @@ playwright/
 │   ├── test-audit/               # Per-test breakdown for the manual audit
 │   ├── run-reviews/              # Per-run triage write-ups (gitignored — local only)
 │   └── upgrade-preflight/        # Pre-upgrade impact reports (gitignored — local only)
+├── eslint-rules/                 # The suite's own lint rules (suite/*), their tests and the per-rule count
 ├── eslint.config.js              # Lint config
 ├── playwright.config.ts
 ├── tsconfig.json
