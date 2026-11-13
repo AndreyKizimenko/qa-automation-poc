@@ -1,7 +1,9 @@
 name: Playwright — Check
 
 # Static checks (tsc + eslint) for the Playwright suite, so type or lint
-# regressions are caught before merge.
+# regressions are caught before merge. It also carries the check that no
+# workflow uploads a report in the clear (.github/scripts/check-artifacts.sh):
+# that one has to be a required check, and this is the required one.
 #
 # Runs on EVERY pull request, deliberately — no `paths:` filter. `check` is a
 # required status check in main's branch protection, and GitHub treats a
@@ -39,6 +41,12 @@ jobs:
           node-version: lts/*
           cache: npm
           cache-dependency-path: playwright/package-lock.json
+
+      # A report holds live credentials and this repository's artifacts are
+      # public, so every upload goes through .github/upload-report, encrypted.
+      - name: No report leaves CI unencrypted
+        working-directory: .
+        run: bash .github/scripts/check-artifacts.sh
 
       - run: npm ci
       - run: npm run check

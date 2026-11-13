@@ -143,10 +143,10 @@ jobs:
           npx playwright merge-reports --reporter html blob-report/all
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose
-      # report matters most.
-      - uses: actions/upload-artifact@v7
+      # report matters most. Encrypted: a report holds typed passwords and the API
+      # token, and this repository's artifacts are public (.github/upload-report).
+      - uses: ./.github/upload-report
         if: ${{ always() }}
         with:
           name: playwright-report-free
-          path: playwright/playwright-report/
           retention-days: 14

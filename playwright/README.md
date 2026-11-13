@@ -340,7 +340,19 @@ Why the flow is shaped this way — the constraints, what bounds a run, how to c
 `playwright-check.yml` is the per-PR gate: it runs `npm run check` (tsc + eslint) on every PR, with
 no path filter, because `check` is a required status check and one that never reports leaves a PR
 unmergeable. It also runs on push to `main`. The tier suites themselves are nightly only — a PR never
-runs live specs.
+runs live specs. The same job checks that no workflow uploads a report unencrypted
+(`.github/scripts/check-artifacts.sh`).
+
+**Reports are uploaded encrypted.** A report holds live credentials (typed passwords in its step titles,
+the API token in traces), and a public repository's artifacts can be downloaded by anyone signed in to
+GitHub. Each artifact is one `<name>.tar.gz.enc`. To open a run's reports, with the report key from
+1Password saved at `~/.config/qa-automation/report-private-key.pem` (or `QA_REPORT_KEY` pointing at it):
+
+```bash
+# from the repo root: downloads every report of the run and decrypts each in place
+bash .claude/skills/playwright-run-reviewer/scripts/fetch_ci_run.sh <run-url> "" ~/Downloads/run-<id>
+cd playwright && npx playwright show-report ~/Downloads/run-<id>/playwright-report-premium
+```
 
 `gitops-verify` runs as part of the nightly gitops orchestrators
 (`nightly-qa-gitops-{free,premium}.yml`), called between each gitops

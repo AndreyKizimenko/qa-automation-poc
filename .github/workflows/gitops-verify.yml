@@ -106,9 +106,10 @@ jobs:
           FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
         run: npx playwright test --project=gitops-verify
 
-      - uses: actions/upload-artifact@v7
+      # Encrypted like every report: a failed API assertion prints its request
+      # headers, the bearer token among them (.github/upload-report).
+      - uses: ./.github/upload-report
         if: ${{ !cancelled() }}
         with:
           name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}${{ inputs.label && format('-{0}', inputs.label) || '' }}
-          path: playwright/playwright-report/
           retention-days: 7
