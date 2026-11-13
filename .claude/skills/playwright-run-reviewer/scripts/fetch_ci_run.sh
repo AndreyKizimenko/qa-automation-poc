@@ -5,8 +5,8 @@
 # (`playwright-report-*`) first; everything else goes to stderr.
 #
 # A single-suite run has one report. A chained run (`QA — Nightly`,
-# `QA — Branch run`) has one per Playwright job: the two suites, twelve
-# gitops-verify reports and two fleetctl-CLI reports.
+# `QA — Branch run`) has the two suites' reports, plus one for each gitops job
+# that failed (a gitops-verify or fleetctl-CLI job uploads its report only then).
 #
 # Usage:
 #   fetch_ci_run.sh <run-url-or-id> [repo] [dest-dir]

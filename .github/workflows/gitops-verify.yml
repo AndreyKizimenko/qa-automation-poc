@@ -106,10 +106,12 @@ jobs:
           FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
         run: npx playwright test --project=gitops-verify
 
-      # Encrypted like every report: a failed API assertion prints its request
-      # headers, the bearer token among them (.github/upload-report).
+      # Uploaded only when the job failed. A green verify's report is a list of
+      # passed checks nobody opens, and a chained run has twelve of these jobs:
+      # uploading each would bury the two suite reports in the run's artifact
+      # list. Encrypted like every report (.github/upload-report).
       - uses: ./.github/upload-report
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         with:
           name: gitops-verify-report-${{ inputs.suite }}-${{ steps.target.outputs.slug }}${{ inputs.label && format('-{0}', inputs.label) || '' }}
           retention-days: 7

@@ -32,11 +32,12 @@ gh run view <id> --repo <owner/repo> --json name,conclusion,headSha,jobs \
 
 A chained run (`QA — Nightly`, `QA — Branch run`) is several Playwright jobs:
 per tier, a gitops chain (applies plus `gitops-verify` checks and fleetctl CLI
-checks, each its own Playwright report) and then the suite, which runs whatever
-gitops did. **Triage a red gitops job first** — an apply that failed or a
-config that drifted can explain suite failures downstream. A job that failed
-before Playwright started (an install step, the deploy wait) has no report:
-read it with `gh run view <id> --log-failed`, and say which suite never ran.
+checks, each a Playwright job that uploads its report only when it fails) and
+then the suite, which runs whatever gitops did. **Triage a red gitops job
+first** — an apply that failed or a config that drifted can explain suite
+failures downstream. A job that failed before Playwright started (an install
+step, the deploy wait, an apply) has no report: read it with
+`gh run view <id> --log-failed`, and say which suite never ran.
 
 ```bash
 bash ${CLAUDE_SKILL_DIR}/scripts/fetch_ci_run.sh "<run-url>" "" <scratchpad>/run-<id>
@@ -47,8 +48,9 @@ The third argument keeps the download in the scratchpad (without it, the script
 uses a `mktemp` dir under `$TMPDIR`); give a re-run attempt of the same run id a
 new directory, since the script reuses one that exists. It downloads every report
 artifact via `gh run download` and prints one report directory per line, the suites'
-(`playwright-report-premium` / `-free`) first. **Never triage just the first line of a chained run as "the run"** — parse
-each suite, plus the report of any job that went red.
+(`playwright-report-premium` / `-free`) first: two lines on a green run, one more for
+each gitops job that failed. **Never triage just the first line of a chained run as
+"the run"** — parse each suite, plus the report of any job that went red.
 
 Reports are uploaded encrypted, one `<artifact>.tar.gz.enc` each: the script decrypts them in place with the
 report key (`~/.config/qa-automation/report-private-key.pem`, or `QA_REPORT_KEY`) and stops with
