@@ -11,8 +11,11 @@
  * exactly this test's hosts, so "select all on this page" can only act on them.
  * Without that, select-all would take a full 50-host page of the load fleet.
  *
- * No teardown restores the hosts — that's the point of the test. A deleted
- * simulation does **not** come back on its own: osquery-perf enrolls once at
+ * No teardown restores a deleted host — that's the point of the test. What the
+ * bulk case's hook returns to Unassigned is a host it staged and an attempt that
+ * failed or timed out never deleted: left on Workstations, it would make the
+ * retry's (and the next run's) "select all" take four hosts instead of two. A
+ * deleted simulation does **not** come back on its own: osquery-perf enrolls once at
  * startup and has no node-invalid recovery, so Fleet's delete-modal promise that
  * hosts "will re-appear unless Fleet's agent is uninstalled" holds for real
  * fleetd but not for the load fleet. The pool is instead repopulated by the
@@ -26,11 +29,25 @@ import { withStaticUser } from '@helpers/auth';
 import { findSimulatedHostIds, hostExists, transferHosts } from '@helpers/api';
 
 test.describe('Premium • Hosts • bulk delete', () => {
+  // The hosts the test put on Workstations. A hook, because a timed-out test
+  // skips its `finally`.
+  let staged: number[] = [];
+
+  test.afterEach(async ({ request }) => {
+    const survivors: number[] = [];
+    for (const id of staged) {
+      if (await hostExists(request, id)) survivors.push(id);
+    }
+    staged = [];
+    await transferHosts(request, 0, survivors);
+  });
+
   test('deletes the selected hosts', async ({ hostsList, workstationsFleetId, request }) => {
     const hosts = await findSimulatedHostIds(request, 'darwin', 2, 10);
     expect(hosts, 'expected simulated macOS hosts to delete').toHaveLength(2);
     const hostIds = hosts.map((h) => h.id);
 
+    staged = hostIds;
     await transferHosts(request, workstationsFleetId, hostIds);
 
     await hostsList.goto({ fleetId: workstationsFleetId });
