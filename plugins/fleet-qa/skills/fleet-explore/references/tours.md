@@ -288,7 +288,9 @@ Question: what happens when two things reach the feature at once, or when the da
 ## Not findings
 
 Known behaviours that look like bugs and aren't, or are already filed. Recognise them, log a NOTE
-with the number, and move on:
+with the number, and move on. An issue number here was open when this was written, so check it
+before leaning on it (`gh issue view <N> -R fleetdm/fleet --json state,milestone`): once the build
+you're on includes the fix, seeing the behaviour again is a regression, and that is a finding.
 
 - **Simulated hosts** (`fleet-gotchas.md` § osquery-perf; `playwright/CLAUDE.md` § Test hosts)
   answer every live query with the same canned row (or, one time in five, nothing, unless started
@@ -300,14 +302,14 @@ with the number, and move on:
   (`fleet-gotchas.md` § Counts and crons); a CVE page can answer 204 while host counts lag
   (`playwright/docs/blocked-by-product-bugs.md`); unchanged report results refresh `last_fetched`
   only after ~50 min (fleetdm/fleet#54897).
-- The **Ace editor worker 404** (fleetdm/fleet#54845), **stacked toasts**, the **hosts list
-  rewriting its URL** and the **report edit form filling itself twice** (`instance-traps.md`
-  § Fleet UI that misleads a check).
+- **Stacked toasts**, the **hosts list rewriting its URL** and the **report edit form filling itself
+  twice** (`instance-traps.md` § Fleet UI that misleads a check). The **Ace editor worker 404**
+  (fleetdm/fleet#54845) only on builds before 4.95.0, where it was fixed.
 - **The browser pane blocks pop-ups** (a `window.open` button shows the page's own
   "allow pop-ups" message), and **a burst of 502s** from a tunnel usually means the server is
   restarting (`instance-traps.md` § UI evidence).
 - Preinstalled Android apps shown as **Failed** while installed (fleetdm/fleet#52617;
-  `instance-traps.md` § Android).
+  `instance-traps.md` § Android), on builds before 4.95.0 only.
 - Whatever `playwright/docs/blocked-by-product-bugs.md` already lists.
 
 ---

@@ -32,6 +32,20 @@ Rules the log follows:
   them.
 - Say which tour each block of rows belongs to, and mark leaving and returning to the charter.
 
+## Illustrative charters
+
+Made up, to show the shape:
+
+- *New feature, after story QA:* Explore the policy automation run detail page with a fleet of 21
+  simulated hosts, a 200-character policy name and a script that fails on half of them, to discover
+  what the page shows while a run is partial and what long names do at the page's widths.
+- *An area, before a release:* Explore Software › Library on the RC instance (Premium) with titles
+  whose names are long, one character, CJK and emoji-first, and a host carrying 1,600+ packages, to
+  discover where the accordion, search and filters break at the edges.
+- *A bug's neighbourhood:* Explore every action near the fixed Reset-policy dialog that confirms "on
+  N hosts", from the single-run and all-runs entry points, to discover whether sibling actions share
+  the same scoping mistake.
+
 ## Template
 
 ```markdown

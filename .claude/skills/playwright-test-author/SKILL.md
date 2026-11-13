@@ -91,10 +91,10 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    platform, { kind: 'real' })`, `vmsFleetId`, `liveMacosHost`. To put simulations on a fleet beside a VM,
    borrow them with `findMdmSimulations` (profiles; a scarce pool) or `findSimulations` (everything else),
    claim your own slice in the registry in `helpers/api/hosts.ts`, and return them in the `finally`.
-5. **Build the page objects first, then the spec.** Page objects expose intent (`openControlsTab()`,
-   `runRowAction(name, 'Delete')`) and locators; assertions live in the spec. Grow an existing page object
-   before creating a new one, and turn a widget two pages share into a component object in
-   `pages/components/`.
+5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either.
+   Page objects expose intent (`openControlsTab()`, `runRowAction(name, 'Delete')`) and locators;
+   assertions live in the spec. Grow an existing page object before creating a new one, and turn a
+   widget two pages share into a component object in `pages/components/`.
 6. **Assert what can fail.** Set membership over hosts you control, never a count on a shared list
    (`toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a UI write
    happened. Scope every assertion to records you created. Assert text or a value, never `toHaveScreenshot`
@@ -166,139 +166,22 @@ A change isn't done until the docs describing it are current, in the same commit
 
 ## Fleet traps the suite has already paid for
 
-**Locators and UI state**
-- **Locator order:** `getByRole` with a name, then `getByLabel`, `getByPlaceholder`, `getByText`. A class
-  selector is a last resort and needs an inline comment saying why nothing else works. Fleet adds a few
-  `data-testid`s of its own: `dropdown-option` on the options of `DropdownWrapper` and `ActionsDropdown`,
-  `<name>-icon` on every `Icon`, plus `card`, `user-menu` and `ace-editor`. Use one when no role or text
-  names the element (an icon-only button); never add one to Fleet's source.
-- **Names change under state.** A tab's accessible name gains a count (*Controls 1* once a profile fails,
-  *Policies 3*, *Upcoming 1*). A `FormField`'s label is replaced by its error text. Row actions are
-  hover-revealed (`clickHoverAction`). Match with a regex grounded in the component.
-- **The Hosts list rewrites its URL just after it loads** and can undo a filter or search chosen before that
-  (a label filter and a search have each been lost, and *Select all matching* once took a whole fleet): use `HostsListPage.searchFor` /
-  `filterTo` / `filterByStatus` / `sortBy` / `LabelFilter.selectLabel`, never a bare `search.fill`, filter click
-  or header click.
-- **Built-in platform labels are osquery-perf answers** (the macOS label holds the Ubuntu simulations): pick
-  hosts by `platform`, and never target a Platforms chip.
-- **Lists page at 20, and searches hit the server.** Act on a row after a search that narrows to exactly
-  it; never scan page 1. A name that is a prefix of a sibling's breaks strict mode.
-- **`Pagination.nextIfEnabled`** compares the first row's link text, or the whole row on a table without
-  links. Use it rather than clicking Next.
-- **A column index read from the header goes stale when the table re-renders** (the reports list after its
-  Manage automations modal saves): `DataTable.cellByColumn` then lands on the neighbouring cell. Match the cell
-  by its content instead (`ReportsListPage.automationsCell`).
-- **An absence check on a menu passes when the menu never opened.** Assert one option that should be there
-  before asserting the one that shouldn't.
-- **The report edit form fills itself twice:** from report state that survives client-side navigation, then
-  again when its own fetch returns. An edit made right after *Edit report* can be overwritten and save nothing,
-  with no prompt. Load `/reports/:id/edit` with `gotoEdit()` and wait for the saved values, or use `fillAll()`.
-- **Root a `filter({ has })` locator at the page.** One built from a scoped locator (`section.getByRole(…)`)
-  looks for that scope inside each candidate and matches nothing, so the click waits out the test's timeout.
-  `filter({ has: this.page.getByRole(…) })` is relative to each candidate, as intended.
-- **Fleet's radio inputs are visually hidden** behind a styled control: click the `<label>` that wraps the
-  radio, then assert the radio is checked (`TargetLabelSelector`, `IntegrationsPage.chooseMigrationMode`).
+`${CLAUDE_SKILL_DIR}/references/fleet-traps.md` is the catalog: what Fleet's UI, the VMs and the shared
+instances have already done to this suite, each with the helper or pattern that avoids it. It's a
+required read, not background: **read the whole file before step 5**, before the first locator, wait
+or helper. Its groups:
 
-**Waiting**
-- **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
-  timeout of their own, so the test hangs to its timeout and its `finally` runs on a closed context: the
-  cleanup silently doesn't happen. Assert the element is visible first, or use a `count()` check for
-  optional ones.
-- **Web-first assertions and auto-waiting, never `waitForTimeout`.** `toPass` around an action that can
-  fail to take (a menu that closes on re-render) is fine.
-- A table keeps its old rows under a loading overlay: `table.waitForSettled()` before reading after a
-  filter, tab or page change.
-- **A toast doesn't prove the second save.** Fleet's toasts stay up for seconds, so after saving the same
-  form twice, `toast.expectSuccess` can match the first one. Poll the stored state through the API
-  instead (`expect.poll`). A locator inside a toast (`toast.success.getByRole('link', …)`) also matches every
-  toast still on screen and breaks strict mode: `toast.dismissAll()` between two runs of the same action.
-- **A closed modal doesn't mean its save landed.** Reopening it straight away can load the pre-save state, and
-  saving again then reverts the edit: confirm the write through the API before reopening.
-- **An activity check at the end of a long test can be buried** past the dashboard feed walk's 15 pages by
-  the other workers' activity: check right after the action, or through the API (`assertActivity`).
-- **Host waits:** `waitForSoftwareSettled` / `waitForHostRefetch`. Never wait on `software_updated_at`, which
-  moves only when the inventory *changes*. Wait out an outstanding refetch (`waitForNoPendingRefetch`)
-  before requesting your own, because Fleet queues one after every install and a new request merges into
-  it. A refetch also re-runs a host's policies immediately. `refetch_requested` is one bit with no author:
-  any refetch's results landing clear it, so a read of it has to follow the moment it was set closely.
-  **A host mid-refetch answers no live query** until the refetch lands (about a minute on a VM): osquery reports
-  a batch only once every query in it has run, and a refetch's batch is Fleet's detail queries. `queryHost` waits
-  out a pending refetch before asking; a UI live run just waits, so bound it to cover one.
-- **A live report or policy run started in the UI has no timeout.** It finishes only once every online
-  targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
-  wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
-  Platforms chip or All hosts.
-- **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
-  `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
-  config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
-  (fleetdm/fleet#54607). Where the script failure itself is the point, the spec goes in `exclusive/`.
-- **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
-  timeout, and keep every wait inside it.
+- **Locators and UI state**: locator order, names that change under state, the Hosts list rewriting
+  its URL, menus, the report edit form, hidden radio inputs.
+- **Waiting**: actions on a missing locator, toasts and closed modals that prove nothing, host
+  refetches, live runs with no timeout, failing an install without stalling a VM, VM time budgets.
+- **Data and state**: activity checks, seeding, global config and its restore, writers that race,
+  gitops-mode exceptions, `exclusive/`, login throttling, deletes that take more with them.
+- **API helpers**: `apiUrl()` and `authHeaders()`, throwing on non-OK, empty multipart fields.
+- **The instances**: the nightly RC redeploy and silent failed deploys, `fleetctl` versions and contexts.
 
-**Data and state**
-- **Key an activity check to what this test did** when the other scope's copy of the test, another spec or an
-  earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
-  the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
-  fields, never `JSON.stringify`.
-- **`assertActivity` expects the browser's admin as the actor.** An activity a spec causes through `fleetctl` or
-  an API helper is attributed to the API token's user instead: look it up with `findActivity` (or
-  `assertActivityAfter` with its `actor` left out) and match it by its content.
-- **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
-  policies at run start. Team-scoped reports survive; global ones never do.
-- **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
-  `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not its hooks. Key the
-  restore to the test that changed something (a describe-level variable only that test sets), so a parallel
-  sibling's hook can't roll it back mid-flight. Restore only the keys you changed: `PATCH /config` refuses some
-  whole snapshotted subtrees with a 400 (`smtp_settings.configured` is read-only).
-- **A report created in the UI runs hourly on every host in scope** (it defaults to *Every hour* on all four
-  platforms, and automations need an interval): keep its SQL benign and delete it. Never untick all
-  automations on Workstations, whose gitops reports carry them.
-- **`organization-info.spec.ts` renames the organization for a few seconds** on both tiers. A spec that compares
-  the page's org name with the config re-reads both until they agree (`shared/settings/apple-mdm.spec.ts`).
-- **Two specs writing the same global key race.** A serial describe serialises only within its file, so a new
-  test that writes a key another spec writes joins that spec's serial describe (or goes in `exclusive/`).
-  Org settings › Advanced's Save posts `server_settings`, `smtp_settings`, `host_expiry_settings`,
-  `activity_expiry_settings`, `features.historical_data`, `mdm.apple_server_url` /
-  `apple_require_hardware_attestation` / `only_allow_apple_business_enrollment` and
-  `sso_settings.sso_server_url` as loaded. `shared/settings/organization/advanced-options.spec.ts` asserts
-  they're unchanged, so no main-project spec writes them.
-- **A fleet subtree Fleet replaces wholesale has one writer per fleet.** A fleet's enroll secrets and its
-  `webhook_settings` are saved whole, so two specs writing them on the same fleet undo each other's write through
-  their snapshot restores. Saving a fleet's policy automations or its Settings tab sends `webhook_settings` and
-  wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
-  Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
-  *role* write there needs a disposable `qa-test-*` user given that fleet.
-- **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
-  premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
-  enroll secret. Only the `gitops-mode` project writes them, it restores them in an `afterEach`, and its
-  teardown and every premium apply put back `GITOPS_EXCEPTIONS_BASELINE`. Never tick Enroll secrets in a UI test.
-- A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
-  needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
-  user-requested activity, so beside the install specs they starve.
-- **Logins are throttled:** `POST /login` allows 10 a minute in one bucket shared by every user and worker. In
-  the browser, sign in through `withStaticUser`'s cached sessions; for an API-only login use `apiLogin`, which
-  waits out a 429.
-- **Some deletes take more with them.** Deleting a script deletes its batch runs (a foreign-key cascade), so a
-  spec reads a batch before it deletes the script. Deleting a fleet returns its hosts to Unassigned, so a
-  throwaway `pw-*` fleet is a staging area the fleet sweep cleans up after. Deleting a software title cancels
-  its pending installs and runs.
-- **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
-  `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
-
-**API helpers**
-- Build URLs with `apiUrl()` and send `authHeaders()`, through the `request` fixture.
-- **Throw on a non-OK response.** A discovery helper that turns a 500 into `null` turns an infra failure
-  into a silent skip; that hid MySQL "table is full" errors for weeks.
-- **Playwright drops an empty-string field from a `multipart` request** (from `FormData` too), and Fleet
-  reads a missing field as "no change" and answers 200. A helper that must send `''` writes the multipart
-  body by hand (`setPinnedVersion`), and reads the result back.
-
-**The instances**
-- **The instances redeploy the RC tag nightly, and a failed deploy is silent.** When Fleet behaves
-  unexpectedly, check `GET /api/latest/fleet/version`'s revision and `GET /debug/migrations` before blaming
-  your spec.
-- **`fleetctl` must be within a minor of the server**, and `fleetctl gitops` reads `~/.fleet/config`, not
-  `FLEET_URL`. Pass `--context`.
+After a long session the catalog may no longer be in front of you. Re-read it rather than working
+from memory.
 
 ## Code style
 

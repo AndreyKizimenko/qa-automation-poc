@@ -100,10 +100,45 @@ claude plugin enable fleet-qa@qa-automation
   ```
 
   CI runs the first on every PR that touches the skills (`skills-check.yml`). It checks the
-  frontmatter, orphaned `references/` and `scripts/` files, that the manifests agree, and that no
-  instance hostnames or tokens appear: this repo is public.
+  frontmatter, that each description survives YAML and stays short, that every `${CLAUDE_…}` path
+  exists, orphaned `references/` and `scripts/` files, that the manifests agree, and that no
+  instance hostnames or tokens appear: this repo is public. It warns when a SKILL.md outgrows what
+  Claude Code keeps after compaction (below).
+- **Run the evals** when you changed a `description:`, moved text between a SKILL.md and a
+  reference, or touched a shared block: `cd plugins/fleet-qa && claude plugin eval . --ablation none
+  --no-publish --runs 1` (about $3; [`fleet-qa/evals/README.md`](fleet-qa/evals/README.md)).
 - **Try it** with `--plugin-dir` (above) before opening the PR.
 - **After it merges**, everyone gets it with the update command.
 
 A new plugin goes in `plugins/<name>/` with its own `.claude-plugin/plugin.json`, plus an entry in
 the marketplace's `plugins` list with `"source": "./plugins/<name>"` and the same `name`.
+
+## How the skills are laid out, and why
+
+Three things about how Claude Code loads a skill shape every SKILL.md here. Each was measured in
+real sessions, and the lint enforces the first two.
+
+- **Only the first ~19,800 characters of a skill survive a long session.** When a conversation is
+  compacted, Claude Code re-attaches each loaded skill cut to about that size. Of 19 real QA
+  sessions measured, 7 compacted after the skill had loaded, and Claude re-read the skill file in
+  one of them. So a SKILL.md stays under 19,000 characters as rendered, with the rules that hold for
+  the whole run (Hard lines, Evidence, Working with the engineer) in its first half.
+- **A required read at a step gets read; "also skim this" mostly doesn't.** The local file, the
+  tracker format and the load-test references were read in every session that needed them; a
+  reference offered as background was read in as few as one session in eight. So detail lives in
+  `references/` and each SKILL.md names the step at which a file must be read: the first steps'
+  detail (`planning.md`, `framing.md`) at the start, and the formats (`report.md`, `signoff.md`,
+  `findings.md`, `screenshots.md`, `plan-format.md`) at the step that produces the output, where
+  they're fresh.
+- **`${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` work only in SKILL.md.** They're substituted
+  when the skill loads, not in a file Claude reads later, and they aren't in the shell's environment.
+  A reference names a file and says whose it is; the SKILL.md gives the path.
+
+**Shared blocks.** A few rules have to be in front of Claude for the whole run in several skills, so
+they're inline in each instead of in a reference: the text between `<!-- shared:NAME -->` and
+`<!-- /shared:NAME -->` (`hard-lines`, `evidence`, `working-with`). The copies must be identical, and
+the lint fails when they aren't. To change one, edit it in `fleet-bug-qa/SKILL.md` and paste it over
+the others.
+
+**Descriptions** go in double quotes. Unquoted, YAML cuts the value at the first ` #`, so a trigger
+example like `'QA #51234'` silently drops everything after it.

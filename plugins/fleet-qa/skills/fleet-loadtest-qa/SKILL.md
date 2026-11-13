@@ -1,6 +1,6 @@
 ---
 name: fleet-loadtest-qa
-description: QA and investigate Fleet behavior at scale on a load test (the 100k-host osquery-perf "loadtest" environments in AWS) — reproduce a scale or performance bug, verify its fix before and after an upgrade, find what breaks when reports, policies, scripts and automations are stacked, recover a load test that is crash-looping or out of memory, time migrations on big tables, and measure and file what you find with evidence the developer can act on. Use whenever the work runs on or is about a load test — "QA #54601 on the loadtest", "the loadtest is crash-looping", "what breaks at 500 reports", "why did Fleet OOM at 100k hosts", "is this deadlock fixed at scale", "measure the migration on 20M rows", "plan the next load-test runs", "check memory/DB on the loadtest" — even if the user only says "loadtest", "100k hosts", "lt3" or names the instance. Works alongside fleet-bug-qa (verdict and comment rules) and fleet-bug-file (filing); use this one for anything that depends on the load-test environment. Do NOT use for QA on the local default/previous instances with a few hosts (fleet-bug-qa), the release DB-upgrade test jobs (release-migration-test), or API timing runs from the Playwright suite alone.
+description: "QA and investigate Fleet at scale on a load test (the 100k-host osquery-perf 'loadtest' environments in AWS): reproduce a scale or performance bug, verify its fix before and after an upgrade, find what breaks when reports, policies, scripts and automations are stacked, recover a load test that is crash-looping or out of memory, time migrations on big tables, and file what you find with measurements a developer can act on. Use for anything that runs on or is about a load test ('QA #54601 on the loadtest', 'the loadtest is crash-looping', 'what breaks at 500 reports', 'why did Fleet OOM at 100k hosts', 'measure the migration on 20M rows', 'plan the next load-test runs'), even if the user only says 'loadtest', '100k hosts' or names the instance. Borrows fleet-bug-qa's verdict and comment and fleet-bug-file's filing. Not for QA on the local default/previous instances (fleet-bug-qa), the release DB-upgrade test jobs (release-migration-test), or API timing runs from the Playwright suite."
 ---
 
 # Fleet load-test QA
@@ -12,12 +12,13 @@ slower and riskier than local QA: one instance is shared, every change is load, 
 everyone, and the environment differs from production in ways that can both create and hide bugs.
 
 This skill adds the load-test layer. For the verdict, the test matrix, origin classes and the ticket comment, follow
-**fleet-bug-qa** (or fleet-story-qa); to file, use **fleet-bug-file**. Before planning, read
-`references/environment.md` (how the load test differs from production — read it every time) and skim
-`references/lessons.md`. Use `references/measuring.md` while running, and `references/recovery.md` the moment tasks
-start dying.
+**fleet-bug-qa** (or fleet-story-qa); to file, use **fleet-bug-file**. References, in
+`${CLAUDE_SKILL_DIR}/references/`, each read at the point that names it: `environment.md` before planning (how the
+load test differs from production — read it every time) with `lessons.md`; `measuring.md` while running; `recovery.md`
+the moment tasks start dying. From fleet-bug-qa, in `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/`:
+`findings.md` when the first odd thing turns up, and `report.md` before writing a ticket comment.
 
-## Tooling (`scripts/`, all take `LT=<instance>` from the environment)
+## Tooling (`${CLAUDE_SKILL_DIR}/scripts/`, all take `LT=<instance>` from the environment)
 | Script | Use |
 |---|---|
 | `lt-env.sh` | Sourced by the others: region, cluster, writer, `lt_api` (admin API with the fleetctl context's token, never printed), time helpers |
@@ -41,8 +42,10 @@ from Homebrew coreutils). The fleet-bug-qa scripts (`${CLAUDE_PLUGIN_ROOT}/skill
 ### 1. Orient
 - Read `~/.claude/fleet-qa.local.md` for the load-test section (instance `LT`, fleetctl context, QA workspace). If it's
   missing, add it (names only, no tokens) per the fleet-bug-qa local-setup reference.
-- `LT=<lt> scripts/lt-status.sh`, and `export LT=<lt>; source scripts/lt-env.sh; lt_api GET /api/latest/fleet/version`: is it up, which build, how loaded. If AWS
-  calls fail, ask the user to run `aws sso login` (with `--profile <profile>` for a named profile).
+- `LT=<lt> lt-status.sh`, and `export LT=<lt>; source lt-env.sh; lt_api GET /api/latest/fleet/version` (both by their
+  full path): is it up, which build, how loaded. If AWS calls fail, ask the user to run `aws sso login` (with
+  `--profile <profile>` for a named profile). Database access (which VPN, which helper, who types the password) is in
+  the local file too; if it isn't, ask once and add it there.
 - Record the instance's shape before touching anything: build, pool size and sizing (from the last deploy's log),
   hosts and platforms, what's already scheduled (reports, policies, automations, scripts, packages), cron health
   (`lt-cron.sh cleanups_then_aggregation -3h now`). Leftovers from earlier work change the load you measure.
@@ -74,6 +77,9 @@ e.g. a real change still cleans up), halo rows, the drivers, the numbers you'll 
 runs pre-fix first with the same driver. Budget the instance: keep the pre-fix phase to what proves the bug (a step
 you expect to crash it needs a reason), estimate each step's lasting side effects (rows, script output, activities)
 and gate anything the API can't clean up, and give a total time — a shared load test can't be held for days.
+Plan against what customers run: the reference architecture's sizing and Fleet's defaults (vulnerability processing
+on, the options a customer has enabled by default), unless the test is about a deviation. Name every deviation in the
+plan with its reason; "it makes the comparison cleaner" usually isn't one.
 Batch the asks: the upgrade (the user runs the deploy workflow), any input change (pool size, sizing), cutting traffic
 for recovery (get it pre-approved for risky steps), anything needing MDM. Share the plan outline in the same message.
 
@@ -91,7 +97,9 @@ samples: memory back near baseline, writer quiet, healthz < 1 s) before measurin
 
 ### 6. Fixed runs
 Same drivers, same data, same order. Serialize anything that changes load. Run long steps in the background
-(`lt-step.sh`, or your driver) and act on the completion notification. Grab expiring evidence (ECS stops, profiles)
+(`lt-step.sh`, or your driver) and act on the completion notification. Say what you're waiting on and until when, and
+end every step with the instance's state in one line (calm and safe to use, or still settling until about when): the
+instance is shared, and someone is usually waiting to use it. Grab expiring evidence (ECS stops, profiles)
 when something trips. Keep regression rows honest: the fix that skips work must still do the work when it's needed —
 measure that case at scale too (it may be slow in its own right; that's a finding).
 
@@ -103,12 +111,17 @@ times vs your changes), and whether the environment explains it (rerun at the re
 rather than disappears when a bottleneck is fixed — keep going until you know what holds at the target.
 
 ### 8. Report
-- **Ticket comment:** fleet-bug-qa's format (verdict, X/Y, scope sentence, matrix, manager-level). Put the decisive
-  numbers in the cells: "❌ 2m26s server, 502" → "✅ 200 in 5–7 s". Add one sentence when the mechanism itself
-  didn't reproduce but the symptom did, or when rows ran locally.
-- **Decision list:** every finding with its origin (introduced / exposed / introduced in this release / pre-existing)
-  and severity — including load-test-only ones, marked as such.
-- **Filing** (fleet-bug-file): steps at the reference sizing when it reproduces there; the measured numbers; a short
+- **Ticket comment:** fleet-bug-qa's format (`report.md`: verdict, X/Y, scope sentence, matrix, manager-level). Put the
+  decisive numbers in the cells: "❌ 2m26s server, 502" → "✅ 200 in 5–7 s". Add one sentence when the mechanism itself
+  didn't reproduce but the symptom did, or when rows ran locally. A campaign covers several tickets: one comment per
+  ticket, printed as each is done and again after any change, without being asked.
+- **Decision list** (`findings.md`): every finding with its origin (introduced / exposed / introduced in this release /
+  pre-existing), who would hit it and your recommendation — including load-test-only ones, marked as such. For each,
+  say plainly whether a real fleet would see it or only osquery-perf does, and whether it reproduces locally: that's
+  the first question asked. An anomaly you watched go by (an error repeating every hour, a cron running far longer
+  than it used to) is on the list or explained, never just an aside.
+- **Filing** (fleet-bug-file, once for the batch; ask whether the issues should carry `:loadtest`): steps at the
+  reference sizing when it reproduces there; the measured numbers; a short
   server-log section (onset timeline, top error signatures, task memory, stop reasons); the profiles (zip + README,
   attached by the user — gh can't upload, so use the user's attachment link); config that matters (pool, sizes).
   Verify any extrapolated claim with one more run before filing it.

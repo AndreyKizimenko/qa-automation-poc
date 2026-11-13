@@ -1,6 +1,6 @@
 ---
 name: fleet-upgrade-preflight
-description: Run BEFORE upgrading a Fleet QA instance to predict which Playwright tests the upgrade will break. Diffs the Fleet release the instance runs today against the one you're upgrading to, and reports the selectors, copy and API routes the suite depends on that disappear — with the PR that removed each and its replacement. Triggers on "what will break when I upgrade", "compare 4.90.1 to 4.91", "preflight the upgrade", "we're moving the instance to <version>", "diff the releases before I upgrade", "upgrade impact on the suite". Pair with playwright-run-reviewer, which triages the run AFTER the upgrade.
+description: Run BEFORE upgrading a Fleet QA instance to predict which Playwright tests the upgrade will break. Diffs the Fleet release the instance runs today against the one you're upgrading to, and reports the selectors, copy and API routes the suite depends on that disappear — with the PR that removed each and its replacement. Triggers on "what will break when I upgrade", "compare 4.90.1 to 4.91", "preflight the upgrade", "we're moving the instance to 4.96", "diff the releases before I upgrade", "upgrade impact on the suite". Pair with playwright-run-reviewer, which triages the run AFTER the upgrade.
 ---
 
 Predicts which specs a Fleet upgrade breaks, before the upgrade happens. Run
@@ -18,7 +18,10 @@ today, and does it still exist in the target?*
 
 That third bucket keeps the report free of noise: a token that was never literal
 in Fleet's source can't be evidence, so it never reaches the report. What does
-reach it is a floor, not the full list (see *It under-reports* in Gotchas).
+reach it is a floor, not the full list. On the last three upgrades the scan
+reported 0, 5 and 1 real breakages where the suite turned out to have 2, 12 and
+10 broken clusters. The scan is the first ten minutes; the hand-check after it
+(*Then hand-check*, below) is the job.
 
 ## Prerequisites
 
@@ -66,13 +69,67 @@ without an instance, `--out <file>` to redirect.
    Fleet PR that removed it, and a replacement **checked against the target
    tree**. A `⚠︎` means the obvious rename is wrong and the component was
    reshaped; the line then lists what the successor actually emits, so you pick.
+   One false positive to rule out first: the scan looks for a class with its
+   dot (`.activity-feed-card`), which only the SCSS rule has. When a release
+   deletes the stylesheet rule and keeps `className: "activity-feed-card"`, the
+   class reads as removed while Fleet still renders it. Grep the target TSX for
+   the bare name before changing a locator.
 2. **UI churn by spec area** — surviving selectors don't mean surviving flows.
    Read the top rows as "expect surprises here."
 3. **Fixes on the running build with no equivalent on the target** — the
    upgrade may roll a fix back. Match by title, not SHA (see Gotchas).
 4. **Changelog fragments** — the release's own notes, for behaviour changes no
    static check can see.
-5. **Unverifiable tokens** — deliberately inert. Don't mine it for findings.
+5. **Unverifiable tokens** — never literal in Fleet's source at either revision,
+   so mostly inert. Read its `class` entries, though: a class Fleet builds from
+   a template (`` `${baseClass}__list-item-button` ``) lands here whether or not
+   the release removed it, and one that was removed has sat here unreported.
+
+## Then hand-check
+
+A text-presence check can't see most of what breaks a spec. What it missed on
+recent upgrades, in the order it cost time:
+
+- **Flows that changed shape**: a modal that became a page, a section collapsed
+  under "Advanced", a dropdown replaced by a filter, a role that lost an action.
+  Every selector survives and the test still fails.
+- **Copy that changed in one component** while the same string survives in
+  another (`Email field must be completed` changed in the user forms and stayed
+  in the login forms), and copy a spec *expects* rather than locates:
+  `toHaveText` and `toContainText` values and lookup constants aren't in the
+  scan's vocabulary.
+- **A constant demoted to a fallback**: the literal is still in the source, but
+  the message users see is now built by a template next to it.
+- **A control that gained an explicit accessible name**: once a dropdown has an
+  `ariaLabel`, its `name` prop no longer names it, so
+  `getByRole('combobox', { name: 'date-filter' })` matches nothing, and an
+  absence check written that way passes without checking anything.
+
+Three diffs find most of these. `<from>` and `<to>` are the revisions the scan
+printed; the second writes its list to the scratchpad:
+
+```bash
+# column headers that changed
+git -C ../fleet diff <from>...<to> -- frontend | grep -E '^[-+][[:space:]]*(title|Header): "'
+
+# copy that left a file and that the suite still names: candidates to read, not verdicts
+git -C ../fleet diff <from>...<to> -- frontend | grep '^-' | grep -oE '"[A-Za-z][^"]{12,90}"' \
+  | tr -d '"' | grep ' ' | sort -u > <scratchpad>/removed-copy.txt
+grep -rhoFf <scratchpad>/removed-copy.txt playwright/tests playwright/pages playwright/helpers \
+  | sort | uniq -c | sort -rn
+
+# controls that gained an accessible name
+git -C ../fleet diff <from>...<to> -- frontend | grep -E '^\+.*ariaLabel='
+```
+
+For each candidate, look at the target tree before touching a spec: a string
+that left one file is often still rendered from another.
+
+Then read the change itself. Split the release's changelog fragments and UI
+churn (sections 2 and 4) by area, and give each area to a read-only agent with
+the specs and page objects that cover it: what does each changed component now
+render, and which test steps no longer match? Three agents covered a release in
+one pass, and that pass is where most of the real breakages were found.
 
 Then fix the POMs against the predictions, upgrade, run the suite, and hand the
 result to **playwright-run-reviewer** — every failure this report predicted is

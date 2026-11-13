@@ -1,192 +1,178 @@
 ---
 name: fleet-explore
-description: Run a chartered exploratory-testing session on a live Fleet instance — Claude explores one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keeps a timestamped tagged log, and ends with a debrief (what was covered and what wasn't, a decision list of findings for the QA engineer, questions for product, candidates for the Playwright suite, what held up) published as a private findings page with every finding's evidence and screenshots inline. Use whenever the user wants to explore, poke at, stress, break, "kick the tires on" or find edge cases in a Fleet feature, page or area — "explore around the policy automations page", "throw worst-case names at the software library", "what else could be broken near this fix", "kick the tires on the new Android enrollment flow", "do an exploratory pass on Hosts before the release", "what would a real customer's data do to this screen" — and when fleet-story-qa, fleet-quickwin-qa or fleet-bug-qa end and the user wants the neighbours poked. Do NOT use to run a story's test plan (fleet-story-qa), to verify a specific bug fix before/after (fleet-bug-qa), to QA a quick win (fleet-quickwin-qa), to write a test plan (fleet-test-plan), to file a finding (fleet-bug-file), or to write Playwright tests (the suite's playwright-test-author).
+description: "Run a chartered exploratory-testing session on a live Fleet instance: explore one feature, page or area with worst-case data, every entry point and scope, lifecycle and interruption tours, keep a timestamped tagged log, and end with a debrief and a private findings page (findings with evidence and screenshots, questions for product, suite candidates, what held up). Use when asked to explore, poke at, stress, break, 'kick the tires on' or find edge cases in a Fleet feature, page or area ('explore around the policy automations page', 'throw worst-case names at the software library', 'what else could be broken near this fix', 'exploratory pass on Hosts before the release'), or to poke the neighbours after a story, quick-win or bug QA. Not for running a story's test plan (fleet-story-qa), verifying a fix (fleet-bug-qa), a quick win (fleet-quickwin-qa), writing a test plan (fleet-test-plan), filing (fleet-bug-file) or writing Playwright tests."
 ---
 
 # Fleet exploratory session
 
-A test plan checks what the story says should happen. An exploratory session looks for what
-nobody wrote down: the fleet name that pushes the row actions off the screen, the second entry
-point that skips the validation, the label deleted while a profile still points at it, the save
-that lands twice. Those are the bug classes that keep escaping (fleet-test-plan's coverage lenses
-list them), and no plan row will ever name all of them, because they're found by looking, not by
-reading.
+A test plan checks what the story says should happen. An exploratory session looks for what nobody
+wrote down: the fleet name that pushes the row actions off the screen, the second entry point that
+skips the validation, the label deleted while a profile still points at it, the save that lands
+twice. Those are the bug classes that keep escaping (fleet-test-plan's coverage lenses list them), and
+no plan row will ever name all of them, because they're found by looking, not by reading.
 
-The session is chartered so it can be debriefed: one line says what's being explored, with what,
-to learn what; a budget says when it ends; a tagged log records what was tried; and the debrief
-says what was covered, what wasn't, and what turned up. Without those, exploration is an afternoon
-of clicking that nobody can act on.
+The session is chartered so it can be debriefed: one line says what's being explored, with what, to
+learn what; a budget says when it ends; a tagged log records what was tried; and the debrief says what
+was covered, what wasn't, and what turned up. Without those, exploration is an afternoon of clicking
+that nobody can act on.
 
-The split: Claude explores, logs and classifies. The QA engineer picks the charter and decides
-what's a bug. Claude never files, never promotes a quirk to a defect on its own, and never decides
-a finding isn't worth the engineer's eyes.
+The split: Claude explores, logs and classifies. The QA engineer picks the charter and decides what's
+a bug. Claude never files, never promotes a quirk to a defect on its own, and never decides a finding
+isn't worth the engineer's eyes.
 
-## Tooling
+## Before you start
 
-Same as the other QA skills. Read `~/.claude/fleet-qa.local.md` first (instances, Fleet checkout,
-QA workspace, role users); if it doesn't exist, create it per
-`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. Scripts are in
-`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh <ctx> <METHOD> <path> [json | -F k=v]`
-(`FLEET_TOKEN=` to act as another user), `screenshot.mjs`, `pw.mjs`, `stack.py`, `cleanup.sh`. Skim
-`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/fleet-gotchas.md` and
-`${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md` before creating data.
-The session runs on the instances the local file names, like every skill here, never on the
-Playwright suite's shared CI instances; those have their own rules in `playwright/CLAUDE.md`.
+- **Read `~/.claude/fleet-qa.local.md`** (instances, Fleet checkout, QA workspace, role users,
+  standing permissions); if it doesn't exist, create it per
+  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. The session runs on the
+  instances that file names, like every skill here, never on the Playwright suite's shared CI
+  instances; those have their own rules in `playwright/CLAUDE.md`.
+- **Check that every context you'll use still answers**, each role user included
+  (`fleetapi.sh <ctx> GET /api/v1/fleet/me`). Expired tokens go in one ask now
+  (`fleetctl login --context <name>`), not when the roles tour starts.
+- **Workspace**: next to the ticket's run when there is one, `<QA workspace>/qa-<N>/explore/`,
+  otherwise `<QA workspace>/explore/`. One file per session, `explore-<date>-<slug>.md` (charter, log,
+  debrief), `screenshots/` beside it, the findings page's `findings.json` and rendered `page/`, and its
+  own `created.txt` in the same cleanup-manifest format as every other run. When the session borrows a
+  run's `qa-<N>` fleet, it doesn't record the fleet again, and its cleanup runs before the run's:
+  deleting the fleet strands the session's hosts in No fleet.
 
-The browser: the Playwright MCP tools when they're available (`browser_navigate`, `browser_snapshot`,
-`browser_click`, `browser_type`, `browser_wait_for`, `browser_find`, `browser_resize`, `browser_tabs`,
-`browser_console_messages`, `browser_network_requests`, `browser_take_screenshot`, `browser_evaluate`),
-or Claude in Chrome when the user prefers their own logged-in browser. A sequence you'll repeat on
-every variation (the setup before each probe) becomes a `pw.mjs` driver.
+**Scripts** are fleet-bug-qa's, in `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`:
+`fleetapi.sh <ctx> <METHOD> <path> [json | -F k=v]` (`FLEET_TOKEN=` to act as another user),
+`screenshot.mjs`, `pw.mjs`, `stack.py`, `cleanup.sh`. A sequence you'll repeat on every variation (the
+setup before each probe) becomes a `pw.mjs` driver.
 
-**Getting the pane signed in.** It usually opens on `/login`. The three ways in, in order, are in
-`instance-traps.md` § Auth, shared with the other QA skills: the engineer signs in once (ask in one
-line and carry on with API probes meanwhile); or, with their say-so, session-owned users on the
-session's fleet; never the engineer's token or password through the browser tool or a file it
-loads.
+**The browser**: the Playwright MCP tools when they're available (`browser_navigate`,
+`browser_snapshot`, `browser_click`, `browser_wait_for`, `browser_find`, `browser_resize`,
+`browser_tabs`, `browser_console_messages`, `browser_network_requests` and the rest), or Claude in
+Chrome when the user prefers their own logged-in browser. The pane usually opens on `/login`; the
+ways in, in order, are in `instance-traps.md` § Auth: the engineer signs in once (ask in one line and
+carry on with API probes meanwhile); or, with their say-so, session-owned users on the session's
+fleet; never the engineer's token or password through the browser tool or a file it loads.
 
-**Screenshots.** `browser_take_screenshot` with a `filename` saves only under `.playwright-mcp/` in
-the qa-automation checkout (gitignored), the whole viewport or one element by its ref; move the
-files into the session's `screenshots/`. Those are the working record. Evidence for a BUG row is
-made the way `fleet-bug-file` makes it, and before cleanup, because the data a session built is
-gone afterwards and nobody can re-shoot it: clip to the element or crop to the region that shows
-the problem, box the wrong state and label it, caption each panel with the build, stack shots that
-are read together (`stack.py`, `--side` for narrow clips), draw with PIL, and re-read the PNG: it
-must show the thing, with no tokens or enroll secrets. Keep the raw full-page shot beside it.
+**References.** This skill's are in `${CLAUDE_SKILL_DIR}/references/`; the shared ones, marked
+*(bug-qa)*, are in `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/`. Each is a required read at
+the step that names it, not background:
 
-Workspace: next to the ticket's run when there is one, `<QA workspace>/qa-<N>/explore/`, otherwise
-`<QA workspace>/explore/`. One file per session, `explore-<date>-<slug>.md` (charter, log, debrief;
-template in `references/session.md`), `screenshots/` beside it, the findings page's `findings.json`
-and rendered `page/` (step 5), and its own `created.txt` in the
-same cleanup-manifest format as every other run. When the session borrows a run's `qa-<N>` fleet, it
-doesn't record the fleet again, and its cleanup runs before the run's: deleting the fleet strands
-the session's hosts in No fleet.
+- `framing.md`: now. Steps 1–2 in detail: what to read first, how to write a charter, the budget,
+  orienting.
+- `session.md`: step 1. The session file's template, the tags, and illustrative charters.
+- `fleet-gotchas.md` *(bug-qa)* and
+  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-story-qa/references/instance-traps.md`: before creating data and
+  before the first UI step.
+- `tours.md`: step 3. The tours, the worst-case catalog, the oracles and the known non-findings.
+- `findings.md` *(bug-qa)*: step 3, when the first thing looks wrong, and again before the decision
+  list.
+- `screenshots.md` *(bug-qa)*: before the first evidence PNG.
+- `findings-page.md`: step 5.
+- fleet-test-plan's `related_bugs.py` and `coverage-lenses.md`, under
+  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-test-plan/` (`scripts/` and `references/`): step 1, for an
+  area's open bugs and the bug classes that keep escaping.
+
+After a long session the detail of a step may no longer be in front of you. Re-read its file from
+this list rather than working from memory.
 
 ## Hard lines
 
-The same ones as every QA skill here, because the instances are shared and a session's curiosity
-is exactly what breaks them:
+<!-- shared:hard-lines -->
+Each of these cost an engineer something once. They hold for the whole run, and for every subagent you
+brief: a subagent hasn't read this skill, so paste this section into its prompt.
 
-- **Never flip global state the human owns**: MDM on or off, the license, GitOps mode, org
-  settings, Apple or Android enterprise setup. A tour that needs Free or GitOps mode goes in a
-  one-line ask; keep exploring elsewhere meanwhile.
-- **Never type the engineer's password, never create or delete their accounts.** API-only users for
-  API checks; the role users in the local file for UI-by-role; session-owned users on the session's
-  fleet only with the engineer's say-so (see Tooling).
-- **Never post, edit or delete on GitHub.** Findings go to the decision list; filing is
-  `fleet-bug-file`, when the user says so.
-- **Explore on objects you created.** A `qa-explore-<slug>` fleet (or the run's `qa-<N>` fleet
-  when the session follows one), your own osquery-perf hosts, labels, policies, reports, scripts,
-  packages and API-only users, each recorded in `created.txt` as it's created. Real hosts, the
-  engineer's fleets and the static role users are read-only. Some GETs write (token-minting
-  config endpoints): read the handler before calling an endpoint you don't know.
-- **Scratch code never stays in the repo.**
+- **Global state belongs to the engineer**: MDM on or off, the license, GitOps mode, org settings, Apple
+  or Android enterprise setup, a server restart. Ask, and they do it (turning Android MDM off deletes
+  the enterprise and every Android app in every fleet). Settings on a fleet this run created are
+  yours, and so is whatever the local file lists under standing permissions.
+- **Work on objects this run created**: your own fleet (`qa-<N>`, `qa-explore-<slug>`), osquery-perf
+  hosts, labels, policies, scripts, packages and API-only users, each recorded in `created.txt` as it's
+  made. Real hosts, the engineer's fleets and the role users are read-only, even for a moment: a
+  device may be mid-test.
+- **Address things by id, never by a name match.** A repro script that matched a fleet by part of its
+  name once wrote to the engineer's real fleet.
+- **Read the handler before calling an endpoint you don't know.** Some GETs write: the zero-touch
+  configuration GET mints a Google token, and a first page load can do the same. When the first call is
+  the thing under test, save it for the row that needs it.
+- **Never type the engineer's password, or create or delete their accounts.** API-only users for API
+  role checks; for UI-by-role, the local file's role users, the engineer signing in, or with their
+  say-so a session-owned user on your fleet (`instance-traps.md` § Auth).
+- **Never print a secret.** Tokens and enroll secrets stay in `~/.fleet/config` and env vars. Don't
+  `cat`, `grep` or `sed` a file that holds keys (the dev `fleet.yml`, a `.env`), masked or not: a line
+  mask prints the key block under the label. Have a script copy the one field into a 600-mode file in
+  the run folder and print key names only. `ps` and `pgrep -fl` show other sessions' secrets too.
+- **Nothing goes on GitHub unless the engineer asked for it in this conversation.** Comments are handed
+  over as copiable blocks; filing is `fleet-bug-file`'s job, on their word.
+- **Scratch code never stays in the Fleet checkout.** Throwaway tests go in, run and come out, with
+  copies in the run folder. If a file of theirs breaks the build, move it aside for the one run and
+  restore it byte for byte.
+- **Undo only what this run recorded, and ask first.** List `created.txt` newest-first, get a yes,
+  then run `cleanup.sh`. Other sessions share the machine and the instances, so never
+  `pkill osquery-perf` or delete by name pattern.
+- **Don't weigh in on release process.** Released or unreleased is a fact to establish, not a
+  recommendation to make.
+<!-- /shared:hard-lines -->
 
 And three that are specific to exploring:
 
-- **Don't fake state.** `page.route` rewriting the license, the viewer's role, a setting or a
-  host's state shows how the frontend reacts to data Fleet may never send; a finding from faked
-  data isn't a finding. Reach states the real way (a real command against a simulated host, a
-  role user, the `previous` instance, when the local file names one, for "how did it behave
-  before"), or ask.
+- **Don't fake state.** `page.route` rewriting the license, the viewer's role, a setting or a host's
+  state shows how the frontend reacts to data Fleet may never send; a finding from faked data isn't a
+  finding. Reach states the real way (a real command against a simulated host, a role user, the
+  `previous` instance, when the local file names one, for "how did it behave before"), or ask. A tour
+  that needs Free or GitOps mode goes in a one-line ask; keep exploring elsewhere meanwhile.
 - **Stuck means note and move on.** An element that isn't where you expected, a page that won't
-  settle, a dialog you can't dismiss: log it (it may be the finding), take a screenshot, and go to
-  the next probe. Never loop retrying the same action. The budget is for coverage.
-- **A finding you can't reproduce is a NOTE, not a BUG.** Three tries, same steps. If it won't
-  come back, record what was tried and let the engineer decide whether to chase it.
+  settle, a dialog you can't dismiss: log it (it may be the finding), take a screenshot, and go to the
+  next probe. Never loop retrying the same action. The budget is for coverage.
+- **A finding you can't reproduce is a NOTE, not a BUG.** Three tries, same steps. If it won't come
+  back, record what was tried and let the engineer decide whether to chase it.
+
+## Working with the engineer
+
+<!-- shared:working-with -->
+- **Ask once, batched, and make every item doable without a question back**: the exact step (the tap
+  path on the device, the command with its values filled in, the link pasted in the message), which
+  instance, how long it takes, and what they'll see when it worked. When you offer options, mark the
+  one you recommend. Device steps go one at a time ("Your turn: …; reply done"), and never ask for
+  screenshots from a phone: they tell you what it shows.
+- **Keep working while they do their part**, and ask a thing once. A question they didn't answer about
+  something minor is a no for now.
+- **Say where things stand.** On a long stretch on your own, post one line as each stage ends and
+  whenever you start waiting: what's done, what you're waiting on, until when. Ten silent minutes read
+  as stuck.
+- **Hand over the deliverable without being asked.** Whenever the outcome changes (a row rerun, a
+  finding decided, a check they ran by hand), print the current deliverable again, complete and
+  copiable: the ticket comment, the sign-off, the debrief. One per ticket when the run covers several.
+<!-- /shared:working-with -->
 
 ## Workflow
 
+Steps 1–2 are spelled out in `framing.md`. Read it before proposing anything.
+
 ### 1. Frame the session
 
-Start from what the user points at (a story just QA'd, a page, an area, a bug's neighbourhood,
-"Hosts before the release") and read what already exists before proposing anything:
-
-- **After a story, quick win or bug QA:** that run's `RESULTS.md` and the test plan's `notes.md`
-  in `<QA workspace>/test-plan-<N>/`. They say what was covered, so the charter aims at what
-  wasn't: the neighbouring pages, the other platform, the other entry points, the data shapes the
-  plan's rows never used.
-- **An area:** the PRs merged into it since the last release
-  (`gh pr list -R fleetdm/fleet --state merged --search "<area words> merged:>=<last release date>" --limit 30`)
-  and the open bugs in it
-  (`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-test-plan/scripts/related_bugs.py -k "<area words>" --fleet <fleet checkout> --out <session dir>/bugs.md`).
-  A change is where the risk is; an open bug is something not to find again.
-- **Always:** Fleet's own event list, read live
-  (`git -C <fleet checkout> show origin/main:docs/Contributing/guides/ui/design-qa-considerations.md`),
-  and the "bug classes that keep escaping" in
-  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-test-plan/references/coverage-lenses.md`. Both are tours in
-  waiting.
-
-Then, in one message, ask the two questions that find the most bugs, "what do you think might
-break?" (a hunch is a valid charter) and "what did the developer say was tricky?", and propose
-**three to five charters**, numbered, your recommended first pick marked and each worded so a
-one-word "yes" accepts it. An answer to the questions may replace a charter; that's the point of
-asking. A charter has three lines:
-
-```
-Explore <target: one page, flow or object type>
-  with <resources: the data, roles, tiers, hosts and tours you'll use>
-  to discover <information: what you want to learn, not what you want to prove>
-```
-
-A good charter names a target narrow enough to finish (the policy automation run detail page, not
-"policies"), resources concrete enough to set up (a fleet with 21 hosts, a 255-character policy
-name, the fleet-observer role user), and an information goal that's a question ("what the page
-shows while a run is partial"), not a claim ("that it works"). Give each a **budget**: 60 actions
-or 45 minutes, whichever comes first, unless the user sets another. An action is one probe (a
-navigate, click or type, with its snapshot and wait); an API call counts one; the repeats that
-reproduce a finding count too. When the two disagree, the clock wins. Several sessions per charter
-are fine; each gets its own log and debrief.
-
-Illustrative charters (made up):
-
-- *New feature, after story QA:* Explore the policy automation run detail page with a fleet of 21
-  simulated hosts, a 200-character policy name and a script that fails on half of them, to discover
-  what the page shows while a run is partial and what long names do at the page's widths.
-- *An area, before a release:* Explore Software › Library on the RC instance (Premium) with titles whose
-  names are long, one character, CJK and emoji-first, and a host carrying 1,600+ packages, to
-  discover where the accordion, search and filters break at the edges.
-- *A bug's neighbourhood:* Explore every action near the fixed Reset-policy dialog that confirms
-  "on N hosts", from the single-run and all-runs entry points, to discover whether sibling actions
-  share the same scoping mistake.
-
-Write the chosen charter and budget at the top of the session file, note the start time (`date`),
-and begin. Two rules for getting from the charter to the first probe:
-
-- **If the user told you to work on your own**, pick the starred charter, record the two questions
-  as unasked in the session file, and go. Otherwise wait for the pick.
-- **Setup counts on the clock.** Build what the API can name first (fleets, labels, policies,
-  reports, scripts, packages, users and their emails); reach for a patched osquery-perf only when
-  the charter is about host names, and then keep the diff and the names files in the session's
-  data folder, so the next session rebuilds in a minute instead of an hour.
+Read what already exists: the run's `RESULTS.md` and the plan's `notes.md` after a QA; the merged PRs
+and the open bugs for an area; Fleet's event list and the escaping bug classes always. Then, in one
+message, ask the two questions that find the most bugs ("what do you think might break?", "what did
+the developer say was tricky?") and propose **three to five charters**, numbered, your pick marked,
+each worded so a one-word "yes" accepts it. A charter reads
+`Explore <target> with <resources> to discover <information>` and has a **budget**: 60 actions or 45
+minutes, whichever comes first; when the two disagree, the clock wins, and setup counts on it. If the
+user told you to work on your own, pick the starred charter, record the questions as unasked and go.
+Otherwise wait for the pick. Write the charter, the budget and the start time at the top of the
+session file (template in `session.md`).
 
 ### 2. Orient (the first five actions)
 
-Walk the happy path once, with ordinary data, to know what "normal" looks like here: the page
-settled, the controls present, the console quiet. Read `browser_console_messages` and note any
-error now, so a later one can be told from the baseline. Known noise is listed in
-`helpers/console.ts` in the `playwright/` folder the local file names: `DEFAULT_IGNORED_CONSOLE_ERRORS`
-for console errors (favicon, `net::ERR_*`, ResizeObserver) and `DEFAULT_IGNORED_PAGE_ERRORS` for
-uncaught exceptions (the Ace editor worker 404, fleetdm/fleet#54845); don't re-report those. While
-here, `GET /api/v1/fleet/me` as each role user the local file names: an expired token goes in the
-ask now (`fleetctl login --context <name>`), not when the roles tour starts.
-
-Then map the surface, the way Emil Kowalski's break-ui skill does (credited in
-`references/tours.md`): every value the charter's page renders and where it comes from (names,
-counts, timestamps, status badges, labels from data, tooltips, button labels, the list itself) with
-its limit from the code (a grep for `maxLength` in the component under `frontend/`, one in the
-server-side validator, the REST docs) or "unbounded". Ten minutes at most; what two greps don't find
-is "unbounded". A value with no limit anywhere is a RISK row before you've typed anything. The table
-goes under `## Surface` in the session file, and the worst-case tour feeds on it.
+Walk the happy path once with ordinary data and note the console's baseline, so a later error can be
+told from it. Then map the surface: every value the page renders, where it comes from, and its limit
+from the code, or "unbounded" (a RISK row before you've typed anything). The table goes under
+`## Surface` in the session file, and the worst-case tour feeds on it.
 
 ### 3. Explore, one tour at a time
 
-`references/tours.md` holds the tours and the worst-case catalog, with Fleet-specific probes. Pick
-the ones the charter calls for, in this order unless the charter says otherwise: worst-case data
-(at each width), scope and gating, second door, lifecycle, interruption, tables and forms, width and
-keyboard, concurrency and timing. The oracles there (§7) aren't a tour: they're how every row decides
-what "wrong" means, so name the one each BUG row rests on. Say which tour you're on in the log; it's
-how the debrief can state coverage.
+`tours.md` holds the tours and the worst-case catalog, with Fleet-specific probes. Pick the ones the
+charter calls for, in this order unless the charter says otherwise: worst-case data (at each width),
+scope and gating, second door, lifecycle, interruption, tables and forms, width and keyboard,
+concurrency and timing. The oracles there (§ 7) aren't a tour: they're how every row decides what
+"wrong" means, so name the one each BUG row rests on. Say which tour you're on in the log; it's how
+the debrief can state coverage.
 
 **Drive snapshot-first.** `browser_navigate`, `browser_snapshot`, act on an element by its ref,
 `browser_wait_for` the text that should appear or disappear (never a fixed sleep), snapshot again,
@@ -200,127 +186,85 @@ question about the DOM (a computed style, a hidden input, an element's box);
 page's rows, load a URL three times), only ever with session-owned credentials.
 
 **Log as you go, not at the end.** One row per action that taught you something: time, where, what
-you did with which input, what you saw, a tag, a follow-up. The tags (`references/session.md` has
-the full table and where each lands in the debrief): **BUG** wrong and reproduced; **QUESTION** can't tell if it's intended;
-**IDEA** a case the Playwright suite should own; **RISK** nothing broke yet, but it's one realistic
-step away; **NOTE** interesting, not actionable, including what wouldn't reproduce. A session of
-forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
+you did with which input, what you saw, a tag, a follow-up. The tags (`session.md` has the full table
+and where each lands in the debrief): **BUG** wrong and reproduced; **QUESTION** can't tell if it's
+intended; **IDEA** a case the Playwright suite should own; **RISK** nothing broke yet, but it's one
+realistic step away; **NOTE** interesting, not actionable, including what wouldn't reproduce. A
+session of forty rows with a dozen tags is normal. A wall of prose at the end isn't a log.
 
-**When something looks wrong**, run this loop before writing the tag:
-
-1. Stop and look. Read the snapshot, the console and the network messages for that action, not
-   just the symptom.
-2. Reproduce it: the same steps, three times. Once is an observation.
-3. Vary one thing at a time: the `previous` instance when the local file names one, another role
-   user, All fleets instead of
-   the fleet, the API instead of the UI, ordinary data instead of worst-case. Each variation that
-   still fails narrows the cause; each that passes names a condition.
-4. Capture, ticket-grade, now (Tooling says how): the element or region, boxed and captioned with
-   the build (`screenshot.mjs --caret` for focus bugs), plus the request and response from
-   `browser_network_requests` and the console line.
-5. Classify the origin the way the other QA skills do: *this change* (when the session follows a
-   story or fix), *released* (`git show fleet-v<latest>:<file>`, or the `previous` instance
-   reproduces it), or *pre-existing but exposed*; in a standalone session, *released* or
-   *unreleased* (on the RC only), decided the way fleet-bug-file does. Search open issues
-   (`gh issue list -R fleetdm/fleet --state open --search "<terms>"`) before calling anything new;
-   an existing issue becomes a NOTE with its number.
-6. Decide: dig now, or log and continue. Dig when the next probe would change the classification;
-   otherwise keep the budget for coverage and mark the follow-up.
+**When something looks wrong**, stop and look before writing the tag: read the snapshot, the console
+and the network messages for that action, not just the symptom. Then take it through `findings.md`:
+reproduce it three times, vary one thing at a time (the `previous` instance when the local file names
+one, another role user, All fleets instead of the fleet, the API instead of the UI, ordinary data
+instead of worst-case), say who would hit it, search the open issues, and capture it ticket-grade now
+with the request and response from `browser_network_requests` and the console line. Classify the
+origin the way the other QA skills do: *this change* (when the session follows a story or fix),
+*released* (`git show fleet-v<latest>:<file>`, or the `previous` instance reproduces it), or
+*pre-existing but exposed*; in a standalone session, *released* or *unreleased* (on the RC only),
+decided the way fleet-bug-file does. An existing issue becomes a NOTE with its number. Then decide:
+dig now, or log and continue. Dig when the next probe would change the classification; otherwise keep
+the budget for coverage and mark the follow-up.
 
 Rendering, hover, focus and scroll findings need a headed browser before they count: the in-app
-browser pane or Claude in Chrome do; `screenshot.mjs` and `pw.mjs` are headless and don't. Headless
-Playwright has produced both a false "not reproducible" and a false "reproduces" in earlier runs, so
-when the pane is all you have, ask the user to try the steps in their own browser too.
+browser pane, Claude in Chrome, or a `pw.mjs` driver opened with `{ headed: true }`. `screenshot.mjs`
+is headless and doesn't. For a hover or drag finding, ask the user to try the steps by hand too.
 
-**Follow leads.** A probe that surfaces something outside the charter is still worth the next
-three actions. Log the deviation ("left charter: following the label count") so the debrief can
-report it, and come back.
+**Follow leads.** A probe that surfaces something outside the charter is still worth the next three
+actions. Log the deviation ("left charter: following the label count") so the debrief can report it,
+and come back.
 
 **Watch the budget.** Note the count every ten actions. When it runs out, stop even mid-tour: a
-debrief with honest "unexplored" rows is worth more than five more probes nobody will know about.
-The user can open the next session.
+debrief with honest "unexplored" rows is worth more than five more probes nobody will know about. The
+user can open the next session.
 
 ### 4. Debrief
 
-Write the debrief at the bottom of the session file (template in `references/session.md`) and
-print it in chat. Five parts, in this order; the first is the one people skip:
+Write the debrief at the bottom of the session file (template in `session.md`) and print it in chat.
+Five parts, in this order; the first is the one people skip:
 
 1. **Coverage.** Each area the charter named and each tour you ran, as **covered**, **partial** or
-   **unexplored**, with a phrase of why for anything short of covered ("budget", "needs Free",
-   "needs a real device"). Deviations from the charter, and what they found.
-2. **Decisions needed**: the same decision list every QA skill here hands over,
-   `# | finding | origin | severity | repro / file:line`, for every BUG row, cosmetic ones included.
-   For a UI finding the severity is **Broken** (content unreadable, an action unreachable, wrong
-   data shown) or **Ugly** (readable but visibly wrong); for a behaviour finding, say in a few words
-   what's lost (a count that's wrong, a write that doesn't land, a gate that doesn't hold), and the
-   engineer maps it to Fleet's severity when filing. For each the user chooses file / mention /
-   drop; filing goes through `fleet-bug-file`, which gets the session file and screenshots as its
-   evidence. The RISK rows follow in their own short **Risks** list: there's nothing to file yet
-   (fleet-bug-file wants a reproduction), so each is mention / drop, or a row for the next test
-   plan that touches the area.
-3. **Questions for product**: the QUESTION rows, one line each, as a copiable block the user can
-   post or forward.
-4. **Candidates for the suite**: the IDEA rows, each passing the test for automation: the
-   behaviour is stable and well defined, pass or fail is unambiguous, and it's worth running
-   nightly. A reproduced bug becomes a candidate once it has an issue number. Hand candidates to
-   `playwright-test-author`, which will want to see the new test fail against the buggy build
-   before trusting it. Everything else stays exploratory.
-5. **What held up.** The worst cases and probes the feature handled correctly. It shows the
-   session was real, tells the user what not to worry about, and is often the longest list.
+   **unexplored**, with a phrase of why for anything short of covered ("budget", "needs Free", "needs
+   a real device"). Deviations from the charter, and what they found.
+2. **Decisions needed**: the decision list from `findings.md` for every BUG row, cosmetic ones
+   included. For a UI finding the severity is **Broken** (content unreadable, an action unreachable,
+   wrong data shown) or **Ugly** (readable but visibly wrong); for a behaviour finding, say in a few
+   words what's lost (a count that's wrong, a write that doesn't land, a gate that doesn't hold), and
+   the engineer maps it to Fleet's severity when filing. The RISK rows follow in their own **Risks**
+   list: there's nothing to file yet.
+3. **Questions for product**: the QUESTION rows, one line each, as a copiable block the user can post
+   or forward.
+4. **Candidates for the suite**: the IDEA rows that pass the test for automation: the behaviour is
+   stable and well defined, pass or fail is unambiguous, and it's worth running nightly. Expect that
+   to be few. A reproduced bug becomes a candidate once it has an issue number. Hand candidates to
+   `playwright-test-author`, which will want to see the new test fail against the buggy build before
+   trusting it. Everything else stays exploratory.
+5. **What held up.** The worst cases and probes the feature handled correctly. It shows the session
+   was real, tells the user what not to worry about, and is often the longest list.
 
-Then the screenshots: every one goes on the findings page (step 5); in chat, the ticket-grade ones
-go out with `SendUserFile` (display `attach`), one caption line per image naming its log row, or as
-a list of paths when `SendUserFile` isn't available. Shots that are read together (the input and
-where it ended up, the same view in two scopes) go out as one image via `stack.py`, cropped to the
-part that matters first. End with the page's link and one line offering the next charter, built
-from the unexplored rows.
-
-The log is the engineer's to read when they want detail; the debrief has to stand on its own.
-Don't pad it with mechanics (which tools, how many snapshots), and don't soften a Broken into a
-NOTE because it "might be intended": that's what QUESTION is for.
+When a charter ran over several sessions, the last debrief carries one consolidated decision list,
+not one per session. The log is the engineer's to read when they want detail; the debrief has to
+stand on its own. Don't pad it with mechanics (which tools, how many snapshots), and don't soften a
+Broken into a NOTE because it "might be intended": that's what QUESTION is for. End with the page's
+link (step 5) and one line offering the next charter, built from the unexplored rows.
 
 ### 5. The findings page
 
-Every session ends with one, short sessions included. It's what the engineer opens, filters and
-forwards: every finding with its steps, raw evidence and screenshots inline, the questions with a
-copy button, risks, suite candidates, what held up, a screenshot gallery and coverage. Build it
-before cleanup, while the evidence still matches the instance. `references/findings-page.md` has the
-schema and what goes in.
-
-1. Write `findings.json` next to the session file from the debrief you just wrote, not from memory:
-   each BUG row under the decision list's id, its steps, the exact evidence from the log (requests,
-   responses, timelines), its screenshots; then the questions, risks, candidates, what held up,
-   known issues and coverage.
-2. Render it with `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/scripts/findings_page.py
-   <session dir>/findings.json --out <session dir>/page`, adding `--out <scratchpad>/<slug>-page`
-   when the session has a scratchpad: the Artifact tool publishes only files under the working
-   directory or the scratchpad. The script refuses token-shaped strings and missing files; fix the
-   JSON and run it again.
-3. Publish it as a private Artifact when the Artifact tool is available, following the tool's own
-   rules for a new page: the rendered `index.html` with the `root` and `files` the script printed, a
-   one-word icon (`bug`), and a one-sentence description. Record the URL in the session file's
-   header (`**Page:**`). Later changes (a finding dropped, a bug filed) go to the same URL: edit the
-   JSON, render again, and publish the same file path in this conversation, or pass the URL as `url`
-   from another one.
-4. Without the Artifact tool, give the path of `<session dir>/page/index.html`; it opens from disk.
-5. When a finding may be security-sensitive, set the JSON's `banner`, and say in chat that the page
-   is private and stays internal until the finding is routed. Sharing it is the engineer's call.
+Every session ends with one, short sessions included: it's what the engineer opens, filters and
+forwards. Read `findings-page.md`, write `findings.json` from the debrief you just wrote, render it
+with `${CLAUDE_SKILL_DIR}/scripts/findings_page.py <session dir>/findings.json --out <session dir>/page`,
+and publish it as a private Artifact when the Artifact tool is available (otherwise give the path of
+`page/index.html`). Build it before cleanup, while the evidence still matches the instance. The
+ticket-grade screenshots also go out in chat, per `screenshots.md`.
 
 ### 6. Cleanup
 
 List the session's `created.txt` newest-first and ask before
-`cleanup.sh <session dir>/created.txt --run`. Only what this session recorded. Leave the session
-file, screenshots, `findings.json` and `page/`; they're the evidence trail, and `fleet-bug-file`
-reads them.
+`cleanup.sh <session dir>/created.txt --run`. Leave the session file, screenshots, `findings.json` and
+`page/`; they're the evidence trail, and `fleet-bug-file` reads them.
 
 ## Where this sits
 
-- After **fleet-story-qa**, **fleet-quickwin-qa** or **fleet-bug-qa**: their halo rows and the quick
-  poke at the neighbours stay theirs; this is the longer session afterwards, offered with the run's
-  workspace as input. The engineer decides whether the change deserves one.
-- Before a release, for an area with a lot of change: one charter per area, from the merged-PR
-  list.
-- Standalone, whenever someone has a hunch.
-
-It doesn't replace the test plan, and a session's "covered" rows don't tick plan boxes. The plan
-proves the spec; the session hunts for what the spec missed.
+After **fleet-story-qa**, **fleet-quickwin-qa** or **fleet-bug-qa**, as the longer session they offer;
+before a release, one charter per area with a lot of change; or standalone, whenever someone has a
+hunch. It doesn't replace the test plan, and a session's "covered" rows don't tick plan boxes. The
+plan proves the spec; the session hunts for what the spec missed.
