@@ -7,8 +7,15 @@ description: Review Playwright test code in Fleet's QA suite (`playwright/` in q
 
 Review like the senior engineer who'll be paged when the nightly goes red. The expensive defects in this
 suite aren't style: a test that locks a real VM, a test that passes without testing anything, and a test
-that leaves state behind for tomorrow's run. Find those first. `playwright/CLAUDE.md` is the contract you
-review against, and `playwright-test-author` is what the author was told.
+that leaves state behind for tomorrow's run. Find those first.
+
+Read two files before you open the diff. `playwright/CLAUDE.md` is the contract you review against.
+`${CLAUDE_SKILL_DIR}/../playwright-test-author/references/fleet-traps.md` is the catalog of traps the
+author was told to avoid (`playwright-test-author` itself is the rest of what they were told). Every
+trap in it is a review check, including the ones this skill doesn't repeat below: an absence check on
+a menu that never opened, a "signed-out" context that is still the admin, a toast that matches the
+first save, a closed modal taken as proof the save landed, an activity check that isn't keyed to
+this test.
 
 ## Scope
 

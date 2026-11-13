@@ -37,7 +37,7 @@ gitops did. **Triage a red gitops job first** — an apply that failed or a
 config that drifted can explain suite failures downstream.
 
 ```bash
-bash <skill>/scripts/fetch_ci_run.sh "<run-url>" "" <scratchpad>/run-<id> > <scratchpad>/reports.txt
+bash ${CLAUDE_SKILL_DIR}/scripts/fetch_ci_run.sh "<run-url>" "" <scratchpad>/run-<id> > <scratchpad>/reports.txt
 ```
 
 Pass `OWNER/REPO` in place of `""` when you have a bare run id rather than a URL.
@@ -63,7 +63,7 @@ That zip endpoint 404s now and then, which is why the script doesn't use it firs
 Then extract a compact, triage-ready summary:
 
 ```bash
-python3 <skill>/scripts/parse_report.py "<report-dir>" --slow 8
+python3 ${CLAUDE_SKILL_DIR}/scripts/parse_report.py "<report-dir>" --slow 8
 ```
 
 This reads the structured result blob embedded in `index.html` (far more
@@ -77,7 +77,7 @@ moved, the worker count changed, a red run ended with tests marked "did not run"
 or the tail needs explaining — lay the run out on one clock:
 
 ```bash
-python3 <skill>/scripts/run_timeline.py "<report-dir>" --tail 10 --platforms
+python3 ${CLAUDE_SKILL_DIR}/scripts/run_timeline.py "<report-dir>" --tail 10 --platforms
 ```
 
 It prints the peak number of results in flight (the worker count that actually
@@ -96,7 +96,7 @@ VM means that host's serial queue is the floor, and no worker count moves it.
 
 For each entry, reach a verdict using the evidence, not just the error string.
 The full decision guide and Fleet-specific signatures are in
-`references/fleet-failure-signatures.md` — **read it before classifying**; the
+`${CLAUDE_SKILL_DIR}/references/fleet-failure-signatures.md` — **read it before classifying**; the
 essentials:
 
 1. **Let the retry pattern speak first.** `outcome: flaky` (failed then passed) →
