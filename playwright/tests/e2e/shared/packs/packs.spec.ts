@@ -63,7 +63,11 @@ test.describe('Packs CRUD', () => {
     ]);
   });
 
-  // Tracked in TODO.md: `POST /api/v1/fleet/packs/schedule` answers 405.
+  // Tracked in TODO.md. It can't decide anything as written. It posts to
+  // `/api/v1/fleet/packs/schedule`, which answers 405: Fleet serves pack
+  // scheduling at `/api/latest/fleet/packs/schedule` (`/api/v1/fleet/schedule`
+  // on v1). And it reads the stats of the list's first host, most likely a
+  // simulation, which reports random stats for whatever is scheduled on it.
   test.skip('pack query executes on targeted host', async ({ request }) => {
     test.setTimeout(5 * 60_000);
 

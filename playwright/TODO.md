@@ -22,7 +22,7 @@ VMs, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-te
 
 | Test | Why | Unblock |
 |---|---|---|
-| `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | `POST /api/v1/fleet/packs/schedule` returns 405 — the schedule endpoint appears partially deprecated. | Find the replacement scheduling endpoint or drop the test. |
+| `tests/e2e/shared/packs/packs.spec.ts` → `pack query executes on targeted host` | The test is wrong, not the endpoint. It posts to `/api/v1/fleet/packs/schedule`, which answers 405 because Fleet serves pack scheduling at `/api/latest/fleet/packs/schedule` (and at `/api/v1/fleet/schedule` on v1; checked against `server/service/handler.go` and the premium instance, 4.95, 2026-11-13). With the path right it would still prove nothing: it targets the first host of the list, most likely a simulation, and a simulation answers the `scheduled_query_stats` detail query with random numbers; a real host sends those stats with its detail refresh, hourly unless a refetch asks sooner, and the test waits four minutes without asking. | A decision, then one of two. **Rewrite** it on a real VM: `requireRealHost`, the path through `apiLatestUrl`, a refetch before each read of `pack_stats`, a `runNonce()` name, the pack and its report deleted in an `afterEach`. Or **delete** it: packs are Fleet's legacy scheduler, the lifecycle above covers the page, and a scheduled report collecting on a real host is covered by `premium/reports/stored-results.spec.ts`. |
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md).

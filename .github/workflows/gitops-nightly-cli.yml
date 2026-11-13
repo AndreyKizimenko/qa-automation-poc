@@ -101,9 +101,11 @@ jobs:
           FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
         run: npx playwright test --project=gitops-nightly
 
-      # Encrypted like every report (.github/upload-report).
+      # Uploaded only when the job failed, as in gitops-verify.yml: a green run's
+      # artifact list is the two suite reports. Encrypted like every report
+      # (.github/upload-report).
       - uses: ./.github/upload-report
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         with:
           name: gitops-nightly-cli-report-${{ inputs.suite }}
           retention-days: 7
