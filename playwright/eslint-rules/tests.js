@@ -117,14 +117,24 @@ tester.run('no-api-cleanup-in-finally', rules['no-api-cleanup-in-finally'], {
   ],
 });
 
-tester.run('widget-in-component', rules['widget-in-component'], {
-  valid: [
-    "this.deleteModal = fleetModal(page, 'Delete label');",
-    "page.locator('.edit-user-modal__edit-user-modal')",
-  ],
+tester.run('modal-in-component', rules['modal-in-component'], {
+  valid: ["this.deleteModal = fleetModal(page, 'Delete label');", "page.locator('.edit-user-modal__edit-user-modal')"],
   invalid: [
     { code: "page.locator('.modal__modal_container').filter({ hasText: 'Delete pack' })", errors: [{ messageId: 'widgetSelector' }] },
     { code: 'page.locator(`.${cls}.modal__modal_container`)', errors: [{ messageId: 'widgetSelector' }] },
+  ],
+});
+
+tester.run('react-select-in-component', rules['react-select-in-component'], {
+  valid: ["new ReactSelect(page.locator('.dashboard-page__platform-filter'))", "page.locator('.activity-type-select__control')"],
+  invalid: [{ code: "modal.locator('.react-select__control')", errors: [{ messageId: 'widgetSelector' }] }],
+});
+
+tester.run('actions-menu-in-component', rules['actions-menu-in-component'], {
+  valid: ['await new ActionsMenu(row).choose(action);'],
+  invalid: [
+    { code: "row.locator('.actions-dropdown-select__control')", errors: [{ messageId: 'widgetSelector' }] },
+    { code: "row.locator('.actions-dropdown__wrapper')", errors: [{ messageId: 'widgetSelector' }] },
   ],
 });
 

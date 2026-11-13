@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
+import { ActionsMenu } from '../components/dropdowns';
 import { UserFormFields } from './users/UserFormFields';
 
 /** The roles a fleet's "Team role" dropdown offers (no GitOps: that one is global-only here). */
@@ -91,10 +92,7 @@ export class FleetUsersPage {
 
   /** Opens a row's Actions menu and picks an item. */
   async runRowAction(row: Locator, action: 'Edit' | 'Remove'): Promise<void> {
-    await expect(row).toBeVisible();
-    // The row's Actions menu is a react-select whose control has no usable role.
-    await row.locator('.actions-dropdown__wrapper').click();
-    await this.clickOption(action);
+    await new ActionsMenu(row).choose(action);
   }
 
   /**

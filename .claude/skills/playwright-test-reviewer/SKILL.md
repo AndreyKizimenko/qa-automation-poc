@@ -187,7 +187,8 @@ test built on them passes or fails on timing:
 **Class selectors.** One is legitimate when Fleet's component offers no role, label, text or test id, and
 a comment says so (beside it, or once for the component). The recurring cases: modal containers (Fleet's
 `Modal` has no `role="dialog"`; `fleetModal(page, title)` holds that one, and lint refuses it elsewhere),
-react-select controls and values (the accessible combobox is hidden),
+react-select controls and values (the accessible combobox is hidden; `ReactSelect` and `ActionsMenu` hold
+them, linted the same way),
 Ace editor internals, and role-less wrappers (cards, `.empty-state`, `.loading-overlay`, a live run's
 result blocks). Flag these:
 - a class with no explanation anywhere in the file, or where a role or text would work;

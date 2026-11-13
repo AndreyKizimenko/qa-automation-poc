@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from './components/Navbar';
+import { ReactSelect } from './components/dropdowns';
 import { TeamDropdown } from './components/TeamDropdown';
 import { MdmCommandDetailsModal } from './components/MdmCommandDetailsModal';
 
@@ -70,14 +71,15 @@ export class DashboardPage {
   // "Hosts enrolled" — the per-platform bar chart at the top of the page.
   readonly hostsEnrolledHeading: Locator;
 
-  // "Platform:" filter. Backed by Fleet's DropdownWrapper over react-select v5:
-  // the trigger exposes no role of its own, so it's scoped by the dashboard's
-  // own BEM container class; each option carries data-testid="dropdown-option".
+  // "Platform:" filter: a DropdownWrapper inside the dashboard's own BEM
+  // container class, since the dropdown exposes no role of its own.
+  private readonly platformDropdown: ReactSelect;
   readonly platformFilter: Locator;
   readonly platformFilterValue: Locator;
 
   // Historical chart card ("Hosts online" / "Vulnerability exposure").
   readonly chartCard: Locator;
+  private readonly chartDatasetDropdown: ReactSelect;
   readonly chartDatasetValue: Locator;
   readonly chartTitle: Locator;
   readonly chartInfoIcon: Locator;
@@ -134,17 +136,15 @@ export class DashboardPage {
 
     this.hostsEnrolledHeading = page.getByRole('heading', { name: 'Hosts enrolled', level: 2 });
 
-    this.platformFilter = page.locator('.dashboard-page__platform-filter .react-select__control');
-    this.platformFilterValue = page.locator(
-      '.dashboard-page__platform-filter .react-select__single-value',
-    );
+    this.platformDropdown = new ReactSelect(page.locator('.dashboard-page__platform-filter'));
+    this.platformFilter = this.platformDropdown.control;
+    this.platformFilterValue = this.platformDropdown.value;
 
     // The chart card has no heading of its own on premium (the dataset
     // dropdown takes its place), so the card is scoped by its component class.
     this.chartCard = page.locator('.chart-card');
-    this.chartDatasetValue = page.locator(
-      '.chart-card__dataset-dropdown .react-select__single-value',
-    );
+    this.chartDatasetDropdown = new ReactSelect(page.locator('.chart-card__dataset-dropdown'));
+    this.chartDatasetValue = this.chartDatasetDropdown.value;
     // Rendered only where a single dataset is offered (free); premium swaps in
     // the dataset dropdown.
     this.chartTitle = page.locator('.chart-card__title');
@@ -293,17 +293,8 @@ export class DashboardPage {
    * the cards that the new route renders.
    */
   async selectPlatform(label: DashboardPlatformLabel): Promise<void> {
-    const current = (await this.platformFilterValue.textContent())?.trim();
-    if (current === label) return;
-    await this.platformFilter.click();
-    // DropdownWrapper stamps data-testid="dropdown-option" on every option;
-    // anchored so "iOS" can't match "iPadOS".
-    await this.page
-      .getByTestId('dropdown-option')
-      .filter({ hasText: new RegExp(`^${label}$`) })
-      .click();
+    await this.platformDropdown.select(label);
     await expect(this.page).toHaveURL(new RegExp(`${PLATFORM_PATHS[label]}(\\?|$)`));
-    await expect(this.platformFilterValue).toHaveText(label);
   }
 
   /**
@@ -312,14 +303,7 @@ export class DashboardPage {
    * dropdown, so calling this there would find no control.
    */
   async selectChartDataset(label: ChartDatasetLabel): Promise<void> {
-    const current = (await this.chartDatasetValue.textContent())?.trim();
-    if (current === label) return;
-    await this.chartCard.locator('.chart-card__dataset-dropdown .react-select__control').click();
-    await this.page
-      .getByTestId('dropdown-option')
-      .filter({ hasText: new RegExp(`^${label}$`) })
-      .click();
-    await expect(this.chartDatasetValue).toHaveText(label);
+    await this.chartDatasetDropdown.select(label);
   }
 
   /** Opens the chart card's "Settings" filter modal. */

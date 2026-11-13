@@ -5,78 +5,139 @@
     }
   },
   "pages/DashboardPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
+      "count": 1
+    },
+    "suite/react-select-in-component": {
       "count": 1
     }
   },
   "pages/account/MyAccountPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
   "pages/controls/ConfigurationProfilesPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
+      "count": 2
+    }
+  },
+  "pages/controls/OsUpdatesPage.ts": {
+    "suite/react-select-in-component": {
       "count": 2
     }
   },
   "pages/controls/SetupAssistantPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
-  "pages/hosts/HostsListPage.ts": {
-    "suite/widget-in-component": {
+  "pages/hosts/HostDetailsPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 3
+    },
+    "suite/react-select-in-component": {
       "count": 2
+    }
+  },
+  "pages/hosts/HostsListPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/modal-in-component": {
+      "count": 2
+    }
+  },
+  "pages/labels/LabelsPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
     }
   },
   "pages/policies/PoliciesListPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
     }
   },
   "pages/policies/PolicyDetailsPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
   "pages/policies/PolicyEditPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
   "pages/reports/ReportDetailsPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
   "pages/reports/ReportEditPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 3
     }
   },
   "pages/reports/ReportsListPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/settings/FleetUsersPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
     }
   },
   "pages/settings/FleetsPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 3
     }
   },
   "pages/settings/IntegrationsPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
     }
   },
   "pages/settings/users/UsersPage.ts": {
-    "suite/widget-in-component": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/modal-in-component": {
       "count": 3
     }
   },
+  "pages/software/FleetMaintainedAppsPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/software/SoftwareOsPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/software/SoftwareTitleDetailPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    }
+  },
   "pages/software/SoftwareTitlesPage.ts": {
-    "suite/widget-in-component": {
+    "suite/modal-in-component": {
       "count": 1
+    }
+  },
+  "pages/software/VulnerabilitiesListPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
     }
   },
   "tests/api/free/license.spec.ts": {

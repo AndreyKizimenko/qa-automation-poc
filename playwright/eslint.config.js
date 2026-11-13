@@ -107,7 +107,11 @@ module.exports = tseslint.config(
     // widget's selector lives.
     files: ['pages/**/*.ts'],
     ignores: ['pages/components/**'],
-    rules: { 'suite/widget-in-component': 'error' },
+    rules: {
+      'suite/modal-in-component': 'error',
+      'suite/react-select-in-component': 'error',
+      'suite/actions-menu-in-component': 'error',
+    },
   },
   {
     // Specs with no page. The browser `test` carries an automatic fixture that
