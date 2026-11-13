@@ -192,7 +192,7 @@ npm run test:gitops-mode:headed -- -g "<title>" # watch it
 `cleanup-setup`. That is what you want while iterating, but it also skips the
 belt-and-braces `disableGitOpsMode` — so a `:only` run that you kill mid-flow
 leaves the flag set. The free two run in the ordinary free project:
-`npm run test:free -- -g "Free • gitops mode"`.
+`npx playwright test --project=free -g "Free • gitops mode"`.
 
 ---
 
@@ -910,7 +910,7 @@ other:
 ### GITOPS-20 · Free • gitops mode › Change management offers no gitops controls
 
 - **File:** [`playwright/tests/e2e/free/settings/gitops-mode.spec.ts`](../../tests/e2e/free/settings/gitops-mode.spec.ts)
-- **Grep:** `npm run test:free -- -g "Change management offers no gitops controls"`
+- **Grep:** `npx playwright test --project=free -g "Change management offers no gitops controls"`
 - **Project:** **free** (not gitops-mode — this spec is not in the `gitops-mode/` folder and runs in the ordinary free suite) · **Scopes:** n/a
 - **Mode:** UI · **Isolation:** independent, read-only
 - **Preconditions:** free-tier instance. Nothing writes `config.gitops` here and nothing can — the feature is premium-gated.
@@ -947,7 +947,7 @@ other:
 ### GITOPS-21 · Free • gitops mode › no gitops marker or gated control anywhere on the core pages
 
 - **File:** [`playwright/tests/e2e/free/settings/gitops-mode.spec.ts`](../../tests/e2e/free/settings/gitops-mode.spec.ts)
-- **Grep:** `npm run test:free -- -g "no gitops marker or gated control anywhere on the core pages"`
+- **Grep:** `npx playwright test --project=free -g "no gitops marker or gated control anywhere on the core pages"`
 - **Project:** **free** · **Scopes:** n/a
 - **Mode:** UI · **Isolation:** independent, read-only
 - **Preconditions:** free-tier instance

@@ -71,7 +71,10 @@ module.exports = tseslint.config(
   { plugins: { suite } },
   {
     files: ['tests/**/*.ts', 'pages/**/*.ts', 'helpers/**/*.ts', 'fixtures.ts', 'setup/**/*.ts'],
-    rules: { 'suite/skip-needs-reason': 'error' },
+    rules: {
+      'suite/skip-needs-reason': 'error',
+      'suite/no-to-be-ok': 'error',
+    },
   },
   {
     files: ['tests/**/*.ts'],
@@ -93,6 +96,26 @@ module.exports = tseslint.config(
   {
     files: ['helpers/**/*.ts', 'setup/**/*.ts', 'fixtures.ts'],
     rules: { 'suite/no-swallowed-response': 'error' },
+  },
+  {
+    // Specs with no page. The browser `test` carries an automatic fixture that
+    // asks for one, so importing it here would launch a browser for every test.
+    files: ['tests/api/**/*.ts', 'tests/cli/**/*.ts', 'tests/loadtest/api/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@fixtures',
+              importNames: ['test'],
+              message:
+                "An API or CLI spec imports `apiTest` (`import { apiTest as test } from '@fixtures'`): `test` opens a page for every test.",
+            },
+          ],
+        },
+      ],
+    },
   },
 
   // Ignore generated / vendored / local-only paths

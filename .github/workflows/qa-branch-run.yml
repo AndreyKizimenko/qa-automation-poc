@@ -66,3 +66,18 @@ jobs:
       ref: ${{ inputs.branch }}
       workers: ${{ inputs.workers }}
     secrets: inherit
+
+  # How this run's failed and flaky tests fared in the nightlies before it,
+  # written to the run's summary: a failure the branch brought is one main's
+  # nights never had. Given the one secret it needs, and it never fails the run.
+  run-history:
+    needs: [playwright-premium, playwright-free]
+    if: ${{ !cancelled() }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/run-history.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets:
+      QA_REPORT_PRIVATE_KEY: ${{ secrets.QA_REPORT_PRIVATE_KEY }}

@@ -3,7 +3,7 @@
  * is exercised through the bearer token of its API-only static
  * counterpart from helpers/api/static-users.ts.
  */
-import { test } from '@fixtures';
+import { apiTest as test } from '@fixtures';
 import {
   expectAllow,
   expectDeny,

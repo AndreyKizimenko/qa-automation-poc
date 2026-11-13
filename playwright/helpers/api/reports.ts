@@ -1,8 +1,8 @@
 // Report (a.k.a. saved query) API helpers for seeding and tearing down
 // preconditions. Fleet's UI calls these "reports"; the REST API keeps the
 // legacy `queries` path.
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 export interface ReportRef {
   id: number;
@@ -76,7 +76,7 @@ export async function listReports(
     headers: authHeaders(),
     params: { per_page: '500', ...(fleetId !== undefined ? { team_id: String(fleetId) } : {}) },
   });
-  if (!res.ok()) return [];
+  await expectOk(res, `Failed to list the reports of ${fleetId === undefined ? 'the global scope' : `fleet ${fleetId}`}`);
   const body = await res.json();
   return ((body.queries ?? []) as ReportRef[]).map((q) => ({
     id: q.id,
@@ -113,7 +113,7 @@ export interface ReportDetails {
 /** Reads one report by id, global or fleet-owned. Throws when Fleet can't return it. */
 export async function getReport(request: APIRequestContext, id: number): Promise<ReportDetails> {
   const res = await request.get(apiUrl(`queries/${id}`), { headers: authHeaders() });
-  await expect(res, `Failed to read report ${id}`).toBeOK();
+  await expectOk(res, `Failed to read report ${id}`);
   const q = (await res.json()).query;
   return {
     id: q.id,
@@ -153,7 +153,7 @@ export async function getHostReportLastFetched(
     headers: authHeaders(),
     params: { per_page: '100' },
   });
-  if (!res.ok()) return null;
+  await expectOk(res, `Failed to list the reports of host ${hostId}`);
   const reports = ((await res.json()).reports ?? []) as Array<{
     name: string;
     last_fetched: string | null;
@@ -175,7 +175,7 @@ export async function getHostReportRows(
   const res = await request.get(apiUrl(`hosts/${hostId}/reports/${reportId}`), {
     headers: authHeaders(),
   });
-  if (!res.ok()) return [];
+  await expectOk(res, `Failed to read report ${reportId}'s rows for host ${hostId}`);
   const results = ((await res.json()).results ?? []) as Array<{ columns: Record<string, string> }>;
   return results.map((r) => r.columns);
 }
@@ -211,7 +211,7 @@ export async function listHostReportIds(request: APIRequestContext, hostId: numb
     headers: authHeaders(),
     params: { per_page: '200' },
   });
-  await expect(res, `Failed to list host ${hostId}'s reports`).toBeOK();
+  await expectOk(res, `Failed to list host ${hostId}'s reports`);
   // Each item names its report by `report_id`; there is no `id`.
   return (((await res.json()).reports ?? []) as Array<{ report_id: number }>)
     .map((r) => r.report_id)
@@ -227,5 +227,5 @@ export async function setReportInterval(request: APIRequestContext, reportId: nu
     headers: authHeaders(),
     data: { interval: seconds },
   });
-  await expect(res, `Failed to set report ${reportId}'s interval`).toBeOK();
+  await expectOk(res, `Failed to set report ${reportId}'s interval`);
 }

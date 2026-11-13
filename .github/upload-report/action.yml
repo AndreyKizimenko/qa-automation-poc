@@ -8,8 +8,9 @@ description: >-
 # GitHub. So a report is never uploaded in the clear: every workflow uploads through this action, and
 # .github/scripts/check-artifacts.sh fails the PR check on any other use of actions/upload-artifact.
 #
-# CI holds only the public key (.github/report-public-key.pem). Reading a report takes the private
-# key: playwright/docs/ci-pipeline.md says where it lives and how to open a report.
+# The jobs that produce a report hold only the public key (.github/report-public-key.pem). Reading
+# one takes the private key: playwright/docs/ci-pipeline.md says where it lives, how to open a
+# report, and which single job in CI is given it.
 #
 # Fails closed: if the report can't be encrypted, the step fails and nothing is uploaded.
 

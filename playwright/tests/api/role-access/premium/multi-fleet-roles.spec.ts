@@ -4,7 +4,7 @@
  * allowed where the user is Maintainer and only reads where the user is
  * Observer, with no cross-team escalation.
  */
-import { test } from '@fixtures';
+import { apiTest as test } from '@fixtures';
 import {
   expectAllow,
   expectDeny,

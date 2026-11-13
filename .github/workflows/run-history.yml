@@ -1,0 +1,85 @@
+name: Run history
+
+# Writes into a run's summary how each of its failed or flaky tests fared in the
+# nightlies before it, and whether the error is the same one: the line that
+# tells a first sighting from the fifth. Called as the last job of `QA — Nightly`
+# and `QA — Branch run`.
+#
+# It is the one job in this repository that is given the report private key
+# (.github/scripts/check-artifacts.sh keeps it the only one). A report can be
+# read only with that key, and CI holds everything a report holds as secrets
+# already, so the key adds nothing a job could not reach before. What the job
+# prints is the rule that matters: test files and titles, outcomes, retry
+# counts, error hashes, run ids and dates, and never an error's text
+# (.github/scripts/run-history-summary.sh). The decrypted reports stay in the
+# runner's temp directory and are never uploaded.
+#
+# A summary, not a gate: when it can't be built (no key, no report, GitHub's
+# API in a mood) the run's own results stand, so the job never fails the run.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose scripts to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
+      nights:
+        description: How many earlier nightlies to compare with
+        required: false
+        type: number
+        default: 14
+    secrets:
+      QA_REPORT_PRIVATE_KEY:
+        required: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  # To list earlier runs and download their report artifacts.
+  actions: read
+
+jobs:
+  summary:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Is there a key to read reports with?
+        id: key
+        env:
+          REPORT_KEY: ${{ secrets.QA_REPORT_PRIVATE_KEY }}
+        run: |
+          if [ -z "$REPORT_KEY" ]; then
+            echo "::notice::QA_REPORT_PRIVATE_KEY is not set, so past reports can't be read and no history is written."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$REPORT_KEY" > "$RUNNER_TEMP/report-private-key.pem"
+          echo "present=true" >> "$GITHUB_OUTPUT"
+
+      - name: How this run's failures fared before
+        if: ${{ steps.key.outputs.present == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_REPORT_KEY: ${{ runner.temp }}/report-private-key.pem
+          NIGHTS: ${{ inputs.nights }}
+        run: |
+          if [ ! -f .github/scripts/run-history-summary.sh ]; then
+            echo "::notice::This ref has no .github/scripts/run-history-summary.sh (it predates the run history), so no history is written."
+            exit 0
+          fi
+          bash .github/scripts/run-history-summary.sh "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "" "$NIGHTS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the key
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/report-private-key.pem"

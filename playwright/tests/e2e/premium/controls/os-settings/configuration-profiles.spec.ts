@@ -18,10 +18,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
-  assertActivity,
+  activityOnFleet,
+  assertActivityAfter,
   deleteProfile,
   findProfileByName,
   getHostDetailUpdatedAt,
+  latestActivityId,
   readManagedPreferenceDomain,
   requireRealHost,
   waitForHostProfileGone,
@@ -72,14 +74,31 @@ const PROFILE_CASES: ProfileCase[] = [
   },
 ];
 
-const SCOPES: readonly TeamScope[] = ['Unassigned', 'Workstations'];
+// Narrowed so `fleetIdFor(scope, …)` returns `number`, never `undefined`.
+const SCOPES = ['Unassigned', 'Workstations'] as const satisfies readonly TeamScope[];
+
+// Every step is taken by the browser's admin, and its activity says so.
+const ADMIN = { actor: process.env.FLEET_ADMIN_EMAIL };
 
 for (const scope of SCOPES) {
   for (const profile of PROFILE_CASES) {
     test.describe(`MDM • OS settings — configuration profiles (${scope}) — ${profile.os}`, () => {
       test.describe.configure({ mode: 'serial' });
 
-      test('upload', async ({ dashboard, controls, osSettings, configurationProfiles, request }) => {
+      // The other scope's lifecycle uploads the same fixture on a worker beside
+      // this one, and so did every earlier run. An activity is this step's only
+      // if it names this fleet and is newer than an id taken before the action.
+      const thisProfileOn = (fleetId: number) => (d: Record<string, unknown>) =>
+        d.profile_name === profile.displayName && activityOnFleet(d, fleetId);
+
+      test('upload', async ({
+        dashboard,
+        controls,
+        osSettings,
+        configurationProfiles,
+        request,
+        workstationsFleetId,
+      }) => {
         await dashboard.goto();
         await dashboard.navbar.goToControls();
         await controls.goToOsSettings();
@@ -89,9 +108,16 @@ for (const scope of SCOPES) {
         // Defensive: a prior failed run may have left the profile behind.
         await configurationProfiles.deleteIfExists(profile.displayName);
 
+        const before = await latestActivityId(request);
         await configurationProfiles.uploadProfile(profile.filePath);
         await expect(configurationProfiles.itemByName(profile.displayName)).toBeVisible();
-        await assertActivity(request, profile.createActivity, (d) => d.profile_name === profile.displayName);
+        await assertActivityAfter(
+          request,
+          profile.createActivity,
+          before,
+          thisProfileOn(fleetIdFor(scope, workstationsFleetId)),
+          ADMIN,
+        );
       });
 
       test('download matches source', async ({ configurationProfiles, workstationsFleetId }) => {
@@ -107,9 +133,16 @@ for (const scope of SCOPES) {
       test('delete', async ({ configurationProfiles, request, workstationsFleetId }) => {
         await configurationProfiles.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
         await configurationProfiles.teamDropdown.select(scope);
+        const before = await latestActivityId(request);
         await configurationProfiles.deleteProfile(profile.displayName);
         await expect(configurationProfiles.itemByName(profile.displayName)).toBeHidden();
-        await assertActivity(request, profile.deleteActivity, (d) => d.profile_name === profile.displayName);
+        await assertActivityAfter(
+          request,
+          profile.deleteActivity,
+          before,
+          thisProfileOn(fleetIdFor(scope, workstationsFleetId)),
+          ADMIN,
+        );
       });
 
       test('activity feed shows upload → delete', async ({ dashboard }) => {

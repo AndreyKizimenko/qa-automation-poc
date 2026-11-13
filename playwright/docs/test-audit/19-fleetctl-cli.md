@@ -167,7 +167,7 @@ Shared across **FCTL-01..25** unless an entry says otherwise:
 ### FCTL-01 · fleetctl · read-only get subcommands › get labels renders a table
 
 - **File:** [`playwright/tests/cli/shared/get-read-only.spec.ts`](../../tests/cli/shared/get-read-only.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "get labels renders a table"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "get labels renders a table"`
 - **Project:** premium **and** free · **Mode:** CLI
 
 **Flow**
@@ -620,7 +620,7 @@ other:
 ### FCTL-14 · fleetctl · premium fleet commands › get fleets lists the provisioned fleets
 
 - **File:** [`playwright/tests/cli/premium/fleets.spec.ts`](../../tests/cli/premium/fleets.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "get fleets lists the provisioned fleets"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "get fleets lists the provisioned fleets"`
 - **Project:** premium · **Mode:** CLI
 
 **Flow**
@@ -851,7 +851,7 @@ other:
 ### FCTL-21 · fleetctl · free licence gating › get fleets is refused
 
 - **File:** [`playwright/tests/cli/free/licensing.spec.ts`](../../tests/cli/free/licensing.spec.ts)
-- **Grep:** `npm run test:free -- tests/cli/ -g "get fleets is refused"`
+- **Grep:** `npx playwright test --project=free tests/cli/ -g "get fleets is refused"`
 - **Project:** free · **Mode:** CLI
 
 **Flow**
@@ -1044,7 +1044,7 @@ FCTL-43 lives in the nightly project; the rest run every time.
 ### FCTL-38 · fleetctl gitops --dry-run › validates the fleetctl new scaffold without changing anything
 
 - **File:** [`playwright/tests/cli/shared/gitops-dry-run.spec.ts`](../../tests/cli/shared/gitops-dry-run.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "without changing anything"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "without changing anything"`
 - **Project:** premium **and** free · **Mode:** CLI + API
 
 **Flow**
@@ -1155,7 +1155,7 @@ other:
 ### FCTL-41 · fleetctl gitops --dry-run · premium › processes fleet configs; `--delete-other-fleets`
 
 - **File:** [`playwright/tests/cli/premium/gitops-dry-run.spec.ts`](../../tests/cli/premium/gitops-dry-run.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "processes fleet configs"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "processes fleet configs"`
 - **Project:** premium · **Mode:** CLI · **2 tests**
 
 **Flow — fleet configs are processed**
@@ -1203,7 +1203,7 @@ other:
 ### FCTL-42 · fleetctl gitops · free skips team configs › skips every fleet file in the scaffold
 
 - **File:** [`playwright/tests/cli/free/gitops-skips-teams.spec.ts`](../../tests/cli/free/gitops-skips-teams.spec.ts)
-- **Grep:** `npm run test:free -- tests/cli/ -g "skips every fleet file"`
+- **Grep:** `npx playwright test --project=free tests/cli/ -g "skips every fleet file"`
 - **Project:** free · **Mode:** CLI
 
 **Flow**
@@ -1292,7 +1292,7 @@ one detail request per host (~300).
 ### FCTL-31 · fleetctl mdm · premium error handling › `{lock,unlock,wipe}` refuses a `{darwin,windows}` host with MDM off
 
 - **File:** [`playwright/tests/cli/premium/mdm-lock-wipe.spec.ts`](../../tests/cli/premium/mdm-lock-wipe.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "refuses a darwin host with MDM off"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "refuses a darwin host with MDM off"`
 - **Project:** premium · **Mode:** CLI + API · **Expands to 6 tests** (2 platforms × 3 actions)
 
 **Flow**
@@ -1387,7 +1387,7 @@ other:
 ### FCTL-34 · fleetctl mdm lock lifecycle › locks a simulated linux host
 
 - **File:** [`playwright/tests/cli/premium/mdm-lock-lifecycle.spec.ts`](../../tests/cli/premium/mdm-lock-lifecycle.spec.ts)
-- **Grep:** `npm run test:premium -- tests/cli/ -g "locks a simulated linux host"`
+- **Grep:** `npx playwright test --project=premium tests/cli/ -g "locks a simulated linux host"`
 - **Project:** premium · **Mode:** CLI + API · **Serial** with FCTL-35
 - **⚠️ Mutating** — genuinely locks a host. FCTL-35 restores it; `afterAll` is the backstop.
 
@@ -1465,7 +1465,7 @@ other:
 ### FCTL-36 · fleetctl mdm · free licence gating › `{lock,unlock,wipe}` refused on MDM-enrolled `{darwin,windows}`
 
 - **File:** [`playwright/tests/cli/free/mdm-licensing.spec.ts`](../../tests/cli/free/mdm-licensing.spec.ts)
-- **Grep:** `npm run test:free -- tests/cli/ -g "is refused on an MDM-enrolled darwin host"`
+- **Grep:** `npx playwright test --project=free tests/cli/ -g "is refused on an MDM-enrolled darwin host"`
 - **Project:** free · **Mode:** CLI + API · **Expands to 6 tests**
 
 **Flow**

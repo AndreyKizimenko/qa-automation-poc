@@ -46,10 +46,10 @@ below hold the reasoning.
       plain gitops-verify and fleetctl reports left to expire were scanned first: none holds a secret.
 - [x] Credentials: the instances are being rebuilt on a new server, and the new ones get new credentials.
       None are carried over.
-- [ ] Fewer secrets inside reports in the first place: sign in through the API in `loginAsAdmin` instead
-      of typing the password (`helpers/auth.ts:32-33`), and check API responses without printing request
-      headers (a failed `expect(res).toBeOK()` prints the bearer token). The second overlaps with "helpers
-      throw on a non-OK response" in the defects table.
+- [x] Fewer secrets inside reports, the second half (2026-11-13): every response is checked with `expectOk`,
+      which prints no request header, and lint refuses `toBeOK` (a failed one prints the bearer token).
+- [ ] Fewer secrets inside reports, the first half: sign in through the API in `loginAsAdmin` instead of
+      typing the password (`helpers/auth.ts:32-33`).
 
 **Small fixes agreed**
 - [x] The `fleet-qa` plugin's `fleet-test-plan` skill pointed at `docs/REST API/rest-api.md`; Fleet's docs
@@ -70,7 +70,33 @@ below hold the reasoning.
 
 **Waiting**
 - [x] The skills rewrite merged with this document (PR #132, 2026-11-13).
-- [ ] The roadmap and decisions D1 to D5 below, to go through one by one. D4 is decided.
+- [x] D2, D3 and D5: yes to each (2026-11-13). D5 and the first half of D3 are applied: `CLAUDE.md` carries
+      the rewritten navigation rule, and a test no longer adds a `docs/test-audit/` entry (the folder is
+      frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11.
+- [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform.
+
+**The order, agreed 2026-11-13.** Sorted by whether a change needs a live run to prove it, and by how many
+specs share the code it touches. The 4.96 upgrade is not close, so nothing here waits on it.
+1. No run needed. Done: the close-outs, the lint rules, the preflight.
+2. Small code changes, each proven by a scoped run. One PR for the tier, one commit per concern, so one
+   branch run covers them:
+   - [x] the fleet dropdown re-opens a menu that closed under it;
+   - [x] helpers check a response with `expectOk`, which prints no header, and throw where they used to
+         return nothing; cleanup no longer stops at 200 leftover users. No retry was added: the cleanup
+         projects inherit CI's two retries, so a transient 5xx is already retried a step at a time;
+   - [x] the two spec defects: the fixed-file-name activity match, and `host-delete`'s simulations left on
+         Workstations;
+   - [x] an API-level `test`, `apiTest` (roadmap 4);
+   - [x] `results.json` in each suite report, kept 90 days, and the history file the run reviews keep from
+         it (`run_history.py`); the first half of roadmap 6.
+   - [x] The rest of roadmap 6: the history in CI's job summary. Decided 2026-11-13: the report key goes
+         in as an Actions secret, for one job, instead of a public history branch. `run-history` is the last
+         job of the nightly and of a branch run; `docs/ci-pipeline.md` says what it may print.
+   - [ ] `parse_report.py` and `run_timeline.py` still read the HTML report's embedded data; pointing them
+         at `results.json` is its own change.
+3. Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags of 5, then 10, 8, 7,
+   11 and 12.
+4. Last: the lanes and the environment gate of 5, then 14, 13, 15 and 16.
 
 **Roadmap items, as they land**
 - [x] 2, lint the contract (2026-11-13). Six `suite/*` rules in `eslint-rules/`, each with tests
@@ -92,6 +118,14 @@ below hold the reasoning.
       | a skip with no tracking comment, or no reason | 0 | 0 |
       | `any`, `force: true`, hook order, `toHaveLength` (the rules that were warnings) | 40 | 8 |
       | toast copy typed in a spec (rule off, not recorded) | 97 | 49 |
+
+- [x] 4, an API-level `test` (2026-11-13): `apiTest` in `fixtures.ts` carries the worker fixtures and no
+      page, and the browser `test` extends it. The ten API specs that imported `test` launch no browser
+      now, and lint refuses the browser `test` under `tests/api`, `tests/cli` and `tests/loadtest/api`.
+- [x] 6 (2026-11-13): each suite report carries `results.json` and is kept 90 days; `run_history.py` keeps
+      a line per test per reviewed run and says how a failing test fared before; and the `run-history` job
+      writes the same into every nightly's and branch run's summary, from the 14 nightlies before it.
+      Still open: the quarantine that would act on it (item 15).
 
 ## Baseline
 
@@ -295,15 +329,15 @@ Independent of scale; each is a small fix.
 
 | What | Where | Status |
 |---|---|---|
-| The fleet dropdown does not re-open a menu that closed under it; five recorded flakes | `pages/components/TeamDropdown.ts` | verified |
-| A lifecycle's activity check matches a fixed file name, so the other scope's parallel run satisfies it | `premium/controls/scripts/library.spec.ts`, `os-settings/configuration-profiles.spec.ts` | verified |
-| Simulations staged on Workstations stay there when the test fails before its delete; the sweep returns hosts only from the VMs fleet | `premium/hosts/host-delete.spec.ts` | verified |
-| Cleanup sweeps return silently on a failed list request, so a 5xx becomes "nothing to clean" | `helpers/api/cleanup.ts`, `software.ts:226`, `mdm.ts` | verified (first two) |
-| `findFleetByName` returns `null` on a failed request: reported as "gitops apply likely missing", and an `afterEach` fleet delete is skipped | `helpers/api/fleets.ts:108` | verified |
+| The fleet dropdown does not re-open a menu that closed under it; five recorded flakes | `pages/components/TeamDropdown.ts` | fixed 2026-11-13: each attempt opens the menu if it is closed, clicks the option and reads the label back, and one that didn't take is made again |
+| A lifecycle's activity check matches a fixed file name, so the other scope's parallel run satisfies it | `premium/controls/scripts/library.spec.ts`, `os-settings/configuration-profiles.spec.ts` | fixed 2026-11-13: each step is keyed to an id taken before it and to its fleet |
+| Simulations staged on Workstations stay there when the test fails before its delete; the sweep returns hosts only from the VMs fleet | `premium/hosts/host-delete.spec.ts` | fixed 2026-11-13: the spec's hook and the Workstations sweep both return them |
+| Cleanup sweeps return silently on a failed list request, so a 5xx becomes "nothing to clean" | `helpers/api/cleanup.ts`, `software.ts:226`, `mdm.ts` | fixed 2026-11-13: they throw, with 21 other places that dropped a non-OK answer |
+| `findFleetByName` returns `null` on a failed request: reported as "gitops apply likely missing", and an `afterEach` fleet delete is skipped | `helpers/api/fleets.ts:108` | fixed 2026-11-13: `null` means not found, and a failed request throws |
 | Two commits never reached `main`: the deletion of `helpers/catalogs/` (nothing imports it) and the removal of the loadtest hostname from two docs | `origin/docs/full-docs-audit`: `856a21d`, `5f77120` | fixed 2026-11-13: both cherry-picked |
 | Two documents give the simulation refresh as 16:00 UTC; the job runs at 09:00 VM-local | `helpers/api/hosts.ts:390`, `docs/test-audit/03-hosts-premium.md:796` | fixed 2026-11-13 |
 | A comment says the row-action menu's options carry no test id; Fleet emits `dropdown-option` on them | `pages/labels/LabelsPage.ts:14` | fixed 2026-11-13: the comment says why the class is used |
-| Cleanup stops the whole run when more than 200 leftover test users exist | `helpers/api/users.ts:96` | verified |
+| Cleanup stops the whole run when more than 200 leftover test users exist | `helpers/api/users.ts:96` | fixed 2026-11-13: it deletes however many match |
 
 ## Where the written contract and the practice differ
 
@@ -313,11 +347,11 @@ document say it.
 | The contract says | The practice is |
 |---|---|
 | "Each premium spec has Unassigned + Workstations variants" (`CLAUDE.md`) | 11 of 95 premium specs loop over scopes (verified). Settled 2026-11-13: `CLAUDE.md` now describes the practice |
-| "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported) |
+| "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported). Settled 2026-11-13 (D5): one click-through test per area, the rest go straight to the page |
 | "Assertions live in the spec" (author skill) | page objects hold 585 `expect` calls and 40 `expectX` methods; 86% are state-settling waits (reported) |
 | "Cover everything visible, even if no test uses it" (`pages/README.md`) | about 10% of public page-object members are referenced by nothing (estimate) |
 | "Every class selector carries an inline comment" (`pages/components/README.md`) | about a third do; another 40% are explained elsewhere in the file (sample of 59) |
-| "Throw on a non-OK response" (trap catalogue) | 8 helpers return `null` or an empty list (reported) |
+| "Throw on a non-OK response" (trap catalogue) | 8 helpers return `null` or an empty list (reported). Settled 2026-11-13: 22 places were found, 21 throw, and one best-effort clean-up says why on its lint directive |
 
 ## What to keep exactly as it is
 
@@ -385,15 +419,15 @@ is additive; existing specs keep working and migrate when they are next touched.
     helper lookup, and a later free-only difference means splitting it again. I would still merge a
     lifecycle the next time an upgrade forces an edit to both copies, and leave the rest alone. Keeping all
     nine as they are is a defensible answer; it roughly doubles the per-release edits in those files.
-- **D2. Tags for capabilities.** Recommended, enforced by the VM fixture as described in section 3. The
+- **D2. Tags for capabilities.** **Decided 2026-11-13: yes.** Enforced by the VM fixture as described in section 3. The
   alternative is a file-name suffix per platform, which forces splitting the files that loop over platforms.
-- **D3. The test-audit documents.** Recommended: generate the catalogue and stop requiring a hand-written
-  entry per test. If the per-test review is still planned, keep it and accept that it doubles the
-  documentation cost of every test.
+- **D3. The test-audit documents.** **Decided 2026-11-13: yes.** Generate the catalogue and stop requiring
+  a hand-written entry per test. The requirement is gone as of that day and `docs/test-audit/` is frozen;
+  the generator is roadmap item 11.
 - **D4. The shape of the 5,000.** Decided 2026-11-12: the 5,000 are UI tests; API coverage is a separate
   suite. Still open: whether each VM platform gets a minute budget that new tests must fit inside.
-- **D5. Click-through navigation.** Rewrite the rule to "one click-through test per area; the rest go
-  straight to the page", which is what most specs do, or enforce the written rule.
+- **D5. Click-through navigation.** **Decided 2026-11-13: rewrite.** The rule is "one click-through test
+  per area; the rest go straight to the page", which is what most specs do. `CLAUDE.md` says so now.
 
 ## Limits of this audit
 

@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { assertActivity } from '@helpers/api';
+import { activityOnFleet, assertActivityAfter, latestActivityId } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import { fleetIdFor } from '@helpers/team-scope';
 import type { TeamScope } from '@pages';
@@ -49,14 +49,24 @@ const SCRIPT_CASES: ScriptCase[] = [
   },
 ];
 
-const SCOPES: readonly TeamScope[] = ['Unassigned', 'Workstations'];
+// Narrowed so `fleetIdFor(scope, …)` returns `number`, never `undefined`.
+const SCOPES = ['Unassigned', 'Workstations'] as const satisfies readonly TeamScope[];
+
+// Every step is taken by the browser's admin, and its activity says so.
+const ADMIN = { actor: process.env.FLEET_ADMIN_EMAIL };
 
 for (const scope of SCOPES) {
   for (const script of SCRIPT_CASES) {
     test.describe(`Scripts library lifecycle (${scope}) — ${script.os}`, () => {
       test.describe.configure({ mode: 'serial' });
 
-      test('upload', async ({ dashboard, controls, scriptsLibrary, request }) => {
+      // The other scope's lifecycle uploads the same file on a worker beside
+      // this one, and so did every earlier run. An activity is this step's only
+      // if it names this fleet and is newer than an id taken before the action.
+      const thisScriptOn = (fleetId: number) => (d: Record<string, unknown>) =>
+        d.script_name === script.baseName && activityOnFleet(d, fleetId);
+
+      test('upload', async ({ dashboard, controls, scriptsLibrary, request, workstationsFleetId }) => {
         await dashboard.goto();
         await dashboard.navbar.goToControls();
         await controls.goToScripts();
@@ -65,9 +75,10 @@ for (const scope of SCOPES) {
         // Defensive: a prior failed run may have left the script behind.
         await scriptsLibrary.deleteIfExists(script.baseName);
 
+        const before = await latestActivityId(request);
         await scriptsLibrary.uploadScript(script.filePath);
         await expect(scriptsLibrary.itemByName(script.baseName)).toBeVisible();
-        await assertActivity(request, 'added_script', (d) => d.script_name === script.baseName);
+        await assertActivityAfter(request, 'added_script', before, thisScriptOn(fleetIdFor(scope, workstationsFleetId)), ADMIN);
 
         const sourceContent = fs.readFileSync(script.filePath, 'utf-8').trim();
         await scriptsLibrary.openScript(script.baseName);
@@ -91,8 +102,9 @@ for (const scope of SCOPES) {
 
         const sourceContent = fs.readFileSync(script.filePath, 'utf-8').trim();
         const editedContent = `${sourceContent}\n${script.editAppend}\n`;
+        const before = await latestActivityId(request);
         await scriptsLibrary.editScript(script.baseName, editedContent);
-        await assertActivity(request, 'updated_script', (d) => d.script_name === script.baseName);
+        await assertActivityAfter(request, 'updated_script', before, thisScriptOn(fleetIdFor(scope, workstationsFleetId)), ADMIN);
 
         await scriptsLibrary.openScript(script.baseName);
         const persistedContent = await scriptsLibrary.openScriptContent();
@@ -105,9 +117,10 @@ for (const scope of SCOPES) {
       test('delete', async ({ scriptsLibrary, request, workstationsFleetId }) => {
         await scriptsLibrary.goto({ fleetId: fleetIdFor(scope, workstationsFleetId) });
         await scriptsLibrary.teamDropdown.select(scope);
+        const before = await latestActivityId(request);
         await scriptsLibrary.deleteScript(script.baseName);
         await expect(scriptsLibrary.itemByName(script.baseName)).toBeHidden();
-        await assertActivity(request, 'deleted_script', (d) => d.script_name === script.baseName);
+        await assertActivityAfter(request, 'deleted_script', before, thisScriptOn(fleetIdFor(scope, workstationsFleetId)), ADMIN);
       });
 
       test('activity feed shows upload → edit → delete', async ({ dashboard }) => {

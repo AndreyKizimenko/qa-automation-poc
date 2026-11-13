@@ -162,8 +162,10 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
 
 **API helpers**
 - Build URLs with `apiUrl()` and send `authHeaders()`, through the `request` fixture.
-- **Throw on a non-OK response.** A discovery helper that turns a 500 into `null` turns an infra failure
-  into a silent skip; that hid MySQL "table is full" errors for weeks.
+- **Throw on a non-OK response, with `expectOk(res, what)`.** A discovery helper that turns a 500 into
+  `null` turns an infra failure into a silent skip; that hid MySQL "table is full" errors for weeks. Name a
+  status that is an answer (`404`, `402`) before the check. Never `expect(res).toBeOK()`: its failure
+  prints the request's headers, the bearer token among them.
 - **Playwright drops an empty-string field from a `multipart` request** (from `FormData` too), and Fleet
   reads a missing field as "no change" and answers 200. A helper that must send `''` writes the multipart
   body by hand (`setPinnedVersion`), and reads the result back.

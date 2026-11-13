@@ -1,5 +1,5 @@
 import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 /**
  * Look for `type` in the recent activity log and fail the test if it's
@@ -42,7 +42,7 @@ export async function findActivity(
         page: String(page),
       },
     });
-    await expect(response).toBeOK();
+    await expectOk(response, 'Failed to read the activity log');
     const data = await response.json();
     const activities = (data.activities ?? []) as Array<Record<string, unknown>>;
     const found = activities.find((a) => {
@@ -66,7 +66,7 @@ export async function latestActivityId(request: APIRequestContext): Promise<numb
     headers: authHeaders(),
     params: { order_key: 'id', order_direction: 'desc', per_page: '1', page: '0' },
   });
-  await expect(res, 'Failed to read the activity log').toBeOK();
+  await expectOk(res, 'Failed to read the activity log');
   return Number(((await res.json()).activities ?? [])[0]?.id ?? 0);
 }
 
@@ -101,6 +101,16 @@ export async function assertActivityAfter(
   return found!;
 }
 
+/**
+ * Whether an activity's details name the fleet `fleetId` (0 for Unassigned).
+ * Fleet records Unassigned as `fleet_id: 0` on most software activities and as
+ * `null` on the script and profile ones and on `deleted_software`, so a missing
+ * id reads as Unassigned.
+ */
+export function activityOnFleet(details: Record<string, unknown>, fleetId: number): boolean {
+  return (details.fleet_id ?? 0) === fleetId;
+}
+
 export interface HostActivity {
   id: number;
   type: string;
@@ -120,7 +130,7 @@ export async function listHostActivities(
     headers: authHeaders(),
     params: { per_page: String(perPage) },
   });
-  await expect(res, `Failed to list activities for host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to list activities for host ${hostId}`);
   return ((await res.json()).activities ?? []).map(
     (a: { id: number; type: string; created_at: string; actor_email?: string | null; details: Record<string, unknown> }) => ({
       id: a.id,

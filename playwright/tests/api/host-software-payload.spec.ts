@@ -19,8 +19,8 @@
  * Grounded in server/service/hosts.go (`hostByIdentifierRequest.ExcludeSoftware`
  * → `fleet.HostDetailOptions{ExcludeSoftware}`).
  */
-import { test, expect } from '@fixtures';
-import { apiUrl, authHeaders, findHostWithSoftware } from '@helpers/api';
+import { apiTest as test, expect } from '@fixtures';
+import { apiUrl, authHeaders, expectOk, findHostWithSoftware } from '@helpers/api';
 
 /** Identity fields that must survive the parameter untouched. */
 const IDENTITY_FIELDS = ['id', 'uuid', 'hostname', 'hardware_serial', 'platform', 'team_id'];
@@ -31,7 +31,7 @@ test.describe('API • host by identifier', () => {
     test.skip(!host, 'no host on this instance reports software');
 
     const detail = await request.get(apiUrl(`hosts/${host!.id}`), { headers: authHeaders() });
-    await expect(detail).toBeOK();
+    await expectOk(detail, `GET /hosts/${host!.id}`);
     const hostname = (await detail.json()).host.hostname as string;
     expect(hostname, 'the resolved host must have a hostname to look up by').toBeTruthy();
 
@@ -39,7 +39,7 @@ test.describe('API • host by identifier', () => {
     const withSoftware = await request.get(apiUrl(`hosts/identifier/${identifier}`), {
       headers: authHeaders(),
     });
-    await expect(withSoftware).toBeOK();
+    await expectOk(withSoftware, 'GET /hosts/identifier/:identifier');
     const full = (await withSoftware.json()).host;
 
     expect(full.hostname).toBe(hostname);
@@ -49,7 +49,7 @@ test.describe('API • host by identifier', () => {
       headers: authHeaders(),
       params: { exclude_software: 'true' },
     });
-    await expect(withoutSoftware).toBeOK();
+    await expectOk(withoutSoftware, 'GET /hosts/identifier/:identifier with exclude_software');
     const trimmed = (await withoutSoftware.json()).host;
 
     expect(trimmed.software?.length ?? 0).toBe(0);

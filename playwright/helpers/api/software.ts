@@ -1,7 +1,7 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 import { getHostCollectedAt, waitForHostRefetch, waitForNoPendingRefetch } from './hosts';
 
 export interface SoftwareTitleRef {
@@ -129,7 +129,7 @@ export async function findSoftwareTitleByPackageName(
         available_for_install: 'true',
       },
     });
-    if (!res.ok()) return null;
+    await expectOk(res, `Failed to list the installable titles of fleet ${fleetId}`);
     const body = await res.json();
     const titles = (body.software_titles ?? []) as Array<{
       id: number;
@@ -223,7 +223,7 @@ export async function deleteAllInstallSoftwareTitles(
       per_page: '100',
     },
   });
-  if (!res.ok()) return;
+  await expectOk(res, `[software cleanup] failed to list the installable titles of fleet ${fleetId}`);
   const body = await res.json();
   const titles = (body.software_titles ?? []) as Array<{ id: number }>;
   await Promise.all(
@@ -259,7 +259,7 @@ export async function deleteLibraryTitlesWhere(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), available_for_install: 'true', per_page: '200' },
   });
-  await expect(res, `Failed to list the library of fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to list the library of fleet ${fleetId}`);
   const titles = ((await res.json()).software_titles ?? []) as Array<{
     id: number;
     name: string;
@@ -298,7 +298,7 @@ export async function getSoftwareTitle(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId) },
   });
-  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to fetch software title ${titleId}`);
   const body = await res.json();
   const t = body.software_title;
   return { id: t.id, name: t.name, source: t.source };
@@ -318,7 +318,7 @@ export async function getAppStoreAppConfiguration(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId) },
   });
-  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to fetch software title ${titleId}`);
   const app = (await res.json()).software_title?.app_store_app;
   if (!app) throw new Error(`Software title ${titleId} has no app store app on fleet ${fleetId}`);
   return app.configuration ?? null;
@@ -365,7 +365,7 @@ export async function getSoftwarePackage(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId) },
   });
-  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to fetch software title ${titleId}`);
   const body = await res.json();
   const t = body.software_title;
   const pkg = t?.software_package ?? t?.packages?.[0];
@@ -430,7 +430,7 @@ export async function listVulnerabilities(
   if (opts.exploit) params.exploit = 'true';
   if (opts.query) params.query = opts.query;
   const res = await request.get(apiUrl('vulnerabilities'), { headers: authHeaders(), params });
-  await expect(res, 'Failed to list vulnerabilities').toBeOK();
+  await expectOk(res, 'Failed to list vulnerabilities');
   return (
     ((await res.json()).vulnerabilities ?? []) as Array<{
       cve: string;
@@ -460,7 +460,7 @@ export async function listHostCves(request: APIRequestContext, hostId: number): 
     headers: authHeaders(),
     params: { vulnerable: 'true', per_page: '100' },
   });
-  await expect(res, `Failed to list the vulnerable software on host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to list the vulnerable software on host ${hostId}`);
   const rows = ((await res.json()).software ?? []) as Array<{
     installed_versions: Array<{ vulnerabilities: string[] | null }> | null;
   }>;
@@ -475,7 +475,7 @@ export async function listVulnerabilityHosts(
   const params: Record<string, string> = { vulnerability: cve, per_page: '1000' };
   if (fleetId !== undefined) params.fleet_id = String(fleetId);
   const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
-  await expect(res, `Failed to list the hosts affected by ${cve}`).toBeOK();
+  await expectOk(res, `Failed to list the hosts affected by ${cve}`);
   return ((await res.json()).hosts as Array<{ id: number; display_name: string }>).map((h) => ({
     id: h.id,
     displayName: h.display_name,
@@ -547,7 +547,7 @@ export async function hostVulnerableVersions(
     headers: authHeaders(),
     params: { vulnerable: 'true', query: softwareName, per_page: '100' },
   });
-  await expect(res, `Failed to read host ${hostId}'s vulnerable software`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}'s vulnerable software`);
   const software = ((await res.json()).software ?? []) as Array<{
     name: string;
     display_name?: string;
@@ -604,7 +604,7 @@ export async function uploadSoftwarePackageBuffer(
     },
     timeout: 120_000,
   });
-  await expect(res, `Upload failed for ${fileName} on fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Upload failed for ${fileName} on fleet ${fleetId}`);
   const ref = await findSoftwareTitleByPackageName(request, fleetId, fileName);
   if (!ref) throw new Error(`Uploaded ${fileName} but couldn't find it in software titles`);
   return ref;
@@ -630,7 +630,7 @@ export async function replaceSoftwarePackage(
     },
     timeout: 120_000,
   });
-  await expect(res, `Failed to replace the package on title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to replace the package on title ${titleId}`);
 }
 
 /** Queues an install of a title's current package on one host. */
@@ -642,7 +642,7 @@ export async function installSoftwareOnHost(
   const res = await request.post(apiUrl(`hosts/${hostId}/software/${titleId}/install`), {
     headers: authHeaders(),
   });
-  await expect(res, `Failed to queue install of title ${titleId} on host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to queue install of title ${titleId} on host ${hostId}`);
 }
 
 /** Queues an uninstall of a title on one host. */
@@ -654,7 +654,7 @@ export async function uninstallSoftwareOnHost(
   const res = await request.post(apiUrl(`hosts/${hostId}/software/${titleId}/uninstall`), {
     headers: authHeaders(),
   });
-  await expect(res, `Failed to queue uninstall of title ${titleId} on host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to queue uninstall of title ${titleId} on host ${hostId}`);
 }
 
 /**
@@ -689,7 +689,7 @@ export async function getHostSoftwareState(
     headers: authHeaders(),
     params: { available_for_install: 'true', per_page: '100' },
   });
-  await expect(res, `Failed to list installable software on host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to list installable software on host ${hostId}`);
   const row = ((await res.json()).software ?? []).find((s: { id: number }) => s.id === titleId) as
     | {
         status: HostSoftwareStatus;
@@ -716,7 +716,7 @@ export async function countHostLibraryTitles(request: APIRequestContext, hostId:
     headers: authHeaders(),
     params: { available_for_install: 'true', per_page: '1' },
   });
-  await expect(res, `Failed to count the Library of host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to count the Library of host ${hostId}`);
   return (await res.json()).count as number;
 }
 
@@ -903,7 +903,7 @@ export async function getHostInventoryVersions(
     headers: authHeaders(),
     params: { query: name, per_page: '50' },
   });
-  await expect(res, `Failed to read the software inventory of host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read the software inventory of host ${hostId}`);
   const rows = ((await res.json()).software ?? []) as Array<{
     name: string;
     installed_versions: Array<{ version: string }> | null;
@@ -929,7 +929,7 @@ export async function listInstallableTitles(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), available_for_install: 'true', per_page: '200' },
   });
-  await expect(res, `Failed to list installable titles on fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to list installable titles on fleet ${fleetId}`);
   return ((await res.json()).software_titles ?? [])
     .filter((t: { software_package?: unknown }) => t.software_package)
     .map(
@@ -956,6 +956,6 @@ export async function listHostSoftwareNames(
     headers: authHeaders(),
     params: { query, per_page: '100' },
   });
-  await expect(res, `Failed to read the software inventory of host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read the software inventory of host ${hostId}`);
   return (((await res.json()).software ?? []) as Array<{ name: string }>).map((r) => r.name);
 }

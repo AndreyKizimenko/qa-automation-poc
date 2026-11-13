@@ -1,4 +1,4 @@
-import { test, expect } from '@fixtures';
+import { apiTest as test, expect } from '@fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { authHeaders, apiUrl } from '@helpers/api';
 

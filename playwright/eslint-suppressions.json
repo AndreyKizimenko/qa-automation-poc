@@ -1,49 +1,4 @@
 {
-  "helpers/api/cleanup.ts": {
-    "suite/no-swallowed-response": {
-      "count": 2
-    }
-  },
-  "helpers/api/fleets.ts": {
-    "suite/no-swallowed-response": {
-      "count": 1
-    }
-  },
-  "helpers/api/hosts.ts": {
-    "suite/no-swallowed-response": {
-      "count": 3
-    }
-  },
-  "helpers/api/labels.ts": {
-    "suite/no-swallowed-response": {
-      "count": 2
-    }
-  },
-  "helpers/api/mdm.ts": {
-    "suite/no-swallowed-response": {
-      "count": 7
-    }
-  },
-  "helpers/api/reports.ts": {
-    "suite/no-swallowed-response": {
-      "count": 3
-    }
-  },
-  "helpers/api/scripts.ts": {
-    "suite/no-swallowed-response": {
-      "count": 1
-    }
-  },
-  "helpers/api/software.ts": {
-    "suite/no-swallowed-response": {
-      "count": 2
-    }
-  },
-  "helpers/api/variables.ts": {
-    "suite/no-swallowed-response": {
-      "count": 1
-    }
-  },
   "helpers/gitops-yaml.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 24
@@ -183,19 +138,9 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts": {
-    "suite/activity-needs-baseline": {
-      "count": 2
-    }
-  },
   "tests/e2e/premium/controls/scripts/batch-run.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
-    }
-  },
-  "tests/e2e/premium/controls/scripts/library.spec.ts": {
-    "suite/activity-needs-baseline": {
-      "count": 3
     }
   },
   "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {

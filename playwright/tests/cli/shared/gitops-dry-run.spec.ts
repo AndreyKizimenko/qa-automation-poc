@@ -19,7 +19,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { apiUrl, authHeaders } from '@helpers/api';
+import { apiUrl, authHeaders, expectOk } from '@helpers/api';
 import { carryLiveEndUserAuth, fleetctl, output } from '@helpers/fleetctl';
 
 /** A placeholder the scaffold interpolates; never applied, since every run is a dry run. */
@@ -41,7 +41,7 @@ test.describe('fleetctl gitops --dry-run', () => {
     await carryLiveEndUserAuth(request, path.join(root, 'default.yml'));
 
     const before = await request.get(apiUrl('labels'), { headers: authHeaders() });
-    await expect(before).toBeOK();
+    await expectOk(before, 'Failed to list labels before the dry run');
     const labelsBefore = ((await before.json()).labels as Array<{ name: string }>).map(
       (l) => l.name,
     );
@@ -57,7 +57,7 @@ test.describe('fleetctl gitops --dry-run', () => {
     expect(output(res)).toMatch(/would've deleted/);
 
     const after = await request.get(apiUrl('labels'), { headers: authHeaders() });
-    await expect(after).toBeOK();
+    await expectOk(after, 'Failed to list labels after the dry run');
     const labelsAfter = ((await after.json()).labels as Array<{ name: string }>).map((l) => l.name);
 
     expect(labelsAfter.sort(), 'a dry run must not delete anything').toEqual(labelsBefore.sort());

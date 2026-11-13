@@ -1,7 +1,7 @@
 // Label API helpers. The cleanup sweep removes `pw-*` labels; CRUD specs also
 // self-heal their own leftovers, and targeting specs build manual labels here.
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 /**
  * Delete every non-builtin label whose name contains `marker`. Substring
@@ -16,7 +16,7 @@ export async function deleteLabelsMatching(
     headers: authHeaders(),
     params: { per_page: '500' },
   });
-  if (!res.ok()) return;
+  await expectOk(res, '[deleteLabelsMatching] failed to list labels');
   const body = await res.json();
   const labels = (body.labels ?? []) as Array<{ id: number; name: string; label_type?: string }>;
   await Promise.all(
@@ -37,7 +37,7 @@ export async function deleteLabelsMatching(
  */
 export async function deleteLabelsWithPrefix(request: APIRequestContext, prefix: string): Promise<void> {
   const res = await request.get(apiUrl('labels'), { headers: authHeaders(), params: { per_page: '500' } });
-  if (!res.ok()) return;
+  await expectOk(res, '[deleteLabelsWithPrefix] failed to list labels');
   const labels = ((await res.json()).labels ?? []) as Array<{ id: number; name: string; label_type?: string }>;
   for (const l of labels.filter((l) => l.label_type !== 'builtin' && l.name.startsWith(prefix))) {
     const status = await deleteLabelById(request, l.id);
@@ -59,7 +59,7 @@ export interface LabelDetails {
 /** A label by exact name, or null when there's none. */
 export async function findLabelByName(request: APIRequestContext, name: string): Promise<LabelDetails | null> {
   const res = await request.get(apiUrl('labels'), { headers: authHeaders(), params: { per_page: '500' } });
-  await expect(res, 'Failed to list labels').toBeOK();
+  await expectOk(res, 'Failed to list labels');
   const label = (
     (await res.json()).labels as Array<{
       id: number;
@@ -83,7 +83,7 @@ export async function findLabelByName(request: APIRequestContext, name: string):
 /** A label's id by exact name, e.g. a built-in platform label ("macOS"). */
 export async function getLabelId(request: APIRequestContext, name: string): Promise<number> {
   const res = await request.get(apiUrl('labels'), { headers: authHeaders() });
-  await expect(res, 'Failed to list labels').toBeOK();
+  await expectOk(res, 'Failed to list labels');
   const label = ((await res.json()).labels as Array<{ id: number; name: string }>).find((l) => l.name === name);
   if (!label) throw new Error(`no label named "${name}"`);
   return label.id;
@@ -102,7 +102,7 @@ export async function listLabelHostIds(
   if (opts.fleetId !== undefined) params.fleet_id = String(opts.fleetId);
   if (opts.status) params.status = opts.status;
   const res = await request.get(apiUrl(`labels/${labelId}/hosts`), { headers: authHeaders(), params });
-  await expect(res, `Failed to list label ${labelId}'s hosts`).toBeOK();
+  await expectOk(res, `Failed to list label ${labelId}'s hosts`);
   return new Set(((await res.json()).hosts ?? []).map((h: { id: number }) => h.id));
 }
 
@@ -122,7 +122,7 @@ export async function createManualLabel(
     headers: authHeaders(),
     data: { name, description: 'Playwright label-targeting fixture', host_ids: hostIds },
   });
-  await expect(res, `Failed to create manual label "${name}": ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to create manual label "${name}": ${await res.text()}`);
   return (await res.json()).label.id;
 }
 
@@ -136,7 +136,7 @@ export async function createDynamicLabel(request: APIRequestContext, name: strin
     headers: authHeaders(),
     data: { name, description: 'Playwright dynamic label', query },
   });
-  await expect(res, `Failed to create dynamic label "${name}": ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to create dynamic label "${name}": ${await res.text()}`);
   return (await res.json()).label.id;
 }
 
@@ -150,7 +150,7 @@ export async function setManualLabelHosts(
     headers: authHeaders(),
     data: { host_ids: hostIds },
   });
-  await expect(res, `Failed to set label ${labelId}'s hosts`).toBeOK();
+  await expectOk(res, `Failed to set label ${labelId}'s hosts`);
 }
 
 /**

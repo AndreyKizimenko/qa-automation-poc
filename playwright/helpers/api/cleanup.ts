@@ -1,11 +1,12 @@
 // Bulk-delete helpers used by the suite-level teardown to leave no-team
 // in a known-empty state. Each helper is safe to call on an already
-// empty scope. The query and pack wipes skip individual failures so one
-// stuck item doesn't abort the rest of the cleanup; the policy wipes throw
-// on a non-OK answer, because a policy left behind also keeps the titles
-// and scripts its automations use.
+// empty scope, and throws when the list it works from can't be read: a
+// failed request is not an empty instance. The query and pack wipes skip
+// an individual delete that errors so one stuck item doesn't abort the
+// rest of the cleanup; the policy wipes throw on a non-OK answer, because a
+// policy left behind also keeps the titles and scripts its automations use.
 import { APIRequestContext } from '@playwright/test';
-import { apiLatestUrl, apiUrl, authHeaders } from './core';
+import { apiLatestUrl, apiUrl, authHeaders, expectOk } from './core';
 
 /** Deletes every global saved query (report); a fleet's own reports aren't listed, so they stay. */
 export async function deleteAllQueries(request: APIRequestContext): Promise<void> {
@@ -13,7 +14,7 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
     headers: authHeaders(),
     params: { per_page: '500' },
   });
-  if (!res.ok()) return;
+  await expectOk(res, '[cleanup queries] failed to list the global reports');
   const body = await res.json();
   const queries = (body.queries ?? []) as Array<{ id: number }>;
   await Promise.all(
@@ -31,7 +32,7 @@ export async function deleteAllPacks(request: APIRequestContext): Promise<void> 
     headers: authHeaders(),
     params: { per_page: '500' },
   });
-  if (!res.ok()) return;
+  await expectOk(res, '[cleanup packs] failed to list the packs');
   const body = await res.json();
   const packs = (body.packs ?? []) as Array<{ id: number }>;
   await Promise.all(

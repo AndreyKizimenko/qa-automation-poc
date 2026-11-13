@@ -29,7 +29,7 @@
  */
 import * as path from 'path';
 import { test, expect } from '@fixtures';
-import { addFmaToFleet, deleteSoftwareTitle, getSoftwareTitle } from '@helpers/api';
+import { addFmaToFleet, deleteSoftwareTitle, expectOk, getSoftwareTitle } from '@helpers/api';
 import { apiUrl, authHeaders } from '@helpers/api/core';
 
 const SCOPE = 'Unassigned' as const;
@@ -51,7 +51,7 @@ async function storedIconUrl(
     headers: authHeaders(),
     params: { fleet_id: String(FLEET_ID) },
   });
-  await expect(res, `Failed to fetch software title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to fetch software title ${titleId}`);
   return (await res.json()).software_title?.icon_url ?? null;
 }
 

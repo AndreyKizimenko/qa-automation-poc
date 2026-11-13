@@ -151,20 +151,43 @@ PR unmergeable.
 
 **A report never leaves CI in the clear.** A Playwright report holds live credentials. The HTML report writes
 every typed value into its step titles, so the admin, static-user and SSO passwords are in every report, green
-or not. A trace records the `Authorization` header of every API call, and a failed API assertion prints its
-request headers into the error text. This repository is public, and anyone signed in to GitHub can download a
+or not. A trace records the `Authorization` header of every API call, and a failed `expect(res).toBeOK()`
+prints its request headers into the error text (the suite checks responses with `expectOk`, which prints
+none, and lint refuses `toBeOK`). This repository is public, and anyone signed in to GitHub can download a
 public repository's artifacts. So every workflow uploads through one action, `.github/upload-report`, which
 packs the report and encrypts it to the public key committed at `.github/report-public-key.pem`; the artifact
-is a single `<name>.tar.gz.enc`, and CI holds no key that opens it. The step fails closed: a report that can't
+is a single `<name>.tar.gz.enc`, and the jobs that run the tests hold no key that opens it. The step fails closed: a report that can't
 be encrypted isn't uploaded. Two checks keep it that way. `.github/scripts/check-artifacts.sh`, a step of the
 required `Playwright — Check`, fails a PR that uploads or publishes anything from a run by another route, or
 that edits the action to stop encrypting. `Report upload — Check` runs the action once in the suites' own
 container whenever the action, the script, the key or a suite workflow changes.
 
+**A suite's report also carries the run as data, and is kept 90 days.** The merge step writes `results.json`
+(Playwright's JSON reporter) beside the HTML report and copies it into the report folder, so it leaves CI
+inside the same encrypted file. A test's history is built from it: `run_history.py`, in the run-reviewer
+skill, records each reviewed run's tests in a local file and says how a failing test fared in the runs before.
+The two suite reports are kept 90 days so that history can be rebuilt from the reports alone; the gitops and
+CLI reports keep 7.
+
+**One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
+nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14
+nightlies before, and whether the error is the same one, so a first sighting and a fifth don't look alike. It
+is given the report private key as the secret `QA_REPORT_PRIVATE_KEY`, downloads those nights' suite reports,
+decrypts them in the runner's temp directory and builds the history there with `run_history.py`. Giving CI
+the key costs nothing it didn't already hold: every credential a report contains is an Actions secret already.
+What matters is what the job says in public, and `.github/scripts/run-history-summary.sh` holds that rule:
+test files and titles, outcomes, retry counts, error hashes, run ids and dates, never an error's text.
+`check-artifacts.sh` fails a PR that names the secret anywhere but this workflow and the two that call it.
+The job is a summary, not a gate: without the secret, or without a report to read, it says so and passes.
+The alternative, a branch of non-secret history lines that CI pushes to, was set aside (2026-11-13): it needs
+a CI job with write access and makes a permanent public record, for a longer memory than triage uses.
+
 The private key lives with the people who read reports: `~/.config/qa-automation/report-private-key.pem`, or
-wherever `QA_REPORT_KEY` points, with a copy in 1Password. `fetch_ci_run.sh` decrypts with it. Losing it loses
-only the reports still in retention: `node .github/scripts/report-crypt.mjs keygen` makes a new pair, and the
-new public key is committed. Encrypting a report doesn't make it safe to quote. Before a piece of one goes
+wherever `QA_REPORT_KEY` points, with a copy in 1Password, and in the repository's `QA_REPORT_PRIVATE_KEY`
+secret for the `run-history` job. `fetch_ci_run.sh` decrypts with it. Losing it loses only the reports still
+in retention: `node .github/scripts/report-crypt.mjs keygen` makes a new pair, the new public key is
+committed, and the secret is set again
+(`gh secret set QA_REPORT_PRIVATE_KEY < ~/.config/qa-automation/report-private-key.pem`). Encrypting a report doesn't make it safe to quote. Before a piece of one goes
 into an issue, a PR or a review, check it for request headers and typed values;
 `.github/scripts/scan-report-secrets.py` lists which of the suite's secrets a report holds, and where.
 

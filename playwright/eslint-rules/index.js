@@ -11,6 +11,7 @@ module.exports = {
     'activity-needs-baseline': require('./activity-needs-baseline'),
     'no-swallowed-response': require('./no-swallowed-response'),
     'skip-needs-reason': require('./skip-needs-reason'),
+    'no-to-be-ok': require('./no-to-be-ok'),
     'no-toast-copy-in-spec': require('./no-toast-copy-in-spec'),
   },
 };

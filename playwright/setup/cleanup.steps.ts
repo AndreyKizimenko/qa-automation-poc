@@ -163,6 +163,11 @@ test('wipe Workstations team state', async ({ request }) => {
   // with no real hosts to update — and clear them in a `finally` a timed-out
   // test never reaches.
   await clearFleetOsUpdates(request, workstations.id);
+  // The fleet holds no hosts of its own. `host-delete.spec` stages simulations
+  // here and counts on them being the only ones, so any a dead run left goes
+  // back to Unassigned.
+  const stranded = (await listFleetHosts(request, workstations.id)).filter((h) => !h.real).map((h) => h.id);
+  await transferHosts(request, 0, stranded);
 });
 
 // A narrow exception to "cleanup touches only Unassigned and Workstations": on

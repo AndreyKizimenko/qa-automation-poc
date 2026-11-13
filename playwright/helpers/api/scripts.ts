@@ -1,5 +1,5 @@
 import { APIRequestContext, APIResponse, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 /**
  * Uploads a script to a fleet's library and returns its id. `fleetId` 0 is
@@ -24,7 +24,7 @@ export async function uploadScript(
       ...(fleetId ? { fleet_id: String(fleetId) } : {}),
     },
   });
-  await expect(res, `Failed to upload script ${name} to fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to upload script ${name} to fleet ${fleetId}`);
   return (await res.json()).script_id as number;
 }
 
@@ -57,7 +57,7 @@ export async function getHostScriptLastExecution(
     headers: authHeaders(),
     params: { per_page: '100' },
   });
-  await expect(res, `Failed to list scripts for host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to list scripts for host ${hostId}`);
   const scripts = ((await res.json()).scripts ?? []) as Array<{
     name: string;
     last_execution: { execution_id: string; status: ScriptExecutionStatus } | null;
@@ -81,7 +81,7 @@ export async function getScriptResult(
   const res = await request.get(apiUrl(`scripts/results/${executionId}`), {
     headers: authHeaders(),
   });
-  await expect(res, `Failed to read script result ${executionId}`).toBeOK();
+  await expectOk(res, `Failed to read script result ${executionId}`);
   const body = await res.json();
   return { exitCode: body.exit_code ?? null, output: body.output ?? '', hostTimeout: !!body.host_timeout };
 }
@@ -98,6 +98,7 @@ export async function queueAdHocScript(
   scriptContents: string,
 ): Promise<void> {
   const res = await postAdHocScript(request, hostId, scriptContents);
+  // eslint-disable-next-line suite/no-swallowed-response -- best effort by design (see above): a clean-up Fleet refuses to queue must not fail a spec whose assertions already passed
   if (!res.ok()) {
     console.warn(`[queueAdHocScript] host ${hostId}: HTTP ${res.status()} — ${await res.text()}`);
   }
@@ -131,11 +132,11 @@ export async function getAgentOptions(
 ): Promise<Record<string, unknown>> {
   if (fleetId === 0) {
     const res = await request.get(apiUrl('config'), { headers: authHeaders() });
-    await expect(res, 'Failed to read global agent options').toBeOK();
+    await expectOk(res, 'Failed to read global agent options');
     return ((await res.json()).agent_options ?? {}) as Record<string, unknown>;
   }
   const res = await request.get(apiUrl(`fleets/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   const body = await res.json();
   return ((body.fleet ?? body.team)?.agent_options ?? {}) as Record<string, unknown>;
 }
@@ -161,7 +162,7 @@ export async function setAgentOptions(
           headers: authHeaders(),
           data: options,
         });
-  await expect(res, `Failed to set agent options on ${fleetId === 0 ? 'global' : `fleet ${fleetId}`}`).toBeOK();
+  await expectOk(res, `Failed to set agent options on ${fleetId === 0 ? 'global' : `fleet ${fleetId}`}`);
 }
 
 /**
@@ -185,7 +186,7 @@ export interface BatchSummary {
 
 export async function getBatchSummary(request: APIRequestContext, batchId: string): Promise<BatchSummary> {
   const res = await request.get(apiUrl(`scripts/batch/${batchId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read batch ${batchId}`).toBeOK();
+  await expectOk(res, `Failed to read batch ${batchId}`);
   const b = await res.json();
   return {
     status: b.status,
@@ -215,7 +216,7 @@ export async function runScriptBatch(
     headers: authHeaders(),
     data: { script_id: scriptId, host_ids: hostIds, ...(opts.notBefore ? { not_before: opts.notBefore } : {}) },
   });
-  await expect(res, `Failed to run script ${scriptId} as a batch on ${hostIds.length} hosts`).toBeOK();
+  await expectOk(res, `Failed to run script ${scriptId} as a batch on ${hostIds.length} hosts`);
   return (await res.json()).batch_execution_id as string;
 }
 
@@ -225,7 +226,7 @@ export async function runScriptBatch(
  */
 export async function cancelScriptBatch(request: APIRequestContext, batchId: string): Promise<void> {
   const res = await request.post(apiUrl(`scripts/batch/${batchId}/cancel`), { headers: authHeaders() });
-  await expect(res, `Failed to cancel batch ${batchId}`).toBeOK();
+  await expectOk(res, `Failed to cancel batch ${batchId}`);
 }
 
 /** A batch's per-host statuses, as its details page tabs name them. */
@@ -241,7 +242,7 @@ export async function listBatchHostIds(
     headers: authHeaders(),
     params: { status, per_page: '500' },
   });
-  await expect(res, `Failed to list batch ${batchId}'s ${status} hosts`).toBeOK();
+  await expectOk(res, `Failed to list batch ${batchId}'s ${status} hosts`);
   return (((await res.json()).hosts ?? []) as Array<{ id: number }>).map((h) => h.id);
 }
 
@@ -258,7 +259,7 @@ export async function findBatchId(request: APIRequestContext, fleetId: number, s
           headers: authHeaders(),
           params: { fleet_id: String(fleetId), per_page: '20' },
         });
-        await expect(res).toBeOK();
+        await expectOk(res, `Failed to list the script batches of fleet ${fleetId}`);
         const batches = ((await res.json()).batch_executions ?? []) as Array<{
           batch_execution_id: string;
           script_name: string;

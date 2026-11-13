@@ -32,8 +32,8 @@ coverage is to be a suite of its own.
 
 **One flow on seeded data.** `e2e/premium/policies/policies.spec.ts` › *Policies — fleet isolation*.
 - Seed through an API helper (`createFleetPolicy`), with a `pw-…-${runNonce()}` name.
-- Enter the way `playwright/CLAUDE.md` says a flow does (dashboard, then the navbar), and call
-  `teamDropdown.select(scope)` after every scoped `goto({ fleetId })`.
+- Go straight to the page with `goto({ fleetId })`, unless this is the area's one click-through test
+  (`playwright/CLAUDE.md`), and call `teamDropdown.select(scope)` after every scoped `goto`.
 - Search until the list holds exactly your row before acting on it.
 - An absence assertion sits beside something that proves the page finished loading (here, the empty state).
 - Remove the seed in an `afterEach`, or in a `finally` when the sweep would catch a miss.

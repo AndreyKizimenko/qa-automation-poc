@@ -7,7 +7,7 @@
  * takes 10 and 20, bulk-transfer takes 0).
  */
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import { apiLatestUrl, authHeaders } from '@helpers/api';
+import { apiLatestUrl, authHeaders, expectOk } from '@helpers/api';
 import { findSimulatedHostIds, getHostFleetId } from '@helpers/api/hosts';
 import { fleetctl } from '@helpers/fleetctl';
 
@@ -21,7 +21,7 @@ const TRANSFER_OFFSET = 30;
  */
 async function hostnameFor(request: APIRequestContext, hostId: number): Promise<string> {
   const res = await request.get(apiLatestUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const body = await res.json();
   return body.host.hostname as string;
 }

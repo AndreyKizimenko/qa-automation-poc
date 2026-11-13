@@ -7,7 +7,7 @@
  * activities) import from this file rather than from `@playwright/test`
  * directly so the auth contract stays in one place.
  */
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { request as apiRequest } from '@playwright/test';
 // ── API versioning ───────────────────────────────────────────────────────────
 
@@ -43,6 +43,23 @@ export interface FleetRef {
 
 export function authHeaders(): { Authorization: string } {
   return { Authorization: `Bearer ${process.env.FLEET_API_TOKEN}` };
+}
+
+/**
+ * Throws unless `res` is a 2xx, saying what was asked (`what`), Fleet's status
+ * and its answer.
+ *
+ * Every helper and spec checks a response with this, never with
+ * `expect(res).toBeOK()`: when that assertion fails, Playwright prints the
+ * request's headers beside it, the bearer token among them, into the job log
+ * and the report. Nothing here prints a header, and the URL is cut to its
+ * path so the instance's address stays out too.
+ */
+export async function expectOk(res: APIResponse, what: string): Promise<void> {
+  if (res.ok()) return;
+  const url = new URL(res.url());
+  const body = await res.text().catch(() => '');
+  throw new Error(`${what}: HTTP ${res.status()} from ${url.pathname}${url.search}\n${body.slice(0, 2_000)}`);
 }
 
 /** Returns FLEET_API_TOKEN if it's still valid, otherwise logs in fresh. */

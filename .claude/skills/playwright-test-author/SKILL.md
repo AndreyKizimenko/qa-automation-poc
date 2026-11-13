@@ -109,9 +109,10 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    `runNonce()`, and never give a durable thing those prefixes. Remove them in an `afterEach`, or in a
    `finally` only when the central sweep would catch a miss: Playwright skips the `finally` of a test that
    times out, and runs its hooks. The sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
-   takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It does not
-   return a host moved to Workstations or QA, restore a config key you changed (only the switches
-   `CLAUDE.md` lists), or delete `pw-*` labels on free. What can outlive a timed-out test on the VMs fleet
+   takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It returns
+   a simulation left on Workstations only between runs, so a spec that stages hosts there still returns
+   them in an `afterEach`. It does not return a host moved to QA, restore a config key you changed (only
+   the switches `CLAUDE.md` lists), or delete `pw-*` labels on free. What can outlive a timed-out test on the VMs fleet
    needs a home there: the VMs sweep for things Fleet stores by name, the resting-state step for state on a
    host. Reports are swept by exact prefix on VMs and Workstations (gitops declares
    `pw-host-report-results`), so a new kind of per-run report adds its prefix.
@@ -185,7 +186,7 @@ A change isn't done until the docs describing it are current, in the same commit
 
 | you changed | update |
 |---|---|
-| a `test()` | its `docs/test-audit/` area entry (steps a person would perform, validations tagged *(UI)* / *(API)*, an honest assessment) and the audit README's index and counts |
+| a `test()` | its spec header and `test.step` titles, which the test catalogue will be generated from. `docs/test-audit/` is frozen: no entry to add or update |
 | a helper, page object or component object | `helpers/README.md` / `pages/README.md` / `pages/components/README.md` |
 | a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
 | gitops | the file's header and its config's README (`gitops/{premium,free}-fleetqa{,-min}/README.md`); a file both the full and `-min` configs declare changes in both; apply it, and say so in the PR |

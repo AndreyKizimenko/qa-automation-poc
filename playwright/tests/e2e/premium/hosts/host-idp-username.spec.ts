@@ -29,6 +29,7 @@ import { withStaticUser } from '@helpers/auth';
 import {
   assertActivityAfter,
   deleteHostIdpUsername,
+  expectOk,
   findSimulations,
   getHostIdpUsername,
   latestActivityId,
@@ -107,7 +108,7 @@ test.describe('Premium • Hosts • IdP username', () => {
       await deleteHostIdpUsername(request, hostId, { ignoreMissing: true });
 
       const put = await putHostIdpUsername(request, hostId, idpUsername);
-      await expect(put).toBeOK();
+      await expectOk(put, `Failed to set the IdP username of host ${hostId}`);
       const body = await put.json();
       expect(body.host_id).toBe(hostId);
       // Fleet reports the IdP username under the `mdm_idp_accounts` source.
