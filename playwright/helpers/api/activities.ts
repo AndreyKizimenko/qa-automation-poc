@@ -101,6 +101,16 @@ export async function assertActivityAfter(
   return found!;
 }
 
+/**
+ * Whether an activity's details name the fleet `fleetId` (0 for Unassigned).
+ * Fleet records Unassigned as `fleet_id: 0` on most software activities and as
+ * `null` on the script and profile ones and on `deleted_software`, so a missing
+ * id reads as Unassigned.
+ */
+export function activityOnFleet(details: Record<string, unknown>, fleetId: number): boolean {
+  return (details.fleet_id ?? 0) === fleetId;
+}
+
 export interface HostActivity {
   id: number;
   type: string;

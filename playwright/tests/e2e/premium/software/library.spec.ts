@@ -14,6 +14,7 @@
 import * as path from 'path';
 import { test, expect } from '@fixtures';
 import {
+  activityOnFleet,
   assertActivityAfter,
   deleteLibraryTitlesWhere,
   expectVppAppsListable,
@@ -98,15 +99,6 @@ function addedBy(c: SoftwareCase, t: LibraryTitle): boolean {
     case 'android':
       return t.appStoreApp?.appStoreId === c.applicationId;
   }
-}
-
-/**
- * Whether an activity's details name the fleet a case runs on. Fleet records
- * Unassigned as `fleet_id: 0` on most software activities and as `null` on
- * `deleted_software`, so a missing id reads as Unassigned.
- */
-function onFleet(d: Record<string, unknown>, fleetId: number): boolean {
-  return (d.fleet_id ?? 0) === fleetId;
 }
 
 // Narrowed so `fleetIdFor(scope, …)` returns `number` (never `undefined`)
@@ -248,7 +240,7 @@ for (const scope of SCOPES) {
           request,
           addActivity,
           beforeAdd,
-          (d) => d.software_title_id === titleId && onFleet(d, fleetId),
+          (d) => d.software_title_id === titleId && activityOnFleet(d, fleetId),
           { actor: process.env.FLEET_ADMIN_EMAIL },
         );
         const details = activity.details as {
@@ -366,7 +358,7 @@ for (const scope of SCOPES) {
           deleteActivity,
           beforeDelete,
           (d) =>
-            onFleet(d, fleetId) &&
+            activityOnFleet(d, fleetId) &&
             (isAppStore
               ? d.app_store_id === appStoreId && d.platform === appStorePlatform
               : d.software_package === packageName),
