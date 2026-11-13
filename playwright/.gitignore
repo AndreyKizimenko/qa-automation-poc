@@ -19,6 +19,11 @@ node_modules/
 # reviews stay local.
 docs/run-reviews/
 
+# The test catalogue, built on demand by `npm run catalogue` from the specs
+# themselves (decided 2026-11-13): committed, it would change in every PR
+# that touches a test.
+docs/test-catalogue/
+
 # Pre-upgrade impact reports from the fleet-upgrade-preflight skill. Derived
 # from two Fleet commits and regenerated in seconds, so the report itself is
 # disposable — anything worth keeping goes into the POM fix or TODO.md.

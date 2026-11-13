@@ -188,7 +188,7 @@ A change isn't done until the docs describing it are current, in the same commit
 
 | you changed | update |
 |---|---|
-| a `test()` | its spec header and `test.step` titles, which the test catalogue will be generated from. `docs/test-audit/` is frozen: no entry to add or update |
+| a `test()` | its spec header and `test.step` titles, which `npm run catalogue` builds the test catalogue from. `docs/test-audit/` is frozen: no entry to add or update |
 | a helper, page object or component object | `helpers/README.md` / `pages/README.md` / `pages/components/README.md` |
 | a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
 | gitops | the file's header and its config's README (`gitops/{premium,free}-fleetqa{,-min}/README.md`); a file both the full and `-min` configs declare changes in both; apply it, and say so in the PR |
