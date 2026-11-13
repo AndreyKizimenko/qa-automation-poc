@@ -17,6 +17,9 @@
 #   rule from the inside.
 # - The public key CI encrypts to exists and is a public key, and no private key is
 #   tracked anywhere in the repository.
+# - One job may read reports: run-history, which prints only test names, outcomes and
+#   error hashes. The private key's secret is named in its workflow and in the two
+#   callers that hand it over, and nowhere else.
 # - report-crypt.mjs works on this machine's Node: round trip, wrong key refused,
 #   tampering detected.
 set -uo pipefail
@@ -76,6 +79,18 @@ if [ -n "$tracked" ]; then
   printf '%s\n' "$tracked"
   problem "a private key is tracked in the files above; remove it and replace the key pair"
 fi
+
+echo "== who is given the private key"
+key_secret="QA_REPORT_PRIVATE""_KEY"
+readers='^\.github/workflows/(run-history|qa-nightly|qa-branch-run)\.yml$'
+while IFS= read -r hit; do
+  [ -z "$hit" ] && continue
+  file="${hit%%:*}"
+  rest="${hit#*:}"
+  line="${rest%%:*}"
+  grep -qE "$readers" <<< "$file" \
+    || problem "$file:$line names $key_secret. Only .github/workflows/run-history.yml reads reports in CI; a job that needs something from a report gets it from there."
+done < <(git grep -n -- "$key_secret" -- .github/workflows .github/upload-report .github/gitops-action 2>/dev/null || true)
 
 echo "== report-crypt.mjs"
 node "$CRYPT" selftest || problem "$CRYPT failed its self-test"

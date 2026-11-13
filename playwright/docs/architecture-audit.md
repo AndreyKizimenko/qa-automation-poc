@@ -89,8 +89,9 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
    - [x] an API-level `test`, `apiTest` (roadmap 4);
    - [x] `results.json` in each suite report, kept 90 days, and the history file the run reviews keep from
          it (`run_history.py`); the first half of roadmap 6.
-   - [ ] The rest of roadmap 6: the history line in CI's job summary. CI can't open a report, so this needs
-         somewhere to keep non-secret history that CI can read (a branch, a cache). To decide.
+   - [x] The rest of roadmap 6: the history in CI's job summary. Decided 2026-11-13: the report key goes
+         in as an Actions secret, for one job, instead of a public history branch. `run-history` is the last
+         job of the nightly and of a branch run; `docs/ci-pipeline.md` says what it may print.
    - [ ] `parse_report.py` and `run_timeline.py` still read the HTML report's embedded data; pointing them
          at `results.json` is its own change.
 3. Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags of 5, then 10, 8, 7,
@@ -121,9 +122,10 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
 - [x] 4, an API-level `test` (2026-11-13): `apiTest` in `fixtures.ts` carries the worker fixtures and no
       page, and the browser `test` extends it. The ten API specs that imported `test` launch no browser
       now, and lint refuses the browser `test` under `tests/api`, `tests/cli` and `tests/loadtest/api`.
-- [x] 6, first half (2026-11-13): each suite report carries `results.json` and is kept 90 days, and
-      `run_history.py` keeps a line per test per reviewed run and says how a failing test fared before.
-      Still open: the history line in CI's job summary, and the quarantine that would read it (item 15).
+- [x] 6 (2026-11-13): each suite report carries `results.json` and is kept 90 days; `run_history.py` keeps
+      a line per test per reviewed run and says how a failing test fared before; and the `run-history` job
+      writes the same into every nightly's and branch run's summary, from the 14 nightlies before it.
+      Still open: the quarantine that would act on it (item 15).
 
 ## Baseline
 

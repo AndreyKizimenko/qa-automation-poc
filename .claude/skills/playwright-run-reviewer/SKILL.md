@@ -127,7 +127,7 @@ before reading a spec, and give each cause **one row** with its count.
    red count is a floor on what broke.
 3. **History.** `python3 ${CLAUDE_SKILL_DIR}/scripts/run_history.py show "<report-dir>"` says, for
    each failed or flaky test, how it fared in the runs recorded before and whether
-   the error is the same one. Then search `docs/run-reviews/` for the test's file and for the
+   the error is the same one (a CI run's summary carries the same for its last 14 nightlies). Then search `docs/run-reviews/` for the test's file and for the
    error's distinctive phrase, then `docs/blocked-by-product-bugs.md` and the
    signature catalog. A failure seen before isn't "a flake" again: say how many
    times and since when, and on the third sighting the next step is a fix, not
