@@ -2,13 +2,14 @@
 
 For playwright-test-author (and worth a reviewer's read). Each of these cost a run, a day or a VM
 once. Read the whole file before writing the first line of spec, page-object or helper code, and
-again when you come back to that work after a long session: it's about 135 lines.
+again when you come back to that work after a long session: it's under 200 lines.
 
 Contents: Locators and UI state · Waiting · Data and state · API helpers · The instances
 
 **Locators and UI state**
 - **Locator order:** `getByRole` with a name, then `getByLabel`, `getByPlaceholder`, `getByText`. A class
-  selector is a last resort and needs an inline comment saying why nothing else works. Fleet adds a few
+  selector is a last resort: it lives in a page or component object, never in a spec, with an inline
+  comment saying why nothing else works. Fleet adds a few
   `data-testid`s of its own: `dropdown-option` on the options of `DropdownWrapper` and `ActionsDropdown`,
   `<name>-icon` on every `Icon`, plus `card`, `user-menu` and `ace-editor`. Use one when no role or text
   names the element (an icon-only button); never add one to Fleet's source.
@@ -38,12 +39,21 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   `filter({ has: this.page.getByRole(…) })` is relative to each candidate, as intended.
 - **Fleet's radio inputs are visually hidden** behind a styled control: click the `<label>` that wraps the
   radio, then assert the radio is checked (`TargetLabelSelector`, `IntegrationsPage.chooseMigrationMode`).
+- **Set an Ace editor with `setAceValue`, read it with `getAceValue`** (`pages/components/aceEditor.ts`).
+  Typed keys go through Ace's own handling, which auto-indents and closes quotes and brackets, so what is
+  saved isn't what was typed; the DOM holds only the visible lines.
+- **A guard on an optional element answers for one instant.** `isVisible()` and `count()` read the page as
+  it is now, so a guard that runs before the page settles takes the "absent" branch and the helper quietly
+  does nothing: a tier guard keyed on a missing dropdown turned every scope selection into a no-op when
+  Fleet changed the markup, and a `deleteIfExists` skipped a row that hadn't rendered. Wait for one of the
+  two states first (`await expect(row.or(emptyState)).toBeVisible()`; `DataTable.rowOrEmpty()` is that for
+  a table), then branch. A tier switch is keyed on `SUITE`, never on whether markup is present.
 
 **Waiting**
 - **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
   timeout of their own, so the test hangs to its timeout and its `finally` runs on a closed context: the
-  cleanup silently doesn't happen. Assert the element is visible first, or use a `count()` check for
-  optional ones.
+  cleanup silently doesn't happen. Assert the element is visible first; for an optional one, guard as the
+  trap above says.
 - **Web-first assertions and auto-waiting, never `waitForTimeout`.** `toPass` around an action that can
   fail to take (a menu that closes on re-render) is fine.
 - A table keeps its old rows under a loading overlay: `table.waitForSettled()` before reading after a
@@ -75,29 +85,50 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   script failure itself is the point, the spec goes in `exclusive/`.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.
+- **A policy's result on a host moves only on a refetch** (or the hourly policy interval), not on the
+  host's 10-second check-in: request a refetch inside the poll that waits for a pass or fail.
+- **A stored report's `last_fetched` doesn't move on every run.** For unchanged results Fleet rewrites it
+  only once the stored value is 50 minutes old (fleetdm/fleet#54897), so a freshness bound on a
+  constant-result report allows 50 min plus two intervals; to see a run land sooner, change the result.
 
 **Data and state**
 - **Key an activity check to what this test did** when the other scope's copy of the test, another spec or an
   earlier run can log the same type: `latestActivityId` before the action, then `assertActivityAfter` matching
-  the fleet (`fleet_id`) and the content. Fleet records a JSON detail with its keys in its own order, so compare
-  fields, never `JSON.stringify`.
+  the fleet (`fleet_id`) and the content. A name that is the same in both scopes (a fixture file's name) is
+  exactly that case. Match on ids (`software_title_id`, `app_store_id`), not on a vendor's display name:
+  Fleet keeps a title's first name when the store renames the app. Fleet records a JSON detail with its keys
+  in its own order, so compare fields, never `JSON.stringify`.
 - **`assertActivity` expects the browser's admin as the actor.** An activity a spec causes through `fleetctl` or
   an API helper is attributed to the API token's user instead: look it up with `findActivity` (or
   `assertActivityAfter` with its `actor` left out) and match it by its content.
 - **Seed your own preconditions.** The cleanup projects delete gitops-provisioned global reports and
   policies at run start. Team-scoped reports survive; global ones never do.
+- **"The first one" of live data is a different one tomorrow.** The first host, row, title or CVE a list
+  returns changes with the simulations' daily refresh and Fleet's hourly counts, and the new one may lack
+  what the test needs. Pick by the property the test requires and throw when nothing has it
+  (`requireRealHost`, `findRenderableCve`, `findOnlineHost`'s `withUsers` / `withOrbit`), or seed it.
+- **A retry of a serial lifecycle starts over with its `delete` skipped.** What the failed attempt created
+  is still there, so a resource Fleet refuses twice fails the retry at the first step with "already exists"
+  and hides the real failure. The first step removes its own leftovers under `testInfo.retry > 0`
+  (`premium/software/edit-package.spec.ts`).
 - **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
   `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not its hooks. Key the
   restore to the test that changed something (a describe-level variable only that test sets), so a parallel
   sibling's hook can't roll it back mid-flight. Restore only the keys you changed: `PATCH /config` refuses some
-  whole snapshotted subtrees with a 400 (`smtp_settings.configured` is read-only).
+  whole snapshotted subtrees with a 400 (`smtp_settings.configured` is read-only). Restore the fields you
+  wrote, not a flag Fleet derives from them: `mdm.enable_disk_encryption` is the AND of the per-platform
+  controls, and writing it back turns every platform on (`setGlobalDiskEncryption` round-trips the
+  per-platform fields for that reason).
 - **A report created in the UI runs hourly on every host in scope** (it defaults to *Every hour* on all four
   platforms, and automations need an interval): keep its SQL benign and delete it. Never untick all
   automations on Workstations, whose gitops reports carry them.
 - **`organization-info.spec.ts` renames the organization for a few seconds** on both tiers. A spec that compares
   the page's org name with the config re-reads both until they agree (`shared/settings/apple-mdm.spec.ts`).
-- **Two specs writing the same global key race.** A serial describe serialises only within its file, so a new
-  test that writes a key another spec writes joins that spec's serial describe (or goes in `exclusive/`).
+- **Two specs writing the same global key race.** Tests are kept apart only inside one file, so a new test
+  that writes a key another spec writes joins that spec's describe, and the describe runs its tests one at
+  a time: `test.describe.configure({ mode: 'default' })` when they don't depend on each other (as
+  `software/vulnerabilities.spec.ts` does), `serial` only when later steps need an earlier one's result. A
+  write that breaks tests in *other* files goes in `exclusive/`.
   Org settings › Advanced's Save posts `server_settings`, `smtp_settings`, `host_expiry_settings`,
   `activity_expiry_settings`, `features.historical_data`, `mdm.apple_server_url` /
   `apple_require_hardware_attestation` / `only_allow_apple_business_enrollment` and
@@ -105,13 +136,13 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   they're unchanged, so no main-project spec writes them.
 - **A fleet subtree Fleet replaces wholesale has one writer per fleet.** A fleet's enroll secrets and its
   `webhook_settings` are saved whole, so two specs writing them on the same fleet undo each other's write through
-  their snapshot restores. Saving a fleet's policy automations or its Settings tab sends `webhook_settings` and
-  wipes the webhook the other one owns (fleetdm/fleet#54619); a `PATCH /teams/:id` carrying only `mdm` is safe.
-  Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong to one, so a fleet-scoped
-  *role* write there needs a disposable `qa-test-*` user given that fleet.
+  their snapshot restores. Before 4.95, saving a fleet's policy automations or its Settings tab also sent the
+  whole `webhook_settings` and wiped the webhook the other one owned (fleetdm/fleet#54619); the snapshot
+  restores still collide. Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong
+  to one, so a fleet-scoped *role* write there needs a disposable `qa-test-*` user given that fleet.
 - **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
   premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
-  enroll secret. Only the `gitops-mode` project writes them, it restores them in an `afterEach`, and its
+  enroll secret. Only the `gitops-mode` project writes them, it restores them in a hook, and its
   teardown and every premium apply put back `GITOPS_EXCEPTIONS_BASELINE`. Never tick Enroll secrets in a UI test.
 - A spec that flips a switch other specs depend on goes in `tests/e2e/<tier>/exclusive/`, and so does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs below every
@@ -125,6 +156,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   its pending installs and runs.
 - **`browser.newContext()` inherits `storageState`,** so an argument-less context is still the admin. Use
   `withCleanContext` from `@helpers/auth` for a genuinely signed-out one.
+- **A file every worker writes is written whole or not at all.** Workers share the disk: the fleetctl config
+  and the cached sessions under `.auth/`. A file rewritten in place is read half-written by a neighbour (148
+  of 240 fleetctl reads, measured). Write a temp file and rename it into place, as `helpers/fleetctl.ts` does.
 
 **API helpers**
 - Build URLs with `apiUrl()` and send `authHeaders()`, through the `request` fixture.
@@ -140,3 +174,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   your spec.
 - **`fleetctl` must be within a minor of the server**, and `fleetctl gitops` reads `~/.fleet/config`, not
   `FLEET_URL`. Pass `--context`.
+- **Apple's tokens fail quietly.** A revoked VPP token leaves `GET /vpp_tokens` looking healthy while every
+  App Store list fails; `expectVppAppsListable` gives Apple's reason. An Apple Business token Apple rejects
+  answers 403 `token_rejected` and breaks the setup assistant. Check both before debugging a spec that adds
+  an App Store app or reads the setup experience.
+- **Premium's firewall refuses realistic install scripts.** A request whose body carries `rm -rf`,
+  `msiexec` or `installer -pkg` comes back as an HTML "Blocked" page: test scripts stay benign (`echo`).

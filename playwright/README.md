@@ -189,6 +189,7 @@ playwright/
 ├── test-data/                    # Static fixtures (.pkg/.msi/.deb/.sh) by platform
 ├── docs/
 │   ├── ci-pipeline.md            # Why the CI flow is shaped as it is, and what bounds a run
+│   ├── architecture-audit.md     # What has to change for the suite to grow fivefold, and the working list
 │   ├── blocked-by-product-bugs.md  # Skips caused by confirmed Fleet defects, with unblock conditions
 │   ├── long-term-goals.md        # Coverage that waits on infrastructure the instances lack
 │   ├── test-plans/               # Per-feature E2E coverage plans
