@@ -20,23 +20,12 @@
  * Two destinations refuse to open their modal when there is nothing in scope to
  * automate: the Reports and Policies pages count the global reports and
  * policies first. The `cleanup-setup` project drains both before the suite
- * runs, so those two tests seed a `pw-` report or policy and delete it in the
- * same test, and again in an `afterEach` in case the test times out.
+ * runs, so those two tests seed a global report or policy through `seed`,
+ * which deletes it after the test.
  */
 import { test, expect } from '@fixtures';
-import { createPolicy, createReport, deletePolicies, deleteReport } from '@helpers/api';
 
 test.describe('Command palette • deep links', () => {
-  let seededReportId: number | undefined;
-  let seededPolicyId: number | undefined;
-
-  test.afterEach(async ({ request }) => {
-    if (seededReportId !== undefined) await deleteReport(request, seededReportId);
-    if (seededPolicyId !== undefined) await deletePolicies(request, [seededPolicyId]);
-    seededReportId = undefined;
-    seededPolicyId = undefined;
-  });
-
   test('Add hosts opens the Add hosts modal and drops its flag', async ({
     palette,
     dashboard,
@@ -110,23 +99,17 @@ test.describe('Command palette • deep links', () => {
     dashboard,
     reportsList,
     page,
-    request,
+    seed,
   }) => {
-    const report = await createReport(request, { name: `pw-palette-deeplink-report-${Date.now()}` });
-    seededReportId = report.id;
+    await seed.report('palette-deeplink-report');
 
-    try {
-      await dashboard.goto();
-      await palette.open();
-      await palette.selectItem('Manage report automations');
+    await dashboard.goto();
+    await palette.open();
+    await palette.selectItem('Manage report automations');
 
-      await expect(page).toHaveURL(/\/reports\/manage/);
-      await expect(reportsList.manageAutomationsModal).toBeVisible();
-      await expect(page).not.toHaveURL(/manage_automations=/);
-    } finally {
-      await deleteReport(request, report.id);
-      seededReportId = undefined;
-    }
+    await expect(page).toHaveURL(/\/reports\/manage/);
+    await expect(reportsList.manageAutomationsModal).toBeVisible();
+    await expect(page).not.toHaveURL(/manage_automations=/);
   });
 
   test('Manage policy automations opens the policies automations modal and drops its flag', async ({
@@ -134,23 +117,17 @@ test.describe('Command palette • deep links', () => {
     dashboard,
     policiesList,
     page,
-    request,
+    seed,
   }) => {
-    const policy = await createPolicy(request, { name: `pw-palette-deeplink-policy-${Date.now()}` });
-    seededPolicyId = policy.id;
+    await seed.policy('palette-deeplink-policy');
 
-    try {
-      await dashboard.goto();
-      await palette.open();
-      await palette.selectItem('Manage policy automations');
+    await dashboard.goto();
+    await palette.open();
+    await palette.selectItem('Manage policy automations');
 
-      await expect(page).toHaveURL(/\/policies\/manage/);
-      await expect(policiesList.automationsModal).toBeVisible();
-      await expect(page).not.toHaveURL(/manage_automations=/);
-    } finally {
-      await deletePolicies(request, [policy.id]);
-      seededPolicyId = undefined;
-    }
+    await expect(page).toHaveURL(/\/policies\/manage/);
+    await expect(policiesList.automationsModal).toBeVisible();
+    await expect(page).not.toHaveURL(/manage_automations=/);
   });
 
   test('Manage software automations opens the software automations modal and drops its flag', async ({

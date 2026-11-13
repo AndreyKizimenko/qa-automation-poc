@@ -22,7 +22,8 @@ module.exports = {
     messages: {
       finallyCleanup:
         "A `finally` that calls the API is skipped when the test times out, and what it undoes stays on the instance: " +
-        'register the undo with the `cleanup` fixture instead (`cleanup.add(what, (request) => …)`).',
+        'register the undo with the `cleanup` fixture instead (`cleanup.add(what, (request) => …)`), or create ' +
+        'through `throwawayFleet`, `borrowSims` or `seed`, which register their own.',
     },
   },
   create(context) {

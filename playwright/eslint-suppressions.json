@@ -264,17 +264,6 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    },
-    "suite/no-date-now-in-name": {
-      "count": 1
-    },
-    "suite/use-own-name": {
-      "count": 1
-    }
-  },
   "tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
@@ -392,14 +381,6 @@
     },
     "suite/use-own-name": {
       "count": 7
-    }
-  },
-  "tests/e2e/premium/policies/policy-label-targets.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    },
-    "suite/use-own-name": {
-      "count": 6
     }
   },
   "tests/e2e/premium/policies/role-access.spec.ts": {
@@ -705,30 +686,11 @@
       "count": 2
     }
   },
-  "tests/e2e/shared/command-palette/deep-links.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 2
-    },
-    "suite/no-date-now-in-name": {
-      "count": 2
-    },
-    "suite/use-own-name": {
-      "count": 2
-    }
-  },
   "tests/e2e/shared/command-palette/pickers.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
     },
     "suite/no-date-now-in-name": {
-      "count": 2
-    }
-  },
-  "tests/e2e/shared/controls/custom-variables.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
-    },
-    "suite/use-own-name": {
       "count": 2
     }
   },

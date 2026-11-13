@@ -129,7 +129,8 @@ test built on them passes or fails on timing:
 
 **Will it leave state behind, or collide?**
 - Cleanup that a timeout skips. A timed-out test runs its hooks and its fixtures' teardown, not its
-  `finally`, so new code registers each undo with the `cleanup` fixture right after the thing exists (lint
+  `finally`, so new code registers each undo with the `cleanup` fixture right after the thing exists, or
+  creates through `throwawayFleet`, `borrowSims` or `seed`, which register their own (lint
   fails a `finally` that calls the API; an `afterEach` is the older way and still sound). A recorded
   `finally` is enough only for what the sweep (`setup/cleanup.steps.ts`) would catch: things on Unassigned
   and Workstations, `pw-*` / `fleet-pw-*` things and borrowed simulations on the VMs fleet, `pw-*` fleets.

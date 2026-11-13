@@ -19,17 +19,19 @@
  *
  * Variables are global and the page isn't tier-gated (only its description
  * differs), so the spec runs on both tiers. Self-contained: everything is
- * created in the test; the afterEach deletes the test's script first, since
- * Fleet refuses to delete a variable a script still uses and
- * `deleteVariablesMatching` ignores the refusal. `cleanup.steps.ts` sweeps
- * `PW_VAR_*` after a killed run.
+ * created in the test, and each test registers its variable's delete before
+ * its script's, so the `cleanup` fixture, which runs them newest first,
+ * deletes the script first: Fleet refuses to delete a variable a script still
+ * uses, and `deleteVariablesMatching` ignores the refusal. `cleanup.steps.ts`
+ * sweeps `PW_VAR_*` after a killed run.
  *
  * Grounded in frontend/pages/ManageControlsPage/Variables (GlobalVariables card
  * + AddCustomVariableModal + DeleteCustomVariableModal), ScriptUploadModal, and
  * server/datastore/mysql/secret_variables.go.
  */
 import { test, expect } from '@fixtures';
-import { createVariable, deleteAllScripts, deleteVariablesMatching, listVariables, uploadScript } from '@helpers/api';
+import { createVariable, deleteAllScripts, deleteVariablesMatching, listVariables } from '@helpers/api';
+import { ownName } from '@helpers/own-name';
 import { runNonce } from '@helpers/profiles';
 
 const MARKER = 'PW_VAR';
@@ -37,26 +39,14 @@ const MARKER = 'PW_VAR';
 /** Unassigned: the scripts library every tier has. */
 const FLEET_ID = 0;
 
+/** A variable name of this test's own: `PW_VAR_` and a nonce, the only shape Fleet allows. */
+const variableName = (): string => `${MARKER}_${runNonce().toUpperCase()}`;
+
 test.describe('Shared • Controls • custom variables', () => {
-  // Tracks a variable a test created so afterEach can purge just that one
-  // (a shared-marker purge would delete a sibling test's variable mid-run),
-  // and the script that uses it, which has to go first.
-  let createdName: string | undefined;
-  let createdScript: string | undefined;
-
-  test.afterEach(async ({ request }) => {
-    if (createdScript) {
-      const script = createdScript;
-      await deleteAllScripts(request, FLEET_ID, (name) => name === script);
-    }
-    if (createdName) await deleteVariablesMatching(request, createdName);
-    createdName = undefined;
-    createdScript = undefined;
-  });
-
-  test('add a custom variable and delete it', async ({ variables }) => {
-    const name = `${MARKER}_${Date.now()}`;
-    createdName = name;
+  test('add a custom variable and delete it', async ({ variables, cleanup }) => {
+    const name = variableName();
+    // By its own name only: a purge by the shared marker would delete a sibling test's variable.
+    cleanup.add(`delete variable ${name}`, (r) => deleteVariablesMatching(r, name));
 
     await variables.goto();
     await variables.openAddModal();
@@ -96,12 +86,13 @@ test.describe('Shared • Controls • custom variables', () => {
   test('a script that uses a variable is refused until the variable exists', async ({
     scriptsLibrary,
     request,
+    cleanup,
   }) => {
-    const n = runNonce();
-    const name = `${MARKER}_${n.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
-    const scriptName = `pw-secret-${n}.sh`;
-    createdName = name;
-    createdScript = scriptName;
+    const name = variableName();
+    const scriptName = `${ownName('secret')}.sh`;
+    // Both before anything exists, the variable's first so that it runs last.
+    cleanup.add(`delete variable ${name}`, (r) => deleteVariablesMatching(r, name));
+    cleanup.add(`delete script ${scriptName}`, (r) => deleteAllScripts(r, FLEET_ID, (n) => n === scriptName));
     const file = {
       name: scriptName,
       mimeType: 'text/x-sh',
@@ -122,14 +113,14 @@ test.describe('Shared • Controls • custom variables', () => {
     await expect(scriptsLibrary.itemByName(scriptName)).toBeVisible();
   });
 
-  test("a variable a script uses can't be deleted", async ({ variables, request }) => {
-    const n = runNonce();
-    const name = `${MARKER}_${n.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
-    const scriptName = `pw-secret-${n}.sh`;
-    createdName = name;
-    createdScript = scriptName;
+  test("a variable a script uses can't be deleted", async ({ variables, request, cleanup, seed }) => {
+    const name = variableName();
     await createVariable(request, name, 'pw-secret-value');
-    await uploadScript(request, FLEET_ID, scriptName, `#!/bin/sh\necho "token: $FLEET_SECRET_${name}"\n`);
+    cleanup.add(`delete variable ${name}`, (r) => deleteVariablesMatching(r, name));
+    const { name: scriptName } = await seed.script('secret', {
+      fleetId: FLEET_ID,
+      content: `#!/bin/sh\necho "token: $FLEET_SECRET_${name}"\n`,
+    });
 
     await variables.goto();
     await variables.deleteVariable(name);

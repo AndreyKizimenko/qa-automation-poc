@@ -93,8 +93,8 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
    (installs, runs, verifies, reports inventory) only a real VM can answer: `requireRealHost(request,
    platform)`, `vmsFleetId`, `liveMacosHost`. To put simulations on a fleet beside a VM, borrow them with
-   `findMdmSimulations` (profiles; a scarce pool) or `findSimulations` (everything else), claim your own
-   slice in the registry in `helpers/api/hosts.ts`, and return them when the test ends (step 7).
+   the `borrowSims` fixture (`mdm: true` only for profiles: a scarce pool) on a slice you claim in the
+   registry in `helpers/api/hosts.ts`; it returns them after the test.
 5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either, and
    start the spec from the exemplar `references/spec-patterns.md` names for its shape. A page object
    exposes locators and intent (`openControlsTab()`, `runRowAction(name, 'Delete')`), waits until its own
@@ -109,7 +109,7 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    `fleet-pw-*`), and never give a durable thing those prefixes. Register each one's undo with the
    `cleanup` fixture the moment it exists (`cleanup.add('delete label', (r) => deleteLabelById(r, id))`):
    it runs after the test even when it times out, which skips a `finally` (lint fails a `finally` that
-   calls the API). For a killed run, the sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
+   calls the API). `throwawayFleet`, `borrowSims` and `seed.*` register theirs. For a killed run, the sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
    takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It returns
    a simulation left on Workstations only between runs, so a spec that stages hosts there still returns
    them itself. It does not return a host moved to QA, restore a config key you changed (only

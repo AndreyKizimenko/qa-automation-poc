@@ -2,8 +2,9 @@
  * The suite's two test objects, one built on the other:
  *
  *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM), the
- *     `cleanup` stack, and nothing that needs a page. API and CLI specs import
- *     it, so none of their tests opens a browser.
+ *     `cleanup` stack with the data fixtures built on it (`throwawayFleet`,
+ *     `borrowSims`, `seed`), and nothing that needs a page. API and CLI specs
+ *     import it, so none of their tests opens a browser.
  *   - `test` extends it with the page objects and the automatic `pageHealth`
  *     monitor. Browser specs import `{ test, expect }` from this file (not from
  *     `@playwright/test`) and destructure whichever page objects they need.
@@ -16,19 +17,37 @@
  *   - Auth comes from the setup projects' storage state.
  *   - Tests call `<page>.goto()` themselves so the spec body stays explicit.
  */
-import { test as base, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import {
   monitorConsoleErrors,
   monitorNetworkFailures,
   monitorPageErrors,
 } from './helpers/console';
 import {
+  createFleet,
+  createFleetPolicy,
+  createManualLabel,
+  createPolicy,
+  createReport,
+  deleteFleet,
+  deleteFleetPolicies,
+  deleteLabelById,
+  deletePolicies,
+  deleteReport,
+  deleteScript,
   findFleetByName,
+  findMdmSimulations,
   findOnlineHost,
+  findSimulations,
   missingRealHostReason,
+  transferHosts,
+  uploadScript,
   withApiRequest,
+  type FleetRef,
   type OnlineHostRef,
+  type ReportRef,
 } from './helpers/api';
+import { ownName } from './helpers/own-name';
 
 import {
   CommandPalette,
@@ -178,9 +197,65 @@ type ApiTestFixtures = {
    *
    * An undo meets what the test may have removed itself (a delete step), so it
    * treats "already gone" as done: `deleteFleet(r, id, { ignoreMissing: true })`.
+   *
+   * It belongs to one test. What a serial lifecycle's later steps still use
+   * isn't registered here, or it is gone before they run: the lifecycle's own
+   * delete step removes it, and the cleanup projects' sweep after a dead run.
    */
   cleanup: Cleanup;
+
+  /**
+   * A fleet of the test's own, `ownName(kind)`, deleted after the test: the
+   * place for a fleet-level write, which on a standing fleet would collide
+   * with every other spec that writes it (premium only). Ask for it before the
+   * first page load: the fleet dropdown reads the fleet list once, at boot.
+   * Its delete is retried for 30 s: the instances' gateway serves the
+   * odd 502, and a stray fleet sits in every fleet picker until the sweep.
+   */
+  throwawayFleet: (kind: string) => Promise<FleetRef>;
+
+  /**
+   * Moves `count` online simulations onto fleet `to` and returns them to
+   * Unassigned after the test (premium only). `offset` is this spec's slice of
+   * the pool, claimed in the registry on `findSimulations` in
+   * `helpers/api/hosts.ts`, so no two specs are handed the same hosts. `mdm`
+   * draws from the MDM-enrolled simulations, a scarce pool kept for profile
+   * targeting (`findMdmSimulations`). Throws when the pool can't cover the
+   * slice.
+   */
+  borrowSims: (opts: BorrowSims) => Promise<number[]>;
+
+  /**
+   * Creates what a test stands on, named `ownName(kind)`, and deletes it after
+   * the test. For anything it doesn't make, create through the helper and
+   * register the delete with `cleanup.add`.
+   */
+  seed: Seed;
 };
+
+export interface BorrowSims {
+  platform: 'darwin' | 'windows' | 'linux';
+  count: number;
+  offset: number;
+  /** The fleet the simulations are moved to. */
+  to: number;
+  /** From the MDM-enrolled pool; macOS and Windows only. */
+  mdm?: boolean;
+}
+
+export interface Seed {
+  /** A manual label holding `hostIds`. */
+  label(kind: string, hostIds: number[]): Promise<{ id: number; name: string }>;
+  /** A policy, global or (with `fleetId`, 0 for Unassigned) a fleet's own. */
+  policy(kind: string, opts?: { fleetId?: number; query?: string; platform?: string }): Promise<{ id: number; name: string }>;
+  /** A report, global unless `teamId` is given; `createReport`'s options. */
+  report(kind: string, opts?: Omit<Parameters<typeof createReport>[1], 'name'>): Promise<ReportRef>;
+  /** A library script on `fleetId` (0 for Unassigned), named `ownName(kind)` plus `extension`. */
+  script(
+    kind: string,
+    opts: { fleetId: number; content: string; extension?: '.sh' | '.ps1' },
+  ): Promise<{ id: number; name: string }>;
+}
 
 type FleetFixtures = {
   /**
@@ -298,6 +373,13 @@ async function resolvePremiumFleetId(
   return fleet.id;
 }
 
+/** Throws on any tier but premium: the fixtures that create or fill a fleet have none to act on there. */
+function requirePremium(fixtureName: string): void {
+  if (process.env.SUITE !== 'premium') {
+    throw new Error(`[${fixtureName}] premium-only fixture — SUITE=${process.env.SUITE} has no fleets`);
+  }
+}
+
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
 export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
@@ -320,8 +402,80 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
       throw new Error(`[cleanup] ${failures.length} undo(s) failed; what each was to remove is still on the instance:\n  ${failures.join('\n  ')}`);
     }
   // Its own budget, apart from the test's: a test that used its whole timeout
-  // still gets its undo actions run.
-  }, { box: true, timeout: 120_000 }],
+  // still gets its undo actions run. Not boxed: a boxed fixture hides the
+  // steps inside it, and each undo is a step the report should show.
+  }, { timeout: 120_000 }],
+
+  throwawayFleet: [async ({ request, cleanup }, use) => {
+    await use(async (kind) => {
+      requirePremium('throwawayFleet');
+      const fleet = await createFleet(request, ownName(kind));
+      cleanup.add(`delete fleet ${fleet.name}`, (r) =>
+        expect
+          .poll(() => deleteFleet(r, fleet.id, { ignoreMissing: true }).then(() => true, () => false), {
+            timeout: 30_000,
+            message: `throwaway fleet ${fleet.id} could not be deleted and is still on the instance`,
+          })
+          .toBe(true),
+      );
+      return fleet;
+    });
+  }, { box: true }],
+
+  borrowSims: [async ({ request, cleanup }, use) => {
+    await use(async ({ platform, count, offset, to, mdm }) => {
+      requirePremium('borrowSims');
+      if (mdm && platform === 'linux') throw new Error('[borrowSims] no MDM-enrolled Linux simulations exist');
+      const ids = mdm
+        ? await findMdmSimulations(request, platform as 'darwin' | 'windows', count, offset)
+        : await findSimulations(request, platform, count, offset);
+      if (ids.length < count) {
+        throw new Error(
+          `[borrowSims] needs ${count} online ${mdm ? 'MDM-enrolled ' : ''}${platform} simulations at offset ${offset}; the pool has ${ids.length}`,
+        );
+      }
+      // Registered before the move, so a move that fails halfway still sends back what it moved.
+      cleanup.add(`return simulations ${ids.join(', ')} to Unassigned`, (r) => transferHosts(r, 0, ids));
+      await transferHosts(request, to, ids);
+      return ids;
+    });
+  }, { box: true }],
+
+  seed: [async ({ request, cleanup }, use) => {
+    await use({
+      async label(kind, hostIds) {
+        const name = ownName(kind);
+        const id = await createManualLabel(request, name, hostIds);
+        cleanup.add(`delete label ${name}`, async (r) => {
+          const status = await deleteLabelById(r, id);
+          if (status >= 300) throw new Error(`[seed.label] deleting label ${id} answered ${status}`);
+        });
+        return { id, name };
+      },
+      async policy(kind, { fleetId, ...fields } = {}) {
+        const name = ownName(kind);
+        if (fleetId === undefined) {
+          const policy = await createPolicy(request, { name, ...fields });
+          cleanup.add(`delete global policy ${name}`, (r) => deletePolicies(r, [policy.id]));
+          return policy;
+        }
+        const policy = await createFleetPolicy(request, fleetId, { name, ...fields });
+        cleanup.add(`delete policy ${name} on fleet ${fleetId}`, (r) => deleteFleetPolicies(r, fleetId, [policy.id]));
+        return { id: policy.id, name: policy.name };
+      },
+      async report(kind, opts = {}) {
+        const report = await createReport(request, { ...opts, name: ownName(kind) });
+        cleanup.add(`delete report ${report.name}`, (r) => deleteReport(r, report.id));
+        return report;
+      },
+      async script(kind, { fleetId, content, extension = '.sh' }) {
+        const name = `${ownName(kind)}${extension}`;
+        const id = await uploadScript(request, fleetId, name, content);
+        cleanup.add(`delete script ${name}`, (r) => deleteScript(r, id));
+        return { id, name };
+      },
+    });
+  }, { box: true }],
 
   workstationsFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('workstationsFleetId', 'Workstations'));

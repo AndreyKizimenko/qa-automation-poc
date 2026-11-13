@@ -69,7 +69,11 @@ export async function listFleetPolicies(
   }));
 }
 
-/** Delete a fleet's policies by id; safe on already-deleted ids. */
+/**
+ * Deletes a fleet's policies by id; an id already gone is not an error. As
+ * with {@link deletePolicies}, Fleet refuses the whole batch with a 404 when
+ * any one id is missing, so such a batch is sent again an id at a time.
+ */
 export async function deleteFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
@@ -80,6 +84,10 @@ export async function deleteFleetPolicies(
     headers: authHeaders(),
     data: { ids },
   });
+  if (res.status() === 404) {
+    if (ids.length > 1) for (const id of ids) await deleteFleetPolicies(request, fleetId, [id]);
+    return;
+  }
   if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()}: ${await res.text()}`);
 }
 
