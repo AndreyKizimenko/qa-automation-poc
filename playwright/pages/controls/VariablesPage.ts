@@ -52,6 +52,12 @@ export class VariablesPage {
     const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
     await this.page.goto(`/controls/variables/global-variables${qs}`);
     await expect(this.heading).toBeVisible();
+    // The list's first fetch has to land before anything is saved: the card's
+    // refetch after a save joins a fetch still in flight (react-query 3 doesn't
+    // start a second one), so a save made too soon is answered with the list
+    // from before it, and the table keeps showing that.
+    await expect(this.table.rowOrEmpty()).toBeVisible();
+    await this.table.waitForSettled();
   }
 
   /** A variable's row in the table, matched by its (uppercased) name. */
