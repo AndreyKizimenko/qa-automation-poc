@@ -106,13 +106,14 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    happened. Scope every assertion to records you created. Assert text or a value, never `toHaveScreenshot`
    for behaviour; when a snapshot can't be avoided, the header says why.
 7. **Give everything you create a home.** Name per-run things with `ownName(kind)` (packages
-   `fleet-pw-*`), and never give a durable thing those prefixes. Remove them in an `afterEach`, or in a
-   `finally` only when the central sweep would catch a miss: Playwright skips the `finally` of a test that
-   times out, and runs its hooks. The sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
+   `fleet-pw-*`), and never give a durable thing those prefixes. Register each one's undo with the
+   `cleanup` fixture the moment it exists (`cleanup.add('delete label', (r) => deleteLabelById(r, id))`):
+   it runs after the test even when it times out, which skips a `finally` (lint fails a `finally` that
+   calls the API). For a killed run, the sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
    takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It returns
    a simulation left on Workstations only between runs, so a spec that stages hosts there still returns
-   them in an `afterEach`. It does not return a host moved to QA, restore a config key you changed (only
-   the switches `CLAUDE.md` lists), or delete `pw-*` labels on free. What can outlive a timed-out test on the VMs fleet
+   them itself. It does not return a host moved to QA, restore a config key you changed (only
+   the switches `CLAUDE.md` lists), or delete `pw-*` labels on free. What a killed run can leave on the VMs fleet
    needs a home there: the VMs sweep for things Fleet stores by name, the resting-state step for state on a
    host. Reports are swept by exact prefix on VMs and Workstations (gitops declares
    `pw-host-report-results`), so a new kind of per-run report adds its prefix.

@@ -62,22 +62,20 @@ test.describe('Free • license', () => {
   // authentication" checkbox (`UserForm.tsx`, shown only on premium or when
   // already set — see `tests/e2e/free/settings/users/`), and `ModifyUser`
   // refuses `mfa_enabled: true` on free before it checks anything else.
-  test('turning on Fleet MFA for a user is refused with 402', async ({ request }) => {
+  test('turning on Fleet MFA for a user is refused with 402', async ({ request, cleanup }) => {
     const { user } = await createUser(request, {
       name: 'QA free MFA refusal',
       email: qaTestEmail('mfa'),
       global_role: 'observer',
       admin_forced_password_reset: false,
     });
-    try {
-      const res = await request.patch(apiUrl(`users/${user.id}`), {
-        headers: authHeaders(),
-        data: { mfa_enabled: true },
-      });
-      await expectLicenseRefusal(res, 'PATCH users/:id mfa_enabled');
-      expect((await getUser(request, user.id)).mfa_enabled).toBe(false);
-    } finally {
-      await deleteUser(request, user.id, { ignoreMissing: true });
-    }
+    cleanup.add(`delete user ${user.email}`, (r) => deleteUser(r, user.id, { ignoreMissing: true }));
+
+    const res = await request.patch(apiUrl(`users/${user.id}`), {
+      headers: authHeaders(),
+      data: { mfa_enabled: true },
+    });
+    await expectLicenseRefusal(res, 'PATCH users/:id mfa_enabled');
+    expect((await getUser(request, user.id)).mfa_enabled).toBe(false);
   });
 });

@@ -128,13 +128,16 @@ test built on them passes or fails on timing:
   than one shape, and each shape is a case it may silently skip.
 
 **Will it leave state behind, or collide?**
-- Cleanup that a timeout skips. A timed-out test runs its hooks, not its `finally`. A `finally` is enough
-  only for what the sweep (`setup/cleanup.steps.ts`) would catch: things on Unassigned and Workstations,
-  `pw-*` / `fleet-pw-*` things and borrowed simulations on the VMs fleet, `pw-*` fleets. Anything else
-  needs an `afterEach`: a host moved to Workstations or QA, a config key, a `pw-*` label on free, a report
-  on VMs or Workstations whose prefix the sweep doesn't list.
-- Per-run names that don't start `pw-*` / `fleet-pw-*`, that aren't unique per scope in a loop, or a
-  durable thing that does carry the prefix.
+- Cleanup that a timeout skips. A timed-out test runs its hooks and its fixtures' teardown, not its
+  `finally`, so new code registers each undo with the `cleanup` fixture right after the thing exists (lint
+  fails a `finally` that calls the API; an `afterEach` is the older way and still sound). A recorded
+  `finally` is enough only for what the sweep (`setup/cleanup.steps.ts`) would catch: things on Unassigned
+  and Workstations, `pw-*` / `fleet-pw-*` things and borrowed simulations on the VMs fleet, `pw-*` fleets.
+  Anything else needs one of the two: a host moved to Workstations or QA, a config key, a `pw-*` label on
+  free, a report on VMs or Workstations whose prefix the sweep doesn't list. An undo registered before the
+  thing exists, or one that fails on "already gone".
+- Per-run names not from `ownName(kind)` (lint fails a `pw-` name built by hand), a kind that isn't unique
+  per scope in a loop, or a durable thing that carries the `pw-` prefix.
 - Global config changed without an `afterEach` restore keyed to the test that changed it, restoring only
   the keys it wrote; a key or a fleet's whole subtree that another spec also writes (`git grep` the key
   before accepting a new writer); a switch flipped in the main project that belongs in `exclusive/`.

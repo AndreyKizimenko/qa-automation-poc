@@ -96,6 +96,27 @@ tester.run('use-own-name', rules['use-own-name'], {
   ],
 });
 
+tester.run('no-api-cleanup-in-finally', rules['no-api-cleanup-in-finally'], {
+  valid: [
+    "cleanup.add('delete user', (r) => deleteUser(r, user.id, { ignoreMissing: true }));",
+    // A local resource, not the instance.
+    'try { await use(api); } finally { await api.dispose(); }',
+    'try { run(); } finally { process.env.SUITE = original; }',
+    // An after hook runs after a timeout too.
+    'test.afterEach(async ({ request }) => { try { await a(request); } finally { await b(request); } });',
+  ],
+  invalid: [
+    {
+      code: 'test("x", async ({ request }) => { try { await run(); } finally { await deleteReport(request, id); } });',
+      errors: [{ messageId: 'finallyCleanup' }],
+    },
+    {
+      code: 'async function within(request) { try { await go(); } finally { await transferHosts(request, 0, ids); } }',
+      errors: [{ messageId: 'finallyCleanup' }],
+    },
+  ],
+});
+
 tester.run('activity-needs-baseline', rules['activity-needs-baseline'], {
   valid: [
     `await assertActivityAfter(request, 'created_policy', baseline, (d) => d.policy_name === name);`,

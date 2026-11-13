@@ -36,7 +36,7 @@ coverage is to be a suite of its own.
   (`playwright/CLAUDE.md`), and call `teamDropdown.select(scope)` after every scoped `goto`.
 - Search until the list holds exactly your row before acting on it.
 - An absence assertion sits beside something that proves the page finished loading (here, the empty state).
-- Remove the seed in an `afterEach`, or in a `finally` when the sweep would catch a miss.
+- Register the seed's delete with `cleanup.add` as soon as it exists; it runs even when the test times out.
 
 **Serial lifecycle.** `e2e/premium/policies/policies.spec.ts` › *Policies CRUD*.
 - `test.describe.configure({ mode: 'serial' })` only because the steps share an id or a name through the
@@ -83,7 +83,8 @@ split.
 - `test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES })`: the budget covers the VM's queue,
   not just this test's work, and every wait stays inside it.
 - `requireRealHost(request, platform)` for the host; it fails with the reason when the VM is missing.
-- A describe-level tracker (`let created`) that an `afterEach` deletes: the test's `finally` is skipped on
+- The created title's delete registered with `cleanup.add` (older specs: a describe-level tracker that an
+  `afterEach` deletes): the test's `finally` is skipped on
   a timeout, and deleting a title also cancels its queued installs.
 - A durable fixture from `helpers/vm-fixtures.ts`, left uninstalled, unless the test changes the title
   itself; then a per-run `fleet-pw-*` package deleted in the same test.

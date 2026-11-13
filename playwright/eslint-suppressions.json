@@ -41,6 +41,9 @@
     }
   },
   "tests/e2e/free/controls/os-settings/profile-delivery.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 2
     }
@@ -79,6 +82,9 @@
     }
   },
   "tests/e2e/free/policies/policy-automations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
     },
@@ -183,6 +189,9 @@
     }
   },
   "tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -193,26 +202,41 @@
     }
   },
   "tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 2
     }
   },
   "tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 5
     }
   },
   "tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 4
     }
   },
   "tests/e2e/premium/controls/os-settings/profile-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 10
     }
   },
   "tests/e2e/premium/controls/scripts/batch-run.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -230,7 +254,20 @@
       "count": 1
     }
   },
+  "tests/e2e/premium/controls/setup-experience/install-software.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/dashboard/automations-activity.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
   "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -239,7 +276,15 @@
     }
   },
   "tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
       "count": 2
     }
   },
@@ -249,6 +294,9 @@
     }
   },
   "tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
@@ -288,6 +336,9 @@
     }
   },
   "tests/e2e/premium/hosts/bulk-transfer.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -298,10 +349,18 @@
     }
   },
   "tests/e2e/premium/hosts/host-idp-username.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
     "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/host-transfer-permissions.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
       "count": 1
     }
   },
@@ -314,6 +373,9 @@
     "suite/activity-needs-baseline": {
       "count": 3
     },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -322,6 +384,9 @@
     }
   },
   "tests/e2e/premium/policies/policy-automations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
     },
@@ -330,6 +395,9 @@
     }
   },
   "tests/e2e/premium/policies/policy-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 6
     }
@@ -353,6 +421,9 @@
     }
   },
   "tests/e2e/premium/reports/list-filters.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 3
+    },
     "suite/no-date-now-in-name": {
       "count": 3
     },
@@ -361,6 +432,9 @@
     }
   },
   "tests/e2e/premium/reports/report-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 5
     }
@@ -368,6 +442,9 @@
   "tests/e2e/premium/reports/reports.spec.ts": {
     "suite/activity-needs-baseline": {
       "count": 3
+    },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
     },
     "suite/no-date-now-in-name": {
       "count": 2
@@ -418,6 +495,9 @@
     }
   },
   "tests/e2e/premium/settings/team-host-status-webhook.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
     }
@@ -460,16 +540,25 @@
     }
   },
   "tests/e2e/premium/settings/users/team-admin-scope.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/custom-icons.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/display-name.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
@@ -485,11 +574,17 @@
     }
   },
   "tests/e2e/premium/software/install-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/inventory-reflects-install.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 2
     },
@@ -498,6 +593,9 @@
     }
   },
   "tests/e2e/premium/software/large-upload.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -522,8 +620,21 @@
     }
   },
   "tests/e2e/premium/software/no-teams-views.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    }
+  },
+  "tests/e2e/premium/software/package-scripts.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/software/patch-policy.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
     }
   },
   "tests/e2e/premium/software/role-access.spec.ts": {
@@ -535,6 +646,9 @@
     "suite/activity-needs-baseline": {
       "count": 2
     },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-class-locator-in-spec": {
       "count": 3
     },
@@ -543,18 +657,37 @@
     }
   },
   "tests/e2e/premium/software/software-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 2
     }
   },
+  "tests/e2e/premium/software/software-lifecycle-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
   "tests/e2e/premium/software/uninstall-from-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/update-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 1
+    }
+  },
+  "tests/e2e/premium/software/version-pinning.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
     }
   },
   "tests/e2e/premium/software/vulnerabilities.spec.ts": {
@@ -573,6 +706,9 @@
     }
   },
   "tests/e2e/shared/command-palette/deep-links.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 2
     },
@@ -581,6 +717,9 @@
     }
   },
   "tests/e2e/shared/command-palette/pickers.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 2
     }
@@ -615,6 +754,9 @@
     }
   },
   "tests/e2e/shared/exclusive/script-execution-disabled.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
     }
@@ -633,6 +775,9 @@
     }
   },
   "tests/e2e/shared/hosts/host-live-query.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -641,6 +786,9 @@
     }
   },
   "tests/e2e/shared/hosts/host-reports-tab.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 3
+    },
     "suite/no-date-now-in-name": {
       "count": 3
     },
@@ -649,6 +797,9 @@
     }
   },
   "tests/e2e/shared/hosts/host-run-script.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 4
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
@@ -691,6 +842,9 @@
     }
   },
   "tests/e2e/shared/policies/policy-hosts.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 2
     }
@@ -715,6 +869,11 @@
       "count": 1
     },
     "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/organization/custom-logo.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
       "count": 1
     }
   },

@@ -1,9 +1,9 @@
 /**
  * The suite's two test objects, one built on the other:
  *
- *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM) and
- *     nothing that needs a page. API and CLI specs import it, so none of their
- *     tests opens a browser.
+ *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM), the
+ *     `cleanup` stack, and nothing that needs a page. API and CLI specs import
+ *     it, so none of their tests opens a browser.
  *   - `test` extends it with the page objects and the automatic `pageHealth`
  *     monitor. Browser specs import `{ test, expect }` from this file (not from
  *     `@playwright/test`) and destructure whichever page objects they need.
@@ -16,7 +16,7 @@
  *   - Auth comes from the setup projects' storage state.
  *   - Tests call `<page>.goto()` themselves so the spec body stays explicit.
  */
-import { test as base } from '@playwright/test';
+import { test as base, type APIRequestContext } from '@playwright/test';
 import {
   monitorConsoleErrors,
   monitorNetworkFailures,
@@ -156,6 +156,32 @@ type ApiWorkerFixtures = {
   liveMacosHost: OnlineHostRef;
 };
 
+/** What a test registers to undo something it made on the instance: the `cleanup` fixture. */
+export interface Cleanup {
+  /**
+   * Registers how to undo what the test just made. `undo` gets an API context
+   * of its own, which is still open when the test's own context isn't.
+   * Register right after the thing exists, before anything that can fail.
+   */
+  add(what: string, undo: (request: APIRequestContext) => Promise<unknown>): void;
+}
+
+type ApiTestFixtures = {
+  /**
+   * The test's undo stack. Everything registered with `cleanup.add` runs
+   * after the test, last registered first, whether it passed, failed or timed
+   * out: Playwright skips the rest of a timed-out test, its `finally` blocks
+   * included, but still tears its fixtures down, giving this one a budget of
+   * its own. Each undo runs as a report step; one that fails doesn't stop the
+   * rest, and the test then fails with every undo that didn't take. A retry
+   * starts on an instance its failed attempt has already put back.
+   *
+   * An undo meets what the test may have removed itself (a delete step), so it
+   * treats "already gone" as done: `deleteFleet(r, id, { ignoreMissing: true })`.
+   */
+  cleanup: Cleanup;
+};
+
 type FleetFixtures = {
   /**
    * Fleet spotlight. A component object rather than a page object, and the
@@ -274,7 +300,29 @@ async function resolvePremiumFleetId(
 
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
-export const apiTest = base.extend<object, ApiWorkerFixtures>({
+export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
+  cleanup: [async ({}, use) => {
+    const undos: Array<{ what: string; undo: (request: APIRequestContext) => Promise<unknown> }> = [];
+    await use({ add: (what, undo) => { undos.push({ what, undo }); } });
+    if (!undos.length) return;
+
+    const failures: string[] = [];
+    await withApiRequest(async (request) => {
+      for (const { what, undo } of undos.reverse()) {
+        try {
+          await base.step(`cleanup: ${what}`, async () => { await undo(request); }, { box: true });
+        } catch (error) {
+          failures.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    });
+    if (failures.length) {
+      throw new Error(`[cleanup] ${failures.length} undo(s) failed; what each was to remove is still on the instance:\n  ${failures.join('\n  ')}`);
+    }
+  // Its own budget, apart from the test's: a test that used its whole timeout
+  // still gets its undo actions run.
+  }, { box: true, timeout: 120_000 }],
+
   workstationsFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('workstationsFleetId', 'Workstations'));
   }, { scope: 'worker', box: true }],

@@ -9,6 +9,7 @@ module.exports = {
     'no-page-locator-in-spec': require('./no-page-locator-in-spec'),
     'no-date-now-in-name': require('./no-date-now-in-name'),
     'use-own-name': require('./use-own-name'),
+    'no-api-cleanup-in-finally': require('./no-api-cleanup-in-finally'),
     'activity-needs-baseline': require('./activity-needs-baseline'),
     'no-swallowed-response': require('./no-swallowed-response'),
     'skip-needs-reason': require('./skip-needs-reason'),
