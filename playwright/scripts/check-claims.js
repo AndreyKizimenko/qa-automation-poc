@@ -1,7 +1,9 @@
 // `npm run lint:claims` (part of `npm run check`): holds helpers/claims.ts to
 // what it promises. Fails, listing every problem, when
 //   - two simulation claims share hosts on a tier, unless every one of them
-//     only reads (or both belong to one spec, whose tests share on purpose);
+//     only reads (or both belong to one spec, whose tests share on purpose),
+//     a `fleetctl-mdm` claim that changes its host included, against the
+//     `transfer` claims whose ordering it walks;
 //   - a claim needs more hosts than its pool held when last measured;
 //   - a key names a spec that doesn't exist or doesn't use it, or another
 //     spec uses it;
@@ -51,7 +53,7 @@ function usesKey(text, key) {
 }
 
 function main() {
-  const { SIM_CLAIMS, POOL_SIZES, CATALOG_CLAIMS } = loadRegistry();
+  const { SIM_CLAIMS, POOL_SIZES, CATALOG_CLAIMS, TRANSFER_POOL_END } = loadRegistry();
   const specs = readSpecs();
   const problems = [];
 
@@ -95,6 +97,21 @@ function main() {
         problems.push(
           `${a.key} (${a.offset}–${a.offset + a.count - 1}, ${a.use}) and ${b.key} (${b.offset}–${b.offset + b.count - 1}, ${b.use}) ` +
             `share ${a.platform} hosts of the ${a.pool} pool on ${tiers.join(' and ')}`,
+        );
+      }
+    }
+  }
+
+  // `fleetctl-mdm` walks the `transfer` ordering with a filter, so a claim's
+  // host sits at its offset or later there: one that changes its host must not
+  // meet a `transfer` claim anywhere from that offset to the pool's end.
+  for (const a of claims.filter((c) => c.pool === 'fleetctl-mdm' && c.use !== 'read')) {
+    for (const b of claims.filter((c) => c.pool === 'transfer' && c.platform === a.platform)) {
+      const tiers = tiersOf(a.spec).filter((t) => tiersOf(b.spec).includes(t));
+      if (tiers.length && b.offset + b.count > a.offset && b.offset < TRANSFER_POOL_END) {
+        problems.push(
+          `${a.key} (${a.use}, ${a.platform} from ${a.offset}) can land on ${b.key}'s hosts ` +
+            `(${b.offset}–${b.offset + b.count - 1}): fleetctl-mdm walks the transfer ordering`,
         );
       }
     }

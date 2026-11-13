@@ -28,9 +28,14 @@ export type SimPlatform = 'darwin' | 'windows' | 'linux';
  *    MDM-enrolled ones, scarce, kept for profile targeting.
  *  - `offline` (`findOfflineSimulations`): the set the perf daemons abandoned
  *    at their last daily refresh, on Unassigned, newest first.
- *  - `fleetctl-mdm` (`findSimulatedHostForMdm`): from the end like `transfer`,
- *    with a hostname, MDM on or off as the claim says (each its own index
- *    space), and orbit when the claim asks for it.
+ *  - `fleetctl-mdm` (`findSimulatedHostForMdm`): the `transfer` ordering again,
+ *    filtered to hosts with a hostname, MDM on or off as the claim says, and
+ *    orbit when the claim asks for it. It shares hosts with `transfer`: an
+ *    offset here is the lowest position the host can have there. So the check
+ *    keeps a `fleetctl-mdm` claim that changes its host apart from every
+ *    `transfer` claim on the platform from that offset up to
+ *    {@link TRANSFER_POOL_END}. A read-only one may land on a `transfer`
+ *    claim's host: its commands are refused client-side, before Fleet sees them.
  */
 export type SimPool = 'transfer' | 'plain' | 'mdm' | 'offline' | 'fleetctl-mdm';
 
