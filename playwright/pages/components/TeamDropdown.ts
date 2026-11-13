@@ -61,6 +61,14 @@ export class TeamDropdown {
    * run of a throwaway-fleet spec, say) is the case that provokes it; prefer
    * `<page>.goto({ fleetId })` for scope there, and keep this for the stable
    * named fleets.
+   *
+   * A selection can fail to take on a page that is still settling, in two
+   * ways. The menu closes whenever focus leaves react-select's hidden input,
+   * so it can be gone before the option is clicked; and an option click can
+   * land without Fleet acting on it, leaving the label on its old value for
+   * as long as anyone waits. Neither is a wrong selection, so each attempt
+   * opens the menu if it is closed, clicks the option and reads the label
+   * back, and an attempt that didn't take is made again.
    */
   async selectByLabel(label: string): Promise<void> {
     // Free has no fleet scoping, so the dropdown never renders there. The
@@ -72,15 +80,18 @@ export class TeamDropdown {
 
     await expect(this.trigger).toBeVisible();
 
-    const current = (await this.currentValue.textContent())?.trim();
-    if (current === label) return;
-
-    await this.trigger.click();
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    await this.page
-      .locator('.fleet-dropdown__option')
-      .filter({ hasText: new RegExp(`^${escaped}$`) })
-      .click();
-    await expect(this.currentValue).toHaveText(label);
+    const option = this.options.filter({ hasText: new RegExp(`^${escaped}$`) });
+    // Each step gets a bound of its own: without one, a click on an option
+    // that is no longer there waits out the whole test instead of the attempt.
+    const attempt = { timeout: 5_000 };
+
+    await expect(async () => {
+      if ((await this.currentValue.textContent(attempt))?.trim() === label) return;
+      // The trigger toggles, so it is clicked only while the menu is closed.
+      if ((await this.trigger.getAttribute('aria-expanded', attempt)) !== 'true') await this.trigger.click(attempt);
+      await option.click(attempt);
+      await expect(this.currentValue).toHaveText(label, attempt);
+    }).toPass({ timeout: 30_000 });
   }
 }
