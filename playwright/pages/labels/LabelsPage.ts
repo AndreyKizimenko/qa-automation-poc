@@ -11,8 +11,10 @@ import { Toast } from '../components/Toast';
  * The list shows only *custom* labels (built-ins are filtered out), so it can
  * be empty — `goto()` anchors on the page heading, not a table row. Each row's
  * actions live behind a react-select `ActionsDropdown` (Edit / Delete / View
- * all hosts); the menu portals to <body> and its options carry no test id, so
- * they're matched by their BEM class + visible text.
+ * all hosts); the menu portals to <body>. Its options carry
+ * `data-testid="dropdown-option"`, the id every `DropdownWrapper` option on the
+ * label form carries too, so they're matched by the actions menu's own option
+ * class + visible text, which no other dropdown emits.
  */
 export type LabelType = 'Dynamic' | 'Manual' | 'Host vitals';
 export type LabelPlatform = 'All platforms' | 'macOS' | 'Windows' | 'Ubuntu' | 'Centos';
