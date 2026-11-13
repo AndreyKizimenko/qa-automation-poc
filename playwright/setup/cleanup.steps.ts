@@ -10,7 +10,7 @@
  * means a Playwright run is self-healing regardless of how the live
  * instance got into its current state.
  */
-import { test } from '@playwright/test';
+import { test, type APIRequestContext } from '@playwright/test';
 import {
   cancelUpcomingActivity,
   clearFleetOsUpdates,
@@ -55,6 +55,14 @@ import {
 import { VM_SOFTWARE_FIXTURES, ensureVmFixtureUninstalled, findVmFixtureTitle, type VmPlatform } from '@helpers/vm-fixtures';
 
 const WORKSTATIONS_FLEET = 'Workstations';
+
+// A step that works on a fleet is declared on premium only: free has no fleets.
+// Declared on free and skipped there, the four of them would show as skipped
+// tests in a free report, once for each time this file runs, beside the tests
+// that are skipped for a reason. On premium this is `test` itself, so a step's
+// result still points at its own line.
+type CleanupStep = (title: string, body: (args: { request: APIRequestContext }) => Promise<void>) => void;
+const premiumStep: CleanupStep = process.env.SUITE === 'free' ? () => {} : test;
 
 // Queries and packs are global on the Fleet API (no per-team endpoint),
 // so deleting them with the unassigned wipe also drains anything created
@@ -111,8 +119,7 @@ test('wipe unassigned state', async ({ request }) => {
 // every fleet picker; this removes them. No standing fleet starts `pw-`. A
 // failure here only logs: a stray fleet is a nuisance, and failing cleanup-setup
 // over one would skip the whole run.
-test('sweep throwaway pw-* fleets', async ({ request }) => {
-  test.skip(process.env.SUITE === 'free', 'fleets are premium-only');
+premiumStep('sweep throwaway pw-* fleets', async ({ request }) => {
   await deleteFleetsWithPrefix(request, 'pw-').catch((err) =>
     console.warn('[cleanup] pw-* fleet sweep failed; the next run retries:', err),
   );
@@ -128,12 +135,7 @@ test('remove test-added global enroll secrets', async ({ request }) => {
   );
 });
 
-test('wipe Workstations team state', async ({ request }) => {
-  test.skip(
-    process.env.SUITE === 'free',
-    'Workstations team only exists on premium',
-  );
-
+premiumStep('wipe Workstations team state', async ({ request }) => {
   const workstations = await findFleetByName(request, WORKSTATIONS_FLEET);
   if (!workstations) {
     // Workstations is provisioned by gitops; if it's missing the instance
@@ -178,9 +180,7 @@ test('wipe Workstations team state', async ({ request }) => {
 // timed-out test before its `finally` runs, and an exact pin left behind stops
 // Fleet's hourly auto-update cron for that title: the version history those
 // specs rely on stops growing, for every later run.
-test('clear stranded version pins on the durable app fleets', async ({ request }) => {
-  test.skip(process.env.SUITE === 'free', 'Fleet-maintained apps and fleets are premium-only');
-
+premiumStep('clear stranded version pins on the durable app fleets', async ({ request }) => {
   for (const name of ['QA', 'VMs']) {
     const fleet = await findFleetByName(request, name);
     if (!fleet) {
@@ -212,9 +212,7 @@ test('clear stranded version pins on the durable app fleets', async ({ request }
 // install this run queues after it.
 const OWN_PACKAGE = /^fleet-pw-/;
 
-test('sweep host-execution leftovers from the VMs fleet', async ({ request }) => {
-  test.skip(process.env.SUITE === 'free', 'fleets are premium-only');
-
+premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ request }) => {
   const vms = await findFleetByName(request, 'VMs');
   if (!vms) throw new Error('VMs fleet not found on premium instance — gitops apply likely missing');
 

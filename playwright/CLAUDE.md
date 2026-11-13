@@ -222,7 +222,7 @@ Folder conventions:
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
 
-The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the fleet steps inside `cleanup.steps.ts` skip on free (fleets are premium-only): Workstations, the `pw-*` fleet sweep, the version-pin clear and the VMs-fleet sweep with its `pw-*` labels. `wipe unassigned state`, the enroll-secret sweep and the VM resting state run on both, and `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
+The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the fleet steps inside `cleanup.steps.ts` are missing on free (fleets are premium-only): Workstations, the `pw-*` fleet sweep, the version-pin clear and the VMs-fleet sweep with its `pw-*` labels. They are declared with `premiumStep`, which declares nothing on free, so a free report's skipped count is tests only. `wipe unassigned state`, the enroll-secret sweep and the VM resting state run on both, and `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
 
 The `gitops-mode` project runs in **its own invocation after the exclusive specs** — CI's third step
 (`if: !cancelled()`, merged into the same report) and `npm run test:premium`'s third invocation — pinned to
