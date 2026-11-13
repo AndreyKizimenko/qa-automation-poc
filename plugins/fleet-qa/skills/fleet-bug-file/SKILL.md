@@ -1,6 +1,6 @@
 ---
 name: fleet-bug-file
-description: File a Fleet bug on GitHub from a finding — verify it reproduces, pin the discovered/reproduced builds, decide released vs unreleased and the product group, write the issue from Fleet's bug-report template with QA's field rules, create it with gh, hand back the screenshots to attach, and record setup + retest checks in the local filed-bugs tracker. Use whenever the user wants to open, file, write up or "bug" an issue they found — "let's bug that", "file this", "open an issue for the reset dialog", "write up the caret thing as a bug", or picking "file it" from a QA decision list — even if they don't say "bug report". Do NOT use to QA an existing fix (fleet-bug-qa), to retest bugs already filed (fleet-bug-retest), for security vulnerabilities that belong in fleetdm/security (ask first), or for feature requests and stories.
+description: "File a Fleet bug on GitHub from a finding: confirm it reproduces, pin the discovered and reproduced builds, decide released vs unreleased and the product group, write the issue from Fleet's bug-report template, create it with gh, hand back the screenshots to attach, and record the setup and retest checks in the local filed-bugs tracker. Use when the user wants to open, file, write up or 'bug' something they found ('let's bug that', 'file this', 'open an issue for the reset dialog', 'write up the caret thing as a bug'), or picks 'file it' from a QA decision list, for one finding or a batch. Not for QA of a fix (fleet-bug-qa), retesting bugs already filed (fleet-bug-retest), security vulnerabilities (ask first: they belong in fleetdm/security), or feature requests and stories."
 ---
 
 # File a Fleet bug
@@ -14,6 +14,12 @@ The instances and the QA workspace (where the tracker lives) come from
 `~/.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
 `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
 
+**Several findings at once** (a decision list's "file A, C and E") are one pass
+through this skill, not one load of it per finding. Group findings that share a
+cause or an area into one issue and say how you grouped them — thirty near-identical
+bugs help nobody — ask the questions for the whole batch in one round, and file
+them in turn.
+
 ## 1. Pin the facts
 
 Work from what's already established in the conversation (a QA run's RESULTS.md,
@@ -22,7 +28,9 @@ just did). Before writing, make sure you know:
 
 - **What's wrong, concretely** — the observed behavior and why it's wrong
   (contradicts its own UI copy, the docs, another path that does it right).
-- **It reproduces** on at least one named build. If the only evidence is old or
+- **It reproduces** on at least one named build. If the user says they already
+  reproduced it ("I reproed it on 4.92 and 4.93, just help file it"), take their
+  builds and don't redo it. If the only evidence is old or
   second-hand, reproduce it once now — an issue that doesn't reproduce wastes the
   developer's first hour. Use the `fleet-bug-qa` scripts for this
   (`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/`: `fleetapi.sh`, `screenshot.mjs`).
@@ -35,6 +43,9 @@ just did). Before writing, make sure you know:
   (record what was tried; never file a bare "cannot reproduce").
 - **The mechanism, if you actually found it** — file:line of the code responsible.
   Only what you confirmed; see "More info" below.
+- **Who hits it, and how** — the path a real user takes to it. If the repro uses an
+  input, a timing or a scale a customer wouldn't, say what the realistic version
+  looks like and what it costs them. The developer and the PM both ask this first.
 
 **Facts are yours to find; decisions are the user's.** Builds, the product group,
 whether it reproduces, duplicates, the responsible code: look those up (the steps
@@ -50,15 +61,18 @@ data they shouldn't, bypass auth), it must not go in the public `fleetdm/fleet`
 repo. Stop and ask the user whether it goes to `fleetdm/security`.
 
 **Duplicate check.** Search before filing:
-`gh issue list -R fleetdm/fleet --state all --search "<2-3 key terms> in:title,body" --limit 20`.
-If an open issue already covers it, tell the user and offer a comment on that
-issue instead. Mention open stories that touch the same surface too (e.g. a
+`gh issue list -R fleetdm/fleet --state all --search "<2-3 key terms> in:title,body" --limit 20`,
+and the user's own filed bugs: `grep -i "<terms>" "<QA workspace>/filed-bugs/INDEX.md"`
+(twice a "new" finding was one they had filed weeks earlier).
+If an open issue already covers it, tell the user and offer to add the new evidence
+to that issue instead — a comment, or an edit to its body when it's theirs and they
+prefer that. Mention open stories that touch the same surface too (e.g. a
 copy rewrite of the same dialog) — the developer should know they overlap. If a *closed* one does, it may be a regression — say so and link it
 in More info.
 
 ## 2. Versions
 
-`scripts/fleet_version.sh <ctx>...` prints each instance's build in the right
+`${CLAUDE_SKILL_DIR}/scripts/fleet_version.sh <ctx>...` prints each instance's build in the right
 format: `rc-minor-fleet-v4.93.0 (e700854)` for branch/RC builds (the short SHA pins
 the exact build, since RC branches move daily), `fleet-v4.92.0` for released ones.
 
@@ -91,7 +105,7 @@ the work. Say in one line what the decision rests on.
 
 ## 4. Product group
 
-Read `references/product-groups.md`. Pick by where the broken behavior lives, state
+Read `${CLAUDE_SKILL_DIR}/references/product-groups.md`. Pick by where the broken behavior lives, state
 the choice with a one-line reason, and ask if two groups fit equally.
 
 ## 5. Write the issue
@@ -114,7 +128,9 @@ these rules per field:
 - **🧑‍💻 Steps to reproduce** — only steps that lead specifically to the bug,
   including non-obvious setup it depends on (a failing policy with a script
   automation on 2+ hosts; 50 hosts for a pagination bug; a specific CA). Leave out
-  the obvious — spinning up Fleet, opening a browser, logging in. Minimise by
+  the obvious — spinning up Fleet, opening a browser, logging in. Lead with the
+  simplest repro that shows the bug; the elaborate one that found it goes in the
+  tracker entry. Minimise by
   removing one step or condition at a time and re-checking after each cut: a step
   that can go without losing the bug isn't a step, and a condition that can't go is
   one to name. Tick the "confirmed
@@ -133,24 +149,24 @@ and know where to look — not read an investigation log.
 For UI bugs, give the user the images that belong under Actual behavior: the wrong
 state, and the contradicting evidence when there is one (e.g. the confirmation that
 names one host + the other host's reset result). Use the user's own screenshots if
-they shared them; otherwise capture with
-`node ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/screenshot.mjs <ctx> <path> <out.png> --clip <sel>`.
-Read each one before sending: it must show the problem, and — this repo is public —
-no enroll secrets, tokens or real user data. Save them in `<QA workspace>/filed-bugs/<slug>/`
-while drafting, and rename the folder to the tracker entry's `<N>-<slug>/` once the issue
-exists (step 7). When more than one image goes under the same
-section, combine them into one in reading order —
-`python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/stack.py actual-behavior.png a.png b.png ...`
-(`--side` for narrow clips) — so the section takes a single paste; crop each to the
-region that shows the problem first (fleet name, filter, count) so the stack stays
-legible and carries no unrelated data. Annotate when it helps the developer find the
-problem at a glance: box the wrong state (and, in a before/after, the right one in another
-color), add a short label beside it, and caption each panel with its build. A before/after
-compares two identical scenarios — same app, input and action on both builds — so only the
-behavior differs. Draw with PIL on the captured PNG, and re-read the result: a box that clips
-the neighbouring line points at the wrong thing. Send with `SendUserFile` (display `attach`)
-after the issue exists, and name where each goes and what order the panels are in.
-`gh` can't upload images, so pasting them is the one manual step.
+they shared them; otherwise capture them the way
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/screenshots.md` says — read it
+before the first one. What matters most for an issue:
+
+- Read each one before sending: it must show the problem, and — this repo is public —
+  no enroll secrets, tokens or real user data.
+- More than one image under the same section becomes one, in reading order
+  (`stack.py`, beside `screenshot.mjs`), so the section takes a single paste. Crop each to the region that
+  shows the problem first (fleet name, filter, count).
+- Annotate when it helps the developer find the problem at a glance: box the wrong
+  state, label it, caption each panel with its build. A before/after compares two
+  identical scenarios, so only the behavior differs. When the bug is a change from
+  the previous release, a shot of how it used to be is the clearest evidence there is.
+- Save them in `<QA workspace>/filed-bugs/<slug>/` while drafting, and rename the
+  folder to the tracker entry's `<N>-<slug>/` once the issue exists (step 7).
+
+Send them after the issue exists, and name where each goes and what order the
+panels are in. `gh` can't upload images, so pasting them is the one manual step.
 
 ## 7. Create it
 
@@ -160,6 +176,10 @@ gh issue create -R fleetdm/fleet --title "<title>" --body-file <body.md> \
   [--milestone "<release, unreleased bugs only>"]
 ```
 
+`fleetdm/fleet` and these labels are the default. When the user names another repo
+or extra labels (a confidential repo, `:loadtest` on bugs from a load test), use
+theirs, and keep the body as short as they ask for.
+
 No `:product` label — QA-filed bugs skip that intake stage. Unreleased bugs always
 get the milestone from step 3, so they land on the release they'd ship in.
 Released bugs get no milestone (product decides when to fix them), and nobody gets
@@ -167,7 +187,7 @@ an assignee, unless the user asks.
 
 ## 8. Record it for retesting
 
-Add the bug to the tracker per `references/tracker.md`: a row at the top of
+Add the bug to the tracker per `${CLAUDE_SKILL_DIR}/references/tracker.md`: a row at the top of
 `<QA workspace>/filed-bugs/INDEX.md`, and `<QA workspace>/filed-bugs/<N>-<slug>.md` with the
 setup, repro, the concrete checks that will prove the fix, and nearby areas a fix
 could break. Write it for someone retesting in a month who remembers nothing — this
@@ -180,7 +200,8 @@ In chat:
   reasons for the group and released/unreleased choice;
 - the body as filed, in a four-backtick fenced block (so it can be edited and
   re-pasted if the user wants changes);
-- the screenshots, each with where it goes.
+- the screenshots, each with where it goes;
+- for a batch, a paste-ready list at the end, one line per issue: its link and title.
 
 If the user asks for changes after filing, edit the issue with
 `gh issue edit <N> -R fleetdm/fleet --body-file ...` / `--title` / `--add-label` / `--milestone` rather than filing

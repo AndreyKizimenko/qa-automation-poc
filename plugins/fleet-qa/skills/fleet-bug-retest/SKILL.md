@@ -1,6 +1,6 @@
 ---
 name: fleet-bug-retest
-description: Go through the bugs in the user's filed-bugs tracker (filed-bugs/INDEX.md in their QA workspace — the bugs they filed with fleet-bug-file), find which ones now have a fix merged into a build running on their instances, and re-verify those — replaying the recorded checks on the pre-fix and fixed instances with light regression/halo coverage and screenshots, or flagging a broader fix for a full fleet-bug-qa pass — then update the tracker. Use whenever the user asks what happened to their bugs, which of their bugs are fixed, to retest/re-verify/"check on" bugs they reported, to sweep for fixes ready to verify after a new RC or branch switch, or to follow up on a specific bug they filed. Do NOT use to file a new bug (fleet-bug-file), to QA someone else's bug or a fix with no tracker context from scratch (fleet-bug-qa), or for QA TODO threads.
+description: "Go through the bugs in the user's filed-bugs tracker (filed-bugs/INDEX.md in their QA workspace: the bugs they filed with fleet-bug-file), find which now have a fix in a build running on their instances, re-verify those by replaying the recorded checks with light regression and halo coverage and screenshots, flag a broader fix for a full fleet-bug-qa pass, and update the tracker. Use when the user asks what happened to their bugs, which of their bugs are fixed, to retest, re-verify or 'check on' bugs they reported, to sweep for fixes ready to verify after a new RC or branch switch, or to follow up on a bug they filed. Not for filing a new bug (fleet-bug-file), QA of someone else's bug or a fix with no tracker entry (fleet-bug-qa), or QA TODO threads."
 ---
 
 # Retest filed bugs
@@ -12,16 +12,21 @@ the checks, confirm nothing nearby broke, and hand back evidence.
 
 It leans on two sibling skills rather than repeating them:
 - **`fleet-bug-file`** — the tracker format: `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-file/references/tracker.md`.
-- **`fleet-bug-qa`** — the before/after method, scripts, ticket-comment format,
-  decision list and cleanup rules: `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/SKILL.md`. Read
-  its steps 3–9 before retesting; everything there applies here, at a smaller scale.
+- **`fleet-bug-qa`** — the method, the scripts and the rules:
+  `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/SKILL.md`. Read it before retesting: its Hard lines,
+  Evidence and Working with the engineer sections and its steps 4–9 apply here, at a smaller
+  scale. Beside it, in `references/`: `planning.md` § 3 (the matrix), `screenshots.md`,
+  `findings.md` (the decision list) and `report.md` (the ticket comment), each read at the step
+  that uses it.
 
 ## 1. Sync the tracker
 
+The QA workspace, the Fleet checkout and the instances come from
+`~/.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
+`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
+
 `<QA workspace>/filed-bugs/INDEX.md` is the scope: only bugs listed there get
-triaged and retested. The QA workspace, the Fleet checkout and the instances come
-from `~/.claude/fleet-qa.local.md`. If it doesn't exist, create it first, per
-`${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`. Those are the ones filed with `fleet-bug-file`, so
+triaged and retested. Those are the ones filed with `fleet-bug-file`, so
 they come with the setup and checks that make a quick retest possible — a bug
 without a tracker entry has none of that, and sweeping in everything the user ever
 authored buries the few bugs that matter under years of already-closed ones.
@@ -41,7 +46,7 @@ authored buries the few bugs that matter under years of already-closed ones.
 ## 2. Triage
 
 ```bash
-scripts/bug_status.py [--ctx previous --ctx default] [<issue> ...]
+${CLAUDE_SKILL_DIR}/scripts/bug_status.py [--ctx previous --ctx default] [<issue> ...]
 ```
 
 It finds the tracker at `$QA_WORKSPACE/filed-bugs/INDEX.md` and the Fleet checkout at
@@ -95,28 +100,36 @@ false confidence.
    object in `<QA workspace>/filed-bugs/<N>-<slug>/created.txt` (the `fleet-bug-qa`
    cleanup manifest format). If the entry's setup no longer applies (renamed
    endpoint, moved UI), adapt and note it in History.
-2. **Checks on the pre-fix instance first** — they must still fail. If they don't,
-   the checks drifted or something else changed; stop and figure out which before
-   trusting a pass.
+2. **The before.** The tracker entry already holds it: the bug was reproduced at
+   filing, on the build the entry names. That is the Pre-fix column
+   (`❌ at filing (<build>)`), and it's what engineers pick when asked. When a
+   pre-fix instance is running and the checks are quick,
+   run them there first anyway — they must still fail, and if they don't, the
+   checks drifted or something else changed, so stop and figure out which before
+   trusting a pass. Don't ask for an instance to be rebuilt just for this.
 3. **Checks on the fixed instance** — they should pass.
 4. **Regression and halo**, scaled to the fix: take the tracker's "Areas nearby"
    and anything else the diff touches. A one-line fix might need two regression
-   rows; a fix in a shared path needs more. Same rules as `fleet-bug-qa` step 3.
-5. **Screenshots** for UI bugs — prefix/fixed pairs via `fleet-bug-qa`'s
-   `screenshot.mjs`, read before sending, sent with `SendUserFile`. They're for the
-   user to trust what was done, and to post on the issue if useful.
+   rows; a fix in a shared path needs more. Same rules as `fleet-bug-qa`'s
+   `planning.md` § 3.
+5. **Screenshots** for UI bugs — before/after pairs made and sent per
+   `fleet-bug-qa`'s `screenshots.md` (the filing-time shot is the before when
+   nothing was rerun). They're for the user to trust what was done, and to post on
+   the issue if useful.
 
 ## 5. Report
 
-Per retested bug, the `fleet-bug-qa` step 8 ticket comment (verdict, X/Y, one-line
-scope, matrix — four-backtick block) and, separately, its decision list for
-anything new that turned up. Then:
+Per retested bug, the ticket comment from `fleet-bug-qa`'s `report.md` (verdict,
+X/Y, one-line scope, matrix — four-backtick block), printed without being asked,
+and, separately, the decision list from `findings.md` for anything new that
+turned up. Then:
 
 - update the tracker (`tracker.md` status values) for every triaged bug, not only the
   retested ones: `verified <branch> (<sha>)`, `reopened` or `needs full QA` after a
   retest; `fix merged (#PR)` for Waiting for a build; `closed without fix` for Closed
   without a fix — plus the last-checked date and a History line;
-- list the setup left behind and ask before cleaning up (`fleet-bug-qa` step 9);
+- list the setup left behind and ask before cleaning up (`fleet-bug-qa` step 9); when
+  the next bug needs the same setup, say so and keep it;
 - don't close issues, move board cards or post comments yourself — hand the user
   the comment and let them do it (or do it if they ask).
 

@@ -31,6 +31,9 @@ Icon
 # Python bytecode (playwright-run-reviewer ships a parse script).
 __pycache__/
 
+# `claude plugin eval` output (reports and traces of each run of plugins/*/evals/).
+plugins/*/evals/results/
+
 # Logs
 *.log
 

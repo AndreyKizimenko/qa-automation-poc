@@ -14,19 +14,39 @@ edit the JSON and render again.
 ## Rendering and publishing
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/scripts/findings_page.py \
+python3 <fleet-explore's scripts>/findings_page.py \
   <session dir>/findings.json --out <session dir>/page [--out <scratchpad>/<slug>-page]
 ```
+
+The script is in fleet-explore's `scripts/` folder; the SKILL.md gives its full path.
 
 - Paths in the JSON (screenshots) are relative to the JSON file. Screenshots become WebP under
   `<out>/shots/` (Pillow; copied unconverted without it).
 - The script refuses token-shaped strings (`Bearer …`, JWTs, enroll secrets, node keys), unknown
   impacts or mechanisms, duplicate ids and missing screenshot files, and lists every problem at once.
+  Fix the JSON and run it again.
 - It prints one JSON line per `--out`: `file_path`, `root` and `files`, the arguments of an
   Artifact publish.
 - `<session dir>/page/` is the record; it opens in a browser from disk. The Artifact tool publishes
   only files under the working directory or the scratchpad, so render a second `--out` into the
   scratchpad for publishing when the session folder is elsewhere (it usually is: the QA workspace).
+
+Publishing, in order:
+
+1. Write `findings.json` next to the session file from the debrief you just wrote, not from memory:
+   each BUG row under the decision list's id, its steps, the exact evidence from the log (requests,
+   responses, timelines), its screenshots; then the questions, risks, candidates, what held up, known
+   issues and coverage. Build the page before cleanup, while the evidence still matches the instance.
+2. Render it (above).
+3. Publish it as a private Artifact when the Artifact tool is available, following the tool's own
+   rules for a new page: the rendered `index.html` with the `root` and `files` the script printed, a
+   one-word icon (`bug`), and a one-sentence description. Record the URL in the session file's header
+   (`**Page:**`). Later changes (a finding dropped, a bug filed) go to the same URL: edit the JSON,
+   render again, and publish the same file path in this conversation, or pass the URL as `url` from
+   another one.
+4. Without the Artifact tool, give the path of `<session dir>/page/index.html`; it opens from disk.
+5. When a finding may be security-sensitive, set the JSON's `banner`, and say in chat that the page is
+   private and stays internal until the finding is routed. Sharing it is the engineer's call.
 
 ## Schema
 

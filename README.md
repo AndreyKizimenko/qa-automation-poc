@@ -73,13 +73,16 @@ or turn on auto-update for the marketplace under `/plugin` → Marketplaces. Inv
 from the request. To install from your own clone, try a branch's skills before they merge, or change a
 plugin, see [`plugins/README.md`](plugins/README.md).
 
-Both sets are linted by `skills-check.yml` on every PR that touches them (see CI below).
+Both sets are linted by `skills-check.yml` on every PR that touches them (see CI below). The plugin also has
+an eval suite that checks each request still reaches the right skill
+([`plugins/fleet-qa/evals/`](plugins/fleet-qa/evals/README.md)).
 
 **The plugin runs against your own Fleet instances.** On first use it writes `~/.claude/fleet-qa.local.md`
 (see `plugins/fleet-qa/skills/fleet-bug-qa/references/local-setup.md`):
 - which fleetctl contexts are the fixed and the pre-fix instance;
 - where your Fleet checkout and QA workspace are;
 - which role users you keep;
+- what Claude may do without asking each time (standing permissions);
 - where Playwright is.
 
 Tokens stay in `~/.fleet/config`. It also needs an authenticated `gh`, a Fleet checkout, a clone of this
@@ -135,7 +138,7 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — the main project, then the exclusive specs and (premium) gitops-mode as their own steps, merged into one report; project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. Optional `workers` input. |
 | `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a worker-count trial. |
 | `playwright-check.yml` | Every PR, push to `main`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. Runs on every PR, with no path filter, because it is a required status check and one that never reports leaves a PR unmergeable. The only Playwright workflow that runs per-PR — the tier suites are nightly. |
-| `skills-check.yml` | Every PR touching the skills, plugin manifests, tools or docs; push to `main`; manual | Lints the Claude Code skills (`.github/scripts/check-skills.sh`): frontmatter (`name` = folder, `description` present), no orphan `references/` or `scripts/` files, plugin manifests consistent with the marketplace, and no instance hostnames or credential-shaped strings in skill text or docs. Not a required check, so it keeps a path filter. |
+| `skills-check.yml` | Every PR touching the skills, plugin manifests, tools or docs; push to `main`; manual | Lints the Claude Code skills (`.github/scripts/check-skills.sh`): frontmatter (`name` = folder, a `description` that survives YAML and stays under 1,024 characters), `${CLAUDE_…}` paths that exist and stay out of reference files, shared rule blocks identical in every skill that carries them, no orphan `references/` or `scripts/` files, plugin manifests consistent with the marketplace, and no instance hostnames or credential-shaped strings in skill text or docs. Warns when a SKILL.md is longer than what Claude Code keeps after compaction. Not a required check, so it keeps a path filter. |
 
 Nightly ordering is by dependency, not by clock: `qa-nightly.yml` fires both
 Render deploy hooks, waits for the deploys to finish (a hook only queues one, and

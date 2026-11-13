@@ -1,4 +1,4 @@
-// Shared Playwright helpers for drivers: `import { open } from '<skill>/scripts/pw.mjs'`.
+// Shared Playwright helpers for drivers: `import { open } from '<this file's full path>'`.
 // Logs in by injecting the fleetctl token as the UI's auth cookie, so no password is ever typed.
 import { createRequire } from 'module';
 import fs from 'fs';
@@ -33,7 +33,7 @@ export function ctxInfo(ctx) {
 }
 
 // opts: token (log in as another user), anon (no auth cookie), cookies ({name: value}),
-// width/height. Reduced motion avoids capturing pages mid fade-in.
+// width/height, headed (show the browser window). Reduced motion avoids capturing pages mid fade-in.
 export async function open(ctx, opts = {}) {
   const { address, token } = ctxInfo(ctx);
   const u = new URL(address);

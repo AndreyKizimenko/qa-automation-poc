@@ -18,8 +18,8 @@ At the start of any of these skills, read the file. If it doesn't exist, build i
 1. **Find what you can.** Don't ask for what the machine can tell you.
    - The fleetctl contexts and their addresses: context names and `address:` lines from
      `~/.fleet/config`. **Don't print or copy the tokens.** For each context, run
-     `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/fleetapi.sh <ctx> GET /api/v1/fleet/version`
-     to see what it runs.
+     `fleetapi.sh <ctx> GET /api/v1/fleet/version` (fleet-bug-qa's `scripts/`, next to this folder) to
+     see what it runs.
    - The Fleet checkout: `git -C ~/repositories/fleet rev-parse --show-toplevel`. Otherwise ask.
    - How the servers run and where they log: `ps -eo pid,command | grep 'fleet serve'`.
    - The database containers: `docker ps --format '{{.Names}} {{.Ports}}' | grep -i mysql`.
@@ -28,7 +28,8 @@ At the start of any of these skills, read the file. If it doesn't exist, build i
      isn't one, say so. Screenshots need it (`npm ci` in that `playwright/` folder).
 2. **Propose the file** (template below), filled in with what you found. Ask for the rest in one
    message: which instance is the fixed one and which the pre-fix one, the QA workspace folder, role
-   users kept for UI-by-role checks, and anything instance-specific.
+   users kept for UI-by-role checks, what Claude may do without asking each time (standing
+   permissions), and anything instance-specific.
 3. **Write it once they confirm**, and say where it is.
 
 ## When it's wrong
@@ -36,8 +37,16 @@ At the start of any of these skills, read the file. If it doesn't exist, build i
 The setup changes. An instance gets redeployed at another version, a context is renamed, a container
 restarts under another name. When something in the file doesn't match what you see, update the file,
 say what changed, and carry on. Treat it as a starting point, not ground truth: the skills still check
-versions live before relying on them — `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/scripts/env_check.sh
-<pre-fix-ctx> <fixed-ctx>` for the two-instance skills, `GET /api/v1/fleet/version` for one instance.
+versions live before relying on them: `env_check.sh <pre-fix-ctx> <fixed-ctx>` (fleet-bug-qa's
+`scripts/`) for the two-instance skills, `GET /api/v1/fleet/version` for one instance.
+
+## Standing permissions
+
+The skills' hard lines make Claude ask before anything global: a server restart, a license or MDM
+switch, an org setting. Some of those an engineer is happy to hand over for good ("you restart the
+servers", "create whatever users you need"). When they say so for the second time, or say "always",
+offer to add it under Standing permissions in the file, so the next run doesn't ask again. Record
+only what they said, in their words. Anything not listed is still asked first.
 
 ## Template
 
@@ -68,8 +77,13 @@ versions live before relying on them — `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug
      as them: that deletes the token. -->
 - `<context>`: <role> on fleet <name> (id <n>), on <instance>
 
+## Standing permissions
+<!-- What Claude may do without asking each time. Anything not listed here is asked first. -->
+- <e.g. restart the `fleet serve` processes once I say they're down; change settings on any `qa-*` fleet; create session-owned users for UI checks>
+
 ## Load test (fleet-loadtest-qa)
 - **Instance:** `LT=fleet-<terraform_workspace>, e.g. fleet-493loadtest-3`, fleetctl context `<loadtest>`, region us-east-2, AWS SSO profile <name> (`export AWS_PROFILE=<name>` for the scripts)
+- **Database access:** <how the writer is reached: which VPN, which helper or command, and who types the password (e.g. "prompt me in the terminal")>
 - **Current shape:** <build/tag, pool size, hosts and platforms, notable data left on it> (update after each redeploy)
 - **State folder:** `~/.fleet-loadtest/<LT>/` (saved ALB action for ramp.sh, maintenance/ramp logs)
 

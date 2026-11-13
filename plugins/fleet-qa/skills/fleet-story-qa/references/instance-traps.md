@@ -2,7 +2,9 @@
 
 Things that cost time in earlier story, quick-win, bug and explore runs; every QA skill here reads
 this file. What's specific to one engineer's machine (which server is which, container names, log
-paths, role users) is in `~/.claude/fleet-qa.local.md`, not here. See `${CLAUDE_PLUGIN_ROOT}/skills/fleet-bug-qa/references/local-setup.md`.
+paths, role users) is in `~/.claude/fleet-qa.local.md`, not here (fleet-bug-qa's `local-setup.md` says
+how that file is built). Scripts named here (`fleetapi.sh`, `pw.mjs`, `screenshot.mjs`) are
+fleet-bug-qa's; the SKILL.md that sent you here gives their path.
 
 ## Which server is which
 
@@ -34,6 +36,11 @@ paths, role users) is in `~/.claude/fleet-qa.local.md`, not here. See `${CLAUDE_
   browser tool or a file it loads: the MCP echoes the code it runs, and the permission check refuses
   materialising a token, then tends to refuse the harmless commands that follow. `screenshot.mjs` and
   `pw.mjs` read the token themselves and stay the headless path for evidence.
+- **A signed-in window without the pane.** When a row needs a visible browser and the pane isn't
+  signed in, don't park the row on the engineer: a `pw.mjs` driver with `open(ctx, { headed: true })`
+  opens a Chromium window signed in as the context's user, and the token never passes through a tool.
+  It has real fonts and display scaling, which headless lacks; its pointer is still synthetic, so for
+  a hover or drag finding a person's hand is the last check.
 - `fleetapi.sh` reads tokens from `~/.fleet/config`. In shell one-liners, zsh doesn't word-split
   `$var`, so `set -- $x` tricks break: loop over arrays, or quote. And `echo =====` fails in zsh (`=cmd`
   expansion), so use `---` as a separator.
@@ -47,8 +54,10 @@ paths, role users) is in `~/.claude/fleet-qa.local.md`, not here. See `${CLAUDE_
   `500 Internal Server Error` that hides Google's reason.
 - `mdm_android_device_reconciler` runs hourly, and `fleetctl trigger --name mdm_android_device_reconciler`
   runs it now. It only checks whether each device exists in the enterprise.
-- Preinstalled apps (Chrome, Gmail, Maps on Samsung) regularly hit #52617 (the setup app is marked
-  Failed while it's installed). Recognise it; don't re-investigate.
+- Preinstalled apps (Chrome, Gmail, Maps on Samsung) hit #52617 (the setup app is marked Failed while
+  it's installed) on builds before 4.95.0. There, recognise it and don't re-investigate. It was fixed
+  in two parts (fleetdm/fleet#52632 in 4.94.0, #55710 in 4.95.0), so from 4.95.0 on it's a regression
+  to report.
 
 ## Scratch tests
 
@@ -66,6 +75,9 @@ RESULTS.md what it skips.
   client would get for a service error.
 
 ## UI evidence
+
+How evidence PNGs are captured, checked, combined, annotated and sent is in fleet-bug-qa's
+`screenshots.md`. The traps:
 
 - The browser pane's `browser_take_screenshot` saves only under `.playwright-mcp/` in the qa-automation
   checkout (gitignored), the whole viewport or one element by ref, unannotated. Ticket-grade evidence
@@ -102,6 +114,12 @@ qa-automation checkout and the open issues before reporting anything like it as 
 - **UI words vs API names.** The UI says "fleets" and "reports"; the API keeps whatever name each
   endpoint has (`team_id` here, `fleet_id` there, `queries` for reports). That mismatch isn't a bug; a
   UI string still saying "team" or "query" is a consistency finding.
-- **The Ace editor worker 404** on pages with a code editor (fleetdm/fleet#54845), an uncaught error.
-  It's in `DEFAULT_IGNORED_PAGE_ERRORS` in the checkout's `playwright/helpers/console.ts`, beside the
-  console noise in `DEFAULT_IGNORED_CONSOLE_ERRORS` (favicon, `net::ERR_*`, ResizeObserver).
+- **The Ace editor worker 404** on pages with a code editor (fleetdm/fleet#54845), an uncaught error,
+  on builds before 4.95.0 only: fleetdm/fleet#55160 fixed it, so on 4.95.0 and later it's a
+  regression. What the suite tolerates on the current release is `DEFAULT_IGNORED_PAGE_ERRORS` in the
+  checkout's `playwright/helpers/console.ts` (empty when there is nothing), beside the console noise
+  in `DEFAULT_IGNORED_CONSOLE_ERRORS` (favicon, `net::ERR_*`, ResizeObserver).
+
+An issue number in this file was open when it was written. Before leaning on one, check it
+(`gh issue view <N> -R fleetdm/fleet --json state,milestone`): once the build you're on includes the
+fix, seeing the behaviour again is a regression, and that is a finding.

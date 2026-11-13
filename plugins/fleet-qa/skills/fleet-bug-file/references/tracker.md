@@ -22,7 +22,9 @@ Status values: `open` → `fix merged (#PR)` → `verified <branch> (<sha>)` /
 `reopened` / `needs full QA` / `closed without fix`. `fleet-bug-file` writes `open`;
 `fleet-bug-retest` writes the rest. The Issue column must start with `#<N>` (a
 `fleetdm/fleet` issue) for `bug_status.py` to read the row; other repos' bugs
-(`security#<N>`) are checked by hand.
+(`security#<N>`) are checked by hand. A row stays after its bug is verified or
+closed: its status is the record, and it's what a later "didn't we file this?"
+search finds. Nothing is removed from the tracker.
 
 ## `<issue>-<slug>/` (one folder per bug)
 

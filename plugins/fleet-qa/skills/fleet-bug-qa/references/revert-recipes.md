@@ -1,6 +1,8 @@
 # Step 4b (fallback) — proving the fix with the PR's tests
 
-Use only when a row can't be reproduced live (see SKILL.md 4b).
+Use only when a row can't be reproduced live (the bug is masked by a later mitigation the engineer
+won't toggle, it needs hardware nobody has, or the path can't be driven from outside) and the engineer
+has confirmed it (see SKILL.md 4b).
 
 The question 4b answers: *if the fix's behavior were missing, would these tests
 notice?* A test that fails to compile hasn't answered it, and neither has a test
