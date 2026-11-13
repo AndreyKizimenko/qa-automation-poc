@@ -9,6 +9,13 @@
  * via gitops in the first place. Running these wipes before tests start
  * means a Playwright run is self-healing regardless of how the live
  * instance got into its current state.
+ *
+ * The sweeps find the suite's own things by name. A spec names them with
+ * `ownName(kind)` (`helpers/own-name.ts`), which opens every name with
+ * `pw-<kind>-`, so a sweep by the `pw-` prefix takes them, and one by an exact
+ * prefix (the reports below: `pw-role-`, `pw-run-script-`, …) takes the kind of
+ * that name. A spec that gives a new kind of report a fleet gitops declares
+ * reports on adds its prefix here.
  */
 import { test } from '@playwright/test';
 import {

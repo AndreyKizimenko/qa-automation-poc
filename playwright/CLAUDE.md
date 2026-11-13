@@ -31,7 +31,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
   [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
   in `.env.loadtest` (gitignored), so no CI workflow targets them.
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
-- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings).
+- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates).
 - `fixtures.ts` — two test objects: `apiTest`, with the worker fixtures (fleet ids, `liveMacosHost`) and nothing that needs a page, and `test`, which extends it with the page-object fixtures, the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `eslint-rules/` — the suite's own lint rules (`suite/*`), their tests and the per-rule count; see *Pre-PR check*.
@@ -319,7 +319,8 @@ This is the pre-PR gate — it catches the common mistakes locally. The premium 
 |---|---|---|
 | `suite/no-class-locator-in-spec` | `locator('.some-class')` in a spec, on any receiver | a locator on the page object or component that owns the element, with the comment that says why no role or text works |
 | `suite/no-page-locator-in-spec` | `page.getBy*()` in a browser spec (also `adminPage.…`, `dashboard.page.…`) | a named locator or method on a page object or component; a locator chained off one the page object returned is fine |
-| `suite/no-date-now-in-name` | `Date.now()` that ends up in a string: `` `pw-${Date.now()}` ``, or a `stamp` variable used that way | `runNonce()` from `@helpers/profiles`; time arithmetic (`Date.now() - start`) is not flagged |
+| `suite/no-date-now-in-name` | `Date.now()` that ends up in a string: `` `pw-${Date.now()}` ``, or a `stamp` variable used that way | `ownName(kind)` from `@helpers/own-name`, or `runNonce()` from `@helpers/profiles` for a name that can't open with `pw-` (an email, a `PW_VAR_` name); time arithmetic (`Date.now() - start`) is not flagged |
+| `suite/use-own-name` | a `pw-` name built at run time: `` `pw-policy-${runNonce()}` ``, `'pw-report-' + suffix` | `ownName('policy')`: `pw-<kind>-<run>-w<worker>-<nonce>`, so a leftover names the run and worker that made it, and the sweeps' prefixes still match; an extension goes outside it (`` `${ownName('script')}.sh` ``) |
 | `suite/activity-needs-baseline` | every `assertActivity(…)` | `latestActivityId()` before the action, then `assertActivityAfter(…)`: without the baseline a retry, the other scope of a loop or an earlier run satisfies the check |
 | `suite/no-swallowed-response` | in `helpers/`, `setup/` and `fixtures.ts`: `if (!res.ok())` whose branch neither throws nor returns the status | throw with the status and body, and name an expected status (`404`, `402`) before it: a dropped 5xx reads as "nothing there" |
 | `suite/no-to-be-ok` | `expect(res).toBeOK()` anywhere: a failure prints the bearer token | `expectOk(res, what)` from `@helpers/api` |

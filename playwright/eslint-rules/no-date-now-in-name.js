@@ -61,11 +61,12 @@ function feedsAString(node) {
 module.exports = {
   meta: {
     type: 'suggestion',
-    docs: { description: 'A per-run name takes its unique part from runNonce(), not the clock' },
+    docs: { description: 'A per-run name takes its unique part from ownName() or runNonce(), not the clock' },
     schema: [],
     messages: {
       clockInName:
-        '`Date.now()` in a per-run name: use `runNonce()` from `@helpers/profiles`.',
+        "`Date.now()` in a per-run name: use `ownName('<kind>')` from `@helpers/own-name` for a `pw-` name, or " +
+        '`runNonce()` from `@helpers/profiles` for one that cannot open with `pw-` (an email, a `PW_VAR_` name).',
     },
   },
   create(context) {

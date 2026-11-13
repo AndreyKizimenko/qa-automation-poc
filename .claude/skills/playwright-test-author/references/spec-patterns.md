@@ -31,7 +31,7 @@ coverage is to be a suite of its own.
 ## The shapes
 
 **One flow on seeded data.** `e2e/premium/policies/policies.spec.ts` › *Policies — fleet isolation*.
-- Seed through an API helper (`createFleetPolicy`), with a `pw-…-${runNonce()}` name.
+- Seed through an API helper (`createFleetPolicy`), with an `ownName('…')` name.
 - Go straight to the page with `goto({ fleetId })`, unless this is the area's one click-through test
   (`playwright/CLAUDE.md`), and call `teamDropdown.select(scope)` after every scoped `goto`.
 - Search until the list holds exactly your row before acting on it.
@@ -130,7 +130,7 @@ and titles its describe `Policies CRUD`). Follow the rule, not the exemplar.
 - A header: what it covers, which host or fleet and why, what it leaves behind and who removes it, and the
   Fleet source it was grounded in.
 - `test` and `expect` from `@fixtures` in a browser spec.
-- Names from `runNonce()` with a `pw-` prefix that says which spec made them.
+- Names from `ownName(kind)`, whose kind says which spec made them.
 - A describe title in the house form: `Premium • Area • what`, `Free • …`, `Shared • …`.
 
 ## Shapes to avoid

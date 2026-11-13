@@ -74,6 +74,28 @@ tester.run('no-date-now-in-name', rules['no-date-now-in-name'], {
   ],
 });
 
+tester.run('use-own-name', rules['use-own-name'], {
+  valid: [
+    "const name = ownName('policy-hosts');",
+    "const file = `${ownName('role-script')}.sh`;",
+    // A fixed name, a prefix, and names that don't open with `pw-`.
+    "const name = 'pw-host-report-results';",
+    'const prefix = `pw-`;',
+    "const pkg = `fleet-pw-${runNonce()}`;",
+    'const email = `qa-test-${runNonce()}@example.com`;',
+    "const variable = 'PW_VAR_' + suffix;",
+    'const copy = `Copy of ${name}`;',
+  ],
+  invalid: [
+    { code: 'const name = `pw-policy-${runNonce()}`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: 'const label = `pw-pl-${n}-a`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: 'const file = `pw-secret-${n}.sh`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: "const name = 'pw-report-' + suffix;", errors: [{ messageId: 'handBuilt' }] },
+    // A chain is reported once, whichever part carries the run-time value.
+    { code: "const name = `pw-${scope}` + '-' + runNonce();", errors: [{ messageId: 'handBuilt' }] },
+  ],
+});
+
 tester.run('activity-needs-baseline', rules['activity-needs-baseline'], {
   valid: [
     `await assertActivityAfter(request, 'created_policy', baseline, (d) => d.policy_name === name);`,

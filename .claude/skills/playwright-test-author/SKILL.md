@@ -105,8 +105,8 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    (`toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a UI write
    happened. Scope every assertion to records you created. Assert text or a value, never `toHaveScreenshot`
    for behaviour; when a snapshot can't be avoided, the header says why.
-7. **Give everything you create a home.** Name per-run things `pw-*` (packages `fleet-pw-*`) with
-   `runNonce()`, and never give a durable thing those prefixes. Remove them in an `afterEach`, or in a
+7. **Give everything you create a home.** Name per-run things with `ownName(kind)` (packages
+   `fleet-pw-*`), and never give a durable thing those prefixes. Remove them in an `afterEach`, or in a
    `finally` only when the central sweep would catch a miss: Playwright skips the `finally` of a test that
    times out, and runs its hooks. The sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
    takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It returns

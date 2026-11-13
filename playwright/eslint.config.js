@@ -81,6 +81,7 @@ module.exports = tseslint.config(
     rules: {
       'suite/no-class-locator-in-spec': 'error',
       'suite/no-date-now-in-name': 'error',
+      'suite/use-own-name': 'error',
       'suite/activity-needs-baseline': 'error',
       // Off until toast copy has a home outside the specs (docs/architecture-audit.md,
       // roadmap item 9): until then the rule would name a problem with no fix.
