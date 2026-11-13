@@ -509,7 +509,7 @@ for a Fleet-maintained app; undeclared means `false`), the display name, icon pr
 pre-install query lifted out of its apply-format file, and the three scripts. The loader records an `icon`.
 
 **CI**: both premium apply workflows carry `compliance.yml`; `verify-baseline-compliance` and
-`verify-min-compliance` (twelve verify reports a run); `generate-gitops.spec.ts` expects `fleets/compliance.yml`;
+`verify-min-compliance` (twelve verify jobs a run); `generate-gitops.spec.ts` expects `fleets/compliance.yml`;
 `npm run test:gitops-verify:premium-{compliance,min-compliance}`. Docs: both gitops READMEs (a Compliance
 section), the root README's premium apply example (it carried `--delete-other-fleets`, which would delete
 Mobile), `playwright/README.md`'s preconditions and scripts, `CLAUDE.md`'s standing fleets and CI facts,

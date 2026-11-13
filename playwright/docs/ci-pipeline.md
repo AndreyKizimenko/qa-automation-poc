@@ -166,8 +166,15 @@ container whenever the action, the script, the key or a suite workflow changes.
 (Playwright's JSON reporter) beside the HTML report and copies it into the report folder, so it leaves CI
 inside the same encrypted file. A test's history is built from it: `run_history.py`, in the run-reviewer
 skill, records each reviewed run's tests in a local file and says how a failing test fared in the runs before.
-The two suite reports are kept 90 days so that history can be rebuilt from the reports alone; the gitops and
-CLI reports keep 7.
+The two suite reports are kept 90 days so that history can be rebuilt from the reports alone.
+
+**A run's artifacts are the two suite reports, and the report of any gitops job that failed.** Each gitops
+chain is a row of small Playwright jobs (premium ten `gitops-verify` and one `fleetctl` job, free two and
+one). A green one uploads nothing: its report would be a list of passed API checks that nobody opens, its log
+already says how many ran, and fourteen such artifacts beside the suites' two bury what there is to read. A
+failed one uploads its report, named for the job, and keeps it 7 days. So a run's artifact list reads as what
+there is to look at: Premium, Free, and whatever in gitops went red. To see which checks a green job ran,
+run its target locally (`npm run test:gitops-verify:<target>`).
 
 **One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
 nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14
