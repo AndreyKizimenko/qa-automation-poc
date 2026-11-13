@@ -10,6 +10,7 @@ module.exports = {
     'no-date-now-in-name': require('./no-date-now-in-name'),
     'use-own-name': require('./use-own-name'),
     'no-api-cleanup-in-finally': require('./no-api-cleanup-in-finally'),
+    'widget-in-component': require('./widget-in-component'),
     'activity-needs-baseline': require('./activity-needs-baseline'),
     'no-swallowed-response': require('./no-swallowed-response'),
     'skip-needs-reason': require('./skip-needs-reason'),

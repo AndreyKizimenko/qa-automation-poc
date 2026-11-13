@@ -4,6 +4,81 @@
       "count": 24
     }
   },
+  "pages/DashboardPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/account/MyAccountPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/controls/ConfigurationProfilesPage.ts": {
+    "suite/widget-in-component": {
+      "count": 2
+    }
+  },
+  "pages/controls/SetupAssistantPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/hosts/HostsListPage.ts": {
+    "suite/widget-in-component": {
+      "count": 2
+    }
+  },
+  "pages/policies/PoliciesListPage.ts": {
+    "suite/widget-in-component": {
+      "count": 2
+    }
+  },
+  "pages/policies/PolicyDetailsPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/policies/PolicyEditPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/reports/ReportDetailsPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/reports/ReportEditPage.ts": {
+    "suite/widget-in-component": {
+      "count": 3
+    }
+  },
+  "pages/reports/ReportsListPage.ts": {
+    "suite/widget-in-component": {
+      "count": 2
+    }
+  },
+  "pages/settings/FleetsPage.ts": {
+    "suite/widget-in-component": {
+      "count": 3
+    }
+  },
+  "pages/settings/IntegrationsPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
+  "pages/settings/users/UsersPage.ts": {
+    "suite/widget-in-component": {
+      "count": 3
+    }
+  },
+  "pages/software/SoftwareTitlesPage.ts": {
+    "suite/widget-in-component": {
+      "count": 1
+    }
+  },
   "tests/api/free/license.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1

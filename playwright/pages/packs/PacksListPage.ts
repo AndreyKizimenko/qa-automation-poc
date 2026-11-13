@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
+import { fleetModal } from '../components/Modal';
 
 /**
  * /packs/manage — list of osquery packs. Has an "Add new pack" button and
@@ -28,11 +29,10 @@ export class PacksListPage {
     this.createNewPackButton = page.getByRole('button', { name: /add new pack/i });
     // Bulk delete — appears when at least one checkbox is selected
     this.deleteButton = page.getByRole('button', { name: /delete/i });
-    // Fleet's Modal applies DeletePackModal's `remove-pack-modal` baseClass to both
-    // the modal container and its inner content div, so `.remove-pack-modal` is not
-    // unique; scope to the modal container by its title text (the shared delete-modal
-    // pattern) so the confirm button can't be confused with the toolbar's bulk delete.
-    this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete pack' });
+    // By its title: `.remove-pack-modal` names both the container and its inner
+    // content div, and the modal keeps the confirm button apart from the
+    // toolbar's bulk delete.
+    this.deleteModal = fleetModal(page, 'Delete pack');
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: /delete/i });
   }
 

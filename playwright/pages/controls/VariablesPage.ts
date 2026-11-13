@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
+import { fleetModal } from '../components/Modal';
 
 /**
  * /controls/variables/global-variables — global custom variables (secrets)
@@ -39,12 +40,12 @@ export class VariablesPage {
     // first (the section-header one) to stay single-match when the list is empty.
     this.addVariableButton = page.getByRole('button', { name: 'Add variable' }).first();
 
-    this.addModal = page.locator('.modal__modal_container').filter({ hasText: 'Add custom variable' });
+    this.addModal = fleetModal(page, 'Add custom variable');
     this.nameInput = this.addModal.getByRole('textbox', { name: 'Name' });
     this.valueInput = this.addModal.getByRole('textbox', { name: 'Value' });
     this.saveButton = this.addModal.getByRole('button', { name: 'Save', exact: true });
 
-    this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete custom variable' });
+    this.deleteModal = fleetModal(page, 'Delete custom variable');
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
   }
 

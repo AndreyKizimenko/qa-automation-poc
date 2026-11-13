@@ -117,6 +117,17 @@ tester.run('no-api-cleanup-in-finally', rules['no-api-cleanup-in-finally'], {
   ],
 });
 
+tester.run('widget-in-component', rules['widget-in-component'], {
+  valid: [
+    "this.deleteModal = fleetModal(page, 'Delete label');",
+    "page.locator('.edit-user-modal__edit-user-modal')",
+  ],
+  invalid: [
+    { code: "page.locator('.modal__modal_container').filter({ hasText: 'Delete pack' })", errors: [{ messageId: 'widgetSelector' }] },
+    { code: 'page.locator(`.${cls}.modal__modal_container`)', errors: [{ messageId: 'widgetSelector' }] },
+  ],
+});
+
 tester.run('activity-needs-baseline', rules['activity-needs-baseline'], {
   valid: [
     `await assertActivityAfter(request, 'created_policy', baseline, (d) => d.policy_name === name);`,

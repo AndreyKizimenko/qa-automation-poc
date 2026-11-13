@@ -103,6 +103,13 @@ module.exports = tseslint.config(
     rules: { 'suite/no-swallowed-response': 'error' },
   },
   {
+    // Page objects outside pages/components/, which is where each shared
+    // widget's selector lives.
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/**'],
+    rules: { 'suite/widget-in-component': 'error' },
+  },
+  {
     // Specs with no page. The browser `test` carries an automatic fixture that
     // asks for one, so importing it here would launch a browser for every test.
     files: ['tests/api/**/*.ts', 'tests/cli/**/*.ts', 'tests/loadtest/api/**/*.ts'],
