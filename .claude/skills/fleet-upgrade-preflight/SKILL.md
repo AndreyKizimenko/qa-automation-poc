@@ -7,10 +7,11 @@ Predicts which specs a Fleet upgrade breaks, before the upgrade happens. Run
 every command below from the **repo root**; paths are relative to it.
 
 The driver is [.claude/skills/fleet-upgrade-preflight/preflight.mjs](preflight.mjs)
-— zero deps, ~5s. It locates the suite by walking up to the repo root, so it
+— zero deps, 3–8s. It locates the suite by walking up to the repo root, so it
 works from any cwd. It reads the running instance's exact revision, then asks one
-question of every selector the suite names: *does this exist in Fleet's source
-today, and does it still exist in the target?*
+question of every selector the suite names and every phrase it expects or keeps
+in a constant: *does this exist in the source Fleet ships today, and does it
+still exist in the target?*
 
     present → absent   BREAKING. The suite names something Fleet deleted.
     present → present  safe.
@@ -18,10 +19,12 @@ today, and does it still exist in the target?*
 
 That third bucket keeps the report free of noise: a token that was never literal
 in Fleet's source can't be evidence, so it never reaches the report. What does
-reach it is a floor, not the full list. On the last three upgrades the scan
-reported 0, 5 and 1 real breakages where the suite turned out to have 2, 12 and
-10 broken clusters. The scan is the first ten minutes; the hand-check after it
-(*Then hand-check*, below) is the job.
+reach it is a floor, not the full list. Backtested on the last three upgrades
+(4.93, 4.94, 4.95), section 1 named 0, 12 and 3 tokens, every one a real
+breakage, and they pointed at 0, 7 and 2 of the 4, 12 and 10 clusters that
+broke. The rest were flows, controls and messages that changed while their
+selectors and copy stayed in the source. The scan is the first ten minutes; the
+hand-check after it (*Then hand-check*, below) is the job.
 
 ## Prerequisites
 
@@ -61,29 +64,35 @@ node .claude/skills/fleet-upgrade-preflight/preflight.mjs scan \
 
 Writes `playwright/docs/upgrade-preflight/<from-sha10>-to-<to-sha10>.md` (gitignored —
 regenerate it, don't commit it) and prints the path. Add `--from <ref>` to compare two refs
-without an instance, `--out <file>` to redirect.
+without an instance, `--out <file>` to redirect, `--suite <path>` to read another checkout's
+`playwright/` directory (the suite at an older commit, to backtest a release).
 
 ## Reading the report
 
-1. **Breaking selectors** — act on these. Each carries the QA `file:line`, the
-   Fleet PR that removed it, and a replacement **checked against the target
-   tree**. A `⚠︎` means the obvious rename is wrong and the component was
-   reshaped; the line then lists what the successor actually emits, so you pick.
-   One false positive to rule out first: the scan looks for a class with its
-   dot (`.activity-feed-card`), which only the SCSS rule has. When a release
-   deletes the stylesheet rule and keeps `className: "activity-feed-card"`, the
-   class reads as removed while Fleet still renders it. Grep the target TSX for
-   the bare name before changing a locator.
+1. **Breaking selectors and copy** — act on these. Each carries the QA
+   `file:line`, the Fleet PR that removed it, and a replacement **checked
+   against the target tree**. A `⚠︎` means the obvious rename is wrong and the
+   component was reshaped; the line then lists what the successor actually
+   emits, so you pick. The last two groups are not locators: **Expected
+   values** are arguments of a matcher or an `expect…` helper, **Constants and
+   page-object arguments** are phrases held in a constant or handed to a page
+   object. Each site says how it uses the token: `used at` (a locator),
+   `expected at`, `named at`. No false positive showed up in the backtests, but
+   one is possible: copy or a class Fleet still renders and now builds another
+   way (a template, a child component), so the literal left the source. Read
+   the removing PR before changing a spec.
 2. **UI churn by spec area** — surviving selectors don't mean surviving flows.
    Read the top rows as "expect surprises here."
 3. **Fixes on the running build with no equivalent on the target** — the
    upgrade may roll a fix back. Match by title, not SHA (see Gotchas).
 4. **Changelog fragments** — the release's own notes, for behaviour changes no
    static check can see.
-5. **Unverifiable tokens** — never literal in Fleet's source at either revision,
-   so mostly inert. Read its `class` entries, though: a class Fleet builds from
-   a template (`` `${baseClass}__list-item-button` ``) lands here whether or not
-   the release removed it, and one that was removed has sat here unreported.
+5. **Unverifiable tokens** — locator tokens never literal in Fleet's source at
+   either revision, so mostly inert. A class built on a component's `baseClass`
+   (`` `${baseClass}__list-item-button` ``) is checked through that component
+   and doesn't land here. Read the `class` entries that do: they are built some
+   other way (react-select's `classNamePrefix`), and one a release removes
+   stays here unreported.
 
 ## Then hand-check
 
@@ -95,9 +104,13 @@ recent upgrades, in the order it cost time:
   Every selector survives and the test still fails.
 - **Copy that changed in one component** while the same string survives in
   another (`Email field must be completed` changed in the user forms and stayed
-  in the login forms), and copy a spec *expects* rather than locates:
-  `toHaveText` and `toContainText` values and lookup constants aren't in the
-  scan's vocabulary.
+  in the login forms), or inside a longer one (a subheader that gained a full
+  stop still contains the old text).
+- **Copy the scan doesn't read**: expected values and constants count only as
+  plain strings of two or more words (three for a piece of a template). A
+  single word (`cellByColumn(row, 'Role')`), a regex
+  (`hasText: /Edit (package|software)/`) and a name with an apostrophe, which
+  Fleet writes as `&apos;`, are never checked.
 - **A constant demoted to a fallback**: the literal is still in the source, but
   the message users see is now built by a template next to it.
 - **A control that gained an explicit accessible name**: once a dropdown has an
@@ -142,8 +155,9 @@ already explained, so triage only has to account for the rest.
   test still broke. Sections 2 and 4 exist because section 1 cannot catch that.
 - **Fleet builds BEM classes as template literals** — `` `${baseClass}__button` ``
   in TSX, `&__button` in nested SCSS. So `fleet-dropdown__button` is in the DOM
-  and *nowhere* in the source as a literal string. The successor lookup resolves
-  through the component that declares the base; a flat text search finds nothing.
+  and *nowhere* in the source as a literal string. The presence check and the
+  successor lookup both resolve through the file that declares the base, and
+  only that file: nearly every component has a `` `${baseClass}__title` ``.
 - **The obvious base swap is often wrong.** `.team-dropdown__control` →
   `.fleet-dropdown__control` reads as certain and is the wrong target: 4.91 made
   the visible trigger a plain `<button>` (`.fleet-dropdown__button`) and kept
@@ -151,10 +165,17 @@ already explained, so triage only has to account for the rest.
   verified against the target tree before it is printed — trust the `⚠︎` when you
   see it.
 - **It under-reports.** A token counts as present if it appears anywhere in the
-  corpus, including Fleet's own tests (`*.tests.tsx`, `*_test.go`) and in any
-  component, not just the one a page object drives. So a class or copy a
-  component dropped, but that a test or an unrelated component still names, reads
-  as present → present. Treat section 1 as a floor, not the full list.
+  source Fleet ships: in any component, not just the one a page object drives,
+  and in a code comment as readily as in markup. (Fleet's tests, mocks and
+  Storybook stories are not in the corpus.) So a class or copy a component
+  dropped, but that another component or a comment still names, reads as
+  present → present: 4.95's `macOS app` type label lives on in two Go comments.
+  Treat section 1 as a floor, not the full list.
+- **A class counts by its dotted or its bare name.** SCSS writes
+  `.activity-feed-card`, TSX `className: "activity-feed-card"`, and a release
+  can delete the rule and keep the class. The bare name counts only between
+  quotes or spaces. A one-word class (`.tag`) meets its bare name in any
+  string, so it always reads as present.
 - **A BEM modifier counts as its base.** 4.90's only mention of
   `.team-dropdown__control` is `&.team-dropdown__control--is-focused`. Demanding
   a hard word boundary silently loses real breakages; a bare `-` still doesn't
@@ -167,13 +188,15 @@ already explained, so triage only has to account for the rest.
   exactly what section 3 is for.
 - **`ee/maintained-apps` is 1,594 of the 3,688 changed files** and is pure noise
   (FMA manifests). The corpus scans `frontend/`, `server/service`,
-  `ee/server/service` only.
+  `ee/server/service` only, so a message built in `server/fleet` is never seen.
 - **Fleet's `frontend/pages/queries` is the Reports UI.** Renamed in the
   product, never on disk. The area map handles it; remember it when reading raw
   paths.
-- **Corpora are cached in `$TMPDIR/fleet-upgrade-preflight/<sha>.txt`.** Keyed
-  by commit, so they can't go stale — but a moving branch ref resolves to a new
-  SHA and re-extracts (~2s).
+- **Corpora are cached in `$TMPDIR/fleet-upgrade-preflight/<sha>-<rules>.txt`.**
+  Keyed by commit, so they can't go stale — but a moving branch ref resolves to
+  a new SHA and re-extracts (~2s). `<rules>` is a digest of what goes into a
+  corpus (trees, file types, the test-file filter): change those in the script
+  and it re-extracts instead of reusing a corpus built the old way.
 
 ## Troubleshooting
 
