@@ -125,8 +125,9 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
 
 ## Verifying without disrupting anyone
 
-`npm run check` (tsc + eslint) is the floor, not proof. A green local run is easy to get for the wrong
-reason, so:
+`npm run check` (tsc + eslint) is the floor, not proof. Lint prints nothing or fails, the suite's own
+`suite/*` rules included (`playwright/CLAUDE.md` → Pre-PR check). A green local run is easy to get for the
+wrong reason, so:
 
 <!-- shared:scoped-run -->
 **A local run is scoped, and never `npm run test:<tier>`.** From `playwright/`:

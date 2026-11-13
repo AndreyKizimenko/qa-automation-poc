@@ -105,7 +105,6 @@ async function openVulnerableTitles(
 // docs/blocked-by-product-bugs.md. The free counterpart of this assertion still
 // runs — free has a single scope, so the leak can't occur there.
 // TODO(fleetdm/fleet#50059): remove once the filter respects the fleet scope.
-// eslint-disable-next-line playwright/no-skipped-test -- tracked in docs/blocked-by-product-bugs.md
 test.skip(
   'Software Titles — every vulnerable-filtered row reports vulnerability data',
   {

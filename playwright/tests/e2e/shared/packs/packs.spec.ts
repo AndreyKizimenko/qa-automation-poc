@@ -63,7 +63,7 @@ test.describe('Packs CRUD', () => {
     ]);
   });
 
-  // eslint-disable-next-line playwright/no-skipped-test -- tracked in TODO.md
+  // Tracked in TODO.md: `POST /api/v1/fleet/packs/schedule` answers 405.
   test.skip('pack query executes on targeted host', async ({ request }) => {
     test.setTimeout(5 * 60_000);
 

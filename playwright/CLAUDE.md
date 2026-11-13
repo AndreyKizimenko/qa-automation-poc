@@ -34,6 +34,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings).
 - `fixtures.ts` — page-object fixtures, worker fixtures (fleet ids, `liveMacosHost`), the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
+- `eslint-rules/` — the suite's own lint rules (`suite/*`), their tests and the per-rule count; see *Pre-PR check*.
 - `test-data/` — fixtures consumed by specs, organised platform-first (`apple/macos/`, `linux/`, `windows/`, plus `shared/`), then by category — e.g. `apple/macos/scripts/macos-create-marker.sh`; see `test-data/README.md`.
 - `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `architecture-audit.md` (what has to change for the suite to grow fivefold, with the working list of next steps), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `long-term-goals.md` (coverage that waits on infrastructure the instances lack), `gitops-coverage/` (the plan for the nightly's gitops coverage), `loadtest-runs/` (dated load-test write-ups), `test-audit/` (per-test step/validation breakdown for the manual audit pass, plus `FINDINGS.md`), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
@@ -282,6 +283,8 @@ Every `test.skip(...)` or `test.describe.skip(...)` needs an inline comment nami
 - **Env-gated, or deliberately deferred** → a row in `TODO.md`.
 - **Data-availability guard** (`test.skip(!host, 'no macOS host')`, `gitopsConfig.scope !== 'no-team'`) → inline reason only. These are preconditions, not debt, and don't get tracked.
 
+Lint holds a skip to this (`suite/skip-needs-reason`, under *Pre-PR check*): one that takes a test out of every run fails without `TODO(fleetdm/fleet#N)` or `TODO.md` in the comment directly above it, and a conditional one fails without its reason argument. So a `.skip` left over from debugging can't reach `main`.
+
 ## CI and the shared instances — current facts
 
 The one place for facts that change. Skills and docs point here rather than restating them, so when one
@@ -304,9 +307,31 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 ## Pre-PR check
 
 ```bash
-npm run check          # tsc --noEmit + eslint
+npm run check          # tsc --noEmit + the lint rules' own tests + eslint
 ```
 
 This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`QA — Nightly`, above), but don't rely on that to catch what `npm run check` would.
+
+**Lint prints nothing, or it fails.** No rule is a warning (`eslint . --max-warnings 0`), so every line it prints is a line to act on. Beside ESLint's and the Playwright plugin's rules it carries the suite's own contract, as the `suite/*` rules in `eslint-rules/`:
+
+| Rule | Fails on | Write instead |
+|---|---|---|
+| `suite/no-class-locator-in-spec` | `locator('.some-class')` in a spec, on any receiver | a locator on the page object or component that owns the element, with the comment that says why no role or text works |
+| `suite/no-page-locator-in-spec` | `page.getBy*()` in a browser spec (also `adminPage.…`, `dashboard.page.…`) | a named locator or method on a page object or component; a locator chained off one the page object returned is fine |
+| `suite/no-date-now-in-name` | `Date.now()` that ends up in a string: `` `pw-${Date.now()}` ``, or a `stamp` variable used that way | `runNonce()` from `@helpers/profiles`; time arithmetic (`Date.now() - start`) is not flagged |
+| `suite/activity-needs-baseline` | every `assertActivity(…)` | `latestActivityId()` before the action, then `assertActivityAfter(…)`: without the baseline a retry, the other scope of a loop or an earlier run satisfies the check |
+| `suite/no-swallowed-response` | in `helpers/`, `setup/` and `fixtures.ts`: `if (!res.ok())` whose branch neither throws nor returns the status | throw with the status and body, and name an expected status (`404`, `402`) before it: a dropped 5xx reads as "nothing there" |
+| `suite/skip-needs-reason` | a skip that takes a test out of every run (`test.skip('title', …)`, `test.describe.skip`, a bare `test.skip()`, and the same with `fixme`) with no `TODO(fleetdm/fleet#N)` or `TODO.md` in the comment directly above it; a conditional skip with no reason argument | what *Skips* asks for: the tracking comment, or `test.skip(!host, 'no online macOS host')` |
+
+`{ force: true }` fails as well (`playwright/no-force-option`). Where a user really can't act on the control (a disabled button's tooltip), keep it under `// eslint-disable-next-line playwright/no-force-option -- <why>`. The same directive, with its reason, is the way past any rule that is wrong for one line.
+
+**Code written before a rule is recorded, not rewritten.** `eslint-suppressions.json` holds, per file and rule, how many places predate the rule; `npm run lint:contract` counts the same places from the code. ESLint keeps a file quiet while it has no more than its recorded count, so:
+
+- A new violation fails. In a file that has recorded ones, ESLint then lists every place of that rule in the file, old and new: fix yours, and the old ones can go with it.
+- Fixing an old one fails with "suppressions left that do not occur anymore": run `npm run lint:prune` and commit the smaller record.
+- The record only shrinks. Never add to it, and never re-create it (`--suppress-all`, `--suppress-rule`) to get a change through. A file that moves takes its entry along: rename its key.
+- ESLint applies the record only from the command line, so an editor's ESLint integration may underline the recorded places in a file you open.
+
+One more rule, `suite/no-toast-copy-in-spec`, is written and switched off: it flags toast copy typed in a spec, and stays off until that copy has a home outside the specs (`docs/architecture-audit.md`, roadmap item 9).
 
 While building, run only the specs you changed — `npx playwright test --project=<tier> <spec-file-names>` on every tier they target, with dependencies at least once, `--workers=2` for anything on the real VMs, and nothing else running against the instance (`gh run list`). The full suite runs once, at the end, as `QA — Branch run`, which Andrey dispatches (facts above). The `playwright-test-author` skill has the detail.
