@@ -26,9 +26,13 @@ Except: a describe that waits on a real VM retries once (`HOST_RETRIES`, 2
 attempts), and `gitops-mode`, `gitops-verify` and `gitops-nightly` don't retry (one
 attempt, no retry signal: triage it as a local run).
 
-- **`outcome: flaky`** (failed then passed on retry) → almost always `flaky` or a
-  genuine race in the product. Start from the flake hypothesis; only escalate to
-  product-defect if the transient failure exposes a real race users would hit.
+- **`outcome: flaky`** (failed then passed on retry) → start from the flake
+  hypothesis, and don't stop there: a pass on retry is also what a test-bug that
+  depends on timing or on leftover state looks like, and what a real race in the
+  product looks like. Escalate to product-defect only if the transient failure
+  exposes a race users would hit. Whatever the verdict, check whether the same
+  test or the same failing frame has been flaky before (the SKILL's history
+  step): a third sighting is a defect in the test or a component, not weather.
 - **`outcome: unexpected`** with **identical errors across all its attempts** →
   deterministic. This is *not* a timing flake, no matter how much the error looks
   like a timeout. A deterministic "element not found after 10s" means the element
@@ -45,18 +49,16 @@ the SKILL's "Re-running locally" section for what it costs on the shared instanc
 
 ```bash
 gh run list --limit 5
-cd playwright && npx playwright test --project=premium <spec-file> -g "<test title>" \
+npx playwright test --project=premium <spec-file> -g "<test title>" \
   --repeat-each=5 --workers=1 --output=<scratchpad>/rerun
 ```
 
-(Not `npm run test:premium -- <spec>`: npm appends your arguments after the script's
-final `exit`, so no `playwright test` sees them. You get the whole main project, the
-exclusive one and gitops-mode, then exit 1.)
-
-Mixed pass/fail across repeats → `flaky`. Uniform failure → real; triage further.
+Run it the way the SKILL's scoped-run rules say (never through the npm script, spec
+names typed out). Mixed pass/fail across repeats → `flaky`. Uniform failure → real;
+triage further.
 
 A related use: when many specs fail on the same changed locator or the instance
-looks degraded, re-running the *current* local suite for one representative spec
+looks degraded, a local run of one representative spec on today's code
 disambiguates fast. If it **passes locally on today's code**, CI ran a stale
 snapshot (or hit a transient) — not a live defect. If it **fails the same way
 locally**, the problem is live; triage it as product/test/infra.
@@ -82,14 +84,15 @@ locally**, the problem is live; triage it as product/test/infra.
 
 ## Cross-checking against the product
 
-The local Fleet checkout is at `~/repositories/fleet`. Use it to adjudicate:
+Use the local Fleet checkout (`$FLEET_REPO`, else `../fleet` beside this repo) to
+adjudicate:
 
 - **Locator questions** → the React component under `frontend/`. Verify the
   role/label/text/class the test targets is what the source currently emits. A
   renamed heading or restructured component makes a correct-looking test a
   `test-bug`. (The `playwright-test-reviewer` skill catalogs Fleet's legitimate
   class fallbacks — a class-based locator is not automatically wrong.)
-- **API shape / behavior** → `docs/REST API/rest-api.md` is authoritative; the
+- **API shape / behavior** → `docs/API/rest-api.md` is authoritative; the
   handler lives under `server/service/`. If the test's API-derived expectation no
   longer matches the documented/implemented response, that's the fault line.
 - **Activity-feed assertions** → the type and its `details` keys in
@@ -174,8 +177,46 @@ Each of these looked like something else at first.
 - **A real-VM spec fails with the host picker's own message.** `requireRealHost` and
   `liveMacosHost` say why there's no host: offline since when, online but its details
   didn't load, or not enrolled at all. Read it before blaming the spec. Both Macs dropped together on
-  2026-09-20 and again on 2026-10-05 (32 failures in one nightly) → `infra-env`; check
-  the host's `seen_time`, then re-run once it's back.
+  2026-09-20, 2026-10-05 (32 failures in one nightly) and 2026-10-10 (55 on each of two
+  runs) → `infra-env`, **one row** with its count; check the host's `seen_time`, then
+  re-run once it's back.
+- **Every App Store or setup-assistant test red at once.** Apple's side. A revoked VPP
+  token (Apple error 9625) leaves `GET /vpp_tokens` looking healthy while adding or
+  listing App Store apps fails; an Apple Business token Apple rejects answers 403
+  `token_rejected` and breaks the setup assistant → `infra-env`, one row. The token is
+  replaced by hand.
+- **`ENOSPC` on an upload, then a 0-byte file and 409s.** The instance's installer disk
+  is full: the first upload fails, and the retries meet its residue → `infra-env`.
+- **The premium gitops apply fails on a Fleet-maintained app's SHA.** Fleet's catalog
+  listed a hash the server never computed; it has cleared the same day each time →
+  `infra-env`, re-check with a gitops-only dispatch.
+- **The navbar, then a bare spinner for 10 s, and no page heading.** A lazy JavaScript
+  chunk hadn't arrived: the QA instances' edge doesn't cache Fleet's bundles, so a cold
+  context fetches them from origin → `flaky` (infra), not a locator problem.
+- **A toast that never came, on a settled page.** Fleet moved the message somewhere
+  else on purpose (an unsupported upload now reads "File type isn't supported" inline)
+  or stopped raising it → `test-bug`, the test is stale. The same goes for a Save or
+  Add button the test expects disabled: validation is moving to submit.
+- **A 409 or "can't delete, in use" on the first attempt**, in the cleanup or at a
+  test's first step. Something the sweep can't remove was left on the instance, often
+  added by hand (a Fleet-maintained app with *Automatic install* keeps its policy,
+  which keeps the title) → `test-bug` in `setup/cleanup.steps.ts`: fix the wipe's
+  order, don't ask for the leftover to be deleted.
+- **The same real-VM test red night after night with the same status.** A durable
+  fixture stuck in a failed install or uninstall (a `.deb` stayed red for six runs):
+  the resting-state step should have cleared it → `test-bug` in the resting state.
+- **A dropdown or filter choice that "didn't take".** The menu closed under the click
+  when the page re-rendered. It surfaces under a different test each time, so search
+  the history by the component's frame (`TeamDropdown`, `LabelFilter`), not the test
+  name → `flaky`, with the fix owed in the component.
+- **An activity or a title the test can't find by name.** A vendor renamed the app
+  and Fleet kept the title's first name → `test-bug`: match by id.
+- **A value that is older or staler than the test allows, on a build that just
+  changed.** Fleet changed its refresh rule on purpose (a stored report's
+  `last_fetched` now moves only every 50 minutes for unchanged results) → `test-bug`.
+- **A failure only the simulations can produce.** Hundreds of simulated hosts
+  registering in the same second reached a race no real fleet would (two OS versions
+  sharing an id) → a data quirk: explain it, route the test around it, no bug draft.
 - **A tooltip that never appeared on a settled page.** The hover landed, then the page
   re-rendered or shifted (a card above loading after the rest) and left the pointer over
   nothing: no tooltip in the snapshot, the page complete, green locally → `flaky`. The
@@ -192,9 +233,10 @@ Each of these looked like something else at first.
   but a skip is not a failure unless a platform that *should* be present is
   missing.
 - **`cleanup-setup` / `cleanup-teardown` / `*-setup` projects** are fixtures. A
-  failure *there* is infra-env (bad seed / instance state), and it typically
-  cascades into many downstream failures — triage the setup failure first; the
-  downstream ones are usually collateral.
+  failure *there* cascades into many downstream failures — triage it first; the
+  downstream ones are usually collateral. Its own verdict depends on why: the
+  instance down or a login throttled is `infra-env`; a wipe that can't remove what
+  is on the instance, or a helper calling a wrong path, is a `test-bug`.
 - **Slow-but-passing** tests belong in the perf note, not the defect list —
   unless one is trending toward its timeout (60 s by default; VM specs set their
   own), which is a flake waiting to happen and worth flagging. The VM specs are
