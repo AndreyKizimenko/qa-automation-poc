@@ -23,8 +23,8 @@ field, an empty multipart field.
 
 - **Default: the current branch's changes.** `git diff main...HEAD --stat`, then read each changed spec,
   page object, helper, fixture and doc in full (not just the hunks), plus what the change calls into.
-  Lint the changed files (`npx eslint <files>` from `playwright/`): a `suite/*` warning on a line the
-  branch added is a finding, and `playwright/CLAUDE.md` → Pre-PR check says what to write instead.
+  If the diff touches `playwright/eslint-suppressions.json`, the record may only shrink: a count that
+  grew, or a new entry that isn't a moved file's, is a finding, and so is an `eslint-disable` with no reason.
 - **A named file or area:** review that, and follow its page objects and helpers far enough to judge them.
 - **The whole suite:** only when asked; it's a different job (sample, then group findings by pattern,
   and count the mechanical ones so the audit has numbers: fixed sleeps, `force: true`, class selectors

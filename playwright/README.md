@@ -125,8 +125,9 @@ From `playwright/`:
 | `npm run test:all` | Premium, then free if premium passed (`&&`) |
 | `npm run lint` | Lint specs + page objects + helpers |
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
+| `npm run lint:prune` | After fixing a recorded violation: shrink `eslint-suppressions.json` to match |
 | `npm run lint:rules` | Test the suite's own lint rules (`eslint-rules/tests.js`) |
-| `npm run lint:contract` | Count what each of the suite's own rules still finds, per rule |
+| `npm run lint:contract` | Count the places each rule still finds in the code, per rule |
 | `npm run typecheck` | Run `tsc --noEmit` on the whole project |
 | `npm run check` | Typecheck, the rule tests **and** lint — run this before opening a PR |
 
@@ -144,12 +145,14 @@ practices via `eslint-plugin-playwright`: no `waitForTimeout`, no
 Floating-promise detection is on via `@typescript-eslint`, so missing
 `await`s on `expect()` or locator actions fail the lint check.
 
-The suite's own conventions are rules too, in `eslint-rules/` (`suite/*`):
-a class selector or a `page.getBy*()` locator in a spec, `Date.now()` in a
-per-run name, `assertActivity` without a baseline, and a helper that drops a
-non-OK response. They are warnings, because code written before them still
-carries each pattern; `CLAUDE.md` → *Pre-PR check* says what to write instead,
-and `npm run lint:contract` prints the count per rule.
+Lint prints nothing or it fails: no rule is a warning. The suite's own
+conventions are rules too, in `eslint-rules/` (`suite/*`): a class selector or
+a `page.getBy*()` locator in a spec, `Date.now()` in a per-run name,
+`assertActivity` without a baseline, a helper that drops a non-OK response,
+and a skip that doesn't say where it is tracked. The places that predate a
+rule are recorded per file in `eslint-suppressions.json` and stay quiet; a new
+one fails, and `npm run lint:prune` shrinks the record when an old one is
+fixed. `CLAUDE.md` → *Pre-PR check* says what to write instead of each.
 
 ---
 
@@ -208,6 +211,7 @@ playwright/
 │   └── upgrade-preflight/        # Pre-upgrade impact reports (gitignored — local only)
 ├── eslint-rules/                 # The suite's own lint rules (suite/*), their tests and the per-rule count
 ├── eslint.config.js              # Lint config
+├── eslint-suppressions.json      # Per file and rule, the violations that predate a rule; it only shrinks
 ├── playwright.config.ts
 ├── tsconfig.json
 ├── TODO.md                       # Skips, env gates, config workarounds
