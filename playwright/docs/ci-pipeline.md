@@ -151,8 +151,9 @@ PR unmergeable.
 
 **A report never leaves CI in the clear.** A Playwright report holds live credentials. The HTML report writes
 every typed value into its step titles, so the admin, static-user and SSO passwords are in every report, green
-or not. A trace records the `Authorization` header of every API call, and a failed API assertion prints its
-request headers into the error text. This repository is public, and anyone signed in to GitHub can download a
+or not. A trace records the `Authorization` header of every API call, and a failed `expect(res).toBeOK()`
+prints its request headers into the error text (the suite checks responses with `expectOk`, which prints
+none, and lint refuses `toBeOK`). This repository is public, and anyone signed in to GitHub can download a
 public repository's artifacts. So every workflow uploads through one action, `.github/upload-report`, which
 packs the report and encrypts it to the public key committed at `.github/report-public-key.pem`; the artifact
 is a single `<name>.tar.gz.enc`, and CI holds no key that opens it. The step fails closed: a report that can't
@@ -160,6 +161,15 @@ be encrypted isn't uploaded. Two checks keep it that way. `.github/scripts/check
 required `Playwright — Check`, fails a PR that uploads or publishes anything from a run by another route, or
 that edits the action to stop encrypting. `Report upload — Check` runs the action once in the suites' own
 container whenever the action, the script, the key or a suite workflow changes.
+
+**A suite's report also carries the run as data, and is kept 90 days.** The merge step writes `results.json`
+(Playwright's JSON reporter) beside the HTML report and copies it into the report folder, so it leaves CI
+inside the same encrypted file. A test's history is built from it: `run_history.py`, in the run-reviewer
+skill, records each reviewed run's tests in a local file and says how a failing test fared in the runs before.
+The two suite reports are kept 90 days so that history can be rebuilt from the reports alone; the gitops and
+CLI reports keep 7. CI itself has no history to read, because it holds no key that opens a report: a line in
+the job summary such as "failed 4 of the last 14 nights" needs somewhere to keep non-secret history that CI
+can read, and that is not decided.
 
 The private key lives with the people who read reports: `~/.config/qa-automation/report-private-key.pem`, or
 wherever `QA_REPORT_KEY` points, with a copy in 1Password. `fetch_ci_run.sh` decrypts with it. Losing it loses

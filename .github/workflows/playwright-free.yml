@@ -135,12 +135,20 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
         run: SUITE=free npx playwright test --project=free-exclusive --reporter=github,blob --global-timeout=900000
 
+      # The merge writes the run twice: the HTML report, and `results.json`, the
+      # same run as data. The run-reviewer's run_history.py builds each test's
+      # history from it. The JSON is written beside the report and then copied
+      # in, because the HTML reporter empties its folder before it writes; it
+      # carries error text, so it leaves CI only inside the encrypted report.
       - name: Merge the reports
         if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: blob-report/results.json
         run: |
           mkdir -p blob-report/all
           find blob-report/suite blob-report/exclusive -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
-          npx playwright merge-reports --reporter html blob-report/all
+          npx playwright merge-reports --reporter html,json blob-report/all
+          cp blob-report/results.json playwright-report/results.json
 
       # Uploaded on every outcome: a failed or interrupted run is the one whose
       # report matters most. Encrypted: a report holds typed passwords and the API
@@ -149,4 +157,5 @@ jobs:
         if: ${{ always() }}
         with:
           name: playwright-report-free
-          retention-days: 14
+          # Long enough for a test's history to be rebuilt from the reports alone.
+          retention-days: 90

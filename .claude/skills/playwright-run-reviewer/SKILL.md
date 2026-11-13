@@ -125,7 +125,9 @@ before reading a spec, and give each cause **one row** with its count.
    (`git -C <fleet checkout> log <green>..<tonight> -- frontend server`). A
    serial describe stops at its first failure, so count "did not run" too: the
    red count is a floor on what broke.
-3. **History.** Search `docs/run-reviews/` for the test's file and for the
+3. **History.** `python3 ${CLAUDE_SKILL_DIR}/scripts/run_history.py show "<report-dir>"` says, for
+   each failed or flaky test, how it fared in the runs recorded before and whether
+   the error is the same one. Then search `docs/run-reviews/` for the test's file and for the
    error's distinctive phrase, then `docs/blocked-by-product-bugs.md` and the
    signature catalog. A failure seen before isn't "a flake" again: say how many
    times and since when, and on the third sighting the next step is a fix, not
@@ -265,8 +267,9 @@ on why, from `run_timeline.py`.
 
 Save the full triage as
 `playwright/docs/run-reviews/<date>-<nightly|branch|local>-<run id>.md` (a local
-run has no id: use a short slug), so the next triage's history search finds it. Print the table and headline findings in
-chat regardless.
+run has no id: use a short slug), so the next triage's history search finds it. Record each
+suite report of a CI run with `run_history.py add "<report-dir>" --build <revision>` (a run
+already recorded is skipped). Print the table and headline findings in chat regardless.
 
 **Afterwards.** A triage that ends at the write-up loses its findings. Before you
 finish, say which of these you did or handed over:
