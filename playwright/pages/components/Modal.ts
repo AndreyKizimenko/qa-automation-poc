@@ -11,7 +11,9 @@ import { Locator, Page } from '@playwright/test';
  * modal that mentions it. `hasText` matches a substring, case-insensitively, so
  * "Delete custom variable" finds the modal titled "Delete custom variable?".
  *
- * Page objects build their modals with this, and the class lives only here.
+ * Page and component objects build their modals with this. Lint
+ * (`suite/modal-in-component`) keeps the class in this file; the places that
+ * predate it are recorded and move when next touched.
  */
 export function fleetModal(page: Page, title: string | RegExp): Locator {
   return page.locator('.modal__modal_container').filter({ has: page.locator('.modal__header', { hasText: title }) });

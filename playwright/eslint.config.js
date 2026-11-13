@@ -100,17 +100,22 @@ module.exports = tseslint.config(
     files: ['helpers/**/*.ts', 'setup/**/*.ts', 'fixtures.ts'],
     rules: { 'suite/no-swallowed-response': 'error' },
   },
+  // Each shared widget's selector lives in its own component file; every other
+  // page and component object uses that component.
   {
-    // Page objects outside pages/components/, which is where each shared
-    // widget's selector lives.
     files: ['pages/**/*.ts'],
-    ignores: ['pages/components/**'],
-    rules: {
-      'suite/modal-in-component': 'error',
-      'suite/react-select-in-component': 'error',
-      'suite/actions-menu-in-component': 'error',
-      'suite/sql-editor-in-component': 'error',
-    },
+    ignores: ['pages/components/Modal.ts'],
+    rules: { 'suite/modal-in-component': 'error' },
+  },
+  {
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/dropdowns.ts'],
+    rules: { 'suite/react-select-in-component': 'error', 'suite/actions-menu-in-component': 'error' },
+  },
+  {
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/SqlEditor.ts'],
+    rules: { 'suite/sql-editor-in-component': 'error' },
   },
   {
     // Specs with no page. The browser `test` carries an automatic fixture that

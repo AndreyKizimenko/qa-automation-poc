@@ -28,7 +28,9 @@ export class ReactSelect {
   /** Picks `label` (nothing, when it is already chosen) and waits until the control shows it. */
   async select(label: string): Promise<void> {
     await expect(this.control).toBeVisible();
-    if ((await this.value.textContent())?.trim() === label) return;
+    // `count()` first: a dropdown still showing its placeholder has no value
+    // element, and `textContent()` would wait for one until the test times out.
+    if ((await this.value.count()) && (await this.value.textContent())?.trim() === label) return;
     await this.control.click();
     await this.root.page().getByTestId('dropdown-option').filter({ hasText: exactText(label) }).click();
     await expect(this.value).toHaveText(label);

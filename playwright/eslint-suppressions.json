@@ -17,6 +17,61 @@
       "count": 1
     }
   },
+  "pages/components/EditSoftwareModal.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/EnrollSecretModal.ts": {
+    "suite/modal-in-component": {
+      "count": 3
+    }
+  },
+  "pages/components/FilterModal.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/PlatformDropdown.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/PolicyAutomationsFields.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/RunScriptModal.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/SoftwareDeploySelector.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/SoftwareInstallerCard.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/StatusFilter.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/TransferHostModal.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/gitopsMode.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 1
+    }
+  },
   "pages/controls/ConfigurationProfilesPage.ts": {
     "suite/modal-in-component": {
       "count": 2
