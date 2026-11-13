@@ -130,6 +130,11 @@ tester.run('react-select-in-component', rules['react-select-in-component'], {
   invalid: [{ code: "modal.locator('.react-select__control')", errors: [{ messageId: 'widgetSelector' }] }],
 });
 
+tester.run('sql-editor-in-component', rules['sql-editor-in-component'], {
+  valid: ['this.sqlEditor = new SqlEditor(page);', "page.locator('.sql-editor-example')"],
+  invalid: [{ code: "page.locator('.sql-editor').filter({ has: textarea })", errors: [{ messageId: 'widgetSelector' }] }],
+});
+
 tester.run('actions-menu-in-component', rules['actions-menu-in-component'], {
   valid: ['await new ActionsMenu(row).choose(action);'],
   invalid: [

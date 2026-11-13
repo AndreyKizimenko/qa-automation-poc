@@ -13,6 +13,7 @@ module.exports = {
     'modal-in-component': require('./widget-in-component').modal,
     'react-select-in-component': require('./widget-in-component').reactSelect,
     'actions-menu-in-component': require('./widget-in-component').actionsMenu,
+    'sql-editor-in-component': require('./widget-in-component').sqlEditor,
     'activity-needs-baseline': require('./activity-needs-baseline'),
     'no-swallowed-response': require('./no-swallowed-response'),
     'skip-needs-reason': require('./skip-needs-reason'),

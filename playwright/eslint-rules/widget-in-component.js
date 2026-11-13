@@ -42,6 +42,12 @@ module.exports = {
     pattern: /\breact-select__/,
     use: '`new ReactSelect(<its container>)` from pages/components/dropdowns',
   }),
+  sqlEditor: widgetRule({
+    widget: 'the report and policy SQL editor',
+    // The class itself, not one that starts with it (`.sql-editor-example`).
+    pattern: /\.sql-editor(?![\w-])/,
+    use: '`new SqlEditor(page)` from pages/components/SqlEditor',
+  }),
   actionsMenu: widgetRule({
     widget: "Fleet's ActionsDropdown (a row's Actions menu)",
     pattern: /actions-dropdown/,

@@ -111,6 +111,7 @@ module.exports = tseslint.config(
       'suite/modal-in-component': 'error',
       'suite/react-select-in-component': 'error',
       'suite/actions-menu-in-component': 'error',
+      'suite/sql-editor-in-component': 'error',
     },
   },
   {
