@@ -227,16 +227,18 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
   const policies = await listFleetPolicies(request, vms.id);
   const reports = await listReports(request, vms.id);
   const borrowed = (await listFleetHosts(request, vms.id)).filter((h) => !h.real).map((h) => h.id);
+  // The policies first: Fleet refuses to delete a script a policy automation
+  // still runs, and a title an install policy points at (below).
+  await deleteFleetPolicies(
+    request,
+    vms.id,
+    policies
+      .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
+      .map((p) => p.id),
+  );
   await Promise.all([
     deleteAllConfigurationProfiles(request, vms.id, (name) => name.startsWith('pw-')),
     transferHosts(request, 0, borrowed),
-    deleteFleetPolicies(
-      request,
-      vms.id,
-      policies
-        .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
-        .map((p) => p.id),
-    ),
     deleteAllScripts(request, vms.id, (name) => name.startsWith('pw-')),
     // By exact prefix: gitops declares `pw-host-report-results` on this fleet too.
     ...reports
@@ -246,7 +248,6 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
       )
       .map((r) => deleteReport(request, r.id)),
   ]);
-  // After the policies: a title an install policy points at can't be deleted.
   await Promise.all(
     titles
       .filter((t) => OWN_PACKAGE.test(t.packageName))
