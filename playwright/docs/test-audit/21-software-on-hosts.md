@@ -243,7 +243,7 @@ some assertions via API), **API** (no meaningful UI validation), **PERF** (timin
 ### Running these
 
 ```bash
-npm run test:premium -- -g "<title fragment>"            # with deps: premium-setup + cleanup-setup (the VMs sweep + resting-state preflight)
+npx playwright test --project=premium -g "<title fragment>"            # with deps: premium-setup + cleanup-setup (the VMs sweep + resting-state preflight)
 npm run test:premium:headed -- -g "<title fragment>"     # watch it
 ```
 
@@ -261,7 +261,7 @@ two on a day it runs. The CI workflows share a concurrency group with their tier
 ### SWH-14 · Premium • Software • Install and uninstall on host › a {macOS .pkg, Windows .msi, Windows .exe, Linux .deb, macOS Fleet-maintained app, Windows Fleet-maintained app} installs on the {darwin, windows, linux} VM and uninstalls again
 
 - **File:** [`playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`](../../tests/e2e/premium/software/software-lifecycle-on-host.spec.ts) · the fixture list and its helpers: [`helpers/vm-fixtures.ts`](../../helpers/vm-fixtures.ts)
-- **Grep:** `npm run test:premium -- -g "VM and uninstalls again"` (six runtime tests: `a macOS .pkg installs on the darwin VM and uninstalls again`, `a Windows .msi installs on the windows VM and uninstalls again`, `a Windows .exe installs on the windows VM and uninstalls again`, `a Linux .deb installs on the linux VM and uninstalls again`, `a macOS Fleet-maintained app installs on the darwin VM and uninstalls again`, `a Windows Fleet-maintained app installs on the windows VM and uninstalls again`)
+- **Grep:** `npx playwright test --project=premium -g "VM and uninstalls again"` (six runtime tests: `a macOS .pkg installs on the darwin VM and uninstalls again`, `a Windows .msi installs on the windows VM and uninstalls again`, `a Windows .exe installs on the windows VM and uninstalls again`, `a Linux .deb installs on the linux VM and uninstalls again`, `a macOS Fleet-maintained app installs on the darwin VM and uninstalls again`, `a Windows Fleet-maintained app installs on the windows VM and uninstalls again`)
 - **Project:** premium · **Scope:** the **VMs** fleet (no fleet dropdown — the flow starts on host details, by URL) · **Host:** the real VM of the row's platform
 - **Mode:** UI+API · **Isolation:** parallel, one test per fixture; describe timeout **900 s**; two `test.step`s, **`install`** then **`uninstall`**, so a report names the half that failed. `finally` → `ensureVmFixtureUninstalled` (returns the fixture to rest, as in step 2; a no-op after a pass). **Never deletes the title** — it's the fleet's, not the test's.
 - **Preconditions:** an online real VM of the platform (`requireRealHost`); the fixture's title on the VMs fleet, found by installer file name for a custom package and by name + platform among the fleet's Fleet-maintained titles for an FMA (`findVmFixtureTitle` — *"<label> fixture is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise, and for an FMA *"<label> has no installer on the VMs fleet"*); the title offered to the VM with a library version (*"<title> isn't offered to <host>"*); the fixture **uninstalled** — the preflight's job, and the test calls `ensureVmFixtureUninstalled` once more before it starts (normally a no-op).
@@ -396,7 +396,7 @@ other:
 ### SWH-03 · Premium • Software • Install on host › "Deploy" creates an install policy, and Fleet installs through it on the Linux VM
 
 - **File:** [`playwright/tests/e2e/premium/software/install-on-host.spec.ts`](../../tests/e2e/premium/software/install-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g 'creates an install policy, and Fleet installs through it'`
+- **Grep:** `npx playwright test --project=premium -g 'creates an install policy, and Fleet installs through it'`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; **timeout 900 s** (`test.setTimeout`) — the file's only test since 2026-09-28; `finally` deletes the policy first, then `removeTitleFromHost` (uninstall if the host has it, wait for the status to clear — **not** for the refetch — then delete the title)
 - **Preconditions:** online real Ubuntu VM
@@ -488,7 +488,7 @@ other:
 ### SWH-05 · Premium • Software • Uninstall from host › an uninstall that fails leaves the software installed, and the Library offers a retry
 
 - **File:** [`playwright/tests/e2e/premium/software/uninstall-from-host.spec.ts`](../../tests/e2e/premium/software/uninstall-from-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "an uninstall that fails leaves the software installed"`
+- **Grep:** `npx playwright test --project=premium -g "an uninstall that fails leaves the software installed"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 600 s; `finally` queues an ad-hoc `apt-get remove --purge` on the VM **without waiting**, then deletes the title
 - **Preconditions:** online real Ubuntu VM
@@ -541,7 +541,7 @@ other:
 ### SWH-06 · Premium • Software • Inventory reflects installs › a package that installs appears in the Inventory once the host re-reports
 
 - **File:** [`playwright/tests/e2e/premium/software/inventory-reflects-install.spec.ts`](../../tests/e2e/premium/software/inventory-reflects-install.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a package that installs appears in the Inventory once the host re-reports"`
+- **Grep:** `npx playwright test --project=premium -g "a package that installs appears in the Inventory once the host re-reports"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 900 s; `finally` → `removeTitleFromHost`
 - **Preconditions:** online real Ubuntu VM (`requireRealHost` throws `no online real linux VM on <url> …` otherwise)
@@ -581,7 +581,7 @@ other:
 ### SWH-07 · Premium • Software • Inventory reflects installs › a pending or failed install never appears in the Inventory, through every retry
 
 - **File:** [`playwright/tests/e2e/premium/software/inventory-reflects-install.spec.ts`](../../tests/e2e/premium/software/inventory-reflects-install.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a pending or failed install never appears in the Inventory"`
+- **Grep:** `npx playwright test --project=premium -g "a pending or failed install never appears in the Inventory"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real **aarch64** Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 900 s; `finally` waits (≤ 5 min, errors swallowed) for `failed_install` to stick, then deletes the title
 - **Preconditions:** online real Ubuntu VM
@@ -630,7 +630,7 @@ other:
 ### SWH-08 · Premium • Software • Update on host › a package the library moves ahead of is offered Update, and only then
 
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a package the library moves ahead of is offered Update, and only then"`
+- **Grep:** `npx playwright test --project=premium -g "a package the library moves ahead of is offered Update, and only then"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 600 s; `finally` → `removeTitleFromHost`
 - **Preconditions:** online real Ubuntu VM
@@ -677,7 +677,7 @@ other:
 ### SWH-09 · Premium • Software • Update on host › Claude › Claude on the {darwin, windows} VM offers Update exactly when the library is ahead of it
 
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "offers Update exactly when the library is ahead of it"` (two runtime tests: `Claude on the darwin VM offers Update exactly when the library is ahead of it`, `Claude on the windows VM offers Update exactly when the library is ahead of it`)
+- **Grep:** `npx playwright test --project=premium -g "offers Update exactly when the library is ahead of it"` (two runtime tests: `Claude on the darwin VM offers Update exactly when the library is ahead of it`, `Claude on the windows VM offers Update exactly when the library is ahead of it`)
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS / Windows VM
 - **Mode:** UI+API · **Isolation:** **serial** describe `Claude`, five tests in this order: darwin SWH-09 → darwin SWH-13 → windows SWH-09 → windows SWH-13 → SWH-10 — because SWH-10 pins the title these read and SWH-13's update changes what they see. A failure in the darwin run **skips every test after it**.
 - **Preconditions:** an online real VM of the platform (`requireRealHost`); Claude (`claude/darwin`, `claude/windows`) is on the VMs fleet — *"Claude is missing from the VMs fleet — re-apply gitops/premium-fleetqa/fleets/vms.yml"* otherwise; Claude is **installed** on the VM — *"… its 'Claude is installed' policy reinstalls it at the VM's next policy run (a refetch triggers one)"* otherwise. Both checks live in the `claudeOn()` helper SWH-09, SWH-10 and SWH-13 share.
@@ -717,7 +717,7 @@ other:
 ### SWH-13 · Premium • Software • Update on host › Claude › Claude on the {darwin, windows} VM updates to the library's build when it is behind
 
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "updates to the library's build when it is behind"` (two runtime tests: `Claude on the darwin VM updates to the library's build when it is behind`, `Claude on the windows VM updates to the library's build when it is behind`)
+- **Grep:** `npx playwright test --project=premium -g "updates to the library's build when it is behind"` (two runtime tests: `Claude on the darwin VM updates to the library's build when it is behind`, `Claude on the windows VM updates to the library's build when it is behind`)
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS / Windows VM
 - **Mode:** UI+API · **Isolation:** serial describe `Claude`, each run straight after the same platform's SWH-09 (order under SWH-09).
 - **Preconditions:** as SWH-09 (`claudeOn()`: the VM, Claude on the fleet, Claude installed). **Skips** when the VM is not behind, with *"installed <versions> is level with library <version>"* — only a vendor release since the last run puts the host behind, so **most days both runs skip**.
@@ -758,7 +758,7 @@ other:
 ### SWH-10 · Premium • Software • Update on host › Claude › Claude on the macOS VM: pinned back it is ahead, installed it is level, unpinned it updates
 
 - **File:** [`playwright/tests/e2e/premium/software/update-on-host.spec.ts`](../../tests/e2e/premium/software/update-on-host.spec.ts)
-- **Grep:** `npm run test:premium -- -g "pinned back it is ahead, installed it is level, unpinned it updates"`
+- **Grep:** `npx playwright test --project=premium -g "pinned back it is ahead, installed it is level, unpinned it updates"`
 - **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real macOS VM
 - **Mode:** UI+API · **Isolation:** serial describe, test 5 of 5; `finally` **unpins** (`setPinnedVersion(…, '')`); `cleanup-setup` also clears any pin it finds on QA / VMs, for the timeout case where the `finally` never runs
 - **Preconditions:** as SWH-09's `claudeOn()` for darwin — the macOS VM, Claude (darwin) on the VMs fleet, and Claude **installed** on the VM (checked before the skip, so a missing install fails this test even on a skip day); **at least two cached builds** (`fleet_maintained_versions`). **Skips** with *"the VMs fleet has cached one Claude build (…); the walk needs the previous one too"* until the vendor ships again and the hourly cron fetches it. **As of 2026-09-28 it skips** — one build cached. Also refuses to start on a pinned title (*"Claude arrived pinned — an earlier run died before restoring it"*).
@@ -807,7 +807,7 @@ other:
 ### SWH-11 · Premium • Software • Large installers › a package over the size limit is refused in the browser, before any upload
 
 - **File:** [`playwright/tests/e2e/premium/software/large-upload.spec.ts`](../../tests/e2e/premium/software/large-upload.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a package over the size limit is refused in the browser"`
+- **Grep:** `npx playwright test --project=premium -g "a package over the size limit is refused in the browser"`
 - **Project:** premium · **Scope:** **Workstations** (no host involved)
 - **Mode:** UI+API · **Isolation:** parallel; default 60 s timeout; the sparse file is deleted in `finally`
 - **Preconditions:** `max_software_package_size` in `GET /config` is > 0 (*"the config reports no max_software_package_size"*). On premium QA it is **10 GiB**.
@@ -845,7 +845,7 @@ other:
 ### SWH-12 · Premium • Software • Large installers › a large upload shows its progress and ends in success
 
 - **File:** [`playwright/tests/e2e/premium/software/large-upload.spec.ts`](../../tests/e2e/premium/software/large-upload.spec.ts)
-- **Grep:** `npm run test:premium -- -g "a large upload shows its progress and ends in success"`
+- **Grep:** `npx playwright test --project=premium -g "a large upload shows its progress and ends in success"`
 - **Project:** premium · **Scope:** **Workstations** (no host involved)
 - **Mode:** UI · **Isolation:** parallel; timeout 300 s; `finally` deletes the local file and the title (Workstations is also wiped by `cleanup.steps.ts`)
 - **Preconditions:** none beyond an instance that will accept ~100 MB (premium QA is a 2 GB Render box — the size is deliberately modest)
