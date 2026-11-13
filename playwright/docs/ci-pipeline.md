@@ -149,6 +149,25 @@ work, as `QA — Branch run`, dispatched by the person who owns the instances. `
 PR with no path filter because it is a required status check, and a required check that never reports leaves a
 PR unmergeable.
 
+**A report never leaves CI in the clear.** A Playwright report holds live credentials. The HTML report writes
+every typed value into its step titles, so the admin, static-user and SSO passwords are in every report, green
+or not. A trace records the `Authorization` header of every API call, and a failed API assertion prints its
+request headers into the error text. This repository is public, and anyone signed in to GitHub can download a
+public repository's artifacts. So every workflow uploads through one action, `.github/upload-report`, which
+packs the report and encrypts it to the public key committed at `.github/report-public-key.pem`; the artifact
+is a single `<name>.tar.gz.enc`, and CI holds no key that opens it. The step fails closed: a report that can't
+be encrypted isn't uploaded. Two checks keep it that way. `.github/scripts/check-artifacts.sh`, a step of the
+required `Playwright — Check`, fails a PR that uploads or publishes anything from a run by another route, or
+that edits the action to stop encrypting. `Report upload — Check` runs the action once in the suites' own
+container whenever the action, the script, the key or a suite workflow changes.
+
+The private key lives with the people who read reports: `~/.config/qa-automation/report-private-key.pem`, or
+wherever `QA_REPORT_KEY` points, with a copy in 1Password. `fetch_ci_run.sh` decrypts with it. Losing it loses
+only the reports still in retention: `node .github/scripts/report-crypt.mjs keygen` makes a new pair, and the
+new public key is committed. Encrypting a report doesn't make it safe to quote. Before a piece of one goes
+into an issue, a PR or a review, check it for request headers and typed values;
+`.github/scripts/scan-report-secrets.py` lists which of the suite's secrets a report holds, and where.
+
 ## What bounds a run
 
 The work in a premium run splits into short browser tests and long host-bound waits: a test that installs
@@ -190,5 +209,8 @@ Free is small enough that none of this applies: two workers, worker-bound; its r
 - **Changing a worker count.** One branch run with `-f workers=N`, then the timeline: if every worker is busy
   to the last minute the count still helps; if the tail is installs on one platform, or a VM describe sits
   near its budget, it does not. Record the result in the facts table with the date.
-- **Judging a run.** `playwright-run-reviewer` owns that: `fetch_ci_run.sh` for the artifacts,
+- **Uploading anything from a run.** Through `./.github/upload-report`, never `actions/upload-artifact`
+  directly, and never to Pages, a release or a gist: the PR check refuses those. Something that provably holds
+  no report, trace, screenshot, log or environment says so on its line, `# unencrypted-ok: <reason>`.
+- **Judging a run.** `playwright-run-reviewer` owns that: `fetch_ci_run.sh` for the artifacts (it decrypts them),
   `parse_report.py` for what failed and why, `run_timeline.py` for how it paced.

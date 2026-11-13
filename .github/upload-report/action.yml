@@ -1,0 +1,61 @@
+name: Upload a Playwright report, encrypted
+description: >-
+  Packs a Playwright report, encrypts it to the repository's report public key and uploads only the
+  encrypted file. The one place in this repository that may call actions/upload-artifact.
+
+# A report holds live credentials (typed passwords in its step titles, the API token in traces and in
+# failed API assertions), and a public repository's artifacts can be downloaded by anyone signed in to
+# GitHub. So a report is never uploaded in the clear: every workflow uploads through this action, and
+# .github/scripts/check-artifacts.sh fails the PR check on any other use of actions/upload-artifact.
+#
+# CI holds only the public key (.github/report-public-key.pem). Reading a report takes the private
+# key: playwright/docs/ci-pipeline.md says where it lives and how to open a report.
+#
+# Fails closed: if the report can't be encrypted, the step fails and nothing is uploaded.
+
+inputs:
+  name:
+    description: Artifact name. The artifact holds one file, <name>.tar.gz.enc
+    required: true
+  path:
+    description: The report directory, relative to the workspace root
+    default: playwright/playwright-report
+  retention-days:
+    description: How many days GitHub keeps the artifact
+    default: '14'
+
+runs:
+  using: composite
+  steps:
+    - name: Encrypt the report
+      id: encrypt
+      shell: bash
+      env:
+        REPORT_DIR: ${{ inputs.path }}
+        ARTIFACT_NAME: ${{ inputs.name }}
+      # $GITHUB_WORKSPACE rather than the github.workspace context: in a container job only the
+      # environment variable is the path as the container sees it.
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+        if [ ! -f "$REPORT_DIR/index.html" ]; then
+          echo "::notice::No report at $REPORT_DIR (the run produced none), so there is nothing to upload."
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        rm -rf encrypted-report
+        mkdir -p encrypted-report
+        out="encrypted-report/$ARTIFACT_NAME.tar.gz.enc"
+        tar -czf - -C "$REPORT_DIR" . \
+          | node .github/scripts/report-crypt.mjs encrypt .github/report-public-key.pem > "$out"
+        test -s "$out"
+        echo "Encrypted $REPORT_DIR to $out ($(du -h "$out" | cut -f1))."
+        echo "ready=true" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ steps.encrypt.outputs.ready == 'true' }}
+      with:
+        name: ${{ inputs.name }}
+        path: encrypted-report/${{ inputs.name }}.tar.gz.enc
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: error

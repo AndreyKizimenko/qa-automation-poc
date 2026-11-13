@@ -1,0 +1,73 @@
+name: Report upload — Check
+
+# Runs the encrypted-upload action once in the suites' own container, on a
+# stand-in report, whenever the action, the encryption script, the key or a suite
+# workflow changes. It proves the part a static check can't: that in that image
+# the report is packed, encrypted and uploaded as one *.tar.gz.enc file.
+#
+# The static half (no other upload path exists, the script round-trips) is
+# .github/scripts/check-artifacts.sh, a step of the required Playwright — Check.
+# This one is not a required status check, so it keeps a paths filter (see
+# playwright-check.yml for why a required one can't).
+
+on:
+  pull_request:
+    paths:
+      - '.github/upload-report/**'
+      - '.github/scripts/report-crypt.mjs'
+      - '.github/report-public-key.pem'
+      - '.github/workflows/report-upload-check.yml'
+      - '.github/workflows/playwright-premium.yml'
+      - '.github/workflows/playwright-free.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    timeout-minutes: 10
+    runs-on: ubuntu-26.04
+    # The same image and user as playwright-premium.yml and playwright-free.yml:
+    # change the tag in all three together.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --user 1001
+    defaults:
+      run:
+        shell: bash
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - name: Make a stand-in report
+        run: |
+          mkdir -p playwright-report/data
+          printf '<!doctype html><title>stand-in report</title><p>%s</p>\n' "$GITHUB_SHA" > playwright-report/index.html
+          head -c 200000 /dev/urandom > playwright-report/data/blob.bin
+
+      - uses: ./.github/upload-report
+        with:
+          name: report-upload-check
+          retention-days: 1
+
+      - name: The upload is the encrypted file
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          f=encrypted-report/report-upload-check.tar.gz.enc
+          test -s "$f"
+          [ "$(head -c 8 "$f")" = "QAREPORT" ]
+          if grep -q "stand-in report" "$f"; then
+            echo "::error::the uploaded file contains the report's text in the clear"
+            exit 1
+          fi
+          echo "Uploaded $(wc -c < "$f") encrypted bytes; the report's text is not readable in them."

@@ -18,6 +18,12 @@
 #
 # Uses `gh run download` (the raw artifacts/.../zip API 404s intermittently on
 # its redirect, so we don't use it). Requires the `gh` CLI, authenticated.
+#
+# CI uploads each report encrypted, as one <artifact>.tar.gz.enc (a report holds
+# live credentials, and this repository's artifacts are public). This script
+# decrypts each one in place, which takes the private key: the file at
+# $QA_REPORT_KEY, else ~/.config/qa-automation/report-private-key.pem. A report
+# from before reports were encrypted is used as it is.
 set -euo pipefail
 
 log() { echo "$@" >&2; }
@@ -51,11 +57,31 @@ mkdir -p "$DEST"
 # Grab report-shaped artifacts. --dir puts each artifact in its own subdir
 # named after the artifact. gh refuses to overwrite, so reports already in
 # DEST (an earlier triage of the same run) are reused as they are.
-if find "$DEST" -maxdepth 2 -name index.html | grep -q .; then
+if find "$DEST" -maxdepth 2 \( -name index.html -o -name '*.tar.gz.enc' \) | grep -q .; then
   log "Reusing the reports already in $DEST"
 else
   gh run download "$RUN_ID" --repo "$REPO" --pattern '*report*' --dir "$DEST" >&2 \
     || gh run download "$RUN_ID" --repo "$REPO" --dir "$DEST" >&2
+fi
+
+# Decrypt each encrypted report next to itself, so what follows sees the same
+# layout as for a plain one: <artifact>/index.html. The encrypted file is
+# removed once its report is out; a failed decryption stops here with the
+# reason, and leaves the file for another try.
+ENCRYPTED="$(find "$DEST" -maxdepth 2 -name '*.tar.gz.enc' | sort)"
+if [[ -n "$ENCRYPTED" ]]; then
+  KEY="${QA_REPORT_KEY:-$HOME/.config/qa-automation/report-private-key.pem}"
+  if [[ ! -r "$KEY" ]]; then
+    log "These reports are encrypted, and there is no private key at $KEY."
+    log "Get the report key from 1Password, save it there (chmod 600), or point QA_REPORT_KEY at it."
+    exit 1
+  fi
+  CRYPT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)/.github/scripts/report-crypt.mjs"
+  while IFS= read -r enc; do
+    log "Decrypting $(basename "$enc")"
+    node "$CRYPT" decrypt "$KEY" "$enc" | tar -xzf - -C "$(dirname "$enc")"
+    rm -f "$enc"
+  done <<< "$ENCRYPTED"
 fi
 
 # Every directory holding an index.html, one level down in its artifact

@@ -101,9 +101,9 @@ jobs:
           FLEET_VPP_LOCATION: ${{ secrets.FLEET_VPP_LOCATION }}
         run: npx playwright test --project=gitops-nightly
 
-      - uses: actions/upload-artifact@v7
+      # Encrypted like every report (.github/upload-report).
+      - uses: ./.github/upload-report
         if: ${{ !cancelled() }}
         with:
           name: gitops-nightly-cli-report-${{ inputs.suite }}
-          path: playwright/playwright-report/
           retention-days: 7

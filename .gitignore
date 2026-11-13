@@ -77,3 +77,6 @@ tools/loglab/SECRETS.env
 tools/loglab/config/*.yml
 tools/loglab/sinks/
 *.bak-*
+
+# What .github/upload-report writes before uploading (CI only).
+encrypted-report/
