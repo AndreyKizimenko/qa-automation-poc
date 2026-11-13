@@ -35,6 +35,7 @@ import {
   deletePolicies,
   deleteReport,
   deleteScript,
+  failureSummary,
   findFleetByName,
   findMdmSimulations,
   findOnlineHost,
@@ -394,7 +395,8 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
         try {
           await base.step(`cleanup: ${what}`, async () => { await undo(request); }, { box: true });
         } catch (error) {
-          failures.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+          // The report keeps the step's own error; the summary that reaches the job log is one line.
+          failures.push(`${what}: ${failureSummary(error)}`);
         }
       }
     });

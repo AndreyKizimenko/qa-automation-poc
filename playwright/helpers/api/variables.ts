@@ -1,6 +1,6 @@
 // Custom-variable (global secret) API helpers: seeding and cleanup.
 import type { APIRequestContext } from '@playwright/test';
-import { apiUrl, authHeaders, expectOk } from './core';
+import { apiUrl, authHeaders, deleteEach, expectOk } from './core';
 
 export interface VariableRef {
   id: number;
@@ -18,20 +18,18 @@ export async function listVariables(request: APIRequestContext): Promise<Variabl
   return ((body.custom_variables ?? []) as VariableRef[]).map((v) => ({ id: v.id, name: v.name }));
 }
 
-/** Delete every custom variable whose name contains `marker` (test cleanup). */
+/**
+ * Deletes every custom variable whose name contains `marker` (test cleanup).
+ * Fleet refuses (409) to delete a variable a script still uses, and that
+ * fails this: delete the scripts first.
+ */
 export async function deleteVariablesMatching(
   request: APIRequestContext,
   marker: string,
 ): Promise<void> {
-  const vars = await listVariables(request);
-  await Promise.all(
-    vars
-      .filter((v) => v.name.includes(marker))
-      .map((v) =>
-        request
-          .delete(apiUrl(`custom_variables/${v.id}`), { headers: authHeaders() })
-          .catch((err) => console.warn(`[deleteVariablesMatching] ${v.id}:`, err)),
-      ),
+  const vars = (await listVariables(request)).filter((v) => v.name.includes(marker));
+  await deleteEach('deleteVariablesMatching', vars, (v) => `variable ${v.id} ${v.name}`, (v) =>
+    request.delete(apiUrl(`custom_variables/${v.id}`), { headers: authHeaders() }),
   );
 }
 

@@ -22,7 +22,7 @@
  * created in the test, and each test registers its variable's delete before
  * its script's, so the `cleanup` fixture, which runs them newest first,
  * deletes the script first: Fleet refuses to delete a variable a script still
- * uses, and `deleteVariablesMatching` ignores the refusal. `cleanup.steps.ts`
+ * uses, and `deleteVariablesMatching` fails on the refusal. `cleanup.steps.ts`
  * sweeps `PW_VAR_*` after a killed run.
  *
  * Grounded in frontend/pages/ManageControlsPage/Variables (GlobalVariables card

@@ -1,7 +1,7 @@
 // Label API helpers. The cleanup sweep removes `pw-*` labels; CRUD specs also
 // self-heal their own leftovers, and targeting specs build manual labels here.
 import type { APIRequestContext } from '@playwright/test';
-import { apiUrl, authHeaders, expectOk } from './core';
+import { apiUrl, authHeaders, deleteEach, expectOk } from './core';
 
 /**
  * Delete every non-builtin label whose name contains `marker`. Substring
@@ -19,14 +19,9 @@ export async function deleteLabelsMatching(
   await expectOk(res, '[deleteLabelsMatching] failed to list labels');
   const body = await res.json();
   const labels = (body.labels ?? []) as Array<{ id: number; name: string; label_type?: string }>;
-  await Promise.all(
-    labels
-      .filter((l) => l.label_type !== 'builtin' && l.name.includes(marker))
-      .map((l) =>
-        request
-          .delete(apiUrl(`labels/id/${l.id}`), { headers: authHeaders() })
-          .catch((err) => console.warn(`[deleteLabelsMatching] ${l.id}:`, err)),
-      ),
+  const matches = labels.filter((l) => l.label_type !== 'builtin' && l.name.includes(marker));
+  await deleteEach('deleteLabelsMatching', matches, (l) => `label ${l.id} "${l.name}"`, (l) =>
+    request.delete(apiUrl(`labels/id/${l.id}`), { headers: authHeaders() }),
   );
 }
 
