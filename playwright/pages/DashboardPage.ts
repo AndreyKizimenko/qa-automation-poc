@@ -266,10 +266,12 @@ export class DashboardPage {
    * A platform's row in the "Hosts enrolled" chart. The y-axis tick is a
    * `role="button"` named "<platform> hosts" only while the platform has hosts
    * and a built-in label to link to — a platform with none renders as inert
-   * text, so `toHaveCount(0)` is how "not clickable" reads.
+   * text, so `toHaveCount(0)` is how "not clickable" reads. The name is matched
+   * whole: the activity feed on the same page holds buttons whose sentence
+   * contains it ("… setup experience software for Linux hosts that enroll …").
    */
   platformRow(label: Exclude<DashboardPlatformLabel, 'All'>): Locator {
-    return this.page.getByRole('button', { name: `${label} hosts` });
+    return this.page.getByRole('button', { name: `${label} hosts`, exact: true });
   }
 
   /**
