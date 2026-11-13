@@ -793,7 +793,7 @@ other:
 - **Grep:** `npx playwright test --project=premium -g "transfers every host the filter matches"`
 - **Project:** premium · **Scope:** a throwaway `pw-transfer-<nonce>` fleet → Unassigned
 - **Mode:** UI+API · **Isolation:** parallel; its own fleet and an offline pool nothing else uses. The `afterEach` deletes the fleet by name, which returns any host still on it to Unassigned; the cleanup projects sweep a fleet a killed run left.
-- **Preconditions (API):** 51 **offline** Linux simulations on Unassigned (`findOfflineSimulations`, the most recently seen first). The perf daemons abandon their set of ~300 at the daily refresh (16:00 UTC), and host expiry deletes it a day later, so ~100 Ubuntu ones are always offline and no other picker reads them. Fewer fails with that explanation.
+- **Preconditions (API):** 51 **offline** Linux simulations on Unassigned (`findOfflineSimulations`, the most recently seen first). The perf daemons abandon their set of ~300 at the daily refresh (09:00 VM-local time), and host expiry deletes it a day later, so ~100 Ubuntu ones are always offline and no other picker reads them. Fewer fails with that explanation.
 - **Data created:** the fleet (deleted in the test and in the `afterEach`). The 51 hosts end on Unassigned, where they started.
 
 **Flow**

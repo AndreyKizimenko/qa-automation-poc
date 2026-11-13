@@ -36,11 +36,12 @@ below hold the reasoning.
 **Credentials in public CI artifacts** (found during this audit; see `docs/ci-pipeline.md`)
 - [x] PR #131, merged 2026-11-13: every report is encrypted before upload, and the required PR check
       refuses any other upload path.
-- [ ] Confirm the first nightly after the merge uploaded `playwright-report-*` as `.tar.gz.enc` and that
-      `fetch_ci_run.sh` opens it.
-- [ ] After the merge, every open branch merges `main` before its next branch run: a branch without
-      `.github/upload-report` fails at the upload step.
-- [ ] Put a copy of the report private key (`~/.config/qa-automation/report-private-key.pem`) in 1Password.
+- [x] The first nightly after the merge (run 43413291769, 2026-11-13, green) uploaded all 16 reports as
+      `.tar.gz.enc`, and `fetch_ci_run.sh` decrypted every one.
+- [x] No PR or branch run was in flight at the merge. The rule stands for an older branch that is picked up
+      again: it merges `main` before its next branch run, because a branch without `.github/upload-report`
+      fails at the upload step.
+- [x] A copy of the report private key (`~/.config/qa-automation/report-private-key.pem`) is in 1Password.
 - [x] The 29 plain suite reports still in retention (30 Oct to 12 Nov) were deleted on 2026-11-13. The 87
       plain gitops-verify and fleetctl reports left to expire were scanned first: none holds a secret.
 - [x] Credentials: the instances are being rebuilt on a new server, and the new ones get new credentials.
@@ -50,21 +51,22 @@ below hold the reasoning.
       headers (a failed `expect(res).toBeOK()` prints the bearer token). The second overlaps with "helpers
       throw on a non-OK response" in the defects table.
 
-**Small fixes agreed, not yet done**
-- [ ] The `fleet-qa` plugin's `fleet-test-plan` skill points at `docs/REST API/rest-api.md`; Fleet's docs
-      branches have `docs/API/rest-api.md`, so its example command fails. One line, plus the plugin's
-      version bump.
-- [ ] `playwright/CLAUDE.md`, the plainly stale or missing parts: "each premium spec has Unassigned +
-      Workstations variants" (11 of 95 do); `teamDropdown.select` after every scoped `goto`, not only in a
-      scope loop; the five stop rules that exist only in the skills (new payload types, the web address and
-      IdP, Android web apps, *Store report results*, cron triggers); the runtime row.
+**Small fixes agreed**
+- [x] The `fleet-qa` plugin's `fleet-test-plan` skill pointed at `docs/REST API/rest-api.md`; Fleet's docs
+      branches have `docs/API/rest-api.md`. Fixed in plugin 1.5.1 (2026-11-13): run the plugin update after
+      the merge.
+- [x] `playwright/CLAUDE.md`, the plainly stale or missing parts (2026-11-13): which scopes a premium spec
+      works in (most work in one; the lifecycles loop over two); `teamDropdown.select` after every scoped `goto`,
+      not only in a scope loop; the five stop rules that existed only in the skills (new payload types, the
+      web address and IdP, Android web apps, *Store report results*, cron triggers); the runtime row, from
+      the 2026-11-13 nightly. The click-through rule is untouched: it waits on D5.
 - [ ] `fleet-upgrade-preflight`'s blind spots, before the 4.96 upgrade (Fleet already has a `docs-v4.96.0`
       branch): drop test files from the corpus, fix the dotted-class match, add expected values to the
       vocabulary, change the cache key. Check the result against the last three upgrades, where the scan
       reported 0, 5 and 1 causes against 2, 12 and 10 real ones.
 
 **Waiting**
-- [ ] The skills rewrite (branch `playwright/skills-polish`) merges with this document.
+- [x] The skills rewrite merged with this document (PR #132, 2026-11-13).
 - [ ] The roadmap and decisions D1 to D5 below, to go through one by one. D4 is decided.
 
 ## Baseline
@@ -274,9 +276,9 @@ Independent of scale; each is a small fix.
 | Simulations staged on Workstations stay there when the test fails before its delete; the sweep returns hosts only from the VMs fleet | `premium/hosts/host-delete.spec.ts` | verified |
 | Cleanup sweeps return silently on a failed list request, so a 5xx becomes "nothing to clean" | `helpers/api/cleanup.ts`, `software.ts:226`, `mdm.ts` | verified (first two) |
 | `findFleetByName` returns `null` on a failed request: reported as "gitops apply likely missing", and an `afterEach` fleet delete is skipped | `helpers/api/fleets.ts:108` | verified |
-| Two commits never reached `main`: the deletion of `helpers/catalogs/` (nothing imports it) and the removal of the loadtest hostname from two docs | `origin/docs/full-docs-audit`: `856a21d`, `5f77120` | verified |
-| Two documents give the simulation refresh as 16:00 UTC; the job runs at 09:00 VM-local | `helpers/api/hosts.ts:390`, `docs/test-audit/03-hosts-premium.md:796` | verified |
-| A comment says the row-action menu's options carry no test id; Fleet emits `dropdown-option` on them | `pages/labels/LabelsPage.ts:14` | verified |
+| Two commits never reached `main`: the deletion of `helpers/catalogs/` (nothing imports it) and the removal of the loadtest hostname from two docs | `origin/docs/full-docs-audit`: `856a21d`, `5f77120` | fixed 2026-11-13: both cherry-picked |
+| Two documents give the simulation refresh as 16:00 UTC; the job runs at 09:00 VM-local | `helpers/api/hosts.ts:390`, `docs/test-audit/03-hosts-premium.md:796` | fixed 2026-11-13 |
+| A comment says the row-action menu's options carry no test id; Fleet emits `dropdown-option` on them | `pages/labels/LabelsPage.ts:14` | fixed 2026-11-13: the comment says why the class is used |
 | Cleanup stops the whole run when more than 200 leftover test users exist | `helpers/api/users.ts:96` | verified |
 
 ## Where the written contract and the practice differ
@@ -286,7 +288,7 @@ document say it.
 
 | The contract says | The practice is |
 |---|---|
-| "Each premium spec has Unassigned + Workstations variants" (`CLAUDE.md`) | 11 of 95 premium specs loop over scopes (verified) |
+| "Each premium spec has Unassigned + Workstations variants" (`CLAUDE.md`) | 11 of 95 premium specs loop over scopes (verified). Settled 2026-11-13: `CLAUDE.md` now describes the practice |
 | "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported) |
 | "Assertions live in the spec" (author skill) | page objects hold 585 `expect` calls and 40 `expectX` methods; 86% are state-settling waits (reported) |
 | "Cover everything visible, even if no test uses it" (`pages/README.md`) | about 10% of public page-object members are referenced by nothing (estimate) |
