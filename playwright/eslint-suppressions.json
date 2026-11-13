@@ -1,0 +1,537 @@
+{
+  "helpers/api/cleanup.ts": {
+    "suite/no-swallowed-response": {
+      "count": 2
+    }
+  },
+  "helpers/api/fleets.ts": {
+    "suite/no-swallowed-response": {
+      "count": 1
+    }
+  },
+  "helpers/api/hosts.ts": {
+    "suite/no-swallowed-response": {
+      "count": 3
+    }
+  },
+  "helpers/api/labels.ts": {
+    "suite/no-swallowed-response": {
+      "count": 2
+    }
+  },
+  "helpers/api/mdm.ts": {
+    "suite/no-swallowed-response": {
+      "count": 7
+    }
+  },
+  "helpers/api/reports.ts": {
+    "suite/no-swallowed-response": {
+      "count": 3
+    }
+  },
+  "helpers/api/scripts.ts": {
+    "suite/no-swallowed-response": {
+      "count": 1
+    }
+  },
+  "helpers/api/software.ts": {
+    "suite/no-swallowed-response": {
+      "count": 2
+    }
+  },
+  "helpers/api/variables.ts": {
+    "suite/no-swallowed-response": {
+      "count": 1
+    }
+  },
+  "tests/api/free/license.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 2
+    }
+  },
+  "tests/e2e/free/controls/scripts/library.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    }
+  },
+  "tests/e2e/free/dashboard/historical-data-collection.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/paywalls.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 3
+    }
+  },
+  "tests/e2e/free/policies/policies.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/policies/policy-automations.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/free/reports/automations.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/reports/reports.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/reports/save-as-new.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/settings/gitops-mode.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 5
+    }
+  },
+  "tests/e2e/free/settings/organization/organization-info.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/settings/users/api-user-create.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/settings/users/edit.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/settings/users/form-validation.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 4
+    }
+  },
+  "tests/e2e/free/settings/users/navigation-and-layout.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/free/settings/users/regular-user-create.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 2
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/account/my-account.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/controls/scripts/batch-run.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/scripts/library.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/gitops-mode/01-indicator-and-links.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/gitops-mode/02-gated-surfaces.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 2
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/gitops-mode/03-exceptions.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/gitops-mode/zz-everything-is-back.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/hosts/host-idp-username.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/policies/policies.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/policies/policy-automations.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/policies/role-access.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/reports/automations.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/reports/list-filters.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/reports/reports.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/reports/role-access.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/reports/save-as-new.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/fleets-lifecycle.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/integrations/mdm.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/organization/fleet-desktop.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/settings/organization/organization-info.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/team-host-status-webhook.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/users/api-user-create.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/users/edit.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/users/form-validation.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 5
+    }
+  },
+  "tests/e2e/premium/settings/users/navigation-and-layout.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/settings/users/regular-user-create.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 8
+    },
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/users/team-admin-scope.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/custom-icons.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/display-name.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/edit-package.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/software/fleet-maintained-filters.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/install-on-host.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/inventory-reflects-install.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/large-upload.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/library.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/manage-automations-access.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/no-teams-views.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/role-access.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/script-only-package.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 2
+    },
+    "suite/no-class-locator-in-spec": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/software/uninstall-from-host.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/update-on-host.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/account/theme.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/auth/sso-login.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/command-palette/deep-links.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/command-palette/pickers.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/controls/custom-variables.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/dashboard/activity-feed.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/dashboard/platform-cards.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/exclusive/script-execution-disabled.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/hosts/filters.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/hosts/host-details-smoke.spec.ts": {
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/hosts/host-live-query.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/hosts/host-reports-tab.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 3
+    }
+  },
+  "tests/e2e/shared/hosts/host-run-script.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/hosts/host-software.spec.ts": {
+    "suite/no-class-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/hosts/sort.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/labels/labels.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/packs/packs.spec.ts": {
+    "suite/activity-needs-baseline": {
+      "count": 3
+    },
+    "suite/no-date-now-in-name": {
+      "count": 3
+    },
+    "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/enroll-secrets.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/organization/advanced-options.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/users/edit-password.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/users/pagination.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/users/row-actions.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/settings/users/search.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  }
+}

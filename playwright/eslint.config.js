@@ -60,15 +60,16 @@ module.exports = tseslint.config(
   },
 
   // The suite's own contract, from ./eslint-rules (CLAUDE.md → Pre-PR check
-  // describes each rule). Warnings: every one marks a pattern the code written
-  // before the rule still carries, and `npm run lint:contract` counts them.
+  // describes each rule). Errors, with the places that predate each rule
+  // recorded per file in eslint-suppressions.json: those stay quiet, a new one
+  // fails, and the file only shrinks (`npm run lint:prune`).
   { plugins: { suite } },
   {
     files: ['tests/**/*.ts'],
     rules: {
-      'suite/no-class-locator-in-spec': 'warn',
-      'suite/no-date-now-in-name': 'warn',
-      'suite/activity-needs-baseline': 'warn',
+      'suite/no-class-locator-in-spec': 'error',
+      'suite/no-date-now-in-name': 'error',
+      'suite/activity-needs-baseline': 'error',
       // Off until toast copy has a home outside the specs (docs/architecture-audit.md,
       // roadmap item 9): until then the rule would name a problem with no fix.
       'suite/no-toast-copy-in-spec': 'off',
@@ -78,11 +79,11 @@ module.exports = tseslint.config(
     // Browser specs only: API and CLI specs have no page, and the load-test
     // specs time raw locators on purpose.
     files: ['tests/e2e/**/*.ts'],
-    rules: { 'suite/no-page-locator-in-spec': 'warn' },
+    rules: { 'suite/no-page-locator-in-spec': 'error' },
   },
   {
     files: ['helpers/**/*.ts', 'setup/**/*.ts', 'fixtures.ts'],
-    rules: { 'suite/no-swallowed-response': 'warn' },
+    rules: { 'suite/no-swallowed-response': 'error' },
   },
 
   // Ignore generated / vendored / local-only paths
