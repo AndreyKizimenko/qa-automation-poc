@@ -55,7 +55,7 @@ const REFUSED = "Couldn't delete. Software uses this label as a custom target. R
 test.describe('Premium • Software — label-scoped software', () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
-  test('a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick', async ({
+  test('a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick', { tag: '@vm-linux' }, async ({
     softwareTitleDetail,
     hostDetails,
     labelsPage,

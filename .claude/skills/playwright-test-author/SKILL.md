@@ -92,7 +92,8 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
 4. **Decide the hosts.** What Fleet decides **server-side** (which hosts a profile, title, policy or report
    reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
    (installs, runs, verifies, reports inventory) only a real VM can answer: `requireRealHost(request,
-   platform)`, `vmsFleetId`, `liveMacosHost`. To put simulations on a fleet beside a VM, borrow them with
+   platform)`, `vmsFleetId`, `liveMacosHost`, each refusing a test without its VM's tag
+   (`{ tag: '@vm-linux' }`). To put simulations on a fleet beside a VM, borrow them with
    the `borrowSims` fixture (`mdm: true` only for profiles: a scarce pool) on a slice you claim in the
    registry in `helpers/api/hosts.ts`; it returns them after the test.
 5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either, and

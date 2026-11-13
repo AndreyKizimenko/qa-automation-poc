@@ -36,7 +36,7 @@ const SIM_OFFSET = 2;
 test.describe('Premium • Policies — label targeting', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
-  test('include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick', async ({
+  test('include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick', { tag: '@vm-macos' }, async ({
     dashboard,
     policiesList,
     policyEdit,

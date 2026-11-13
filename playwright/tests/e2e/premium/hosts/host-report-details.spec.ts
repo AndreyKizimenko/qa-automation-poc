@@ -41,7 +41,7 @@ import { findReportByName, getHostReportLastFetched } from '@helpers/api';
 const REPORT_NAME = 'pw-host-report-results';
 
 test.describe('Premium • Hosts • host report results', () => {
-  test('a report with stored results drills into this host and out to all hosts', async ({
+  test('a report with stored results drills into this host and out to all hosts', { tag: '@vm-macos' }, async ({
     hostDetails,
     hostQueryReport,
     reportDetails,

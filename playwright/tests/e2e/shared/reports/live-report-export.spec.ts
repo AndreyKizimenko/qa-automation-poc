@@ -49,7 +49,7 @@ test.describe('Reports • run live on the real VMs', () => {
     reportName = '';
   });
 
-  test("returns each VM's own answer and exports exactly those rows to CSV", async ({
+  test("returns each VM's own answer and exports exactly those rows to CSV", { tag: ['@vm-macos', '@vm-windows', '@vm-linux'] }, async ({
     dashboard,
     reportsList,
     reportDetails,

@@ -59,6 +59,7 @@ import {
   getHostScriptLastExecution,
   queueAdHocScript,
   requireRealHost,
+  vmTag,
   setAgentOptions,
   uploadScript,
   type RealHostRef,
@@ -119,7 +120,7 @@ async function runFromModal(
 }
 
 test.describe('Shared • Hosts • Run script', () => {
-  test('a script changes the host, and a report run by that host reads the change back', async ({
+  test('a script changes the host, and a report run by that host reads the change back', { tag: '@vm-macos' }, async ({
     hostDetails,
     dashboard,
     request,
@@ -204,7 +205,7 @@ test.describe('Shared • Hosts • Run script', () => {
     }
   });
 
-  test('a script that exits non-zero reads as an error, with the output it recorded', async ({
+  test('a script that exits non-zero reads as an error, with the output it recorded', { tag: '@vm-linux' }, async ({
     hostDetails,
     request,
   }) => {
@@ -249,7 +250,7 @@ test.describe('Shared • Hosts • Run script', () => {
     }
   });
 
-  test('a script that outlives the agent timeout is stopped, and the details say why', async ({
+  test('a script that outlives the agent timeout is stopped, and the details say why', { tag: '@vm-linux' }, async ({
     hostDetails,
     request,
   }) => {
@@ -348,7 +349,8 @@ test.describe('Shared • Hosts • Run script', () => {
   ];
 
   for (const interpreter of interpreters) {
-    test(`a ${interpreter.label} script runs under ${interpreter.label}`, async ({
+    // eslint-disable-next-line playwright/valid-test-tags -- the tag is the interpreter's VM, from vmTag()
+    test(`a ${interpreter.label} script runs under ${interpreter.label}`, { tag: vmTag(interpreter.platform) }, async ({
       hostDetails,
       request,
     }) => {

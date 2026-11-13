@@ -143,7 +143,7 @@ test.describe('Premium • Software • Script-only package', () => {
   });
 });
 
-test.describe('Premium • Software • Script-only package run on a host', () => {
+test.describe('Premium • Software • Script-only package run on a host', { tag: '@vm-macos' }, () => {
   // One run on the Mac, whose queue other specs' installs and scripts share, so
   // the run can wait behind them.
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });

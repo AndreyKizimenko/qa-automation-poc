@@ -45,7 +45,7 @@ async function openAddSoftware(dashboard: DashboardPage, softwareTitles: Softwar
 test.describe('Premium • Software • Install on host', () => {
   test.describe.configure({ retries: HOST_RETRIES });
 
-  test('"Deploy" creates an install policy, and Fleet installs through it on the Linux VM', async ({
+  test('"Deploy" creates an install policy, and Fleet installs through it on the Linux VM', { tag: '@vm-linux' }, async ({
     dashboard,
     softwareTitles,
     softwareCustomPackage,

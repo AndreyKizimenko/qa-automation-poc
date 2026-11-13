@@ -83,7 +83,9 @@ split.
 `e2e/premium/software/software-lifecycle-on-host.spec.ts` (each platform).
 - `test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES })`: the budget covers the VM's queue,
   not just this test's work, and every wait stays inside it.
-- `requireRealHost(request, platform)` for the host; it fails with the reason when the VM is missing.
+- `requireRealHost(request, platform)` for the host; it fails with the reason when the VM is missing, and
+  refuses a test without the VM's tag: `{ tag: '@vm-macos' }` on the test or describe, `vmTag(fixture.platform)`
+  in a loop over platforms (with the `playwright/valid-test-tags` directive the exemplar carries).
 - The created title's delete registered with `cleanup.add` (older specs: a describe-level tracker that an
   `afterEach` deletes): the test's `finally` is skipped on
   a timeout, and deleting a title also cancels its queued installs.

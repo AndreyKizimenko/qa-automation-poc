@@ -70,7 +70,7 @@ test.describe('Premium • Hosts • single-host transfer by role', () => {
     });
   }
 
-  test('a team admin is not offered Transfer on a host they administer', async ({
+  test('a team admin is not offered Transfer on a host they administer', { tag: '@vm-macos' }, async ({
     browser,
     liveMacosHost,
   }) => {

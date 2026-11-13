@@ -69,7 +69,7 @@ test.describe('Premium • Hosts • Recovery Lock password', () => {
     await setFleetRecoveryLock(request, vmsFleetId, false);
   });
 
-  test('enforce on the VMs fleet, verify, view, rotate and clear on the Mac', async ({
+  test('enforce on the VMs fleet, verify, view, rotate and clear on the Mac', { tag: '@vm-macos' }, async ({
     dashboard,
     controls,
     osSettings,

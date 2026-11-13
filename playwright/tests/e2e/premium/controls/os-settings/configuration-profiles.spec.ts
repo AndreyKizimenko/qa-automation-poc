@@ -187,7 +187,7 @@ test.describe('MDM • OS settings — configuration profile upload validation',
   });
 });
 
-test.describe('MDM • OS settings — a profile for all hosts, delivered and removed (VMs fleet)', () => {
+test.describe('MDM • OS settings — a profile for all hosts, delivered and removed (VMs fleet)', { tag: '@vm-macos' }, () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   test('the macOS VM installs and verifies it, and loses it when it is deleted', async ({

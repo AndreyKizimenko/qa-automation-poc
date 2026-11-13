@@ -43,6 +43,9 @@ module.exports = tseslint.config(
       'playwright/valid-expect': 'error',
       'playwright/no-focused-test': 'error',
       'playwright/no-skipped-test': 'off', // suite/skip-needs-reason checks what this suite asks of a skip
+      // The only tags are the real-VM ones (helpers/api/hosts.ts, VM_TAGS), so a
+      // misspelt tag fails here instead of leaving a VM test out of its lane.
+      'playwright/valid-test-tags': ['error', { allowedTags: ['@vm-macos', '@vm-windows', '@vm-linux'] }],
       'playwright/prefer-hooks-in-order': 'error',
       'playwright/prefer-to-have-length': 'error',
       'playwright/expect-expect': 'off', // too many false positives with custom assert helpers

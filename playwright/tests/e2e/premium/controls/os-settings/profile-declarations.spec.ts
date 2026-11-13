@@ -50,7 +50,7 @@ import type { ProfileTarget } from '@pages';
 /** Which slice of the MDM-enrolled simulations this spec borrows (see `findMdmSimulations`). */
 const SIM_OFFSET = 2;
 
-test.describe('Premium • Controls • Configuration profiles — declarations', () => {
+test.describe('Premium • Controls • Configuration profiles — declarations', { tag: '@vm-macos' }, () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick', async ({

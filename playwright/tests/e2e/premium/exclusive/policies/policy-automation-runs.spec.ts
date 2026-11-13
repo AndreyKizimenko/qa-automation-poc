@@ -107,7 +107,7 @@ test.describe('Premium • Policies • automation runs', () => {
     if (labelId !== undefined) await deleteLabelById(request, labelId);
   });
 
-  test('a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on', async ({
+  test('a failing script is tried 3 times, and a refetch runs it again only once continuous automations are on', { tag: '@vm-linux' }, async ({
     dashboard,
     policiesList,
     hostDetails,

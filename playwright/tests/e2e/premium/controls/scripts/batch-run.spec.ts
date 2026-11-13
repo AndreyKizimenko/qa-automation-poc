@@ -64,7 +64,7 @@ const nonce = (): string => `${Date.now().toString(36)}${crypto.randomBytes(2).t
 test.describe('Premium • Controls • Batch script run', () => {
   test.describe.configure({ timeout: 720_000, retries: HOST_RETRIES });
 
-  test('a batch on one VM of each platform puts each host in the status its platform earns', async ({
+  test('a batch on one VM of each platform puts each host in the status its platform earns', { tag: ['@vm-macos', '@vm-windows', '@vm-linux'] }, async ({
     dashboard,
     hostsList,
     scriptsBatchProgress,

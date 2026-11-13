@@ -50,6 +50,12 @@ regenerate both on every restart.
   profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
   versions must use them. `kind: 'real'` keys on `hardware_model` matching `/virtual|qemu/i`, not on MDM
   enrollment.
+- **A test that needs a real VM is tagged with it**: `@vm-macos`, `@vm-windows` or `@vm-linux`, on the test or
+  its describe (`{ tag: '@vm-linux' }`; `vmTag(platform)` in a loop over platforms). `requireRealHost` and
+  `liveMacosHost` refuse a test that lacks the tag of the VM it asks for, and lint allows no other tag. So the
+  tags list every test one VM's outage takes down: `npx playwright test --project=premium --grep @vm-macos`
+  runs them, and `--grep-invert` leaves them out. The tag means "needs this VM online", a read of its name
+  included, not "waits on its queue".
 - **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
   7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
   `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`. A spec that installs or
@@ -174,7 +180,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 Nine browser/API/CLI projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
-Project scope is determined purely by folder — no tags. The `testIgnore`
+Project scope is determined purely by folder. The only tags are the real-VM ones (Test hosts), and no project selects by them yet. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |

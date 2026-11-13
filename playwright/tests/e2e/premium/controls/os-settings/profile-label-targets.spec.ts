@@ -88,7 +88,7 @@ async function openProfilesOnVmsFleet({ dashboard, controls, osSettings, configu
 test.describe('Premium • Controls • Configuration profiles — label targeting', () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
-  test('macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick', async ({
+  test('macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick', { tag: '@vm-macos' }, async ({
     dashboard,
     controls,
     osSettings,
@@ -225,7 +225,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
     }
   });
 
-  test('Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off', async ({
+  test('Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off', { tag: '@vm-windows' }, async ({
     dashboard,
     controls,
     osSettings,

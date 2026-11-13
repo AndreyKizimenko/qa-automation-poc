@@ -45,7 +45,7 @@ import { inertMobileconfig, rejectedMobileconfig, runNonce } from '@helpers/prof
 /** How many InstallProfile commands one refused profile gets: the first, then Fleet's retries. */
 const INSTALL_ATTEMPTS = 1 + 3;
 
-test.describe('Premium • Controls • Configuration profiles — delivery on one host', () => {
+test.describe('Premium • Controls • Configuration profiles — delivery on one host', { tag: '@vm-macos' }, () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a profile is installed, resent and removed by commands the host names it in', async ({

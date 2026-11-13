@@ -1,4 +1,4 @@
-import { APIRequestContext, APIResponse, expect } from '@playwright/test';
+import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders, expectOk, type HostRef } from './core';
 
 /**
@@ -921,14 +921,41 @@ export async function listFleetHosts(
 export type RealHostRef = OnlineHostRef & { fleetId: number };
 
 /**
+ * The tag a test carries when it needs a platform's real VM online:
+ * `{ tag: vmTag('darwin') }` on the test, or on its describe. A test that asks
+ * {@link requireRealHost} or `liveMacosHost` for a VM without it fails, so the
+ * tags select every test a VM outage takes down (`--grep @vm-macos`), and a
+ * per-VM lane can take its tests by tag.
+ */
+export const VM_TAGS = { darwin: '@vm-macos', windows: '@vm-windows', linux: '@vm-linux' } as const;
+
+export function vmTag(platform: 'darwin' | 'windows' | 'linux'): (typeof VM_TAGS)[typeof platform] {
+  return VM_TAGS[platform];
+}
+
+/** Throws unless the running test carries the tag of the VM it is asking for. */
+export function assertVmTagged(platform: 'darwin' | 'windows' | 'linux', asker: string): void {
+  const info = test.info();
+  const tag = VM_TAGS[platform];
+  if (!info.tags.includes(tag)) {
+    throw new Error(
+      `[${asker}] "${info.title}" needs the ${platform} VM but isn't tagged ${tag}: add { tag: '${tag}' } ` +
+        `(or \`vmTag('${platform}')\`) to the test or its describe.`,
+    );
+  }
+}
+
+/**
  * The online real VM of `platform`, with its fleet (0 for Unassigned — every
  * host on free). Throws rather than returning null: a spec that needs a real
  * device has nothing to test without one, and the message says what to check.
+ * The calling test must carry the platform's {@link VM_TAGS} tag.
  */
 export async function requireRealHost(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
 ): Promise<RealHostRef> {
+  assertVmTagged(platform, 'requireRealHost');
   const host = await findOnlineHost(request, platform, { kind: 'real' });
   if (!host) {
     throw new Error(

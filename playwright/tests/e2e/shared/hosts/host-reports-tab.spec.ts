@@ -21,7 +21,7 @@ import { createReport, deleteReportsMatching } from '@helpers/api';
 
 const rand = () => Math.random().toString(36).slice(2, 8);
 
-test('Host details — reports tab lists the host reports, searches, and sorts', async ({
+test('Host details — reports tab lists the host reports, searches, and sorts', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,
@@ -74,7 +74,7 @@ test('Host details — reports tab lists the host reports, searches, and sorts',
  * reports also move. The toggle exists only while the org-wide
  * "Store report results" is on, which the suite never turns off.
  */
-test("Host details — reports that don't store results show only with the toggle on", async ({
+test("Host details — reports that don't store results show only with the toggle on", { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,
@@ -135,7 +135,7 @@ test("Host details — reports that don't store results show only with the toggl
  * the default as `undefined` — so selecting it *removes* the `sort` param
  * rather than setting one.
  */
-test('Host details — the results-recency sorts keep reports awaiting results last', async ({
+test('Host details — the results-recency sorts keep reports awaiting results last', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,

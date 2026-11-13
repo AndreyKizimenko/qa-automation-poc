@@ -40,6 +40,7 @@ import {
   findMdmSimulations,
   findOnlineHost,
   findSimulations,
+  assertVmTagged,
   missingRealHostReason,
   transferHosts,
   uploadScript,
@@ -155,25 +156,10 @@ type ApiWorkerFixtures = {
   loadtestFleetId: number;
 
   /**
-   * The online **real** macOS VM, resolved once per worker via the Fleet API,
-   * with the vitals a spec asserts against. Backs every spec that needs genuine
-   * device behaviour — live reports that actually run the query's SQL, refetch,
-   * real local users and agent versions.
-   *
-   * Resolved by platform + online status + hardware model rather than by name or
-   * a pinned id, since ids change on re-enrollment. A virtualized hardware model
-   * is what separates the real VMs from the osquery-perf load fleet sharing these
-   * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
-   * fleet, but free has no fleets, so the hardware model is the cross-tier signal.
-   *
-   * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
-   * should draw from the simulated pool via `findSimulatedHostIds` instead —
-   * there are only a couple of real VMs per tier and they must not be destroyed.
-   *
-   * Fails loud when none is online, so a downed VM surfaces as a clear setup
-   * error instead of a puzzling mid-spec assertion failure.
+   * The online real macOS VM, looked up once per worker. Specs ask for
+   * `liveMacosHost`, which checks the test's tag and hands this on.
    */
-  liveMacosHost: OnlineHostRef;
+  liveMacosHostOfWorker: OnlineHostRef;
 };
 
 /** What a test registers to undo something it made on the instance: the `cleanup` fixture. */
@@ -232,6 +218,30 @@ type ApiTestFixtures = {
    * register the delete with `cleanup.add`.
    */
   seed: Seed;
+
+  /**
+   * The online **real** macOS VM, looked up once per worker via the Fleet API,
+   * with the vitals a spec asserts against. Backs every spec that needs genuine
+   * device behaviour — live reports that actually run the query's SQL, refetch,
+   * real local users and agent versions.
+   *
+   * Resolved by platform + online status + hardware model rather than by name or
+   * a pinned id, since ids change on re-enrollment. A virtualized hardware model
+   * is what separates the real VMs from the osquery-perf load fleet sharing these
+   * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
+   * fleet, but free has no fleets, so the hardware model is the cross-tier signal.
+   *
+   * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
+   * should draw from the simulated pool via `findSimulatedHostIds` instead —
+   * there are only a couple of real VMs per tier and they must not be destroyed.
+   *
+   * Fails loud when none is online, so a downed VM surfaces as a clear setup
+   * error instead of a puzzling mid-spec assertion failure. The test (or its
+   * describe) must carry `{ tag: '@vm-macos' }`: the fixture refuses one that
+   * doesn't, as `requireRealHost` does, so the tag lists every test that needs
+   * the Mac.
+   */
+  liveMacosHost: OnlineHostRef;
 };
 
 export interface BorrowSims {
@@ -408,6 +418,11 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
   // steps inside it, and each undo is a step the report should show.
   }, { timeout: 120_000 }],
 
+  liveMacosHost: [async ({ liveMacosHostOfWorker }, use) => {
+    assertVmTagged('darwin', 'liveMacosHost');
+    await use(liveMacosHostOfWorker);
+  }, { box: true }],
+
   throwawayFleet: [async ({ request, cleanup }, use) => {
     await use(async (kind) => {
       requirePremium('throwawayFleet');
@@ -491,7 +506,7 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
     await use(await resolvePremiumFleetId('vmsFleetId', 'VMs'));
   }, { scope: 'worker', box: true }],
 
-  liveMacosHost: [async ({}, use) => {
+  liveMacosHostOfWorker: [async ({}, use) => {
     const host = await withApiRequest((request) =>
       findOnlineHost(request, 'darwin', { kind: 'real' }),
     );

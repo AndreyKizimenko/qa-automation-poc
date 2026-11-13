@@ -53,7 +53,7 @@ import {
 test.describe('Premium • Software • Deploy install retries', () => {
   test.describe.configure({ retries: HOST_RETRIES });
 
-  test('a Deploy whose install fails is tried 3 times, then reads Failed', async ({ hostDetails, vmsFleetId, request }) => {
+  test('a Deploy whose install fails is tried 3 times, then reads Failed', { tag: '@vm-linux' }, async ({ hostDetails, vmsFleetId, request }) => {
     // Three install attempts, each followed by orbit's backoff (1, then 2 min).
     test.setTimeout(900_000);
     const host = await requireRealHost(request, 'linux');

@@ -32,7 +32,7 @@ import {
 
 const DISABLED_COPY = 'Running scripts is disabled in organization settings.';
 
-test('turning script execution off disables running scripts everywhere Fleet offers it', async ({
+test('turning script execution off disables running scripts everywhere Fleet offers it', { tag: '@vm-macos' }, async ({
   organizationAdvanced,
   hostDetails,
   scriptsLibrary,

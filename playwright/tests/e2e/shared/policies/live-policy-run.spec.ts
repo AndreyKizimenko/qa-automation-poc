@@ -65,7 +65,7 @@ test.describe('Policies • run live on the real VMs', () => {
     policyId = 0;
   });
 
-  test('marks each VM Pass or Fail, sums them as Yes / No, sorts the hosts case-insensitively and exports them', async ({
+  test('marks each VM Pass or Fail, sums them as Yes / No, sorts the hosts case-insensitively and exports them', { tag: ['@vm-macos', '@vm-windows', '@vm-linux'] }, async ({
     dashboard,
     policiesList,
     policyDetails,

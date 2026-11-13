@@ -17,7 +17,7 @@
  * per-gate reasoning and why Linux needs no `kind` constraint.
  */
 import { test, expect } from '@fixtures';
-import { findOnlineHost, requireRealHost } from '@helpers/api';
+import { findOnlineHost, requireRealHost, vmTag } from '@helpers/api';
 
 const MDM_ACTIONS = ['Lock', 'Wipe', 'Turn off MDM'] as const;
 
@@ -58,7 +58,8 @@ test.describe('Free • Hosts • MDM action availability', () => {
       ? `offers only ${testCase.offered.join(' + ')}`
       : 'offers none of Lock, Wipe or Turn off MDM';
 
-    test(`${testCase.label} ${summary}`, async ({ hostDetails, request }) => {
+    // eslint-disable-next-line playwright/valid-test-tags -- the tag is the case's VM, and a simulated case has none
+    test(`${testCase.label} ${summary}`, { tag: testCase.realDevice ? vmTag(testCase.platform) : [] }, async ({ hostDetails, request }) => {
       // A real device's absence fails with why: offline since when, or not enrolled.
       const host = testCase.realDevice
         ? await requireRealHost(request, testCase.platform)

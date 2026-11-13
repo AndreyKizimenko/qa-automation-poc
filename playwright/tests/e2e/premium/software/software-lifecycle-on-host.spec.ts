@@ -65,6 +65,7 @@ import {
   getHostSoftwareState,
   listHostActivities,
   requireRealHost,
+  vmTag,
   waitForHostSoftwareStatus,
   waitForSoftwareSettled,
 } from '@helpers/api';
@@ -119,7 +120,8 @@ test.describe('Premium • Software • Install and uninstall on host', () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   for (const fixture of VM_SOFTWARE_FIXTURES) {
-    test(`a ${fixture.label} installs on the ${fixture.platform} VM and uninstalls again`, async ({
+    // eslint-disable-next-line playwright/valid-test-tags -- the tag is the fixture's VM, from vmTag()
+    test(`a ${fixture.label} installs on the ${fixture.platform} VM and uninstalls again`, { tag: vmTag(fixture.platform) }, async ({
       hostDetails,
       vmsFleetId,
       request,
