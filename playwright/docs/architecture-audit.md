@@ -69,6 +69,27 @@ below hold the reasoning.
 - [x] The skills rewrite merged with this document (PR #132, 2026-11-13).
 - [ ] The roadmap and decisions D1 to D5 below, to go through one by one. D4 is decided.
 
+**Roadmap items, as they land**
+- [x] 2, lint the contract (2026-11-13). Six `suite/*` rules in `eslint-rules/`, each with tests
+      (`npm run lint:rules`, part of `npm run check`); `CLAUDE.md` → *Pre-PR check* says what each fails on
+      and what to write instead. Lint prints nothing or fails: every rule is an error, `--max-warnings 0`
+      covers the rest, and the places that predate a rule are recorded per file in
+      `eslint-suppressions.json`, so only a new one fails and the record only shrinks
+      (`npm run lint:prune`). A seventh rule, for toast copy, is written and off until item 9 gives that
+      copy a home. What the record held on the day (`npm run lint:contract`), which is the number to
+      bring down:
+
+      | Rule | Places | Files |
+      |---|---|---|
+      | class selector in a spec | 30 | 13 |
+      | `page.getBy*()` in a browser spec | 52 | 32 |
+      | `Date.now()` in a per-run name | 65 | 50 |
+      | `assertActivity` without a baseline | 29 | 11 |
+      | a helper that drops a non-OK response | 22 | 9 |
+      | a skip with no tracking comment, or no reason | 0 | 0 |
+      | `any`, `force: true`, hook order, `toHaveLength` (the rules that were warnings) | 40 | 8 |
+      | toast copy typed in a spec (rule off, not recorded) | 97 | 49 |
+
 ## Baseline
 
 | | |
