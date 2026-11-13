@@ -54,7 +54,7 @@ instances, so if the file is missing, just ask for the Fleet checkout path and w
 Read Fleet code and docs **without touching the user's checkout**, since it may hold their work. Run
 `git -C <fleet> fetch origin`, then `git show origin/main:<path>`, `git grep -n <pattern> origin/main
 -- <dirs>`, `gh pr diff <PR> -R fleetdm/fleet`. Reference docs for an unreleased version live on the
-`docs-v<version>` branch (`git show origin/docs-v4.95.0:"docs/REST API/rest-api.md"`).
+`docs-v<version>` branch (`git show origin/docs-v4.95.0:docs/API/rest-api.md`).
 
 Scripts are in `${CLAUDE_SKILL_DIR}/scripts/` (Python 3, stdlib only, need `gh`).
 
