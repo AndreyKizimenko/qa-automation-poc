@@ -14,7 +14,7 @@
  * `cleanup-setup` if a run dies first.
  */
 import { test, expect } from '@fixtures';
-import { apiLogin, apiUrl, createUser, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
+import { apiLogin, apiUrl, createUser, deleteUser, expectOk, qaTestEmail, qaTestPassword } from '@helpers/api';
 
 test.describe('Settings • Users • an admin sets a password', () => {
   let userId: number | undefined;
@@ -56,7 +56,7 @@ test.describe('Settings • Users • an admin sets a password', () => {
       const before = await login(oldPassword);
       expect(before.ok(), 'the user logs in with the password they were created with').toBeTruthy();
       const oldAuth = { Authorization: `Bearer ${(await before.json()).token as string}` };
-      await expect(await api.get(apiUrl('me'), { headers: oldAuth })).toBeOK();
+      await expectOk(await api.get(apiUrl('me'), { headers: oldAuth }), 'GET /me with the token from the first login');
 
       await usersPage.goto();
       const row = await usersPage.findRowByEmail(email);

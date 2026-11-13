@@ -1,5 +1,5 @@
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders, type FleetRef } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk, type FleetRef } from './core';
 import { deleteBootstrapPackage } from './mdm';
 import { compareVersions } from './software';
 
@@ -14,7 +14,7 @@ export async function getFleetWebhookSettings(
   fleetId: number,
 ): Promise<Record<string, unknown>> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   return ((await res.json()).team?.webhook_settings ?? {}) as Record<string, unknown>;
 }
 
@@ -28,7 +28,7 @@ export async function getFleetHostExpirySettings(
   fleetId: number,
 ): Promise<{ host_expiry_enabled?: boolean; host_expiry_window?: number }> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   return (await res.json()).team?.host_expiry_settings ?? {};
 }
 
@@ -42,7 +42,7 @@ export async function setFleetWebhookSettings(
     headers: authHeaders(),
     data: { webhook_settings: webhookSettings },
   });
-  await expect(res, `Failed to update fleet ${fleetId} webhook settings`).toBeOK();
+  await expectOk(res, `Failed to update fleet ${fleetId} webhook settings`);
 }
 
 /**
@@ -60,7 +60,7 @@ export async function getFleetFeatures(
   fleetId: number,
 ): Promise<Record<string, unknown>> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   return ((await res.json()).team?.features ?? {}) as Record<string, unknown>;
 }
 
@@ -74,7 +74,7 @@ export async function setFleetFeatures(
     headers: authHeaders(),
     data: { features },
   });
-  await expect(res, `Failed to update fleet ${fleetId} features`).toBeOK();
+  await expectOk(res, `Failed to update fleet ${fleetId} features`);
 }
 
 /**
@@ -105,7 +105,7 @@ export async function findFleetByName(
     headers: authHeaders(),
     params: { query: name, per_page: '50' },
   });
-  if (!res.ok()) return null;
+  await expectOk(res, `Failed to look up the fleet "${name}"`);
   const body = await res.json();
   const match = (body.fleets ?? body.teams ?? []).find(
     (t: { id: number; name: string }) => t.name === name,
@@ -121,7 +121,7 @@ export async function createFleet(
     headers: authHeaders(),
     data: { name },
   });
-  await expect(res, `Failed to create fleet "${name}"`).toBeOK();
+  await expectOk(res, `Failed to create fleet "${name}"`);
   const body = await res.json();
   // The teams→fleets rename is in transition; prefer `fleet`, fall back to `team`.
   const ref = body.fleet ?? body.team;
@@ -143,7 +143,7 @@ export async function deleteFleet(
     headers: authHeaders(),
   });
   if (opts.ignoreMissing && res.status() === 404) return;
-  await expect(res, `Failed to delete fleet ${id}`).toBeOK();
+  await expectOk(res, `Failed to delete fleet ${id}`);
 }
 
 /**
@@ -153,7 +153,7 @@ export async function deleteFleet(
  */
 export async function deleteFleetsWithPrefix(request: APIRequestContext, prefix: string): Promise<void> {
   const res = await request.get(apiUrl('fleets'), { headers: authHeaders(), params: { per_page: '500' } });
-  await expect(res, 'Failed to list fleets').toBeOK();
+  await expectOk(res, 'Failed to list fleets');
   const body = await res.json();
   const fleets = (body.fleets ?? body.teams ?? []) as Array<{ id: number; name: string }>;
   for (const fleet of fleets.filter((f) => f.name.startsWith(prefix))) {
@@ -196,7 +196,7 @@ export async function getFleetWindowsDiskEncryption(
   fleetId: number,
 ): Promise<FleetWindowsDiskEncryption> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   const windows = (await res.json()).team?.mdm?.windows_settings ?? {};
   return {
     enabled: windows.enable_disk_encryption ?? false,
@@ -210,7 +210,7 @@ export async function getFleetOsUpdates(
   fleetId: number,
 ): Promise<{ macos: AppleOsUpdates; windows: WindowsOsUpdates }> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   const mdm = (await res.json()).team?.mdm ?? {};
   return {
     macos: {
@@ -243,7 +243,7 @@ export async function clearFleetOsUpdates(request: APIRequestContext, fleetId: n
       },
     },
   });
-  await expect(res, `Failed to clear fleet ${fleetId}'s OS updates: ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to clear fleet ${fleetId}'s OS updates: ${await res.text()}`);
 }
 
 /**
@@ -255,7 +255,7 @@ export async function clearFleetOsUpdates(request: APIRequestContext, fleetId: n
  */
 export async function appleListedMacosVersions(request: APIRequestContext): Promise<string[]> {
   const res = await request.get('https://gdmf.apple.com/v2/pmv', { timeout: 30_000 });
-  await expect(res, "Couldn't read Apple's software lookup service").toBeOK();
+  await expectOk(res, "Couldn't read Apple's software lookup service");
   const assets = ((await res.json()).AssetSets?.macOS ?? []) as Array<{ ProductVersion: string }>;
   return [...new Set(assets.map((a) => a.ProductVersion))].sort(compareVersions);
 }
@@ -276,7 +276,7 @@ export async function setFleetMacosUpdates(
       mdm: { macos_updates: { minimum_version: updates.minimumVersion, deadline: updates.deadline, deadline_days: null } },
     },
   });
-  await expect(res, `Failed to set fleet ${fleetId}'s macOS updates: ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to set fleet ${fleetId}'s macOS updates: ${await res.text()}`);
 }
 
 /**
@@ -295,13 +295,13 @@ export async function setFleetWindowsUpdates(
       mdm: { windows_updates: { deadline_days: updates.deadlineDays, grace_period_days: updates.gracePeriodDays } },
     },
   });
-  await expect(res, `Failed to set fleet ${fleetId}'s Windows updates: ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to set fleet ${fleetId}'s Windows updates: ${await res.text()}`);
 }
 
 /** Whether the fleet enforces Recovery Lock passwords (`mdm.enable_recovery_lock_password`). */
 export async function getFleetRecoveryLock(request: APIRequestContext, fleetId: number): Promise<boolean> {
   const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
   return !!(await res.json()).team?.mdm?.enable_recovery_lock_password;
 }
 
@@ -321,5 +321,5 @@ export async function setFleetRecoveryLock(
     headers: authHeaders(),
     data: { mdm: { enable_recovery_lock_password: enabled } },
   });
-  await expect(res, `Failed to set fleet ${fleetId}'s Recovery Lock enforcement: ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to set fleet ${fleetId}'s Recovery Lock enforcement: ${await res.text()}`);
 }

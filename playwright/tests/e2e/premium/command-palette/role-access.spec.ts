@@ -23,7 +23,7 @@
  */
 import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from '@fixtures';
-import { apiUrl, authHeaders } from '@helpers/api';
+import { apiUrl, authHeaders, expectOk } from '@helpers/api';
 import { withStaticUser } from '@helpers/auth';
 import { CommandPalette, DashboardPage, ReportsListPage } from '@pages';
 
@@ -41,7 +41,7 @@ async function findUnassignedHost(
       order_direction: 'asc',
     },
   });
-  await expect(res, 'failed to list Unassigned hosts').toBeOK();
+  await expectOk(res, 'failed to list Unassigned hosts');
   const { hosts } = await res.json();
   expect(hosts?.length, 'expected an online host in Unassigned').toBeGreaterThan(0);
   return { id: hosts[0].id, displayName: hosts[0].display_name };

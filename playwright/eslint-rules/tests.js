@@ -149,6 +149,19 @@ test.describe.skip('pack schedules', () => {});`,
   ],
 });
 
+tester.run('no-to-be-ok', rules['no-to-be-ok'], {
+  valid: [
+    `await expectOk(res, 'Failed to list hosts');`,
+    `expect(res.status()).toBe(200);`,
+    `expect(res.ok(), 'the user logs in').toBeTruthy();`,
+  ],
+  invalid: [
+    { code: `await expect(res).toBeOK();`, errors: [{ messageId: 'toBeOk' }] },
+    { code: `await expect(res, 'Failed to list hosts').toBeOK();`, errors: [{ messageId: 'toBeOk' }] },
+    { code: `await expect(res).not.toBeOK();`, errors: [{ messageId: 'toBeOk' }] },
+  ],
+});
+
 tester.run('no-toast-copy-in-spec', rules['no-toast-copy-in-spec'], {
   valid: [
     `await usersPage.toast.expectSuccess();`,

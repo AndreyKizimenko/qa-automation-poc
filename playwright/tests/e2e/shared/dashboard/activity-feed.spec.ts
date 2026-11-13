@@ -29,7 +29,7 @@
  */
 import { test, expect } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { apiLogin, apiUrl, createUser, deleteReport, deleteUser, qaTestEmail, qaTestPassword } from '@helpers/api';
+import { apiLogin, apiUrl, createUser, deleteReport, deleteUser, expectOk, qaTestEmail, qaTestPassword } from '@helpers/api';
 
 test.describe('Dashboard • activity feed filters', () => {
   let userId: number | undefined;
@@ -60,12 +60,12 @@ test.describe('Dashboard • activity feed filters', () => {
     const api = await playwright.request.newContext({ baseURL: process.env.FLEET_URL, ignoreHTTPSErrors: true });
     try {
       const login = await apiLogin(api, email, qaTestPassword());
-      await expect(login).toBeOK();
+      await expectOk(login, `Failed to log in as ${email}`);
       const headers = { Authorization: `Bearer ${(await login.json()).token as string}` };
       const created = await api.post(apiUrl('queries'), { headers, data: { name: reportName, query: 'SELECT 1;' } });
-      await expect(created).toBeOK();
+      await expectOk(created, `Failed to create the report ${reportName}`);
       reportId = (await created.json()).query.id as number;
-      await expect(await api.delete(apiUrl(`queries/id/${reportId}`), { headers })).toBeOK();
+      await expectOk(await api.delete(apiUrl(`queries/id/${reportId}`), { headers }), `Failed to delete report ${reportId}`);
       reportId = undefined;
     } finally {
       await api.dispose();

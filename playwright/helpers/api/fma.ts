@@ -1,6 +1,6 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import * as crypto from 'crypto';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 import { getSoftwarePackage } from './software';
 
 interface FmaListEntry {
@@ -34,7 +34,7 @@ export async function findFmaIdBySlug(
       headers: authHeaders(),
       params: { fleet_id: String(fleetId), per_page: String(perPage), page: String(page) },
     });
-    await expect(res, `Failed to list Fleet-maintained apps`).toBeOK();
+    await expectOk(res, `Failed to list Fleet-maintained apps`);
     const apps = ((await res.json()).fleet_maintained_apps ?? []) as FmaListEntry[];
     for (const app of apps) {
       if (app.slug) _fmaIdBySlug.set(app.slug, app.id);
@@ -70,7 +70,7 @@ export async function countFleetMaintainedApps(
       ...(opts.availableOnly ? { available: 'true' } : {}),
     },
   });
-  await expect(res, 'Failed to count Fleet-maintained apps').toBeOK();
+  await expectOk(res, 'Failed to count Fleet-maintained apps');
   const body = await res.json();
   return body.count as number;
 }
@@ -89,7 +89,7 @@ export async function findAvailableFleetMaintainedApp(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), available: 'true', per_page: '1' },
   });
-  await expect(res, 'Failed to list available Fleet-maintained apps').toBeOK();
+  await expectOk(res, 'Failed to list available Fleet-maintained apps');
   const app = (((await res.json()).fleet_maintained_apps ?? []) as FmaListEntry[])[0];
   if (!app) throw new Error(`Fleet ${fleetId} has already added every Fleet-maintained app`);
   return { id: app.id, name: app.name, platform: app.platform };
@@ -113,7 +113,7 @@ export async function addFmaToFleet(
     data: { fleet_maintained_app_id: fmaId, fleet_id: fleetId },
     timeout: 60_000,
   });
-  await expect(res, `Failed to add FMA "${slug}" to fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to add FMA "${slug}" to fleet ${fleetId}`);
   const body = await res.json();
   if (!body.software_title_id) {
     throw new Error(`FMA add returned no software_title_id: ${JSON.stringify(body)}`);
@@ -157,7 +157,7 @@ export async function listFleetMaintainedTitles(
       per_page: '200',
     },
   });
-  await expect(res, `Failed to list software titles on fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to list software titles on fleet ${fleetId}`);
   const body = await res.json();
   const titles = (body.software_titles ?? []) as Array<{
     id: number;
@@ -209,7 +209,7 @@ export async function setPinnedVersion(
     data: Buffer.from(body),
     timeout: 60_000,
   });
-  await expect(res, `Failed to set version pin on title ${titleId}`).toBeOK();
+  await expectOk(res, `Failed to set version pin on title ${titleId}`);
   expect(
     (await getSoftwarePackage(request, fleetId, titleId))?.pinnedVersion,
     `title ${titleId}'s pin on fleet ${fleetId} after setting it to "${version}"`,

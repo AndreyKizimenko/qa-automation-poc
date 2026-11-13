@@ -1,5 +1,5 @@
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 export type AppStorePlatform = 'darwin' | 'ios' | 'ipados' | 'android';
 
@@ -26,11 +26,11 @@ export async function expectVppAppsListable(
     params: { fleet_id: String(fleetId) },
     timeout: 60_000,
   });
-  await expect(
+  await expectOk(
     res,
     `Fleet can't list the VPP apps for fleet ${fleetId}; the reason is in the response below. ` +
       'A VPP token Apple has revoked or let expire is renewed in Settings → Integrations → MDM → VPP',
-  ).toBeOK();
+  );
 }
 
 /**
@@ -56,10 +56,7 @@ export async function addAppStoreApp(
     data,
     timeout: 60_000,
   });
-  await expect(
-    res,
-    `Failed to add app_store_app ${opts.appStoreId} (${opts.platform}) to fleet ${fleetId}`,
-  ).toBeOK();
+  await expectOk(res, `Failed to add app_store_app ${opts.appStoreId} (${opts.platform}) to fleet ${fleetId}`);
   const body = await res.json();
   if (!body.software_title_id) {
     throw new Error(`Add app store app returned no software_title_id: ${JSON.stringify(body)}`);

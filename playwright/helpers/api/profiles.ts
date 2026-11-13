@@ -18,7 +18,7 @@
  *    live queries truthfully.
  */
 import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 import { waitForNoPendingRefetch } from './hosts';
 import type { GeneratedProfile } from '../profiles';
 
@@ -81,13 +81,13 @@ export async function uploadProfile(
   if (fleetId) form.append('fleet_id', String(fleetId));
   targetsForm(form, targets);
   const res = await request.post(apiUrl('configuration_profiles'), { headers: authHeaders(), multipart: form });
-  await expect(res, `Failed to upload profile ${profile.name}: ${await res.text()}`).toBeOK();
+  await expectOk(res, `Failed to upload profile ${profile.name}: ${await res.text()}`);
   return (await res.json()).profile_uuid;
 }
 
 export async function getProfile(request: APIRequestContext, uuid: string): Promise<ProfileRecord> {
   const res = await request.get(apiUrl(`configuration_profiles/${uuid}`), { headers: authHeaders() });
-  await expect(res, `Failed to read profile ${uuid}`).toBeOK();
+  await expectOk(res, `Failed to read profile ${uuid}`);
   return toRecord(await res.json());
 }
 
@@ -97,7 +97,7 @@ export async function listProfiles(request: APIRequestContext, fleetId: number):
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), per_page: '200' },
   });
-  await expect(res, `Failed to list fleet ${fleetId}'s profiles`).toBeOK();
+  await expectOk(res, `Failed to list fleet ${fleetId}'s profiles`);
   return ((await res.json()).profiles ?? []).map(toRecord);
 }
 
@@ -114,7 +114,7 @@ export async function findProfileByName(
 export async function deleteProfile(request: APIRequestContext, uuid: string): Promise<void> {
   const res = await request.delete(apiUrl(`configuration_profiles/${uuid}`), { headers: authHeaders() });
   if (res.status() === 404) return;
-  await expect(res, `Failed to delete profile ${uuid}`).toBeOK();
+  await expectOk(res, `Failed to delete profile ${uuid}`);
 }
 
 export type HostProfileStatus = 'pending' | 'verifying' | 'verified' | 'failed';
@@ -131,7 +131,7 @@ export interface HostProfile {
 /** The profiles Fleet lists for a host — its Controls tab, as data. */
 export async function listHostProfiles(request: APIRequestContext, hostId: number): Promise<HostProfile[]> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const profiles = ((await res.json()).host?.mdm?.profiles ?? []) as Array<{
     name: string;
     profile_uuid: string;
@@ -236,7 +236,7 @@ export async function queryHost(
       data: { query: sql },
       timeout: 120_000,
     });
-    await expect(res, `Live query on host ${hostId} failed`).toBeOK();
+    await expectOk(res, `Live query on host ${hostId} failed`);
     const body = await res.json();
     if (!body.error) return body.rows ?? [];
     lastError = String(body.error);

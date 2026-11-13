@@ -1,7 +1,7 @@
-import { APIRequestContext, APIResponse, expect } from '@playwright/test';
+import type { APIRequestContext, APIResponse } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 // ── Bootstrap package ────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ export async function getBootstrapMetadata(
     headers: authHeaders(),
   });
   if (res.status() === 404) return null;
-  await expect(res, `Failed to get bootstrap metadata for fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to get bootstrap metadata for fleet ${fleetId}`);
   return res.json();
 }
 
@@ -38,7 +38,7 @@ export async function deleteBootstrapPackage(
     headers: authHeaders(),
   });
   if (res.status() === 404 || res.status() === 402) return;
-  await expect(res, `Failed to delete bootstrap for fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to delete bootstrap for fleet ${fleetId}`);
 }
 
 /**
@@ -62,7 +62,7 @@ export async function uploadBootstrapPackage(
       fleet_id: String(fleetId),
     },
   });
-  await expect(res, `Failed to upload a bootstrap package to fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to upload a bootstrap package to fleet ${fleetId}`);
 }
 
 // ── Setup Experience ─────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ export async function getMacosSetupSettings(
   const res = await request.get(apiUrl(fleetId === 0 ? 'config' : `teams/${fleetId}`), {
     headers: authHeaders(),
   });
-  await expect(res, `Failed to read fleet ${fleetId}'s setup experience`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${fleetId}'s setup experience`);
   const body = await res.json();
   const setup = (fleetId === 0 ? body.mdm : body.team?.mdm)?.macos_setup ?? {};
   return {
@@ -129,7 +129,7 @@ export async function resetManualAgentInstall(
 ): Promise<void> {
   const res = await patchSetupExperience(request, fleetId, { macos_manual_agent_install: false });
   if (res.status() === 402) return;
-  if (!res.ok()) console.warn(`[manual agent install reset] fleet ${fleetId}: HTTP ${res.status()}`);
+  await expectOk(res, `[manual agent install reset] fleet ${fleetId}`);
 }
 
 /**
@@ -147,7 +147,7 @@ export async function deleteSetupExperienceScript(
     params: { team_id: String(fleetId) },
   });
   if (res.status() === 404 || res.status() === 402) return;
-  if (!res.ok()) console.warn(`[setup-exp script cleanup] fleet ${fleetId}: HTTP ${res.status()}`);
+  await expectOk(res, `[setup-exp script cleanup] fleet ${fleetId}`);
 }
 
 /**
@@ -162,7 +162,7 @@ export async function getEulaMetadata(
     headers: authHeaders(),
   });
   if (res.status() === 404) return null;
-  await expect(res, 'Failed to get EULA metadata').toBeOK();
+  await expectOk(res, 'Failed to get EULA metadata');
   return res.json();
 }
 
@@ -172,7 +172,7 @@ export async function deleteEula(request: APIRequestContext, token: string): Pro
     headers: authHeaders(),
   });
   if (res.status() === 404) return;
-  await expect(res, `Failed to delete EULA ${token}`).toBeOK();
+  await expectOk(res, `Failed to delete EULA ${token}`);
 }
 
 /**
@@ -199,7 +199,7 @@ export async function deleteSetupAssistant(
     params: { team_id: String(fleetId) },
   });
   if (res.status() === 404 || res.status() === 402) return;
-  if (!res.ok()) console.warn(`[setup-assistant cleanup] fleet ${fleetId}: HTTP ${res.status()}`);
+  await expectOk(res, `[setup-assistant cleanup] fleet ${fleetId}`);
 }
 
 /**
@@ -229,7 +229,7 @@ export async function resetMacosSetupToggles(
     data: body,
   });
   if (res.status() === 402) return;
-  if (!res.ok()) console.warn(`[macos_setup reset] fleet ${fleetId}: HTTP ${res.status()}`);
+  await expectOk(res, `[macos_setup reset] fleet ${fleetId}`);
 }
 
 /**
@@ -256,9 +256,7 @@ export async function clearSetupExperienceSoftware(
     // 402 means the tier is free — no per-platform state to clear on any of them.
     if (res.status() === 402) return;
     if (res.status() === 404) continue;
-    if (!res.ok()) {
-      console.warn(`[setup-exp software cleanup] fleet ${fleetId} ${platform}: HTTP ${res.status()}`);
-    }
+    await expectOk(res, `[setup-exp software cleanup] fleet ${fleetId} ${platform}`);
   }
 }
 
@@ -311,7 +309,7 @@ export interface AppleApnsInfo {
 /** Throws when Apple MDM isn't on. */
 export async function getAppleApnsInfo(request: APIRequestContext): Promise<AppleApnsInfo> {
   const res = await request.get(apiUrl('mdm/apple'), { headers: authHeaders() });
-  await expect(res, 'Failed to read the Apple MDM push certificate').toBeOK();
+  await expectOk(res, 'Failed to read the Apple MDM push certificate');
   const body = await res.json();
   return { commonName: body.common_name, renewDate: body.renew_date };
 }
@@ -332,7 +330,7 @@ export async function deleteAllConfigurationProfiles(
     headers: authHeaders(),
     params: { team_id: String(fleetId), per_page: '200' },
   });
-  if (!res.ok()) return;
+  await expectOk(res, `[profile cleanup] failed to list the profiles of fleet ${fleetId}`);
   const body = await res.json();
   const profiles = (body.profiles ?? []) as Array<{ profile_uuid: string; name: string }>;
   const targets = matching ? profiles.filter((p) => matching(p.name)) : profiles;
@@ -360,7 +358,7 @@ export async function deleteAllScripts(
     headers: authHeaders(),
     params: { team_id: String(fleetId), per_page: '200' },
   });
-  if (!res.ok()) return;
+  await expectOk(res, `[script cleanup] failed to list the scripts of fleet ${fleetId}`);
   const body = await res.json();
   const scripts = (body.scripts ?? []) as Array<{ id: number; name: string }>;
   const targets = matching ? scripts.filter((s) => matching(s.name)) : scripts;
@@ -396,7 +394,7 @@ export async function listHostMdmCommands(
   requestType?: string,
 ): Promise<HostMdmCommand[]> {
   const host = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(host, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(host, `Failed to read host ${hostId}`);
   const uuid = (await host.json()).host.uuid as string;
   const params: Record<string, string> = {
     host_identifier: uuid,
@@ -406,7 +404,7 @@ export async function listHostMdmCommands(
   };
   if (requestType) params.request_type = requestType;
   const res = await request.get(apiUrl('commands'), { headers: authHeaders(), params });
-  await expect(res, `Failed to list host ${hostId}'s MDM commands`).toBeOK();
+  await expectOk(res, `Failed to list host ${hostId}'s MDM commands`);
   const results = ((await res.json()).results ?? []) as Array<{
     command_uuid: string;
     request_type: string;

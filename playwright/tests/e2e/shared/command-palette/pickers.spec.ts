@@ -33,6 +33,7 @@ import {
   createReport,
   deletePolicies,
   deleteReport,
+  expectOk,
   findOnlineHost,
 } from '@helpers/api';
 
@@ -66,7 +67,7 @@ async function listSoftwareTitles(
       ...(query ? { query } : {}),
     },
   });
-  await expect(res, 'failed to list software titles').toBeOK();
+  await expectOk(res, 'failed to list software titles');
   const body = await res.json();
   return (
     (body.software_titles ?? []) as Array<{ id: number; name: string; display_name?: string }>

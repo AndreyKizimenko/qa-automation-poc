@@ -1,6 +1,6 @@
 // Policy API helpers for seeding/tearing down preconditions.
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 export interface PolicyRef {
   id: number;
@@ -82,7 +82,7 @@ export async function deleteFleetPolicies(
  */
 export async function listHostPolicyIds(request: APIRequestContext, hostId: number): Promise<number[]> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (((await res.json()).host?.policies ?? []) as Array<{ id: number }>).map((p) => p.id).sort((a, b) => a - b);
 }
 
@@ -96,7 +96,7 @@ export interface GlobalPolicy extends PolicyRef {
 /** One global policy, read back after a UI write. */
 export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
   const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
-  await expect(res, `Failed to read global policy ${id}`).toBeOK();
+  await expectOk(res, `Failed to read global policy ${id}`);
   const { policy } = await res.json();
   return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
 }
@@ -111,7 +111,7 @@ export async function getHostPolicyResponses(
   hostId: number,
 ): Promise<Map<number, string>> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const policies = ((await res.json()).host?.policies ?? []) as Array<{ id: number; response: string }>;
   return new Map(policies.map((p) => [p.id, p.response ?? '']));
 }
@@ -134,7 +134,7 @@ export async function listPolicyHosts(
   };
   if (fleetId !== undefined) params.fleet_id = String(fleetId);
   const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
-  await expect(res, `Failed to list the hosts ${response} policy ${policyId}`).toBeOK();
+  await expectOk(res, `Failed to list the hosts ${response} policy ${policyId}`);
   return ((await res.json()).hosts as Array<{ id: number; display_name: string }>).map((h) => ({
     id: h.id,
     displayName: h.display_name,

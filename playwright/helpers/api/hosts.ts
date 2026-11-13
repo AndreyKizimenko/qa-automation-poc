@@ -1,5 +1,5 @@
 import { APIRequestContext, APIResponse, expect } from '@playwright/test';
-import { apiLatestUrl, apiUrl, authHeaders, type HostRef } from './core';
+import { apiLatestUrl, apiUrl, authHeaders, expectOk, type HostRef } from './core';
 
 /**
  * The `platform` query param returns a label group that can include hosts
@@ -25,7 +25,7 @@ function matchesPlatform(
  */
 export async function getHostDisplayName(request: APIRequestContext, hostId: number): Promise<string> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host.display_name as string;
 }
 
@@ -36,7 +36,7 @@ export async function getHostDisplayName(request: APIRequestContext, hostId: num
  */
 export async function getHostPlatform(request: APIRequestContext, hostId: number): Promise<string> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host.platform as string;
 }
 
@@ -53,7 +53,7 @@ export interface HostSummary {
 /** A host's name, UUID and OS version, read from `GET /hosts/:id`. */
 export async function getHostSummary(request: APIRequestContext, hostId: number): Promise<HostSummary> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const host = (await res.json()).host;
   return { id: host.id, displayName: host.display_name, uuid: host.uuid, osVersion: host.os_version };
 }
@@ -104,7 +104,7 @@ export async function findHostWithSoftware(
     headers: authHeaders(),
     params: { per_page: String(maxScan), order_key: 'display_name', order_direction: 'asc' },
   });
-  if (!res.ok()) return null;
+  await expectOk(res, 'Failed to list hosts');
   const body = await res.json();
   const hosts = (body.hosts ?? []) as Array<{ id: number; display_name: string }>;
 
@@ -113,7 +113,7 @@ export async function findHostWithSoftware(
       headers: authHeaders(),
       params: { per_page: '1' },
     });
-    if (!swRes.ok()) continue;
+    await expectOk(swRes, `Failed to read the software of host ${host.id}`);
     const swBody = await swRes.json();
     if ((swBody.software?.length ?? 0) > 0 || (swBody.count ?? 0) > 0) {
       return { id: host.id, displayName: host.display_name };
@@ -418,7 +418,7 @@ export async function findOfflineSimulations(
       per_page: '1000',
     },
   });
-  await expect(res, 'Failed to list the offline hosts on Unassigned').toBeOK();
+  await expectOk(res, 'Failed to list the offline hosts on Unassigned');
   const hosts = (await res.json()).hosts as Array<{ id: number; platform: string; hardware_model?: string }>;
   return hosts
     .filter((h) => matchesPlatform(h.platform, platform) && !REAL_DEVICE_MODEL.test(h.hardware_model ?? ''))
@@ -488,7 +488,7 @@ export async function getHostDeviceState(
   hostId: number,
 ): Promise<HostDeviceState> {
   const res = await request.get(apiLatestUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const mdm = (await res.json()).host?.mdm ?? {};
   return { deviceStatus: mdm.device_status ?? null, pendingAction: mdm.pending_action ?? null };
 }
@@ -633,14 +633,14 @@ export async function getHostCollectedAt(
   field: HostCollectedAtField,
 ): Promise<string> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host?.[field] ?? '';
 }
 
 /** Asks Fleet to re-collect a host's vitals and software on its next check-in. */
 export async function requestHostRefetch(request: APIRequestContext, hostId: number): Promise<void> {
   const res = await request.post(apiUrl(`hosts/${hostId}/refetch`), { headers: authHeaders() });
-  await expect(res, `Failed to request a refetch of host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to request a refetch of host ${hostId}`);
 }
 
 /** One queued item on a host — an install, uninstall, script run or MDM command. */
@@ -663,7 +663,7 @@ export async function listUpcomingActivities(
     headers: authHeaders(),
     params: { per_page: '100' },
   });
-  await expect(res, `Failed to list host ${hostId}'s upcoming activities`).toBeOK();
+  await expectOk(res, `Failed to list host ${hostId}'s upcoming activities`);
   const activities = ((await res.json()).activities ?? []) as Array<{
     uuid: string;
     type: string;
@@ -722,7 +722,7 @@ export async function waitForNoPendingRefetch(
  */
 export async function getHostRefetchRequested(request: APIRequestContext, hostId: number): Promise<boolean> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host?.refetch_requested ?? false;
 }
 
@@ -788,7 +788,7 @@ export async function getHostMdmIdentity(
   hostId: number,
 ): Promise<HostMdmIdentity> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const { host } = await res.json();
   return { hostname: host?.hostname ?? '', enrollmentStatus: host?.mdm?.enrollment_status ?? null };
 }
@@ -840,7 +840,7 @@ export async function getHostCertificates(
       order_direction: 'asc',
     },
   });
-  await expect(res, `Failed to read certificates for host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read certificates for host ${hostId}`);
   const body = await res.json();
   const certificates = (body.certificates ?? []).map(
     (c: {
@@ -898,7 +898,7 @@ export async function listFleetHosts(
   const params: Record<string, string> = { fleet_id: String(fleetId), per_page: '1000' };
   if (opts.status) params.status = opts.status;
   const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
-  await expect(res, `Failed to list the hosts of fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to list the hosts of fleet ${fleetId}`);
   const hosts = (await res.json()).hosts as Array<{
     id: number;
     display_name: string;
@@ -987,17 +987,22 @@ export async function getHostFleetId(
   hostId: number,
 ): Promise<number | null> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host?.team_id ?? null;
 }
 
-/** Vitals for a single host, shaped for assertions (null when unreadable). */
+/**
+ * Vitals for a single host, shaped for assertions. Null for a host that is
+ * gone by the time it is read (deleted since the list was taken); any other
+ * failure to read it throws.
+ */
 async function getOnlineHostVitals(
   request: APIRequestContext,
   candidate: OnlineHost,
 ): Promise<OnlineHostRef | null> {
   const res = await request.get(apiUrl(`hosts/${candidate.id}`), { headers: authHeaders() });
-  if (!res.ok()) return null;
+  if (res.status() === 404) return null;
+  await expectOk(res, `Failed to read host ${candidate.id}`);
   const { host } = await res.json();
   return {
     id: candidate.id,
@@ -1051,7 +1056,7 @@ async function listOnlineHosts(
   });
   // A failed list throws rather than reading as "no host": every real-device
   // spec would otherwise blame a VM for an API error.
-  await expect(res, 'Failed to list the online hosts').toBeOK();
+  await expectOk(res, 'Failed to list the online hosts');
   return ((await res.json()).hosts ?? []) as OnlineHost[];
 }
 
@@ -1077,7 +1082,7 @@ export async function transferHosts(
     headers: authHeaders(),
     data: { team_id: teamId, hosts: hostIds },
   });
-  await expect(res, `Failed to transfer hosts to fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to transfer hosts to fleet ${fleetId}`);
 }
 
 /**
@@ -1096,7 +1101,7 @@ export async function transferHostsByFilter(
     headers: authHeaders(),
     data: { team_id: teamId, filters },
   });
-  await expect(res, `Failed to transfer hosts to fleet ${fleetId}`).toBeOK();
+  await expectOk(res, `Failed to transfer hosts to fleet ${fleetId}`);
 }
 
 /**
@@ -1114,7 +1119,7 @@ export async function listHostsRunningOs(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), os_name: osName, os_version: osVersion, per_page: '1000' },
   });
-  await expect(res, `Failed to list hosts running ${osName} ${osVersion}`).toBeOK();
+  await expectOk(res, `Failed to list hosts running ${osName} ${osVersion}`);
   return ((await res.json()).hosts ?? []).map((h: { id: number; os_version: string }) => ({ id: h.id, os: h.os_version }));
 }
 
@@ -1157,7 +1162,7 @@ export async function deleteHostIdpUsername(
     headers: authHeaders(),
   });
   if (!(ignoreMissing && res.status() === 422)) {
-    await expect(res, `Failed to remove the IdP username of host ${hostId}`).toBeOK();
+    await expectOk(res, `Failed to remove the IdP username of host ${hostId}`);
   }
   return res;
 }
@@ -1168,7 +1173,7 @@ export async function getHostIdpUsername(
   hostId: number,
 ): Promise<string | null> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const endUsers = ((await res.json()).host?.end_users ?? []) as Array<{ idp_username?: string }>;
   return endUsers.find((u) => u.idp_username)?.idp_username ?? null;
 }
@@ -1194,7 +1199,7 @@ export async function getHostRecoveryLockStatus(
   hostId: number,
 ): Promise<HostRecoveryLockStatus> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
-  await expect(res, `Failed to read host ${hostId}`).toBeOK();
+  await expectOk(res, `Failed to read host ${hostId}`);
   const rl = (await res.json()).host?.mdm?.os_settings?.recovery_lock_password ?? {};
   return { status: rl.status ?? null, detail: rl.detail ?? '', passwordAvailable: !!rl.password_available };
 }

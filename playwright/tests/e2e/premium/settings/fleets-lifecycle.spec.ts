@@ -21,12 +21,12 @@
  */
 import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from '@fixtures';
-import { apiUrl, authHeaders, deleteFleet, findFleetByName } from '@helpers/api';
+import { apiUrl, authHeaders, deleteFleet, expectOk, findFleetByName } from '@helpers/api';
 
 async function fleetName(request: APIRequestContext, id: number): Promise<string | null> {
   const res = await request.get(apiUrl(`fleets/${id}`), { headers: authHeaders() });
   if (res.status() === 404) return null;
-  await expect(res, `Failed to read fleet ${id}`).toBeOK();
+  await expectOk(res, `Failed to read fleet ${id}`);
   const body = await res.json();
   return (body.fleet ?? body.team).name as string;
 }

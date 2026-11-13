@@ -14,6 +14,7 @@ import {
   authHeaders,
   createUser,
   deleteUser,
+  expectOk,
   findSimulations,
   getHostIdpUsername,
   getUser,
@@ -33,7 +34,7 @@ async function expectLicenseRefusal(res: APIResponse, what: string): Promise<voi
 test.describe('Free • license', () => {
   test('license tier is free', async ({ request }) => {
     const res = await request.get(apiUrl('config'), { headers: authHeaders() });
-    await expect(res).toBeOK();
+    await expectOk(res, 'GET /config');
     const config = await res.json();
     expect(config.license?.tier).toBe('free');
   });

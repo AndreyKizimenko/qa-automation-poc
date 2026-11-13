@@ -11,7 +11,7 @@
  * never be deleted by this code, no matter what.
  */
 import { APIRequestContext, APIResponse, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 export type UserRole =
   | 'observer'
@@ -92,9 +92,6 @@ export function qaTestPassword(): string {
  */
 export const QA_TEST_API_USER_NAME_RE = /^QA API \S+ \d{13}(-[a-z0-9]+)?$/;
 
-/** Bulk-delete safety cap. A normal run creates a few dozen at most. */
-const QA_TEST_DELETE_CAP = 200;
-
 /**
  * Generates a unique `qa-test-<ms>-<rand>@fleetdm.com` address. Pass `slug`
  * to embed a short tag (e.g. role name) into the local-part so logs are
@@ -145,7 +142,7 @@ export async function createUser(
     headers: authHeaders(),
     data,
   });
-  await expect(res, `Failed to create user "${params.email}"`).toBeOK();
+  await expectOk(res, `Failed to create user "${params.email}"`);
   const body = await res.json();
   return { user: body.user, token: body.token };
 }
@@ -164,7 +161,7 @@ export async function createApiUser(
     headers: authHeaders(),
     data: params,
   });
-  await expect(res, `Failed to create API user "${params.name}"`).toBeOK();
+  await expectOk(res, `Failed to create API user "${params.name}"`);
   const body = await res.json();
   return { user: body.user, token: body.token };
 }
@@ -174,7 +171,7 @@ export async function getUser(
   id: number,
 ): Promise<UserRef> {
   const res = await request.get(apiUrl(`users/${id}`), { headers: authHeaders() });
-  await expect(res, `Failed to fetch user ${id}`).toBeOK();
+  await expectOk(res, `Failed to fetch user ${id}`);
   return (await res.json()).user;
 }
 
@@ -189,7 +186,7 @@ export async function listUsers(
   if (opts.page !== undefined) params.page = String(opts.page);
 
   const res = await request.get(apiUrl('users'), { headers: authHeaders(), params });
-  await expect(res, 'Failed to list users').toBeOK();
+  await expectOk(res, 'Failed to list users');
   return (await res.json()).users ?? [];
 }
 
@@ -218,7 +215,7 @@ export async function updateUser(
     headers: authHeaders(),
     data: patch,
   });
-  await expect(res, `Failed to update user ${id}`).toBeOK();
+  await expectOk(res, `Failed to update user ${id}`);
   return (await res.json()).user;
 }
 
@@ -229,7 +226,7 @@ export async function deleteUser(
 ): Promise<void> {
   const res = await request.delete(apiUrl(`users/${id}`), { headers: authHeaders() });
   if (opts.ignoreMissing && res.status() === 404) return;
-  await expect(res, `Failed to delete user ${id}`).toBeOK();
+  await expectOk(res, `Failed to delete user ${id}`);
 }
 
 export async function requirePasswordReset(
@@ -241,7 +238,7 @@ export async function requirePasswordReset(
     headers: authHeaders(),
     data: { require },
   });
-  await expect(res, `Failed to set password-reset flag on user ${id}`).toBeOK();
+  await expectOk(res, `Failed to set password-reset flag on user ${id}`);
 }
 
 export async function deleteUserSessions(
@@ -251,7 +248,7 @@ export async function deleteUserSessions(
   const res = await request.delete(apiUrl(`users/${id}/sessions`), {
     headers: authHeaders(),
   });
-  await expect(res, `Failed to delete sessions for user ${id}`).toBeOK();
+  await expectOk(res, `Failed to delete sessions for user ${id}`);
 }
 
 // ── Bulk cleanup ─────────────────────────────────────────────────────────────
@@ -259,24 +256,16 @@ export async function deleteUserSessions(
 /**
  * Deletes every user whose email matches {@link QA_TEST_EMAIL_RE}. Other
  * users — admins, SSO users, anything with a real address — are
- * unreachable from this helper by construction.
- *
- * Safety: if more than {@link QA_TEST_DELETE_CAP} accounts match, the
- * helper throws rather than continuing. That much accumulation suggests
- * something is misconfigured and silent deletion would hide the symptom.
+ * unreachable from this helper by construction, and that is the whole of its
+ * safety: it deletes however many it finds. A cleanup that stopped at a count
+ * would turn a few dead runs' leftovers into a failure of every run after
+ * them, until someone cleared the users by hand.
  */
 export async function deleteAllQaTestUsers(
   request: APIRequestContext,
 ): Promise<{ deleted: number }> {
   const all = await listUsers(request);
   const targets = all.filter((u) => QA_TEST_EMAIL_RE.test(u.email));
-
-  if (targets.length === 0) return { deleted: 0 };
-  if (targets.length > QA_TEST_DELETE_CAP) {
-    throw new Error(
-      `[deleteAllQaTestUsers] Refusing to delete ${targets.length} matching users — cap is ${QA_TEST_DELETE_CAP}. Investigate before clearing.`,
-    );
-  }
 
   for (const u of targets) {
     // Individual deletes (no bulk endpoint); ignoreMissing covers a parallel
@@ -299,13 +288,6 @@ export async function deleteLeftoverApiTestUsers(
 ): Promise<{ deleted: number }> {
   const all = await listUsers(request, { query: 'QA API' });
   const targets = all.filter((u) => u.api_only && QA_TEST_API_USER_NAME_RE.test(u.name));
-
-  if (targets.length === 0) return { deleted: 0 };
-  if (targets.length > QA_TEST_DELETE_CAP) {
-    throw new Error(
-      `[deleteLeftoverApiTestUsers] Refusing to delete ${targets.length} matching users — cap is ${QA_TEST_DELETE_CAP}. Investigate before clearing.`,
-    );
-  }
 
   for (const u of targets) {
     await deleteUser(request, u.id, { ignoreMissing: true });

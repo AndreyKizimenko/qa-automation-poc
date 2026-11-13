@@ -4,7 +4,7 @@
  * sub-test so a per-step failure pinpoints which action regressed.
  */
 import { test, expect } from '@fixtures';
-import { authHeaders, assertActivity, apiUrl } from '@helpers/api';
+import { apiUrl, assertActivity, authHeaders, expectOk } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 
 test.describe('Packs CRUD', () => {
@@ -68,14 +68,14 @@ test.describe('Packs CRUD', () => {
     test.setTimeout(5 * 60_000);
 
     const hostsRes = await request.get(apiUrl('hosts'), { headers: authHeaders() });
-    await expect(hostsRes).toBeOK();
+    await expectOk(hostsRes, 'Failed to list hosts');
     const hostsData = await hostsRes.json();
     const host = hostsData.hosts?.[0];
     expect(host).toBeDefined();
     const hostID = host.id;
 
     const queriesRes = await request.get(apiUrl('queries'), { headers: authHeaders() });
-    await expect(queriesRes).toBeOK();
+    await expectOk(queriesRes, 'Failed to list reports');
     const queriesData = await queriesRes.json();
     let queryID: number;
 
@@ -86,7 +86,7 @@ test.describe('Packs CRUD', () => {
         headers: authHeaders(),
         data: { query: 'SELECT 1;', name: `smoke_pack_query_${Date.now()}` },
       });
-      await expect(createQueryRes).toBeOK();
+      await expectOk(createQueryRes, 'Failed to create the report the pack schedules');
       queryID = (await createQueryRes.json()).query.id;
     }
 
@@ -99,14 +99,14 @@ test.describe('Packs CRUD', () => {
         host_ids: [hostID],
       },
     });
-    await expect(createPackRes).toBeOK();
+    await expectOk(createPackRes, 'Failed to create the pack');
     const packID = (await createPackRes.json()).pack.id;
 
     const scheduleRes = await request.post(apiUrl('packs/schedule'), {
       headers: authHeaders(),
       data: { pack_id: packID, query_id: queryID, interval: 10 },
     });
-    await expect(scheduleRes).toBeOK();
+    await expectOk(scheduleRes, 'Failed to schedule the report in the pack');
 
     const timeoutMs = 4 * 60_000;
     const pollIntervalMs = 15_000;
@@ -115,7 +115,7 @@ test.describe('Packs CRUD', () => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const hostRes = await request.get(apiUrl(`hosts/${hostID}`), { headers: authHeaders() });
-      await expect(hostRes).toBeOK();
+      await expectOk(hostRes, `Failed to read host ${hostID}`);
       const hostData = await hostRes.json();
       const packStats = hostData.host?.pack_stats as Array<{
         pack_id: number;

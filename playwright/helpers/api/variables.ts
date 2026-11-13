@@ -1,6 +1,6 @@
 // Custom-variable (global secret) API helpers: seeding and cleanup.
-import { APIRequestContext, expect } from '@playwright/test';
-import { apiUrl, authHeaders } from './core';
+import type { APIRequestContext } from '@playwright/test';
+import { apiUrl, authHeaders, expectOk } from './core';
 
 export interface VariableRef {
   id: number;
@@ -13,7 +13,7 @@ export async function listVariables(request: APIRequestContext): Promise<Variabl
     headers: authHeaders(),
     params: { per_page: '500' },
   });
-  if (!res.ok()) return [];
+  await expectOk(res, 'Failed to list the custom variables');
   const body = await res.json();
   return ((body.custom_variables ?? []) as VariableRef[]).map((v) => ({ id: v.id, name: v.name }));
 }
@@ -41,6 +41,6 @@ export async function deleteVariablesMatching(
  */
 export async function createVariable(request: APIRequestContext, name: string, value: string): Promise<number> {
   const res = await request.post(apiUrl('custom_variables'), { headers: authHeaders(), data: { name, value } });
-  await expect(res, `Failed to create custom variable ${name}`).toBeOK();
+  await expectOk(res, `Failed to create custom variable ${name}`);
   return (await res.json()).id as number;
 }

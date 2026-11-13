@@ -71,7 +71,10 @@ module.exports = tseslint.config(
   { plugins: { suite } },
   {
     files: ['tests/**/*.ts', 'pages/**/*.ts', 'helpers/**/*.ts', 'fixtures.ts', 'setup/**/*.ts'],
-    rules: { 'suite/skip-needs-reason': 'error' },
+    rules: {
+      'suite/skip-needs-reason': 'error',
+      'suite/no-to-be-ok': 'error',
+    },
   },
   {
     files: ['tests/**/*.ts'],
