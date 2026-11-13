@@ -8,6 +8,18 @@ hand, and the rest are marked **reported** or **estimate**.
 Out of scope, by agreement: the number of real VMs and the instance's concurrency. Both are being solved
 outside the suite. This document is about what the tests and their structure must be ready for when they are.
 
+**Where it stands, 2026-11-13.** Tiers 1 and 2 of the agreed order are on `main`: PRs #133, #134 and #135,
+then #139, proven by branch run 43483630012 (697 premium and 368 free tests passed; none failed, was flaky
+or was retried). **Tier 3 is next**, and [*Tier 3: the brief*](#tier-3-the-brief) is written for someone who
+was not here for the first two. How to read the rest:
+
+- **Working list**: what has landed and what is open. It is the plan of record, and it is kept current.
+- **Tier 3: the brief**: what to build next, what is already there, and how work is delivered here.
+- **Sections 1 to 6**: the audit as written on 2026-11-12, kept for the reasoning. Each opens with a
+  **Since then** line saying what no longer holds. Their counts are the audit day's unless a line says
+  otherwise.
+- **Roadmap**: every item with its size and its status.
+
 ## Verdict
 
 The layering holds and should not be reworked: folder-routed tiers, page objects with component objects, API
@@ -74,12 +86,31 @@ below hold the reasoning.
       the rewritten navigation rule, and a test no longer adds a `docs/test-audit/` entry (the folder is
       frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11.
 - [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform.
+- [ ] Three rows of *Where the written contract and the practice differ* have no answer yet: assertions in
+      page objects, page-object members nothing references, and class selectors without a comment.
+- [ ] Three changes the sections propose have no roadmap row: the config lock (section 2), `serial` only
+      for shared ids (section 4), and an optional `root` on components (section 5). Each needs a place in
+      the order or a "no".
+
+**After tier 2, from the review of its branch run (2026-11-13)**
+- [x] A run's artifact list is what there is to read: the two suite reports, plus the report of a gitops
+      job only when that job failed. It was 16 artifacts a run, 14 of them green gitops reports.
+- [x] A free report's skipped count is tests only. The four fleet cleanup steps are declared on premium
+      alone; skipped on free, three times a job, they were 12 of free's 13 "skipped".
+- [x] Every skip in the two suite reports was checked against its reason. Three wait on open Fleet issues
+      (#54622, #54623, #50059, each with its row in `blocked-by-product-bugs.md`). One is a data guard that
+      lifts by itself: the Windows "updates when it is behind" test runs on the nights Fleet's catalog is
+      ahead of the VM, and its sibling asserts the Update / Reinstall state every night. One stood on a
+      wrong reason:
+- [ ] `shared/packs/packs.spec.ts` → "pack query executes on targeted host", skipped since May on a 405
+      that was the test's own wrong path, and unsound with the path fixed (it reads a simulation's random
+      stats). Rewrite it on a real VM or delete it; `TODO.md` has both. Andrey's call.
 
 **The order, agreed 2026-11-13.** Sorted by whether a change needs a live run to prove it, and by how many
 specs share the code it touches. The 4.96 upgrade is not close, so nothing here waits on it.
-1. No run needed. Done: the close-outs, the lint rules, the preflight.
+1. No run needed. **Done** (PRs #133, #134, #135): the close-outs, the lint rules, the preflight.
 2. Small code changes, each proven by a scoped run. One PR for the tier, one commit per concern, so one
-   branch run covers them:
+   branch run covers them. **Done** (PR #139, branch run 43483630012) but for its last line:
    - [x] the fleet dropdown re-opens a menu that closed under it;
    - [x] helpers check a response with `expectOk`, which prints no header, and throw where they used to
          return nothing; cleanup no longer stops at 200 leftover users. No retry was added: the cleanup
@@ -94,30 +125,35 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
          job of the nightly and of a branch run; `docs/ci-pipeline.md` says what it may print.
    - [ ] `parse_report.py` and `run_timeline.py` still read the HTML report's embedded data; pointing them
          at `results.json` is its own change.
-3. Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags of 5, then 10, 8, 7,
-   11 and 12.
+3. **Next.** Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags of 5, then 10,
+   8, 7, 11 and 12. [*Tier 3: the brief*](#tier-3-the-brief) has each one.
 4. Last: the lanes and the environment gate of 5, then 14, 13, 15 and 16.
 
+Roadmap 9, a home for toast copy, was left out of this order when it was agreed. Proposed, not agreed:
+tier 3, beside item 7, because `Toast` is one of the shared widgets and the lint rule that waits on it is
+already written.
+
 **Roadmap items, as they land**
+- [x] 1, the defects table (2026-11-13): every row is fixed. Three rows in tier 1, six in tier 2.
 - [x] 2, lint the contract (2026-11-13). Six `suite/*` rules in `eslint-rules/`, each with tests
       (`npm run lint:rules`, part of `npm run check`); `CLAUDE.md` → *Pre-PR check* says what each fails on
       and what to write instead. Lint prints nothing or fails: every rule is an error, `--max-warnings 0`
       covers the rest, and the places that predate a rule are recorded per file in
       `eslint-suppressions.json`, so only a new one fails and the record only shrinks
       (`npm run lint:prune`). A seventh rule, for toast copy, is written and off until item 9 gives that
-      copy a home. What the record held on the day (`npm run lint:contract`), which is the number to
-      bring down:
+      copy a home. What the record held on the day it was made, and what it holds after tier 2
+      (`npm run lint:contract` prints today's). The last column is the number to bring down:
 
-      | Rule | Places | Files |
-      |---|---|---|
-      | class selector in a spec | 30 | 13 |
-      | `page.getBy*()` in a browser spec | 52 | 32 |
-      | `Date.now()` in a per-run name | 65 | 50 |
-      | `assertActivity` without a baseline | 29 | 11 |
-      | a helper that drops a non-OK response | 22 | 9 |
-      | a skip with no tracking comment, or no reason | 0 | 0 |
-      | `any`, `force: true`, hook order, `toHaveLength` (the rules that were warnings) | 40 | 8 |
-      | toast copy typed in a spec (rule off, not recorded) | 97 | 49 |
+      | Rule | Places on the day | Files | Places after tier 2 |
+      |---|---|---|---|
+      | class selector in a spec | 30 | 13 | 30 |
+      | `page.getBy*()` in a browser spec | 52 | 32 | 52 |
+      | `Date.now()` in a per-run name | 65 | 50 | 65 |
+      | `assertActivity` without a baseline | 29 | 11 | 24, in 9 files |
+      | a helper that drops a non-OK response | 22 | 9 | 0: 21 throw, one says why on its directive |
+      | a skip with no tracking comment, or no reason | 0 | 0 | 0 |
+      | `any`, `force: true`, hook order, `toHaveLength` (the rules that were warnings) | 40 | 8 | 40 |
+      | toast copy typed in a spec (rule off, not recorded) | 97 | 49 | 97 |
 
 - [x] 4, an API-level `test` (2026-11-13): `apiTest` in `fixtures.ts` carries the worker fixtures and no
       page, and the browser `test` extends it. The ten API specs that imported `test` launch no browser
@@ -126,6 +162,72 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
       a line per test per reviewed run and says how a failing test fared before; and the `run-history` job
       writes the same into every nightly's and branch run's summary, from the 14 nightlies before it.
       Still open: the quarantine that would act on it (item 15).
+
+## Tier 3: the brief
+
+Written 2026-11-13 for whoever takes tier 3 without having seen tiers 1 and 2. Read these first, in this
+order: `playwright/CLAUDE.md`, whole (the suite's contract; its *Pre-PR check* is how lint works here);
+sections 1, 2, 3 and 5 below (why each thing is built); `docs/ci-pipeline.md` before touching a workflow.
+Invoke the `playwright-test-author` skill before writing code, and read the files it requires.
+
+**What tier 3 is.** Foundations: helpers, fixtures and structure that new specs use from the day they land,
+and that old specs move to when someone next edits them. None of it needs the new server, more VMs or
+shards; what does is tier 4. A foundation is done when:
+
+- it is built, and a test of its own or a deliberate break has shown it failing for the reason it exists;
+- a few specs chosen to exercise it use it, and the PR names them. The suite is not migrated in one PR.
+  The exception is anything a fixture enforces (the VM tags): that covers every test it applies to on the
+  day it is switched on;
+- new code can only go the new way: a lint rule or the fixture says so, with what to write instead, and
+  `CLAUDE.md` carries the rule;
+- the docs that teach the old way are changed in the same commit (`CLAUDE.md`, the READMEs under
+  `helpers/` and `pages/`, the author skill's `fleet-traps.md` and `spec-patterns.md`);
+- its line in the working list is ticked, with the numbers measured.
+
+**The items, in order.** "There today" was counted on 2026-11-13 at `c9af972`.
+
+| Roadmap | Build | There today | Watch for |
+|---|---|---|---|
+| **3** `ownName()`, the `cleanup` fixture, data fixtures on top (M) | One naming helper that carries run and worker. A fixture that holds a stack of undo actions and runs them in its own teardown, with an API context of its own, so a timed-out test still cleans up. Then `throwawayFleet`, `borrowedSims` and `seed.*` built on both. Its proof is a test that creates something and then times out: nothing is left, where the `finally` it replaces leaves it. Section 1 | `runNonce()` in `helpers/profiles.ts`, which lint sends new names to; 65 recorded `Date.now()` names in 50 files; in specs, 82 `finally`, 55 `afterEach` and 19 `afterAll` | The sweep in `setup/cleanup.steps.ts` finds leftovers by prefix (`pw-*`, `fleet-pw-*`, `PW_VAR_*`, `pw-enroll-`, `qa-test-*`), and reports only by exact prefix, because gitops declares reports beside them: `pw-run-script-`, `pw-rl-` and `pw-stored-results-` on VMs, which also holds gitops's `pw-host-report-results`, and `pw-role-` on Workstations. A new name shape and the sweep change in one commit. A job is up to three `playwright test` invocations and the config is evaluated again in every worker, so the run part comes from the environment (`GITHUB_RUN_ID`, or a value the config sets once with `??=`), never from a value minted per process. The fixture goes on `apiTest`, so API and CLI specs get it. When `ownName()` exists, `suite/no-date-now-in-name` and its row in `CLAUDE.md` point at it |
+| **5, tags only** (part of M) | `@vm-macos`, `@vm-windows`, `@vm-linux` on every test that waits on a real VM, and the picker refusing a test that asks for a platform it isn't tagged for. Section 3, D2 | No tag anywhere. 43 spec files use a VM picker: `requireRealHost` 27, `liveMacosHost` 9, `vmsFleetId` 28, `kind: 'real'` 2 | Enforcement needs every VM test tagged in the same commit. `vmsFleetId` alone is not a VM wait: a spec can use the VMs fleet for what Fleet decides server-side. A test generated by a loop over platforms takes its tag from the loop. `liveMacosHost` is a worker fixture, with no test to read tags from. **Not in tier 3:** lane projects and the environment gate. `playwright.config.ts`' projects and the workflows stay as they are |
+| **10** claims registry (S–M) | A typed map from a claim to its platform, pool, offset and size; pickers take the claim, not a number; a check in `npm run check` that fails on an overlap or an exhausted pool. Catalog-app slugs claimed in spec headers go in as well. Section 2 | The registry is a doc comment in `helpers/api/hosts.ts`; 26 call sites of the three simulation finders in 16 spec files | The offsets index a live, ordered list that `host-delete.spec.ts` shrinks during a run |
+| **8** twins, identical pairs first (S a pair) | Move to `shared/` the pairs that are one flow. Section 5, D1 | Of 31 free specs with a premium twin at the same path, **one** is identical once comments are stripped (`settings/users/delete`), and **three** differ only by the tier word in the describe title and a `teamDropdown.select('All fleets')` that does nothing on free (`software/vulnerability-automations`, `settings/organization/organization-info`, `reports/automations`). The "nine" in section 5 was one reviewer's count | Re-derive the list before moving anything. A moved file takes its `eslint-suppressions.json` entry along: rename the key. Its tests get new ids, so the run history sees them as new: say so in the PR. The other 27 pairs wait on D1 |
+| **7** shared widgets (S each) | `Modal` first, then `ReactSelect`, `ActionsMenu`, `SqlEditor`, `setSlider()`, `pickRadio()`, each internal to page objects. Section 5 | `.modal__` selectors on 38 lines of 23 files under `pages/`; 39 files in `pages/components/`, none of them a modal base | No spec edits. Move two or three page objects to each widget as proof and leave the rest for the upgrade that next touches them |
+| **11** generated catalogue (M) | A script that writes the test catalogue from `playwright test --list`, the spec headers and `test.step` titles. Section 5, D3 | `docs/test-audit/`, frozen on 2026-11-13: nothing updates it | Ask first whether the output is committed or built on demand: a committed one changes in every PR that touches a test |
+| **12** `CLAUDE.md` split (M) | A lean core and a nested file per subtree (`setup/`, `gitops-mode/`, `loadtest/`, `cli/`, `api/`) | One file of about 340 lines | Last, because every other item edits it. A nested file loads only when work happens under its folder, so the real-host stop rules and the facts table stay in the core. The skills and docs cite its sections by title: search for `CLAUDE.md` before renaming one |
+
+**How work is delivered here.** Each line cost a round trip to learn.
+
+- **One PR for a batch, one commit per concern**, based on `main`, never on another open PR. Proposed
+  batches: (A) item 3; (B) the tags and item 10; (C) items 8 and 7; (D) items 11 and 12, which change no
+  suite code. Item 3 is a batch of its own either way; confirm the rest with Andrey before opening the
+  second. A PR opens as a draft and fills up.
+- **Andrey dispatches the full run.** A PR that changes the suite gets one `QA — Branch run` (about 65
+  minutes). Open the PR, say it is ready, and say `--ref <branch>` when it changes a workflow file.
+  Merging is his word too.
+- **Local runs are scoped**: the specs that changed, on each tier they run on, after `gh run list` shows
+  the instances idle. Once with dependencies; `--workers=2` on anything that waits on a VM.
+- **See it fail first.** A new check that has never been red proves nothing. For a change to `fixtures.ts`,
+  which every spec imports: the same test ids before and after (`npx playwright test --project=<p> --list`
+  for each project), then one browser spec, one API spec and one VM spec on each tier.
+- **Lint prints nothing or it fails.** No rule is a warning. `eslint-suppressions.json` records the places
+  that predate a rule and only shrinks (`npm run lint:prune` after fixing one). A new rule's first record
+  is made once, in the commit that adds the rule and for that rule only
+  (`npx eslint . --suppress-rule suite/<rule>`); a rule that can't say what to write instead isn't
+  switched on (`suite/no-toast-copy-in-spec` is written and off for that reason).
+- **This stays a UI suite.** Never move a browser test to an API spec, and never branch on the tier inside
+  a spec: tiers are folders, and free coverage is a goal of its own.
+- **The repository is public.** No instance hostname, token or credential in a commit. A report holds live
+  credentials: reports leave CI encrypted, and nothing from one's request headers or typed values goes
+  into a PR, an issue or a review. `bash .github/scripts/check-artifacts.sh` before a workflow change.
+- **The stop rules in `CLAUDE.md` come before any plan here**: what may reach a real VM, the standing
+  fleets, the global settings nobody saves. When a step looks like one of them, ask.
+- **This document is the plan of record.** Tick the working list as things land, and write what was
+  measured, not what was intended.
+
+**To settle with Andrey, none of it blocking item 3:** the batches after the first; where roadmap 9 goes;
+whether the generated catalogue is committed; D4's minute budget, which the tags make measurable; D1 for
+the other 27 twin pairs; and the three changes that have no roadmap row (the working list names them).
 
 ## Baseline
 
@@ -142,6 +244,10 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
 | Flake rate (estimate from the run reviews) | about 0.1% of executions, about one flaky test a night |
 
 ## 1. One run owns the instance
+
+**Since then (2026-11-13).** Nothing here is built yet: it is roadmap 3 (tier 3) and 14 (tier 4). Lint now
+holds the line on names (`suite/no-date-now-in-name`): 65 recorded places in 50 spec files, and a new one
+fails and is sent to `runNonce()`, the nonce `ownName()` will wrap.
 
 **What the code assumes.** `setup/cleanup.steps.ts` deletes every global report, policy and pack and every
 script, profile and installable title on Unassigned and Workstations, with no prefix filter (verified,
@@ -180,6 +286,11 @@ stops growing with the suite.
 
 ## 2. Shared resources are handed out by comments
 
+**Since then (2026-11-13).** Unchanged. The registry is roadmap 10 (tier 3) and the lease is 13 (tier 4).
+The config lock has no roadmap row; it needs item 3's `cleanup` fixture, so it can only follow it.
+`host-delete.spec.ts` returns the simulations it stages when it fails before its delete, but it still
+deletes hosts, so the offsets still index a list that shrinks.
+
 **What the code does.**
 - **Simulations.** A spec borrows hosts by integer offset: `findSimulations(request, 'linux', 2, 0)`. Who owns
   which offsets is a doc comment in `helpers/api/hosts.ts` (verified, lines 271–273, 338–339, 356–376: about
@@ -204,6 +315,9 @@ stops growing with the suite.
 
 ## 3. What a test needs is implicit
 
+**Since then (2026-11-13).** D2 is decided: tags, checked by the fixture. Nothing is built. The tags are
+tier 3; the lanes and the environment gate are tier 4.
+
 **What the code does.** Nothing machine-readable says "this test needs the macOS VM". There are no tags
 (verified), 12 specs name the platform statically and 5 more resolve it at run time (reported). Three costs
 follow:
@@ -227,6 +341,10 @@ follow:
    red row with its reason.
 
 ## 4. VM minutes can grow as fast as the suite
+
+**Since then (2026-11-13).** The API specs launch no browser: `apiTest` is in `fixtures.ts` (roadmap 4), and
+on the branch run free's 35 API tests took 3.1 s where they had taken 8.9. The minute budget is still D4,
+and the `serial` blocks used as a mutex are untouched and have no roadmap row.
 
 **Decided 2026-11-12:** this stays a UI suite. API coverage will be a separate suite that can run on its
 own, so nothing here moves a browser test to the API. What is left of this section is the VM budget and two
@@ -263,6 +381,13 @@ uniform 5x:
    default mode on one worker, as `software/vulnerabilities.spec.ts` already does.
 
 ## 5. Repair cost follows the number of files
+
+**Since then (2026-11-13).** *Conventions as prose* is answered: the contract is linted (roadmap 2), as
+errors over a recorded baseline rather than as warnings, and the working list has the counts.
+`docs/test-audit/` is frozen (D3), so an upgrade PR no longer edits it. The twins were counted again: one
+pair is identical once comments are stripped, three more differ only by the tier word in a describe title
+and a dropdown call that does nothing on free, and "nine" was one reviewer's count. Widgets, toast copy
+and the generated catalogue are untouched.
 
 Fleet ships every three weeks and each upgrade breaks tests. The cost per broken cause is flat where the
 changed thing lives in one place: the Toast component fixed 49 of 61 failures in 4.90 with one edit
@@ -304,6 +429,12 @@ Also worth doing here: most components take `page` only (33 of 38; reported), so
 hand-rolls the second. Adding an optional `root` argument, as `TeamDropdown` has, is additive.
 
 ## 6. Nobody remembers the last run
+
+**Since then (2026-11-13).** *What exists* no longer holds. Each suite report carries `results.json` and
+is kept 90 days. `run_history.py` keeps a line per test per run, and the `run-history` job writes how each
+failed or flaky test fared in the 14 nightlies before into the run's summary (roadmap 6). The dropdown
+re-opens a menu that closed under it. Open: the quarantine (15, tier 4), and the two triage scripts, which
+still read the HTML report's embedded data.
 
 **What exists.** CI keeps an HTML report for 14 days. Run reviews are markdown files that are gitignored and
 live on one laptop. There is no per-test history, no flake ledger and no quarantine.
@@ -348,9 +479,9 @@ document say it.
 |---|---|
 | "Each premium spec has Unassigned + Workstations variants" (`CLAUDE.md`) | 11 of 95 premium specs loop over scopes (verified). Settled 2026-11-13: `CLAUDE.md` now describes the practice |
 | "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported). Settled 2026-11-13 (D5): one click-through test per area, the rest go straight to the page |
-| "Assertions live in the spec" (author skill) | page objects hold 585 `expect` calls and 40 `expectX` methods; 86% are state-settling waits (reported) |
-| "Cover everything visible, even if no test uses it" (`pages/README.md`) | about 10% of public page-object members are referenced by nothing (estimate) |
-| "Every class selector carries an inline comment" (`pages/components/README.md`) | about a third do; another 40% are explained elsewhere in the file (sample of 59) |
+| "Assertions live in the spec" (author skill) | page objects hold 585 `expect` calls and 40 `expectX` methods; 86% are state-settling waits (reported). **Unsettled** |
+| "Cover everything visible, even if no test uses it" (`pages/README.md`) | about 10% of public page-object members are referenced by nothing (estimate). **Unsettled** |
+| "Every class selector carries an inline comment" (`pages/components/README.md`) | about a third do; another 40% are explained elsewhere in the file (sample of 59). **Unsettled** |
 | "Throw on a non-OK response" (trap catalogue) | 8 helpers return `null` or an empty list (reported). Settled 2026-11-13: 22 places were found, 21 throw, and one best-effort clean-up says why on its lint directive |
 
 ## What to keep exactly as it is
@@ -375,34 +506,34 @@ is additive; existing specs keep working and migrate when they are next touched.
 
 **Now, before adding tests**
 
-| # | Item | Size | Unlocks |
-|---|---|---|---|
-| 1 | Fix the defects table above | S | fewer flakes today |
-| 2 | Lint the contract, warnings first | S | convergence of everything written after it |
-| 3 | `ownName()` and the `cleanup` fixture, with data fixtures built on them (`throwawayFleet`, `borrowedSims`, `seed.policy/report/script/label`) | M | timeout-safe cleanup, shard-safe names |
-| 4 | API-level `test` for the API specs the repo already has | S | no browser per API test; the seam for the separate API suite |
-| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs |
-| 6 | `results.json`, the history file, the summary line | S | flake memory |
+| # | Item | Size | Unlocks | Status, 2026-11-13 |
+|---|---|---|---|---|
+| 1 | Fix the defects table above | S | fewer flakes today | done |
+| 2 | Lint the contract, warnings first | S | convergence of everything written after it | done, as errors over a recorded baseline |
+| 3 | `ownName()` and the `cleanup` fixture, with data fixtures built on them (`throwawayFleet`, `borrowedSims`, `seed.policy/report/script/label`) | M | timeout-safe cleanup, shard-safe names | **tier 3, first** |
+| 4 | API-level `test` for the API specs the repo already has | S | no browser per API test; the seam for the separate API suite | done |
+| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs | tags tier 3; lanes and gate tier 4 |
+| 6 | `results.json`, the history file, the summary line | S | flake memory | done |
 
 **While growing**
 
-| # | Item | Size |
-|---|---|---|
-| 7 | Shared widget components, migrated as upgrades touch them | S each |
-| 8 | Twin consolidation (identical pairs first) | S per pair |
-| 9 | UI-copy module for toasts | M |
-| 10 | Typed claims registry for simulations and catalog apps | S–M |
-| 11 | Generated test catalogue replacing hand-written audit entries | M |
-| 12 | `CLAUDE.md` split into a lean core plus nested files per subtree (`setup/`, `gitops-mode/`, `loadtest/`, `cli/`, `api/`) | M |
+| # | Item | Size | Status, 2026-11-13 |
+|---|---|---|---|
+| 7 | Shared widget components, migrated as upgrades touch them | S each | tier 3 |
+| 8 | Twin consolidation (identical pairs first) | S per pair | tier 3 for the four that are one flow; the rest on D1 |
+| 9 | UI-copy module for toasts | M | not in the agreed order; proposed for tier 3, beside 7 |
+| 10 | Typed claims registry for simulations and catalog apps | S–M | tier 3 |
+| 11 | Generated test catalogue replacing hand-written audit entries | M | tier 3; the audit folder is already frozen |
+| 12 | `CLAUDE.md` split into a lean core plus nested files per subtree (`setup/`, `gitops-mode/`, `loadtest/`, `cli/`, `api/`) | M | tier 3, last |
 
 **When the infrastructure arrives**
 
-| # | Item | Size |
-|---|---|---|
-| 13 | VM leases across workers and shards | S on top of 5 |
-| 14 | Cleanup as pre- and post-jobs; shards; sessions minted once | M |
-| 15 | Quarantine project fed by the history | S on top of 6 |
-| 16 | Per-worker throwaway fleets for fleet-scoped CRUD, if collisions on Workstations show up | M |
+| # | Item | Size | Status, 2026-11-13 |
+|---|---|---|---|
+| 13 | VM leases across workers and shards | S on top of 5 | tier 4 |
+| 14 | Cleanup as pre- and post-jobs; shards; sessions minted once | M | tier 4 |
+| 15 | Quarantine project fed by the history | S on top of 6 | tier 4; the history it reads exists |
+| 16 | Per-worker throwaway fleets for fleet-scoped CRUD, if collisions on Workstations show up | M | tier 4 |
 
 ## Decisions that are yours
 
@@ -431,7 +562,8 @@ is additive; existing specs keep working and migrate when they are next touched.
 
 ## Limits of this audit
 
-- Nothing was executed. Races and collisions are derived from code unless a run review recorded them.
+- Nothing was executed for the audit itself. Races and collisions are derived from code unless a run review
+  recorded them. What the working list ticks was run: each tick names its PR, run or measurement.
 - Counts marked reported come from a single reviewer's `git grep` and were not all re-run.
 - Runtime projections scale the 2026-09-30 and 2026-10-06 measurements linearly.
 - Pool sizes on the live instances, and how shards behave against them, were not checked.
