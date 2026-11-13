@@ -33,8 +33,10 @@
     "test:all": "npm run test:premium && npm run test:free",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:rules": "node eslint-rules/tests.js",
+    "lint:contract": "node eslint-rules/count.js",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint:rules && npm run lint"
   },
   "keywords": [],
   "author": "",
