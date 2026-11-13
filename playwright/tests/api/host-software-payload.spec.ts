@@ -19,7 +19,7 @@
  * Grounded in server/service/hosts.go (`hostByIdentifierRequest.ExcludeSoftware`
  * → `fleet.HostDetailOptions{ExcludeSoftware}`).
  */
-import { test, expect } from '@fixtures';
+import { apiTest as test, expect } from '@fixtures';
 import { apiUrl, authHeaders, expectOk, findHostWithSoftware } from '@helpers/api';
 
 /** Identity fields that must survive the parameter untouched. */

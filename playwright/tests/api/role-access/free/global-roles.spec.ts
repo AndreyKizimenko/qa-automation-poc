@@ -4,7 +4,7 @@
  * and are rejected from the ones above. Each role is exercised through
  * the bearer token of its API-only static counterpart.
  */
-import { test } from '@fixtures';
+import { apiTest as test } from '@fixtures';
 import {
   expectAllow,
   expectDeny,

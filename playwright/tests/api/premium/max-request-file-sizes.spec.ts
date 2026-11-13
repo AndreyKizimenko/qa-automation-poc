@@ -26,7 +26,7 @@
  * server/platform/http/errors.go, which formats them with `units.HumanSize` —
  * hence MiB values rendered in MB.
  */
-import { test, expect } from '@fixtures';
+import { apiTest as test, expect } from '@fixtures';
 import { apiUrl, authHeaders } from '@helpers/api';
 
 const MIB = 1024 * 1024;

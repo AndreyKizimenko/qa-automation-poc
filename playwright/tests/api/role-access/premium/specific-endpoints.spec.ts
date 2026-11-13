@@ -12,7 +12,7 @@
  *     to `GET /hosts` + `GET /fleets/:id/policies`. Allow-listed reads
  *     still honor the fleet-scope filter on top.
  */
-import { test } from '@fixtures';
+import { apiTest as test } from '@fixtures';
 import {
   expectAllow,
   expectDeny,

@@ -4,7 +4,7 @@
  * Tier-specific contracts (e.g. asserting `license.tier === 'free'`) live
  * alongside this file in `tests/api/free/`.
  */
-import { test, expect } from '@fixtures';
+import { apiTest as test, expect } from '@fixtures';
 import { apiUrl, authHeaders, expectOk } from '@helpers/api';
 
 test.describe('Config shape', () => {

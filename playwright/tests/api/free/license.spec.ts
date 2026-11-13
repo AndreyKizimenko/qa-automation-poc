@@ -7,7 +7,7 @@
  * anything, which is what's asserted: the write is read back to prove it
  * didn't land.
  */
-import { test, expect } from '@fixtures';
+import { apiTest as test, expect } from '@fixtures';
 import type { APIResponse } from '@playwright/test';
 import {
   apiUrl,

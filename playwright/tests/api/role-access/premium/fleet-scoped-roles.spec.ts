@@ -6,7 +6,7 @@
  * `@fixtures` resolve each fleet's id once per worker. Probes are built
  * from `fleetScopedProbes(id)`.
  */
-import { test } from '@fixtures';
+import { apiTest as test } from '@fixtures';
 import {
   expectAllow,
   expectDeny,

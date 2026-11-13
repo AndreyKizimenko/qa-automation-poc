@@ -1,7 +1,12 @@
 /**
- * Page-object fixtures. Specs import `{ test, expect }` from this file
- * (not from `@playwright/test`) and destructure whichever page objects they
- * need.
+ * The suite's two test objects, one built on the other:
+ *
+ *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM) and
+ *     nothing that needs a page. API and CLI specs import it, so none of their
+ *     tests opens a browser.
+ *   - `test` extends it with the page objects and the automatic `pageHealth`
+ *     monitor. Browser specs import `{ test, expect }` from this file (not from
+ *     `@playwright/test`) and destructure whichever page objects they need.
  *
  * To add a new fixture: build the POM under `pages/`, re-export it from
  * `pages/index.ts`, then in this file: import it, add it to `FleetFixtures`,
@@ -86,14 +91,16 @@ import {
   EditUserPage,
 } from './pages';
 
-type FleetWorkerFixtures = {
+type BrowserWorkerFixtures = {
   /**
    * First host id (sorted by display_name ASC) within the loadtest fleet on
    * the loadtest instance. Loadtest project only — the storageState path is
    * hardcoded and the fleet is scoped via `loadtestFleetId`.
    */
   firstHostId: number;
+};
 
+type ApiWorkerFixtures = {
   /**
    * Resolved id of the Workstations fleet on the premium instance — fetched
    * once per worker via the Fleet API. Used by premium specs that need to
@@ -267,7 +274,7 @@ async function resolvePremiumFleetId(
 
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
-export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
+export const apiTest = base.extend<object, ApiWorkerFixtures>({
   workstationsFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('workstationsFleetId', 'Workstations'));
   }, { scope: 'worker', box: true }],
@@ -294,6 +301,22 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     await use(host);
   }, { scope: 'worker', box: true }],
 
+  loadtestFleetId: [async ({}, use) => {
+    const raw = process.env.FLEET_LOADTEST_FLEET_ID;
+    const id = Number(raw);
+    if (!raw || !Number.isInteger(id) || id <= 0) {
+      throw new Error(
+        `[loadtestFleetId fixture] FLEET_LOADTEST_FLEET_ID must be a positive integer (got ${JSON.stringify(raw)}). Set it in .env.loadtest to the id of the team holding the loadtest dataset.`,
+      );
+    }
+    await use(id);
+  }, { scope: 'worker', box: true }],
+});
+
+// Everything below needs a page (or, for `firstHostId`, a browser), so it
+// lives on the test object only browser specs import: an automatic fixture
+// that asks for `page` gives every test a page, whether or not it uses one.
+export const test = apiTest.extend<FleetFixtures, BrowserWorkerFixtures>({
   pageHealth: [async ({ page }, use, testInfo) => {
     const errors = monitorConsoleErrors(page);
     const exceptions = monitorPageErrors(page);
@@ -318,17 +341,6 @@ export const test = base.extend<FleetFixtures, FleetWorkerFixtures>({
     if (fails.length) messages.push(`Server errors (5xx):\n  ${fails.join('\n  ')}`);
     if (messages.length) throw new Error(`Page health issues:\n${messages.join('\n')}`);
   }, { auto: true, box: true }],
-
-  loadtestFleetId: [async ({}, use) => {
-    const raw = process.env.FLEET_LOADTEST_FLEET_ID;
-    const id = Number(raw);
-    if (!raw || !Number.isInteger(id) || id <= 0) {
-      throw new Error(
-        `[loadtestFleetId fixture] FLEET_LOADTEST_FLEET_ID must be a positive integer (got ${JSON.stringify(raw)}). Set it in .env.loadtest to the id of the team holding the loadtest dataset.`,
-      );
-    }
-    await use(id);
-  }, { scope: 'worker', box: true }],
 
   firstHostId: [async ({ browser, loadtestFleetId }, use) => {
     const context = await browser.newContext({
