@@ -10,6 +10,7 @@ module.exports = {
     'no-date-now-in-name': require('./no-date-now-in-name'),
     'activity-needs-baseline': require('./activity-needs-baseline'),
     'no-swallowed-response': require('./no-swallowed-response'),
+    'skip-needs-reason': require('./skip-needs-reason'),
     'no-toast-copy-in-spec': require('./no-toast-copy-in-spec'),
   },
 };

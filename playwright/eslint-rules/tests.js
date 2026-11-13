@@ -112,6 +112,43 @@ tester.run('no-swallowed-response', rules['no-swallowed-response'], {
   ],
 });
 
+tester.run('skip-needs-reason', rules['skip-needs-reason'], {
+  valid: [
+    `// TODO(fleetdm/fleet#54622): the modal links to a page the role can't open.
+// Un-skip once the link is withheld.
+test.skip('global-technician is not offered "create a report"', async () => {});`,
+    `/* Needs the schedule endpoint's replacement: tracked in TODO.md. */
+test.describe.skip('pack schedules', () => {});`,
+    // A conditional skip carries its reason as the second argument.
+    `test('x', async () => { test.skip(!host, 'no online macOS host'); });`,
+    `test.skip(({ browserName }) => browserName !== 'chromium', 'Chromium only');`,
+    `test.fixme(osKey === 'deb', 'TODO(fleetdm/fleet#1): the deb installer hangs');`,
+    // Not Playwright's skip.
+    `queue.skip('a title');`,
+  ],
+  invalid: [
+    { code: `test.skip('left over from debugging', async () => {});`, errors: [{ messageId: 'untracked' }] },
+    { code: `test.describe.skip('SSO', () => {});`, errors: [{ messageId: 'untracked' }] },
+    { code: `test('x', async () => { test.fixme(); });`, errors: [{ messageId: 'untracked' }] },
+    // A comment that describes the test is not where the skip is tracked.
+    {
+      code: `// Covers the bulk path.\ntest.skip('bulk transfer moves every host', async () => {});`,
+      errors: [{ messageId: 'untracked' }],
+    },
+    // A blank line separates the TODO from the skip, so it belongs to something else.
+    {
+      code: `// TODO(fleetdm/fleet#1): the header's own note.\n\ntest.skip('title', async () => {});`,
+      errors: [{ messageId: 'untracked' }],
+    },
+    // A TODO inside the skipped test's body is not above the skip.
+    {
+      code: `test.skip('title', async () => {\n  // TODO(fleetdm/fleet#1): reload first\n  await save();\n});`,
+      errors: [{ messageId: 'untracked' }],
+    },
+    { code: `test('x', async () => { test.skip(!host); });`, errors: [{ messageId: 'noDescription' }] },
+  ],
+});
+
 tester.run('no-toast-copy-in-spec', rules['no-toast-copy-in-spec'], {
   valid: [
     `await usersPage.toast.expectSuccess();`,

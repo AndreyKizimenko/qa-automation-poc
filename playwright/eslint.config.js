@@ -32,22 +32,27 @@ module.exports = tseslint.config(
       // Critical: catches missing `await` on expect() and other async calls
       '@typescript-eslint/no-floating-promises': 'error',
 
-      // Playwright anti-patterns
+      // Playwright anti-patterns. No rule here is a warning: `npm run lint` runs
+      // with --max-warnings 0, so a line it prints is a line to act on.
       'playwright/no-wait-for-timeout': 'error',
-      'playwright/no-force-option': 'warn',
+      // Allowed only with its reason: `// eslint-disable-next-line playwright/no-force-option -- <why>`
+      'playwright/no-force-option': 'error',
       'playwright/no-element-handle': 'error',
-      'playwright/no-networkidle': 'warn',
+      'playwright/no-networkidle': 'error',
       'playwright/prefer-web-first-assertions': 'error',
       'playwright/valid-expect': 'error',
       'playwright/no-focused-test': 'error',
-      'playwright/no-skipped-test': ['warn', { allowConditional: true }],
+      'playwright/no-skipped-test': 'off', // suite/skip-needs-reason checks what this suite asks of a skip
+      'playwright/prefer-hooks-in-order': 'error',
+      'playwright/prefer-to-have-length': 'error',
       'playwright/expect-expect': 'off', // too many false positives with custom assert helpers
       'playwright/no-conditional-in-test': 'off', // legitimate in graceful-skip / optional-widget flows
       'playwright/no-conditional-expect': 'off', // same reason
 
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+
       // Relax some typescript-eslint defaults that aren't relevant for test code
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-non-null-assertion': 'off', // env.FLEET_ADMIN_EMAIL! is intentional
       '@typescript-eslint/no-unsafe-assignment': 'off', // noisy on API response bodies
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -64,6 +69,10 @@ module.exports = tseslint.config(
   // recorded per file in eslint-suppressions.json: those stay quiet, a new one
   // fails, and the file only shrinks (`npm run lint:prune`).
   { plugins: { suite } },
+  {
+    files: ['tests/**/*.ts', 'pages/**/*.ts', 'helpers/**/*.ts', 'fixtures.ts', 'setup/**/*.ts'],
+    rules: { 'suite/skip-needs-reason': 'error' },
+  },
   {
     files: ['tests/**/*.ts'],
     rules: {

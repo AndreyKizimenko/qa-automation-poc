@@ -44,9 +44,32 @@
       "count": 1
     }
   },
+  "helpers/gitops-yaml.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 24
+    }
+  },
   "tests/api/free/license.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    }
+  },
+  "tests/api/gitops-verify/_config.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "playwright/prefer-to-have-length": {
+      "count": 1
+    }
+  },
+  "tests/api/gitops-verify/controls.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "tests/api/gitops-verify/settings.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
     }
   },
   "tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts": {
@@ -147,6 +170,11 @@
       "count": 2
     },
     "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/software/vulnerabilities.spec.ts": {
+    "playwright/prefer-hooks-in-order": {
       "count": 1
     }
   },
@@ -371,11 +399,17 @@
     }
   },
   "tests/e2e/premium/software/library.spec.ts": {
+    "playwright/no-force-option": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/manage-automations-access.spec.ts": {
+    "playwright/no-force-option": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
     }
@@ -405,6 +439,11 @@
   },
   "tests/e2e/premium/software/update-on-host.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/vulnerabilities.spec.ts": {
+    "playwright/prefer-hooks-in-order": {
       "count": 1
     }
   },
