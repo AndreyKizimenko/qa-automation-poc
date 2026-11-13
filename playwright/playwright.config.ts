@@ -176,9 +176,19 @@ export default defineConfig({
   // shared QA instance renders slowly under concurrent load (the bundle refetch
   // noted above), so transient render latency shouldn't surface as a flake.
   expect: { timeout: 10_000 },
+  // In CI this reporter serves only the gitops jobs: the suites pass their own
+  // (`--reporter=github,blob`, merged into one HTML report). `list` rather than
+  // `github`, because the `github` reporter adds a "Run Summary" annotation to
+  // the run page for every job, green or not, and a chained run has fourteen
+  // gitops jobs. A failed gitops job shows red in the job list and uploads its
+  // report; its log names each check it ran.
   reporter: process.env.CI
-    ? [['github'], ['html', { open: 'never' }]]
+    ? [['list'], ['html', { open: 'never' }]]
     : 'html',
+  // No "Slow Test" annotations: the slow files are known and slow by design (a
+  // real VM's install queue, a webhook's cron), so the warning repeats every
+  // night and says nothing. `run_timeline.py` answers questions about pacing.
+  reportSlowTests: null,
   use: {
     baseURL: process.env.FLEET_URL,
     testIdAttribute: 'data-testid',

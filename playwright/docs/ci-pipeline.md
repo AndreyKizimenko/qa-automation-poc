@@ -171,10 +171,15 @@ The two suite reports are kept 90 days so that history can be rebuilt from the r
 **A run's artifacts are the two suite reports, and the report of any gitops job that failed.** Each gitops
 chain is a row of small Playwright jobs (premium ten `gitops-verify` and one `fleetctl` job, free two and
 one). A green one uploads nothing: its report would be a list of passed API checks that nobody opens, its log
-already says how many ran, and fourteen such artifacts beside the suites' two bury what there is to read. A
-failed one uploads its report, named for the job, and keeps it 7 days. So a run's artifact list reads as what
-there is to look at: Premium, Free, and whatever in gitops went red. To see which checks a green job ran,
-run its target locally (`npm run test:gitops-verify:<target>`).
+already lists each check (the `list` reporter), and fourteen such artifacts beside the suites' two bury what
+there is to read. A failed one uploads its report, named for the job, and keeps it 7 days. So a run's artifact
+list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
+
+**The run page's annotations work the same way.** The suites run with the `github` reporter, which adds one
+"Run Summary" annotation per invocation (free two, premium three: its main project, exclusive specs and
+gitops-mode) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
+`list` instead (the config's CI reporter), so a green one adds none, and `reportSlowTests` is off, since the
+slow files are slow by design. A green run's page carries those five summaries and nothing else.
 
 **One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
 nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14
