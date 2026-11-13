@@ -183,19 +183,9 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts": {
-    "suite/activity-needs-baseline": {
-      "count": 2
-    }
-  },
   "tests/e2e/premium/controls/scripts/batch-run.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
-    }
-  },
-  "tests/e2e/premium/controls/scripts/library.spec.ts": {
-    "suite/activity-needs-baseline": {
-      "count": 3
     }
   },
   "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
