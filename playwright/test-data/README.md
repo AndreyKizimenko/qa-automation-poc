@@ -5,10 +5,8 @@ bootstrap packages, sample scripts, custom software packages and configuration
 profiles. Declarations, and profiles a spec needs its own copy of, are generated
 at run time by `helpers/profiles.ts` instead.
 
-App-store *reference* catalogues (FMA, VPP, Android) are not in here — they're
-typed TypeScript modules under
-[`../helpers/catalogs/`](../helpers/catalogs/). Anything imported as code
-lives there; this folder is for files we read off disk and upload.
+This folder is for files read off disk and uploaded; anything imported as code
+lives under [`../helpers/`](../helpers/).
 
 ## Layout
 

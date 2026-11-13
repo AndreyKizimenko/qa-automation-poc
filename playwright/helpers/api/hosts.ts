@@ -387,7 +387,7 @@ export async function findSimulations(
 /**
  * Offline simulations on Unassigned: the pool for a spec that needs many hosts
  * and must not shift anyone else's. At their daily refresh
- * (`tools/perf-hosts/com.fleetqa.perf.refresh.plist`, 16:00 UTC) the perf
+ * (`tools/perf-hosts/com.fleetqa.perf.refresh.plist`, 09:00 VM-local time) the perf
  * daemons enroll a fresh set of ~300 simulations and abandon the previous one,
  * which stays offline until host expiry (`host_expiry_window: 1`) deletes it a
  * day later. Every other picker takes online hosts, so nothing else reads or
