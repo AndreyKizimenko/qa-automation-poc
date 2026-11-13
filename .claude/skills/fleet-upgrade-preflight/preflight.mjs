@@ -6,8 +6,9 @@
  * The core idea is a two-tree presence check, not a diff heuristic:
  *
  *   For every selector token the suite depends on (CSS class, accessible
- *   name, placeholder, test id, API route), ask two questions —
- *     1. does it exist in Fleet's source at the revision we run TODAY?
+ *   name, placeholder, test id, API route) and every phrase it expects or
+ *   keeps as a constant, ask two questions —
+ *     1. does it exist in the source Fleet ships at the revision we run TODAY?
  *     2. does it still exist at the revision we're upgrading TO?
  *
  *   present → absent  = BREAKING. The suite names something Fleet deleted.
@@ -32,9 +33,11 @@
  *   node .claude/skills/fleet-upgrade-preflight/preflight.mjs detect
  *   node .claude/skills/fleet-upgrade-preflight/preflight.mjs scan --to origin/rc-minor-fleet-v4.91.0
  *   node .claude/skills/fleet-upgrade-preflight/preflight.mjs scan --from <sha> --to <ref> --out report.md
+ *   node .claude/skills/fleet-upgrade-preflight/preflight.mjs scan --from <ref> --to <ref> --suite <other checkout>/playwright
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -57,7 +60,15 @@ function findRepoRoot(start) {
 }
 
 const REPO_DIR = findRepoRoot(SKILL_DIR);
-const SUITE_DIR = path.join(REPO_DIR, 'playwright');
+
+/** The suite to read: `--suite <its playwright/ directory>`, else the one in this repo. */
+function resolveSuiteDir(explicit) {
+  const dir = path.resolve(typeof explicit === 'string' ? explicit : path.join(REPO_DIR, 'playwright'));
+  if (!SCAN_ROOTS.some((root) => fs.existsSync(path.join(dir, root)))) {
+    die(`No suite at ${dir} (looked for ${SCAN_ROOTS.join(', ')}). --suite takes the playwright/ directory itself.`);
+  }
+  return dir;
+}
 
 /** Fleet source checkout. Override with FLEET_REPO. */
 function resolveFleetRepo(explicit) {
@@ -79,8 +90,32 @@ function resolveFleetRepo(explicit) {
 // selector and every string of UI copy; server/service carries the route
 // table the API helpers call.
 const CORPUS_PATHS = ['frontend', 'server/service', 'ee/server/service'];
+const CORPUS_EXT = /\.(tsx?|jsx?|scss|css|go|html)$/;
+
+// Fleet's own tests, the helpers and mocks they run on, and Storybook stories.
+// None of it reaches a browser, so a class or a line of copy that survives only
+// there must not read as present: a Go integration-test comment once kept
+// "Turn on disk encryption" alive in the corpus a release after the UI dropped it.
+const NOT_SHIPPED = [
+  /_test\.go$/, // Go tests
+  /(^|\/)test(ing)?_[^/]*\.go$/, // test_types.go: constants and types those tests share
+  /(^|\/)[a-z_]+test\/.*\.go$/, // Go test-helper packages: svctest, integrationtest, sceptest, …
+  /\.(tests?|stories)\.[jt]sx?$/, // Jest tests, Storybook stories
+  /^frontend\/test\//, // Jest setup, request handlers, stubs
+  /(^|\/)(__mocks__|mocks?|mock_service|testdata)\//, // mock data, the Go service mock, fixtures
+];
+const inCorpus = (file) => CORPUS_EXT.test(file) && !NOT_SHIPPED.some((re) => re.test(file));
 
 const CACHE_DIR = path.join(os.tmpdir(), 'fleet-upgrade-preflight');
+
+// A digest of everything that decides what a corpus holds: which trees, which
+// files, and how the text is laid out. It is part of each cache file's name, so
+// a corpus built under other rules is never read back as if it were current.
+const CORPUS_LAYOUT = 'one line per file, whitespace collapsed';
+const CORPUS_RULES = createHash('sha1')
+  .update(JSON.stringify([CORPUS_LAYOUT, CORPUS_PATHS, String(CORPUS_EXT), NOT_SHIPPED.map(String)]))
+  .digest('hex')
+  .slice(0, 8);
 
 // ── Fleet UI directory → QA spec area ────────────────────────────────────────
 //
@@ -161,14 +196,16 @@ function describeRef(repo, sha) {
   return { sha, short: sha.slice(0, 10), subject, date, rcBranches: rc };
 }
 
-// ── Corpus: the full text of Fleet's UI + route tables at one revision ───────
+// ── Corpus: the text of the UI + route tables Fleet ships at one revision ────
 //
 // Materialised once per SHA and cached in the OS temp dir. Whitespace is
 // collapsed so that copy JSX wrapped across lines ("Add\n  software") still
-// matches a suite selector written on one line.
+// matches a suite selector written on one line. Each file becomes one line,
+// which lets a check that has to stay inside one component (a class built on
+// that component's `baseClass`) find the file's edges.
 
 function corpusFor(repo, sha) {
-  const cached = path.join(CACHE_DIR, `${sha}.txt`);
+  const cached = path.join(CACHE_DIR, `${sha}-${CORPUS_RULES}.txt`);
   if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
 
   fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -180,20 +217,20 @@ function corpusFor(repo, sha) {
     { stdio: ['ignore', 'ignore', 'pipe'] },
   );
 
-  const chunks = [];
+  const files = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(p);
-      else if (/\.(tsx?|jsx?|scss|css|go|html)$/.test(entry.name)) {
-        chunks.push(fs.readFileSync(p, 'utf8'));
+      else if (inCorpus(path.relative(work, p).split(path.sep).join('/'))) {
+        files.push(fs.readFileSync(p, 'utf8').replace(/\s+/g, ' '));
       }
     }
   };
   walk(work);
   fs.rmSync(work, { recursive: true, force: true });
 
-  const corpus = chunks.join('\n').replace(/\s+/g, ' ');
+  const corpus = files.join('\n');
   fs.writeFileSync(cached, corpus);
   return corpus;
 }
@@ -204,7 +241,7 @@ const normalise = (s) => s.replace(/\s+/g, ' ').trim();
 
 const SCAN_ROOTS = ['pages', 'helpers', 'tests', 'setup', 'fixtures.ts'];
 
-function listSuiteFiles() {
+function listSuiteFiles(suiteDir) {
   const out = [];
   const walk = (p) => {
     const st = fs.statSync(p);
@@ -218,7 +255,7 @@ function listSuiteFiles() {
     }
   };
   for (const root of SCAN_ROOTS) {
-    const p = path.join(SUITE_DIR, root);
+    const p = path.join(suiteDir, root);
     if (fs.existsSync(p)) walk(p);
   }
   return out;
@@ -232,6 +269,15 @@ function listSuiteFiles() {
  *   name    — accessible name / visible copy. Strong, but copy can be built
  *             from variables, so the FROM-tree check does the filtering.
  *   route   — `/api/v1/fleet/…`. Normalised to Fleet's `_version_` form.
+ *
+ * Those four are what a locator is built from. Two more kinds are copy the
+ * suite compares against or passes around, found by reading every string
+ * literal (see `stringLiterals` and `phraseUse`):
+ *
+ *   expect  — an argument of a matcher or of one of the suite's `expect…`
+ *             helpers: `toHaveText('Application (macOS)')`.
+ *   literal — any other phrase: a lookup constant, an argument a page object
+ *             turns into a locator (`selectSoftwareView('Full inventory')`).
  */
 const EXTRACTORS = [
   // Every string handed to locator()/filter() — pull CSS class tokens out.
@@ -273,31 +319,197 @@ function normaliseRoute(route) {
     .replace(/\/+$/, '');
 }
 
-/** Copy tokens that are too generic to mean anything in a 27 MB corpus. */
+/** Copy tokens that are too generic to mean anything in 10 MB of source. */
 const NOISE = new Set(['.first', '.last', '.and', '.or', '.not']);
 const isNoise = (t) => NOISE.has(t) || t.length < 3;
 
-function buildVocabulary() {
-  /** @type {Map<string, {kind:string, token:string, sites:{file:string,line:number}[]}>} */
-  const vocab = new Map();
+/** A `/` here opens a regex literal; after anything else it divides. */
+const REGEX_MAY_START = /(^|[(,=:[!&|?{};+\-*%<>~^])$|\b(return|typeof|case|in|of|delete|void|throw|new|else|do)$/;
 
-  for (const file of listSuiteFiles()) {
+/**
+ * Every string literal in a TypeScript source: its text, where it starts and
+ * the call whose arguments it sits in. A hand-rolled pass rather than a regex,
+ * because comments, regex literals and `${…}` nesting all hold quote
+ * characters that open no string. A template with interpolations yields its
+ * static pieces one by one, each marked `piece`.
+ *
+ * `call` is the nearest enclosing `name(`, seen through array and object
+ * literals but not through a function body: `'x'` in `toHaveText(['x'])`
+ * belongs to toHaveText, while a constant declared inside a `test(…)` callback
+ * belongs to no call.
+ */
+function stringLiterals(src) {
+  const out = [];
+  const frames = []; // every open "(", "{" and "${", innermost last
+  let i = 0;
+  let sig = 0; // where the last significant token ended: what precedes position i
+
+  const preceding = (n) => src.slice(Math.max(0, sig - n), sig);
+  const enclosingCall = () => {
+    for (let f = frames.length - 1; f >= 0; f--) {
+      if (frames[f].block) return '';
+      if (frames[f].call !== undefined) return frames[f].call;
+    }
+    return '';
+  };
+  // What the two-character escape at j stands for. A whitespace escape becomes
+  // a space, which is all normalise() would leave of it.
+  const unescaped = (j) => (/[ntr\n]/.test(src[j + 1]) ? ' ' : (src[j + 1] ?? ''));
+
+  // Reads template text from i up to the next `${` (then code resumes, and the
+  // matching "}" brings us back here) or to the closing backtick.
+  const readTemplate = (tpl) => {
+    const start = i;
+    let text = '';
+    while (i < src.length && src[i] !== '`') {
+      if (src[i] === '\\') {
+        text += unescaped(i);
+        i += 2;
+      } else if (src[i] === '$' && src[i + 1] === '{') {
+        tpl.pieces.push({ index: start, text });
+        frames.push({ template: tpl });
+        sig = i += 2;
+        return;
+      } else text += src[i++];
+    }
+    tpl.pieces.push({ index: start, text });
+    for (const p of tpl.pieces) out.push({ ...p, piece: tpl.pieces.length > 1, call: tpl.call });
+    sig = ++i;
+  };
+
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      const eol = src.indexOf('\n', i);
+      i = eol === -1 ? src.length : eol;
+    } else if (c === '/' && src[i + 1] === '*') {
+      const close = src.indexOf('*/', i + 2);
+      i = close === -1 ? src.length : close + 2;
+    } else if (c === '"' || c === "'") {
+      const start = i++;
+      let text = '';
+      while (i < src.length && src[i] !== c && src[i] !== '\n') {
+        if (src[i] === '\\') {
+          text += unescaped(i);
+          i += 2;
+        } else text += src[i++];
+      }
+      out.push({ index: start, text, piece: false, call: enclosingCall() });
+      sig = ++i;
+    } else if (c === '`') {
+      i++;
+      readTemplate({ pieces: [], call: enclosingCall() });
+    } else if (c === '/' && REGEX_MAY_START.test(preceding(8))) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < src.length && src[j] !== '\n' && (inClass || src[j] !== '/')) {
+        if (src[j] === '\\') j++;
+        else if (src[j] === '[') inClass = true;
+        else if (src[j] === ']') inClass = false;
+        j++;
+      }
+      sig = i = src[j] === '/' ? j + 1 : i + 1;
+    } else if (c === '(') {
+      frames.push({ call: preceding(60).match(/([A-Za-z_$][\w$]*)$/)?.[1] ?? '' });
+      sig = ++i;
+    } else if (c === ')') {
+      while (frames.length && frames.pop().call === undefined);
+      sig = ++i;
+    } else if (c === '{') {
+      // After ")", "=>", a keyword or a statement's end a brace opens a block;
+      // after "(", ",", ":", "=" and the like it opens an object literal.
+      frames.push({ block: sig === 0 || /[)>\w$;{}]$/.test(preceding(1)) });
+      sig = ++i;
+    } else if (c === '}') {
+      const top = frames[frames.length - 1];
+      i++;
+      if (top?.template) {
+        frames.pop();
+        readTemplate(top.template);
+      } else {
+        if (top?.block !== undefined) frames.pop();
+        sig = i;
+      }
+    } else {
+      if (!/\s/.test(c)) sig = i + 1;
+      i++;
+    }
+  }
+  return out;
+}
+
+// Calls whose string arguments are a locator's: the EXTRACTORS above own those.
+const LOCATOR_CALL = /^(locator|filter|getBy[A-Z]\w*)$/;
+// Calls whose string arguments are prose the suite wrote for its own reader:
+// test and step titles, skip reasons, assertion messages, errors, logs. A title
+// often repeats a piece of UI copy without depending on it.
+const PROSE_CALL = /^(test|setup|describe|serial|parallel|only|step|skip|fixme|fail|slow|expect|soft|poll|\w*Error|log|warn)$/;
+// The matchers that take text, and the suite's own `expect…` helpers (`toast.expectSuccess`).
+const EXPECTATION_CALL =
+  /^(to(Have|Contain)Text|toHaveValues?|toHaveAttribute|toHaveAccessible\w+|toHaveTitle|toBe|toEqual|toStrictEqual|toContain|toContainEqual|toMatchObject|expect[A-Z]\w*)$/;
+
+/**
+ * Whether a string literal is copy worth checking, and as what: 'expect',
+ * 'literal' or null.
+ *
+ * Only phrases qualify. A single word, an identifier, a file name or a URL
+ * meets Fleet's source by coincidence too easily (`README.md` in a code
+ * comment), and when that coincidence ends the report would call it a
+ * breakage. A whole literal needs two words; a piece of an interpolated
+ * template is a sentence cut short, so it needs three. A backslash marks a
+ * regex source, not copy.
+ */
+function phraseUse(literal, token) {
+  if (LOCATOR_CALL.test(literal.call) || PROSE_CALL.test(literal.call)) return null;
+  if (token.includes('\\')) return null;
+  const words = token.split(' ').filter((w) => /[A-Za-z0-9]/.test(w)).length;
+  if (words < (literal.piece ? 3 : 2)) return null;
+  return EXPECTATION_CALL.test(literal.call) ? 'expect' : 'literal';
+}
+
+const PHRASE_KINDS = new Set(['expect', 'literal']);
+
+function buildVocabulary(suiteDir) {
+  /** @type {Map<string, {kind:string, token:string, sites:{file:string,line:number,as:string}[]}>} */
+  const vocab = new Map();
+  const add = (kind, token, site) => {
+    const key = `${kind} ${token}`;
+    if (!vocab.has(key)) vocab.set(key, { kind, token, sites: [] });
+    vocab.get(key).sites.push(site);
+  };
+
+  for (const file of listSuiteFiles(suiteDir)) {
     const src = fs.readFileSync(file, 'utf8');
     // Offset → line number, computed once per file.
     const lineAt = (idx) => src.slice(0, idx).split('\n').length;
-    const rel = path.relative(SUITE_DIR, file);
+    const rel = path.relative(suiteDir, file);
 
     for (const { kind, re, pick } of EXTRACTORS) {
       for (const m of src.matchAll(re)) {
         for (let token of pick(m)) {
           if (!token || isNoise(token)) continue;
           if (kind === 'route') token = normaliseRoute(token);
-          const key = `${kind} ${token}`;
-          if (!vocab.has(key)) vocab.set(key, { kind, token, sites: [] });
-          vocab.get(key).sites.push({ file: rel, line: lineAt(m.index) });
+          add(kind, token, { file: rel, line: lineAt(m.index), as: kind });
         }
       }
     }
+
+    for (const literal of stringLiterals(src)) {
+      const token = normalise(literal.text);
+      const use = phraseUse(literal, token);
+      if (use) add(use, token, { file: rel, line: lineAt(literal.index), as: use });
+    }
+  }
+
+  // One entry per piece of copy. A phrase a locator also names joins that `name`
+  // entry, and one that is expected somewhere is an `expect` entry everywhere;
+  // each site keeps how it uses the phrase.
+  for (const entry of [...vocab.values()]) {
+    if (!PHRASE_KINDS.has(entry.kind)) continue;
+    const stronger = vocab.get(`name ${entry.token}`) || (entry.kind === 'literal' && vocab.get(`expect ${entry.token}`));
+    if (!stronger) continue;
+    stronger.sites.push(...entry.sites);
+    vocab.delete(`${entry.kind} ${entry.token}`);
   }
   return [...vocab.values()];
 }
@@ -317,23 +529,118 @@ function buildVocabulary() {
  * match; a single `-` does not, because `.fleet-dropdown-wrapper` is its own
  * class and says nothing about `.fleet-dropdown`.
  *
+ * The dotted form is how a stylesheet writes a class. TSX writes the bare name
+ * (`className="activity-feed-card"`, `baseClass = "activity-feed-card"`), and
+ * Fleet can delete a class's SCSS rule while still rendering the class, so the
+ * bare name counts too, where a quote or whitespace bounds it on both sides the
+ * way a class attribute would. The same ending rules apply, so
+ * `"fleet-dropdown-wrapper"` still says nothing about `.fleet-dropdown`. A
+ * class that is one plain word (`.tag`) meets its bare name in any string
+ * (`type: "tag"`), so for those the check can only ever say "present".
+ *
  * indexOf-and-check beats a regex here — absent tokens fail on the first scan
- * instead of backtracking across 38 MB.
+ * instead of backtracking across the whole corpus.
  */
 function containsClass(corpus, token) {
-  let i = corpus.indexOf(token);
-  while (i !== -1) {
-    const rest = corpus.slice(i + token.length, i + token.length + 2);
-    if (rest === '' || rest.startsWith('--') || !/[A-Za-z0-9_-]/.test(rest[0])) return true;
-    i = corpus.indexOf(token, i + 1);
+  const endsName = (end) => corpus.startsWith('--', end) || !/[A-Za-z0-9_-]/.test(corpus[end] ?? ' ');
+  for (let i = corpus.indexOf(token); i !== -1; i = corpus.indexOf(token, i + 1)) {
+    if (endsName(i + token.length)) return true;
+  }
+
+  const bare = token.slice(1);
+  const bounds = (ch) => ch === undefined || /[\s"'`]/.test(ch);
+  for (let i = corpus.indexOf(bare); i !== -1; i = corpus.indexOf(bare, i + 1)) {
+    const end = i + bare.length;
+    if (bounds(corpus[i - 1]) && (bounds(corpus[end]) || corpus.startsWith('--', end))) return true;
   }
   return false;
 }
 
-const present = (corpus, entry) =>
-  entry.kind === 'class'
-    ? containsClass(corpus, entry.token)
-    : corpus.includes(normalise(entry.token));
+/**
+ * A class Fleet never writes out, only builds: `${baseClass}__list-item-button`
+ * in the file that declares `baseClass = "eula-list-item"`. Returns how that
+ * file writes it, or null. The search stays inside the files that declare the
+ * base, because nearly every component has a `${baseClass}__title`.
+ */
+function builtOnBase(bases, token) {
+  const bare = token.slice(1);
+  for (const sep of bare.matchAll(/__|--|-/g)) {
+    const base = bare.slice(0, sep.index);
+    const written = '${baseClass}' + bare.slice(sep.index);
+    for (const file of bases.get(base) || []) {
+      for (let i = file.indexOf(written); i !== -1; i = file.indexOf(written, i + 1)) {
+        const end = i + written.length;
+        if (file.startsWith('--', end) || !/[A-Za-z0-9_-]/.test(file[end] ?? ' ')) return { base, written };
+      }
+    }
+  }
+  return null;
+}
+
+const hasClass = (corpus, token) => containsClass(corpus.text, token) || builtOnBase(corpus.bases, token) !== null;
+
+const WORD = /[A-Za-z0-9]+/g;
+
+/**
+ * Wraps a corpus with the two lookups that would otherwise mean reading all of
+ * it once per token:
+ *
+ *   wordsAt — where each of `words` starts. `includes` reads the whole corpus
+ *             every time a token is absent, and most of the suite's phrases
+ *             are: test data and messages the suite composes were never in
+ *             Fleet's source. With this, a phrase is tried only where its
+ *             rarest word occurs.
+ *   bases   — the text of each file that declares `baseClass = "…"`, by base.
+ */
+function searchable(text, words) {
+  const wordsAt = new Map();
+  for (const m of text.matchAll(WORD)) {
+    if (!words.has(m[0])) continue;
+    if (!wordsAt.has(m[0])) wordsAt.set(m[0], []);
+    wordsAt.get(m[0]).push(m.index);
+  }
+
+  const bases = new Map();
+  for (const m of text.matchAll(/\bbaseClass\s*[:=]\s*["'`]([A-Za-z0-9_-]+)["'`]/g)) {
+    const end = text.indexOf('\n', m.index);
+    const file = text.slice(text.lastIndexOf('\n', m.index) + 1, end === -1 ? text.length : end);
+    if (!bases.has(m[1])) bases.set(m[1], []);
+    bases.get(m[1]).push(file);
+  }
+  return { text, wordsAt, bases };
+}
+
+/**
+ * Whether the corpus holds `phrase`, starting and ending on a word boundary:
+ * `Package (deb)` is not found inside `Subpackage (deb)`.
+ */
+function containsPhrase({ text, wordsAt }, phrase) {
+  let rarest = null;
+  for (const m of phrase.matchAll(WORD)) {
+    const at = wordsAt.get(m[0]);
+    if (!at) return false;
+    if (!rarest || at.length < rarest.at.length) rarest = { at, offset: m.index };
+  }
+  if (!rarest) return false;
+  const wordChar = (i) => /[A-Za-z0-9]/.test(text[i] ?? ' ');
+  const opens = /^[A-Za-z0-9]/.test(phrase);
+  const closes = /[A-Za-z0-9]$/.test(phrase);
+  return rarest.at.some((at) => {
+    const start = at - rarest.offset;
+    return (
+      start >= 0 &&
+      text.startsWith(phrase, start) &&
+      !(opens && wordChar(start - 1)) &&
+      !(closes && wordChar(start + phrase.length))
+    );
+  });
+}
+
+const present = (corpus, entry) => {
+  if (entry.kind === 'class') return hasClass(corpus, entry.token);
+  if (PHRASE_KINDS.has(entry.kind)) return containsPhrase(corpus, entry.token);
+  return corpus.text.includes(normalise(entry.token));
+};
 
 function classify(vocab, fromCorpus, toCorpus) {
   const broken = [];
@@ -341,14 +648,18 @@ function classify(vocab, fromCorpus, toCorpus) {
   let ok = 0;
 
   for (const entry of vocab) {
-    const inFrom = present(fromCorpus, entry);
-    const inTo = present(toCorpus, entry);
-
-    if (inFrom && !inTo) broken.push(entry);
-    else if (inFrom) ok++;
-    else unverifiable.push(entry);
+    // A token the FROM tree never held is unverifiable whatever the target says.
+    if (!present(fromCorpus, entry)) unverifiable.push(entry);
+    else if (present(toCorpus, entry)) ok++;
+    else broken.push(entry);
   }
   return { broken, unverifiable, ok };
+}
+
+/** The files that declare `baseClass = "<base>"` at a revision. */
+function filesDeclaringBase(repo, sha, base) {
+  const out = git(repo, ['grep', '-l', '-F', `baseClass = "${base}"`, sha, '--', 'frontend'], { allowFail: true });
+  return out ? out.split('\n').filter(Boolean).map((entry) => entry.replace(`${sha}:`, '')) : [];
 }
 
 /**
@@ -362,14 +673,8 @@ function classify(vocab, fromCorpus, toCorpus) {
  * template literals and its stylesheet's `&`-nesting.
  */
 function classesForBase(repo, toSha, base) {
-  const owners = git(repo, ['grep', '-l', '-F', `baseClass = "${base}"`, toSha, '--', 'frontend'], {
-    allowFail: true,
-  });
-  if (!owners) return [];
-
   const found = new Set();
-  for (const entry of owners.split('\n').filter(Boolean).slice(0, 4)) {
-    const file = entry.replace(`${toSha}:`, '');
+  for (const file of filesDeclaringBase(repo, toSha, base).slice(0, 4)) {
     const dir = path.dirname(file);
     const siblings = git(repo, ['ls-tree', '--name-only', `${toSha}:${dir}`], { allowFail: true }) || '';
 
@@ -389,20 +694,44 @@ function classesForBase(repo, toSha, base) {
   return [...found].sort();
 }
 
-/** Pickaxe the commit that removed a token, so the report can name the PR. */
-function blameRemoval(repo, fromSha, toSha, token) {
-  const needle = token.startsWith('.') ? token.slice(1) : token;
+const shippedDiffs = new Map();
+
+/**
+ * A commit's patch to the files a corpus is built from. Fleet's tests are left
+ * out here as they are there, so neither the commit named as the removal nor
+ * the replacement read from its diff comes from a test.
+ */
+function shippedDiff(repo, sha) {
+  if (!shippedDiffs.has(sha)) {
+    const diff = git(repo, ['show', '--format=', sha, '--', ...CORPUS_PATHS], { allowFail: true }) || '';
+    const files = diff.split(/^(?=diff --git )/m);
+    shippedDiffs.set(sha, files.filter((f) => inCorpus(f.match(/^diff --git a\/(\S+) b\//)?.[1] ?? '')).join(''));
+  }
+  return shippedDiffs.get(sha);
+}
+
+/**
+ * Pickaxe the commit that removed `needle` (a token as Fleet's source writes
+ * it) from `paths`, so the report can name the PR.
+ */
+function blameRemoval(repo, fromSha, toSha, needle, paths = CORPUS_PATHS) {
   const out = git(
     repo,
-    ['log', '--format=%H%x09%s', '--max-count=3', `-S${needle}`, `${fromSha}..${toSha}`, '--', ...CORPUS_PATHS],
+    ['log', '--format=%H%x09%s', '--max-count=8', `-S${needle}`, `${fromSha}..${toSha}`, '--', ...paths],
     { allowFail: true },
   );
   if (!out) return [];
-  return out.split('\n').filter(Boolean).map((l) => {
-    const [sha, subject] = l.split('\t');
-    const pr = subject.match(/\(#(\d+)\)/);
-    return { sha, short: sha.slice(0, 10), subject, pr: pr ? pr[1] : null };
-  });
+  const touches = (sha) => shippedDiff(repo, sha).split('\n').some((l) => /^[-+]/.test(l) && l.includes(needle));
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [sha, subject] = l.split('\t');
+      const pr = subject.match(/\(#(\d+)\)/);
+      return { sha, short: sha.slice(0, 10), subject, pr: pr ? pr[1] : null };
+    })
+    .filter((commit) => touches(commit.sha))
+    .slice(0, 3);
 }
 
 const words = (s) => s.toLowerCase().match(/[a-z0-9]+/g) || [];
@@ -437,9 +766,7 @@ function similarity(a, b) {
  * listing what the successor component actually emits.
  */
 function successorHints(repo, commitSha, toSha, kind, token, toCorpus) {
-  const diff = git(repo, ['show', '--format=', commitSha, '--', ...CORPUS_PATHS], {
-    allowFail: true,
-  });
+  const diff = shippedDiff(repo, commitSha);
   if (!diff) return [];
   const lines = diff.split('\n');
   const hints = [];
@@ -456,7 +783,7 @@ function successorHints(repo, commitSha, toSha, kind, token, toCorpus) {
     }
     for (const b of [...bases].slice(0, 3)) {
       const direct = `.${b}${suffix}`;
-      if (containsClass(toCorpus, direct)) {
+      if (hasClass(toCorpus, direct)) {
         hints.push({ confident: true, text: `\`${direct}\`` });
         continue;
       }
@@ -473,7 +800,7 @@ function successorHints(repo, commitSha, toSha, kind, token, toCorpus) {
         });
       }
     }
-  } else if (kind === 'name') {
+  } else if (kind === 'name' || PHRASE_KINDS.has(kind)) {
     const norm = normalise(token);
     let best = null;
     for (let i = 0; i < lines.length; i++) {
@@ -487,7 +814,7 @@ function successorHints(repo, commitSha, toSha, kind, token, toCorpus) {
         if (score >= 0.5 && (!best || score > best.score)) best = { cand, score };
       }
     }
-    if (best && toCorpus.includes(normalise(best.cand))) {
+    if (best && toCorpus.text.includes(normalise(best.cand))) {
       hints.push({ confident: true, text: `\`${best.cand}\`` });
     }
   }
@@ -554,8 +881,8 @@ function missingOnTarget(repo, fromSha, toSha) {
 
 // ── Live instance ────────────────────────────────────────────────────────────
 
-function readEnv(tier) {
-  const file = path.join(SUITE_DIR, `.env.${tier}`);
+function readEnv(suiteDir, tier) {
+  const file = path.join(suiteDir, `.env.${tier}`);
   if (!fs.existsSync(file)) return null;
   const env = {};
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
@@ -565,8 +892,8 @@ function readEnv(tier) {
   return env;
 }
 
-async function fleetVersion(tier) {
-  const env = readEnv(tier);
+async function fleetVersion(suiteDir, tier) {
+  const env = readEnv(suiteDir, tier);
   if (!env?.FLEET_URL) return { tier, error: `no .env.${tier} (or no FLEET_URL in it)` };
   try {
     const res = await fetch(`${env.FLEET_URL}/api/v1/fleet/version`, {
@@ -585,7 +912,7 @@ async function fleetVersion(tier) {
 
 function renderReport(ctx) {
   const {
-    from, to, live, broken, unverifiable, okCount, vocabCount,
+    from, to, live, broken, unverifiable, okCount, vocabCount, phraseCount,
     churn, fragments, missing, repo, fromSha, toSha,
   } = ctx;
 
@@ -606,43 +933,76 @@ function renderReport(ctx) {
     }
     p();
   }
-  p(`Checked **${vocabCount}** selector tokens from the suite against both trees: ` +
-    `**${broken.length} breaking**, ${okCount} still present, ${unverifiable.length} unverifiable ` +
-    `(never literal in Fleet's source — dynamic copy or API-derived text).`);
+  p(`Checked **${vocabCount - phraseCount}** locator tokens and **${phraseCount}** expected values and ` +
+    `constants from the suite against both trees: **${broken.length} breaking**, ${okCount} still present, ` +
+    `${unverifiable.length} unverifiable (never literal in Fleet's source — dynamic copy, API-derived text, ` +
+    `the suite's own test data).`);
   p();
 
-  // 1. Breaking selectors
-  p(`## 1. Breaking selectors — present today, gone after the upgrade`);
+  // 1. Breaking selectors and copy
+  p(`## 1. Breaking selectors and copy — present today, gone after the upgrade`);
   p();
   if (!broken.length) {
-    p(`_None._ No selector the suite names disappears between these two revisions.`);
+    p(`_None._ Nothing the suite names disappears between these two revisions.`);
     p();
   } else {
-    const byKind = { class: [], testid: [], name: [], route: [] };
+    const byKind = { class: [], testid: [], name: [], route: [], expect: [], literal: [] };
     for (const b of broken) byKind[b.kind].push(b);
     const KIND_TITLE = {
       class: 'CSS classes',
       testid: 'Test IDs',
-      name: 'Accessible names / visible copy',
+      name: 'Accessible names / visible copy (locators)',
       route: 'API routes',
+      expect: 'Expected values',
+      literal: 'Constants and page-object arguments',
     };
-    for (const kind of ['class', 'testid', 'route', 'name']) {
+    const KIND_NOTE = {
+      expect:
+        'Not locators: text the suite compares the page against, as an argument of a matcher ' +
+        '(`toHaveText`, `toContainText`, …) or of one of its own `expect…` helpers.',
+      literal:
+        'Not locators either: phrases the suite keeps in a constant or hands to a page object, ' +
+        'which turns them into a locator or an expectation. Follow each site to see which.',
+    };
+    // How a site uses the token: a phrase can be located in one file and expected in another.
+    const SITE_VERB = { expect: 'expected at', literal: 'named at' };
+    for (const kind of ['class', 'testid', 'route', 'name', 'expect', 'literal']) {
       const items = byKind[kind];
       if (!items.length) continue;
       p(`### ${KIND_TITLE[kind]} (${items.length})`);
       p();
+      if (KIND_NOTE[kind]) {
+        p(KIND_NOTE[kind]);
+        p();
+      }
       for (const item of items) {
-        const blame = blameRemoval(repo, fromSha, toSha, item.token);
+        // A class Fleet only builds is literal nowhere, so its removal is looked
+        // for as the owning component writes it, in the files that declare the base.
+        const built =
+          kind === 'class' && !containsClass(ctx.fromCorpus.text, item.token)
+            ? builtOnBase(ctx.fromCorpus.bases, item.token)
+            : null;
+        const owners = built ? filesDeclaringBase(repo, fromSha, built.base) : [];
+        const blame = owners.length
+          ? blameRemoval(repo, fromSha, toSha, built.written, owners)
+          : blameRemoval(repo, fromSha, toSha, kind === 'class' ? item.token.slice(1) : item.token);
         p(`- \`${item.token}\``);
+        if (built) p(`  - Fleet builds it: \`${built.written}\` where \`baseClass = "${built.base}"\``);
         for (const s of item.sites.slice(0, 6)) {
-          p(`  - used at [${s.file}:${s.line}](${s.file}#L${s.line})`);
+          p(`  - ${SITE_VERB[s.as] || 'used at'} [${s.file}:${s.line}](${s.file}#L${s.line})`);
         }
         if (item.sites.length > 6) p(`  - …and ${item.sites.length - 6} more site(s)`);
         for (const b of blame) {
           const link = b.pr ? ` — https://github.com/fleetdm/fleet/pull/${b.pr}` : '';
           p(`  - removed by \`${b.short}\` ${b.subject}${link}`);
         }
-        if (blame.length) {
+        if (built && ctx.toCorpus.bases.has(built.base)) {
+          // The component is still there, so its successor is not some other
+          // component the removing commit happened to add.
+          const menu = classesForBase(repo, toSha, built.base).slice(0, 12);
+          p(`  - ⚠︎ \`${built.base}\` is still a component in the target and no longer builds this class. ` +
+            (menu.length ? `It now emits: ${menu.map((c) => `\`${c}\``).join(', ')}` : `It emits no class built on its base.`));
+        } else if (blame.length) {
           const hints = successorHints(repo, blame[0].sha, toSha, item.kind, item.token, ctx.toCorpus);
           for (const h of hints) {
             p(`  - ${h.confident ? '**replacement (verified in target):**' : '⚠︎'} ${h.text}`);
@@ -703,8 +1063,10 @@ function renderReport(ctx) {
   }
   p();
 
-  // 5. Unverifiable
-  p(`## 5. Unverifiable tokens (${unverifiable.length})`);
+  // 5. Unverifiable. Only locator tokens are listed: the phrases among them are
+  // mostly the suite's own test data, and would bury the classes worth reading.
+  const unverifiableLocators = unverifiable.filter((u) => !PHRASE_KINDS.has(u.kind));
+  p(`## 5. Unverifiable tokens (${unverifiableLocators.length})`);
   p();
   p(`Never present as a literal in Fleet's source at **either** revision, so their`);
   p(`absence in the target proves nothing. Listed for completeness — copy that is`);
@@ -712,12 +1074,15 @@ function renderReport(ctx) {
   p();
   p(`<details><summary>expand</summary>`);
   p();
-  for (const u of unverifiable.slice(0, 200)) {
+  for (const u of unverifiableLocators.slice(0, 200)) {
     p(`- \`${u.token}\` (${u.kind}) — ${u.sites[0].file}:${u.sites[0].line}`);
   }
-  if (unverifiable.length > 200) p(`- …and ${unverifiable.length - 200} more`);
+  if (unverifiableLocators.length > 200) p(`- …and ${unverifiableLocators.length - 200} more`);
   p();
   p(`</details>`);
+  p();
+  p(`Not listed: ${unverifiable.length - unverifiableLocators.length} expected values and constants that Fleet's`);
+  p(`source held at neither revision (test data, messages the suite composes).`);
   p();
 
   return L.join('\n');
@@ -741,8 +1106,9 @@ function parseArgs(argv) {
   return out;
 }
 
-async function cmdDetect() {
-  const results = await Promise.all([fleetVersion('premium'), fleetVersion('free')]);
+async function cmdDetect(args) {
+  const suiteDir = resolveSuiteDir(args.suite);
+  const results = await Promise.all([fleetVersion(suiteDir, 'premium'), fleetVersion(suiteDir, 'free')]);
   for (const r of results) {
     if (r.error) console.log(`${r.tier.padEnd(8)} ERROR  ${r.error}`);
     else console.log(`${r.tier.padEnd(8)} ${r.version}  branch=${r.branch}  revision=${r.revision}  (${r.host})`);
@@ -757,10 +1123,12 @@ async function cmdDetect() {
 async function cmdScan(args) {
   if (!args.to) die(`--to <ref> is required (e.g. --to origin/rc-minor-fleet-v4.91.0).`);
   const repo = resolveFleetRepo(args['fleet-repo']);
+  const suiteDir = resolveSuiteDir(args.suite);
   log(`fleet repo: ${repo}`);
+  log(`suite:      ${suiteDir}`);
 
   log(`\ndetecting the running build…`);
-  const live = await Promise.all([fleetVersion('premium'), fleetVersion('free')]);
+  const live = await Promise.all([fleetVersion(suiteDir, 'premium'), fleetVersion(suiteDir, 'free')]);
   for (const v of live) {
     log(v.error ? `  ${v.tier}: ${v.error}` : `  ${v.tier}: ${v.version} (${v.branch})`);
   }
@@ -782,14 +1150,16 @@ async function cmdScan(args) {
   log(`  to   ${to.short}  ${to.subject}`);
   if (fromSha === toSha) die(`--from and --to resolve to the same commit.`);
 
-  log(`\nbuilding corpora…`);
-  const fromCorpus = corpusFor(repo, fromSha);
-  const toCorpus = corpusFor(repo, toSha);
-  log(`  from: ${(fromCorpus.length / 1e6).toFixed(1)} MB   to: ${(toCorpus.length / 1e6).toFixed(1)} MB`);
+  log(`\nextracting the suite's vocabulary…`);
+  const vocab = buildVocabulary(suiteDir);
+  const phrases = vocab.filter((entry) => PHRASE_KINDS.has(entry.kind));
+  log(`  ${vocab.length - phrases.length} locator tokens, ${phrases.length} expected values and constants`);
 
-  log(`\nextracting the suite's selector vocabulary…`);
-  const vocab = buildVocabulary();
-  log(`  ${vocab.length} distinct tokens`);
+  log(`\nbuilding corpora…`);
+  const phraseWords = new Set(phrases.flatMap((entry) => entry.token.match(WORD) || []));
+  const fromCorpus = searchable(corpusFor(repo, fromSha), phraseWords);
+  const toCorpus = searchable(corpusFor(repo, toSha), phraseWords);
+  log(`  from: ${(fromCorpus.text.length / 1e6).toFixed(1)} MB   to: ${(toCorpus.text.length / 1e6).toFixed(1)} MB`);
 
   const { broken, unverifiable, ok } = classify(vocab, fromCorpus, toCorpus);
   log(`  ${broken.length} breaking, ${ok} present in both, ${unverifiable.length} unverifiable`);
@@ -801,14 +1171,14 @@ async function cmdScan(args) {
   log(`  ${churn.areas.length} spec areas touched, ${fragments.length} changelog fragments, ${missing.length} commits with no equivalent on target`);
 
   const md = renderReport({
-    from, to, fromRef, toRef: args.to, fromSha, toSha, repo, live, toCorpus,
-    broken, unverifiable, okCount: ok, vocabCount: vocab.length,
+    from, to, fromRef, toRef: args.to, fromSha, toSha, repo, live, fromCorpus, toCorpus,
+    broken, unverifiable, okCount: ok, vocabCount: vocab.length, phraseCount: phrases.length,
     churn, fragments, missing,
   });
 
   const outPath = path.resolve(
     args.out ||
-      path.join(SUITE_DIR, 'docs', 'upgrade-preflight', `${from.short}-to-${to.short}.md`),
+      path.join(suiteDir, 'docs', 'upgrade-preflight', `${from.short}-to-${to.short}.md`),
   );
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, md);
@@ -819,17 +1189,20 @@ async function cmdScan(args) {
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];
 
-if (cmd === 'detect') await cmdDetect();
+if (cmd === 'detect') await cmdDetect(args);
 else if (cmd === 'scan') await cmdScan(args);
 else {
   console.error(`usage:
-  preflight.mjs detect
-  preflight.mjs scan --to <ref> [--from <ref|sha>] [--fleet-repo <path>] [--out <file>]
+  preflight.mjs detect [--suite <path>]
+  preflight.mjs scan --to <ref> [--from <ref|sha>] [--fleet-repo <path>] [--suite <path>] [--out <file>]
 
   --to           Fleet ref you are upgrading TO (e.g. origin/rc-minor-fleet-v4.91.0)
   --from         Fleet ref running now. Defaults to the live instance's revision.
   --fleet-repo   Path to a fleetdm/fleet checkout. Defaults to $FLEET_REPO, else ../fleet.
-  --out          Report path. Defaults to playwright/docs/upgrade-preflight/<from-sha10>-to-<to-sha10>.md
+  --suite        The playwright/ directory to read: its specs and page objects, and its
+                 .env files for the instances. Defaults to this repo's; point it at another
+                 checkout's to scan the suite as it was at an older commit.
+  --out          Report path. Defaults to docs/upgrade-preflight/<from-sha10>-to-<to-sha10>.md in the suite read.
 `);
   process.exit(cmd ? 1 : 0);
 }
