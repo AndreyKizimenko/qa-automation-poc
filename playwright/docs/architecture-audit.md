@@ -60,10 +60,13 @@ below hold the reasoning.
       not only in a scope loop; the five stop rules that existed only in the skills (new payload types, the
       web address and IdP, Android web apps, *Store report results*, cron triggers); the runtime row, from
       the 2026-11-13 nightly. The click-through rule is untouched: it waits on D5.
-- [ ] `fleet-upgrade-preflight`'s blind spots, before the 4.96 upgrade (Fleet already has a `docs-v4.96.0`
-      branch): drop test files from the corpus, fix the dotted-class match, add expected values to the
-      vocabulary, change the cache key. Check the result against the last three upgrades, where the scan
-      reported 0, 5 and 1 causes against 2, 12 and 10 real ones.
+- [x] `fleet-upgrade-preflight`'s blind spots, before the 4.96 upgrade (2026-11-13): Fleet's tests and mocks
+      are out of the corpus, a class counts by its bare name too, expected values and constants are in the
+      vocabulary, a class built on `baseClass` is checked through its component, and the cache is keyed by
+      the corpus rules. Backtested against the suite as it was before each upgrade's fix PR: section 1 went
+      from 0, 5 and 2 tokens to 0, 12 and 3, every one real, with the 4.95 false positive gone. That is 0, 7
+      and 2 of the 4, 12 and 10 clusters that broke; the rest changed flow, markup or behaviour with their
+      text still in the source, so the hand-check stays the larger half of the job.
 
 **Waiting**
 - [x] The skills rewrite merged with this document (PR #132, 2026-11-13).
