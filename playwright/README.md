@@ -206,7 +206,7 @@ playwright/
 │   ├── test-plans/               # Per-feature E2E coverage plans
 │   ├── gitops-coverage/          # The plan for the nightly's gitops coverage
 │   ├── loadtest-runs/            # Dated load-test write-ups
-│   ├── test-audit/               # Per-test breakdown for the manual audit
+│   ├── test-audit/               # Per-test breakdown from the manual audit (frozen 2026-11-13)
 │   ├── run-reviews/              # Per-run triage write-ups (gitignored — local only)
 │   └── upgrade-preflight/        # Pre-upgrade impact reports (gitignored — local only)
 ├── eslint-rules/                 # The suite's own lint rules (suite/*), their tests and the per-rule count
@@ -297,7 +297,7 @@ explicitly. The npm scripts already do this.
 
 **Role access:** add a spec under `tests/api/role-access/{free,premium}/`. These probe endpoints as a pre-provisioned static user rather than creating one — pull the user and its bearer headers from `@helpers/api/static-users`, and assert with `expectAllow` / `expectDeny` from `@helpers/api/role-access`.
 
-**E2E flows** follow the click-through navigation rule in `CLAUDE.md`: enter through the dashboard and click through navbar / tabs / subnav rather than calling `goto()` directly on the feature page. Direct `goto()` is reserved for non-flow contexts (paywall checks, page-load assertions).
+**E2E flows** follow the navigation rule in `CLAUDE.md`: one test per area enters through the dashboard and clicks through navbar / tabs / subnav to the feature, and every other test goes straight to its page with the page object's `goto()`.
 
 **Skipping something?** Every skip needs an inline reason. Where it gets recorded depends
 on why: an env gate or a deliberately deferred test goes in [TODO.md](TODO.md); a flow

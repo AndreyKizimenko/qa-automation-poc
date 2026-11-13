@@ -70,7 +70,26 @@ below hold the reasoning.
 
 **Waiting**
 - [x] The skills rewrite merged with this document (PR #132, 2026-11-13).
-- [ ] The roadmap and decisions D1 to D5 below, to go through one by one. D4 is decided.
+- [x] D2, D3 and D5: yes to each (2026-11-13). D5 and the first half of D3 are applied: `CLAUDE.md` carries
+      the rewritten navigation rule, and a test no longer adds a `docs/test-audit/` entry (the folder is
+      frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11.
+- [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform.
+
+**The order, agreed 2026-11-13.** Sorted by whether a change needs a live run to prove it, and by how many
+specs share the code it touches. The 4.96 upgrade is not close, so nothing here waits on it.
+1. No run needed. Done: the close-outs, the lint rules, the preflight.
+2. Small code changes, each proven by a scoped run:
+   - [ ] the fleet dropdown re-opens a menu that closed under it, as its own PR with its own branch run;
+   - [ ] helpers throw on a non-OK response without printing request headers, with a short retry in the
+         cleanup calls so a transient 5xx doesn't fail setup, and cleanup no longer stops at 200 leftover
+         users;
+   - [ ] the two spec defects: the fixed-file-name activity match, and `host-delete`'s simulations left on
+         Workstations;
+   - [ ] an API-level `test` (roadmap 4);
+   - [ ] `results.json` and the history file, through the encrypted upload (roadmap 6).
+3. Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags of 5, then 10, 8, 7,
+   11 and 12.
+4. Last: the lanes and the environment gate of 5, then 14, 13, 15 and 16.
 
 **Roadmap items, as they land**
 - [x] 2, lint the contract (2026-11-13). Six `suite/*` rules in `eslint-rules/`, each with tests
@@ -313,7 +332,7 @@ document say it.
 | The contract says | The practice is |
 |---|---|
 | "Each premium spec has Unassigned + Workstations variants" (`CLAUDE.md`) | 11 of 95 premium specs loop over scopes (verified). Settled 2026-11-13: `CLAUDE.md` now describes the practice |
-| "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported) |
+| "Enter through the dashboard and click through" (`CLAUDE.md`) | 34 of 95 premium specs do; 48 never load the dashboard (reported). Settled 2026-11-13 (D5): one click-through test per area, the rest go straight to the page |
 | "Assertions live in the spec" (author skill) | page objects hold 585 `expect` calls and 40 `expectX` methods; 86% are state-settling waits (reported) |
 | "Cover everything visible, even if no test uses it" (`pages/README.md`) | about 10% of public page-object members are referenced by nothing (estimate) |
 | "Every class selector carries an inline comment" (`pages/components/README.md`) | about a third do; another 40% are explained elsewhere in the file (sample of 59) |
@@ -385,15 +404,15 @@ is additive; existing specs keep working and migrate when they are next touched.
     helper lookup, and a later free-only difference means splitting it again. I would still merge a
     lifecycle the next time an upgrade forces an edit to both copies, and leave the rest alone. Keeping all
     nine as they are is a defensible answer; it roughly doubles the per-release edits in those files.
-- **D2. Tags for capabilities.** Recommended, enforced by the VM fixture as described in section 3. The
+- **D2. Tags for capabilities.** **Decided 2026-11-13: yes.** Enforced by the VM fixture as described in section 3. The
   alternative is a file-name suffix per platform, which forces splitting the files that loop over platforms.
-- **D3. The test-audit documents.** Recommended: generate the catalogue and stop requiring a hand-written
-  entry per test. If the per-test review is still planned, keep it and accept that it doubles the
-  documentation cost of every test.
+- **D3. The test-audit documents.** **Decided 2026-11-13: yes.** Generate the catalogue and stop requiring
+  a hand-written entry per test. The requirement is gone as of that day and `docs/test-audit/` is frozen;
+  the generator is roadmap item 11.
 - **D4. The shape of the 5,000.** Decided 2026-11-12: the 5,000 are UI tests; API coverage is a separate
   suite. Still open: whether each VM platform gets a minute budget that new tests must fit inside.
-- **D5. Click-through navigation.** Rewrite the rule to "one click-through test per area; the rest go
-  straight to the page", which is what most specs do, or enforce the written rule.
+- **D5. Click-through navigation.** **Decided 2026-11-13: rewrite.** The rule is "one click-through test
+  per area; the rest go straight to the page", which is what most specs do. `CLAUDE.md` says so now.
 
 ## Limits of this audit
 

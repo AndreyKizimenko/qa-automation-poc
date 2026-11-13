@@ -190,8 +190,8 @@ result blocks). Flag these:
   none, so those are fine);
 - any class selector in a spec.
 
-**Docs that should have moved with the code** (findings, not blockers): a `test()` with no
-`docs/test-audit/` entry or stale audit counts; a new helper, page object or component object missing from
+**Docs that should have moved with the code** (findings, not blockers): a spec header or a `test.step`
+title that no longer says what the test does (`docs/test-audit/` is frozen, and needs no entry); a new helper, page object or component object missing from
 `helpers/README.md` / `pages/README.md` / `pages/components/README.md`; a new fixture without a `test-data/`
 README; a gitops change without its file header and config README
 (`gitops/{premium,free}-fleetqa{,-min}/README.md`), or made to only one of the full and `-min` copies of a

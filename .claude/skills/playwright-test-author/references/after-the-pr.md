@@ -37,7 +37,7 @@ Filed #N, with the skip or workaround and its row in blocked-by-product-bugs.md.
 was seen passing. Or "None".
 
 ## Docs
-The test-audit entries and counts, READMEs, CLAUDE.md, skills. Or "no audit entry because …".
+READMEs, CLAUDE.md, skills, spec headers. Or "None".
 
 ## Verified
 `npm run check`. Per tier: with dependencies, or `--no-deps` and why; headed; repeats as N/N; workers.

@@ -69,8 +69,8 @@ Tier-routing rules:
 ### e2e vs loadtest vs gitops-verify
 
 - **E2E** — "Does this feature work for the user?" Runs in the
-  `premium` and `free` projects. Uses click-through flows, verifies the
-  UI renders and the user can complete a task.
+  `premium` and `free` projects. Drives the UI as a user would, and verifies
+  it renders and the user can complete a task.
 
 - **Loadtest** — "How fast does this load under high-scale data?"
   Runs in the `loadtest` project against a high-scale QA instance. Uses
