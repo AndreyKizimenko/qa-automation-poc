@@ -1,5 +1,11 @@
 # Manual test audit — working index
 
+> **Frozen on 2026-11-13.** These files record the suite as it was audited by hand. A new or changed
+> test no longer adds or updates an entry here, and the counts below are not kept current: the per-test
+> catalogue will be generated from `playwright test --list`, the spec headers and the `test.step` titles
+> ([`../architecture-audit.md`](../architecture-audit.md), decision D3 and roadmap item 11). The
+> assessments, the Notes blocks and `FINDINGS.md` stay as the record of that review.
+
 Every automated test in the suite, broken down into the steps a person performs and
 the validations the test makes, so each one can be **re-run by hand** and judged:
 does it earn its runtime, does it validate the right thing, does it cover the
@@ -72,7 +78,7 @@ what you actually see on screen.
 4. To watch the automation do the same thing, each entry carries a **Grep** line:
 
    ```bash
-   npm run test:premium -- -g "Policies CRUD (All fleets) › create" --headed
+   npx playwright test --project=premium -g "Policies CRUD (All fleets) › create" --headed
    ```
 
    Serial CRUD sub-tests need their siblings, so grep the describe title rather
