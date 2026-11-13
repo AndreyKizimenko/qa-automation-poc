@@ -105,11 +105,6 @@
       "count": 1
     }
   },
-  "tests/e2e/free/reports/automations.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
-    }
-  },
   "tests/e2e/free/reports/reports.spec.ts": {
     "suite/activity-needs-baseline": {
       "count": 3
@@ -134,11 +129,6 @@
   "tests/e2e/free/settings/gitops-mode.spec.ts": {
     "suite/no-page-locator-in-spec": {
       "count": 5
-    }
-  },
-  "tests/e2e/free/settings/organization/organization-info.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
     }
   },
   "tests/e2e/free/settings/users/api-user-create.spec.ts": {
@@ -396,11 +386,6 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/reports/automations.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
-    }
-  },
   "tests/e2e/premium/reports/list-filters.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 3
@@ -468,11 +453,6 @@
   "tests/e2e/premium/settings/organization/fleet-desktop.spec.ts": {
     "suite/no-page-locator-in-spec": {
       "count": 2
-    }
-  },
-  "tests/e2e/premium/settings/organization/organization-info.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
     }
   },
   "tests/e2e/premium/settings/team-host-status-webhook.spec.ts": {
@@ -811,6 +791,11 @@
       "count": 2
     }
   },
+  "tests/e2e/shared/reports/automations.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
   "tests/e2e/shared/reports/edit-warnings.spec.ts": {
     "suite/use-own-name": {
       "count": 1
@@ -836,6 +821,11 @@
   },
   "tests/e2e/shared/settings/organization/custom-logo.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/organization/organization-info.spec.ts": {
+    "suite/no-date-now-in-name": {
       "count": 1
     }
   },

@@ -1,14 +1,15 @@
 /**
- * Free • Settings • Organization info. Same org name + support URL round-trip
- * as premium (the form is tier-agnostic). Mutates GLOBAL app config, so the
- * original org_info is snapshotted via the API and restored in afterEach.
+ * Shared • Settings • Organization info. Editing the org name + support URL
+ * persists across a reload, on both tiers (the form is tier-agnostic). This mutates GLOBAL app config, so the original
+ * org_info is snapshotted via the API up front and restored in afterEach
+ * (which runs even if the test body fails).
  *
  * Grounded in frontend/pages/admin/OrgSettingsPage/cards/Info.
  */
 import { test, expect } from '@fixtures';
 import { getAppConfig, patchAppConfig, type OrgInfo } from '@helpers/api';
 
-test.describe('Free • Settings • Organization info', () => {
+test.describe('Shared • Settings • Organization info', () => {
   let original: OrgInfo;
 
   test.beforeEach(async ({ request }) => {

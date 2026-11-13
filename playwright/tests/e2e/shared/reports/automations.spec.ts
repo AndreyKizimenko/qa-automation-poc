@@ -1,10 +1,11 @@
 /**
- * Premium • Reports • automations. The reports-list "Manage automations" modal
+ * Shared • Reports • automations. The reports-list "Manage automations" modal
  * turns a report's automations on and off again (per-report
  * `automations_enabled`, sent to the configured log destination on the report's
  * interval), and the list's Automations column reads "On", then "Off". This is
  * per-report state — not global config — so the report is seeded + torn down
- * via the API.
+ * via the API. Both tiers have it; premium works in All fleets, and free, with
+ * no fleets, has no dropdown (`teamDropdown.select` does nothing there).
  *
  * Grounded in frontend/pages/queries/ManageQueriesPage + its
  * ManageQueryAutomationsModal (a checkbox per report; Save PATCHes each
@@ -15,7 +16,7 @@ import { createReport, deleteReportsMatching, findReportById } from '@helpers/ap
 
 const MARKER = 'pw-report-auto';
 
-test.describe('Premium • Reports • automations', () => {
+test.describe('Shared • Reports • automations', () => {
   let name: string;
   let id: number;
 
