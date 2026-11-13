@@ -295,7 +295,7 @@ Independent of scale; each is a small fix.
 
 | What | Where | Status |
 |---|---|---|
-| The fleet dropdown does not re-open a menu that closed under it; five recorded flakes | `pages/components/TeamDropdown.ts` | verified |
+| The fleet dropdown does not re-open a menu that closed under it; five recorded flakes | `pages/components/TeamDropdown.ts` | fixed 2026-11-13: each attempt opens the menu if it is closed, clicks the option and reads the label back, and one that didn't take is made again |
 | A lifecycle's activity check matches a fixed file name, so the other scope's parallel run satisfies it | `premium/controls/scripts/library.spec.ts`, `os-settings/configuration-profiles.spec.ts` | verified |
 | Simulations staged on Workstations stay there when the test fails before its delete; the sweep returns hosts only from the VMs fleet | `premium/hosts/host-delete.spec.ts` | verified |
 | Cleanup sweeps return silently on a failed list request, so a 5xx becomes "nothing to clean" | `helpers/api/cleanup.ts`, `software.ts:226`, `mdm.ts` | verified (first two) |
