@@ -37,8 +37,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
 - **Root a `filter({ has })` locator at the page.** One built from a scoped locator (`section.getByRole(…)`)
   looks for that scope inside each candidate and matches nothing, so the click waits out the test's timeout.
   `filter({ has: this.page.getByRole(…) })` is relative to each candidate, as intended.
-- **Fleet's radio inputs are visually hidden** behind a styled control: click the `<label>` that wraps the
-  radio, then assert the radio is checked (`TargetLabelSelector`, `IntegrationsPage.chooseMigrationMode`).
+- **Fleet's radio inputs are visually hidden** behind a styled control, and its sliders have no accessible
+  name: `pickRadio(scope, name)` and `setSlider(toggle, on)` (`pages/components/formControls.ts`) click the
+  right element and wait for the new state.
 - **Set an Ace editor with `setAceValue`, read it with `getAceValue`** (`pages/components/aceEditor.ts`).
   Typed keys go through Ace's own handling, which auto-indents and closes quotes and brackets, so what is
   saved isn't what was typed; the DOM holds only the visible lines.

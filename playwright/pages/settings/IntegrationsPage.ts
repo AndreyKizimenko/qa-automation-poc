@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { FileUploader } from '../components/FileUploader';
 import { Toast } from '../components/Toast';
+import { pickRadio } from '../components/formControls';
 
 /**
  * /settings/integrations — the Integrations section, with a left-side nav
@@ -195,19 +196,10 @@ export class IntegrationsPage {
   }
 
   /**
-   * Picks a migration mode. Fleet's radio inputs are visually hidden behind a
-   * styled control, so this clicks the `<label>` wrapping the radio, then
-   * asserts the radio took it.
+   * Picks a migration mode, and waits for its radio to read checked.
    */
   async chooseMigrationMode(mode: 'voluntary' | 'forced'): Promise<void> {
-    const name = mode === 'forced' ? 'Forced' : 'Voluntary';
-    // The `has` locator is rooted at the page: one built from the section would
-    // look for the section inside each label.
-    await this.migrationSection
-      .locator('label')
-      .filter({ has: this.page.getByRole('radio', { name, exact: true }) })
-      .click();
-    await expect(mode === 'forced' ? this.migrationForcedRadio : this.migrationVoluntaryRadio).toBeChecked();
+    await pickRadio(this.migrationSection, mode === 'forced' ? 'Forced' : 'Voluntary');
   }
 
   /** Saves the migration workflow and waits for its own toast. */

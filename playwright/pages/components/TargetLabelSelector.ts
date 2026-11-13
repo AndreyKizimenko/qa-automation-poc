@@ -1,4 +1,5 @@
 import { Locator, expect } from '@playwright/test';
+import { pickRadio } from './formControls';
 
 export type LabelMode = 'any' | 'all';
 
@@ -45,20 +46,9 @@ export class TargetLabelSelector {
     this.excludeTab = this.root.getByRole('tab', { name: tabName('Exclude') });
   }
 
-  /**
-   * Clicks the `<label>` wrapping the radio named `name` inside `within`, then
-   * asserts the radio took it. The `has` locator is built from the page, not from
-   * `within`: a `has` locator is matched *inside* each label, so one carrying the
-   * container's chain would look for the container inside the label and match
-   * nothing.
-   */
+  /** Picks the radio named `name` inside `within`, and waits for it to read checked. */
   private async pick(within: Locator, name: string): Promise<void> {
-    const radio = within.getByRole('radio', { name, exact: true });
-    await within
-      .locator('label')
-      .filter({ has: within.page().getByRole('radio', { name, exact: true }) })
-      .click();
-    await expect(radio).toBeChecked();
+    await pickRadio(within, name);
   }
 
   async chooseAllHosts(): Promise<void> {
