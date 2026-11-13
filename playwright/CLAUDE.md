@@ -11,6 +11,15 @@ This folder contains the Playwright end-to-end suite for Fleet. The standards be
 
 All four live in the repo-root `.claude/skills/`, which is checked in. They must stay at the root: a nested `.claude/skills/` (e.g. under `playwright/`) is treated as directory-scoped, which renames the commands to `playwright:<name>` and ties them to files under that directory.
 
+## Nested files
+
+This file is the core. What matters only under one folder is in that folder's own `CLAUDE.md`, which loads
+when work happens there: [`setup/`](setup/CLAUDE.md) (the cleanup projects, step by step),
+[`tests/api/`](tests/api/CLAUDE.md), [`tests/cli/`](tests/cli/CLAUDE.md),
+[`tests/loadtest/`](tests/loadtest/CLAUDE.md) and
+[`tests/e2e/premium/gitops-mode/`](tests/e2e/premium/gitops-mode/CLAUDE.md). The real-host rules, the
+fixtures, the projects and the CI facts stay here, because every spec depends on them.
+
 ## Comment style (always-on)
 
 When you write or rewrite a comment in any file under this folder, describe what the code is *doing*. Never describe what changed, what was added, fixed, or how it differs from a previous version. The reader has not seen the prior state and the comment will outlive the change.
@@ -25,11 +34,9 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
   - `premium/<area>/` — premium-only flows. Each spec says which scope it works in: Unassigned, Workstations, All fleets, or a throwaway `pw-*` fleet of its own. The CRUD lifecycles and the setup-experience specs run once per scope; most specs work in one.
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
-- `tests/cli/` — `fleetctl` specs, in the same `shared/` / `premium/` / `free/` split as `tests/e2e/`, plus `cli/nightly/` which only the `gitops-nightly` project picks up. They run the `fleetctl` on `PATH` (or `FLEETCTL_BIN`) against the suite's instance, so locally install the one matching the server (`npm i -g fleetctl@<server version>`), as CI does: an older client fails — 4.92.1's `generate-gitops` exits 1 on free.
-- `tests/loadtest/` — page-load timing tests. Run locally only — they
-  need a high-scale instance and a team provisioned via
-  [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
-  in `.env.loadtest` (gitignored), so no CI workflow targets them.
+- `tests/cli/` — `fleetctl` specs, in the same `shared/` / `premium/` / `free/` split, plus `cli/nightly/` for the `gitops-nightly` project; [`tests/cli/CLAUDE.md`](tests/cli/CLAUDE.md).
+- `tests/loadtest/` — page-load and API timing tests, run locally only against a high-scale instance;
+  [`tests/loadtest/CLAUDE.md`](tests/loadtest/CLAUDE.md).
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
 - `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates, `claims.ts` for which spec uses which simulations and catalog apps).
 - `fixtures.ts` — two test objects: `apiTest`, with the worker fixtures (fleet ids, `liveMacosHost`), the `cleanup` stack and the data fixtures built on it (`throwawayFleet`, `borrowSims`, `seed`), and nothing that needs a page, and `test`, which extends it with the page-object fixtures, the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
@@ -231,40 +238,30 @@ Folder conventions:
 ## Project pipeline (premium)
 
 1. `premium-setup` — admin login, writes `.auth/premium-admin.json`.
-2. `cleanup-setup` — pre-test dependency. Wipes unassigned state (queries, policies — global ones and Unassigned's own, deleted before its software and scripts, since Fleet refuses to delete a title or script a policy automation uses — packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities, and on Workstations its policies, installable software, profiles, scripts, setup experience and OS-update settings, returning to Unassigned any simulation a dead run left staged there — but **not its reports**, which gitops declares, beyond the copies specs save there by exact prefix (`pw-role-`, `Copy of playwright-saveasnew-`): a spec that puts a report on Workstations deletes it itself, and adds its prefix to that sweep. On premium it also removes throwaway `pw-*` fleets, and on both tiers any test-added (`pw-enroll-`) global enroll secret and any `PW_VAR_*` custom variable (after the scripts, since Fleet refuses to delete a variable a script references). `pw-*` labels are swept on premium only, inside the VMs-fleet step, so a free spec deletes its own. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items). It does **not** reset disk encryption or the BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these, too*), and a spec that writes one of the others restores it in an `afterEach`, or works on a throwaway `pw-*` fleet.
+2. `cleanup-setup` — pre-test dependency. Wipes what specs create on Unassigned and Workstations — but not
+   Workstations' gitops reports beyond the copies specs save there by exact prefix (`pw-role-`, `Copy of
+   playwright-saveasnew-`) — and throwaway `pw-*` fleets, test-added (`pw-enroll-`) global enroll secrets and
+   `PW_VAR_*` variables; on the VMs fleet it takes `pw-*` things and borrowed simulations, reports only by exact
+   prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`, since gitops declares `pw-host-report-results`
+   there). A spec that leaves a new kind of per-run report on Workstations or VMs adds its prefix to that
+   sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off and script
+   execution on, and brings the real VMs to their resting state. It does **not** reset disk encryption or the
+   BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user
+   authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these,
+   too*), and a spec that writes one of the others restores it, or works on a throwaway `pw-*` fleet.
+   [`setup/CLAUDE.md`](setup/CLAUDE.md) has each step.
 3. `cleanup-teardown` — same wipe steps run again at end of project regardless of pass/fail, so a crashed worker still leaves a clean instance. Both projects point at the same `setup/cleanup.steps.ts`.
 
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
 
-The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the fleet steps inside `cleanup.steps.ts` are missing on free (fleets are premium-only): Workstations, the `pw-*` fleet sweep, the version-pin clear and the VMs-fleet sweep with its `pw-*` labels. They are declared with `premiumStep`, which declares nothing on free, so a free report's skipped count is tests only. `wipe unassigned state`, the enroll-secret sweep and the VM resting state run on both, and `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
+The `free` project runs the **same cleanup chain**, minus the fleet steps (fleets are premium-only). **Do not
+plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable
+software, profiles and scripts are all wiped on free too.
 
-The `gitops-mode` project runs in **its own invocation after the exclusive specs** — CI's third step
-(`if: !cancelled()`, merged into the same report) and `npm run test:premium`'s third invocation — pinned to
-`workers: 1` with `fullyParallel: false` and `retries: 0`. Like the exclusive projects it depends only on
-`premium-setup`: a dependency on `premium` would skip it whenever one unrelated main-project test is red, and
-put the whole suite in front of a local run. Its `gitops-mode-teardown` project turns the flag back off and
-puts the exceptions back at `GITOPS_EXCEPTIONS_BASELINE` (`labels: false, software: false, secrets: true`).
-`cleanup-setup` calls `disableGitOpsMode` as well, because a teardown project doesn't run on a `SIGKILL` and a
-stuck flag disables the *next* run's entire suite. The exceptions matter even with the mode off, because
-`fleetctl gitops` reads them: a stuck `secrets: false` makes the next apply delete every enroll secret. Every
-premium gitops apply therefore restores them first (`.github/scripts/restore-gitops-exceptions.sh`), since the
-gitops chain runs before `cleanup-setup`. A spec never writes `secrets: false` outside the gitops-mode project. Run it with `npm run test:gitops-mode` (login, the specs,
-teardown) or `npm run test:gitops-mode:only` (`--no-deps`, for local iteration).
-
-`cleanup-setup` also turns script execution back on, for the same reason: the exclusive projects turn it off,
-and a run killed mid-spec would otherwise leave every script spec of the next run failing.
-
-On premium it sweeps the VMs fleet for what the host-execution specs leave there when a test dies: `fleet-pw-*` titles and `pw-*` policies, scripts, profiles and labels by prefix, but reports only by exact prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), because gitops declares `pw-host-report-results` on that fleet. A spec that leaves a new kind of per-run report there adds its prefix to that sweep. Deleting a software title cancels its pending installs and script runs, so a per-run package deleted in an `afterEach` also clears that VM's queue. Deleting a title never uninstalls it, though, so when the Ubuntu VM's inventory lists a `fleet-pw-*` package the sweep queues a `dpkg --purge` for it.
-
-On premium it also clears any version pin on the QA and VMs fleets' Fleet-maintained apps, never deleting them: an exact pin a timed-out test leaves behind stops Fleet's hourly auto-update for that title, and with it the version history the pinning and update specs read.
-
-It also brings the real VMs to their resting state before the first test and after the last: it cancels the
-suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
-returns every durable fixture to rest — uninstalled, with no failed install or uninstall on record, which
-Fleet otherwise keeps as the title's status and which the Library then offers as Retry or Reinstall instead of
-Install. A VM that's offline is only logged — its specs fail on it with their own message.
-
-The `loadtest` project depends only on `loadtest-setup`; `loadtest-api` depends on nothing (it sends the bearer token from `FLEET_API_TOKEN`, logging in with the admin credentials when that token is stale). Each project's setup chain is otherwise independent — no cross-project sharing.
+The `gitops-mode` project runs alone, in its own invocation after the exclusive specs, and puts the flag and
+its exceptions back after itself ([`tests/e2e/premium/gitops-mode/CLAUDE.md`](tests/e2e/premium/gitops-mode/CLAUDE.md)).
+A spec never writes `secrets: false` outside it: a stuck one makes the next gitops apply delete every enroll
+secret.
 
 ## Env vars
 
@@ -286,9 +283,7 @@ Default: a spec is a single end-to-end flow; cleanup runs at the end of the same
 - The final sub-test asserts the dashboard activity feed via `dashboard.expectActivities([matcher, …])`: every matcher must match a row, and it reloads and re-walks the feed while one is missing. Build the strings with `activityCopy` (`@helpers/activity-copy`). Matchers use explicit verbs and the rendered scope suffix — they differ per resource and per tier, so scout the live feed when authoring a new one.
 - Cleanup still runs inside the same describe block (the `delete` sub-test), so an aborted create still leaves the cleanup-teardown project to wipe state. The `cleanup` fixture and the data fixtures belong to one test: what a later step still uses is not registered with them, or it is gone before that step runs.
 
-**Performance specs** (`tests/loadtest/`) follow different rules. They live in the `tests/loadtest/` tree (which the loadtest project's `testDir` targets exclusively, and which premium/free skip via `testIgnore`), and **navigate by direct URL** because measuring page-load time is the point. They use `measureNav` / `measureSearch` from `helpers/perf.ts`. The e2e conventions above (click-through nav, etc.) do not apply.
-
-**API timing specs** (`tests/loadtest/api/`, the `loadtest-api` project) have no browser at all. `shapes.ts` is the request matrix — one entry per endpoint + sort/filter combination, with the fleetdm/fleet issue it guards — and `helpers/perf-api.ts` samples each shape several times with one request in flight, classifies it (`ok` / `slow` / `error` / `broken` / `unavailable` / `skipped`) and keeps run history under `.perf-history-api/`. Over the 5 s budget is `slow` and only flagged; a shape with any failed sample — `error` (some) or `broken` (all) — fails its family, while `unavailable` is an optional shape that 4xxs on every sample. Add a shape by adding a line to `shapes.ts`; add an id it needs to `resolve.ts`; then run `python3 tools/loadtest-api-audit/audit-shapes.py` from the repo root — Fleet ignores unknown query parameters, so a misspelt one would silently time the wrong request. The plan and the rationale for every family live in `docs/test-plans/loadtest-api-timing.md`.
+**Performance and API timing specs** (`tests/loadtest/`) follow rules of their own: [`tests/loadtest/CLAUDE.md`](tests/loadtest/CLAUDE.md).
 
 ## Skips
 

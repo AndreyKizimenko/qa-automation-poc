@@ -13,7 +13,8 @@ of this skill is about not doing those.
 
 `playwright/CLAUDE.md` is the suite contract: layout, projects, host populations, the cleanup pipeline,
 imports, skips, and a **CI and the shared instances** table with the facts that change (the nightly, workers,
-timeouts, runtimes). Read it before you start; this skill doesn't repeat it.
+timeouts, runtimes). Read it before you start, and the nested `CLAUDE.md` of the folder you work in
+(`setup/`, `tests/api/`, `tests/cli/`, `tests/loadtest/`, `gitops-mode/`); this skill doesn't repeat them.
 
 ## Stop and ask before any of these
 
