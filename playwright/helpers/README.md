@@ -26,6 +26,7 @@ that's a page-object responsibility.
 | Path | Purpose |
 |------|---------|
 | [`api/`](./api/) | Per-area Fleet API helpers (see below). The barrel `@helpers/api` re-exports everything. |
+| [`toast-copy.ts`](./toast-copy.ts) | `toastCopy` — the toast copy specs pass to `toast.expectSuccess` / `expectError`, grouped by area, each entry citing where Fleet renders it (or that the server writes it and the frontend relays it); builders for copy that names something. Lint (`suite/no-toast-copy-in-spec`) refuses copy typed in a spec |
 | [`activity-copy.ts`](./activity-copy.ts) | `activityCopy` — the expected activity-feed strings, shared by the specs that assert the feed and by the copy-contract API spec, so wording lives in one place |
 | [`auth.ts`](./auth.ts) | `loginAsAdmin()` (the setup projects call it, then save `.auth/*.json`; `withStaticUser` signs in through it too), plus `withCleanContext()` / `withStaticUser()` for specs that need a second browser context signed in as someone else (a cached session is reused only while both its cookie and Fleet's session are alive), and `sessionBearerHeaders(page)` — the signed-in user's own bearer token, read from Fleet's session cookie, for calling the API as a `withStaticUser` user |
 | [`csv.ts`](./csv.ts) | `parseCsv` / `csvRecords` / `readCsvDownload` — read the CSV Fleet's frontend exports (every field quoted, `""` for a quote, `="0123"` for leading zeros) into a header and records keyed by it |

@@ -12,6 +12,7 @@
  * query's automations_enabled; toast "Successfully updated report automations.").
  */
 import { test, expect } from '@fixtures';
+import { toastCopy } from '@helpers/toast-copy';
 import { createReport, deleteReportsMatching, findReportById } from '@helpers/api';
 
 const MARKER = 'pw-report-auto';
@@ -42,7 +43,7 @@ test.describe('Shared • Reports • automations', () => {
     await reportsList.openManageAutomations();
     await reportsList.setReportAutomation(name, true);
     await reportsList.saveAutomations();
-    await reportsList.toast.expectSuccess('Successfully updated report automations.');
+    await reportsList.toast.expectSuccess(toastCopy.reports.automationsUpdated);
 
     const report = await findReportById(request, id);
     expect(report?.automations_enabled).toBe(true);
@@ -55,7 +56,7 @@ test.describe('Shared • Reports • automations', () => {
     await expect(reportsList.reportAutomationCheckbox(name)).toBeChecked();
     await reportsList.setReportAutomation(name, false);
     await reportsList.saveAutomations();
-    await reportsList.toast.expectSuccess('Successfully updated report automations.');
+    await reportsList.toast.expectSuccess(toastCopy.reports.automationsUpdated);
 
     expect((await findReportById(request, id))?.automations_enabled).toBe(false);
     await expect(reportsList.automationsCell(name)).toHaveText('Off');

@@ -227,6 +227,9 @@
     "suite/no-page-locator-in-spec": {
       "count": 2
     },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 3
     }
@@ -260,6 +263,9 @@
   "tests/e2e/free/reports/save-as-new.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/free/settings/gitops-mode.spec.ts": {
@@ -276,6 +282,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/free/settings/users/edit.spec.ts": {
@@ -283,6 +292,9 @@
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -302,6 +314,9 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/free/software/vulnerabilities.spec.ts": {
@@ -318,6 +333,9 @@
     "suite/no-api-cleanup-in-finally": {
       "count": 1
     },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -329,6 +347,9 @@
   },
   "tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     },
     "suite/use-own-name": {
@@ -370,6 +391,11 @@
       "count": 2
     }
   },
+  "tests/e2e/premium/controls/scripts/library.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
   "tests/e2e/premium/controls/scripts/role-access.spec.ts": {
     "suite/use-own-name": {
       "count": 1
@@ -385,8 +411,18 @@
       "count": 1
     }
   },
+  "tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
   "tests/e2e/premium/dashboard/automations-activity.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -401,9 +437,15 @@
   "tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -454,6 +496,9 @@
     "suite/no-api-cleanup-in-finally": {
       "count": 2
     },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -463,12 +508,20 @@
       "count": 1
     }
   },
+  "tests/e2e/premium/hosts/host-delete.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    }
+  },
   "tests/e2e/premium/hosts/host-idp-username.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     },
     "suite/use-own-name": {
       "count": 1
@@ -477,9 +530,20 @@
   "tests/e2e/premium/hosts/host-transfer-permissions.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/recovery-lock.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/premium/labels/role-access.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -504,6 +568,9 @@
     },
     "suite/no-class-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
     },
     "suite/use-own-name": {
       "count": 7
@@ -559,6 +626,9 @@
     "suite/no-page-locator-in-spec": {
       "count": 1
     },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 4
     }
@@ -566,6 +636,9 @@
   "tests/e2e/premium/reports/save-as-new.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     }
   },
   "tests/e2e/premium/reports/stored-results.spec.ts": {
@@ -573,9 +646,17 @@
       "count": 1
     }
   },
+  "tests/e2e/premium/settings/enroll-secrets.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    }
+  },
   "tests/e2e/premium/settings/fleets-lifecycle.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     },
     "suite/use-own-name": {
       "count": 1
@@ -597,6 +678,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/premium/settings/users/api-user-create.spec.ts": {
@@ -608,6 +692,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 6
     }
   },
   "tests/e2e/premium/settings/users/edit.spec.ts": {
@@ -616,6 +703,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/settings/users/form-validation.spec.ts": {
@@ -634,6 +724,9 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
     }
   },
   "tests/e2e/premium/settings/users/team-admin-scope.spec.ts": {
@@ -642,6 +735,9 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     }
   },
   "tests/e2e/premium/software/custom-icons.spec.ts": {
@@ -698,6 +794,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/software/library.spec.ts": {
@@ -705,6 +804,9 @@
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -727,11 +829,17 @@
   "tests/e2e/premium/software/package-scripts.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/premium/software/patch-policy.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
     }
   },
   "tests/e2e/premium/software/role-access.spec.ts": {
@@ -749,12 +857,18 @@
     "suite/no-class-locator-in-spec": {
       "count": 3
     },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
     "suite/use-own-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/software-label-targets.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     },
     "suite/use-own-name": {
@@ -789,6 +903,11 @@
   },
   "tests/e2e/premium/software/vulnerabilities.spec.ts": {
     "playwright/prefer-hooks-in-order": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/account/change-password.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -837,6 +956,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/shared/hosts/filters.spec.ts": {
@@ -901,6 +1023,9 @@
   "tests/e2e/shared/labels/labels.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 6
     }
   },
   "tests/e2e/shared/packs/packs.spec.ts": {
@@ -933,6 +1058,9 @@
     }
   },
   "tests/e2e/shared/reports/edit-warnings.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -945,10 +1073,16 @@
   "tests/e2e/shared/settings/enroll-secrets.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/shared/settings/organization/advanced-options.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     },
     "suite/use-own-name": {
@@ -965,8 +1099,16 @@
       "count": 1
     }
   },
+  "tests/e2e/shared/settings/users/delete.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
   "tests/e2e/shared/settings/users/edit-password.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -978,6 +1120,9 @@
   "tests/e2e/shared/settings/users/row-actions.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     }
   },
   "tests/e2e/shared/settings/users/search.spec.ts": {

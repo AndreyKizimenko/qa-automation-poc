@@ -136,6 +136,7 @@ and titles its describe `Policies CRUD`). Follow the rule, not the exemplar.
   Fleet source it was grounded in.
 - `test` and `expect` from `@fixtures` in a browser spec.
 - Names from `ownName(kind)`, whose kind says which spec made them.
+- Toast copy from `toastCopy` (`@helpers/toast-copy`), activity copy from `activityCopy`: never typed in the spec.
 - Its undo in the fixtures (`cleanup`, `throwawayFleet`, `borrowSims`, `seed`), never a `finally`.
 - A describe title in the house form: `Premium • Area • what`, `Free • …`, `Shared • …`.
 

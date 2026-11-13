@@ -87,9 +87,7 @@ module.exports = tseslint.config(
       'suite/use-own-name': 'error',
       'suite/no-api-cleanup-in-finally': 'error',
       'suite/activity-needs-baseline': 'error',
-      // Off until toast copy has a home outside the specs (docs/architecture-audit.md,
-      // roadmap item 9): until then the rule would name a problem with no fix.
-      'suite/no-toast-copy-in-spec': 'off',
+      'suite/no-toast-copy-in-spec': 'error',
     },
   },
   {

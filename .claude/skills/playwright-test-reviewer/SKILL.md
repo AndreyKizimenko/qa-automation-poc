@@ -159,8 +159,9 @@ test built on them passes or fails on timing:
   failed attempt's leftovers.
 - A claim in `helpers/claims.ts` whose `use` understates what the spec does (`read` on hosts it moves or
   changes): `npm run lint:claims` lets read claims share hosts, so that is the overlap it can't see.
-- UI copy (a toast, a heading, an activity sentence) typed as a literal in a spec when a page object or
-  `activityCopy` holds it: one more file to edit the day Fleet rewords it.
+- UI copy (a heading, an activity sentence) typed as a literal in a spec when a page object or
+  `activityCopy` holds it: one more file to edit the day Fleet rewords it. Toast copy has `toastCopy`, and
+  lint fails a toast literal in a spec; check a new entry there cites the Fleet source that renders it.
 - A time budget copied as a bare number with another spec's comment, and a file that parallel workers
   write in place.
 

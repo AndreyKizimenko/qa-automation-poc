@@ -32,6 +32,7 @@
 import { test, expect } from '@fixtures';
 import { createVariable, deleteAllScripts, deleteVariablesMatching, listVariables } from '@helpers/api';
 import { ownName } from '@helpers/own-name';
+import { toastCopy } from '@helpers/toast-copy';
 import { runNonce } from '@helpers/profiles';
 
 const MARKER = 'PW_VAR';
@@ -58,7 +59,7 @@ test.describe('Shared • Controls • custom variables', () => {
     await expect(row).toContainText(`$FLEET_SECRET_${name}`);
 
     await variables.deleteVariable(name);
-    await variables.toast.expectSuccess('Variable successfully deleted.');
+    await variables.toast.expectSuccess(toastCopy.variables.deleted);
     await expect(variables.variableRow(name)).toHaveCount(0);
   });
 
@@ -101,14 +102,14 @@ test.describe('Shared • Controls • custom variables', () => {
 
     await scriptsLibrary.goto({ fleetId: FLEET_ID });
     await scriptsLibrary.submitScriptUpload(file);
-    await scriptsLibrary.toast.expectError(`Couldn't add. Variable "$FLEET_SECRET_${name}" doesn't exist.`);
+    await scriptsLibrary.toast.expectError(toastCopy.variables.missingForScript(name));
     await expect(scriptsLibrary.uploadModal).toBeVisible();
 
     await createVariable(request, name, 'pw-secret-value');
 
     // The modal kept the file, so Add script sends the same upload again.
     await scriptsLibrary.uploadConfirmButton.click();
-    await scriptsLibrary.toast.expectSuccess('Successfully uploaded.');
+    await scriptsLibrary.toast.expectSuccess(toastCopy.scripts.uploaded);
     await expect(scriptsLibrary.uploadModal).toBeHidden();
     await expect(scriptsLibrary.itemByName(scriptName)).toBeVisible();
   });
@@ -124,9 +125,7 @@ test.describe('Shared • Controls • custom variables', () => {
 
     await variables.goto();
     await variables.deleteVariable(name);
-    await variables.toast.expectError(
-      `Couldn't delete. ${name} is used by the "${scriptName}" script in the "Unassigned" fleet. Please edit or delete the script and try again.`,
-    );
+    await variables.toast.expectError(toastCopy.variables.usedByUnassignedScript(name, scriptName));
     await expect(variables.variableRow(name)).toBeVisible();
     expect((await listVariables(request)).map((v) => v.name)).toContain(name);
   });
