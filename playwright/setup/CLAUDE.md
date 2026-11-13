@@ -36,7 +36,8 @@ The `loadtest` project depends only on `loadtest-setup`; `loadtest-api` depends 
 - The sweeps find the suite's own things by name. `ownName(kind)` opens every name with `pw-<kind>-`, so a
   sweep by the `pw-` prefix takes them, and one by an exact prefix takes that kind. A new name shape and the
   sweep that has to find it change in one commit.
-- A sweep throws when it can't list or delete (`deleteEach`); only the fleet and enroll-secret marker sweeps
-  log instead, because failing `cleanup-setup` over a stray one would skip the whole run.
+- A sweep throws when it can't list or delete (`deleteEach`). Three only log: the `pw-*` fleet sweep and the
+  enroll-secret marker sweep, because failing `cleanup-setup` over a stray one would skip the whole run, and
+  `deleteLabelsWithPrefix`, because a label something still targets is refused and goes on the next sweep.
 - Every step is self-healing: it removes what it finds however it got there, a person's hand-added leftover
   included. A step that fails on such a leftover is a cleanup bug to fix here, not an instance to clean by hand.
