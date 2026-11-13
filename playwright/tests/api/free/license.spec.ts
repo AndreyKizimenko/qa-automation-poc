@@ -45,7 +45,7 @@ test.describe('Free • license', () => {
   // simulation, so that if the check ever regressed, no real VM's end user
   // would be written.
   test('setting or removing a host IdP username is refused with 402', async ({ request }) => {
-    const [hostId] = await findSimulations(request, 'windows', 1, 0);
+    const [hostId] = await findSimulations(request, 'api/free/license#idp-refusal');
     expect(hostId, 'expected an online simulated Windows host').toBeDefined();
 
     const put = await putHostIdpUsername(request, hostId, `pw-idp-free-${Date.now()}@example.com`);

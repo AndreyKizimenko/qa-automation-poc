@@ -50,6 +50,7 @@ import {
   type ReportRef,
 } from './helpers/api';
 import { ownName } from './helpers/own-name';
+import { simClaim, type SimClaimKey } from './helpers/claims';
 
 import {
   CommandPalette,
@@ -202,13 +203,11 @@ type ApiTestFixtures = {
   throwawayFleet: (kind: string) => Promise<FleetRef>;
 
   /**
-   * Moves `count` online simulations onto fleet `to` and returns them to
-   * Unassigned after the test (premium only). `offset` is this spec's slice of
-   * the pool, claimed in the registry on `findSimulations` in
-   * `helpers/api/hosts.ts`, so no two specs are handed the same hosts. `mdm`
-   * draws from the MDM-enrolled simulations, a scarce pool kept for profile
-   * targeting (`findMdmSimulations`). Throws when the pool can't cover the
-   * slice.
+   * Moves a claim's simulations onto fleet `to` and returns them to Unassigned
+   * after the test (premium only). The claim (`helpers/claims.ts`, pool `plain`
+   * or `mdm`) gives the platform and the slice, so no two specs are handed the
+   * same hosts; `mdm` is the MDM-enrolled pool, kept for profile targeting.
+   * Throws when the pool can't cover the slice.
    */
   borrowSims: (opts: BorrowSims) => Promise<number[]>;
 
@@ -245,13 +244,10 @@ type ApiTestFixtures = {
 };
 
 export interface BorrowSims {
-  platform: 'darwin' | 'windows' | 'linux';
-  count: number;
-  offset: number;
+  /** This spec's slice of the `plain` or `mdm` pool. */
+  claim: SimClaimKey<'plain' | 'mdm'>;
   /** The fleet the simulations are moved to. */
   to: number;
-  /** From the MDM-enrolled pool; macOS and Windows only. */
-  mdm?: boolean;
 }
 
 export interface Seed {
@@ -440,15 +436,16 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
   }, { box: true }],
 
   borrowSims: [async ({ request, cleanup }, use) => {
-    await use(async ({ platform, count, offset, to, mdm }) => {
+    await use(async ({ claim, to }) => {
       requirePremium('borrowSims');
-      if (mdm && platform === 'linux') throw new Error('[borrowSims] no MDM-enrolled Linux simulations exist');
-      const ids = mdm
-        ? await findMdmSimulations(request, platform as 'darwin' | 'windows', count, offset)
-        : await findSimulations(request, platform, count, offset);
+      const { pool, platform, count, offset } = simClaim(claim);
+      const ids =
+        pool === 'mdm'
+          ? await findMdmSimulations(request, claim as SimClaimKey<'mdm'>)
+          : await findSimulations(request, claim as SimClaimKey<'plain'>);
       if (ids.length < count) {
         throw new Error(
-          `[borrowSims] needs ${count} online ${mdm ? 'MDM-enrolled ' : ''}${platform} simulations at offset ${offset}; the pool has ${ids.length}`,
+          `[borrowSims] ${claim} needs ${count} online ${platform} simulations from offset ${offset} of the ${pool} pool; it has ${ids.length}`,
         );
       }
       // Registered before the move, so a move that fails halfway still sends back what it moved.

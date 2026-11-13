@@ -64,13 +64,6 @@ import {
 } from '@helpers/api/hosts';
 import { fleetctl, output } from '@helpers/fleetctl';
 
-/**
- * Distinct from the offsets the browser specs claim (bulk-transfer 0,
- * host-delete 10/20) and from the CLI transfer spec's 30. Kept small because
- * requiring orbit cuts the ~97 Ubuntu simulations down to ~39 — the pool this
- * draws from is far shallower than the raw platform count suggests.
- */
-const LOCK_OFFSET = 5;
 /** Each attempt is a fresh coin flip, so 5 leaves a ~3% chance of a false failure. */
 const ATTEMPTS = 5;
 /** Orbit's script poll runs on a ~60s interval, so one round trip needs well over a minute. */
@@ -149,11 +142,7 @@ test.describe('fleetctl mdm lock lifecycle · linux', () => {
     // Linux is not an MDM platform, so fleetctl's client-side guard never
     // applies and no MDM-connected host is needed. Orbit is what polls for the
     // lock script, though, so a host without it could never complete the lock.
-    host = await findSimulatedHostForMdm(request, 'linux', {
-      mdmConnected: false,
-      withOrbit: true,
-      offset: LOCK_OFFSET,
-    });
+    host = await findSimulatedHostForMdm(request, 'cli/premium/mdm-lock-lifecycle#locked');
     expect(host, 'no simulated linux host with orbit available to lock').toBeTruthy();
 
     const res = await fleetctl(['mdm', 'lock', '--host', host!.hostname]);

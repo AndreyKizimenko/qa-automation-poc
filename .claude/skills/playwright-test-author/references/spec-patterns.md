@@ -96,8 +96,9 @@ split.
 
 **Label targeting with borrowed simulations.** `e2e/premium/policies/policy-label-targets.spec.ts`
 (`e2e/premium/controls/os-settings/profile-label-targets.spec.ts` for profiles, from the MDM-enrolled pool).
-- A named slice constant (`SIM_OFFSET`), claimed in the registry comment on the picker in
-  `helpers/api/hosts.ts`, and passed to `borrowSims` (`mdm: true` for profiles).
+- A claim of its own in `helpers/claims.ts` (`'<spec path>#outside'`, pool `plain`, or `mdm` for
+  profiles, `use: 'moved'`), passed to `borrowSims({ claim, to })`. `npm run lint:claims` says whether it
+  overlaps another spec's or runs past its pool.
 - Labels from `seed.label`; what the test creates in the UI (the policies) gets `cleanup.add` right after
   its save. The undo runs newest first: what targets the labels, then the labels (Fleet refuses to delete
   a label still targeted), then the simulations go back to Unassigned.

@@ -137,6 +137,7 @@ module.exports = tseslint.config(
       '.playwright-mcp/**',
       'eslint.config.js', // This config file itself — can't type-check with its own rules
       'eslint-rules/**', // Plain JS outside the tsconfig, for the same reason; `npm run lint:rules` tests it
+      'scripts/**', // Plain JS outside the tsconfig, for the same reason; `npm run lint:claims` runs it
     ],
   },
 );

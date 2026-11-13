@@ -57,7 +57,7 @@ test.describe('Premium • Software • no-teams views (Unassigned)', () => {
     hostDetails,
     request,
   }) => {
-    const [hostId] = await findSimulations(request, 'linux', 1, 5);
+    const [hostId] = await findSimulations(request, 'e2e/premium/software/no-teams-views#library-read');
     expect(hostId, 'an online Linux simulation on Unassigned').toBeDefined();
 
     const name = `fleet-pw-unassigned-${runNonce()}`;

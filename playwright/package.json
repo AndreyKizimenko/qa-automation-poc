@@ -36,8 +36,9 @@
     "lint:prune": "eslint . --max-warnings 0 --prune-suppressions",
     "lint:rules": "node eslint-rules/tests.js",
     "lint:contract": "node eslint-rules/count.js",
+    "lint:claims": "node scripts/check-claims.js",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint:rules && npm run lint"
+    "check": "npm run typecheck && npm run lint:rules && npm run lint:claims && npm run lint"
   },
   "keywords": [],
   "author": "",

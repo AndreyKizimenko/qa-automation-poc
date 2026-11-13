@@ -49,9 +49,9 @@ test.describe('Shared • Policies • policy hosts', () => {
     hostDetails,
     request,
   }) => {
-    const [darwin] = await findSimulations(request, 'darwin', 1, 6);
-    const [linux] = await findSimulations(request, 'linux', 1, 6);
-    const [windows] = await findSimulations(request, 'windows', 1, 2);
+    const [darwin] = await findSimulations(request, 'e2e/shared/policies/policy-hosts#darwin');
+    const [linux] = await findSimulations(request, 'e2e/shared/policies/policy-hosts#linux');
+    const [windows] = await findSimulations(request, 'e2e/shared/policies/policy-hosts#windows');
     expect([darwin, linux, windows], 'an online simulation of each platform').not.toContain(undefined);
 
     const marker = `pw-policy-hosts-${runNonce()}`;
@@ -106,7 +106,7 @@ test.describe('Shared • Policies • policy hosts', () => {
     // Two refetches and a minute of list reads.
     test.setTimeout(240_000);
 
-    const hosts = await findSimulations(request, 'linux', 2, 6);
+    const hosts = await findSimulations(request, 'e2e/shared/policies/policy-hosts#linux');
     expect(hosts, 'two online Linux simulations').toHaveLength(2);
     const names = await Promise.all(hosts.map((id) => getHostDisplayName(request, id)));
 

@@ -30,9 +30,6 @@ import { deleteFleetPolicies, listHostPolicyIds, requireRealHost } from '@helper
 import { ownName } from '@helpers/own-name';
 import type { PolicyTarget } from '@pages';
 
-/** Which slice of the simulations this spec borrows (see `findSimulations`). */
-const SIM_OFFSET = 2;
-
 test.describe('Premium • Policies — label targeting', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
@@ -49,7 +46,7 @@ test.describe('Premium • Policies — label targeting', () => {
   }) => {
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
-    const [s1, s2] = await borrowSims({ platform: 'darwin', count: 2, offset: SIM_OFFSET, to: vmsFleetId });
+    const [s1, s2] = await borrowSims({ claim: 'e2e/premium/policies/policy-label-targets#outside', to: vmsFleetId });
     const ours = [vm.id, s1, s2];
 
     const label = {

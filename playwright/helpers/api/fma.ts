@@ -2,6 +2,7 @@ import { APIRequestContext, expect } from '@playwright/test';
 import * as crypto from 'crypto';
 import { apiUrl, authHeaders, expectOk } from './core';
 import { getSoftwarePackage } from './software';
+import type { CatalogSlug } from '../claims';
 
 interface FmaListEntry {
   id: number;
@@ -101,11 +102,15 @@ export async function findAvailableFleetMaintainedApp(
  * resulting `software_title_id`. The actual CDN fetch happens
  * asynchronously on the server; the title may take a few seconds to
  * appear in the fleet's titles list.
+ *
+ * Only a slug claimed in `helpers/claims.ts` (`CATALOG_CLAIMS`) is accepted: a
+ * fleet takes each app once, so two specs adding the same one to the same
+ * fleet would refuse each other.
  */
 export async function addFmaToFleet(
   request: APIRequestContext,
   fleetId: number,
-  slug: string,
+  slug: CatalogSlug,
 ): Promise<{ titleId: number }> {
   const fmaId = await findFmaIdBySlug(request, fleetId, slug);
   const res = await request.post(apiUrl('software/fleet_maintained_apps'), {

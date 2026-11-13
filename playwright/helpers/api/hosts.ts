@@ -1,5 +1,6 @@
 import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders, expectOk, type HostRef } from './core';
+import { simClaim, TRANSFER_POOL_END, type SimClaimKey } from '../claims';
 
 /**
  * The `platform` query param returns a label group that can include hosts
@@ -264,13 +265,9 @@ export async function findOnlineHost(
  * first hosts ascending, so mutating from the other end keeps a parallel worker
  * from having a host moved out from under it mid-assertion.
  *
- * `offset` claims a distinct slice of the pool. The suite runs fully parallel,
- * so two mutating specs on the same platform must not be handed the same hosts —
- * each picks a slice and the offsets are kept distinct across specs.
- *
- * Slices claimed: darwin 0–2 `bulk-transfer.spec.ts`, 10–11 and 20
- * `host-delete.spec.ts`, 30 `tests/cli/premium/fleets.spec.ts`; windows 0–2
- * `host-transfer-permissions.spec.ts`, 10 `host-delete.spec.ts`.
+ * The slice is the claim's (`helpers/claims.ts`, pool `transfer`): the suite runs
+ * fully parallel, so two mutating specs on the same platform must not be handed
+ * the same hosts, and the registry's check holds the claims apart.
  *
  * Pages the pool until `offset + count` hosts of the requested platform have
  * been collected, rather than reading the slice off one fixed-size page: the
@@ -283,10 +280,9 @@ export async function findOnlineHost(
  */
 export async function findSimulatedHostIds(
   request: APIRequestContext,
-  platform: 'darwin' | 'windows',
-  count: number,
-  offset = 0,
+  claim: SimClaimKey<'transfer'>,
 ): Promise<HostRef[]> {
+  const { platform, count, offset } = simClaim(claim);
   const needed = offset + count;
   const perPage = 100;
   // Bounds the walk at 1000 online hosts so a pool that can never satisfy the
@@ -310,12 +306,11 @@ export async function findSimulatedHostIds(
 }
 
 /**
- * How far into the end of the display-name ordering the borrowing specs start.
- * {@link findSimulatedHostIds} hands the transfer and delete specs slices at
- * offsets 0–25 of that same ordering, so starting past 40 keeps a borrowed
- * simulation from being moved or deleted by one of them mid-test.
+ * How far into the end of the display-name ordering the borrowing specs start:
+ * the `transfer` pool's claims sit below it, so a borrowed simulation is never
+ * one a transfer or delete spec moves or deletes mid-test.
  */
-const BORROW_SKIP = 40;
+const BORROW_SKIP = TRANSFER_POOL_END;
 
 /**
  * Online, MDM-enrolled simulations — hosts a label-targeting spec can move onto
@@ -330,20 +325,14 @@ const BORROW_SKIP = 40;
  * profiles draw here. Everything else uses {@link findSimulations}, whose pool is
  * the rest: the two can't hand out the same host.
  *
- * `offset` claims a distinct slice, as with {@link findSimulatedHostIds}. The
- * ordering covers every fleet, so a host another spec has borrowed keeps its
- * place and the slices stay apart. Returns fewer than `count` when the pool
- * can't cover it — callers assert on the length they need.
- *
- * Slices claimed: darwin + windows 0–1 `profile-label-targets.spec.ts`;
- * darwin 2–3 `profile-declarations.spec.ts` (both moved onto the VMs fleet).
+ * The slice is the claim's (`helpers/claims.ts`, pool `mdm`). The ordering
+ * covers every fleet, so a host another spec has borrowed keeps its place and
+ * the slices stay apart. Returns fewer than the claim's `count` when the pool
+ * can't cover it — callers assert on the length they need. `borrowSims` with
+ * `mdm` is this, moved onto a fleet and returned after the test.
  */
-export async function findMdmSimulations(
-  request: APIRequestContext,
-  platform: 'darwin' | 'windows',
-  count: number,
-  offset = 0,
-): Promise<number[]> {
+export async function findMdmSimulations(request: APIRequestContext, claim: SimClaimKey<'mdm'>): Promise<number[]> {
+  const { platform, count, offset } = simClaim(claim);
   return findBorrowableSimulations(request, platform, count, offset, (h) => !!h.mdm?.connected_to_fleet);
 }
 
@@ -353,34 +342,12 @@ export async function findMdmSimulations(
  * targets, who a label holds. Disjoint from {@link findMdmSimulations}' pool;
  * same slicing.
  *
- * Slices claimed: linux 0–1 `software-label-targets.spec.ts`, 2–4
- * `shared/labels/labels.spec.ts` (a manual label's members, never moved), 5
- * `premium/software/no-teams-views.spec.ts` (its Library read, never moved), 6–7
- * `shared/policies/policy-hosts.spec.ts` (refetched for a policy's answer, never
- * moved), 8–9 `shared/hosts/filters.spec.ts` (a manual label's member and a
- * search target, read only), 10–19 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (batch
- * script runs on Unassigned, never moved; see {@link findScriptableSimulations}),
- * 20–29 `shared/hosts/sort.spec.ts` (a manual label's members, read only);
- * darwin 0–1
- * `profile-broken-labels.spec.ts` (label members, never moved), 2–3
- * `policy-label-targets.spec.ts`, 4–5 `report-label-targets.spec.ts` (moved
- * onto the VMs fleet), 6 `shared/policies/policy-hosts.spec.ts` (read only), 7
- * `shared/hosts/sort.spec.ts` (a manual label's member, read only),
- * 10–39 `shared/controls/scripts/batch-schedule-cancel.spec.ts` (a batch script
- * run on Unassigned, never moved);
- * windows 0–1 `premium/hosts/host-idp-username.spec.ts`
- * (an IdP username set and removed, never moved), 2
- * `shared/policies/policy-hosts.spec.ts` (read only), 3
- * `shared/hosts/sort.spec.ts` (a manual label's member, read only). On free, windows 0 is read
- * by `free/hosts/host-idp-username.spec.ts` and `api/free/license.spec.ts`,
- * both of which write nothing.
+ * The slice is the claim's (`helpers/claims.ts`, pool `plain`), which says
+ * what the spec does to its hosts: several only read theirs (a label's
+ * members, a search target), and only those may share one.
  */
-export async function findSimulations(
-  request: APIRequestContext,
-  platform: 'darwin' | 'windows' | 'linux',
-  count: number,
-  offset = 0,
-): Promise<number[]> {
+export async function findSimulations(request: APIRequestContext, claim: SimClaimKey<'plain'>): Promise<number[]> {
+  const { platform, count, offset } = simClaim(claim);
   return findBorrowableSimulations(request, platform, count, offset, (h) => !h.mdm?.connected_to_fleet);
 }
 
@@ -399,15 +366,12 @@ export async function findSimulations(
  * when the set is thin (a refresh that didn't run) — callers assert on the
  * length they need.
  *
- * Claimed: linux, 51, `premium/hosts/bulk-transfer.spec.ts` (staged on a
- * throwaway fleet for "Select all matching hosts"); darwin, 1,
- * `shared/hosts/filters.spec.ts` (a manual label's offline member, never moved).
+ * The claim (`helpers/claims.ts`, pool `offline`) gives the platform and how
+ * many: the set has no offsets, so two claims on one platform would get the
+ * same hosts, and the registry's check refuses that unless both only read.
  */
-export async function findOfflineSimulations(
-  request: APIRequestContext,
-  platform: 'darwin' | 'windows' | 'linux',
-  count: number,
-): Promise<number[]> {
+export async function findOfflineSimulations(request: APIRequestContext, claim: SimClaimKey<'offline'>): Promise<number[]> {
+  const { platform, count } = simClaim(claim);
   const res = await request.get(apiUrl('hosts'), {
     headers: authHeaders(),
     params: {
@@ -460,11 +424,9 @@ async function findBorrowableSimulations(
  */
 export async function findScriptableSimulations(
   request: APIRequestContext,
-  platform: 'darwin' | 'linux',
-  count: number,
-  offset: number,
+  claim: SimClaimKey<'plain'>,
 ): Promise<HostRef[]> {
-  const slice = new Set(await findSimulations(request, platform, count, offset));
+  const slice = new Set(await findSimulations(request, claim));
   const unassigned = await listFleetHosts(request, 0, { status: 'online' });
   return unassigned
     .filter((h) => slice.has(h.id) && !h.real && !!h.orbitVersion && h.scriptsEnabled !== false)
@@ -515,54 +477,22 @@ export interface MdmTargetHost extends HostRef {
   mdmConnected: boolean;
 }
 
-export interface MdmHostRequirements {
-  /**
-   * Whether the host must be connected to Fleet MDM.
-   *
-   * **This must be chosen, not left to chance.** `fleetctl mdm` refuses a host
-   * that isn't MDM-connected *client-side* (`hostMdmActionSetup` in
-   * `cmd/fleetctl/fleetctl/mdm.go`), before it ever calls the server — but only
-   * for platforms where `MDMTurnedOnSupported` is true (darwin, ios, ipados,
-   * windows, android; **not** Linux). That refusal is what makes the error-path
-   * specs safe: a *connected* macOS or Windows simulation would sail through and
-   * enqueue a real lock or wipe. About a third of the pool is enrolled, so
-   * picking blind is a coin flip.
-   *
-   * `false` for premium error-path specs. `true` is only safe on **free**, where
-   * the licence check short-circuits before anything is enqueued.
-   */
-  mdmConnected: boolean;
-  /**
-   * Require a host that runs orbit.
-   *
-   * Only ~40% of the pool does (`osquery-perf --orbit_prob` defaults to 0.5), and
-   * **only those can ever complete a lock or unlock**: on Windows and Linux both
-   * run as scripts, which orbit is what polls for. Lock a simulation without
-   * orbit and it sits at `pending_action: 'lock'` forever — after which Fleet
-   * refuses every further lock *and* unlock, so the host can only be deleted.
-   *
-   * Required for any spec that performs a real lock. Leave unset for error-path
-   * specs, which never reach the server and would only shrink their pool.
-   */
-  withOrbit?: boolean;
-  /** Claims a distinct slice so parallel specs don't collide. */
-  offset?: number;
-}
-
 /**
  * A simulated host suitable for a `fleetctl mdm` command.
  *
- * Reads the list endpoint alone — it carries `hostname`, `mdm.connected_to_fleet`
- * and `orbit_version`, so no per-host detail fetch is needed. Draws from the
+ * The claim (`helpers/claims.ts`, pool `fleetctl-mdm`) says which: MDM on or
+ * off, orbit or not, and the offset. Reads the list endpoint alone — it carries
+ * `hostname`, `mdm.connected_to_fleet` and `orbit_version`, so no per-host
+ * detail fetch is needed. Draws from the
  * **end** of the display-name ordering, like {@link findSimulatedHostIds}, to stay
  * clear of the read-only pickers.
  */
 export async function findSimulatedHostForMdm(
   request: APIRequestContext,
-  platform: 'darwin' | 'windows' | 'linux',
-  requirements: MdmHostRequirements,
+  claim: SimClaimKey<'fleetctl-mdm'>,
 ): Promise<MdmTargetHost | null> {
-  const { mdmConnected, withOrbit = false, offset = 0 } = requirements;
+  const { platform, mdmConnected, withOrbit = false, offset } = simClaim(claim);
+  if (mdmConnected === undefined) throw new Error(`[findSimulatedHostForMdm] claim ${claim} must say whether MDM is on`);
   const perPage = 100;
   const maxPages = 10;
   const matches: OnlineHost[] = [];

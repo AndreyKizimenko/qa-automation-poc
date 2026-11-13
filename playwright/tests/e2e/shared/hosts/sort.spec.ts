@@ -57,9 +57,9 @@ async function labelOfDistinctOsVersions(
   labelName: string,
 ): Promise<{ labelId: number; hosts: HostSummary[] }> {
   const ids = [
-    ...(await findSimulations(request, 'darwin', 1, 7)),
-    ...(await findSimulations(request, 'windows', 1, 3)),
-    ...(await findSimulations(request, 'linux', 10, 20)),
+    ...(await findSimulations(request, 'e2e/shared/hosts/sort#darwin')),
+    ...(await findSimulations(request, 'e2e/shared/hosts/sort#windows')),
+    ...(await findSimulations(request, 'e2e/shared/hosts/sort#linux')),
   ];
   const byVersion = new Map<string, HostSummary>();
   for (const id of ids) {

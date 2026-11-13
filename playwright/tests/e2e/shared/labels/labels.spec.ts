@@ -150,7 +150,7 @@ test.describe('Labels • Manual label lifecycle', () => {
     // assertion for this one test.
     pageHealth.disable();
 
-    const ids = await findSimulations(request, 'linux', 3, 2);
+    const ids = await findSimulations(request, 'e2e/shared/labels/labels#members');
     expect(ids, 'three online Linux simulations for the manual label').toHaveLength(3);
     hosts = await Promise.all(ids.map(async (id) => ({ id, name: await getHostDisplayName(request, id) })));
 

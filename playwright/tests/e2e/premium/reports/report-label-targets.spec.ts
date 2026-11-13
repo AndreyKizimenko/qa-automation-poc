@@ -38,9 +38,6 @@ import {
 } from '@helpers/api';
 import { runNonce } from '@helpers/profiles';
 
-/** Which slice of the simulations this spec borrows (see `findSimulations`). */
-const SIM_OFFSET = 4;
-
 test.describe('Premium • Reports — label targeting', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
@@ -54,7 +51,7 @@ test.describe('Premium • Reports — label targeting', () => {
   }) => {
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
-    const sims = await findSimulations(request, 'darwin', 2, SIM_OFFSET);
+    const sims = await findSimulations(request, 'e2e/premium/reports/report-label-targets#outside');
     expect(sims, 'needs two online macOS simulations on Unassigned').toHaveLength(2);
     const [s1, s2] = sims;
     const ours = [vm.id, s1, s2];

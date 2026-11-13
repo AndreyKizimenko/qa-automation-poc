@@ -31,10 +31,11 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
   [`gitops/loadtest/`](../gitops/loadtest/README.md); credentials live
   in `.env.loadtest` (gitignored), so no CI workflow targets them.
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
-- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates).
+- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates, `claims.ts` for which spec uses which simulations and catalog apps).
 - `fixtures.ts` — two test objects: `apiTest`, with the worker fixtures (fleet ids, `liveMacosHost`), the `cleanup` stack and the data fixtures built on it (`throwawayFleet`, `borrowSims`, `seed`), and nothing that needs a page, and `test`, which extends it with the page-object fixtures, the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `eslint-rules/` — the suite's own lint rules (`suite/*`), their tests and the per-rule count; see *Pre-PR check*.
+- `scripts/` — `check-claims.js`, the check `npm run lint:claims` runs on `helpers/claims.ts`.
 - `test-data/` — fixtures consumed by specs, organised platform-first (`apple/macos/`, `linux/`, `windows/`, plus `shared/`), then by category — e.g. `apple/macos/scripts/macos-create-marker.sh`; see `test-data/README.md`.
 - `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `architecture-audit.md` (what has to change for the suite to grow fivefold, with the working list of next steps), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `long-term-goals.md` (coverage that waits on infrastructure the instances lack), `gitops-coverage/` (the plan for the nightly's gitops coverage), `loadtest-runs/` (dated load-test write-ups), `test-audit/` (the manual audit's per-test breakdown and `FINDINGS.md`, frozen on 2026-11-13: a test no longer adds or updates an entry there), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
@@ -86,10 +87,16 @@ regenerate both on every restart.
 - **A simulation can answer what Fleet decides server-side** — which hosts a profile is listed for, which are
   offered a software title, which a policy or report targets — so a label-targeting spec moves two onto the VMs
   fleet as the "outside the label" hosts beside the real VM. Borrow them with the `borrowSims` fixture, which
-  moves them and returns them to Unassigned after the test: from `findSimulations`' pool, or with `mdm: true`
-  from `findMdmSimulations`' (only for profiles: MDM-enrolled simulations are scarce; the two pools are
-  disjoint), each spec on its own slice (the registry is in `helpers/api/hosts.ts`). The VMs sweep returns
-  any a killed run left.
+  moves them and returns them to Unassigned after the test, on the spec's own claim.
+- **Every simulation a spec uses is claimed in `helpers/claims.ts`**, and the pickers take the claim's key,
+  not a number: `findSimulations(request, 'e2e/shared/hosts/sort#linux')`. A claim names its pool (`plain`;
+  `mdm` only for profiles, since MDM-enrolled simulations are scarce; `transfer` for moving or deleting
+  hosts; `offline`; `fleetctl-mdm`), platform, slice and what the spec does to the hosts (`read`, `changed`,
+  `moved`, `deleted`). `npm run lint:claims`, inside `npm run check`, fails on two claims sharing hosts on a
+  tier unless all of them only read, on a claim bigger than its pool measured, and on a key its spec
+  doesn't use or another spec does. A Fleet-maintained app a spec adds to a fleet is claimed there too
+  (`CATALOG_CLAIMS`); `addFmaToFleet` takes only a claimed slug. The VMs sweep returns any simulation a
+  killed run left.
 - **The simulations re-enroll with the global enroll secret** on every daemon restart. Never replace the global
   list from a snapshot or post it empty: `restoreGlobalEnrollSecrets` is the one write a spec makes there, and
   `EnrollSecretModal` acts on a secret by its value only (`shared/settings/enroll-secrets.spec.ts`).
@@ -315,7 +322,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 ## Pre-PR check
 
 ```bash
-npm run check          # tsc --noEmit + the lint rules' own tests + eslint
+npm run check          # tsc --noEmit + the lint rules' own tests + the claims check + eslint
 ```
 
 This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`QA — Nightly`, above), but don't rely on that to catch what `npm run check` would.

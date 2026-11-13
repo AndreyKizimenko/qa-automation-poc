@@ -94,8 +94,8 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    (installs, runs, verifies, reports inventory) only a real VM can answer: `requireRealHost(request,
    platform)`, `vmsFleetId`, `liveMacosHost`, each refusing a test without its VM's tag
    (`{ tag: '@vm-linux' }`). To put simulations on a fleet beside a VM, borrow them with
-   the `borrowSims` fixture (`mdm: true` only for profiles: a scarce pool) on a slice you claim in the
-   registry in `helpers/api/hosts.ts`; it returns them after the test.
+   the `borrowSims` fixture, on a claim of your own in `helpers/claims.ts` (pool `mdm` only for
+   profiles: it's scarce); it returns them after the test.
 5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either, and
    start the spec from the exemplar `references/spec-patterns.md` names for its shape. A page object
    exposes locators and intent (`openControlsTab()`, `runRowAction(name, 'Delete')`), waits until its own

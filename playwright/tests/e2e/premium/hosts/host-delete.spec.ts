@@ -43,7 +43,7 @@ test.describe('Premium • Hosts • bulk delete', () => {
   });
 
   test('deletes the selected hosts', async ({ hostsList, workstationsFleetId, request }) => {
-    const hosts = await findSimulatedHostIds(request, 'darwin', 2, 10);
+    const hosts = await findSimulatedHostIds(request, 'e2e/premium/hosts/host-delete#pair');
     expect(hosts, 'expected simulated macOS hosts to delete').toHaveLength(2);
     const hostIds = hosts.map((h) => h.id);
 
@@ -80,7 +80,7 @@ test.describe('Premium • Hosts • delete by role', () => {
     vmsFleetId,
     request,
   }) => {
-    const [host] = await findSimulatedHostIds(request, 'darwin', 1, 20);
+    const [host] = await findSimulatedHostIds(request, 'e2e/premium/hosts/host-delete#single');
     expect(host, 'expected a simulated macOS host to delete').toBeDefined();
 
     // A team admin only sees hosts on their own fleets, so the host is staged
@@ -111,7 +111,7 @@ test.describe('Premium • Hosts • delete from host details', () => {
     hostDetails,
     request,
   }) => {
-    const [host] = await findSimulatedHostIds(request, 'windows', 1, 10);
+    const [host] = await findSimulatedHostIds(request, 'e2e/premium/hosts/host-delete#windows');
     expect(host, 'expected a simulated Windows host to delete').toBeDefined();
 
     await hostDetails.goto(host.id);

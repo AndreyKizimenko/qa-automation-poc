@@ -47,7 +47,7 @@ test.describe('Premium • Hosts • IdP username', () => {
     hostDetails,
     request,
   }) => {
-    const [hostId] = await findSimulations(request, 'windows', 1, 0);
+    const [hostId] = await findSimulations(request, 'e2e/premium/hosts/host-idp-username#user-card');
     expect(hostId, 'expected an online simulated Windows host').toBeDefined();
     const idpUsername = username('ui');
 
@@ -100,7 +100,7 @@ test.describe('Premium • Hosts • IdP username', () => {
   });
 
   test('the device_mapping API sets and removes the IdP username', async ({ hostDetails, request }) => {
-    const [hostId] = await findSimulations(request, 'windows', 1, 1);
+    const [hostId] = await findSimulations(request, 'e2e/premium/hosts/host-idp-username#api');
     expect(hostId, 'expected an online simulated Windows host').toBeDefined();
     const idpUsername = username('api');
 
@@ -131,7 +131,7 @@ test.describe('Premium • Hosts • IdP username', () => {
   });
 
   test('a global observer is not offered Add user', async ({ browser, request }) => {
-    const [hostId] = await findSimulations(request, 'windows', 1, 0);
+    const [hostId] = await findSimulations(request, 'e2e/premium/hosts/host-idp-username#user-card');
     expect(hostId, 'expected an online simulated Windows host').toBeDefined();
 
     await withStaticUser(browser, 'global-observer', async (page) => {

@@ -89,7 +89,7 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     scriptBatchDetails,
     request,
   }) => {
-    const ids = await findSimulations(request, 'linux', 3, 10);
+    const ids = await findSimulations(request, 'e2e/shared/controls/scripts/batch-schedule-cancel#batch');
     const hosts = (await listFleetHosts(request, 0, { status: 'online' })).filter((h) => ids.includes(h.id));
     expect(hosts, 'the claimed simulations should be online on Unassigned').toHaveLength(3);
     const names = sorted(hosts.map((h) => h.displayName));
@@ -170,7 +170,7 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
     // Up to 2 minutes to the scheduled time, up to 2 more for the worker to start it.
     test.setTimeout(420_000);
 
-    const [host] = await findScriptableSimulations(request, 'linux', 7, 13);
+    const [host] = await findScriptableSimulations(request, 'e2e/shared/controls/scripts/batch-schedule-cancel#scheduled');
     expect(host, 'no orbit simulation online on Unassigned in linux 13–19').toBeTruthy();
 
     const scriptName = `pw-batch-sched-${nonce()}.sh`;
@@ -230,7 +230,7 @@ test.describe('Shared • Controls • Batch script schedule and cancel', () => 
       fleetId: 0,
       status: 'online',
     });
-    const hosts = (await findScriptableSimulations(request, 'darwin', 30, 10)).filter((h) => !inScaleBatch.has(h.id));
+    const hosts = (await findScriptableSimulations(request, 'e2e/shared/controls/scripts/batch-schedule-cancel#edited')).filter((h) => !inScaleBatch.has(h.id));
     expect(hosts.length, 'too few orbit simulations in darwin 10–39 outside the macOS label').toBeGreaterThanOrEqual(5);
     const ids = hosts.map((h) => h.id);
 

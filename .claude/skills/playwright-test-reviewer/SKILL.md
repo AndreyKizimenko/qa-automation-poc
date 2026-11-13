@@ -157,7 +157,8 @@ test built on them passes or fails on timing:
 - `mode: 'serial'` on tests that share no id: one failure skips the rest. Tests that only must not overlap
   use `mode: 'default'` in one file. And a serial lifecycle whose first step can't run again over its own
   failed attempt's leftovers.
-- A simulation slice with no claim in the registry comment on its picker, or overlapping one.
+- A claim in `helpers/claims.ts` whose `use` understates what the spec does (`read` on hosts it moves or
+  changes): `npm run lint:claims` lets read claims share hosts, so that is the overlap it can't see.
 - UI copy (a toast, a heading, an activity sentence) typed as a literal in a spec when a page object or
   `activityCopy` holds it: one more file to edit the day Fleet rewords it.
 - A time budget copied as a bare number with another spec's comment, and a file that parallel workers
