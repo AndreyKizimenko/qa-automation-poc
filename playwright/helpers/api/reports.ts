@@ -180,11 +180,11 @@ export async function getHostReportRows(
   return results.map((r) => r.columns);
 }
 
-/** Delete a report by id; safe to call on an already-deleted id. */
+/** Deletes a report by id; one already gone (404) is not an error. */
 export async function deleteReport(request: APIRequestContext, id: number): Promise<void> {
-  await request
-    .delete(apiUrl(`queries/id/${id}`), { headers: authHeaders() })
-    .catch((err) => console.warn(`[deleteReport] ${id}:`, err));
+  const res = await request.delete(apiUrl(`queries/id/${id}`), { headers: authHeaders() });
+  if (res.status() === 404) return;
+  await expectOk(res, `Failed to delete report ${id}`);
 }
 
 /**
