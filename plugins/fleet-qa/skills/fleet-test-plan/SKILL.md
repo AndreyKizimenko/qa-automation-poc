@@ -71,8 +71,9 @@ come from the catalog in `${CLAUDE_PLUGIN_ROOT}/skills/fleet-explore/references/
   to Product and Engineering.
 - **Keep what other people wrote.** Ticked boxes stay ticked. Notes, links and rows from Product or
   the engineer stay unless they're clearly superseded, and the change list says why. Adding a
-  surface prefix or concrete inputs to someone's row is fine. Changing what the row checks is a
-  change, and it needs a reason.
+  surface prefix or concrete inputs to someone's row is fine, and so is moving it to the section
+  `plan-format.md` gives it, as long as its wording and checkbox travel with it. Changing what the
+  row checks is a change, and it needs a reason.
 - **The spec defines "correct".** Code shows where the risk sits and which rows share a path. It
   doesn't decide the expected result. When the code and the spec disagree, keep the spec in the row
   and raise the mismatch as a question.
@@ -108,7 +109,10 @@ python3 $S/story_context.py <N> --out <ws>
 ```
 
 This writes `story.md`, `comments.md`, `test-plan-current.md` and `context.json` (linked PRs sorted
-into docs vs code and cherry-picks, linked issues and bugs, sub-issues, Figma links). Then read:
+into docs vs code and cherry-picks, linked issues and bugs, sub-issues, Figma links). If it reports
+rows hidden in an HTML comment, someone filled in the template's suggested sections without
+un-commenting them: those rows are part of the plan but don't render on the issue, so they come out
+of the comment in this pass. Then read:
 
 1. **The story and every comment.** Decisions and scope changes land in comments and can overrule the
    body. Also read the parent story, sub-issues and linked issues it names, at least their titles and
@@ -147,7 +151,8 @@ into docs vs code and cherry-picks, linked issues and bugs, sub-issues, Figma li
 8. **The live checklists.** Run `git show origin/main:.github/ISSUE_TEMPLATE/story.md` (including the
    commented-out "Suggested checks") and `git show
    origin/main:docs/Contributing/guides/ui/design-qa-considerations.md`. Both change over time, so
-   read them, don't recall them.
+   read them, don't recall them. The template's Test plan headings up to "Supplemental testing",
+   commented-out ones included, are the plan's sections.
 
 ### 2. Map risk (in `notes.md`, not the issue)
 
@@ -173,13 +178,21 @@ check and a worked excerpt. Then write `<ws>/plan.md`: the Test plan section's c
 the template's reminder line. What it comes down to:
 
 - **Sections are the story template's, nothing else**, in the template's order, with a Setup block on
-  top and the global-switch sections (Premium gating, Upgrade, Feature in isolation) last.
+  top. A section the plan uses comes out of the template's HTML comment, because GitHub doesn't
+  render what's inside it. The unused ones stay in the comment.
+- **A row's surface picks its section.** `API:` rows go under API, `GitOps:` rows under GitOps,
+  `UI:` rows under UI. The topic sections (Permissions, Premium gating, Upgrade, Feature in
+  isolation, IdP, Host re-enrollment) take the rows about that topic whatever their surface. Edge
+  cases keeps what has no section of its own, which is device and `fleetctl` cases, under one line
+  that points to the other sections. People look for a check where the template says it lives, so
+  an `API:` row under Edge cases reads as misfiled even when the check is good.
 - **Every check lives in exactly one row.** List each check as behavior × entry point × input and
-  give it one home. Run the full input matrix on one entry point, and send one representative bad
-  input through each of the others.
-- **Rows read** `- [ ] <Surface>: <action with exact inputs> → <observable result>`, with Surface one
-  of `UI`, `API`, `fleetctl`, `GitOps`, `Device`. One behavior per row; a matrix is one row; reasons
-  and how-to-check details go in `notes.md`.
+  give it one home. Run the full input matrix once, through the API, and send one representative bad
+  input through each other entry point, in that entry point's own section.
+- **Rows read** `- [ ] <Surface>: <action with exact inputs> → <observable result>`, with exactly one
+  Surface out of `UI`, `API`, `fleetctl`, `GitOps`, `Device`. One behavior per row; a matrix is one
+  row; a check through two entry points is two rows; reasons and how-to-check details go in
+  `notes.md`.
 - **Size follows the change**: about 12–25 rows for a one-field change, 30–45 for a feature spanning
   UI, API, GitOps and devices. The person's share fits one sitting of an hour or two, with each global
   switch happening once.
@@ -207,12 +220,23 @@ wrong input isn't right: fix the input and say so in `changes.md`. Then, using t
   them (see Hard lines). Only change the spec's expected result when a decision in the story, its
   comments or the PR conversation did.
 - **Collapse** rows that the code shows are one path, keeping all their inputs.
+- **Move** rows that sit in the wrong section to the one `plan-format.md` gives them: an `API:` row
+  under Edge cases goes to API, and rows inside the template's HTML comment come out with their
+  section. The row's wording and checkbox travel with it. The one rewording a move allows is a
+  split: a row that checks through two entry points with different sections, named in its prefix
+  (`API, GitOps:`) or in its text ("…and the same through GitOps"), becomes one row per surface.
+  Each half keeps its part of the wording and the original checkbox state, and restates the expected
+  result so it reads on its own. Product's Core flow rows stay where Product put them.
 - **Flag, don't delete,** rows the diff doesn't seem to implement. Either the PR is incomplete or the
   row is stale, and the engineer is the one who can say which. These go in questions.
 - **Remove** only true duplicates and rows the story itself has dropped.
 
+The same goes for a design pass that starts from an existing plan: keep what's right, and move what's
+misfiled.
+
 Write `<ws>/changes.md` with one line per added, changed, collapsed, removed or flagged row and its
-reason.
+reason. Moved rows get one line per section they left ("Edge cases → API: 9 rows, wording
+unchanged"), not one per row, so the real changes stay easy to find.
 
 ### 6. Deliver
 
@@ -235,7 +259,9 @@ In chat:
 
 Before you deliver, do a dedupe pass. Read the plan once, row by row, and for each row ask whether
 another row already checks the same behavior through the same entry point with the same input. If
-one does, merge the two, keep every distinct input, and note the merge in `changes.md`. Then reread
+one does, merge the two, keep every distinct input, and note the merge in `changes.md`. In the same
+read, check each row sits in the section its surface or topic gives it, and that no section with
+rows is still inside the template's HTML comment. Then reread
 `notes.md` against `plan.md`. If `notes.md` says a row can't happen as
 written, or will behave differently, change the row (or flag it with a question) instead of leaving
 the finding in your notes only.

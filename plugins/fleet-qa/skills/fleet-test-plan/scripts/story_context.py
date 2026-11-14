@@ -51,6 +51,14 @@ def strip_html_comments(text):
     return re.sub(r"<!--.*?-->", "", text, flags=re.S)
 
 
+def hidden_story_rows(plan):
+    """Rows with a surface prefix inside an HTML comment: someone filled in the template's suggested
+    sections without un-commenting them, so GitHub doesn't render them. The template's own rows
+    ("Verify…", "Test all…") have no surface prefix and aren't counted."""
+    hidden = "\n".join(re.findall(r"<!--.*?-->", plan, flags=re.S))
+    return re.findall(r"^\s*- \[(?: |x|X)\] (?:UI|API|fleetctl|GitOps|Device)\b[^:\n]*:", hidden, flags=re.M)
+
+
 def lookup_numbers(repo, numbers):
     """Resolve #N references to issue/PR type, title, state and labels in batched GraphQL calls."""
     owner, name = repo.split("/")
@@ -140,6 +148,7 @@ def main():
     rows = re.findall(r"^\s*- \[( |x|X)\] ", visible, flags=re.M)
     ticked = sum(1 for r in rows if r.lower() == "x")
     todo_only = bool(re.search(r"^\s*-\s*TODO\s*$", visible, flags=re.M)) and not rows
+    hidden = hidden_story_rows(plan)
 
     # Linked PRs: timeline cross-references plus anything the body/comments link to.
     timeline = [json.loads(l) for l in gh(
@@ -171,20 +180,25 @@ def main():
         ".[] | {number, title, state}").splitlines() if l.strip()]
 
     impl = [p for p in prs if p["kind"] == "code" and (p["merged"] or p["state"] == "OPEN")]
+    has_plan = bool(rows or hidden)
     if impl:
-        phase = "pr-update" if rows else "pr-first"
+        phase = "pr-update" if has_plan else "pr-first"
     else:
-        phase = "design-update" if rows else "design-first"
+        phase = "design-update" if has_plan else "design-first"
 
     ctx = {"issue": a.issue, "title": iss["title"], "labels": labels,
            "milestone": (iss.get("milestone") or {}).get("title"), "phase_guess": phase,
-           "plan_rows": len(rows), "plan_rows_ticked": ticked, "plan_is_template_only": todo_only or not rows,
+           "plan_rows": len(rows), "plan_rows_ticked": ticked, "plan_rows_hidden": len(hidden),
+           "plan_is_template_only": todo_only or not has_plan,
            "prs": prs, "issues": issues, "sub_issues": subs, "figma": figma,
            "referenced_elsewhere": elsewhere}
     (out / "context.json").write_text(json.dumps(ctx, indent=2) + "\n")
 
     print(f"#{a.issue} {iss['title']}  [{', '.join(labels)}]  milestone={ctx['milestone']}")
     print(f"phase guess: {phase}   existing plan rows: {len(rows)} ({ticked} ticked)   comments: {len(comments)}")
+    if hidden:
+        print(f"  + {len(hidden)} rows hidden in an HTML comment (suggested sections filled in but not "
+              "un-commented): they don't render on the issue")
     print(f"figma links: {len(figma)}")
     for p in prs:
         flag = " cherry-pick" if p["cherry_pick"] else ""
