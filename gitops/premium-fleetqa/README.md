@@ -40,7 +40,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance and Mobile (free has no fleets).
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance, Mobile and OS matrix (free has no fleets).
 
 ### Keep the client within a minor of the server
 
@@ -62,11 +62,15 @@ reason, and the `gitops-verify` project asserts each fleet's software set exactl
 
 ### Do not pass `--delete-other-fleets`
 
-`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has a fleet that is deliberately not under gitops**, and that flag would destroy it:
+`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has two fleets that are not under gitops**, and that flag would destroy them:
 
 | fleet | why it is not in gitops |
 |---|---|
 | **Mobile** (104) | Holds ABM/VPP-enrolled mobile state that isn't reproducible from this repo. |
+| **OS matrix** (621) | Holds the device lab's OS-flavour VMs and its spare ones, which enrolled by hand. Created by hand on 2026-11-14 with nothing declared on it: no software, policies, profiles, OS-update settings or disk encryption, since anything set there reaches those machines. Deleting it would drop them all into Unassigned. It is to be declared here, empty, once specs use it. |
+
+`playwright/tests/api/gitops-verify/fleets.spec.ts` checks the instance holds exactly the declared fleets plus
+these two (`HAND_KEPT_FLEETS`).
 
 A run that names only some fleet files also leaves the others alone without the flag — so applying
 `vms.yml` never touches QA or Workstations, and vice versa.

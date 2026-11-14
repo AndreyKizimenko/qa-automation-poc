@@ -39,10 +39,11 @@ export const gitopsConfig = loadAnyConfig(target);
  * The baseline and min variants of a tier declare the same fleets between them
  * (the nightly applies the baseline's QA and VMs files in both passes), so the
  * fleet set the instance should hold is the union of both directories' fleet
- * files. `HAND_KEPT_FLEETS` are the fleets gitops deliberately doesn't declare —
- * see gitops/premium-fleetqa/README.md › "Do not pass --delete-other-fleets".
+ * files. `HAND_KEPT_FLEETS` are the fleets gitops doesn't declare: Mobile, and
+ * OS matrix, where the device lab keeps its OS-flavour VMs — see
+ * gitops/premium-fleetqa/README.md › "Do not pass --delete-other-fleets".
  */
-export const HAND_KEPT_FLEETS = ['Mobile'];
+export const HAND_KEPT_FLEETS = ['Mobile', 'OS matrix'];
 export function siblingConfigDir(): string | undefined {
   const dir = gitopsConfig.scope === 'no-team' ? gitopsConfig.source : path.dirname(path.dirname(gitopsConfig.source));
   const base = path.basename(dir);
