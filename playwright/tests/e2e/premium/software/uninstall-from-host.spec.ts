@@ -29,7 +29,7 @@ import {
 test.describe('Premium • Software • Uninstall from host', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
-  test('an uninstall that fails leaves the software installed, and the Library offers a retry', async ({
+  test('an uninstall that fails leaves the software installed, and the Library offers a retry', { tag: '@vm-linux' }, async ({
     hostDetails,
     vmsFleetId,
     request,

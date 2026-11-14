@@ -14,7 +14,8 @@ module.exports = {
     schema: [],
     messages: {
       toastCopy:
-        'Toast copy typed in a spec: take it from the module that holds the suite\'s toast copy.',
+        'Toast copy typed in a spec: take it from `toastCopy` (`@helpers/toast-copy`), adding the entry there ' +
+        'with the Fleet source that renders it.',
     },
   },
   create(context) {

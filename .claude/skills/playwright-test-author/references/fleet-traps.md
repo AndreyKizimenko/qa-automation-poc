@@ -37,8 +37,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
 - **Root a `filter({ has })` locator at the page.** One built from a scoped locator (`section.getByRole(…)`)
   looks for that scope inside each candidate and matches nothing, so the click waits out the test's timeout.
   `filter({ has: this.page.getByRole(…) })` is relative to each candidate, as intended.
-- **Fleet's radio inputs are visually hidden** behind a styled control: click the `<label>` that wraps the
-  radio, then assert the radio is checked (`TargetLabelSelector`, `IntegrationsPage.chooseMigrationMode`).
+- **Fleet's radio inputs are visually hidden** behind a styled control, and its sliders have no accessible
+  name: `pickRadio(scope, name)` and `setSlider(toggle, on)` (`pages/components/formControls.ts`) click the
+  right element and wait for the new state.
 - **Set an Ace editor with `setAceValue`, read it with `getAceValue`** (`pages/components/aceEditor.ts`).
   Typed keys go through Ace's own handling, which auto-indents and closes quotes and brackets, so what is
   saved isn't what was typed; the DOM holds only the visible lines.
@@ -51,8 +52,8 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
 
 **Waiting**
 - **An action on a missing locator waits forever.** `click`, `fill`, `innerText` and `getAttribute` have no
-  timeout of their own, so the test hangs to its timeout and its `finally` runs on a closed context: the
-  cleanup silently doesn't happen. Assert the element is visible first; for an optional one, guard as the
+  timeout of their own, so the test hangs to its timeout and its `finally` never runs: cleanup written
+  there silently doesn't happen. Register it with the `cleanup` fixture, which runs after a timeout. Assert the element is visible first; for an optional one, guard as the
   trap above says.
 - **Web-first assertions and auto-waiting, never `waitForTimeout`.** `toPass` around an action that can
   fail to take (a menu that closes on re-render) is fine.
@@ -111,8 +112,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   is still there, so a resource Fleet refuses twice fails the retry at the first step with "already exists"
   and hides the real failure. The first step removes its own leftovers under `testInfo.retry > 0`
   (`premium/software/edit-package.spec.ts`).
-- **Snapshot global config before changing it, and restore it in an `afterEach`** (`getAppConfig` /
-  `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not its hooks. Key the
+- **Snapshot global config before changing it, and restore it with `cleanup.add` or an `afterEach`**
+  (`getAppConfig` / `patchAppConfig` in `helpers/api/config.ts`). A timed-out test skips its `finally`, not
+  its hooks or its fixtures' teardown. Key the
   restore to the test that changed something (a describe-level variable only that test sets), so a parallel
   sibling's hook can't roll it back mid-flight. Restore only the keys you changed: `PATCH /config` refuses some
   whole snapshotted subtrees with a 400 (`smtp_settings.configured` is read-only). Restore the fields you

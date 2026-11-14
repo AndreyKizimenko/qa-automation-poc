@@ -43,9 +43,6 @@ import {
   type GeneratedProfile,
 } from '@helpers/profiles';
 
-/** Which slice of the simulations this spec reads (see `findSimulations`). */
-const SIM_OFFSET = 0;
-
 const REFUSED = "Couldn't delete. A configuration profile targets this label. Please delete the profile and try again.";
 
 interface Case {
@@ -76,7 +73,7 @@ test.describe('Premium • Controls • Configuration profiles — a targeted la
       const n = runNonce();
       const labelName = `pw-bl-${n}`;
       const profile = c.make(`pw-bl-${n}-p`);
-      const members = c.label === 'manual' ? await findSimulations(request, 'darwin', 2, SIM_OFFSET) : [];
+      const members = c.label === 'manual' ? await findSimulations(request, 'e2e/premium/controls/os-settings/profile-broken-labels#members') : [];
       if (c.label === 'manual') expect(members, 'needs two online macOS simulations').toHaveLength(2);
       let labelId: number | undefined;
       let uuid: string | undefined;

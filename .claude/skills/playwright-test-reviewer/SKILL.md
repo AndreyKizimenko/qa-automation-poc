@@ -128,13 +128,17 @@ test built on them passes or fails on timing:
   than one shape, and each shape is a case it may silently skip.
 
 **Will it leave state behind, or collide?**
-- Cleanup that a timeout skips. A timed-out test runs its hooks, not its `finally`. A `finally` is enough
-  only for what the sweep (`setup/cleanup.steps.ts`) would catch: things on Unassigned and Workstations,
-  `pw-*` / `fleet-pw-*` things and borrowed simulations on the VMs fleet, `pw-*` fleets. Anything else
-  needs an `afterEach`: a host moved to Workstations or QA, a config key, a `pw-*` label on free, a report
-  on VMs or Workstations whose prefix the sweep doesn't list.
-- Per-run names that don't start `pw-*` / `fleet-pw-*`, that aren't unique per scope in a loop, or a
-  durable thing that does carry the prefix.
+- Cleanup that a timeout skips. A timed-out test runs its hooks and its fixtures' teardown, not its
+  `finally`, so new code registers each undo with the `cleanup` fixture right after the thing exists, or
+  creates through `throwawayFleet`, `borrowSims` or `seed`, which register their own (lint
+  fails a `finally` that calls the API; an `afterEach` is the older way and still sound). A recorded
+  `finally` is enough only for what the sweep (`setup/cleanup.steps.ts`) would catch: things on Unassigned
+  and Workstations, `pw-*` / `fleet-pw-*` things and borrowed simulations on the VMs fleet, `pw-*` fleets.
+  Anything else needs one of the two: a host moved to Workstations or QA, a config key, a `pw-*` label on
+  free, a report on VMs or Workstations whose prefix the sweep doesn't list. An undo registered before the
+  thing exists, or one that fails on "already gone".
+- Per-run names not from `ownName(kind)` (lint fails a `pw-` name built by hand), a kind that isn't unique
+  per scope in a loop, or a durable thing that carries the `pw-` prefix.
 - Global config changed without an `afterEach` restore keyed to the test that changed it, restoring only
   the keys it wrote; a key or a fleet's whole subtree that another spec also writes (`git grep` the key
   before accepting a new writer); a switch flipped in the main project that belongs in `exclusive/`.
@@ -153,9 +157,11 @@ test built on them passes or fails on timing:
 - `mode: 'serial'` on tests that share no id: one failure skips the rest. Tests that only must not overlap
   use `mode: 'default'` in one file. And a serial lifecycle whose first step can't run again over its own
   failed attempt's leftovers.
-- A simulation slice with no claim in the registry comment on its picker, or overlapping one.
-- UI copy (a toast, a heading, an activity sentence) typed as a literal in a spec when a page object or
-  `activityCopy` holds it: one more file to edit the day Fleet rewords it.
+- A claim in `helpers/claims.ts` whose `use` understates what the spec does (`read` on hosts it moves or
+  changes): `npm run lint:claims` lets read claims share hosts, so that is the overlap it can't see.
+- UI copy (a heading, an activity sentence) typed as a literal in a spec when a page object or
+  `activityCopy` holds it: one more file to edit the day Fleet rewords it. Toast copy has `toastCopy`, and
+  lint fails a toast literal in a spec; check a new entry there cites the Fleet source that renders it.
 - A time budget copied as a bare number with another spec's comment, and a file that parallel workers
   write in place.
 
@@ -181,7 +187,9 @@ test built on them passes or fails on timing:
 
 **Class selectors.** One is legitimate when Fleet's component offers no role, label, text or test id, and
 a comment says so (beside it, or once for the component). The recurring cases: modal containers (Fleet's
-`Modal` has no `role="dialog"`), react-select controls and values (the accessible combobox is hidden),
+`Modal` has no `role="dialog"`; `fleetModal(page, title)` holds that one, and lint refuses it elsewhere),
+react-select controls and values (the accessible combobox is hidden; `ReactSelect` and `ActionsMenu` hold
+them, linted the same way),
 Ace editor internals, and role-less wrappers (cards, `.empty-state`, `.loading-overlay`, a live run's
 result blocks). Flag these:
 - a class with no explanation anywhere in the file, or where a role or text would work;

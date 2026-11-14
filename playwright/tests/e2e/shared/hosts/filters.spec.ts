@@ -54,8 +54,8 @@ test.describe('Hosts • Filters', () => {
     request,
     page,
   }) => {
-    const [onlineId] = await findSimulations(request, 'linux', 1, 8);
-    const [offlineId] = await findOfflineSimulations(request, 'darwin', 1);
+    const [onlineId] = await findSimulations(request, 'e2e/shared/hosts/filters#label-member');
+    const [offlineId] = await findOfflineSimulations(request, 'e2e/shared/hosts/filters#offline-member');
     expect(onlineId, 'no online Linux simulation at slice 8').toBeDefined();
     expect(offlineId, 'no offline macOS simulation on Unassigned').toBeDefined();
     const online = await getHostDisplayName(request, onlineId);
@@ -94,7 +94,7 @@ test.describe('Hosts • Filters', () => {
     request,
     page,
   }) => {
-    const [hostId] = await findSimulations(request, 'linux', 1, 9);
+    const [hostId] = await findSimulations(request, 'e2e/shared/hosts/filters#search-target');
     expect(hostId, 'no online Linux simulation at slice 9').toBeDefined();
     const { displayName: name, uuid } = await getHostSummary(request, hostId);
 

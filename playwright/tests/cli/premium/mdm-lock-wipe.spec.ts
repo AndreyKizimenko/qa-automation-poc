@@ -42,7 +42,7 @@ test.describe('fleetctl mdm · premium error handling', () => {
   for (const platform of ['darwin', 'windows'] as const) {
     for (const action of ['lock', 'unlock', 'wipe'] as const) {
       test(`${action} refuses a ${platform} host with MDM off`, async ({ request }) => {
-        const host = await findSimulatedHostForMdm(request, platform, { mdmConnected: false });
+        const host = await findSimulatedHostForMdm(request, `cli/premium/mdm-lock-wipe#${platform}`);
         expect(host, `no simulated ${platform} host with MDM off is available`).toBeTruthy();
 
         const res = await fleetctl(['mdm', action, '--host', host!.hostname]);

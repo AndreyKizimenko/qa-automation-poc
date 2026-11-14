@@ -47,10 +47,7 @@ import {
 import { inertDeclaration, runNonce, writeProfile, type InertDeclaration } from '@helpers/profiles';
 import type { ProfileTarget } from '@pages';
 
-/** Which slice of the MDM-enrolled simulations this spec borrows (see `findMdmSimulations`). */
-const SIM_OFFSET = 2;
-
-test.describe('Premium • Controls • Configuration profiles — declarations', () => {
+test.describe('Premium • Controls • Configuration profiles — declarations', { tag: '@vm-macos' }, () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a declaration with no target, include all, or exclude reaches exactly the hosts its labels pick', async ({
@@ -64,7 +61,7 @@ test.describe('Premium • Controls • Configuration profiles — declarations'
   }, testInfo) => {
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
-    const sims = await findMdmSimulations(request, 'darwin', 2, SIM_OFFSET);
+    const sims = await findMdmSimulations(request, 'e2e/premium/controls/os-settings/profile-declarations#outside');
     expect(sims, 'needs two online, MDM-enrolled macOS simulations on Unassigned').toHaveLength(2);
     const [s1, s2] = sims;
     const ours = [vm.id, s1, s2];

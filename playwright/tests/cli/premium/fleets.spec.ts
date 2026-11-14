@@ -2,16 +2,13 @@
  * Fleet (team) commands, which exist only on premium.
  *
  * The transfer test mutates host membership, so it draws from the **simulated**
- * osquery-perf pool via `findSimulatedHostIds` — never a real VM. It claims
- * offset 30 to stay clear of the slices the browser specs use (host-delete
- * takes 10 and 20, bulk-transfer takes 0).
+ * osquery-perf pool via `findSimulatedHostIds` — never a real VM, on its own
+ * claim in `helpers/claims.ts`.
  */
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { apiLatestUrl, authHeaders, expectOk } from '@helpers/api';
 import { findSimulatedHostIds, getHostFleetId } from '@helpers/api/hosts';
 import { fleetctl } from '@helpers/fleetctl';
-
-const TRANSFER_OFFSET = 30;
 
 /**
  * `fleetctl hosts transfer --hosts` resolves each entry as a host *identifier*,
@@ -36,7 +33,7 @@ test.describe('fleetctl · premium fleet commands', () => {
   });
 
   test('hosts transfer moves a simulated host between fleets', async ({ request }) => {
-    const [host] = await findSimulatedHostIds(request, 'darwin', 1, TRANSFER_OFFSET);
+    const [host] = await findSimulatedHostIds(request, 'cli/premium/fleets#transfer');
     expect(host, 'no simulated macOS host available to transfer').toBeTruthy();
 
     const hostname = await hostnameFor(request, host.id);

@@ -21,7 +21,7 @@ import { getHostDetailUpdatedAt, waitForHostRefetch } from '@helpers/api';
 const unambiguousUsername = (usernames: string[]): string | undefined =>
   usernames.find((name) => !usernames.some((other) => other !== name && other.includes(name)));
 
-test('Host details — refetch re-collects the host vitals', async ({
+test('Host details — refetch re-collects the host vitals', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,
@@ -52,7 +52,7 @@ test('Host details — refetch re-collects the host vitals', async ({
   await expect(hostDetails.lastFetched).toContainText(/Last fetched (in )?less than a minute/);
 });
 
-test('Host details — local user accounts card filters by username', async ({
+test('Host details — local user accounts card filters by username', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
 }) => {
@@ -72,7 +72,7 @@ test('Host details — local user accounts card filters by username', async ({
   await expect(hostDetails.userRow(username!)).toBeVisible();
 });
 
-test('Host details — Agent tooltip reports osquery and Orbit versions', async ({
+test('Host details — Agent tooltip reports osquery and Orbit versions', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   page,

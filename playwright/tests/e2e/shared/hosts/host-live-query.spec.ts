@@ -19,7 +19,7 @@ import { createReport, deleteReportsMatching } from '@helpers/api';
 
 const rand = () => Math.random().toString(36).slice(2, 8);
 
-test('Host details — runs a saved report live against the host', async ({
+test('Host details — runs a saved report live against the host', { tag: '@vm-macos' }, async ({
   hostDetails,
   reportEdit,
   reportLive,

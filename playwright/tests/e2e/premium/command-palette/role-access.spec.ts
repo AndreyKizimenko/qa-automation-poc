@@ -48,7 +48,7 @@ async function findUnassignedHost(
 }
 
 test.describe('Premium • Command palette • role access', () => {
-  test('the host picker finds a host in a fleet the role administers', async ({
+  test('the host picker finds a host in a fleet the role administers', { tag: '@vm-macos' }, async ({
     browser,
     liveMacosHost,
   }) => {

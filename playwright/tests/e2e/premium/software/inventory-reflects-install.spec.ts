@@ -47,7 +47,7 @@ async function inventoryFor(hostDetails: HostDetailsPage, hostId: number, name: 
   await expect(hostDetails.softwareRowOrEmpty()).toBeVisible();
 }
 
-test.describe('Premium • Software • Inventory reflects installs', () => {
+test.describe('Premium • Software • Inventory reflects installs', { tag: '@vm-linux' }, () => {
   // Three install attempts, minutes apart, on a VM other specs are using too.
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 

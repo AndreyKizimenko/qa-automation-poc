@@ -65,7 +65,7 @@ test.describe('Premium • Reports • stored results', () => {
     createdId = undefined;
   });
 
-  test("the long-standing gitops report holds a fresh result from the macOS VM", async ({
+  test("the long-standing gitops report holds a fresh result from the macOS VM", { tag: '@vm-macos' }, async ({
     dashboard,
     reportsList,
     reportDetails,
@@ -100,7 +100,7 @@ test.describe('Premium • Reports • stored results', () => {
     await expect(reportDetails.resultRows.filter({ hasText: vm.displayName })).toContainText('bar');
   });
 
-  test('a report created with Store data on collects a result from the macOS VM', async ({
+  test('a report created with Store data on collects a result from the macOS VM', { tag: '@vm-macos' }, async ({
     dashboard,
     reportsList,
     reportEdit,

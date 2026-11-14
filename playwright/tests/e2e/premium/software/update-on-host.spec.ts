@@ -56,6 +56,7 @@ import {
   removeTitleFromHost,
   replaceSoftwarePackage,
   requireRealHost,
+  vmTag,
   setPinnedVersion,
   uploadSoftwarePackageBuffer,
   waitForSoftwareSettled,
@@ -117,7 +118,7 @@ async function claudeOn(request: APIRequestContext, fleetId: number, platform: '
 test.describe('Premium • Software • Update on host', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
-  test('a package the library moves ahead of is offered Update, and only then', async ({
+  test('a package the library moves ahead of is offered Update, and only then', { tag: '@vm-linux' }, async ({
     hostDetails,
     vmsFleetId,
     request,
@@ -159,7 +160,8 @@ test.describe('Premium • Software • Update on host', () => {
     test.describe.configure({ mode: 'serial' });
 
     for (const platform of ['darwin', 'windows'] as const) {
-      test(`Claude on the ${platform} VM offers Update exactly when the library is ahead of it`, async ({
+      // eslint-disable-next-line playwright/valid-test-tags -- the tag is the loop's VM, from vmTag()
+      test(`Claude on the ${platform} VM offers Update exactly when the library is ahead of it`, { tag: vmTag(platform) }, async ({
         hostDetails,
         vmsFleetId,
         request,
@@ -175,7 +177,8 @@ test.describe('Premium • Software • Update on host', () => {
         await expect(library.installAction('Claude', behind ? 'Reinstall' : 'Update')).toHaveCount(0);
       });
 
-      test(`Claude on the ${platform} VM updates to the library's build when it is behind`, async ({
+      // eslint-disable-next-line playwright/valid-test-tags -- the tag is the loop's VM, from vmTag()
+      test(`Claude on the ${platform} VM updates to the library's build when it is behind`, { tag: vmTag(platform) }, async ({
         hostDetails,
         vmsFleetId,
         request,
@@ -201,7 +204,7 @@ test.describe('Premium • Software • Update on host', () => {
       });
     }
 
-    test('Claude on the macOS VM: pinned back it is ahead, installed it is level, unpinned it updates', async ({
+    test('Claude on the macOS VM: pinned back it is ahead, installed it is level, unpinned it updates', { tag: '@vm-macos' }, async ({
       hostDetails,
       vmsFleetId,
       request,

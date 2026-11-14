@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { TargetLabelSelector, type LabelMode } from '../components/TargetLabelSelector';
 import { Toast } from '../components/Toast';
+import { SqlEditor } from '../components/SqlEditor';
 
 /**
  * `/policies/new` (new) and `/policies/:id/edit` (existing) — same form,
@@ -51,6 +52,7 @@ export class PolicyEditPage {
   readonly navbar: Navbar;
   readonly toast: Toast;
 
+  private readonly sqlEditor: SqlEditor;
   readonly editor: Locator;
   readonly editorContent: Locator;
   readonly editorTextarea: Locator;
@@ -93,15 +95,10 @@ export class PolicyEditPage {
     this.navbar = new Navbar(page);
     this.toast = new Toast(page);
 
-    // The /policies/new and /policies/:id/edit pages also render a
-    // schema-sidebar SQL example that uses the same `.sql-editor`
-    // wrapper. Filter by the non-readonly textarea (only the main
-    // editor is editable; the example's textarea has `readonly`).
-    this.editor = page.locator('.sql-editor').filter({
-      has: page.locator('textarea.ace_text-input:not([readonly])'),
-    });
-    this.editorContent = this.editor.locator('.ace_content');
-    this.editorTextarea = this.editor.locator('textarea.ace_text-input');
+    this.sqlEditor = new SqlEditor(page);
+    this.editor = this.sqlEditor.root;
+    this.editorContent = this.sqlEditor.content;
+    this.editorTextarea = this.sqlEditor.textarea;
 
     // PlatformCompatibility renders a role-less container holding one
     // <span class="platform"> per OS; the compatible ones carry a
@@ -247,34 +244,13 @@ export class PolicyEditPage {
     expect(await this.sqlText()).toContain(values.sql.trim());
   }
 
-  /**
-   * Replace SQL by writing directly into Ace's buffer. Going through
-   * the hidden textarea (`pressSequentially`) routes through Ace's
-   * key-event pipeline, which in SQL mode can auto-insert characters
-   * around `;` and duplicate the trailing terminator. `setValue` on
-   * the Ace instance attached to the editor DOM bypasses that layer
-   * entirely; the `1` cursor-position arg places the caret at the end.
-   */
+  /** Replaces the policy's SQL and waits until the editor shows it (`SqlEditor.set`). */
   async setSql(sql: string): Promise<void> {
-    // Drive the editor through its attached Ace instance rather than a DOM
-    // click: the visible `.ace_content` is tall and can sit below the fold,
-    // where its center overlaps the platform-compatibility badge and the
-    // policy-automations rows and intercepts the click. `focus()` + `setValue`
-    // bypass the pointer entirely; the `1` cursor-position arg parks the caret
-    // at the end (pressSequentially would let SQL mode duplicate the `;`).
-    await expect(this.editorContent).toBeVisible();
-    await this.editorContent.evaluate((el, newSql) => {
-      const aceEl = el.closest('.ace_editor');
-      const env = (aceEl as unknown as { env?: { editor?: { setValue: (v: string, c?: number) => void; focus: () => void } } } | null)?.env;
-      if (!env?.editor) throw new Error('Ace editor instance not found on .ace_editor element');
-      env.editor.focus();
-      env.editor.setValue(newSql, 1);
-    }, sql);
-    await expect(this.editorContent).toHaveText(sql);
+    await this.sqlEditor.set(sql);
   }
 
   async sqlText(): Promise<string> {
-    return (await this.editorContent.innerText()).trim();
+    return this.sqlEditor.text();
   }
 
   /**

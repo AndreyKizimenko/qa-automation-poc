@@ -22,7 +22,7 @@
  * package specs. The free tier has no Library tab (`free/hosts/host-software-tab`).
  */
 import { test, expect } from '@fixtures';
-import { countHostLibraryTitles, requireRealHost } from '@helpers/api';
+import { countHostLibraryTitles, requireRealHost, vmTag } from '@helpers/api';
 
 const ROUTES = [
   { platform: 'darwin', tab: 'Fleet-maintained', path: '/software/add/fleet-maintained' },
@@ -34,7 +34,8 @@ const itemsText = (n: number) => `${n} item${n === 1 ? '' : 's'}`;
 
 test.describe("Premium • Software • a host's Library tab", () => {
   for (const route of ROUTES) {
-    test(`on the ${route.platform} VM, counts what it offers and adds software on the ${route.tab} tab`, async ({
+    // eslint-disable-next-line playwright/valid-test-tags -- the tag is the route's VM, from vmTag()
+    test(`on the ${route.platform} VM, counts what it offers and adds software on the ${route.tab} tab`, { tag: vmTag(route.platform) }, async ({
       hostDetails,
       fleetMaintainedApps,
       softwareCustomPackage,

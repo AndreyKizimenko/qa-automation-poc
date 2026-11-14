@@ -1,9 +1,10 @@
 /**
  * The suite's two test objects, one built on the other:
  *
- *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM) and
- *     nothing that needs a page. API and CLI specs import it, so none of their
- *     tests opens a browser.
+ *   - `apiTest` carries the worker fixtures (fleet ids, the live macOS VM), the
+ *     `cleanup` stack with the data fixtures built on it (`throwawayFleet`,
+ *     `borrowSims`, `seed`), and nothing that needs a page. API and CLI specs
+ *     import it, so none of their tests opens a browser.
  *   - `test` extends it with the page objects and the automatic `pageHealth`
  *     monitor. Browser specs import `{ test, expect }` from this file (not from
  *     `@playwright/test`) and destructure whichever page objects they need.
@@ -16,19 +17,40 @@
  *   - Auth comes from the setup projects' storage state.
  *   - Tests call `<page>.goto()` themselves so the spec body stays explicit.
  */
-import { test as base } from '@playwright/test';
+import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import {
   monitorConsoleErrors,
   monitorNetworkFailures,
   monitorPageErrors,
 } from './helpers/console';
 import {
+  createFleet,
+  createFleetPolicy,
+  createManualLabel,
+  createPolicy,
+  createReport,
+  deleteFleet,
+  deleteFleetPolicies,
+  deleteLabelById,
+  deletePolicies,
+  deleteReport,
+  deleteScript,
+  failureSummary,
   findFleetByName,
+  findMdmSimulations,
   findOnlineHost,
+  findSimulations,
+  assertVmTagged,
   missingRealHostReason,
+  transferHosts,
+  uploadScript,
   withApiRequest,
+  type FleetRef,
   type OnlineHostRef,
+  type ReportRef,
 } from './helpers/api';
+import { ownName } from './helpers/own-name';
+import { simClaim, type SimClaimKey } from './helpers/claims';
 
 import {
   CommandPalette,
@@ -135,7 +157,69 @@ type ApiWorkerFixtures = {
   loadtestFleetId: number;
 
   /**
-   * The online **real** macOS VM, resolved once per worker via the Fleet API,
+   * The online real macOS VM, looked up once per worker. Specs ask for
+   * `liveMacosHost`, which checks the test's tag and hands this on.
+   */
+  liveMacosHostOfWorker: OnlineHostRef;
+};
+
+/** What a test registers to undo something it made on the instance: the `cleanup` fixture. */
+export interface Cleanup {
+  /**
+   * Registers how to undo what the test just made. `undo` gets an API context
+   * of its own, which is still open when the test's own context isn't.
+   * Register right after the thing exists, before anything that can fail.
+   */
+  add(what: string, undo: (request: APIRequestContext) => Promise<unknown>): void;
+}
+
+type ApiTestFixtures = {
+  /**
+   * The test's undo stack. Everything registered with `cleanup.add` runs
+   * after the test, last registered first, whether it passed, failed or timed
+   * out: Playwright skips the rest of a timed-out test, its `finally` blocks
+   * included, but still tears its fixtures down, giving this one a budget of
+   * its own. Each undo runs as a report step; one that fails doesn't stop the
+   * rest, and the test then fails with every undo that didn't take. A retry
+   * starts on an instance its failed attempt has already put back.
+   *
+   * An undo meets what the test may have removed itself (a delete step), so it
+   * treats "already gone" as done: `deleteFleet(r, id, { ignoreMissing: true })`.
+   *
+   * It belongs to one test. What a serial lifecycle's later steps still use
+   * isn't registered here, or it is gone before they run: the lifecycle's own
+   * delete step removes it, and the cleanup projects' sweep after a dead run.
+   */
+  cleanup: Cleanup;
+
+  /**
+   * A fleet of the test's own, `ownName(kind)`, deleted after the test: the
+   * place for a fleet-level write, which on a standing fleet would collide
+   * with every other spec that writes it (premium only). Ask for it before the
+   * first page load: the fleet dropdown reads the fleet list once, at boot.
+   * Its delete is retried for 30 s: the instances' gateway serves the
+   * odd 502, and a stray fleet sits in every fleet picker until the sweep.
+   */
+  throwawayFleet: (kind: string) => Promise<FleetRef>;
+
+  /**
+   * Moves a claim's simulations onto fleet `to` and returns them to Unassigned
+   * after the test (premium only). The claim (`helpers/claims.ts`, pool `plain`
+   * or `mdm`) gives the platform and the slice, so no two specs are handed the
+   * same hosts; `mdm` is the MDM-enrolled pool, kept for profile targeting.
+   * Throws when the pool can't cover the slice.
+   */
+  borrowSims: (opts: BorrowSims) => Promise<number[]>;
+
+  /**
+   * Creates what a test stands on, named `ownName(kind)`, and deletes it after
+   * the test. For anything it doesn't make, create through the helper and
+   * register the delete with `cleanup.add`.
+   */
+  seed: Seed;
+
+  /**
+   * The online **real** macOS VM, looked up once per worker via the Fleet API,
    * with the vitals a spec asserts against. Backs every spec that needs genuine
    * device behaviour — live reports that actually run the query's SQL, refetch,
    * real local users and agent versions.
@@ -151,10 +235,34 @@ type ApiWorkerFixtures = {
    * there are only a couple of real VMs per tier and they must not be destroyed.
    *
    * Fails loud when none is online, so a downed VM surfaces as a clear setup
-   * error instead of a puzzling mid-spec assertion failure.
+   * error instead of a puzzling mid-spec assertion failure. The test (or its
+   * describe) must carry `{ tag: '@vm-macos' }`: the fixture refuses one that
+   * doesn't, as `requireRealHost` does, so the tag lists every test that needs
+   * the Mac.
    */
   liveMacosHost: OnlineHostRef;
 };
+
+export interface BorrowSims {
+  /** This spec's slice of the `plain` or `mdm` pool. */
+  claim: SimClaimKey<'plain' | 'mdm'>;
+  /** The fleet the simulations are moved to. */
+  to: number;
+}
+
+export interface Seed {
+  /** A manual label holding `hostIds`. */
+  label(kind: string, hostIds: number[]): Promise<{ id: number; name: string }>;
+  /** A policy, global or (with `fleetId`, 0 for Unassigned) a fleet's own. */
+  policy(kind: string, opts?: { fleetId?: number; query?: string; platform?: string }): Promise<{ id: number; name: string }>;
+  /** A report, global unless `teamId` is given; `createReport`'s options. */
+  report(kind: string, opts?: Omit<Parameters<typeof createReport>[1], 'name'>): Promise<ReportRef>;
+  /** A library script on `fleetId` (0 for Unassigned), named `ownName(kind)` plus `extension`. */
+  script(
+    kind: string,
+    opts: { fleetId: number; content: string; extension?: '.sh' | '.ps1' },
+  ): Promise<{ id: number; name: string }>;
+}
 
 type FleetFixtures = {
   /**
@@ -272,9 +380,117 @@ async function resolvePremiumFleetId(
   return fleet.id;
 }
 
+/** Throws on any tier but premium: the fixtures that create or fill a fleet have none to act on there. */
+function requirePremium(fixtureName: string): void {
+  if (process.env.SUITE !== 'premium') {
+    throw new Error(`[${fixtureName}] premium-only fixture — SUITE=${process.env.SUITE} has no fleets`);
+  }
+}
+
 // `box: true` collapses the fixture step in traces so failures surface at
 // the real test action instead of inside this file.
-export const apiTest = base.extend<object, ApiWorkerFixtures>({
+export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
+  cleanup: [async ({}, use) => {
+    const undos: Array<{ what: string; undo: (request: APIRequestContext) => Promise<unknown> }> = [];
+    await use({ add: (what, undo) => { undos.push({ what, undo }); } });
+    if (!undos.length) return;
+
+    const failures: string[] = [];
+    await withApiRequest(async (request) => {
+      for (const { what, undo } of undos.reverse()) {
+        try {
+          await base.step(`cleanup: ${what}`, async () => { await undo(request); }, { box: true });
+        } catch (error) {
+          // The report keeps the step's own error; the summary that reaches the job log is one line.
+          failures.push(`${what}: ${failureSummary(error)}`);
+        }
+      }
+    });
+    if (failures.length) {
+      throw new Error(`[cleanup] ${failures.length} undo(s) failed; what each was to remove is still on the instance:\n  ${failures.join('\n  ')}`);
+    }
+  // Its own budget, apart from the test's: a test that used its whole timeout
+  // still gets its undo actions run. Not boxed: a boxed fixture hides the
+  // steps inside it, and each undo is a step the report should show.
+  }, { timeout: 120_000 }],
+
+  liveMacosHost: [async ({ liveMacosHostOfWorker }, use) => {
+    assertVmTagged('darwin', 'liveMacosHost');
+    await use(liveMacosHostOfWorker);
+  }, { box: true }],
+
+  throwawayFleet: [async ({ request, cleanup }, use) => {
+    await use(async (kind) => {
+      requirePremium('throwawayFleet');
+      const fleet = await createFleet(request, ownName(kind));
+      cleanup.add(`delete fleet ${fleet.name}`, (r) =>
+        expect
+          .poll(() => deleteFleet(r, fleet.id, { ignoreMissing: true }).then(() => true, () => false), {
+            timeout: 30_000,
+            message: `throwaway fleet ${fleet.id} could not be deleted and is still on the instance`,
+          })
+          .toBe(true),
+      );
+      return fleet;
+    });
+  }, { box: true }],
+
+  borrowSims: [async ({ request, cleanup }, use) => {
+    await use(async ({ claim, to }) => {
+      requirePremium('borrowSims');
+      const { pool, platform, count, offset } = simClaim(claim);
+      const ids =
+        pool === 'mdm'
+          ? await findMdmSimulations(request, claim as SimClaimKey<'mdm'>)
+          : await findSimulations(request, claim as SimClaimKey<'plain'>);
+      if (ids.length < count) {
+        throw new Error(
+          `[borrowSims] ${claim} needs ${count} online ${platform} simulations from offset ${offset} of the ${pool} pool; it has ${ids.length}`,
+        );
+      }
+      // Registered before the move, so a move that fails halfway still sends back what it moved.
+      cleanup.add(`return simulations ${ids.join(', ')} to Unassigned`, (r) => transferHosts(r, 0, ids));
+      await transferHosts(request, to, ids);
+      return ids;
+    });
+  }, { box: true }],
+
+  seed: [async ({ request, cleanup }, use) => {
+    await use({
+      async label(kind, hostIds) {
+        const name = ownName(kind);
+        const id = await createManualLabel(request, name, hostIds);
+        cleanup.add(`delete label ${name}`, async (r) => {
+          const status = await deleteLabelById(r, id);
+          if (status >= 300) throw new Error(`[seed.label] deleting label ${id} answered ${status}`);
+        });
+        return { id, name };
+      },
+      async policy(kind, { fleetId, ...fields } = {}) {
+        const name = ownName(kind);
+        if (fleetId === undefined) {
+          const policy = await createPolicy(request, { name, ...fields });
+          cleanup.add(`delete global policy ${name}`, (r) => deletePolicies(r, [policy.id]));
+          return policy;
+        }
+        const policy = await createFleetPolicy(request, fleetId, { name, ...fields });
+        cleanup.add(`delete policy ${name} on fleet ${fleetId}`, (r) => deleteFleetPolicies(r, fleetId, [policy.id]));
+        return { id: policy.id, name: policy.name };
+      },
+      async report(kind, opts = {}) {
+        const report = await createReport(request, { ...opts, name: ownName(kind) });
+        cleanup.add(`delete report ${report.name}`, (r) => deleteReport(r, report.id));
+        return report;
+      },
+      async script(kind, { fleetId, content, extension = '.sh' }) {
+        const name = `${ownName(kind)}${extension}`;
+        const id = await uploadScript(request, fleetId, name, content);
+        cleanup.add(`delete script ${name}`, (r) => deleteScript(r, id));
+        return { id, name };
+      },
+    });
+  }, { box: true }],
+
   workstationsFleetId: [async ({}, use) => {
     await use(await resolvePremiumFleetId('workstationsFleetId', 'Workstations'));
   }, { scope: 'worker', box: true }],
@@ -287,7 +503,7 @@ export const apiTest = base.extend<object, ApiWorkerFixtures>({
     await use(await resolvePremiumFleetId('vmsFleetId', 'VMs'));
   }, { scope: 'worker', box: true }],
 
-  liveMacosHost: [async ({}, use) => {
+  liveMacosHostOfWorker: [async ({}, use) => {
     const host = await withApiRequest((request) =>
       findOnlineHost(request, 'darwin', { kind: 'real' }),
     );

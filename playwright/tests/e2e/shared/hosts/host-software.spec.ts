@@ -97,7 +97,7 @@ test('Hosts — software tab search filters, and a title links to filtered hosts
  * explicitly in each view, so the result doesn't depend on which page of a
  * paginated inventory a title happens to land on.
  */
-test('Hosts — the macOS app type narrows a Mac\'s inventory to top-level applications', async ({
+test('Hosts — the macOS app type narrows a Mac\'s inventory to top-level applications', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   page,

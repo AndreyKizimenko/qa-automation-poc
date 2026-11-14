@@ -9,6 +9,13 @@
  * via gitops in the first place. Running these wipes before tests start
  * means a Playwright run is self-healing regardless of how the live
  * instance got into its current state.
+ *
+ * The sweeps find the suite's own things by name. A spec names them with
+ * `ownName(kind)` (`helpers/own-name.ts`), which opens every name with
+ * `pw-<kind>-`, so a sweep by the `pw-` prefix takes them, and one by an exact
+ * prefix (the reports below: `pw-role-`, `pw-run-script-`, …) takes the kind of
+ * that name. A spec that gives a new kind of report a fleet gitops declares
+ * reports on adds its prefix here.
  */
 import { test, type APIRequestContext } from '@playwright/test';
 import {
@@ -220,16 +227,18 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
   const policies = await listFleetPolicies(request, vms.id);
   const reports = await listReports(request, vms.id);
   const borrowed = (await listFleetHosts(request, vms.id)).filter((h) => !h.real).map((h) => h.id);
+  // The policies first: Fleet refuses to delete a script a policy automation
+  // still runs, and a title an install policy points at (below).
+  await deleteFleetPolicies(
+    request,
+    vms.id,
+    policies
+      .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
+      .map((p) => p.id),
+  );
   await Promise.all([
     deleteAllConfigurationProfiles(request, vms.id, (name) => name.startsWith('pw-')),
     transferHosts(request, 0, borrowed),
-    deleteFleetPolicies(
-      request,
-      vms.id,
-      policies
-        .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
-        .map((p) => p.id),
-    ),
     deleteAllScripts(request, vms.id, (name) => name.startsWith('pw-')),
     // By exact prefix: gitops declares `pw-host-report-results` on this fleet too.
     ...reports
@@ -239,7 +248,6 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
       )
       .map((r) => deleteReport(request, r.id)),
   ]);
-  // After the policies: a title an install policy points at can't be deleted.
   await Promise.all(
     titles
       .filter((t) => OWN_PACKAGE.test(t.packageName))

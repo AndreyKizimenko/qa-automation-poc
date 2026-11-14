@@ -39,12 +39,20 @@ export async function createPolicy(
   return { id: policy.id, name: policy.name };
 }
 
-/** Delete global policies by id (bulk endpoint); safe on already-deleted ids. */
+/**
+ * Deletes global policies by id; an id already gone is not an error. Fleet
+ * refuses the whole batch with a 404 when any one id is missing
+ * (`PoliciesByID`), deleting none of them, so a batch that meets a 404 is sent
+ * again an id at a time.
+ */
 export async function deletePolicies(request: APIRequestContext, ids: number[]): Promise<void> {
   if (ids.length === 0) return;
-  await request
-    .post(apiUrl('global/policies/delete'), { headers: authHeaders(), data: { ids } })
-    .catch((err) => console.warn('[deletePolicies]', err));
+  const res = await request.post(apiUrl('global/policies/delete'), { headers: authHeaders(), data: { ids } });
+  if (res.status() === 404) {
+    if (ids.length > 1) for (const id of ids) await deletePolicies(request, [id]);
+    return;
+  }
+  await expectOk(res, `Failed to delete global policies ${ids.join(', ')}`);
 }
 
 /** A fleet's own policies (not inherited global ones). */
@@ -61,7 +69,11 @@ export async function listFleetPolicies(
   }));
 }
 
-/** Delete a fleet's policies by id; safe on already-deleted ids. */
+/**
+ * Deletes a fleet's policies by id; an id already gone is not an error. As
+ * with {@link deletePolicies}, Fleet refuses the whole batch with a 404 when
+ * any one id is missing, so such a batch is sent again an id at a time.
+ */
 export async function deleteFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
@@ -72,6 +84,10 @@ export async function deleteFleetPolicies(
     headers: authHeaders(),
     data: { ids },
   });
+  if (res.status() === 404) {
+    if (ids.length > 1) for (const id of ids) await deleteFleetPolicies(request, fleetId, [id]);
+    return;
+  }
   if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()}: ${await res.text()}`);
 }
 

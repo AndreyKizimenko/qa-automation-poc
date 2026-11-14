@@ -20,6 +20,7 @@ import {
   getSoftwareTitle,
   type AppStorePlatform,
 } from '@helpers/api';
+import type { CatalogSlug } from '@helpers/claims';
 import type { InstallSoftwarePlatform, TeamScope } from '@pages';
 
 interface CustomCase {
@@ -31,7 +32,7 @@ interface CustomCase {
 interface FmaCase {
   kind: 'fma';
   platform: InstallSoftwarePlatform;
-  slug: string;
+  slug: CatalogSlug;
 }
 
 interface VppCase {
@@ -181,7 +182,7 @@ for (const scope of SCOPES) {
 
       // 11 macOS FMA slugs — none overlapping the single-case test above
       // (1password) or the library spec macOS FMA case (airtame).
-      const slugs = [
+      const slugs: CatalogSlug[] = [
         '010-editor/darwin', 'apparency/darwin', 'appcleaner/darwin',
         'bbedit/darwin', 'bitwarden/darwin', 'box-drive/darwin',
         'brave-browser/darwin', 'coteditor/darwin', 'cyberduck/darwin',

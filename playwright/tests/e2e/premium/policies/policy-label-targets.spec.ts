@@ -19,93 +19,79 @@
  * tab is where a person sees it. A policy doesn't need MDM, so the simulations
  * come from the pool that isn't enrolled, leaving the scarce enrolled ones to
  * the profile specs.
+ *
+ * Everything it makes is undone by the fixtures after the test, timed out or
+ * not, newest first: the policies, then the labels they target (Fleet refuses
+ * to delete a label a policy still targets), then the simulations go back to
+ * Unassigned.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
-import {
-  createManualLabel,
-  deleteFleetPolicies,
-  deleteLabelById,
-  findSimulations,
-  listHostPolicyIds,
-  requireRealHost,
-  transferHosts,
-} from '@helpers/api';
-import { runNonce } from '@helpers/profiles';
+import { deleteFleetPolicies, listHostPolicyIds, requireRealHost } from '@helpers/api';
+import { ownName } from '@helpers/own-name';
 import type { PolicyTarget } from '@pages';
-
-/** Which slice of the simulations this spec borrows (see `findSimulations`). */
-const SIM_OFFSET = 2;
 
 test.describe('Premium • Policies — label targeting', () => {
   test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
-  test('include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick', async ({
+  test('include all, include any + exclude any, and exclude all run on exactly the hosts their labels pick', { tag: '@vm-macos' }, async ({
     dashboard,
     policiesList,
     policyEdit,
     hostDetails,
     vmsFleetId,
     request,
+    borrowSims,
+    seed,
+    cleanup,
   }) => {
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
-    const sims = await findSimulations(request, 'darwin', 2, SIM_OFFSET);
-    expect(sims, 'needs two online macOS simulations on Unassigned').toHaveLength(2);
-    const [s1, s2] = sims;
+    const [s1, s2] = await borrowSims({ claim: 'e2e/premium/policies/policy-label-targets#outside', to: vmsFleetId });
     const ours = [vm.id, s1, s2];
 
-    const n = runNonce();
-    const label = { a: `pw-pl-${n}-a`, b: `pw-pl-${n}-b`, c: `pw-pl-${n}-c` };
+    const label = {
+      a: (await seed.label('pl-a', [vm.id, s1])).name,
+      b: (await seed.label('pl-b', [vm.id, s2])).name,
+      c: (await seed.label('pl-c', [s2])).name,
+    };
     const cases: Array<{ name: string; target: PolicyTarget; runsOn: number[] }> = [
-      { name: `pw-pl-${n}-all`, target: { include: { mode: 'all', labels: [label.a, label.b] } }, runsOn: [vm.id] },
+      { name: ownName('pl-all'), target: { include: { mode: 'all', labels: [label.a, label.b] } }, runsOn: [vm.id] },
       {
-        name: `pw-pl-${n}-any`,
+        name: ownName('pl-any'),
         target: { include: { mode: 'any', labels: [label.a, label.b] }, exclude: { mode: 'any', labels: [label.c] } },
         runsOn: [vm.id, s1],
       },
-      { name: `pw-pl-${n}-xall`, target: { exclude: { mode: 'all', labels: [label.a, label.b] } }, runsOn: [s1, s2] },
+      { name: ownName('pl-xall'), target: { exclude: { mode: 'all', labels: [label.a, label.b] } }, runsOn: [s1, s2] },
     ];
     const policyIds: number[] = [];
-    const labelIds: number[] = [];
 
-    try {
-      await transferHosts(request, vmsFleetId, sims);
-      labelIds.push(await createManualLabel(request, label.a, [vm.id, s1]));
-      labelIds.push(await createManualLabel(request, label.b, [vm.id, s2]));
-      labelIds.push(await createManualLabel(request, label.c, [s2]));
-
-      await dashboard.goto();
-      await dashboard.navbar.goToPolicies();
+    await dashboard.goto();
+    await dashboard.navbar.goToPolicies();
+    await policiesList.teamDropdown.selectByLabel('VMs');
+    for (const c of cases) {
+      await policiesList.goto({ fleetId: vmsFleetId });
       await policiesList.teamDropdown.selectByLabel('VMs');
-      for (const c of cases) {
-        await policiesList.goto({ fleetId: vmsFleetId });
-        await policiesList.teamDropdown.selectByLabel('VMs');
-        await policiesList.addPolicy();
-        await policyEdit.setSql('SELECT 1;');
-        policyIds.push(
-          await policyEdit.saveNew({ name: c.name, description: 'Playwright label-targeted policy', resolution: '' }, c.target),
-        );
-      }
-
-      // Server-side: each policy runs on exactly the hosts its labels pick.
-      const runsOn = async () => {
-        const perHost = await Promise.all(ours.map(async (h) => [h, await listHostPolicyIds(request, h)] as const));
-        return cases.map((c, i) => perHost.filter(([, ids]) => ids.includes(policyIds[i])).map(([h]) => h).sort((x, y) => x - y));
-      };
-      await expect
-        .poll(runsOn, { message: 'each policy should run on exactly its hosts', timeout: 60_000, intervals: [5_000] })
-        .toEqual(cases.map((c) => [...c.runsOn].sort((x, y) => x - y)));
-
-      // The VM's Policies tab lists the two that include it, and not the one that excludes it.
-      await hostDetails.goto(vm.id);
-      await hostDetails.openPoliciesTab();
-      await expect(hostDetails.policyRow(cases[0].name)).toBeVisible();
-      await expect(hostDetails.policyRow(cases[1].name)).toBeVisible();
-      await expect(hostDetails.policyRow(cases[2].name)).toHaveCount(0);
-    } finally {
-      await deleteFleetPolicies(request, vmsFleetId, policyIds);
-      await transferHosts(request, 0, sims);
-      for (const id of labelIds) await deleteLabelById(request, id);
+      await policiesList.addPolicy();
+      await policyEdit.setSql('SELECT 1;');
+      const id = await policyEdit.saveNew({ name: c.name, description: 'Playwright label-targeted policy', resolution: '' }, c.target);
+      cleanup.add(`delete policy ${c.name}`, (r) => deleteFleetPolicies(r, vmsFleetId, [id]));
+      policyIds.push(id);
     }
+
+    // Server-side: each policy runs on exactly the hosts its labels pick.
+    const runsOn = async () => {
+      const perHost = await Promise.all(ours.map(async (h) => [h, await listHostPolicyIds(request, h)] as const));
+      return cases.map((c, i) => perHost.filter(([, ids]) => ids.includes(policyIds[i])).map(([h]) => h).sort((x, y) => x - y));
+    };
+    await expect
+      .poll(runsOn, { message: 'each policy should run on exactly its hosts', timeout: 60_000, intervals: [5_000] })
+      .toEqual(cases.map((c) => [...c.runsOn].sort((x, y) => x - y)));
+
+    // The VM's Policies tab lists the two that include it, and not the one that excludes it.
+    await hostDetails.goto(vm.id);
+    await hostDetails.openPoliciesTab();
+    await expect(hostDetails.policyRow(cases[0].name)).toBeVisible();
+    await expect(hostDetails.policyRow(cases[1].name)).toBeVisible();
+    await expect(hostDetails.policyRow(cases[2].name)).toHaveCount(0);
   });
 });

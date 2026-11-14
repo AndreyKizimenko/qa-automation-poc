@@ -138,6 +138,13 @@ const suite = resolveSuite();
 // — the "|| 'premium'" fallback was the original silent-footgun pattern.
 process.env.SUITE = suite;
 
+// The run every per-run name carries (`ownName`, helpers/own-name.ts). Set once,
+// here in the runner: each worker inherits the runner's environment and loads
+// this file again, and `??=` keeps the value it inherited. In CI it is the
+// workflow run, the same in a job's main, exclusive and gitops-mode invocations;
+// locally, the moment this invocation started. Base 36 keeps the names short.
+process.env.PW_RUN_ID ??= Number(process.env.GITHUB_RUN_ID || Date.now()).toString(36);
+
 dotenv.config({ path: path.resolve(__dirname, `.env.${suite}`), quiet: true });
 
 export default defineConfig({

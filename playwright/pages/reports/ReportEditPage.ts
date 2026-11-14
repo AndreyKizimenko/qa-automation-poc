@@ -3,6 +3,7 @@ import { Navbar } from '../components/Navbar';
 import { TargetLabelSelector } from '../components/TargetLabelSelector';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
+import { SqlEditor } from '../components/SqlEditor';
 
 /**
  * `/reports/new` (new) and `/reports/:id/edit` (existing) — same form, two
@@ -67,6 +68,7 @@ export class ReportEditPage {
   readonly navbar: Navbar;
   readonly toast: Toast;
 
+  private readonly sqlEditor: SqlEditor;
   readonly editor: Locator;
   readonly editorContent: Locator;
   readonly editorTextarea: Locator;
@@ -137,17 +139,10 @@ export class ReportEditPage {
     this.navbar = new Navbar(page);
     this.toast = new Toast(page);
 
-    // The /reports/new and /reports/:id/edit pages also render a
-    // schema-sidebar SQL example that uses the same `.sql-editor`
-    // wrapper. `.first()` is unreliable here — initial render order
-    // changes whether the main or example editor lands first in the
-    // DOM. Filter by the non-readonly textarea (only the main editor
-    // is editable; the example's textarea has `readonly`).
-    this.editor = page.locator('.sql-editor').filter({
-      has: page.locator('textarea.ace_text-input:not([readonly])'),
-    });
-    this.editorContent = this.editor.locator('.ace_content');
-    this.editorTextarea = this.editor.locator('textarea.ace_text-input');
+    this.sqlEditor = new SqlEditor(page);
+    this.editor = this.sqlEditor.root;
+    this.editorContent = this.sqlEditor.content;
+    this.editorTextarea = this.sqlEditor.textarea;
 
     this.nameInput = page.locator('input[name="query-name"]');
     this.descriptionInput = page.locator('textarea[name="query-description"]');
@@ -232,28 +227,14 @@ export class ReportEditPage {
     await expect(this.editorContent).toBeVisible();
   }
 
-  /**
-   * Replace SQL by writing directly into Ace's buffer. Going through
-   * the hidden textarea (`pressSequentially`) routes through Ace's
-   * key-event pipeline, which in SQL mode can auto-insert characters
-   * around `;` and duplicate the trailing terminator. `setValue` on
-   * the Ace instance attached to the editor DOM bypasses that layer
-   * entirely; the `1` cursor-position arg places the caret at the end.
-   */
+  /** Replaces the report's SQL and waits until the editor shows it (`SqlEditor.set`). */
   async setSql(sql: string): Promise<void> {
-    await this.editorContent.click();
-    await this.editorContent.evaluate((el, newSql) => {
-      const aceEl = el.closest('.ace_editor');
-      const env = (aceEl as unknown as { env?: { editor?: { setValue: (v: string, c?: number) => void } } } | null)?.env;
-      if (!env?.editor) throw new Error('Ace editor instance not found on .ace_editor element');
-      env.editor.setValue(newSql, 1);
-    }, sql);
-    await expect(this.editorContent).toHaveText(sql);
+    await this.sqlEditor.set(sql);
   }
 
   /** Trimmed text shown in the editor. */
   async sqlText(): Promise<string> {
-    return (await this.editorContent.innerText()).trim();
+    return this.sqlEditor.text();
   }
 
   /**

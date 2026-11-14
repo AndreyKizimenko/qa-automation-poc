@@ -1,21 +1,23 @@
 /**
- * Premium • Reports • automations. The reports-list "Manage automations" modal
+ * Shared • Reports • automations. The reports-list "Manage automations" modal
  * turns a report's automations on and off again (per-report
  * `automations_enabled`, sent to the configured log destination on the report's
  * interval), and the list's Automations column reads "On", then "Off". This is
  * per-report state — not global config — so the report is seeded + torn down
- * via the API.
+ * via the API. Both tiers have it; premium works in All fleets, and free, with
+ * no fleets, has no dropdown (`teamDropdown.select` does nothing there).
  *
  * Grounded in frontend/pages/queries/ManageQueriesPage + its
  * ManageQueryAutomationsModal (a checkbox per report; Save PATCHes each
  * query's automations_enabled; toast "Successfully updated report automations.").
  */
 import { test, expect } from '@fixtures';
+import { toastCopy } from '@helpers/toast-copy';
 import { createReport, deleteReportsMatching, findReportById } from '@helpers/api';
 
 const MARKER = 'pw-report-auto';
 
-test.describe('Premium • Reports • automations', () => {
+test.describe('Shared • Reports • automations', () => {
   let name: string;
   let id: number;
 
@@ -41,7 +43,7 @@ test.describe('Premium • Reports • automations', () => {
     await reportsList.openManageAutomations();
     await reportsList.setReportAutomation(name, true);
     await reportsList.saveAutomations();
-    await reportsList.toast.expectSuccess('Successfully updated report automations.');
+    await reportsList.toast.expectSuccess(toastCopy.reports.automationsUpdated);
 
     const report = await findReportById(request, id);
     expect(report?.automations_enabled).toBe(true);
@@ -54,7 +56,7 @@ test.describe('Premium • Reports • automations', () => {
     await expect(reportsList.reportAutomationCheckbox(name)).toBeChecked();
     await reportsList.setReportAutomation(name, false);
     await reportsList.saveAutomations();
-    await reportsList.toast.expectSuccess('Successfully updated report automations.');
+    await reportsList.toast.expectSuccess(toastCopy.reports.automationsUpdated);
 
     expect((await findReportById(request, id))?.automations_enabled).toBe(false);
     await expect(reportsList.automationsCell(name)).toHaveText('Off');

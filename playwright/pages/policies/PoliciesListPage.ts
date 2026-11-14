@@ -4,6 +4,7 @@ import { Navbar } from '../components/Navbar';
 import { PolicyAutomationsFields } from '../components/PolicyAutomationsFields';
 import { TeamDropdown } from '../components/TeamDropdown';
 import { Toast } from '../components/Toast';
+import { setSlider } from '../components/formControls';
 
 /**
  * /policies/manage — list of policies. Supports team scoping and an
@@ -181,9 +182,7 @@ export class PoliciesListPage {
 
   /** Toggle the policy-automations slider to `enabled` (idempotent). */
   async setPolicyAutomations(enabled: boolean): Promise<void> {
-    const isOn = (await this.policyAutomationsToggle.getAttribute('aria-checked')) === 'true';
-    if (isOn !== enabled) await this.policyAutomationsToggle.click();
-    await expect(this.policyAutomationsToggle).toHaveAttribute('aria-checked', String(enabled));
+    await setSlider(this.policyAutomationsToggle, enabled);
   }
 
   /**

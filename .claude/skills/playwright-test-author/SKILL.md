@@ -13,7 +13,8 @@ of this skill is about not doing those.
 
 `playwright/CLAUDE.md` is the suite contract: layout, projects, host populations, the cleanup pipeline,
 imports, skips, and a **CI and the shared instances** table with the facts that change (the nightly, workers,
-timeouts, runtimes). Read it before you start; this skill doesn't repeat it.
+timeouts, runtimes). Read it before you start, and the nested `CLAUDE.md` of the folder you work in
+(`setup/`, `tests/api/`, `tests/cli/`, `tests/loadtest/`, `gitops-mode/`); this skill doesn't repeat them.
 
 ## Stop and ask before any of these
 
@@ -92,9 +93,10 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
 4. **Decide the hosts.** What Fleet decides **server-side** (which hosts a profile, title, policy or report
    reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
    (installs, runs, verifies, reports inventory) only a real VM can answer: `requireRealHost(request,
-   platform)`, `vmsFleetId`, `liveMacosHost`. To put simulations on a fleet beside a VM, borrow them with
-   `findMdmSimulations` (profiles; a scarce pool) or `findSimulations` (everything else), claim your own
-   slice in the registry in `helpers/api/hosts.ts`, and return them when the test ends (step 7).
+   platform)`, `vmsFleetId`, `liveMacosHost`, each refusing a test without its VM's tag
+   (`{ tag: '@vm-linux' }`). To put simulations on a fleet beside a VM, borrow them with
+   the `borrowSims` fixture, on a claim of your own in `helpers/claims.ts` (pool `mdm` only for
+   profiles: it's scarce); it returns them after the test.
 5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either, and
    start the spec from the exemplar `references/spec-patterns.md` names for its shape. A page object
    exposes locators and intent (`openControlsTab()`, `runRowAction(name, 'Delete')`), waits until its own
@@ -105,14 +107,15 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    (`toBeGreaterThanOrEqual(hostCount, 2)` passes whatever happens). Confirm through the API that a UI write
    happened. Scope every assertion to records you created. Assert text or a value, never `toHaveScreenshot`
    for behaviour; when a snapshot can't be avoided, the header says why.
-7. **Give everything you create a home.** Name per-run things `pw-*` (packages `fleet-pw-*`) with
-   `runNonce()`, and never give a durable thing those prefixes. Remove them in an `afterEach`, or in a
-   `finally` only when the central sweep would catch a miss: Playwright skips the `finally` of a test that
-   times out, and runs its hooks. The sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
+7. **Give everything you create a home.** Name per-run things with `ownName(kind)` (packages
+   `fleet-pw-*`), and never give a durable thing those prefixes. Register each one's undo with the
+   `cleanup` fixture the moment it exists (`cleanup.add('delete label', (r) => deleteLabelById(r, id))`):
+   it runs after the test even when it times out, which skips a `finally` (lint fails a `finally` that
+   calls the API). `throwawayFleet`, `borrowSims` and `seed.*` register theirs. For a killed run, the sweep (`setup/cleanup.steps.ts`) empties Unassigned and Workstations,
    takes `pw-*` things and borrowed simulations off the VMs fleet and deletes `pw-*` fleets. It returns
    a simulation left on Workstations only between runs, so a spec that stages hosts there still returns
-   them in an `afterEach`. It does not return a host moved to QA, restore a config key you changed (only
-   the switches `CLAUDE.md` lists), or delete `pw-*` labels on free. What can outlive a timed-out test on the VMs fleet
+   them itself. It does not return a host moved to QA, restore a config key you changed (only
+   the switches `CLAUDE.md` lists), or delete `pw-*` labels on free. What a killed run can leave on the VMs fleet
    needs a home there: the VMs sweep for things Fleet stores by name, the resting-state step for state on a
    host. Reports are swept by exact prefix on VMs and Workstations (gitops declares
    `pw-host-report-results`), so a new kind of per-run report adds its prefix.
@@ -186,7 +189,7 @@ A change isn't done until the docs describing it are current, in the same commit
 
 | you changed | update |
 |---|---|
-| a `test()` | its spec header and `test.step` titles, which the test catalogue will be generated from. `docs/test-audit/` is frozen: no entry to add or update |
+| a `test()` | its spec header and `test.step` titles, which `npm run catalogue` builds the test catalogue from. `docs/test-audit/` is frozen: no entry to add or update |
 | a helper, page object or component object | `helpers/README.md` / `pages/README.md` / `pages/components/README.md` |
 | a fixture | its `test-data/` README: what it does, why it's safe on a real VM, how to rebuild it |
 | gitops | the file's header and its config's README (`gitops/{premium,free}-fleetqa{,-min}/README.md`); a file both the full and `-min` configs declare changes in both; apply it, and say so in the PR |

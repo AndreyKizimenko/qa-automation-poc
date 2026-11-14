@@ -40,7 +40,7 @@ test.describe('Premium • Hosts • single-host transfer by role', () => {
       qaFleetId,
       request,
     }) => {
-      const hosts = await findSimulatedHostIds(request, 'windows', ROLES.length);
+      const hosts = await findSimulatedHostIds(request, 'e2e/premium/hosts/host-transfer-permissions#per-role');
       expect(hosts, 'expected simulated Windows hosts to transfer').toHaveLength(ROLES.length);
       const host = hosts[role.hostIndex];
 
@@ -70,7 +70,7 @@ test.describe('Premium • Hosts • single-host transfer by role', () => {
     });
   }
 
-  test('a team admin is not offered Transfer on a host they administer', async ({
+  test('a team admin is not offered Transfer on a host they administer', { tag: '@vm-macos' }, async ({
     browser,
     liveMacosHost,
   }) => {

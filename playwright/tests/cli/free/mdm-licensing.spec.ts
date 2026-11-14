@@ -28,7 +28,7 @@ test.describe('fleetctl mdm · free licence gating', () => {
   for (const platform of ['darwin', 'windows'] as const) {
     for (const action of ['lock', 'unlock', 'wipe'] as const) {
       test(`${action} is refused on an MDM-enrolled ${platform} host`, async ({ request }) => {
-        const host = await findSimulatedHostForMdm(request, platform, { mdmConnected: true });
+        const host = await findSimulatedHostForMdm(request, `cli/free/mdm-licensing#${platform}`);
         test.skip(!host, `no MDM-enrolled simulated ${platform} host in the pool`);
 
         const res = await fleetctl(['mdm', action, '--host', host!.hostname]);
@@ -43,7 +43,7 @@ test.describe('fleetctl mdm · free licence gating', () => {
   // prove the licence check fires there rather than in the CLI.
   for (const action of ['lock', 'unlock', 'wipe'] as const) {
     test(`${action} is refused on a Linux host`, async ({ request }) => {
-      const host = await findSimulatedHostForMdm(request, 'linux', { mdmConnected: false });
+      const host = await findSimulatedHostForMdm(request, 'cli/free/mdm-licensing#linux');
       expect(host, 'no simulated Linux host is available').toBeTruthy();
 
       const res = await fleetctl(['mdm', action, '--host', host!.hostname]);

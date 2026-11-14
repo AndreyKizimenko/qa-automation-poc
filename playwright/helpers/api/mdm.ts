@@ -1,7 +1,7 @@
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { apiUrl, authHeaders, expectOk } from './core';
+import { apiUrl, authHeaders, deleteEach, expectOk } from './core';
 
 // ── Bootstrap package ────────────────────────────────────────────────────────
 
@@ -334,12 +334,8 @@ export async function deleteAllConfigurationProfiles(
   const body = await res.json();
   const profiles = (body.profiles ?? []) as Array<{ profile_uuid: string; name: string }>;
   const targets = matching ? profiles.filter((p) => matching(p.name)) : profiles;
-  await Promise.all(
-    targets.map((p) =>
-      request
-        .delete(apiUrl(`configuration_profiles/${p.profile_uuid}`), { headers: authHeaders() })
-        .catch((err) => console.warn(`[profile cleanup] ${p.profile_uuid}:`, err)),
-    ),
+  await deleteEach('profile cleanup', targets, (p) => `profile ${p.profile_uuid} "${p.name}"`, (p) =>
+    request.delete(apiUrl(`configuration_profiles/${p.profile_uuid}`), { headers: authHeaders() }),
   );
 }
 
@@ -362,12 +358,8 @@ export async function deleteAllScripts(
   const body = await res.json();
   const scripts = (body.scripts ?? []) as Array<{ id: number; name: string }>;
   const targets = matching ? scripts.filter((s) => matching(s.name)) : scripts;
-  await Promise.all(
-    targets.map((s) =>
-      request
-        .delete(apiUrl(`scripts/${s.id}`), { headers: authHeaders() })
-        .catch((err) => console.warn(`[script cleanup] ${s.id}:`, err)),
-    ),
+  await deleteEach('script cleanup', targets, (s) => `script ${s.id} "${s.name}"`, (s) =>
+    request.delete(apiUrl(`scripts/${s.id}`), { headers: authHeaders() }),
   );
 }
 

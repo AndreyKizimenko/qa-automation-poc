@@ -14,9 +14,9 @@
  *
  * **This spec creates and deletes its own fleet, which `playwright/CLAUDE.md`
  * otherwise forbids.** That rule exists to protect Workstations, which gitops
- * provisions and nothing may delete. A throwaway fleet that lives only between
- * the top of this test and its `finally` is a different thing, and it is the
- * only safe subject here, because **disabling collection deletes the data
+ * provisions and nothing may delete. A throwaway fleet that lives only as long
+ * as this test (`throwawayFleet` deletes it afterwards, a timed-out test
+ * included) is a different thing, and it is the only safe subject here, because **disabling collection deletes the data
  * already collected** — Fleet's own confirmation says "This cannot be undone".
  * A fleet created seconds ago has no history to lose; every standing fleet
  * does. Do not "simplify" this onto Workstations, VMs or any other fleet the
@@ -41,14 +41,9 @@
  * DashboardPage/cards/ChartCard/DataCollectionDisabledState (whose sentence
  * names the scope the switch applied to).
  */
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from '@fixtures';
-import {
-  createFleet,
-  deleteFleet,
-  getFleetHistoricalData,
-  getGlobalHistoricalData,
-} from '@helpers/api';
+import { getFleetHistoricalData, getGlobalHistoricalData } from '@helpers/api';
 import { TeamSettingsPage } from '@pages';
 
 /**
@@ -84,36 +79,12 @@ async function withChartResponse(
   await response;
 }
 
-/**
- * Removes the throwaway fleet, retrying on a schedule until Fleet accepts the
- * delete. The cleanup projects sweep `pw-*` fleets only at a run's edges, so a
- * stray one would sit in every other spec's fleet dropdown until then — and the
- * QA instance's gateway serves the occasional 502, so one attempt isn't enough
- * of a guarantee.
- */
-async function deleteFleetWithRetry(request: APIRequestContext, id: number): Promise<void> {
-  await expect
-    .poll(() => deleteFleet(request, id, { ignoreMissing: true }).then(() => true, () => false), {
-      timeout: 30_000,
-      message: `throwaway fleet ${id} could not be deleted and is still on the instance`,
-    })
-    .toBe(true);
-}
-
 test.describe('Premium • Dashboard • historical data collection', () => {
-  // Tracked outside the test as well as inside it: Playwright aborts a timed-out
-  // test before its `finally` runs, but still gives hooks their own budget, so
-  // this is what stops a timeout stranding a fleet on the instance.
-  let throwawayFleetId: number | undefined;
-
-  test.afterEach(async ({ request }) => {
-    if (throwawayFleetId !== undefined) await deleteFleetWithRetry(request, throwawayFleetId);
-  });
-
   test('each fleet switch empties its own chart dataset, and re-enabling restores both', async ({
     dashboard,
     page,
     request,
+    throwawayFleet,
   }) => {
     // Three fleet-settings saves, two of them behind a confirmation, four
     // dashboard loads, and three waits on `/charts/cve`, which takes upwards of
@@ -127,142 +98,129 @@ test.describe('Premium • Dashboard • historical data collection', () => {
     );
 
     const teamSettings = new TeamSettingsPage(page);
-    // Created before the first page load so the fleet dropdown, which reads the
-    // team list once at app boot, already lists it. The parallel index keeps
-    // the name unique when `--repeat-each` starts several copies in the same
-    // millisecond — Fleet rejects a duplicate fleet name.
-    const fleet = await createFleet(
-      request,
-      `pw-historical-data-${Date.now()}-${test.info().parallelIndex}`,
-    );
-    throwawayFleetId = fleet.id;
+    // Before the first page load, so the fleet dropdown lists it.
+    const fleet = await throwawayFleet('historical-data');
 
-    try {
       // A fleet this new has no hosts and no history, so its chart is a grid of
-      // "No data" cells. The grid's presence, not its values, is the signal
-      // that the dataset is still being collected.
-      await withChartResponse(page, 'uptime', fleet.id, () =>
-        dashboard.goto({ fleetId: fleet.id }),
-      );
-      await dashboard.teamDropdown.selectByLabel(fleet.name);
-      await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
-      await expect(dashboard.chartCells.first()).toBeVisible();
+    // "No data" cells. The grid's presence, not its values, is the signal
+    // that the dataset is still being collected.
+    await withChartResponse(page, 'uptime', fleet.id, () =>
+      dashboard.goto({ fleetId: fleet.id }),
+    );
+    await dashboard.teamDropdown.selectByLabel(fleet.name);
+    await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
+    await expect(dashboard.chartCells.first()).toBeVisible();
 
-      await withChartResponse(page, 'cve', fleet.id, () =>
-        dashboard.selectChartDataset('Vulnerability exposure'),
-      );
-      await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
-      await expect(dashboard.chartCells.first()).toBeVisible();
+    await withChartResponse(page, 'cve', fleet.id, () =>
+      dashboard.selectChartDataset('Vulnerability exposure'),
+    );
+    await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
+    await expect(dashboard.chartCells.first()).toBeVisible();
 
-      // Hosts online off, vulnerability exposure untouched.
-      await teamSettings.goto(fleet.id);
-      await expect(teamSettings.retentionSectionHeading).toBeVisible();
-      await teamSettings.setHistoricalDataDisabled('hostsOnline', true);
-      await teamSettings.toast.dismissAll();
-      await teamSettings.save();
+    // Hosts online off, vulnerability exposure untouched.
+    await teamSettings.goto(fleet.id);
+    await expect(teamSettings.retentionSectionHeading).toBeVisible();
+    await teamSettings.setHistoricalDataDisabled('hostsOnline', true);
+    await teamSettings.toast.dismissAll();
+    await teamSettings.save();
 
-      // The confirmation names the fleet and lists only what this save deletes
-      // — the proof that a per-fleet switch, not the deployment-wide one, is
-      // about to be written.
-      await expect(teamSettings.confirmDisableModal).toContainText(`fleet "${fleet.name}"`);
-      await expect(teamSettings.confirmDisableDatasets).toHaveText(['Hosts online']);
-      await teamSettings.confirmDisable();
+    // The confirmation names the fleet and lists only what this save deletes
+    // — the proof that a per-fleet switch, not the deployment-wide one, is
+    // about to be written.
+    await expect(teamSettings.confirmDisableModal).toContainText(`fleet "${fleet.name}"`);
+    await expect(teamSettings.confirmDisableDatasets).toHaveText(['Hosts online']);
+    await teamSettings.confirmDisable();
 
-      expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
-        uptime: false,
-        vulnerabilities: true,
-      });
+    expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
+      uptime: false,
+      vulnerabilities: true,
+    });
 
-      // One dataset collapses, the other keeps charting: the switches are
-      // independent, which toggling both at once could never show.
-      await dashboard.goto({ fleetId: fleet.id });
-      await dashboard.teamDropdown.selectByLabel(fleet.name);
-      await dashboard.selectChartDataset('Hosts online');
+    // One dataset collapses, the other keeps charting: the switches are
+    // independent, which toggling both at once could never show.
+    await dashboard.goto({ fleetId: fleet.id });
+    await dashboard.teamDropdown.selectByLabel(fleet.name);
+    await dashboard.selectChartDataset('Hosts online');
+    await expect(dashboard.dataCollectionDisabledHeading).toBeVisible();
+    await expect(dashboard.dataCollectionDisabledPanel).toContainText(
+      'to see data for this fleet',
+    );
+    await expect(dashboard.chartCells).toHaveCount(0);
+
+    await withChartResponse(page, 'cve', fleet.id, () =>
+      dashboard.selectChartDataset('Vulnerability exposure'),
+    );
+    await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
+    await expect(dashboard.chartCells.first()).toBeVisible();
+
+    // "Turn on" is the card's way back — it routes to the fleet's settings,
+    // where the switch that emptied the card lives.
+    await dashboard.selectChartDataset('Hosts online');
+    await dashboard.chartTurnOnButton.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/settings/fleets/settings\\?fleet_id=${fleet.id}`),
+    );
+    await expect(teamSettings.retentionSectionHeading).toBeVisible();
+    await expect(teamSettings.disableHostsOnlineCheckbox).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+
+    // Vulnerability exposure off as well. Hosts online is already off, so the
+    // confirmation lists only the dataset this save newly disables.
+    await teamSettings.setHistoricalDataDisabled('vulnerabilities', true);
+    await teamSettings.toast.dismissAll();
+    await teamSettings.save();
+    await expect(teamSettings.confirmDisableDatasets).toHaveText([
+      'Vulnerability exposure',
+    ]);
+    await teamSettings.confirmDisable();
+
+    expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
+      uptime: false,
+      vulnerabilities: false,
+    });
+
+    // Neither dataset issues a chart request now, so both panels render
+    // straight from the fleet's config.
+    await dashboard.goto({ fleetId: fleet.id });
+    await dashboard.teamDropdown.selectByLabel(fleet.name);
+    for (const dataset of ['Hosts online', 'Vulnerability exposure'] as const) {
+      await dashboard.selectChartDataset(dataset);
       await expect(dashboard.dataCollectionDisabledHeading).toBeVisible();
-      await expect(dashboard.dataCollectionDisabledPanel).toContainText(
-        'to see data for this fleet',
-      );
       await expect(dashboard.chartCells).toHaveCount(0);
-
-      await withChartResponse(page, 'cve', fleet.id, () =>
-        dashboard.selectChartDataset('Vulnerability exposure'),
-      );
-      await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
-      await expect(dashboard.chartCells.first()).toBeVisible();
-
-      // "Turn on" is the card's way back — it routes to the fleet's settings,
-      // where the switch that emptied the card lives.
-      await dashboard.selectChartDataset('Hosts online');
-      await dashboard.chartTurnOnButton.click();
-      await expect(page).toHaveURL(
-        new RegExp(`/settings/fleets/settings\\?fleet_id=${fleet.id}`),
-      );
-      await expect(teamSettings.retentionSectionHeading).toBeVisible();
-      await expect(teamSettings.disableHostsOnlineCheckbox).toHaveAttribute(
-        'aria-checked',
-        'true',
-      );
-
-      // Vulnerability exposure off as well. Hosts online is already off, so the
-      // confirmation lists only the dataset this save newly disables.
-      await teamSettings.setHistoricalDataDisabled('vulnerabilities', true);
-      await teamSettings.toast.dismissAll();
-      await teamSettings.save();
-      await expect(teamSettings.confirmDisableDatasets).toHaveText([
-        'Vulnerability exposure',
-      ]);
-      await teamSettings.confirmDisable();
-
-      expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
-        uptime: false,
-        vulnerabilities: false,
-      });
-
-      // Neither dataset issues a chart request now, so both panels render
-      // straight from the fleet's config.
-      await dashboard.goto({ fleetId: fleet.id });
-      await dashboard.teamDropdown.selectByLabel(fleet.name);
-      for (const dataset of ['Hosts online', 'Vulnerability exposure'] as const) {
-        await dashboard.selectChartDataset(dataset);
-        await expect(dashboard.dataCollectionDisabledHeading).toBeVisible();
-        await expect(dashboard.chartCells).toHaveCount(0);
-      }
-
-      // Re-enabling needs no confirmation — nothing is deleted on the way back.
-      await dashboard.chartTurnOnButton.click();
-      await expect(teamSettings.retentionSectionHeading).toBeVisible();
-      await teamSettings.setHistoricalDataDisabled('hostsOnline', false);
-      await teamSettings.setHistoricalDataDisabled('vulnerabilities', false);
-      await teamSettings.toast.dismissAll();
-      await teamSettings.save();
-      await teamSettings.toast.expectSuccess('Successfully updated settings.');
-      await expect(teamSettings.confirmDisableModal).toHaveCount(0);
-
-      expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
-        uptime: true,
-        vulnerabilities: true,
-      });
-
-      // Both charts come back. Each dashboard entry is a fresh page load, which
-      // is what makes this meaningful: ChartCard holds every dataset for five
-      // minutes, so a chart "restored" without reloading could be the copy
-      // fetched before anything was turned off.
-      await withChartResponse(page, 'uptime', fleet.id, () =>
-        dashboard.goto({ fleetId: fleet.id }),
-      );
-      await dashboard.teamDropdown.selectByLabel(fleet.name);
-      await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
-      await expect(dashboard.chartCells.first()).toBeVisible();
-
-      await withChartResponse(page, 'cve', fleet.id, () =>
-        dashboard.selectChartDataset('Vulnerability exposure'),
-      );
-      await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
-      await expect(dashboard.chartCells.first()).toBeVisible();
-    } finally {
-      // In the finally so a failure mid-flow still leaves no fleet behind.
-      await deleteFleetWithRetry(request, fleet.id);
-      throwawayFleetId = undefined;
     }
+
+    // Re-enabling needs no confirmation — nothing is deleted on the way back.
+    await dashboard.chartTurnOnButton.click();
+    await expect(teamSettings.retentionSectionHeading).toBeVisible();
+    await teamSettings.setHistoricalDataDisabled('hostsOnline', false);
+    await teamSettings.setHistoricalDataDisabled('vulnerabilities', false);
+    await teamSettings.toast.dismissAll();
+    await teamSettings.save();
+    await teamSettings.toast.expectSuccess('Successfully updated settings.');
+    await expect(teamSettings.confirmDisableModal).toHaveCount(0);
+
+    expect(await getFleetHistoricalData(request, fleet.id)).toEqual({
+      uptime: true,
+      vulnerabilities: true,
+    });
+
+    // Both charts come back. Each dashboard entry is a fresh page load, which
+    // is what makes this meaningful: ChartCard holds every dataset for five
+    // minutes, so a chart "restored" without reloading could be the copy
+    // fetched before anything was turned off.
+    await withChartResponse(page, 'uptime', fleet.id, () =>
+      dashboard.goto({ fleetId: fleet.id }),
+    );
+    await dashboard.teamDropdown.selectByLabel(fleet.name);
+    await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
+    await expect(dashboard.chartCells.first()).toBeVisible();
+
+    await withChartResponse(page, 'cve', fleet.id, () =>
+      dashboard.selectChartDataset('Vulnerability exposure'),
+    );
+    await expect(dashboard.dataCollectionDisabledPanel).toHaveCount(0);
+    await expect(dashboard.chartCells.first()).toBeVisible();
   });
 });

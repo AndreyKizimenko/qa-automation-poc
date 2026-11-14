@@ -57,7 +57,7 @@ test.describe('Premium • Hosts • bulk transfer', () => {
     qaFleetId,
     request,
   }) => {
-    const hosts = await findSimulatedHostIds(request, 'darwin', HOST_COUNT);
+    const hosts = await findSimulatedHostIds(request, 'e2e/premium/hosts/bulk-transfer#selected');
     expect(hosts, 'expected simulated macOS hosts to stage').toHaveLength(HOST_COUNT);
     const hostIds = hosts.map((h) => h.id);
 
@@ -170,7 +170,7 @@ test.describe('Premium • Hosts • transfer every matching host', () => {
     request,
     page,
   }) => {
-    const hosts = await findOfflineSimulations(request, 'linux', STAGED);
+    const hosts = await findOfflineSimulations(request, 'e2e/premium/hosts/bulk-transfer#staged');
     expect(
       hosts,
       `${STAGED} offline Linux simulations on Unassigned: the perf daemons' daily refresh leaves ~100 (tools/perf-hosts)`,

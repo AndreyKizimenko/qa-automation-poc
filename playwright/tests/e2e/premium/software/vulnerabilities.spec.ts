@@ -266,7 +266,7 @@ test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
  * between the two). The Hosts list is computed live, so it is compared with the
  * live API host list, never with the count.
  */
-test("Vulnerabilities — a CVE's host count and hosts are its fleet's", async ({
+test("Vulnerabilities — a CVE's host count and hosts are its fleet's", { tag: '@vm-linux' }, async ({
   dashboard,
   softwareTitles,
   vulnerabilitiesList,

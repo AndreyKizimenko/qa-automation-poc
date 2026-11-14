@@ -19,7 +19,7 @@ test.describe('Free • Hosts • IdP username', () => {
     hostDetails,
     request,
   }) => {
-    const [hostId] = await findSimulations(request, 'windows', 1, 0);
+    const [hostId] = await findSimulations(request, 'e2e/free/hosts/host-idp-username#host');
     expect(hostId, 'expected an online simulated Windows host').toBeDefined();
 
     await hostDetails.goto(hostId);

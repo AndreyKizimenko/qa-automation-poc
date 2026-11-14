@@ -31,12 +31,13 @@ coverage is to be a suite of its own.
 ## The shapes
 
 **One flow on seeded data.** `e2e/premium/policies/policies.spec.ts` › *Policies — fleet isolation*.
-- Seed through an API helper (`createFleetPolicy`), with a `pw-…-${runNonce()}` name.
+- Seed through the `seed` fixture (`seed.policy('…', { fleetId })`; `e2e/shared/command-palette/deep-links.spec.ts`
+  seeds this way), which names the thing and deletes it after the test, timed out or not. For what `seed`
+  doesn't make: the API helper with an `ownName('…')` name, then `cleanup.add` for its delete.
 - Go straight to the page with `goto({ fleetId })`, unless this is the area's one click-through test
   (`playwright/CLAUDE.md`), and call `teamDropdown.select(scope)` after every scoped `goto`.
 - Search until the list holds exactly your row before acting on it.
 - An absence assertion sits beside something that proves the page finished loading (here, the empty state).
-- Remove the seed in an `afterEach`, or in a `finally` when the sweep would catch a miss.
 
 **Serial lifecycle.** `e2e/premium/policies/policies.spec.ts` › *Policies CRUD*.
 - `test.describe.configure({ mode: 'serial' })` only because the steps share an id or a name through the
@@ -82,27 +83,31 @@ split.
 `e2e/premium/software/software-lifecycle-on-host.spec.ts` (each platform).
 - `test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES })`: the budget covers the VM's queue,
   not just this test's work, and every wait stays inside it.
-- `requireRealHost(request, platform)` for the host; it fails with the reason when the VM is missing.
-- A describe-level tracker (`let created`) that an `afterEach` deletes: the test's `finally` is skipped on
+- `requireRealHost(request, platform)` for the host; it fails with the reason when the VM is missing, and
+  refuses a test without the VM's tag: `{ tag: '@vm-macos' }` on the test or describe, `vmTag(fixture.platform)`
+  in a loop over platforms (with the `playwright/valid-test-tags` directive the exemplar carries).
+- The created title's delete registered with `cleanup.add` (older specs: a describe-level tracker that an
+  `afterEach` deletes): the test's `finally` is skipped on
   a timeout, and deleting a title also cancels its queued installs.
 - A durable fixture from `helpers/vm-fixtures.ts`, left uninstalled, unless the test changes the title
   itself; then a per-run `fleet-pw-*` package deleted in the same test.
 - The header says which VM and why it must be real. A test that can't run beside a copy of itself (it
   owns a durable fixture, or writes the one global setting of its kind) says that too, as `e2e/premium/dashboard/automations-activity.spec.ts` does.
 
-**Label targeting with borrowed simulations.**
-`e2e/premium/controls/os-settings/profile-label-targets.spec.ts`.
-- A named slice constant (`SIM_OFFSET`), claimed in the registry comment on the picker in
-  `helpers/api/hosts.ts`.
-- `findMdmSimulations` for profiles, `findSimulations` for everything else.
+**Label targeting with borrowed simulations.** `e2e/premium/policies/policy-label-targets.spec.ts`
+(`e2e/premium/controls/os-settings/profile-label-targets.spec.ts` for profiles, from the MDM-enrolled pool).
+- A claim of its own in `helpers/claims.ts` (`'<spec path>#outside'`, pool `plain`, or `mdm` for
+  profiles, `use: 'moved'`), passed to `borrowSims({ claim, to })`. `npm run lint:claims` says whether it
+  overlaps another spec's or runs past its pool.
+- Labels from `seed.label`; what the test creates in the UI (the policies) gets `cleanup.add` right after
+  its save. The undo runs newest first: what targets the labels, then the labels (Fleet refuses to delete
+  a label still targeted), then the simulations go back to Unassigned.
 - Assert set equality over the hosts you placed, never a count.
-- Return the simulations to Unassigned and delete the labels last (Fleet refuses to delete a label that is
-  still targeted).
 
 **Throwaway `pw-*` fleet.** `e2e/premium/dashboard/historical-data-collection.spec.ts`.
-- `createFleet` with a `pw-` name; scope the page by URL (`goto({ fleetId })`). The exemplar's
+- `throwawayFleet('kind')`, before the first page load; it deletes the fleet after the test, and the sweep
+  removes one a killed run left. Scope the page by URL (`goto({ fleetId })`). The exemplar's
   `selectByLabel(fleet.name)` after each `goto` confirms the scope took; it is not how the fleet is reached.
-- `deleteFleet` in the test and again in an `afterEach`; the sweep removes one a killed run left.
 - A fleet created through the UI, because the fleet's own lifecycle is the test:
   `e2e/premium/settings/fleets-lifecycle.spec.ts`.
 
@@ -130,7 +135,9 @@ and titles its describe `Policies CRUD`). Follow the rule, not the exemplar.
 - A header: what it covers, which host or fleet and why, what it leaves behind and who removes it, and the
   Fleet source it was grounded in.
 - `test` and `expect` from `@fixtures` in a browser spec.
-- Names from `runNonce()` with a `pw-` prefix that says which spec made them.
+- Names from `ownName(kind)`, whose kind says which spec made them.
+- Toast copy from `toastCopy` (`@helpers/toast-copy`), activity copy from `activityCopy`: never typed in the spec.
+- Its undo in the fixtures (`cleanup`, `throwawayFleet`, `borrowSims`, `seed`), never a `finally`.
 - A describe title in the house form: `Premium • Area • what`, `Free • …`, `Shared • …`.
 
 ## Shapes to avoid

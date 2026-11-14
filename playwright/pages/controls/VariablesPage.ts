@@ -2,6 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { DataTable } from '../components/DataTable';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
+import { fleetModal } from '../components/Modal';
 
 /**
  * /controls/variables/global-variables — global custom variables (secrets)
@@ -39,12 +40,12 @@ export class VariablesPage {
     // first (the section-header one) to stay single-match when the list is empty.
     this.addVariableButton = page.getByRole('button', { name: 'Add variable' }).first();
 
-    this.addModal = page.locator('.modal__modal_container').filter({ hasText: 'Add custom variable' });
+    this.addModal = fleetModal(page, 'Add custom variable');
     this.nameInput = this.addModal.getByRole('textbox', { name: 'Name' });
     this.valueInput = this.addModal.getByRole('textbox', { name: 'Value' });
     this.saveButton = this.addModal.getByRole('button', { name: 'Save', exact: true });
 
-    this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete custom variable' });
+    this.deleteModal = fleetModal(page, 'Delete custom variable');
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
   }
 
@@ -52,6 +53,12 @@ export class VariablesPage {
     const qs = opts.fleetId !== undefined ? `?fleet_id=${opts.fleetId}` : '';
     await this.page.goto(`/controls/variables/global-variables${qs}`);
     await expect(this.heading).toBeVisible();
+    // The list's first fetch has to land before anything is saved: the card's
+    // refetch after a save joins a fetch still in flight (react-query 3 doesn't
+    // start a second one), so a save made too soon is answered with the list
+    // from before it, and the table keeps showing that.
+    await expect(this.table.rowOrEmpty()).toBeVisible();
+    await this.table.waitForSettled();
   }
 
   /** A variable's row in the table, matched by its (uppercased) name. */

@@ -3,6 +3,7 @@ import { DataTable } from '../components/DataTable';
 import { Pagination } from '../components/Pagination';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
+import { fleetModal } from '../components/Modal';
 
 /**
  * /labels/manage — the dedicated Labels page, plus its add (/labels/new) and
@@ -68,9 +69,8 @@ export class LabelsPage {
     this.hostSearch = page.getByRole('searchbox');
     this.saveButton = page.getByRole('button', { name: 'Save', exact: true });
 
-    // DeleteLabelModal — Fleet Modal renders a role-less title; scope by the
-    // shared container class filtered by the title text.
-    this.deleteModal = page.locator('.modal__modal_container').filter({ hasText: 'Delete label' });
+    // DeleteLabelModal.
+    this.deleteModal = fleetModal(page, 'Delete label');
     this.deleteConfirmButton = this.deleteModal.getByRole('button', { name: 'Delete', exact: true });
   }
 

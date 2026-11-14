@@ -43,6 +43,9 @@ module.exports = tseslint.config(
       'playwright/valid-expect': 'error',
       'playwright/no-focused-test': 'error',
       'playwright/no-skipped-test': 'off', // suite/skip-needs-reason checks what this suite asks of a skip
+      // The only tags are the real-VM ones (helpers/api/hosts.ts, VM_TAGS), so a
+      // misspelt tag fails here instead of leaving a VM test out of its lane.
+      'playwright/valid-test-tags': ['error', { allowedTags: ['@vm-macos', '@vm-windows', '@vm-linux'] }],
       'playwright/prefer-hooks-in-order': 'error',
       'playwright/prefer-to-have-length': 'error',
       'playwright/expect-expect': 'off', // too many false positives with custom assert helpers
@@ -81,10 +84,10 @@ module.exports = tseslint.config(
     rules: {
       'suite/no-class-locator-in-spec': 'error',
       'suite/no-date-now-in-name': 'error',
+      'suite/use-own-name': 'error',
+      'suite/no-api-cleanup-in-finally': 'error',
       'suite/activity-needs-baseline': 'error',
-      // Off until toast copy has a home outside the specs (docs/architecture-audit.md,
-      // roadmap item 9): until then the rule would name a problem with no fix.
-      'suite/no-toast-copy-in-spec': 'off',
+      'suite/no-toast-copy-in-spec': 'error',
     },
   },
   {
@@ -96,6 +99,23 @@ module.exports = tseslint.config(
   {
     files: ['helpers/**/*.ts', 'setup/**/*.ts', 'fixtures.ts'],
     rules: { 'suite/no-swallowed-response': 'error' },
+  },
+  // Each shared widget's selector lives in its own component file; every other
+  // page and component object uses that component.
+  {
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/Modal.ts'],
+    rules: { 'suite/modal-in-component': 'error' },
+  },
+  {
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/dropdowns.ts'],
+    rules: { 'suite/react-select-in-component': 'error', 'suite/actions-menu-in-component': 'error' },
+  },
+  {
+    files: ['pages/**/*.ts'],
+    ignores: ['pages/components/SqlEditor.ts'],
+    rules: { 'suite/sql-editor-in-component': 'error' },
   },
   {
     // Specs with no page. The browser `test` carries an automatic fixture that
@@ -132,6 +152,7 @@ module.exports = tseslint.config(
       '.playwright-mcp/**',
       'eslint.config.js', // This config file itself — can't type-check with its own rules
       'eslint-rules/**', // Plain JS outside the tsconfig, for the same reason; `npm run lint:rules` tests it
+      'scripts/**', // Plain JS outside the tsconfig, for the same reason; `npm run lint:claims` runs it
     ],
   },
 );

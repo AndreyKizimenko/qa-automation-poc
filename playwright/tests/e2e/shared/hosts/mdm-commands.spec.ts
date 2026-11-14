@@ -56,7 +56,7 @@ const USER_LIST_PAYLOAD = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-test('a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it', async ({
+test('a custom MDM command is acknowledged by the host and reported everywhere Fleet shows it', { tag: '@vm-macos' }, async ({
   hostDetails,
   dashboard,
   request,

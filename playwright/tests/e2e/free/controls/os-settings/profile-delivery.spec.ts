@@ -36,7 +36,7 @@ import {
 } from '@helpers/api';
 import { inertDeclaration, inertMobileconfig, runNonce, writeProfile } from '@helpers/profiles';
 
-test.describe('Free • Controls • Configuration profiles — delivery to the real Mac', () => {
+test.describe('Free • Controls • Configuration profiles — delivery to the real Mac', { tag: '@vm-macos' }, () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   test('a profile is installed, resent and removed, and the host names it in each command', async ({

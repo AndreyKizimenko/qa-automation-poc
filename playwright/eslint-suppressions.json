@@ -4,8 +4,202 @@
       "count": 24
     }
   },
+  "pages/DashboardPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    },
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/account/MyAccountPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/EditSoftwareModal.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/EnrollSecretModal.ts": {
+    "suite/modal-in-component": {
+      "count": 3
+    }
+  },
+  "pages/components/FilterModal.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/PlatformDropdown.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/PolicyAutomationsFields.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/RunScriptModal.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/SoftwareDeploySelector.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/components/SoftwareInstallerCard.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/StatusFilter.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/TransferHostModal.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/components/gitopsMode.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 1
+    }
+  },
+  "pages/controls/ConfigurationProfilesPage.ts": {
+    "suite/modal-in-component": {
+      "count": 2
+    }
+  },
+  "pages/controls/OsUpdatesPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/controls/SetupAssistantPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/hosts/HostDetailsPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 3
+    },
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/hosts/HostsListPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/modal-in-component": {
+      "count": 2
+    }
+  },
+  "pages/labels/LabelsPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/policies/PoliciesListPage.ts": {
+    "suite/modal-in-component": {
+      "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/policies/PolicyDetailsPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/policies/PolicyEditPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/reports/ReportDetailsPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/reports/ReportEditPage.ts": {
+    "suite/modal-in-component": {
+      "count": 3
+    }
+  },
+  "pages/reports/ReportsListPage.ts": {
+    "suite/modal-in-component": {
+      "count": 2
+    },
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/settings/FleetUsersPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 1
+    }
+  },
+  "pages/settings/FleetsPage.ts": {
+    "suite/modal-in-component": {
+      "count": 3
+    }
+  },
+  "pages/settings/IntegrationsPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/settings/users/UsersPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    },
+    "suite/modal-in-component": {
+      "count": 3
+    }
+  },
+  "pages/software/FleetMaintainedAppsPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/software/SoftwareOsPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
+  "pages/software/SoftwareTitleDetailPage.ts": {
+    "suite/actions-menu-in-component": {
+      "count": 2
+    }
+  },
+  "pages/software/SoftwareTitlesPage.ts": {
+    "suite/modal-in-component": {
+      "count": 1
+    }
+  },
+  "pages/software/VulnerabilitiesListPage.ts": {
+    "suite/react-select-in-component": {
+      "count": 2
+    }
+  },
   "tests/api/free/license.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -27,8 +221,21 @@
       "count": 4
     }
   },
+  "tests/api/premium/max-request-file-sizes.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
   "tests/e2e/free/controls/os-settings/configuration-profiles.spec.ts": {
     "suite/activity-needs-baseline": {
+      "count": 2
+    }
+  },
+  "tests/e2e/free/controls/os-settings/profile-delivery.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/use-own-name": {
       "count": 2
     }
   },
@@ -37,8 +244,18 @@
       "count": 3
     }
   },
+  "tests/e2e/free/controls/scripts/role-access.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
   "tests/e2e/free/dashboard/historical-data-collection.spec.ts": {
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/hosts/host-actions-role-access.spec.ts": {
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -56,15 +273,29 @@
     }
   },
   "tests/e2e/free/policies/policy-automations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 3
     }
   },
-  "tests/e2e/free/reports/automations.spec.ts": {
-    "suite/no-date-now-in-name": {
+  "tests/e2e/free/policies/role-access.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/policies/sql-validation.spec.ts": {
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -74,21 +305,27 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/free/reports/role-access.spec.ts": {
+    "suite/use-own-name": {
+      "count": 3
     }
   },
   "tests/e2e/free/reports/save-as-new.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/free/settings/gitops-mode.spec.ts": {
     "suite/no-page-locator-in-spec": {
       "count": 5
-    }
-  },
-  "tests/e2e/free/settings/organization/organization-info.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
     }
   },
   "tests/e2e/free/settings/users/api-user-create.spec.ts": {
@@ -100,6 +337,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/free/settings/users/edit.spec.ts": {
@@ -107,6 +347,9 @@
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -126,6 +369,9 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/free/software/vulnerabilities.spec.ts": {
@@ -138,17 +384,131 @@
       "count": 1
     }
   },
+  "tests/e2e/premium/controls/os-settings/configuration-profiles.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/disk-encryption.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/profile-broken-labels.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/profile-declarations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 5
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/profile-delivery-retry.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 4
+    }
+  },
+  "tests/e2e/premium/controls/os-settings/profile-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 10
+    }
+  },
   "tests/e2e/premium/controls/scripts/batch-run.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/controls/scripts/library.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/scripts/role-access.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/setup-experience/bootstrap-package.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/setup-experience/install-software.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/dashboard/automations-activity.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
       "count": 1
     }
   },
   "tests/e2e/premium/dashboard/historical-data-collection.spec.ts": {
-    "suite/no-date-now-in-name": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/exclusive/os-updates/ddm-conflict.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/exclusive/os-updates/macos-updates.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/exclusive/software/deploy-install-retries.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
@@ -174,6 +534,9 @@
   "tests/e2e/premium/gitops-mode/04-controls-and-reports.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 1
     }
   },
   "tests/e2e/premium/gitops-mode/zz-everything-is-back.spec.ts": {
@@ -184,8 +547,59 @@
       "count": 3
     }
   },
+  "tests/e2e/premium/hosts/bulk-transfer.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/host-actions-role-access.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/host-delete.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    }
+  },
   "tests/e2e/premium/hosts/host-idp-username.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/host-transfer-permissions.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/hosts/recovery-lock.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/labels/role-access.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -193,50 +607,113 @@
     "suite/activity-needs-baseline": {
       "count": 3
     },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/policies/policy-automations.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
+    },
+    "suite/use-own-name": {
+      "count": 7
     }
   },
   "tests/e2e/premium/policies/role-access.spec.ts": {
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 4
     }
   },
-  "tests/e2e/premium/reports/automations.spec.ts": {
-    "suite/no-date-now-in-name": {
+  "tests/e2e/premium/policies/sql-validation.spec.ts": {
+    "suite/use-own-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/reports/list-filters.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 3
+    },
     "suite/no-date-now-in-name": {
       "count": 3
+    },
+    "suite/use-own-name": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/reports/report-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 5
     }
   },
   "tests/e2e/premium/reports/reports.spec.ts": {
     "suite/activity-needs-baseline": {
       "count": 3
     },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 1
     }
   },
   "tests/e2e/premium/reports/role-access.spec.ts": {
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 4
     }
   },
   "tests/e2e/premium/reports/save-as-new.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    }
+  },
+  "tests/e2e/premium/reports/stored-results.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/settings/enroll-secrets.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/settings/fleets-lifecycle.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -250,13 +727,14 @@
       "count": 2
     }
   },
-  "tests/e2e/premium/settings/organization/organization-info.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
-    }
-  },
   "tests/e2e/premium/settings/team-host-status-webhook.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -269,6 +747,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 6
     }
   },
   "tests/e2e/premium/settings/users/edit.spec.ts": {
@@ -277,6 +758,9 @@
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/settings/users/form-validation.spec.ts": {
@@ -295,19 +779,34 @@
     },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
     }
   },
   "tests/e2e/premium/settings/users/team-admin-scope.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     }
   },
   "tests/e2e/premium/software/custom-icons.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-class-locator-in-spec": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/display-name.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
@@ -323,11 +822,17 @@
     }
   },
   "tests/e2e/premium/software/install-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/inventory-reflects-install.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 2
     },
@@ -336,11 +841,17 @@
     }
   },
   "tests/e2e/premium/software/large-upload.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/premium/software/library.spec.ts": {
@@ -348,6 +859,9 @@
       "count": 1
     },
     "suite/no-page-locator-in-spec": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -360,8 +874,27 @@
     }
   },
   "tests/e2e/premium/software/no-teams-views.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    }
+  },
+  "tests/e2e/premium/software/package-scripts.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/patch-policy.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 4
     }
   },
   "tests/e2e/premium/software/role-access.spec.ts": {
@@ -373,22 +906,63 @@
     "suite/activity-needs-baseline": {
       "count": 2
     },
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-class-locator-in-spec": {
       "count": 3
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/premium/software/software-label-targets.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/premium/software/software-lifecycle-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
     }
   },
   "tests/e2e/premium/software/uninstall-from-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
   "tests/e2e/premium/software/update-on-host.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }
   },
+  "tests/e2e/premium/software/version-pinning.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    }
+  },
   "tests/e2e/premium/software/vulnerabilities.spec.ts": {
     "playwright/prefer-hooks-in-order": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/account/change-password.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -402,28 +976,27 @@
       "count": 2
     }
   },
-  "tests/e2e/shared/command-palette/deep-links.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 2
-    }
-  },
   "tests/e2e/shared/command-palette/pickers.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
     "suite/no-date-now-in-name": {
       "count": 2
-    }
-  },
-  "tests/e2e/shared/controls/custom-variables.spec.ts": {
-    "suite/no-date-now-in-name": {
-      "count": 1
     }
   },
   "tests/e2e/shared/controls/scripts/batch-schedule-cancel.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 3
     }
   },
   "tests/e2e/shared/dashboard/activity-feed.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
@@ -433,12 +1006,21 @@
     }
   },
   "tests/e2e/shared/exclusive/script-execution-disabled.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-page-locator-in-spec": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/shared/hosts/filters.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 2
+    },
+    "suite/use-own-name": {
       "count": 2
     }
   },
@@ -448,18 +1030,36 @@
     }
   },
   "tests/e2e/shared/hosts/host-live-query.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    },
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/use-own-name": {
       "count": 1
     }
   },
   "tests/e2e/shared/hosts/host-reports-tab.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 3
+    },
     "suite/no-date-now-in-name": {
+      "count": 3
+    },
+    "suite/use-own-name": {
       "count": 3
     }
   },
   "tests/e2e/shared/hosts/host-run-script.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 4
+    },
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 5
     }
   },
   "tests/e2e/shared/hosts/host-software.spec.ts": {
@@ -470,11 +1070,17 @@
   "tests/e2e/shared/hosts/sort.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 2
     }
   },
   "tests/e2e/shared/labels/labels.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 6
     }
   },
   "tests/e2e/shared/packs/packs.spec.ts": {
@@ -488,18 +1094,76 @@
       "count": 1
     }
   },
+  "tests/e2e/shared/policies/live-policy-run.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/policies/policy-hosts.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 2
+    }
+  },
+  "tests/e2e/shared/reports/automations.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/reports/edit-warnings.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/reports/live-report-export.spec.ts": {
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
   "tests/e2e/shared/settings/enroll-secrets.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 2
     }
   },
   "tests/e2e/shared/settings/organization/advanced-options.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
+    },
+    "suite/use-own-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/organization/custom-logo.spec.ts": {
+    "suite/no-api-cleanup-in-finally": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/organization/organization-info.spec.ts": {
+    "suite/no-date-now-in-name": {
+      "count": 1
+    }
+  },
+  "tests/e2e/shared/settings/users/delete.spec.ts": {
+    "suite/no-toast-copy-in-spec": {
+      "count": 1
     }
   },
   "tests/e2e/shared/settings/users/edit-password.spec.ts": {
     "suite/no-date-now-in-name": {
+      "count": 1
+    },
+    "suite/no-toast-copy-in-spec": {
       "count": 1
     }
   },
@@ -511,6 +1175,9 @@
   "tests/e2e/shared/settings/users/row-actions.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
+    },
+    "suite/no-toast-copy-in-spec": {
+      "count": 3
     }
   },
   "tests/e2e/shared/settings/users/search.spec.ts": {

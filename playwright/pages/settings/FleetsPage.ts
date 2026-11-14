@@ -1,7 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
 import { Toast } from '../components/Toast';
-import { clickHoverAction } from '../components/clickHoverAction';
+import { ActionsMenu } from '../components/dropdowns';
 
 export type FleetRowAction = 'Rename' | 'Delete';
 
@@ -69,17 +69,11 @@ export class FleetsPage {
     await expect(this.addModal).toBeHidden();
   }
 
-  /**
-   * Opens a row's Actions and picks `action`. The control is Fleet's
-   * react-select ActionsDropdown: it reveals on row hover, has no accessible
-   * name, and portals its options with no role, so classes are the handle (as
-   * on the Labels page).
-   */
+  /** Opens a row's Actions menu and picks `action`. */
   async runRowAction(name: string, action: FleetRowAction): Promise<void> {
     const row = this.row(name);
     await expect(row).toHaveCount(1);
-    await clickHoverAction(row, row.locator('.actions-dropdown-select__control'));
-    await this.page.locator('.actions-dropdown-select__option').filter({ hasText: action }).click();
+    await new ActionsMenu(row).choose(action);
   }
 
   async renameFleet(name: string, newName: string): Promise<void> {

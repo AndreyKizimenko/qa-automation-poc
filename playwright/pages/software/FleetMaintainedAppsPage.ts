@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { setSlider } from '../components/formControls';
 
 /**
  * `/software/add/fleet-maintained` — catalog of pre-packaged apps. Each row
@@ -148,14 +149,11 @@ export class FleetMaintainedAppsPage {
   }
 
   /**
-   * Flip the "Hide added apps" slider. Reads the current state from
-   * `aria-checked` so the call is idempotent, and waits for the `status=`
-   * query param Fleet writes, which is the signal the refetch was issued.
+   * Set the "Hide added apps" slider, and wait for the `status=` query param
+   * Fleet writes, which is the signal the refetch was issued.
    */
   async setHideAddedApps(hidden: boolean): Promise<void> {
-    const isOn = (await this.hideAddedAppsToggle.getAttribute('aria-checked')) === 'true';
-    if (isOn !== hidden) await this.hideAddedAppsToggle.click();
-    await expect(this.hideAddedAppsToggle).toHaveAttribute('aria-checked', String(hidden));
+    await setSlider(this.hideAddedAppsToggle, hidden);
     if (hidden) {
       await expect(this.page).toHaveURL(/status=available/);
     } else {

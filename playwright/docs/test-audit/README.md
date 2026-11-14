@@ -2,9 +2,10 @@
 
 > **Frozen on 2026-11-13.** These files record the suite as it was audited by hand. A new or changed
 > test no longer adds or updates an entry here, and the counts below are not kept current: the per-test
-> catalogue will be generated from `playwright test --list`, the spec headers and the `test.step` titles
-> ([`../architecture-audit.md`](../architecture-audit.md), decision D3 and roadmap item 11). The
-> assessments, the Notes blocks and `FINDINGS.md` stay as the record of that review.
+> catalogue is `npm run catalogue`, which builds `docs/test-catalogue/` from `playwright test --list`, the
+> spec headers and the `test.step` titles ([`../architecture-audit.md`](../architecture-audit.md),
+> decision D3 and roadmap item 11). The assessments, the Notes blocks and `FINDINGS.md` stay as the record
+> of that review.
 
 Every automated test in the suite, broken down into the steps a person performs and
 the validations the test makes, so each one can be **re-run by hand** and judged:

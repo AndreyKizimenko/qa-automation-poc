@@ -29,7 +29,7 @@
  *     subject and no `kind` is required.
  */
 import { test, expect } from '@fixtures';
-import { findOnlineHost, requireRealHost } from '@helpers/api';
+import { findOnlineHost, requireRealHost, vmTag } from '@helpers/api';
 
 /** The three actions under test; every case asserts each one present or absent. */
 const MDM_ACTIONS = ['Lock', 'Wipe', 'Turn off MDM'] as const;
@@ -59,7 +59,8 @@ const CASES = [
 
 test.describe('Premium • Hosts • MDM action availability', () => {
   for (const testCase of CASES) {
-    test(`${testCase.label} offers ${testCase.offered.join(' + ')}`, async ({
+    // eslint-disable-next-line playwright/valid-test-tags -- the tag is the case's VM, and a simulated case has none
+    test(`${testCase.label} offers ${testCase.offered.join(' + ')}`, { tag: testCase.realDevice ? vmTag(testCase.platform) : [] }, async ({
       hostDetails,
       request,
     }) => {

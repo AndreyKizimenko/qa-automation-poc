@@ -47,15 +47,12 @@ import { inertDeb } from '@helpers/deb';
 import { runNonce } from '@helpers/profiles';
 import type { LabelScopeOption } from '@pages';
 
-/** Which slice of the Linux simulations this spec borrows (see `findSimulations`). */
-const SIM_OFFSET = 0;
-
 const REFUSED = "Couldn't delete. Software uses this label as a custom target. Remove the label from the software target and try again.";
 
 test.describe('Premium • Software — label-scoped software', () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
-  test('a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick', async ({
+  test('a package scoped include all, include any or exclude any is offered to exactly the hosts its labels pick', { tag: '@vm-linux' }, async ({
     softwareTitleDetail,
     hostDetails,
     labelsPage,
@@ -67,7 +64,7 @@ test.describe('Premium • Software — label-scoped software', () => {
     pageHealth.disable();
     const vm = await requireRealHost(request, 'linux');
     expect(vm.fleetId, 'the Ubuntu VM must be on the VMs fleet').toBe(vmsFleetId);
-    const sims = await findSimulations(request, 'linux', 2, SIM_OFFSET);
+    const sims = await findSimulations(request, 'e2e/premium/software/software-label-targets#outside');
     expect(sims, 'needs two online Linux simulations on Unassigned').toHaveLength(2);
     const [s1, s2] = sims;
     const ours = [vm.id, s1, s2].sort((x, y) => x - y);

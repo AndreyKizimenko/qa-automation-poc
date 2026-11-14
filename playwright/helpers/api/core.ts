@@ -62,6 +62,48 @@ export async function expectOk(res: APIResponse, what: string): Promise<void> {
   throw new Error(`${what}: HTTP ${res.status()} from ${url.pathname}${url.search}\n${body.slice(0, 2_000)}`);
 }
 
+/**
+ * One line that says why a request failed, safe for a log or a report. A
+ * Playwright request error carries a call log listing the request's headers,
+ * the bearer token among them: only the first line is kept, and an address is
+ * cut to its path, as in {@link expectOk}.
+ */
+export function failureSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split('\n')[0].replace(/https?:\/\/[^/\s]+/g, '');
+}
+
+/**
+ * Sends one delete per item, all at once, and throws after the last has
+ * answered, naming every one that failed with Fleet's status and answer. A
+ * sweep goes past a delete that fails instead of stopping at it, and still
+ * fails: what it couldn't remove is a finding, not "nothing there". A 404 is
+ * an item already gone.
+ */
+export async function deleteEach<T>(
+  what: string,
+  items: readonly T[],
+  name: (item: T) => string,
+  send: (item: T) => Promise<APIResponse>,
+): Promise<void> {
+  const failures: string[] = [];
+  await Promise.all(
+    items.map(async (item) => {
+      try {
+        const res = await send(item);
+        if (res.ok() || res.status() === 404) return;
+        const body = await res.text().catch(() => '');
+        failures.push(`${name(item)}: HTTP ${res.status()} ${body.replace(/\s+/g, ' ').slice(0, 300)}`);
+      } catch (error) {
+        failures.push(`${name(item)}: ${failureSummary(error)}`);
+      }
+    }),
+  );
+  if (failures.length) {
+    throw new Error(`[${what}] ${failures.length} of ${items.length} deletes failed:\n  ${failures.join('\n  ')}`);
+  }
+}
+
 /** Returns FLEET_API_TOKEN if it's still valid, otherwise logs in fresh. */
 export async function getApiToken(baseURL: string): Promise<string> {
   if (process.env.FLEET_API_TOKEN) {

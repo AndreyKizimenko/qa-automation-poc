@@ -74,6 +74,75 @@ tester.run('no-date-now-in-name', rules['no-date-now-in-name'], {
   ],
 });
 
+tester.run('use-own-name', rules['use-own-name'], {
+  valid: [
+    "const name = ownName('policy-hosts');",
+    "const file = `${ownName('role-script')}.sh`;",
+    // A fixed name, a prefix, and names that don't open with `pw-`.
+    "const name = 'pw-host-report-results';",
+    'const prefix = `pw-`;',
+    "const pkg = `fleet-pw-${runNonce()}`;",
+    'const email = `qa-test-${runNonce()}@example.com`;',
+    "const variable = 'PW_VAR_' + suffix;",
+    'const copy = `Copy of ${name}`;',
+  ],
+  invalid: [
+    { code: 'const name = `pw-policy-${runNonce()}`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: 'const label = `pw-pl-${n}-a`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: 'const file = `pw-secret-${n}.sh`;', errors: [{ messageId: 'handBuilt' }] },
+    { code: "const name = 'pw-report-' + suffix;", errors: [{ messageId: 'handBuilt' }] },
+    // A chain is reported once, whichever part carries the run-time value.
+    { code: "const name = `pw-${scope}` + '-' + runNonce();", errors: [{ messageId: 'handBuilt' }] },
+  ],
+});
+
+tester.run('no-api-cleanup-in-finally', rules['no-api-cleanup-in-finally'], {
+  valid: [
+    "cleanup.add('delete user', (r) => deleteUser(r, user.id, { ignoreMissing: true }));",
+    // A local resource, not the instance.
+    'try { await use(api); } finally { await api.dispose(); }',
+    'try { run(); } finally { process.env.SUITE = original; }',
+    // An after hook runs after a timeout too.
+    'test.afterEach(async ({ request }) => { try { await a(request); } finally { await b(request); } });',
+  ],
+  invalid: [
+    {
+      code: 'test("x", async ({ request }) => { try { await run(); } finally { await deleteReport(request, id); } });',
+      errors: [{ messageId: 'finallyCleanup' }],
+    },
+    {
+      code: 'async function within(request) { try { await go(); } finally { await transferHosts(request, 0, ids); } }',
+      errors: [{ messageId: 'finallyCleanup' }],
+    },
+  ],
+});
+
+tester.run('modal-in-component', rules['modal-in-component'], {
+  valid: ["this.deleteModal = fleetModal(page, 'Delete label');", "page.locator('.edit-user-modal__edit-user-modal')"],
+  invalid: [
+    { code: "page.locator('.modal__modal_container').filter({ hasText: 'Delete pack' })", errors: [{ messageId: 'widgetSelector' }] },
+    { code: 'page.locator(`.${cls}.modal__modal_container`)', errors: [{ messageId: 'widgetSelector' }] },
+  ],
+});
+
+tester.run('react-select-in-component', rules['react-select-in-component'], {
+  valid: ["new ReactSelect(page.locator('.dashboard-page__platform-filter'))", "page.locator('.activity-type-select__control')"],
+  invalid: [{ code: "modal.locator('.react-select__control')", errors: [{ messageId: 'widgetSelector' }] }],
+});
+
+tester.run('sql-editor-in-component', rules['sql-editor-in-component'], {
+  valid: ['this.sqlEditor = new SqlEditor(page);', "page.locator('.sql-editor-example')"],
+  invalid: [{ code: "page.locator('.sql-editor').filter({ has: textarea })", errors: [{ messageId: 'widgetSelector' }] }],
+});
+
+tester.run('actions-menu-in-component', rules['actions-menu-in-component'], {
+  valid: ['await new ActionsMenu(row).choose(action);'],
+  invalid: [
+    { code: "row.locator('.actions-dropdown-select__control')", errors: [{ messageId: 'widgetSelector' }] },
+    { code: "row.locator('.actions-dropdown__wrapper')", errors: [{ messageId: 'widgetSelector' }] },
+  ],
+});
+
 tester.run('activity-needs-baseline', rules['activity-needs-baseline'], {
   valid: [
     `await assertActivityAfter(request, 'created_policy', baseline, (d) => d.policy_name === name);`,

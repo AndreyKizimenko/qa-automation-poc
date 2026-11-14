@@ -69,9 +69,6 @@ import {
 } from '@helpers/profiles';
 import type { ConfigurationProfilesPage, ControlsPage, DashboardPage, OsSettingsPage, ProfileTarget } from '@pages';
 
-/** Which slice of the MDM-enrolled simulations this spec borrows (see `findMdmSimulations`). */
-const SIM_OFFSET = 0;
-
 async function openProfilesOnVmsFleet({ dashboard, controls, osSettings, configurationProfiles }: {
   dashboard: DashboardPage;
   controls: ControlsPage;
@@ -88,7 +85,7 @@ async function openProfilesOnVmsFleet({ dashboard, controls, osSettings, configu
 test.describe('Premium • Controls • Configuration profiles — label targeting', () => {
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
-  test('macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick', async ({
+  test('macOS: include all, include any + exclude, and exclude reach exactly the hosts their labels pick', { tag: '@vm-macos' }, async ({
     dashboard,
     controls,
     osSettings,
@@ -99,7 +96,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
   }, testInfo) => {
     const vm = await requireRealHost(request, 'darwin');
     expect(vm.fleetId, 'the macOS VM must be on the VMs fleet').toBe(vmsFleetId);
-    const sims = await findMdmSimulations(request, 'darwin', 2, SIM_OFFSET);
+    const sims = await findMdmSimulations(request, 'e2e/premium/controls/os-settings/profile-label-targets#macos');
     expect(sims, 'needs two online, MDM-enrolled macOS simulations on Unassigned').toHaveLength(2);
     const [s1, s2] = sims;
     const ours = [vm.id, s1, s2];
@@ -225,7 +222,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
     }
   });
 
-  test('Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off', async ({
+  test('Windows: include all + exclude reaches only the VM, and an edit that excludes it takes the profile back off', { tag: '@vm-windows' }, async ({
     dashboard,
     controls,
     osSettings,
@@ -240,7 +237,7 @@ test.describe('Premium • Controls • Configuration profiles — label targeti
     // be undone by this one's removal, and the other way round.
     const others = (await listProfiles(request, vmsFleetId)).filter((p) => p.platform === 'windows' && p.name.startsWith('pw-'));
     expect(others.map((p) => p.name), 'another generated Windows profile is on the VMs fleet').toEqual([]);
-    const sims = await findMdmSimulations(request, 'windows', 2, SIM_OFFSET);
+    const sims = await findMdmSimulations(request, 'e2e/premium/controls/os-settings/profile-label-targets#windows');
     expect(sims, 'needs two online, MDM-enrolled Windows simulations on Unassigned').toHaveLength(2);
     const [s1, s2] = sims;
     const ours = [vm.id, s1, s2];

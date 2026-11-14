@@ -32,7 +32,7 @@ import { getHostCertificates } from '@helpers/api';
 
 const COLUMNS = ['Name', 'Issuer', 'Scope', 'Issued', 'Expires'] as const;
 
-test('Host details — the certificates card lists every reported certificate', async ({
+test('Host details — the certificates card lists every reported certificate', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,
@@ -83,7 +83,7 @@ test('Host details — the certificates card lists every reported certificate', 
   }
 });
 
-test('Host details — a certificate row opens its full details', async ({
+test('Host details — a certificate row opens its full details', { tag: '@vm-macos' }, async ({
   hostDetails,
   liveMacosHost,
   request,

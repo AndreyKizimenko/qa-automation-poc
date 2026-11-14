@@ -1,12 +1,13 @@
 // Bulk-delete helpers used by the suite-level teardown to leave no-team
 // in a known-empty state. Each helper is safe to call on an already
 // empty scope, and throws when the list it works from can't be read: a
-// failed request is not an empty instance. The query and pack wipes skip
-// an individual delete that errors so one stuck item doesn't abort the
-// rest of the cleanup; the policy wipes throw on a non-OK answer, because a
-// policy left behind also keeps the titles and scripts its automations use.
+// failed request is not an empty instance. The query and pack wipes send
+// every delete before they throw (`deleteEach`), so one stuck item doesn't
+// stop the rest of the cleanup and still fails it; the policy wipes throw
+// on a non-OK answer, because a policy left behind also keeps the titles and
+// scripts its automations use.
 import { APIRequestContext } from '@playwright/test';
-import { apiLatestUrl, apiUrl, authHeaders, expectOk } from './core';
+import { apiLatestUrl, apiUrl, authHeaders, deleteEach, expectOk } from './core';
 
 /** Deletes every global saved query (report); a fleet's own reports aren't listed, so they stay. */
 export async function deleteAllQueries(request: APIRequestContext): Promise<void> {
@@ -16,13 +17,9 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
   });
   await expectOk(res, '[cleanup queries] failed to list the global reports');
   const body = await res.json();
-  const queries = (body.queries ?? []) as Array<{ id: number }>;
-  await Promise.all(
-    queries.map((q) =>
-      request
-        .delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() })
-        .catch((err) => console.warn(`[cleanup queries] ${q.id}:`, err)),
-    ),
+  const queries = (body.queries ?? []) as Array<{ id: number; name: string }>;
+  await deleteEach('cleanup queries', queries, (q) => `report ${q.id} "${q.name}"`, (q) =>
+    request.delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() }),
   );
 }
 
@@ -34,13 +31,9 @@ export async function deleteAllPacks(request: APIRequestContext): Promise<void> 
   });
   await expectOk(res, '[cleanup packs] failed to list the packs');
   const body = await res.json();
-  const packs = (body.packs ?? []) as Array<{ id: number }>;
-  await Promise.all(
-    packs.map((p) =>
-      request
-        .delete(apiUrl(`packs/id/${p.id}`), { headers: authHeaders() })
-        .catch((err) => console.warn(`[cleanup packs] ${p.id}:`, err)),
-    ),
+  const packs = (body.packs ?? []) as Array<{ id: number; name: string }>;
+  await deleteEach('cleanup packs', packs, (p) => `pack ${p.id} "${p.name}"`, (p) =>
+    request.delete(apiUrl(`packs/id/${p.id}`), { headers: authHeaders() }),
   );
 }
 
