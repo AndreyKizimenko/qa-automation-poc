@@ -41,6 +41,13 @@ export async function getHostPlatform(request: APIRequestContext, hostId: number
   return (await res.json()).host.platform as string;
 }
 
+/** A host's CPU architecture as osquery reports it: `x86_64`, `aarch64`, `arm64e`. */
+export async function getHostCpuType(request: APIRequestContext, hostId: number): Promise<string> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read host ${hostId}`);
+  return (await res.json()).host.cpu_type as string;
+}
+
 /** What the Hosts list shows of a host and searches it by. */
 export interface HostSummary {
   id: number;

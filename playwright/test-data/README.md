@@ -99,7 +99,7 @@ macOS inventory lists `.app` bundles only. **Rebuilding one changes its hash**:
 commit it, then point its `*.package.yml` at the new commit and hash, and re-apply.
 
 Packages whose name, version or size is decided at run time — a per-run `.deb`,
-an `amd64` build that the ARM VMs refuse, a ~100 MB upload — aren't files here at
+a build for the architecture the Linux VM isn't, a ~100 MB upload — aren't files here at
 all: `helpers/deb.ts` builds them in memory.
 
 `shared/software/fleet-playwright-script-package.sh` is written by hand but

@@ -5,8 +5,9 @@
  *
  *  - install/uninstall specs give each run's package a title no other spec (or
  *    earlier run) can share;
- *  - an `amd64` package on the aarch64 Linux VMs is a deterministic failed
- *    install (dpkg refuses the architecture), with nothing touching the host;
+ *  - a package built for an architecture the Linux VM isn't (`foreignDebArch`)
+ *    is a deterministic failed install: dpkg refuses it, and nothing touches
+ *    the host;
  *  - the large-upload spec needs ~100 MB that is still a real package Fleet
  *    accepts, so the upload ends in success rather than a parse error.
  *
@@ -30,7 +31,7 @@ export interface DebSpec {
   /** The `Package:` field — which is also the title Fleet lists. */
   name: string;
   version: string;
-  /** `all` installs anywhere; a mismatched one (amd64 on arm64) is refused by dpkg. */
+  /** `all` installs anywhere; one the host isn't (arm64 on x86_64) is refused by dpkg. */
   arch: 'all' | 'amd64' | 'arm64';
   files: DebFile[];
   /** gzip level for the payload. 0 stores it, which is what a large, incompressible payload wants. */
@@ -121,6 +122,14 @@ export function buildDeb(spec: DebSpec): Buffer {
     arMember('control.tar.gz', tarGz([{ path: './control', data: Buffer.from(control) }], 9)),
     arMember('data.tar.gz', tarGz(data, spec.compressionLevel ?? 9)),
   ]);
+}
+
+/**
+ * The Debian architecture a host's dpkg refuses, from the host's `cpu_type` as
+ * Fleet reports it: `arm64` for an `x86_64` host, `amd64` for an `aarch64` one.
+ */
+export function foreignDebArch(cpuType: string): 'amd64' | 'arm64' {
+  return /aarch64|arm/i.test(cpuType) ? 'amd64' : 'arm64';
 }
 
 /** The conventional one-marker package for `name`. */
