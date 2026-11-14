@@ -1,6 +1,20 @@
 import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders, expectOk, type HostRef } from './core';
 import { simClaim, TRANSFER_POOL_END, type SimClaimKey } from '../claims';
+import { VMS_FLEET } from './static-users';
+
+/**
+ * Every value Fleet records as a Linux host's `platform`: `HostLinuxOSs` in
+ * Fleet's `server/fleet/hosts.go`. A distribution missing here matches no
+ * platform at all, so no picker and no guard sees its hosts. Fedora reports
+ * `rhel` and Kubuntu `ubuntu`; Zorin, openSUSE Leap and Omarchy report their own.
+ */
+const LINUX_PLATFORMS = new Set([
+  'linux', 'ubuntu', 'zorin', 'debian', 'parrot', 'rhel', 'centos', 'sles', 'kali', 'gentoo',
+  'amzn', 'pop', 'arch', 'linuxmint', 'void', 'nixos', 'endeavouros', 'manjaro', 'manjaro-arm',
+  'opensuse-leap', 'opensuse-tumbleweed', 'tuxedo', 'neon', 'archarm', 'flatcar', 'coreos',
+  'cachyos', 'omarchy', 'amd-ryzen-ai-developer-platform',
+]);
 
 /**
  * The `platform` query param returns a label group that can include hosts
@@ -13,11 +27,7 @@ function matchesPlatform(
 ): boolean {
   if (desired === 'darwin') return hostPlatform === 'darwin';
   if (desired === 'windows') return hostPlatform === 'windows';
-  const linuxPlatforms = [
-    'linux', 'ubuntu', 'debian', 'rhel', 'centos', 'arch',
-    'fedora', 'amzn', 'sles', 'gentoo', 'pop', 'manjaro',
-  ];
-  return linuxPlatforms.includes(hostPlatform);
+  return LINUX_PLATFORMS.has(hostPlatform);
 }
 
 /**
@@ -39,6 +49,13 @@ export async function getHostPlatform(request: APIRequestContext, hostId: number
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read host ${hostId}`);
   return (await res.json()).host.platform as string;
+}
+
+/** A host's CPU architecture as osquery reports it: `x86_64`, `aarch64`, `arm64e`. */
+export async function getHostCpuType(request: APIRequestContext, hostId: number): Promise<string> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read host ${hostId}`);
+  return (await res.json()).host.cpu_type as string;
 }
 
 /** What the Hosts list shows of a host and searches it by. */
@@ -133,46 +150,73 @@ export interface OnlineHostRef extends HostRef {
 }
 
 /**
- * Which population of hosts to draw from. The QA instances carry both a handful
- * of **real** VMs and a large **simulated** (osquery-perf) load fleet, and they
+ * Which population of hosts to draw from. The QA instances carry the device
+ * lab's machines and a large **simulated** (osquery-perf) load fleet, and they
  * suit opposite purposes:
  *
- *  - `'real'` — a genuine device. Runs real osquery, so it answers live queries
- *    with the query's actual results, reports real local users and agent
- *    versions, and supports MDM-gated features. Use for any spec asserting real
- *    device behaviour. There are only a couple per tier, so never destroy one.
+ *  - `'real'` — a lab machine the suite's real-host specs run on. Runs real
+ *    osquery, so it answers live queries with the query's actual results,
+ *    reports real local users and agent versions, and supports MDM-gated
+ *    features. Use for any spec asserting real device behaviour. On premium
+ *    these are the lab machines on the **VMs** fleet; free has no fleets, so
+ *    there it is every lab machine.
  *  - `'simulated'` — the disposable load fleet. Plentiful and self-regenerating,
  *    but it ignores live-query SQL, returns no rows for a fraction of runs, and
  *    reports contradictory label membership. Use where the test needs *volume*
  *    (bulk select/transfer/delete) and the individual host is incidental.
  *
- * Told apart by **hardware model**: the QA VMs run on virtualized hardware and
- * report `VirtualMac2,1` or `QEMU Virtual Machine`, while osquery-perf reports
- * fixed consumer models (`MacBookPro11,4`, `Surface Laptop 2`). The model is a
- * property of the machine, so it holds on both tiers and across re-enrollment.
+ * A lab machine on any other premium fleet (the OS-flavour VMs on **OS matrix**)
+ * is neither: no real-host spec targets it, and no simulation picker may move,
+ * delete, lock or run anything on it.
+ *
+ * A lab machine is told from a simulation by its **hardware**: the lab runs on
+ * virtualized hardware, while osquery-perf reports fixed consumer models
+ * (`MacBookPro11,4`, `Surface Laptop 2`) or none at all (its Linux hosts). The
+ * hardware is a property of the machine, so it holds on both tiers and across
+ * re-enrollment.
  *
  * MDM enrollment is deliberately *not* the discriminator. It used to be, on the
  * premise that only real VMs were enrolled — which stopped being true once the
  * `perf-hosts` tooling began enrolling a share of the simulations, at which
  * point `'real'` started returning simulations and `'simulated'` could return a
  * VM. A host's enrollment also flaps independently of what kind of host it is.
- *
- * Because the model covers Linux too, `'simulated'` now excludes the real Linux
- * VMs as well, so a destructive spec targeting `linux` can no longer draw one.
  */
 export type HostKind = 'real' | 'simulated';
 
+/** The hardware fields the hosts list reports, which tell a lab machine from a simulation. */
+interface HostHardware {
+  hardware_model?: string;
+  hardware_vendor?: string;
+}
+
 /**
- * The QA VMs are the only hosts on virtualized hardware. Matched
- * case-insensitively against the reported hardware model, which covers
- * `VirtualMac2,1` (macOS) and `QEMU Virtual Machine` (Windows and Linux).
+ * The lab's machines are the only hosts on virtualized hardware: the macOS VMs
+ * report the model `VirtualMac2,1`, and the Linux and Windows VMs the vendor
+ * `QEMU` with the model `Standard PC (Q35 + ICH9, 2009)` or `QEMU Virtual
+ * Machine`. A host that has reported no hardware yet reads as a simulation.
  */
-const REAL_DEVICE_MODEL = /virtual|qemu/i;
+const LAB_HARDWARE_MODEL = /virtual|qemu|standard pc/i;
+const LAB_HARDWARE_VENDOR = /qemu/i;
+
+function isLabMachine(host: HostHardware): boolean {
+  return LAB_HARDWARE_MODEL.test(host.hardware_model ?? '') || LAB_HARDWARE_VENDOR.test(host.hardware_vendor ?? '');
+}
+
+/**
+ * Whether a lab machine sits where the suite's real-host specs work. Premium
+ * keeps those on the VMs fleet, beside the durable software and settings the
+ * specs count on; which lab machines are on it is the lab's decision, not a
+ * name's or a model's. Free has no fleets, so every lab machine there counts.
+ * Anything but free is held to the fleet, so a run that doesn't know its tier
+ * can't take a lab machine the suite doesn't target.
+ */
+function isSuiteTarget(host: { team_name?: string | null }): boolean {
+  return process.env.SUITE === 'free' || host.team_name === VMS_FLEET;
+}
 
 function matchesKind(host: OnlineHost, kind?: HostKind): boolean {
   if (!kind) return true;
-  const isReal = REAL_DEVICE_MODEL.test(host.hardware_model ?? '');
-  return kind === 'real' ? isReal : !isReal;
+  return kind === 'real' ? isLabMachine(host) && isSuiteTarget(host) : !isLabMachine(host);
 }
 
 /**
@@ -209,7 +253,7 @@ export interface OnlineHostRequirements {
  * field. Ordering by display name keeps the pick stable across calls in a run.
  *
  * The pool is **paged** rather than read off one window. `kind` is decided from
- * the hardware model, which Fleet has no query param for, so it can only be
+ * the host's hardware, which Fleet has no query param for, so it can only be
  * applied client-side — and a handful of real VMs among hundreds of simulations
  * will not reliably land in the first page.
  *
@@ -257,8 +301,8 @@ export async function findOnlineHost(
 
 /**
  * Simulated hosts of a platform — the disposable pool for specs that mutate or
- * destroy hosts. Excludes every host on virtualized hardware so a real VM can
- * never be selected (see {@link HostKind}).
+ * destroy hosts. Excludes every host on virtualized hardware so a lab machine
+ * can never be selected, whatever fleet it's on (see {@link HostKind}).
  *
  * Drawn from the **end** of the display-name ordering on purpose: the read-only
  * pickers other specs use (`findOnlineHost`, `findHostWithSoftware`) all take the
@@ -362,7 +406,7 @@ export async function findSimulations(request: APIRequestContext, claim: SimClai
  *
  * The most recently seen come first: they belong to the newest abandoned set,
  * a day from expiry, rather than to an older one expiry is about to delete.
- * Real VMs are excluded by hardware, as everywhere. Returns fewer than `count`
+ * Lab machines are excluded by hardware, as everywhere. Returns fewer than `count`
  * when the set is thin (a refresh that didn't run) — callers assert on the
  * length they need.
  *
@@ -383,9 +427,9 @@ export async function findOfflineSimulations(request: APIRequestContext, claim: 
     },
   });
   await expectOk(res, 'Failed to list the offline hosts on Unassigned');
-  const hosts = (await res.json()).hosts as Array<{ id: number; platform: string; hardware_model?: string }>;
+  const hosts = (await res.json()).hosts as Array<HostHardware & { id: number; platform: string }>;
   return hosts
-    .filter((h) => matchesPlatform(h.platform, platform) && !REAL_DEVICE_MODEL.test(h.hardware_model ?? ''))
+    .filter((h) => matchesPlatform(h.platform, platform) && !isLabMachine(h))
     .slice(0, count)
     .map((h) => h.id);
 }
@@ -812,7 +856,10 @@ export interface ListedHost {
   orbitVersion: string | null;
   /** False when fleetd runs with scripts disabled; null when the host hasn't said. */
   scriptsEnabled: boolean | null;
-  /** Whether it's one of the QA VMs rather than a simulation — see {@link HostKind}. */
+  /**
+   * Whether it's one of the lab's machines rather than a simulation, on whatever
+   * fleet the listing read — see {@link HostKind}.
+   */
   real: boolean;
 }
 
@@ -829,21 +876,22 @@ export async function listFleetHosts(
   if (opts.status) params.status = opts.status;
   const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
   await expectOk(res, `Failed to list the hosts of fleet ${fleetId}`);
-  const hosts = (await res.json()).hosts as Array<{
-    id: number;
-    display_name: string;
-    platform: string;
-    orbit_version: string | null;
-    scripts_enabled: boolean | null;
-    hardware_model?: string;
-  }>;
+  const hosts = (await res.json()).hosts as Array<
+    HostHardware & {
+      id: number;
+      display_name: string;
+      platform: string;
+      orbit_version: string | null;
+      scripts_enabled: boolean | null;
+    }
+  >;
   return hosts.map((h) => ({
     id: h.id,
     displayName: h.display_name,
     platform: h.platform,
     orbitVersion: h.orbit_version ?? null,
     scriptsEnabled: h.scripts_enabled ?? null,
-    real: REAL_DEVICE_MODEL.test(h.hardware_model ?? ''),
+    real: isLabMachine(h),
   }));
 }
 
@@ -876,10 +924,11 @@ export function assertVmTagged(platform: 'darwin' | 'windows' | 'linux', asker: 
 }
 
 /**
- * The online real VM of `platform`, with its fleet (0 for Unassigned — every
- * host on free). Throws rather than returning null: a spec that needs a real
- * device has nothing to test without one, and the message says what to check.
- * The calling test must carry the platform's {@link VM_TAGS} tag.
+ * The online real VM of `platform` (the first by display name of those the suite
+ * targets, see {@link HostKind}), with its fleet: VMs on premium, 0 for
+ * Unassigned on free. Throws rather than returning null: a spec that needs a
+ * real device has nothing to test without one, and the message says what to
+ * check. The calling test must carry the platform's {@link VM_TAGS} tag.
  */
 export async function requireRealHost(
   request: APIRequestContext,
@@ -898,20 +947,21 @@ export async function requireRealHost(
 
 /**
  * Why no online real VM of a platform was found, for the error a real-device
- * spec fails with. A real VM is told apart by its hardware model
- * (`/virtual|qemu/i`, see {@link HostKind}), not by MDM enrolment, which a third
- * of the simulations share. So this reads every host of the platform on
- * virtualized hardware, online or not, and says which case it is: enrolled but
- * offline since its last check-in (powered off, asleep, or its network down),
- * online but its details didn't load, or not enrolled at all (deleted, or not
- * re-enrolled since).
+ * spec fails with. A lab machine is told apart by its hardware (see
+ * {@link HostKind}), not by MDM enrolment, which a third of the simulations
+ * share. So this reads every lab machine of the platform, online or not, and
+ * says which case it is: where the suite looks but offline since its last
+ * check-in (powered off, asleep, or its network down), online but its details
+ * didn't load, enrolled but on another fleet than VMs (a machine that
+ * re-enrolled, or one that was never moved there), or not enrolled at all
+ * (deleted, or not re-enrolled since).
  */
 export async function missingRealHostReason(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
 ): Promise<string> {
   const perPage = 500;
-  const real: Array<{ id: number; display_name: string; status: string; seen_time: string }> = [];
+  const lab: Array<OnlineHost & { status: string; seen_time: string }> = [];
   for (let page = 0; page < 10; page++) {
     const res = await request.get(apiUrl('hosts'), {
       headers: authHeaders(),
@@ -919,13 +969,18 @@ export async function missingRealHostReason(
     });
     if (!res.ok()) return `the hosts list answered ${res.status()}, so whether one is enrolled is unknown`;
     const batch = ((await res.json()).hosts ?? []) as Array<OnlineHost & { status: string; seen_time: string }>;
-    real.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && REAL_DEVICE_MODEL.test(h.hardware_model ?? '')));
+    lab.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && isLabMachine(h)));
     if (batch.length < perPage) break;
   }
-  if (real.length === 0) {
+  if (lab.length === 0) {
     return `no ${platform} host on virtualized hardware is enrolled at all (deleted, or not re-enrolled since)`;
   }
-  return real
+  const targets = lab.filter(isSuiteTarget);
+  if (targets.length === 0) {
+    const elsewhere = lab.map((h) => `"${h.display_name}" (${h.team_name ?? 'Unassigned'})`).join(', ');
+    return `no ${platform} lab machine is on the ${VMS_FLEET} fleet, where the suite looks for one; enrolled elsewhere: ${elsewhere}`;
+  }
+  return targets
     .map((h) =>
       h.status === 'online'
         ? `"${h.display_name}" (id ${h.id}) is online, but its details didn't load`
@@ -970,23 +1025,28 @@ async function getOnlineHostVitals(
   };
 }
 
-interface OnlineHost {
+/**
+ * A host as the hosts list reports it. Its hardware model and vendor are what
+ * {@link matchesKind} reads to tell a lab machine from an osquery-perf
+ * simulation; both are absent on a host that hasn't reported vitals yet, which
+ * reads as "not a lab machine".
+ */
+interface OnlineHost extends HostHardware {
   id: number;
   display_name: string;
   platform: string;
-  /** Reported hardware model — what {@link matchesKind} reads to tell a QA VM
-   * from an osquery-perf simulation. Absent on a host that hasn't reported
-   * vitals yet, which reads as "not a real device". */
-  hardware_model?: string;
-  /** The host's own hostname, which diverges from `display_name` on macOS
-   * ("macos-prem's Virtual Machine" vs "macos-prems-Virtual-Machine.local").
-   * fleetctl resolves `--host` / `--hosts` against this, not the display name. */
+  /** The host's own hostname, which can diverge from `display_name`: the lab's
+   * Windows VMs show "PREM-WIN11-01" beside the hostname "prem-win11-01", and its
+   * RHEL VMs report a fully qualified one ("prem-rhel9-01.px.lan"). fleetctl
+   * resolves `--host` / `--hosts` against this, not the display name. */
   hostname?: string;
   mdm?: { enrollment_status?: string | null; connected_to_fleet?: boolean | null };
   /** Set only when the simulation runs orbit — see {@link findSimulatedHostForMdm}. */
   orbit_version?: string | null;
   /** The host's fleet; null for Unassigned. */
   team_id?: number | null;
+  /** That fleet's name; null for Unassigned. */
+  team_name?: string | null;
 }
 
 async function listOnlineHosts(

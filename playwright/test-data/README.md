@@ -41,7 +41,7 @@ test-data/
 
 - **Software**: real upstream installers, kept verbatim by their
   upstream filename so the source is obvious. Examples:
-  `gh_2.92.0_macOS_universal.pkg`, `7z2601-arm64.exe`,
+  `gh_2.92.0_macOS_universal.pkg`, `7z2601-x64.exe`,
   `step-cli_0.30.2-1_amd64.deb`,
   `npp.8.9.4.Installer.x64.msi`,
   `sublime-text_build-4200_amd64.deb`. Pick the closest fit for what a
@@ -90,7 +90,7 @@ regenerates it:
 
 The `.pkg` and `.msi` builders are shell, not Python, because each wraps the one
 tool that can write the format. The `fleet-playwright-install` `.pkg`, `.msi` and
-`.deb` — with 7-Zip's `7z2601-arm64.exe` — are the VMs fleet's durable
+`.deb` — with 7-Zip's `7z2601-x64.exe` — are the VMs fleet's durable
 install/uninstall fixtures: declared in `gitops/premium-fleetqa/fleets/vms.yml`,
 which downloads each from a commit-pinned URL and checks its `hash_sha256`, and
 listed for the specs in `helpers/vm-fixtures.ts`. Each installs *nothing that
@@ -99,7 +99,7 @@ macOS inventory lists `.app` bundles only. **Rebuilding one changes its hash**:
 commit it, then point its `*.package.yml` at the new commit and hash, and re-apply.
 
 Packages whose name, version or size is decided at run time — a per-run `.deb`,
-an `amd64` build that the ARM VMs refuse, a ~100 MB upload — aren't files here at
+a build for the architecture the Linux VM isn't, a ~100 MB upload — aren't files here at
 all: `helpers/deb.ts` builds them in memory.
 
 `shared/software/fleet-playwright-script-package.sh` is written by hand but

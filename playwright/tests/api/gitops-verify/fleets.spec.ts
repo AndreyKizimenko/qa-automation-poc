@@ -2,8 +2,8 @@
  * Fleets: the instance's fleets are exactly the ones the tier's gitops files
  * declare, plus the ones gitops deliberately leaves alone. The nightly applies
  * the baseline's QA and VMs files in both passes, so the expected set is the
- * union of the baseline and min directories' fleet files, and `Mobile` is
- * hand-kept (gitops/premium-fleetqa/README.md). A fleet the suite's cleanup
+ * union of the baseline and min directories' fleet files, and `Mobile` and
+ * `OS matrix` are hand-kept (gitops/premium-fleetqa/README.md). A fleet the suite's cleanup
  * would sweep (`pw-*`, a throwaway a dead run left) is reported, not failed on:
  * the chain runs before that sweep.
  *

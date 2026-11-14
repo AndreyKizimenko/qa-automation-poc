@@ -11,7 +11,7 @@ The Ubuntu VM's durable install/uninstall fixture, declared in
 `gitops/premium-fleetqa/fleets/vms.yml` and used by
 `premium/software/software-lifecycle-on-host.spec.ts`. One marker file under
 `/usr/share/fleet-playwright-install/`, no maintainer scripts, `Architecture:
-all` so the aarch64 VM installs it. Rebuild with
+all` so a VM of either architecture installs it. Rebuild with
 `python3 test-data/linux/software/make-deb.py fleet-playwright-install 1.0.0 all`
 (sha256 `6fcc33be969fa089a58ab69e4a3749c96f2b642704c6ec176c92105582c9dcc3`).
 

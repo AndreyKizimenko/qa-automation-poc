@@ -13,7 +13,7 @@
  *     them, before the failure sticks — so the Inventory is read inside that
  *     pending window, a minute or two long.
  *
- * Both run on the aarch64 Linux VM with packages built per run by
+ * Both run on the Linux VM with packages built per run by
  * `helpers/deb.ts`. The failing one is an ordinary package with a pre-install
  * query that returns no rows (`SELECT 1 WHERE 1 = 0;`): orbit stops before the
  * install script and Fleet records the install failed, so nothing reaches the

@@ -94,8 +94,8 @@ repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwri
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
 - **GitOps (free)** — `fleetctl gitops --context <your free-instance context> -f gitops/free-fleetqa/default.yml`
-- **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps a
-  fleet that is deliberately not under gitops; see `gitops/premium-fleetqa/README.md`):
+- **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps two
+  fleets that are not under gitops; see `gitops/premium-fleetqa/README.md`):
   ```bash
   fleetctl gitops --context qa-premium \
     -f gitops/premium-fleetqa/default.yml \

@@ -3,8 +3,8 @@
  *
  * Add a package with **Deploy** on, and Fleet creates an `[Install software]
  * <title> (<ext>)` policy whose automation installs it on every host missing it.
- * Here the package can't install — built for `amd64`, refused by the aarch64
- * Ubuntu VM's dpkg — so the policy keeps failing, and Fleet retries a failed
+ * Here the package can't install — built for the architecture the Ubuntu VM
+ * isn't, so its dpkg refuses it — so the policy keeps failing, and Fleet retries a failed
  * install a policy queued while the policy still fails for the host: 3 attempts
  * in all (`MaxPolicyAutomationRetries`; `shouldRetryPolicyAutomationSoftwareInstall`
  * in `server/service/orbit.go`), then *Failed* in the Library and "Fleet failed to
@@ -35,11 +35,12 @@
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
-import { inertDeb } from '@helpers/deb';
+import { foreignDebArch, inertDeb } from '@helpers/deb';
 import {
   cancelUpcomingActivity,
   deleteFleetPolicies,
   deleteSoftwareTitle,
+  getHostCpuType,
   listFleetPolicies,
   listHostActivities,
   listUpcomingActivities,
@@ -57,6 +58,7 @@ test.describe('Premium • Software • Deploy install retries', () => {
     // Three install attempts, each followed by orbit's backoff (1, then 2 min).
     test.setTimeout(900_000);
     const host = await requireRealHost(request, 'linux');
+    const arch = foreignDebArch(await getHostCpuType(request, host.id));
     const name = `fleet-pw-deploy-fails-${Date.now().toString(36)}`;
     const policyName = `[Install software] ${name} (deb)`;
 
@@ -68,14 +70,14 @@ test.describe('Premium • Software • Deploy install retries', () => {
 
     let titleId: number | undefined;
     try {
-      // Built for amd64: the aarch64 VM's dpkg refuses it, so every attempt fails
-      // on the device without touching it — and the package never arriving is
-      // what keeps the install policy failing, which a retry needs.
+      // Built for the architecture the VM isn't: its dpkg refuses the package, so
+      // every attempt fails on the device without touching it — and the package
+      // never arriving is what keeps the install policy failing, which a retry needs.
       ({ titleId } = await uploadSoftwarePackageBuffer(
         request,
         vmsFleetId,
-        `${name}_1.0.0_amd64.deb`,
-        inertDeb(name, '1.0.0', 'amd64'),
+        `${name}_1.0.0_${arch}.deb`,
+        inertDeb(name, '1.0.0', arch),
         {},
         { automaticInstall: true },
       ));

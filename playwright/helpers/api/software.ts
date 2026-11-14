@@ -891,7 +891,7 @@ export async function waitForSoftwareSettled(
  * reports — independent of any library title. Needed where Fleet hasn't tied a
  * title to what the host reports: a new `.exe` title is named from the
  * installer's ProductName ("7-Zip") while Windows lists the program by its
- * DisplayName ("7-Zip 26.01 (arm64)"), so the title shows no installed version
+ * DisplayName ("7-Zip 26.01 (x64)"), so the title shows no installed version
  * until something links them.
  */
 export async function getHostInventoryVersions(
