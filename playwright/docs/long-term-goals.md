@@ -9,8 +9,13 @@ Skipped and deferred *tests* live in [`../TODO.md`](../TODO.md); skips owed to a
 
 ## Host types
 
-The instances have one real VM per platform: macOS 26.6, Windows 11 and Ubuntu 26.04. Everything else Fleet
-manages is untested on a real device.
+The suite runs on one real VM per platform per tier: Ubuntu 24.04, Windows 11 and macOS (15.7 on premium,
+26.6 on free). Everything else Fleet manages is untested on a real device.
+
+Since 2026-11-14 those VMs come from the device lab, which also enrolled what the first three rows below ask
+for, on premium's OS matrix fleet: Fedora 45, RHEL 9 and 10, Omarchy, and a dozen more OS flavours. No spec
+uses them yet. [`device-lab-plan.md`](device-lab-plan.md) has the plan; its step D writes a smoke per OS
+version and takes those rows out of this table.
 
 | host | what it would unblock |
 |---|---|

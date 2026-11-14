@@ -11,9 +11,12 @@ outside the suite. This document is about what the tests and their structure mus
 **Where it stands, 2026-11-14.** Tiers 1, 2 and 3 of the agreed order are on `main`. Tier 1 is PRs #133, #134
 and #135; tier 2 is #139, proven by branch run 43483630012; #140 cut the artifacts and fixed the skip counts.
 Tier 3 is PR #141, merged 2026-11-14 at `e7585b5` and proven by branch run 43530391400: 696 premium and 368
-free tests passed, and none failed, was flaky or was retried. **Tier 4 is next.** It waits on the
-infrastructure (the rebuilt instances, more VMs, shards), and [*Tier 4: the brief*](#tier-4-the-brief) is
-written for whoever takes it. The working list holds the smaller open items. How to read the rest:
+free tests passed, and none failed, was flaky or was retried. **Tier 4 has started.** The extra VMs arrived
+on 2026-11-14 as the device lab, and [`device-lab-plan.md`](device-lab-plan.md) is the plan of record for
+moving the suite onto it: its steps B + C build roadmap 13 (VM leases) and the environment gate of 5. The
+rebuilt instances and the shards have not arrived, so 14, 15 and 16 still wait, and
+[*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
+smaller open items. How to read the rest:
 
 - **Working list**: what has landed and what is open. It is the plan of record, and it is kept current.
 - **Tier 4: the brief**: what to build next, what is already there, and what to watch for.
@@ -144,7 +147,9 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
    commit per concern, and one branch run once the last item was in (Andrey, 2026-11-13).
    [*Tier 3: the brief*](#tier-3-the-brief) has each one, and the working list what each measured.
 4. **Next, when the infrastructure arrives:** the lanes and the environment gate of 5, then 14, 13, 15 and
-   16. [*Tier 4: the brief*](#tier-4-the-brief) has each one.
+   16. [*Tier 4: the brief*](#tier-4-the-brief) has each one. The VMs arrived first (2026-11-14), so 13 and
+   the gate go ahead of the rest, under [`device-lab-plan.md`](device-lab-plan.md); whether the lanes are
+   still needed is decided there, from the first pooled run's numbers.
 
 Roadmap 9, a home for toast copy, was left out of this order when it was agreed; it joined tier 3, beside
 item 7, on 2026-11-13.
@@ -226,6 +231,11 @@ more than one VM per platform, the rebuilt instances, shards. Most of it proves 
 so the suite uses new VMs the day they appear. Read [*Tier 3: the brief*](#tier-3-the-brief)'s *How work is
 delivered here* first: it still holds (one PR per batch, one commit per concern, scoped local runs, see it
 fail first, lint that fails or prints nothing, Andrey dispatches the full run and merges).
+
+**2026-11-14: the VMs arrived**, as a device lab with a pool of VMs per platform on premium and one VM per
+OS flavour. [`device-lab-plan.md`](device-lab-plan.md) has what the lab is, what has landed and what is
+next. The table's *There today* column describes the day before: since PR #144 a real VM is a lab machine on
+the VMs fleet, picked first by display name, and one per platform is there until the lease is built.
 
 | Roadmap | Build | There today | Watch for |
 |---|---|---|---|

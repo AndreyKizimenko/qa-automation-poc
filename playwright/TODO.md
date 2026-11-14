@@ -33,6 +33,10 @@ Product-defect skips live in
 
 Known gaps nobody has scheduled. Each row says where the test would go and what it needs.
 
+**OS-version smokes.** The device lab has one host per OS flavour on premium's OS matrix fleet, and no spec
+targets them. It is scheduled: [docs/device-lab-plan.md](docs/device-lab-plan.md) › *Step D* has the smoke
+list, the hosts each row runs on and what is still missing (an `.rpm` fixture, openSUSE's `zypper`).
+
 **Free coverage.** Behaviour free has too, tested only on premium today. Checked against the source (no
 `isPremiumTier`, no license gate) when each row was written.
 
