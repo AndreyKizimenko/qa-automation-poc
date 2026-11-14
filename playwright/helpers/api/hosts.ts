@@ -207,9 +207,11 @@ function isLabMachine(host: HostHardware): boolean {
  * keeps those on the VMs fleet, beside the durable software and settings the
  * specs count on; which lab machines are on it is the lab's decision, not a
  * name's or a model's. Free has no fleets, so every lab machine there counts.
+ * Anything but free is held to the fleet, so a run that doesn't know its tier
+ * can't take a lab machine the suite doesn't target.
  */
 function isSuiteTarget(host: { team_name?: string | null }): boolean {
-  return process.env.SUITE !== 'premium' || host.team_name === VMS_FLEET;
+  return process.env.SUITE === 'free' || host.team_name === VMS_FLEET;
 }
 
 function matchesKind(host: OnlineHost, kind?: HostKind): boolean {

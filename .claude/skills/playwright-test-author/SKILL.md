@@ -45,10 +45,11 @@ Each has happened, or nearly happened, and none can be undone from a test.
   and has the resting-state step turn it off after a dead run (`playwright/CLAUDE.md` → Test hosts).
 - **What other specs stand on, changed:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`; resting state uninstalled), a standing fleet created, renamed or
-  deleted (Workstations, VMs, QA and Compliance from gitops; Mobile by hand), a host moved onto Compliance,
-  gitops config, static users (their tokens can't be re-minted). A global gitops file a spec dry-runs or
-  applies on premium must declare the IdP (`carryLiveEndUserAuth` in `helpers/fleetctl.ts`): Compliance
-  depends on it, and fleetctl refuses a global file that would clear it.
+  deleted (Workstations, VMs, QA and Compliance from gitops; Mobile and OS matrix by hand), a host moved onto
+  Compliance or onto or off OS matrix (the device lab's OS-flavour VMs: nothing is uploaded to that fleet
+  or set on it), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
+  `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either
   re-syncs every fleet's DEP profile with Apple Business Manager, and `server_url` also feeds the Apple MDM
   URL (while `apple_server_url` is empty), Windows MDM discovery, the Android callback and the SSO ACS URL.
