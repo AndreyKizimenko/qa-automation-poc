@@ -69,7 +69,8 @@ but they're invisible if you're bringing up a fresh instance.
 | **Claude installed on the macOS and Windows VMs**, tracking latest, from the VMs fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
 | **Install/uninstall fixtures on the VMs fleet**: inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` and the other install specs | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` |
 | **Fleet-maintained app shelf on the QA fleet**: 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `fleets/qa.yml`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
-| **Online hosts**: three real VMs per tier (macOS, Windows, Ubuntu; MDM-enrolled where the platform allows) and ~300 osquery-perf simulations | both | every host-dependent spec | the VMs are rebuilt by hand; the simulations are [`../tools/perf-hosts/`](../tools/perf-hosts/README.md)' daemons. See CLAUDE.md › *Test hosts* |
+| **Online hosts**: the device lab's VMs (macOS, Windows 11 and Ubuntu 24.04; MDM-enrolled where the platform allows), on the `VMs` fleet on premium and in Unassigned on free, and ~300 osquery-perf simulations | both | every host-dependent spec | a lab VM that is offline or broken is the lab owner's to restore; the simulations are [`../tools/perf-hosts/`](../tools/perf-hosts/README.md)' daemons. See CLAUDE.md › *Test hosts* |
+| **The `OS matrix` fleet**, kept by hand | premium | no spec: it keeps the lab's OS-flavour VMs and its spare ones away from everything on `VMs` | never upload to it, set anything on it, or move a host onto or off it. See [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) › *Do not pass `--delete-other-fleets`* |
 | **Admin SSO and end-user auth (EUA)**, configured on the instance | both | the SSO and setup-experience specs | configure on the instance; the suite doesn't provision them |
 
 **Loadtest only — provision the fleet first.** The `loadtest` project
@@ -234,7 +235,7 @@ playwright/
   Destructure what you need; TypeScript lists what's available.
 - **Worker fixtures**, resolved once per worker via the Fleet API so specs don't
   re-look-up shared state: `workstationsFleetId`, `qaFleetId`, `vmsFleetId` (fleet ids),
-  `liveMacosHost` (the online real macOS VM, found by hardware model), plus `loadtestFleetId` /
+  `liveMacosHost` (the online real macOS VM: a lab machine by its hardware, on the VMs fleet on premium), plus `loadtestFleetId` /
   `firstHostId` for the loadtest project.
 - **`pageHealth`** — auto-applied to every test. Monitors uncaught page exceptions, console
   errors and 5xx responses, and asserts at teardown. Opt out with `pageHealth.disable()` in specs that intentionally
