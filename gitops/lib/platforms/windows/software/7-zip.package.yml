@@ -1,13 +1,14 @@
-# 7-Zip's own ARM64 NSIS installer, as a custom .exe package. Fleet names a new
-# title from the installer's ProductName ("7-Zip") while Windows lists the
-# program by its DisplayName ("7-Zip 26.01 (arm64)"), so it starts unlinked
-# (fleetdm/fleet#20440). 7-Zip is in the Fleet-maintained catalog, so Fleet's
-# hourly `reconcile_windows_maintained_app_titles` cron then merges the
-# DisplayName title into this one — renaming it "7-zip", with 7-Zip's upgrade
-# code — and it is linked from then on. A .exe needs both scripts. URL pinned to
-# a commit; the hash skips the download.
-- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/950d61bec3d24200be6a968397a9013aab6e13a2/playwright/test-data/windows/software/7z2601-arm64.exe
-  hash_sha256: 1fecf4e3407950939c8ffcc3e42e3039821997dea155301c75369474e5f15175
+# 7-Zip's own x64 NSIS installer, as a custom .exe package: the device lab's
+# Windows VMs are x86_64. Fleet names a new title from the installer's
+# ProductName ("7-Zip") while Windows lists the program by its DisplayName
+# ("7-Zip 26.01 (x64)"), so it starts unlinked (fleetdm/fleet#20440). 7-Zip is in
+# the Fleet-maintained catalog, so Fleet's hourly
+# `reconcile_windows_maintained_app_titles` cron then merges the DisplayName
+# title into this one — renaming it "7-zip", with 7-Zip's upgrade code — and it
+# is linked from then on. A .exe needs both scripts. URL pinned to a commit; the
+# hash skips the download.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/4e736b343376520b1269bb054ccf559aaef8f51c/playwright/test-data/windows/software/7z2601-x64.exe
+  hash_sha256: d64a0468f5b5b0b0fc5b2188450bcd655b70809d97b1c4535f2884635094377d
   install_script:
     path: 7-zip-install.ps1
   uninstall_script:

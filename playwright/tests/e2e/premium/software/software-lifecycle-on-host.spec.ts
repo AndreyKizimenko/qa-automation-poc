@@ -21,14 +21,14 @@
  *   |---|---|---|
  *   | macOS `.pkg` | `fleet-playwright-install-1.0.0.pkg` (`make-pkg.sh`) | an empty app bundle in /Applications |
  *   | Windows `.msi` | `fleet-playwright-install-1.0.0.msi` (`make-msi.sh`) | one marker file under Program Files |
- *   | Windows `.exe` | 7-Zip's `7z2601-arm64.exe` | 7-Zip, into its own folder |
+ *   | Windows `.exe` | 7-Zip's `7z2601-x64.exe` | 7-Zip, into its own folder |
  *   | Linux `.deb` | `fleet-playwright-install_1.0.0_all.deb` (`make-deb.py`) | one marker file under /usr/share |
  *   | macOS Fleet-maintained | Itsycal | a menu-bar calendar, never launched |
  *   | Windows Fleet-maintained | DB Browser for SQLite | an MSI, no service, never launched |
  *
  * **The `.exe` may or may not be linked to what Windows reports.** A new title is
  * named from the installer's ProductName ("7-Zip") while Windows lists the
- * program by its DisplayName ("7-Zip 26.01 (arm64)"), so it starts unlinked
+ * program by its DisplayName ("7-Zip 26.01 (x64)"), so it starts unlinked
  * (fleetdm/fleet#20440): no installed version in the Library, and the host's
  * inventory lists it under the DisplayName. Because 7-Zip is in the
  * Fleet-maintained catalog, Fleet's hourly `reconcile_windows_maintained_app_titles`

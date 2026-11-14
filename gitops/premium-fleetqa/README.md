@@ -240,7 +240,7 @@ the fixtures that have to exist before a test starts:
   **presence** policies (not patch policies — those would erase the "behind" state the spec creates)
   reinstall it on any VM that loses it at that VM's next policy run.
 - **The install/uninstall subjects** of `playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`:
-  an inert "Fleet Playwright Install" `.pkg`, `.msi` and `.deb`, 7-Zip's ARM64 `.exe` (with its own install and
+  an inert "Fleet Playwright Install" `.pkg`, `.msi` and `.deb`, 7-Zip's x64 `.exe` (with its own install and
   uninstall scripts), and the Fleet-maintained Itsycal (macOS) and DB Browser for SQLite (Windows). The custom
   packages download from commit-pinned `raw.githubusercontent.com` URLs with a `hash_sha256`, so the URL never
   changes and Fleet skips the download once it holds the file. Their resting state is **uninstalled** — the

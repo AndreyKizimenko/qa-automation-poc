@@ -43,7 +43,7 @@ export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
   {
     label: 'Windows .exe',
     platform: 'windows',
-    packageName: '7z2601-arm64.exe',
+    packageName: '7z2601-x64.exe',
     // A new .exe title takes the installer's ProductName while Windows lists the
     // program by its DisplayName, so it starts unlinked (fleetdm/fleet#20440).
     // 7-Zip is also in the Fleet-maintained catalog, and Fleet's hourly
@@ -51,7 +51,7 @@ export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
     // title into this one (renaming it "7-zip", with 7-Zip's upgrade code), after
     // which it is linked. Which state the durable title is in depends on whether
     // the cron has run since the title was created, so both are read.
-    unlinkedInventoryName: '7-Zip 26.01 (arm64)',
+    unlinkedInventoryName: '7-Zip 26.01 (x64)',
   },
   { label: 'Linux .deb', platform: 'linux', packageName: 'fleet-playwright-install_1.0.0_all.deb' },
   { label: 'macOS Fleet-maintained app', platform: 'darwin', fleetMaintainedName: 'Itsycal' },
