@@ -8,15 +8,17 @@ hand, and the rest are marked **reported** or **estimate**.
 Out of scope, by agreement: the number of real VMs and the instance's concurrency. Both are being solved
 outside the suite. This document is about what the tests and their structure must be ready for when they are.
 
-**Where it stands, 2026-11-13.** Tiers 1 and 2 of the agreed order are on `main`: PRs #133, #134 and #135,
-then #139, proven by branch run 43483630012 (697 premium and 368 free tests passed; none failed, was flaky
-or was retried). **Tier 3 is built, in PR #141**, which waits on its one branch run: roadmap 3 (`ownName()`,
-the `cleanup` fixture and the data fixtures on it), the VM tags of 5, and 7, 8, 9, 10, 11 and 12; the working
-list has what each measured. [*Tier 3: the brief*](#tier-3-the-brief) is written for someone who was not
-here for the first two. How to read the rest:
+**Where it stands, 2026-11-14.** Tiers 1, 2 and 3 of the agreed order are on `main`. Tier 1 is PRs #133, #134
+and #135; tier 2 is #139, proven by branch run 43483630012; #140 cut the artifacts and fixed the skip counts.
+Tier 3 is PR #141, merged 2026-11-14 at `e7585b5` and proven by branch run 43530391400: 696 premium and 368
+free tests passed, and none failed, was flaky or was retried. **Tier 4 is next.** It waits on the
+infrastructure (the rebuilt instances, more VMs, shards), and [*Tier 4: the brief*](#tier-4-the-brief) is
+written for whoever takes it. The working list holds the smaller open items. How to read the rest:
 
 - **Working list**: what has landed and what is open. It is the plan of record, and it is kept current.
-- **Tier 3: the brief**: what to build next, what is already there, and how work is delivered here.
+- **Tier 4: the brief**: what to build next, what is already there, and what to watch for.
+- **Tier 3: the brief**: done, kept as the record of what tier 3 was asked to do, and for *How work is
+  delivered here*, which still holds.
 - **Sections 1 to 6**: the audit as written on 2026-11-12, kept for the reasoning. Each opens with a
   **Since then** line saying what no longer holds. Their counts are the audit day's unless a line says
   otherwise.
@@ -94,6 +96,16 @@ below hold the reasoning.
       for shared ids (section 4), and an optional `root` on components (section 5). Each needs a place in
       the order or a "no".
 
+**Open outside the tiers, 2026-11-14**
+- [ ] A lazy JavaScript chunk that never arrives (the page stuck on a bare spinner) has been seen three
+      times: 2026-09-20, 10-27, and 11-13 in #140's branch run. The instances' edge doesn't cache Fleet's
+      bundles (fleetdm/fleet#45682, `playwright.config.ts`), so each new browser context fetches them from
+      origin. The fix is the edge, not a wait: check it on the rebuilt instances.
+- [ ] Specs move to the tier-3 foundations when next edited: hand-built `pw-` names (104 recorded),
+      `Date.now()` names (61), API-calling `finally` blocks (69), widget selectors (modal 30, react-select
+      25, row menu 14) and toast copy (86). Each number only falls; `npm run lint:contract` prints today's.
+      Tier 4's run-scoped sweep (roadmap 14) needs the names first.
+
 **After tier 2, from the review of its branch run (2026-11-13)**
 - [x] A run's artifact list is what there is to read: the two suite reports, plus the report of a gitops
       job only when that job failed. It was 16 artifacts a run, 14 of them green gitops reports.
@@ -127,10 +139,12 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
          job of the nightly and of a branch run; `docs/ci-pipeline.md` says what it may print.
    - [ ] `parse_report.py` and `run_timeline.py` still read the HTML report's embedded data; pointing them
          at `results.json` is its own change.
-3. **Built, in PR #141.** Foundations, built now and adopted as specs are touched: roadmap 3, the VM tags
-   of 5, then 10, 8, 7, 9, 11 and 12. [*Tier 3: the brief*](#tier-3-the-brief) has each one. One PR for
-   the tier, one commit per concern, and one branch run once the last item was in (Andrey, 2026-11-13).
-4. Last: the lanes and the environment gate of 5, then 14, 13, 15 and 16.
+3. **Done** (PR #141, merged 2026-11-14, branch run 43530391400). Foundations, built now and adopted as
+   specs are touched: roadmap 3, the VM tags of 5, then 10, 8, 7, 9, 11 and 12. One PR for the tier, one
+   commit per concern, and one branch run once the last item was in (Andrey, 2026-11-13).
+   [*Tier 3: the brief*](#tier-3-the-brief) has each one, and the working list what each measured.
+4. **Next, when the infrastructure arrives:** the lanes and the environment gate of 5, then 14, 13, 15 and
+   16. [*Tier 4: the brief*](#tier-4-the-brief) has each one.
 
 Roadmap 9, a home for toast copy, was left out of this order when it was agreed; it joined tier 3, beside
 item 7, on 2026-11-13.
@@ -204,7 +218,33 @@ item 7, on 2026-11-13.
       `tests/cli/`, `tests/loadtest/` and `tests/e2e/premium/gitops-mode/`; the core keeps every section the
       skills cite and is 47.0 kB, from 52.1.
 
+## Tier 4: the brief
+
+Written 2026-11-14, after tier 3 merged. Tier 4 is what the suite needs once the infrastructure changes:
+more than one VM per platform, the rebuilt instances, shards. Most of it proves nothing until then, so
+**start it when one of those arrives**, not before; the one item worth building ahead is the VM lease (13),
+so the suite uses new VMs the day they appear. Read [*Tier 3: the brief*](#tier-3-the-brief)'s *How work is
+delivered here* first: it still holds (one PR per batch, one commit per concern, scoped local runs, see it
+fail first, lint that fails or prints nothing, Andrey dispatches the full run and merges).
+
+| Roadmap | Build | There today | Watch for |
+|---|---|---|---|
+| **5, lanes** | A project per VM platform that takes its tests by tag (`grep: /@vm-linux/`), with as many workers as that platform has VMs, beside the main project in the same invocation; the main project leaves them out (`grepInvert`). Section 3 | Every VM test is tagged, and the pickers refuse an untagged one: 59 tests in `premium`, 3 in `premium-exclusive`, 24 in `free`, 1 in `free-exclusive`. One VM per platform per tier | With one VM per platform a lane runs one worker, so lanes only reorder the work until more VMs arrive. A new project name goes into `PROJECT_TO_SUITE`, or the config throws. The exclusive projects hold VM tests too: they stay their own invocations. CI merges each step's blob into one report; check `run_timeline.py --platforms` before and after |
+| **5, environment gate** | A setup project per lane that checks what its tests stand on: the VM online, the Apple tokens answering, the disk with room, the expected build. The lane depends on it, so an outage is one red row with its reason, not 55. Section 3 | `missingRealHostReason` says why a VM is missing; `expectVppAppsListable` probes the VPP token the way that catches a revoked one (`GET /vpp_tokens` looks healthy). No ABM token check, no disk check; the workflows print each instance's build | A gate that fails has to say what to fix, as the pickers' messages do. A dependency that fails skips its dependents, which is the point here, and wrong for anything else: only lane tests depend on a gate |
+| **14** cleanup outside the projects; shards; sessions minted once | An environment switch that takes `cleanup-setup` / `cleanup-teardown` out of the project graph, a CI job that runs them before the shards and one after, and login state minted once and handed to every shard. Sweeps then take their own run's names plus any `pw-*` older than a few hours; the wipe-everything pass stays in the nightly. Section 1 | `ownName()` puts the run (`PW_RUN_ID`, the workflow run in CI) and the worker in a name: `pw-<kind>-<run>-w<worker>-<nonce>`, the last three tokens fixed, so a parser can read them. The `cleanup` fixture undoes a test's own things even on a timeout. The cleanup projects run inside the invocations: before and after the main project, and after the exclusive one | A run-scoped sweep can only spare what it can attribute: the names not yet from `ownName` (working list) are another run's or this run's alike. Static-user sessions are cached per machine, and `POST /login` allows 10 a minute for everyone. A global setting's snapshot-and-restore is correct only when one run is on the instance |
+| **13** VM leases | A fixture that hands each worker one VM of a platform, by worker index (`TEST_PARALLEL_INDEX`), so every VM is used. Section 2 | `requireRealHost` and `liveMacosHost` take the first online VM by display name: with three VMs, every test would land on the first | Build it before the VMs arrive. Each VM needs the durable fixtures (`helpers/vm-fixtures.ts`, `gitops/premium-fleetqa/fleets/vms.yml`) and the resting-state step, which today rests one VM per platform. A lane's worker count and the lease's VM count must agree |
+| **15** quarantine | A list of tests the history marks unstable (say, failed or flaky in 3 of the last 14 nightlies), routed to a project whose result doesn't fail the run, each entry with the issue or test-bug that clears it. Section 6 | Each suite report carries `results.json` (kept 90 days); `run_history.py` keeps a line per test per run; the `run-history` job writes each failure's last 14 nightlies into the run's summary | A test id changes when its file moves (tier 3's twins did), so key the list on ids and expect a move to drop an entry. A quarantine that hides a product defect is worse than a red run: an entry without an owner and an issue fails |
+| **16** per-worker throwaway fleets | Only if fleet-scoped CRUD starts colliding on Workstations: a fleet per worker for it, from `throwawayFleet` | `throwawayFleet(kind)` exists; the CRUD lifecycles share Workstations and no collision has been seen | The fleet dropdown reads the fleet list once, at boot: create the fleet before the first page load. Don't build it ahead of a collision |
+
+**To settle with Andrey before or during tier 4:** when the rebuilt instances and the extra VMs arrive, which
+decides when tier 4 starts; D4, a VM minute budget per platform (the tags make it measurable:
+`--grep @vm-linux` with `run_timeline.py`); and whether the lease (13) goes in ahead of the VMs, as
+recommended above.
+
 ## Tier 3: the brief
+
+**Done:** PR #141, merged 2026-11-14 (branch run 43530391400). Kept as the record of what tier 3 was asked to
+do, and for *How work is delivered here* below, which still holds.
 
 Written 2026-11-13 for whoever takes tier 3 without having seen tiers 1 and 2. Read these first, in this
 order: `playwright/CLAUDE.md`, whole (the suite's contract; its *Pre-PR check* is how lint works here);
@@ -578,8 +618,8 @@ is additive; existing specs keep working and migrate when they are next touched.
 
 | # | Item | Size | Status, 2026-11-13 |
 |---|---|---|---|
-| 13 | VM leases across workers and shards | S on top of 5 | tier 4 |
-| 14 | Cleanup as pre- and post-jobs; shards; sessions minted once | M | tier 4 |
+| 13 | VM leases across workers and shards | S on top of 5 | tier 4; worth building before the VMs arrive |
+| 14 | Cleanup as pre- and post-jobs; shards; sessions minted once | M | tier 4; needs the remaining names on `ownName` |
 | 15 | Quarantine project fed by the history | S on top of 6 | tier 4; the history it reads exists |
 | 16 | Per-worker throwaway fleets for fleet-scoped CRUD, if collisions on Workstations show up | M | tier 4 |
 
