@@ -81,7 +81,7 @@ PR #145. Its description has what each commit changed and every run behind it.
 - [x] `requireRealHost`, `findOnlineHost(…, { kind: 'real' })` and `liveMacosHost` return pool hosts of the
       run's tier, never a matrix or special host. A matrix host is asked for by its `os`, a special host by
       its purpose: `requireLabHost(request, matrixHostOfRun('rhel-9'))`, which step D is the first to call.
-- [ ] A preflight that names any pool host that is offline, on the wrong fleet or no longer enrolled:
+- [x] A preflight that names any pool host that is offline, on the wrong fleet or no longer enrolled:
       `tests/api/lab-hosts.spec.ts`, one test per pool host, tagged with its platform's VM tag. It is a test
       of its own, not a dependency of the main project: a missing pool host is one red row with its reason,
       and the rest of the run goes on with the hosts that are there. A matrix or special host that is
