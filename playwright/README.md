@@ -130,8 +130,7 @@ From `playwright/`:
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
 | `npm run lint:prune` | After fixing a recorded violation: shrink `eslint-suppressions.json` to match |
 | `npm run lint:rules` | Test the suite's own lint rules (`eslint-rules/tests.js`) |
-| `npm run lint:lab` | Check `lab-hosts.json`: every entry placeable, and, where the device lab's folder is on this machine, level with the lab's own copy |
-| `npm run lab:sync` | Copy the lab's `lab-hosts.json` over the suite's (the lab edits its copy first) |
+| `npm run lint:lab` | Check `lab-hosts.json`, the device lab's manifest and its only copy: every entry placeable, and each host's `fleet` the one its role puts it on |
 | `npm run lint:contract` | Count the places each rule still finds in the code, per rule |
 | `npm run typecheck` | Run `tsc --noEmit` on the whole project |
 | `npm run check` | Typecheck, the rule tests, the claims and lab-manifest checks **and** lint — run this before opening a PR |

@@ -6,6 +6,11 @@
 > spec headers and the `test.step` titles ([`../architecture-audit.md`](../architecture-audit.md),
 > decision D3 and roadmap item 11). The assessments, the Notes blocks and `FINDINGS.md` stay as the record
 > of that review.
+>
+> **The real hosts changed the next day.** On 2026-11-14 the three ARM UTM VMs per tier (macOS 26.6,
+> Windows 11, Ubuntu 26.04) gave way to the device lab. The host facts a manual re-run depends on (which
+> machines, how a spec picks one, their architecture, the fixture files that follows from) were corrected on
+> 2026-11-15; an assessment that counts "the one real VM" or "three VMs" still describes the suite as audited.
 
 Every automated test in the suite, broken down into the steps a person performs and
 the validations the test makes, so each one can be **re-run by hand** and judged:
@@ -104,12 +109,16 @@ what you actually see on screen.
 - **Most hosts on the QA instances are osquery-perf simulations** (~300 online, random
   names, ~30% of them MDM-enrolled). Tests resolve them by platform + status, never by name.
   Simulated hosts can't install software, run scripts, or take MDM commands.
-- **Three real VMs per tier — macOS, Windows 11 and Ubuntu, all ARM** — on the **VMs**
-  fleet on premium and in Unassigned on free. Tests reach them with
-  `findOnlineHost(…, { kind: 'real' })`, which keys on hardware model (`VirtualMac` /
-  QEMU), not MDM enrollment; `liveMacosHost` is the macOS one. Entries say which kind
-  they need. Don't delete these, and install nothing on them but the suite's inert
-  fixtures (area 21 lists them).
+- **The real hosts are the device lab's**, listed in [`lab-hosts.json`](../../lab-hosts.json)
+  ([`device-lab-plan.md`](../device-lab-plan.md) has the rest). Its **pool** is what specs run on:
+  on premium four Ubuntu 24.04, two Windows 11 and two macOS VMs (one macOS 26, one macOS 15) on the
+  **VMs** fleet; on free one of each (`free-ubu2404d-01`, `free-win11-01`, `free-macos26-01`) in
+  Unassigned. The Linux and Windows VMs are x86_64, the Macs Apple silicon VMs. `requireRealHost`,
+  `findOnlineHost(…, { kind: 'real' })` and `liveMacosHost` hand each worker its own pool host of the
+  platform, by the manifest, not by hardware model or MDM enrollment. Premium's other lab hosts sit on
+  **OS matrix**, and only the per-OS smokes touch them. By hand, any pool host of the platform will do.
+  Entries say which kind they need. Don't delete these, and install nothing on them but the suite's
+  inert fixtures (area 21 lists them).
 - **The VMs fleet is under gitops** (`gitops/premium-fleetqa/fleets/vms.yml`, applied by the
   nightly before every premium run, in both the baseline and the min pass): it keeps Claude
   installed on the macOS and Windows VMs, holds the `pw-host-report-results` report, and

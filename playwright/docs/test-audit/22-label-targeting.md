@@ -21,8 +21,8 @@ moved back in the `finally`, and by the cleanup sweep if the test dies):
 
 - *Which hosts Fleet lists a profile for* is its server-side decision. A simulation answers it as well as a VM:
   it lists every profile that targets it (a macOS simulation even acknowledges the install and sits at
-  "verifying") and none that doesn't. That's how a host of the same platform can be outside the label — there
-  is one real VM per platform.
+  "verifying") and none that doesn't. That's how a host of the same platform can be outside the label — a
+  worker has one real VM per platform.
 - *What the host does with it* — installed, verified, the setting really there — only the VM answers, read back
   with a live query **filtered to the profile's own domain or value** (an unfiltered `managed_policies` read
   returns fleetd's config, enroll secret included).

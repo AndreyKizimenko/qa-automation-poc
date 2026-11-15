@@ -1,15 +1,14 @@
 {
-  "_about": "Device lab hosts for the Playwright suite. Match a Fleet host by its display name, lower-cased (Windows reports it upper-case; the RHEL hosts' `hostname` is an FQDN ending .px.lan, so don't match on `hostname`). Names are stable; Fleet ids are not. Source: fleet/qa-stuff/device-lab/README.md.",
+  "_about": "The device lab's manifest: every real host on the Free and Premium QA instances, and what each is for. This is its only copy. The lab's owner edits it here, in a PR, whenever a host is added, removed, renamed or moved (the `device-lab` skill does it after a scan of the lab), and `npm run lint:lab` checks it. Match a Fleet host by its display name, lower-cased: Windows reports it upper-case, and the RHEL hosts' `hostname` is an FQDN ending .px.lan. Names are stable; Fleet ids are not.",
   "_fields": {
     "role": "pool = interchangeable suite target; matrix = one per OS flavor; special = single-purpose",
     "fleet_platform": "the host's `platform` value in Fleet's API",
-    "fleet": "where the host sits today (premium fleets; free has none)",
-    "legacy_real": "reports a hardware model matching /virtual|qemu/i, so the current picker treats it as a real VM",
-    "parked": "a pool member kept out of the VMs fleet until the suite can use more than one VM per platform",
+    "fleet": "the fleet the host sits on: Unassigned on free, VMs for the pool, OS matrix for matrix and special hosts. The suite places hosts by role, not by this field; `lint:lab` fails when the two disagree",
+    "legacy_real": "reports the hardware model `QEMU Virtual Machine` or `VirtualMac2,1`: one host per platform per tier was made to look like the old UTM VMs before the suite read this file. Kept as a fact about the machine; nothing reads it",
     "dialog_tool": "what fleetd can use for the LUKS passphrase prompt; null means escrow fails (fleetdm/fleet#58776)",
     "package_manager": "only where it differs from the package type's usual one (openSUSE installs rpm with zypper, not dnf)"
   },
-  "updated": "2026-11-14",
+  "updated": "2026-11-15",
   "hosts": [
     {
       "name": "free-ubu2404d-01",

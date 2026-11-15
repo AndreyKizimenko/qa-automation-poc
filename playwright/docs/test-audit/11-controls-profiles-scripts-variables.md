@@ -81,10 +81,11 @@ or *run* a script on one — they exercise the library only. Script **execution*
 elsewhere and in CTL-24/25: single-host runs are [HOST-19…22](02-hosts-shared-and-free.md) (Host
 details → Actions → Run script, on both tiers), batch runs are CTL-24 (the three real VMs) and CTL-25
 (the simulation pool), and a batch's schedule, cancel and cancel-on-edit are CTL-37…39 (simulations on
-Unassigned, both tiers). There are **three real VMs per tier — macOS, Windows and Ubuntu, all ARM** — on
-the **VMs** fleet (id 103) on premium and in Unassigned on free, resolved with
-`findOnlineHost(…, { kind: 'real' })`, which keys on hardware model (`VirtualMac` / `QEMU`), **not** MDM
-enrollment (~30% of the osquery-perf simulations are MDM-enrolled too). The simulations that simulate fleetd "run" a script within
+Unassigned, both tiers). The real hosts are the device lab's pool VMs — macOS, Windows and Ubuntu — on
+the **VMs** fleet (id 103) on premium and in Unassigned on free ([README](README.md), "Before you run
+anything"). `findOnlineHost(…, { kind: 'real' })` hands each worker its own one of each platform, by
+[`lab-hosts.json`](../../lab-hosts.json), **not** by MDM enrollment (~30% of the osquery-perf simulations
+are MDM-enrolled too). The simulations that simulate fleetd "run" a script within
 ~35 s and report a random exit code, nothing more;
 osquery-perf answers a *batch* with a random exit code, which CTL-25 turns into arithmetic rather than
 per-host assertions. **Profile delivery to a host is still untested — and must never be tested with

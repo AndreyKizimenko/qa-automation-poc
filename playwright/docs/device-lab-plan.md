@@ -3,11 +3,12 @@
 The plan of record for moving the suite onto the device lab, kept current as each step lands. Tick a box in
 the commit that does the work, and move a step to **Done** with its PR and what proved it.
 
-The lab itself is documented outside this repo, in Andrey's `fleet/qa-stuff/device-lab/`: `README.md` (how it
-is built), `PLAYWRIGHT-HANDOFF.md` (what the lab asks of the suite), `lab-hosts.json` (every host, with role,
-OS, package type and fleet) and `REVIEW-2026-11-14.md`. The `device-lab` skill checks and repairs it. Read the
-handoff and the manifest before working on a step here; this file records what the suite decided to do about
-them, and where the handoff turned out wrong.
+The lab's manifest is [`lab-hosts.json`](../lab-hosts.json) in this repo: every host, with role, OS, package
+type and fleet, and its only copy. How the lab is built and run stays outside this repo, in Andrey's private
+`fleet/qa-stuff/device-lab/` (`README.md`, `PLAYWRIGHT-HANDOFF.md`, `REVIEW-2026-11-14.md`), because it maps
+the machines' network and access. The `device-lab` skill checks and repairs the lab, and opens the PR that
+keeps the manifest level with it. Read the handoff and the manifest before working on a step here; this file
+records what the suite decided to do about them, and where the handoff turned out wrong.
 
 **Where it stands, 2026-11-15.** Steps A, B and C are on `main`. A is PR #144. B + C are PR #145, merged at
 `19ab2d1` after a green branch run (43667531465), the first full run of the suite on the lab's VMs: the
@@ -74,11 +75,10 @@ it.
 
 - [x] `lab-hosts.json` lives in the suite and is loaded once (`helpers/lab-hosts.ts`). A Fleet host matches
       an entry by display name, lower-cased: Windows reports its name in upper case, and the RHEL hosts'
-      `hostname` is fully qualified. Its `fleet`, `parked` and `legacy_real` fields describe where the lab had
-      a host, not a rule: a host's fleet follows from its role (pool: VMs on premium, Unassigned on free;
-      matrix and special: OS matrix). **The lab's copy stays the first one edited** (Andrey, 2026-11-14): the
-      suite's is a copy, `npm run lab:sync` copies the lab's over it, and `npm run lint:lab`, inside `npm run
-      check`, fails while the two differ on a machine that has the lab's folder.
+      `hostname` is fully qualified. A host's fleet follows from its role (pool: VMs on premium, Unassigned on
+      free; matrix and special: OS matrix); its `fleet` field records the same, and `npm run lint:lab` fails
+      when the two disagree. **This is the manifest's only copy** (Andrey, 2026-11-15): the lab's owner edits
+      it here in a PR.
 - [x] A host is a lab machine when the manifest lists it. The hardware check stays as the guard for a host
       nobody has added yet. The four physical Macs arriving in January report a real hardware model, so only
       the manifest will know them; the role `physical` exists for them: no worker is handed one, and the
@@ -320,9 +320,11 @@ BitLocker PIN.
 
 ## Decided
 
-- **The lab's `lab-hosts.json` is the one edited first; the suite's is a copy** (Andrey, 2026-11-14).
-  `npm run lab:sync` and `npm run lint:lab` carry and check it; in CI, where the lab's folder isn't, the
-  preflight's last test notes an online host on lab hardware that the suite's copy doesn't list.
+- **`playwright/lab-hosts.json` is the manifest's only copy** (Andrey, 2026-11-15; it replaces the two-copy
+  arrangement of 2026-11-14, whose original sat in a folder no repository tracked). The lab's owner changes it
+  in a PR when the lab changes: the `device-lab` skill scans the lab, compares it with this file and opens
+  that PR. `lab:sync` is gone; `lint:lab` checks the shape and that each `fleet` matches its role. The
+  preflight's last test still notes an online host on lab hardware that the manifest doesn't list.
 - **The cleanup returns every lab host to its role's fleet**, the matrix and special hosts included (Andrey,
   2026-11-14).
 - **The fleets are as they will stay**: the pool on VMs, everything else on OS matrix, from 2026-11-14, and
@@ -348,9 +350,6 @@ BitLocker PIN.
 
 ## Open questions for Andrey
 
-- The lab's side of the manifest: the `device-lab` skill should end a change to `lab-hosts.json` with `npm
-  run lab:sync` here and a PR. Until it says so, a host whose role the lab changed is moved back by the
-  suite's cleanup to where the suite's stale copy puts it.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
@@ -436,13 +435,17 @@ BitLocker PIN.
   run was 100 tests in 15.6 min at 3 workers. The three Windows matrix hosts take turns, about 6 minutes
   in all: declared first, so they start with the run, they are its floor however many workers there are.
 - **A Debian-family lab VM's own upgrade can refuse an install** (seen once, branch run 43680528701). The
-  daily `unattended-upgrade` held dpkg's lock on `prem-zorin18-luks` for over six minutes, and Fleet's
+  daily `unattended-upgrade` held dpkg's lock on `prem-zorin18-luks` from 06:23 to 06:35 UTC, and Fleet's
   default `.deb` script is a bare `apt-get install`, which gives up at once when the lock is held: six
-  tries in a row failed with "Could not get lock /var/lib/dpkg/lock-frontend". The hosts are on UTC and
-  Ubuntu's default timer fires between 06:00 and 07:00 (the timer itself wasn't read on the host). In
-  containers the same day: `apt-get` and `zypper` fail at once when their lock is held, `dnf` 4 and 5 wait
-  and then install. Left as it is (Andrey, 2026-11-15): the run-reviewer's signatures know it, and a
-  smoke's failed install now quotes what the host printed.
+  tries in a row failed with "Could not get lock /var/lib/dpkg/lock-frontend". In containers the same
+  day: `apt-get` and `zypper` fail at once when their lock is held, `dnf` 4 and 5 wait and then install.
+  Fixed in the lab that evening (Andrey, 2026-11-15): no pool host installs updates by itself any more.
+  The Debian family's daily upgrades are off; the Windows desktops download updates but don't install
+  them (Windows had been installing and restarting them on its own around 17:40 UTC, inside branch-run
+  hours); the two macOS 26 VMs no longer install macOS updates. Updates happen in the lab's monthly
+  pass, when no run is going, and new baselines follow it. The same evening the pool's Windows clocks were
+  fixed: they had started an hour fast after every boot, for up to 15 hours, until Windows' time service
+  ran. The run-reviewer's signatures still know the lock error, in case a host starts upgrading again.
 - **The steps of `setup/cleanup.steps.ts` run in parallel** (`fullyParallel`), so one step can't count on
   another having run. That is why the return of lab hosts to their fleets sits inside the resting-state
   step, ahead of its walk through the pool, and not in a step of its own.
