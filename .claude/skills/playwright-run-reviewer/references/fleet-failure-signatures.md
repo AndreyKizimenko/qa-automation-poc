@@ -175,8 +175,10 @@ Each of these looked like something else at first.
   under concurrent `vulnerable=true` software-titles queries → `infra-env`. A
   discovery helper that turns that 500 into `null` turns it into a silent skip.
 - **A real-VM spec fails with the host picker's own message.** `requireRealHost` and
-  `liveMacosHost` say why there's no host: offline since when, online but its details
-  didn't load, or not enrolled at all. Read it before blaming the spec. Both Macs dropped together on
+  `liveMacosHost` say why the platform's pool had no host to hand out, per pool host:
+  offline since when, on the wrong fleet, or not enrolled at all. Read it before blaming
+  the spec. One pool host out fails only its own `lab-hosts.spec.ts` row (the workers
+  share the rest), and failures that share one `vm` annotation point at that VM. Both Macs dropped together on
   2026-09-20, 2026-10-05 (32 failures in one nightly) and 2026-10-10 (55 on each of two
   runs) → `infra-env`, **one row** with its count; check the host's `seen_time`, then
   re-run once it's back.
