@@ -55,7 +55,7 @@ jobs:
   test:
     # A guard against a hung run: Playwright stops the smokes at 45 min
     # (--global-timeout), so a run that uses all of it still writes and uploads
-    # its report inside this limit. About a quarter of an hour is usual.
+    # its report inside this limit. Twelve to fourteen minutes is usual.
     timeout-minutes: 60
     runs-on: ubuntu-26.04
     # The same image and user as the suites' jobs: browsers are pre-installed in

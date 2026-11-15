@@ -13,8 +13,9 @@ them, and where the handoff turned out wrong.
 `19ab2d1` after a green branch run (43667531465), the first full run of the suite on the lab's VMs: the
 manifest decides what each lab host is, each worker is handed its own pool VM, and the eight pool VMs are on
 the VMs fleet. Premium stays at 3 workers for now (Andrey, 2026-11-15), so C's trial of a fourth, and the
-last two boxes under C, are deferred. Step D is PR #146 (`playwright/device-lab-smokes`), awaiting its
-branch run.
+last two boxes under C, are deferred. Step D is PR #146 (`playwright/device-lab-smokes`): built, and green
+on its branch run (43690094173), the first run of the `Playwright — OS smokes` workflow. It waits only for
+its merge. Step E is next, after that.
 
 ## What the suite has to work with
 
@@ -38,7 +39,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial is deferred |
-| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15, and green locally; awaiting the branch run of its head (`--ref`, `-f os-smokes=true`) |
+| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Green on branch run 43690094173; awaiting its merge |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -210,7 +211,7 @@ Not proven by a run: the cleanup's return of a stray host has not yet moved a re
 astray in any run so far, the branch run included (its decision was replayed on live data with doctored
 entries, and picked the right hosts and fleets).
 
-## Step D: built, awaiting its branch run
+## Step D: built and green, awaiting its merge
 
 A smoke per OS version: `tests/e2e/premium/matrix/os-smokes.spec.ts`, one describe per manifest `os`, over the
 fifteen matrix hosts **and** the pool's four OS versions (Ubuntu 24.04, Windows 11, macOS 15 and 26), so each
@@ -220,20 +221,25 @@ through the UI like the rest of the suite. PR #146, against `main`; its descript
 **Where it stands, 2026-11-15.** Everything below is in PR #146 (`playwright/device-lab-smokes`), based on
 `main` after #145 merged. On premium (4.95.0-rc, `d6df44a`):
 
+- **Branch run 43690094173**, on `f73aab7`, with the checks as the table has them: green throughout. The
+  smokes' own workflow, on its first run, 149 of 149 (140 smokes, the login and the cleanup's steps) in
+  12.0 minutes at 6 workers; premium 708 passed and 6 skipped, free 372 and 1; every gitops job green;
+  nothing flaky or retried. The PR's description has the run of its final head, which differs by a
+  review's small fixes.
 - **Branch run 43680528701**, on `e9f08b9`, when the smokes were seven checks and the last step of premium's
   job: both suites and every gitops job green, and 99 of the 100 smokes at 3 workers. The one red was
   `prem-zorin18-luks`'s install, refused six times over because the host's own daily upgrade held dpkg's
   lock (*Facts*, below): the host's, not the smoke's.
-- **The head, locally**, with the checks as the table has them: the whole project with its login and
-  teardown at 6 workers, 148 of 149 in 9.2 minutes. The one red was a test bug (a tarball has no version
-  for the Library to show), fixed and green on its own run.
+- **Locally**, the whole project with its login and teardown at 6 workers: 148 of 149 in 9.2 minutes, the
+  one red a test bug (a tarball has no version for the Library to show), fixed and green on its own run.
 - **Seen failing first**, on scratch edits since reverted. From the first seven checks: a wrong OS major, a
   wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, the rest
   skipped), vulnerabilities on Debian 13, Fleet Desktop on the headless server. From the rest: a memory
   shape no host has, the wrong platform's label, a platform the host doesn't answer with, a tarball held
-  to an inventory it never reaches (red after five minutes with "inventory never listed"), and openSUSE
-  with Fleet's own `.rpm` scripts (red as soon as Fleet gives up, with `dnf: command not found` in the
-  message).
+  to an inventory it never reaches (red after five minutes with "inventory never listed"), an installed
+  package held to an inventory that has dropped it ("inventory never dropped"), a user the host doesn't
+  have, and openSUSE with Fleet's own `.rpm` scripts (red as soon as Fleet gives up, with `dnf: command
+  not found` in the message).
 - **Not run:** `--repeat-each` and a headed pass, and the sweep with something to sweep (it has only met a
   clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
 
@@ -270,10 +276,10 @@ host moved.
       on one fleet. Checked in containers of each rpm host's distribution before it met a host.
 - [x] Closes `long-term-goals.md`'s Fedora, RHEL and Omarchy rows. The Omarchy row's `pkg.tar.zst` was the
       fleetd agent package, not a custom package: Fleet takes none of that type.
-- [ ] Its branch run, which Andrey dispatches:
+- [x] Its branch run: 43690094173 (2026-11-15), dispatched with
       `gh workflow run "QA — Branch run" --ref playwright/device-lab-smokes -f branch=playwright/device-lab-smokes -f os-smokes=true`
-      (the branch changes workflow files, and a branch run leaves the smokes out unless asked). That run
-      is the first time the `Playwright — OS smokes` workflow runs at all.
+      (the branch changes workflow files, and a branch run leaves the smokes out unless asked). Green, and
+      the first time the `Playwright — OS smokes` workflow ran at all.
 - [ ] macOS 27, when its VM exists, gets a DDM-focused smoke.
 - [x] openSUSE's `zypper` scripts are a workaround for a Fleet gap (its default `.rpm` scripts call `dnf`):
       fleetdm/fleet#58784, with the `TODO` at the scripts and a row in `blocked-by-product-bugs.md`.
@@ -327,9 +333,9 @@ BitLocker PIN.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
-- The smokes' job runs at 6 workers, set in #146 from a clean local run at that count: each host is one
-  worker's, so nothing is shared. Say if it should follow premium's 3 instead, which is about 16 minutes
-  where 6 is about 9.
+- The smokes' job runs at 6 workers, set in #146: each host is one worker's, so nothing is shared, and its
+  first run in CI at that count was clean (12 minutes, nothing retried). Say if it should follow premium's
+  3 instead, which would be about 20 minutes in CI.
 - When to run the deferred trial of a fourth premium worker; premium's worker count, D4 and the lanes wait on
   it (C's last two boxes). By the branch run's numbers, 97 test-minutes over 4 workers is a main project of
   about 24 minutes, if the instance holds up.
@@ -406,8 +412,9 @@ BitLocker PIN.
 - **"Fleet Desktop: 1.63.0" in the Agent tooltip is not "Fleet Desktop is running".** orbit reports what
   `fleet-desktop --version` printed when orbit started (`orbit/cmd/orbit/orbit.go`); the two headless hosts
   report "unknown". The smoke asks the host for the process instead.
-- **A per-OS smoke run is 45 test-minutes, and about nine minutes at 6 workers.** 140 tests in 9.2 min with
-  login and teardown (2026-11-15, local); an OS version takes 1.8 to 3.8 min, and its install and uninstall
+- **A per-OS smoke run is about twelve minutes in CI at 6 workers.** 140 tests in 12.0 min with login and
+  teardown, 57 test-minutes, the job 13.5 (branch run 43690094173); on a laptop 9.2 min and 45
+  test-minutes (2026-11-15). Locally an OS version takes 1.8 to 3.8 min, and its install and uninstall
   with the inventory after each 1.2 to 2.5 of them. Following both into the inventory costs little, because
   the wait rides the refetch Fleet queues itself and that lands within half a minute. With seven checks the
   run was 100 tests in 15.6 min at 3 workers. The three Windows matrix hosts take turns, about 6 minutes

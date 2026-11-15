@@ -112,8 +112,8 @@ flavour's red night, and that a run's page shows them as their own line. Each ho
 one worker walks one host through its smokes (`mode: 'default'` per OS) while the others walk theirs; only
 the three Windows matrix hosts take turns, because they share one `.msi` title on the fleet. That is why the
 job runs at 6 workers where premium's suite runs at 3: no pool is shared, most of a smoke is a wait on its
-host, and 45 test-minutes over 6 workers is 9 minutes. The Windows turn, about 6 minutes and declared first
-so it starts with the run, is the floor: more workers than that buy nothing. The nightly
+host: 57 test-minutes in CI are 12 minutes at 6 workers, nothing retried (branch run 43690094173). The
+Windows turn, declared first so it starts with the run, is the floor: more workers than that buy nothing. The nightly
 runs it after premium's suite, whatever that did; a branch run leaves it out unless dispatched with `-f
 os-smokes=true`, which a branch that touches the smokes, the lab manifest or what they stand on should be.
 

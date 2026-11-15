@@ -15,9 +15,9 @@ free tests passed, and none failed, was flaky or was retried. **Tier 4 has start
 on 2026-11-14 as the device lab, and [`device-lab-plan.md`](device-lab-plan.md) is the plan of record for
 moving the suite onto it. Its steps A to C are on `main` (PRs #144 and #145, the second proven by branch run
 43667531465): they built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per pool
-VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146) gives every
-OS version the lab holds the same smokes every night, in a project and a workflow of their own: nineteen
-versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on a four-worker run on
+VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146, green on
+branch run 43690094173) gives every OS version the lab holds the same smokes every night, in a project and a
+workflow of their own: nineteen versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on a four-worker run on
 the pool, which is deferred (Andrey, 2026-11-15). The rebuilt instances and the shards have not arrived, so
 14, 15 and 16 still wait, and
 [*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
@@ -259,7 +259,7 @@ per OS flavour, and the pool's four OS versions each get the same few checks eve
 project shaped like a lane**: `premium-matrix` takes its tests by folder, its subjects from the manifest and
 its hosts by `os`, runs as an invocation and a workflow of its own after premium's suite, and one worker walks
 one host through its smokes, so another worker is another host at once, with no pool to share: it runs at
-six where premium's suite runs at three, 45 test-minutes in about nine. **It carries its own gate**: the first smoke of an OS fails with what is wrong with its host
+six where premium's suite runs at three, 57 test-minutes in twelve in CI. **It carries its own gate**: the first smoke of an OS fails with what is wrong with its host
 (offline, on another fleet, not enrolled) and the rest of that OS skip, so a dead matrix host is one red row.
 **And it is a selection that is not a hand-picked file list**, which section 3 found missing: `-g "rhel-9 \("`
 runs one flavour, and the workflow runs alone after a change to the lab.
@@ -480,8 +480,8 @@ and the `serial` blocks used as a mutex are untouched and have no roadmap row.
 **Since then (2026-11-15).** The pool took premium's main project from 123.5 to 97.0 test-minutes at the
 same three workers, and its tests over 30 s that wait on a VM from 81 minutes to 53: the VMs removed
 queueing, not work ([`device-lab-plan.md`](device-lab-plan.md) › *What proved it*). The per-OS smokes add
-45 test-minutes a night, in a job of their own, on hosts the main project doesn't use but for the pool's
-four OS versions. Neither is a budget: D4 is still open.
+57 test-minutes a night in CI, in a job of their own, on hosts the main project doesn't use but for the
+pool's four OS versions. Neither is a budget: D4 is still open.
 
 **Decided 2026-11-12:** this stays a UI suite. API coverage will be a separate suite that can run on its
 own, so nothing here moves a browser test to the API. What is left of this section is the VM budget and two
