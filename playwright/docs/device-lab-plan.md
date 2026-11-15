@@ -245,6 +245,9 @@ BitLocker PIN.
 - **The fleets are as they will stay**: the pool on VMs, everything else on OS matrix, from 2026-11-14, and
   B + C merge before the next nightly (Andrey, 2026-11-14).
 - **Host expiry on VMs and OS matrix is 30 days** (Andrey, 2026-11-14).
+- **The three old UTM VMs' records were deleted from the VMs fleet** (Andrey, 2026-11-15): under the fleet's
+  own 30 days they would no longer have expired in a day. The fleet holds exactly the eight pool VMs. Free's
+  three old records are on Unassigned and expire by themselves under the global day.
 - **The PR's branch run is at 3 and 2 workers, the trial of a fourth premium worker is a run of its own after
   the merge, and free stays at 2 for good** (Andrey, 2026-11-15). `-f workers=N` on a branch run sets
   premium's count only.
@@ -252,10 +255,6 @@ BitLocker PIN.
 ## Open questions for Andrey
 
 - A matrix host that is offline: does its smoke fail or skip? (Step D.)
-- The three old UTM VMs' records are still on the VMs fleet, offline (`ubuntu-prem-QEMU-Virtual-Machine`,
-  `WIN-SF55P5EPCGO`, `macos-prem’s Virtual Machine`). The global one-day window would have deleted them on
-  2026-11-15; under the fleet's own 30 days they stay until mid-December unless someone deletes them. No
-  picker takes them (offline, and lab hardware) and the preflight ignores an offline unlisted host.
 - The lab's side of the manifest: the `device-lab` skill should end a change to `lab-hosts.json` with `npm
   run lab:sync` here and a PR. Until it says so, a host whose role the lab changed is moved back by the
   suite's cleanup to where the suite's stale copy puts it.
