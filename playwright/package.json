@@ -24,6 +24,7 @@
     "test:gitops-verify:premium-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/workstations.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-qa": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/qa.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-vms": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/vms.yml playwright test --project=gitops-verify",
+    "test:gitops-verify:premium-os-matrix": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/os-matrix.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-compliance": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa/fleets/compliance.yml playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min playwright test --project=gitops-verify",
     "test:gitops-verify:premium-min-workstations": "SUITE=premium GITOPS_TARGET=../gitops/premium-fleetqa-min/fleets/workstations.yml playwright test --project=gitops-verify",

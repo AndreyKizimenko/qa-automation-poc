@@ -2,7 +2,7 @@
 
 Trimmed variant of [`../premium-fleetqa/`](../premium-fleetqa/). Used to verify that `fleetctl gitops` actually applies changes to a live Premium instance, including team-scoped resources.
 
-References files in `../lib/` like the baseline. Each scope (no-team, Workstations, Compliance) trims a few items so gitops-verify can detect the difference.
+References files in `../lib/` like the baseline. Each scope (no-team, Workstations, Compliance) trims a few items so gitops-verify can detect the difference. The QA, VMs and OS matrix fleets have no file here: the min apply carries the baseline's own (`../premium-fleetqa/fleets/{qa,vms,os-matrix}.yml`), since the first two hold the suite's durable fixtures and the third is declared empty.
 
 ## What's different from baseline
 
@@ -50,7 +50,7 @@ ends there. The suite's `cleanup-setup` and `cleanup-teardown` then delete every
 and profile, and Workstations' policies, profiles, scripts and software. So between runs the instance holds
 **this variant's org settings, labels and custom host vitals, Workstations' reports (3 of its 5:
 `fleets/workstations.yml` drops "Collect XProtect reports" and "Detect if Apple Intelligence is enabled"),
-everything on QA and VMs, and this variant's Compliance fleet in full** (the cleanup never touches it) — and
+everything on QA and VMs, OS matrix declared empty, and this variant's Compliance fleet in full** (the cleanup never touches it) — and
 none of the rest until the next chain re-applies it. Before calling a declared item missing, check which of
 those it is; a spec that reads a gitops item reads one both configs declare and the cleanup keeps ("Collect
 default browser on macOS").

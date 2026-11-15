@@ -1,10 +1,15 @@
-# "VMs" fleet — home of the real (non-simulated) QA VMs: one macOS, one Windows
-# and one Ubuntu. Every Playwright spec that needs a genuine device runs here.
+# "VMs" fleet — home of the device lab's **pool** VMs, the real (non-simulated)
+# hosts every Playwright spec that needs a genuine device runs on: several
+# Ubuntu, Windows and macOS VMs (`playwright/lab-hosts.json`, role `pool`), one
+# of each platform to a Playwright worker. The lab's other hosts are on the
+# OS matrix fleet (fleets/os-matrix.yml).
 #
 # This file owns the fleet's durable fixtures: state that has to exist before a
-# test starts, so it is declared here rather than seeded by a test.
+# test starts, so it is declared here rather than seeded by a test. Everything
+# here reaches every pool VM of its platform, which is the point: whichever VM
+# a worker is handed has the same fixtures.
 #
-# 1. `pw-host-report-results` — a report with a short interval, so the macOS VM
+# 1. `pw-host-report-results` — a report with a short interval, so each macOS VM
 #    always holds a stored result. Read by
 #    `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`, where
 #    waiting out a first scheduled run would cost minutes per run, and by
@@ -14,7 +19,7 @@
 #    changes, so Fleet refreshes its `last_fetched` only once that is 50
 #    minutes old, not on every run.
 #
-# 2. Claude, kept installed on the macOS and Windows VMs and tracking latest —
+# 2. Claude, kept installed on every macOS and Windows VM and tracking latest —
 #    the subject of `playwright/tests/e2e/premium/software/update-on-host.spec.ts`,
 #    which exercises the host Library's Update button against an app that is
 #    already there. Three things keep it in that state over weeks:
@@ -34,7 +39,8 @@
 #
 # 3. The install/uninstall subjects of
 #    `playwright/tests/e2e/premium/software/software-lifecycle-on-host.spec.ts`,
-#    each of which installs one of these on its VM and uninstalls it again:
+#    each of which installs one of these on its worker's VM and uninstalls it
+#    again:
 #
 #      - a custom package per platform — the inert "Fleet Playwright Install"
 #        .pkg, .msi and .deb, plus 7-Zip's x64 .exe on Windows, which Fleet
@@ -46,13 +52,21 @@
 #    Their resting state is *uninstalled*, the opposite of Claude's. Because the
 #    titles never leave the fleet, Fleet always knows whether each is installed,
 #    and the preflight in `cleanup.steps.ts` uninstalls any a dead run left
-#    behind before the next run starts.
+#    behind, on every pool VM, before the next run starts.
 #
 # Everything else on this fleet is per-run: specs whose test changes the title
 # itself (a version swap, a failing uninstall script, an install policy) upload
 # their own `fleet-pw-*` package and delete it in the same test, and the cleanup
-# sweep removes any a dead run left — the title, and on the Ubuntu VM the
+# sweep removes any a dead run left — the title, and on the Ubuntu VMs the
 # package itself. An apply of this file deletes whatever it does not declare.
+#
+# Host expiry is the fleet's own. A fleet with expiry off falls under the global
+# window, which is one day on this instance (it is what culls the abandoned
+# osquery-perf simulations): a lab VM that was offline for longer than that was
+# deleted, and re-enrolled under a new id. 30 days outlasts a long weekend and a
+# lab outage. A simulation a spec borrows onto this fleet is returned to
+# Unassigned by that spec, and by the cleanup's sweep after a dead run, so none
+# stays long enough for the window to matter.
 #
 # Applied before every nightly premium run, in both the baseline and the min
 # pass, by `.github/workflows/gitops-premium{,-min}.yml`.
@@ -68,13 +82,13 @@ settings:
     enable_host_users: true
     enable_software_inventory: true
   host_expiry_settings:
-    host_expiry_enabled: false
-    host_expiry_window: 0
+    host_expiry_enabled: true
+    host_expiry_window: 30
 
 reports:
   - name: pw-host-report-results
     description: >-
-      Durable report with a stored result on the macOS VM. Read by
+      Durable report with a stored result on each macOS VM. Read by
       playwright/tests/e2e/premium/hosts/host-report-details.spec.ts.
     query: SELECT 'bar' AS foo;
     interval: 300
@@ -85,7 +99,7 @@ reports:
 policies:
   - name: Claude is installed (macOS)
     description: >-
-      Keeps Claude on the macOS VM for the host Library update spec. Installs it
+      Keeps Claude on the macOS VMs for the host Library update spec. Installs it
       when missing; never updates it.
     resolution: Fleet installs Claude automatically.
     query: SELECT 1 FROM apps WHERE bundle_identifier = 'com.anthropic.claudefordesktop';
@@ -94,7 +108,7 @@ policies:
       fleet_maintained_app_slug: claude/darwin
   - name: Claude is installed (Windows)
     description: >-
-      Keeps Claude on the Windows VM for the host Library update spec. Installs
+      Keeps Claude on the Windows VMs for the host Library update spec. Installs
       it when missing; never updates it.
     resolution: Fleet installs Claude automatically.
     query: SELECT 1 FROM programs WHERE name = 'Claude' AND publisher = 'Anthropic, PBC';

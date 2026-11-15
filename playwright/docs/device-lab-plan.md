@@ -94,12 +94,12 @@ PR #145. Its description has what each commit changed and every run behind it.
 - [x] Every real-VM test records the host and OS it ran on in the report (agreed 2026-11-14): a `vm`
       annotation, `prem-macos26-01 (macOS 26.6.2)`, from the pickers. `run_timeline.py --platforms` tallies
       minutes per VM from it.
-- [ ] gitops declares OS matrix: `fleets/os-matrix.yml`, empty, disk encryption and key escrow declared off
+- [x] gitops declares OS matrix: `fleets/os-matrix.yml`, empty, disk encryption and key escrow declared off
       for every platform, applied and verified in both passes like `vms.yml`. `gitops-verify`'s `_sanity`
       spec fails the file if it ever declares an entity (`EMPTY_FLEETS`), and OS matrix is out of
       `HAND_KEPT_FLEETS`. The chain is sixteen Playwright jobs, from fourteen. A PR that changes a workflow
       file is dispatched with `--ref`.
-- [ ] gitops gives VMs and OS matrix a host-expiry window of their own: 30 days (Andrey, 2026-11-14). A
+- [x] gitops gives VMs and OS matrix a host-expiry window of their own: 30 days (Andrey, 2026-11-14). A
       fleet with expiry off uses the global window, which is one day on both instances
       (`CleanupExpiredHostsBatch` in Fleet's `server/datastore/mysql/hosts.go`): a lab VM that is offline for
       more than a day was deleted, and re-enrolled on VMs under a new id. Free has no fleets, so its three

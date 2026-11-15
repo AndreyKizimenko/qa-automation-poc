@@ -57,11 +57,11 @@ then): an apply deletes whatever its config doesn't declare, a running test's pe
 manual apply waits for a running suite instead of overlapping it.
 
 **gitops before the suite, and the suite runs whatever gitops did.** The suite assumes the instance is in the
-declared state (the Workstations, QA, VMs and Compliance fleets exist; the VMs fleet carries the durable software
-fixtures). Applying first makes that true every night. After each apply, `gitops-verify` runs against every file
-that apply carried — on premium the no-team config, Workstations, Compliance, QA and VMs, with the QA and VMs
-files verified after both the baseline and the min apply, since both carry them unchanged; the second pass
-proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
+declared state (the Workstations, QA, VMs, OS matrix and Compliance fleets exist; the VMs fleet carries the
+durable software fixtures; OS matrix carries nothing). Applying first makes that true every night. After each
+apply, `gitops-verify` runs against every file that apply carried — on premium the no-team config, Workstations,
+Compliance, QA, VMs and OS matrix, with the QA, VMs and OS matrix files verified after both the baseline and
+the min apply, since both carry them unchanged; the second pass proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
 control, so its verify is the only place those are checked. The suite runs even if a gitops step is red, in the
 nightly and in a branch run alike: a failed apply or check is its own signal and already fails the run, and the
 suite's results are still wanted. A branch run that stopped there would leave the branch's tests unjudged until a
@@ -170,9 +170,9 @@ skill, records each reviewed run's tests in a local file and says how a failing 
 The two suite reports are kept 90 days so that history can be rebuilt from the reports alone.
 
 **A run's artifacts are the two suite reports, and the report of any gitops job that failed.** Each gitops
-chain is a row of small Playwright jobs (premium ten `gitops-verify` and one `fleetctl` job, free two and
+chain is a row of small Playwright jobs (premium twelve `gitops-verify` and one `fleetctl` job, free two and
 one). A green one uploads nothing: its report would be a list of passed API checks that nobody opens, its log
-already lists each check (the `list` reporter), and fourteen such artifacts beside the suites' two bury what
+already lists each check (the `list` reporter), and sixteen such artifacts beside the suites' two bury what
 there is to read. A failed one uploads its report, named for the job, and keeps it 7 days. So a run's artifact
 list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
 

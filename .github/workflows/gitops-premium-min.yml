@@ -59,13 +59,15 @@ jobs:
       - name: Apply latest configuration to Fleet
         uses: ./.github/gitops-action
         with:
-          # The QA and VMs fleets hold the suite's durable fixtures, which are the
-          # same in both passes, so both apply the baseline's own files.
+          # The QA and VMs fleets hold the suite's durable fixtures, and the OS
+          # matrix fleet is declared empty: all three are the same in both
+          # passes, so both apply the baseline's own files.
           config-files: |
             gitops/premium-fleetqa-min/default.yml
             gitops/premium-fleetqa-min/fleets/workstations.yml
             gitops/premium-fleetqa/fleets/qa.yml
             gitops/premium-fleetqa/fleets/vms.yml
+            gitops/premium-fleetqa/fleets/os-matrix.yml
             gitops/premium-fleetqa-min/fleets/compliance.yml
           dry-run-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         env:
