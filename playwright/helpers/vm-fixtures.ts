@@ -58,6 +58,19 @@ export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
   { label: 'Windows Fleet-maintained app', platform: 'windows', fleetMaintainedName: 'DB Browser for SQLite' },
 ];
 
+/**
+ * The `.msi` the per-OS smokes upload to the OS matrix fleet for a Windows
+ * matrix host, for the length of a test (`premium/matrix/os-smokes.spec.ts`).
+ * Not one of the fixtures above: no gitops file declares it, and the cleanup's
+ * OS matrix step removes one a killed run left. Fleet titles an `.msi` after
+ * the product inside it, so every upload of it is this one title.
+ * `test-data/windows/software/make-msi.sh smoke` builds it.
+ */
+export const OS_SMOKE_MSI = {
+  packageName: 'fleet-playwright-smoke-1.0.0.msi',
+  title: 'Fleet Playwright Smoke',
+} as const;
+
 export interface VmFixtureTitle {
   titleId: number;
   name: string;
