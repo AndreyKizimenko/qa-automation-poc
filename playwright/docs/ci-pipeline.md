@@ -16,7 +16,7 @@ QA — Nightly (one chain, both tiers)
 
 a gitops chain            apply baseline → verify → apply min → verify → fleetctl checks
 a suite job (premium)     main project (3 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
-the per-OS smokes job     after premium's suite job: the premium-matrix project (3 workers), with a report of its own
+the per-OS smokes job     after premium's suite job: the premium-matrix project (6 workers), with a report of its own
 a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
 
 QA — Branch run           the same two tier chains without the redeploy, against a branch, on demand
@@ -110,7 +110,10 @@ overlap, so in a chain it costs a few minutes over a step of premium's job (a ch
 second cleanup). What it buys is that the smokes can be run and re-run alone, after a lab change or one
 flavour's red night, and that a run's page shows them as their own line. Each host works its own queue, so
 one worker walks one host through its smokes (`mode: 'default'` per OS) while the others walk theirs; only
-the three Windows matrix hosts take turns, because they share one `.msi` title on the fleet. The nightly
+the three Windows matrix hosts take turns, because they share one `.msi` title on the fleet. That is why the
+job runs at 6 workers where premium's suite runs at 3: no pool is shared, most of a smoke is a wait on its
+host, and 45 test-minutes over 6 workers is 9 minutes. The Windows turn, about 6 minutes and declared first
+so it starts with the run, is the floor: more workers than that buy nothing. The nightly
 runs it after premium's suite, whatever that did; a branch run leaves it out unless dispatched with `-f
 os-smokes=true`, which a branch that touches the smokes, the lab manifest or what they stand on should be.
 

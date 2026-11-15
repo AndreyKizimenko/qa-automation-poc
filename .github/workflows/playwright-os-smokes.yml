@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       workers:
-        description: Worker count for the smokes (blank — what playwright.config.ts sets for CI)
+        description: Worker count for the smokes (blank — 6)
         required: false
         type: string
         default: ''
@@ -30,7 +30,7 @@ on:
         type: string
         default: ''
       workers:
-        description: Worker count for the smokes (blank — what playwright.config.ts sets for CI)
+        description: Worker count for the smokes (blank — 6)
         required: false
         type: string
         default: ''
@@ -107,13 +107,16 @@ jobs:
       # One invocation: login, the smokes, then the cleanup's steps as their
       # teardown, which sweep what a smoke left on OS matrix and on its hosts.
       # Each host works its own queue, so one worker walks one host through its
-      # smokes while the others walk theirs. No fleetctl is installed: the
-      # project has no CLI spec.
+      # smokes while the others walk theirs: six workers, where the suites'
+      # count is bounded by a pool of VMs and by the instance under a suite's
+      # page loads. Most of a smoke is a wait on its host. Past six the run is
+      # as long as the three Windows matrix hosts' turn. No fleetctl is
+      # installed: the project has no CLI spec.
       - name: Run the per-OS smokes
         id: smokes
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/os-smokes
-          WORKERS: ${{ inputs.workers }}
+          WORKERS: ${{ inputs.workers || '6' }}
         run: SUITE=premium npx playwright test --project=premium-matrix --reporter=github,blob --global-timeout=2700000
 
       # The HTML report, and `results.json`, the same run as data, which the
