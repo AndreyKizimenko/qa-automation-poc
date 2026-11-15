@@ -20,7 +20,7 @@
  * astray fails nothing here: it is noted on the last test's report and in the
  * job log, where the lab's owner reads it. The same test notes any online host
  * on lab hardware that the manifest doesn't list, which is how a host the lab
- * added shows up before the suite's copy of the manifest has it.
+ * added shows up before the manifest's PR has merged.
  *
  * The cleanup has already returned every lab host to its role's fleet by the
  * time this runs (`setup/cleanup.steps.ts`), so "on the wrong fleet" here means
@@ -60,7 +60,7 @@ test.describe('API • device lab hosts', () => {
       ...(await listUnlistedLabMachines(request)).map(
         (host) =>
           `"${host.displayName}" (id ${host.id}, on ${host.fleetName ?? 'Unassigned'}) is online on lab hardware and lab-hosts.json doesn't list it: ` +
-          'copy the lab\'s manifest into the suite (`npm run lab:sync`)',
+          'the lab\'s owner adds it to lab-hosts.json in a PR',
       ),
     ];
     for (const note of notes) {

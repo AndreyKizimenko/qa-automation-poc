@@ -43,7 +43,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `eslint-rules/` — the suite's own lint rules (`suite/*`), their tests and the per-rule count; see *Pre-PR check*.
 - `lab-hosts.json` — the device lab's manifest: every real host on the instances, with its tier, platform, OS and role (Test hosts).
-- `scripts/` — `check-claims.js`, the check `npm run lint:claims` runs on `helpers/claims.ts`; `lab-manifest.js`, which `npm run lint:lab` runs on `lab-hosts.json` and `npm run lab:sync` copies the lab's own over it with; and `catalogue.js`, which `npm run catalogue` runs to write the test catalogue (below).
+- `scripts/` — `check-claims.js`, the check `npm run lint:claims` runs on `helpers/claims.ts`; `lab-manifest.js`, which `npm run lint:lab` runs on `lab-hosts.json`; and `catalogue.js`, which `npm run catalogue` runs to write the test catalogue (below).
 - `test-data/` — fixtures consumed by specs, organised platform-first (`apple/macos/`, `linux/`, `windows/`, plus `shared/`), then by category — e.g. `apple/macos/scripts/macos-create-marker.sh`; see `test-data/README.md`.
 - `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `architecture-audit.md` (what has to change for the suite to grow fivefold, with the working list of next steps), `device-lab-plan.md` (the plan of record for moving the suite onto the device lab: what has landed, what is next, and what was checked on the instances), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `long-term-goals.md` (coverage that waits on infrastructure the instances lack), `gitops-coverage/` (the plan for the nightly's gitops coverage), `loadtest-runs/` (dated load-test write-ups), `test-audit/` (the manual audit's per-test breakdown and `FINDINGS.md`, frozen on 2026-11-13: a test no longer adds or updates an entry there), `test-catalogue/` (every test, the projects that run it, its spec's header and its `test.step` titles: built on demand by `npm run catalogue` from the suite itself, and gitignored, so it never drifts), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
@@ -72,9 +72,11 @@ regenerate both on every restart.
   which can't be rolled back: never the subject of anything that needs a reset to recover from. A Fleet host
   is matched to its entry by display name, lower-cased (Windows reports upper case). An entry also says what
   the lab knows of the OS: the `platform` Fleet reports for it, its package type and package manager, its
-  desktop (`none`: headless, no Fleet Desktop) and whether it is in MDM. The file is a copy of the
-  lab's own, which is edited first: `npm run lab:sync` copies that over it, and `npm run lint:lab`, inside
-  `npm run check`, fails while the two differ on a machine that has the lab's folder.
+  desktop (`none`: headless, no Fleet Desktop) and whether it is in MDM. This file is the manifest's only
+  copy: the lab's owner changes it in a PR when the lab changes (the `device-lab` skill scans the lab and
+  opens that PR), and `npm run lint:lab`, inside `npm run check`, fails on an entry the suite can't place or
+  a `fleet` that disagrees with the role. A spec that needs a host the manifest doesn't have asks the lab's
+  owner for it; it doesn't add an entry for a machine that isn't there.
 - **A lab machine is never a simulation.** Every simulation picker and both of the cleanup's host sweeps skip
   whatever the manifest lists and, as the guard for a host the lab enrolled and nobody has listed yet,
   whatever reports virtualized hardware (the model `VirtualMac2,1`, or the vendor `QEMU`).

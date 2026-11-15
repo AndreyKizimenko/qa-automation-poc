@@ -2,10 +2,9 @@
  * The device lab's hosts, from `lab-hosts.json` beside `fixtures.ts`: every
  * real machine the instances hold, and what each is for.
  *
- * The file is a copy. The lab edits its own first (`lab-hosts.json` in the
- * device-lab folder), and `npm run lab:sync` copies that one over this one;
- * `npm run lint:lab`, inside `npm run check`, fails while the two differ on a
- * machine that has the lab folder. The suite reads an entry's name, tier,
+ * This is the manifest's only copy. The lab's owner edits it in a PR whenever
+ * a host is added, removed, renamed or moved, and `npm run lint:lab`, inside
+ * `npm run check`, holds it to the shape below. The suite reads an entry's name, tier,
  * platform, `os` and role, and, for the per-OS smokes, what the lab says of the
  * OS itself: the platform Fleet reports it as, its package type and package
  * manager, its desktop, and whether it is enrolled in MDM. The rest (LUKS, the
@@ -22,10 +21,10 @@
  *    from here. Never a pool target, and never the subject of anything that
  *    needs a reset to recover from.
  *
- * Its **fleet** follows from the role ({@link labHostFleet}), not from the
- * entry's `fleet`, `parked` or `legacy_real` fields: those record where the
- * lab had a host on the day the file was written, and how it looked to the
- * suite before the suite read this file.
+ * Its **fleet** follows from the role ({@link labHostFleet}). The entry's
+ * `fleet` field records the same, and `npm run lint:lab` fails when the two
+ * disagree; its `legacy_real` field is a fact about the machine that nothing
+ * reads.
  *
  * A Fleet host is matched to an entry by its **display name, lower-cased**
  * ({@link labHostNamed}): Windows reports its name in upper case, and the RHEL
