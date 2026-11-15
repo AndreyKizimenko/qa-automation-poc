@@ -195,13 +195,14 @@ Each of these looked like something else at first.
 - **A `.deb` install fails with `Could not get lock /var/lib/dpkg/lock-frontend. It is held by
   process N (unattended-upgr)`.** A smoke's error quotes the host's output; for any other spec read
   it from `GET /software/install/<install_uuid>/results` (the uuid is on the host's
-  `installed_software` activity). The host's own daily upgrade held dpkg's lock, and Fleet's
+  `installed_software` activity). The host's own upgrade held dpkg's lock, and Fleet's
   `apt-get install` doesn't wait for one: three tries half a minute apart, then `failed_install`.
-  The Debian-family lab VMs are on UTC and upgrade between 06:00 and 07:00 (`apt-daily-upgrade.timer`),
-  so only a run that installs in that hour meets it → `infra-env`, one row; re-run outside the hour.
-  First seen 2026-11-15 on `prem-zorin18-luks` (branch run 43680528701), and left at that (Andrey):
-  say so when it is seen a second time, since the next step then is a request that Fleet's default
-  `.deb` scripts wait for the lock (`DPkg::Lock::Timeout`).
+  Seen once, 2026-11-15 on `prem-zorin18-luks` (branch run 43680528701), when the Debian-family lab
+  VMs still upgraded daily between 06:00 and 07:00 UTC. The lab turned those upgrades off that
+  evening: hosts are updated only in the lab's monthly pass, run when no suite run is going. So a
+  second sighting means a lab host upgrades by itself again (one rolled back to an old baseline, or a
+  newly built one) → `infra-env`, one row; name the host and the time for Andrey, and re-run. Fleet's
+  default `.deb` script not waiting for the lock (`DPkg::Lock::Timeout`) was left as it is (Andrey).
 - **Every App Store or setup-assistant test red at once.** Apple's side. A revoked VPP
   token (Apple error 9625) leaves `GET /vpp_tokens` looking healthy while adding or
   listing App Store apps fails; an Apple Business token Apple rejects answers 403

@@ -941,7 +941,7 @@ other:
   | PowerShell | **Windows** | `.ps1` | `Write-Output "powershell $($PSVersionTable.PSVersion)"` | `/^powershell \d+\.\d+/` |
 
 - **Mode:** UI+API · **Isolation:** four independent tests; budget 300s each.
-- **Preconditions:** one **real VM per variant** (`requireRealHost(request, platform)`), mandatory. **Python runs on Linux on purpose:** the macOS VMs have no Xcode Command Line Tools, so `/usr/bin/python3` there is Apple's install-prompt stub and exits non-zero. This is the only test in the area that uses the **Windows** VM for execution.
+- **Preconditions:** one **real VM per variant** (`requireRealHost(request, platform)`), mandatory. **Python runs on Linux:** it was put there when the old macOS VMs had no Xcode Command Line Tools, so `/usr/bin/python3` was Apple's install-prompt stub and exited non-zero. The device lab's macOS VMs have the tools (2026-11-15), so Python would run there too. This is the only test in the area that uses the **Windows** VM for execution.
 - **Data created:** one library script `pw-run-script-<label>-<id><ext>` per variant on the host's fleet; deleted in `finally`.
 
 **Flow** (per variant)
