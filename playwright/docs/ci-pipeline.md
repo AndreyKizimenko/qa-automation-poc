@@ -15,7 +15,7 @@ QA — Nightly (one chain, both tiers)
     └─ free:    gitops chain ─► free suite job          (the two tiers side by side)
 
 a gitops chain            apply baseline → verify → apply min → verify → fleetctl checks
-a suite job (premium)     main project (3 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
+a suite job (premium)     main project (3 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → per-OS smokes (3 workers; the nightly only) → merge reports
 a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
 
 QA — Branch run           the same two tier chains without the redeploy, against a branch, on demand
@@ -99,6 +99,17 @@ beside another browser project in a single invocation, because side by side is e
 avoid. The order between the two steps does not matter; both put their lock back in their teardown, and
 `cleanup-setup` would anyway.
 
+**The per-OS smokes are a step of the same job, not a workflow of their own.** `premium-matrix` runs one spec:
+the same few checks on the matrix host of each OS flavour and on a pool VM of each OS version the pool holds
+(`tests/e2e/premium/matrix/os-smokes.spec.ts`). It works the pool's VMs, so like the exclusive specs it can't
+run beside the main project, and it holds no lock, so it runs at the suite's worker count, last: a flavour's
+trouble then costs the steps before it nothing. A workflow of its own would buy no overlap, since every suite
+on an instance shares one concurrency group, and would cost a second login, cleanup and report. Each host
+works its own queue, so one worker walks one host through its smokes (`mode: 'default'` per OS) while the
+others walk theirs; only the three Windows matrix hosts take turns, because they share one `.msi` title on
+the fleet. The nightly runs the step; a branch run leaves it out unless dispatched with `-f os-smokes=true`,
+which a branch that touches the smokes, the lab manifest or what they stand on should be.
+
 **The gitops-mode exceptions are restored before every premium apply, not by the suite.** Unlike the mode flag,
 the exceptions act outside gitops mode: `fleetctl gitops` reads them on every apply, so a stuck `secrets: false`
 makes it delete every enroll secret (premium's YAML declares none) and a stuck `labels` or `software: true` makes
@@ -125,7 +136,7 @@ shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
 minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
-gitops-mode step and free's exclusive step at 15; the job limit sits above the sum.
+gitops-mode step and free's exclusive step at 15, and the per-OS smokes at 45; the job limit sits above the sum.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.
 
@@ -182,10 +193,10 @@ there is to read. A failed one uploads its report, named for the job, and keeps 
 list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
 
 **The run page's annotations work the same way.** The suites run with the `github` reporter, which adds one
-"Run Summary" annotation per invocation (free two, premium three: its main project, exclusive specs and
-gitops-mode) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
+"Run Summary" annotation per invocation (free two, premium four in the nightly: its main project, exclusive
+specs, gitops-mode and the per-OS smokes) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
 `list` instead (the config's CI reporter), so a green one adds none, and `reportSlowTests` is off, since the
-slow files are slow by design. A green run's page carries those five summaries and nothing else.
+slow files are slow by design. A green nightly's page carries those six summaries and nothing else.
 
 **One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
 nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14
