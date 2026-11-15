@@ -177,7 +177,8 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   unexpectedly, check `GET /api/latest/fleet/version`'s revision and `GET /debug/migrations` before blaming
   your spec.
 - **`fleetctl` must be within a minor of the server**, and `fleetctl gitops` reads `~/.fleet/config`, not
-  `FLEET_URL`. Pass `--context`.
+  `FLEET_URL`. Pass `--context`. Before a local CLI spec, check the client a test resolves and update it
+  yourself when it is behind, without asking (`playwright/tests/cli/CLAUDE.md` has the check and the commands).
 - **Apple's tokens fail quietly.** A revoked VPP token leaves `GET /vpp_tokens` looking healthy while every
   App Store list fails; `expectVppAppsListable` gives Apple's reason. An Apple Business token Apple rejects
   answers 403 `token_rejected` and breaks the setup assistant. Check both before debugging a spec that adds
