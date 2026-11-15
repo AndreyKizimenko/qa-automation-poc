@@ -13,16 +13,17 @@ The suite runs on the device lab's pool VMs ([`lab-hosts.json`](../lab-hosts.jso
 24.04, Windows 11 and macOS, four, two and two of them on premium (macOS 15 and 26) and one of each on free
 (macOS 26), with each worker handed its own. Everything else Fleet manages is untested on a real device.
 
-The lab also enrolled what the first three rows below ask for, on premium's OS matrix fleet: Fedora 45, RHEL 9
-and 10, Omarchy, and a dozen more OS flavours (role `matrix`). No spec uses them yet.
-[`device-lab-plan.md`](device-lab-plan.md) has the plan; its step D writes a smoke per OS version and takes
-those rows out of this table.
+The lab's other hosts, one per OS flavour on premium's OS matrix fleet (role `matrix`: Fedora, RHEL 9 and 10,
+Omarchy, openSUSE, Debian, Amazon Linux, Windows 10 and Server, and more), get a smoke each every night, as
+does every OS version of the pool (`premium/matrix/os-smokes.spec.ts`, the `premium-matrix` project): the OS
+and agent versions Fleet shows, the inventory by package type, a script, an `.rpm`, `.deb`, `.msi` or tarball
+installed and uninstalled, an install by a policy automation, Fleet Desktop, and the OS's vulnerabilities.
+A smoke is one pass of each on one host: what a flavour would need beyond it is in
+[`../TODO.md`](../TODO.md) › *Coverage backlog*, and disk encryption on those hosts is
+[`device-lab-plan.md`](device-lab-plan.md)'s step E.
 
 | host | what it would unblock |
 |---|---|
-| **Fedora** (RPM-based) | `.rpm` custom packages end to end: upload, install, uninstall, delete, and an `.rpm` installed by a policy automation. Fleet's default install and uninstall scripts differ per package type, and no `.rpm` is exercised anywhere today |
-| **RHEL** (RPM-based) | the same `.rpm` path on the enterprise distribution; RHEL's OS version and vulnerability matching (OVAL) |
-| **Omarchy** (Arch-based) | `pkg.tar.zst` agent packages and Arch software inventory |
 | **iOS / iPadOS** | device-side MDM: profile delivery, Lost Mode lock/unlock, VPP and `.ipa` installs on the device. The catalog halves (adding an App Store app, a VPP token) already run without one |
 | **Android** | enrollment, profile delivery to a device, Managed Google Play installs. Adding a Play app already runs without one |
 | **A sacrificial macOS VM**, MDM-enrolled and rebuildable | firing **Lock** and **Wipe** on a real device. Today their availability is asserted on every platform (`premium/hosts/mdm-actions-availability.spec.ts`) but they never run on a real VM, because a locked or wiped VM can't be recovered from here. Unlocking a locked Mac needs the PIN Fleet shows, entered on the device |

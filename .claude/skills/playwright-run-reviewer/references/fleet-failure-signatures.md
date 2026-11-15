@@ -182,6 +182,14 @@ Each of these looked like something else at first.
   2026-09-20, 2026-10-05 (32 failures in one nightly) and 2026-10-10 (55 on each of two
   runs) → `infra-env`, **one row** with its count; check the host's `seen_time`, then
   re-run once it's back.
+- **A per-OS smoke is red** (`premium/matrix/os-smokes.spec.ts`, the premium job's last step, one
+  describe per OS version). "is online on its fleet…" red with the rest of that OS skipped is the
+  host, not Fleet: the error is `labHostProblem`'s (offline since when, on another fleet, not
+  enrolled) → `infra-env`, the lab owner's. Any other smoke red on **one** OS is that flavour's own
+  behaviour (its package manager, its inventory source, what Fleet shows for its OS): read the
+  install's or script's recorded output before calling it a flake, and expect a `product-defect` or
+  a lab change (an OS update moved the host a major version) more often than a test bug. The same
+  smoke red on **every** OS is the smoke's code or the instance.
 - **Every App Store or setup-assistant test red at once.** Apple's side. A revoked VPP
   token (Apple error 9625) leaves `GET /vpp_tokens` looking healthy while adding or
   listing App Store apps fails; an Apple Business token Apple rejects answers 403

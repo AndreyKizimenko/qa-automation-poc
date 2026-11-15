@@ -31,7 +31,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 
 - `tests/e2e/` — browser specs in three sibling folders:
   - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `command-palette/`, `controls/`, `dashboard/`, `hosts/`, `labels/`, `packs/`, `policies/`, `reports/`, `settings/`, `software/`, plus `exclusive/`); both premium and free pick these up via folder structure.
-  - `premium/<area>/` — premium-only flows. Each spec says which scope it works in: Unassigned, Workstations, All fleets, or a throwaway `pw-*` fleet of its own. The CRUD lifecycles and the setup-experience specs run once per scope; most specs work in one.
+  - `premium/<area>/` — premium-only flows. Each spec says which scope it works in: Unassigned, Workstations, All fleets, or a throwaway `pw-*` fleet of its own. The CRUD lifecycles and the setup-experience specs run once per scope; most specs work in one. `premium/matrix/` holds the per-OS smokes, which the `premium-matrix` project runs on its own (Projects).
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
 - `tests/cli/` — `fleetctl` specs, in the same `shared/` / `premium/` / `free/` split, plus `cli/nightly/` for the `gitops-nightly` project; [`tests/cli/CLAUDE.md`](tests/cli/CLAUDE.md).
@@ -70,7 +70,9 @@ regenerate both on every restart.
   purpose: both live on premium's **OS matrix** fleet, no worker is handed one, and a spec asks for one by its
   `os` or purpose (`requireLabHost(request, matrixHostOfRun('rhel-9'))`). `physical` is a bare-metal machine,
   which can't be rolled back: never the subject of anything that needs a reset to recover from. A Fleet host
-  is matched to its entry by display name, lower-cased (Windows reports upper case). The file is a copy of the
+  is matched to its entry by display name, lower-cased (Windows reports upper case). An entry also says what
+  the lab knows of the OS: the `platform` Fleet reports for it, its package type and package manager, its
+  desktop (`none`: headless, no Fleet Desktop) and whether it is in MDM. The file is a copy of the
   lab's own, which is edited first: `npm run lab:sync` copies that over it, and `npm run lint:lab`, inside
   `npm run check`, fails while the two differ on a machine that has the lab's folder.
 - **A lab machine is never a simulation.** Every simulation picker and both of the cleanup's host sweeps skip
@@ -81,6 +83,18 @@ regenerate both on every restart.
   lands on VMs, whatever it is for; the resting-state step returns each to its role's fleet before a run and
   after it. That step is the only thing that moves a host onto or off OS matrix. Nothing is uploaded to OS
   matrix or set on it: gitops declares it empty, with disk encryption off, and `gitops-verify` holds it to that.
+  **The one exception is the per-OS smokes** (`premium/matrix/os-smokes.spec.ts`), for the length of a test:
+  a library script and a package nothing installs until the test asks its own host to, and a policy held to
+  that host by a manual label holding only it. Whatever else goes on that fleet reaches all sixteen hosts, so
+  never a package with automatic install, a profile, agent options, or an OS-update or disk-encryption
+  setting; never `zenity` or `kdialog` on `prem-fedora45-luks` or `prem-omarchy-01`, which reproduce
+  fleetdm/fleet#58776 by lacking them; and nothing that leaves a matrix host changed, since each has one
+  baseline snapshot and only the lab's owner can roll it back.
+- **The per-OS smokes run the same few checks on every OS version every night**: on the matrix host of each
+  flavour and on a pool VM of each version the pool holds (the `premium-matrix` project, CI's last premium
+  step). They are where a flavour's own behaviour is asserted: what Fleet shows for its OS, its inventory's
+  package type, its package manager's install and uninstall. A spec in the main project that needs one OS
+  version of the pool still asks `requireRealHost` for it by `os`.
 - **The lab preflight** (`tests/api/lab-hosts.spec.ts`) is one test per pool host. One that is offline, on the
   wrong fleet or no longer enrolled is a red row naming it and saying which, while the workers go on with the
   rest of the pool. Hosts outside the pool, and online lab machines the manifest doesn't list, are noted on
@@ -231,14 +245,14 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 
 ## Projects (folder-based)
 
-Nine browser/API/CLI projects target three Fleet environments. Each has its own env file
+Ten browser/API/CLI projects target three Fleet environments. Each has its own env file
 (`.env.<suite>`) and its own auth state (`.auth/<suite>-admin.json`).
 Project scope is determined purely by folder. The only tags are the real-VM ones (Test hosts), and no project selects by them yet. The `testIgnore`
 matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**` | `.auth/premium-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**`, `**/matrix/**` | `.auth/premium-admin.json` |
 | `free` | `tests/e2e/{shared,free}/**`, `tests/cli/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/exclusive/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`), one worker | `**/api/**` | `.auth/loadtest-admin.json` |
 | `loadtest-api` | `tests/loadtest/api/**` only (`testDir`), one worker, no browser | n/a | bearer token |
@@ -246,6 +260,7 @@ matrix in `playwright.config.ts` is the source of truth:
 | `gitops-nightly` | `tests/cli/nightly/**` only (`testDir`), 180 s timeout, no retries | n/a | `fleetctl` with `FLEET_API_TOKEN` |
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`), one worker, its own invocation after `premium-exclusive` | n/a | `.auth/premium-admin.json` |
 | `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
+| `premium-matrix` | `tests/e2e/premium/matrix/**` only (`testDir`), its own invocation after the others | n/a | `.auth/premium-admin.json` |
 | `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, one worker, its own invocation after `free` | n/a | `.auth/free-admin.json` |
 
 Folder conventions:
@@ -275,6 +290,13 @@ Folder conventions:
   Filter by file name, not path, when running one (`playwright test --project=free-exclusive
   script-execution-disabled`): the exclusive projects' `testDir` is `tests/e2e`, so a `tests/e2e/…` path filter
   never matches.
+- A check every OS version should get → a smoke in `tests/e2e/premium/matrix/os-smokes.spec.ts`, not a spec
+  of its own: one describe per OS version of `lab-hosts.json`, each host's smokes in order in one worker, the
+  hosts side by side. The `premium-matrix` project runs it **in its own invocation** (`npm run
+  test:premium:matrix`; CI's last premium step, which a branch run leaves out unless dispatched with `-f
+  os-smokes=true`). It works the pool's VMs too, so the config refuses it beside `premium` or
+  `premium-exclusive`; like them it depends only on login and shares `cleanup-teardown`. Filter by OS:
+  `--project=premium-matrix -g "rhel-9 \("`.
 
 ## Project pipeline (premium)
 

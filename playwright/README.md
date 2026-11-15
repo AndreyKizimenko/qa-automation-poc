@@ -2,7 +2,7 @@
 
 Automated browser, API and `fleetctl` tests for Fleet. The projects:
 
-- **premium** — Fleet Premium instance (default browser suite), with **premium-exclusive** and **gitops-mode** run after it.
+- **premium** — Fleet Premium instance (default browser suite), with **premium-exclusive**, **gitops-mode** and **premium-matrix** (a smoke per OS version of the device lab) run after it.
 - **free** — Fleet Free instance (browser suite), with **free-exclusive** run after it.
 - **loadtest** / **loadtest-api** — high-scale instance for page-load and API timing (local only).
 - **gitops-verify** — pure-API checks that a gitops target matches the live instance. Driven by the nightly orchestrators.
@@ -102,6 +102,7 @@ From `playwright/`:
 | `npm run test:premium:headed` | Premium suite, browser visible — the same three invocations |
 | `npm run test:premium:ui` | Premium main project, Playwright UI |
 | `npm run test:premium:exclusive` | Premium's exclusive specs alone (`premium-exclusive`) |
+| `npm run test:premium:matrix` | The per-OS smokes alone (`premium-matrix`): one describe per OS version in `lab-hosts.json`; `-- -g "rhel-9 \("` for one |
 | `npm run test:free` | Free suite, headless — two invocations in sequence: the main project, the exclusive specs |
 | `npm run test:free:headed` | Free suite, browser visible — the same two invocations |
 | `npm run test:free:ui` | Free main project, Playwright UI |
@@ -167,7 +168,7 @@ playwright/
 ├── tests/                        # Specs — see tests/README.md for the full layout
 │   ├── e2e/                      # Browser specs
 │   │   ├── shared/               # Tier-agnostic (both projects), plus exclusive/
-│   │   ├── premium/              # Premium-only, plus exclusive/ and gitops-mode/
+│   │   ├── premium/              # Premium-only, plus exclusive/, gitops-mode/ and matrix/ (the per-OS smokes)
 │   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs
 │   ├── api/                      # Pure-API specs (no browser): root contracts, premium/, free/, role-access/, gitops-verify/
 │   ├── cli/                      # fleetctl specs: shared/, premium/, free/, plus nightly/ (gitops-nightly project only)
@@ -252,7 +253,7 @@ playwright/
 |---|---|---|---|---|
 | Target | Premium Fleet instance | Free Fleet instance | High-scale instance | Premium **or** free, selected via `SUITE` |
 | Picks up | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` (minus `free/` + `gitops-verify/`) | `tests/e2e/{shared,free}/**`, `tests/cli/{shared,free}/**`, `tests/api/**` (minus `premium/` + `gitops-verify/`) | `tests/loadtest/**` only | `tests/api/gitops-verify/**` only |
-| Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/exclusive/**` | n/a — own `testDir` | n/a — own `testDir` |
+| Skips | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**`, `**/matrix/**` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/exclusive/**` | n/a — own `testDir` | n/a — own `testDir` |
 | Retries on failure | 2 in CI, 0 locally | 2 in CI, 0 locally | No — a slow run is a slow run | No — drift should fail loudly |
 | Timeouts | 60s test / 10s expect | 60s test / 10s expect | 60s test / 30s expect | 60s test / 10s expect (inherits top-level) |
 | Auth state | `.auth/premium-admin.json` | `.auth/free-admin.json` | `.auth/loadtest-admin.json` | None (bearer token via `FLEET_API_TOKEN`) |
@@ -267,8 +268,9 @@ Worker counts are per tier in CI and higher locally; the current numbers and why
 live in [CLAUDE.md's facts table](CLAUDE.md#ci-and-the-shared-instances--current-facts) and
 [docs/ci-pipeline.md](docs/ci-pipeline.md). Override either with `WORKERS=N` or `--workers=N`.
 
-Three more projects run **alone, in their own invocation after the main project**: `premium-exclusive` and
-`free-exclusive` (specs that turn a global switch off) and `gitops-mode` (specs that turn gitops mode on).
+Four more projects run **alone, in their own invocation after the main project**: `premium-exclusive` and
+`free-exclusive` (specs that turn a global switch off), `gitops-mode` (specs that turn gitops mode on) and
+`premium-matrix` (the same few smokes on every OS version the device lab holds, `tests/e2e/premium/matrix/`).
 Each depends only on the tier's login setup, and the config refuses to name one beside another browser
 project — [docs/ci-pipeline.md](docs/ci-pipeline.md) has the reasoning.
 
@@ -347,10 +349,11 @@ Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
 `.github/workflows/playwright-premium.yml`) — run nightly by `QA — Nightly`
 (`qa-nightly.yml`) after each tier's gitops chain, and runnable on demand via `workflow_dispatch`. Each
-job runs the main project, then the exclusive specs and (premium) gitops-mode as separate steps, and merges
-the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
+job runs the main project, then the exclusive specs and (premium) gitops-mode and the per-OS smokes as separate
+steps, and merges the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
-`-f workers=N` for a trial of premium's worker count (free keeps its own), and `--ref <branch>` as well when the branch changes a workflow file.
+`-f workers=N` for a trial of premium's worker count (free keeps its own), `-f os-smokes=true` to include the
+per-OS smokes (a branch run leaves them out otherwise), and `--ref <branch>` as well when the branch changes a workflow file.
 
 Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in
 [docs/ci-pipeline.md](docs/ci-pipeline.md).

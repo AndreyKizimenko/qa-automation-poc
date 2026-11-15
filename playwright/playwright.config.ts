@@ -15,6 +15,7 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'gitops-mode': 'premium',
   'gitops-mode-teardown': 'premium',
   'premium-exclusive': 'premium',
+  'premium-matrix': 'premium',
   free: 'free',
   'free-exclusive': 'free',
   'free-setup': 'free',
@@ -110,6 +111,15 @@ function resolveSuite(): Suite {
         `--project=${tier} and --project=${tier}-exclusive can't run in one invocation — the exclusive specs would run beside the main ones. Run them one after the other (npm run test:${tier} does).`,
       );
     }
+  }
+  // The per-OS smokes run on the pool's VMs too, and like the exclusive specs
+  // depend only on login setup: beside either project they would share those
+  // VMs' queues with it.
+  const besideMatrix = named.filter((n) => n === 'premium' || n === 'premium-exclusive');
+  if (named.includes('premium-matrix') && besideMatrix.length) {
+    fail(
+      `--project=premium-matrix can't run in one invocation with --project=${besideMatrix.join(', ')} — the smokes would queue on the same VMs. Run it on its own, after them (npm run test:premium:matrix).`,
+    );
   }
   // One invocation loads one `.env.<suite>`, so projects of two tiers in one
   // invocation would point the second tier's setup and specs at the first
@@ -250,6 +260,8 @@ export default defineConfig({
         '**/gitops-mode/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
+        // The per-OS smokes; see premium-matrix.
+        '**/matrix/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -280,6 +292,29 @@ export default defineConfig({
       testMatch: ['**/shared/exclusive/**/*.spec.ts', '**/premium/exclusive/**/*.spec.ts'],
       workers: 1,
       fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/premium-admin.json',
+      },
+      dependencies: ['premium-setup'],
+      teardown: 'cleanup-teardown',
+    },
+
+    // ── OS matrix (its own invocation after the main project) ─────────────────
+    // A smoke per OS version: the same few checks on the one host of each OS
+    // flavour (premium's OS matrix fleet) and on a pool VM of each OS version the
+    // pool holds, so every version is covered every night while the main suite
+    // spreads over the pool by worker. A step of its own so that a flavour's
+    // failure reads as that flavour's and never costs the main suite a minute,
+    // and so a branch run can leave it out. Each host works its own queue: the
+    // spec keeps one host's tests in one worker, and the hosts run side by side.
+    //
+    // Like the exclusive projects it depends only on login setup and shares
+    // cleanup-teardown, which sweeps what a dead run left on OS matrix and on
+    // its hosts.
+    {
+      name: 'premium-matrix',
+      testDir: './tests/e2e/premium/matrix',
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',

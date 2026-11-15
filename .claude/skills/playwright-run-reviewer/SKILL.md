@@ -216,7 +216,8 @@ not a last resort. It answers two questions the report alone can't:
 **A local run is scoped, and never `npm run test:<tier>`.** From `playwright/`:
 `npx playwright test --project=<tier> <spec-file-names>`, with `premium` or `free` (both, for anything in
 `shared/`), `<tier>-exclusive <file-name>` for an `exclusive/` spec (its own invocation, never beside the main
-project), and `npm run test:gitops-mode` for a `gitops-mode/` one. Three things turn a scoped run into
+project), `premium-matrix -g "<os> \("` for the per-OS smokes, and `npm run test:gitops-mode` for a
+`gitops-mode/` one. Three things turn a scoped run into
 something else:
 - `npm run test:<tier> -- <spec>` runs the **whole** suite: npm appends the arguments after the script's
   final `exit`, so no `playwright test` sees them.
