@@ -8,14 +8,18 @@ hand, and the rest are marked **reported** or **estimate**.
 Out of scope, by agreement: the number of real VMs and the instance's concurrency. Both are being solved
 outside the suite. This document is about what the tests and their structure must be ready for when they are.
 
-**Where it stands, 2026-11-14.** Tiers 1, 2 and 3 of the agreed order are on `main`. Tier 1 is PRs #133, #134
+**Where it stands, 2026-11-15.** Tiers 1, 2 and 3 of the agreed order are on `main`. Tier 1 is PRs #133, #134
 and #135; tier 2 is #139, proven by branch run 43483630012; #140 cut the artifacts and fixed the skip counts.
 Tier 3 is PR #141, merged 2026-11-14 at `e7585b5` and proven by branch run 43530391400: 696 premium and 368
 free tests passed, and none failed, was flaky or was retried. **Tier 4 has started.** The extra VMs arrived
 on 2026-11-14 as the device lab, and [`device-lab-plan.md`](device-lab-plan.md) is the plan of record for
-moving the suite onto it: its steps B + C built roadmap 13 (VM leases) and the environment gate of 5, as a
-preflight test per pool VM (2026-11-15). Whether 5's lanes are still needed, and D4, wait on the first
-four-worker run on the pool. The rebuilt instances and the shards have not arrived, so 14, 15 and 16 still wait, and
+moving the suite onto it. Its steps A to C are on `main` (PRs #144 and #145, the second proven by branch run
+43667531465): they built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per pool
+VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146) gives every
+OS version the lab holds the same smokes every night, in a project and a workflow of their own: nineteen
+versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on a four-worker run on
+the pool, which is deferred (Andrey, 2026-11-15). The rebuilt instances and the shards have not arrived, so
+14, 15 and 16 still wait, and
 [*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
 smaller open items. How to read the rest:
 
@@ -94,22 +98,24 @@ below hold the reasoning.
       the rewritten navigation rule, and a test no longer adds a `docs/test-audit/` entry (the folder is
       frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11, both built in PR #141.
 - [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform. D4 is decided from the
-      numbers of the first four-worker run on the pool ([`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C*).
+      numbers of the first four-worker run on the pool ([`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C*);
+      that run is deferred (Andrey, 2026-11-15), with premium at three workers.
 - [ ] Three rows of *Where the written contract and the practice differ* have no answer yet: assertions in
       page objects, page-object members nothing references, and class selectors without a comment.
 - [ ] Three changes the sections propose have no roadmap row: the config lock (section 2), `serial` only
       for shared ids (section 4), and an optional `root` on components (section 5). Each needs a place in
       the order or a "no".
 
-**Open outside the tiers, 2026-11-14**
+**Open outside the tiers, 2026-11-15**
 - [ ] A lazy JavaScript chunk that never arrives (the page stuck on a bare spinner) has been seen three
       times: 2026-09-20, 10-27, and 11-13 in #140's branch run. The instances' edge doesn't cache Fleet's
       bundles (fleetdm/fleet#45682, `playwright.config.ts`), so each new browser context fetches them from
       origin. The fix is the edge, not a wait: check it on the rebuilt instances.
-- [ ] Specs move to the tier-3 foundations when next edited: hand-built `pw-` names (104 recorded),
-      `Date.now()` names (61), API-calling `finally` blocks (69), widget selectors (modal 30, react-select
-      25, row menu 14) and toast copy (86). Each number only falls; `npm run lint:contract` prints today's.
-      Tier 4's run-scoped sweep (roadmap 14) needs the names first.
+- [ ] Specs move to the tier-3 foundations when next edited: hand-built `pw-` names (103 recorded, from
+      104), `Date.now()` names (59, from 61), API-calling `finally` blocks (68, from 69), widget selectors
+      (modal 30, react-select 25, row menu 14) and toast copy (86), as counted on 2026-11-15. Each number
+      only falls; `npm run lint:contract` prints today's. Tier 4's run-scoped sweep (roadmap 14) needs the
+      names first.
 
 **After tier 2, from the review of its branch run (2026-11-13)**
 - [x] A run's artifact list is what there is to read: the two suite reports, plus the report of a gitops
@@ -152,6 +158,8 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
    16. [*Tier 4: the brief*](#tier-4-the-brief) has each one. The VMs arrived first (2026-11-14), so 13 and
    the gate went ahead of the rest, under [`device-lab-plan.md`](device-lab-plan.md), and are built
    (2026-11-15); whether the lanes are still needed is decided there, from the first pooled run's numbers.
+   The plan's step D, a smoke per OS version, is outside the roadmap: it is coverage the lab made possible,
+   not a change to how the suite scales, though it is the first project shaped like a lane (below).
 
 Roadmap 9, a home for toast copy, was left out of this order when it was agreed; it joined tier 3, beside
 item 7, on 2026-11-13.
@@ -245,6 +253,17 @@ pool VM, red with its reason when the VM is offline, astray or gone, while the r
 the pool. A dead pool VM now shrinks the pool instead of failing every test of its platform, which was the
 lanes' main reason; the token, disk and build checks are not built.
 
+**2026-11-15: a smoke per OS version** (the plan's step D, PR #146). The fifteen hosts outside the pool, one
+per OS flavour, and the pool's four OS versions each get the same few checks every night, from
+`tests/e2e/premium/matrix/os-smokes.spec.ts`. Three things in it bear on the rows below. **It is the first
+project shaped like a lane**: `premium-matrix` takes its tests by folder, its subjects from the manifest and
+its hosts by `os`, runs as an invocation and a workflow of its own after premium's suite, and one worker walks
+one host through its smokes, so another worker is another host at once, with no pool to share: it runs at
+six where premium's suite runs at three, 45 test-minutes in about nine. **It carries its own gate**: the first smoke of an OS fails with what is wrong with its host
+(offline, on another fleet, not enrolled) and the rest of that OS skip, so a dead matrix host is one red row.
+**And it is a selection that is not a hand-picked file list**, which section 3 found missing: `-g "rhel-9 \("`
+runs one flavour, and the workflow runs alone after a change to the lab.
+
 | Roadmap | Build | There today | Watch for |
 |---|---|---|---|
 | **5, lanes** | A project per VM platform that takes its tests by tag (`grep: /@vm-linux/`), with as many workers as that platform has VMs, beside the main project in the same invocation; the main project leaves them out (`grepInvert`). Section 3 | Every VM test is tagged, and the pickers refuse an untagged one: 59 tests in `premium`, 3 in `premium-exclusive`, 24 in `free`, 1 in `free-exclusive`. One VM per platform per tier | With one VM per platform a lane runs one worker, so lanes only reorder the work until more VMs arrive. A new project name goes into `PROJECT_TO_SUITE`, or the config throws. The exclusive projects hold VM tests too: they stay their own invocations. CI merges each step's blob into one report; check `run_timeline.py --platforms` before and after |
@@ -254,8 +273,8 @@ lanes' main reason; the token, disk and build checks are not built.
 | **15** quarantine | A list of tests the history marks unstable (say, failed or flaky in 3 of the last 14 nightlies), routed to a project whose result doesn't fail the run, each entry with the issue or test-bug that clears it. Section 6 | Each suite report carries `results.json` (kept 90 days); `run_history.py` keeps a line per test per run; the `run-history` job writes each failure's last 14 nightlies into the run's summary | A test id changes when its file moves (tier 3's twins did), so key the list on ids and expect a move to drop an entry. A quarantine that hides a product defect is worse than a red run: an entry without an owner and an issue fails |
 | **16** per-worker throwaway fleets | Only if fleet-scoped CRUD starts colliding on Workstations: a fleet per worker for it, from `throwawayFleet` | `throwawayFleet(kind)` exists; the CRUD lifecycles share Workstations and no collision has been seen | The fleet dropdown reads the fleet list once, at boot: create the fleet before the first page load. Don't build it ahead of a collision |
 
-**To settle with Andrey before or during tier 4:** when the rebuilt instances and the extra VMs arrive, which
-decides when tier 4 starts; D4, a VM minute budget per platform (the tags make it measurable:
+**To settle with Andrey before or during tier 4:** when the rebuilt instances arrive (the extra VMs did, on
+2026-11-14), which decides when the rest of tier 4 starts; D4, a VM minute budget per platform (the tags make it measurable:
 `--grep @vm-linux` with `run_timeline.py`, whose `--platforms` now also tallies minutes per VM); and whether
 the lanes (5) are still worth building now that the lease (13) spreads the workers over the pool.
 
@@ -426,7 +445,9 @@ The lanes and the environment gate are tier 4.
 
 **Since then (2026-11-15).** The gate is built for the VMs, as a preflight test per pool VM
 (`tests/api/lab-hosts.spec.ts`), and one dead VM is no longer dozens of red rows: the pool shrinks and the
-workers share what is left. The lanes are not built, and may not need to be.
+workers share what is left. The lanes are not built, and may not need to be. The per-OS smokes
+(`premium-matrix`, [`device-lab-plan.md`](device-lab-plan.md) › *Step D*) are the first selection that is
+not a file list: a project of their own, one describe per OS version, with the gate as each OS's first test.
 
 **What the code does.** Nothing machine-readable says "this test needs the macOS VM". There are no tags
 (verified), 12 specs name the platform statically and 5 more resolve it at run time (reported). Three costs
@@ -455,6 +476,12 @@ follow:
 **Since then (2026-11-13).** The API specs launch no browser: `apiTest` is in `fixtures.ts` (roadmap 4), and
 on the branch run free's 35 API tests took 3.1 s where they had taken 8.9. The minute budget is still D4,
 and the `serial` blocks used as a mutex are untouched and have no roadmap row.
+
+**Since then (2026-11-15).** The pool took premium's main project from 123.5 to 97.0 test-minutes at the
+same three workers, and its tests over 30 s that wait on a VM from 81 minutes to 53: the VMs removed
+queueing, not work ([`device-lab-plan.md`](device-lab-plan.md) › *What proved it*). The per-OS smokes add
+45 test-minutes a night, in a job of their own, on hosts the main project doesn't use but for the pool's
+four OS versions. Neither is a budget: D4 is still open.
 
 **Decided 2026-11-12:** this stays a UI suite. API coverage will be a separate suite that can run on its
 own, so nothing here moves a browser test to the API. What is left of this section is the VM budget and two
@@ -623,7 +650,7 @@ is additive; existing specs keep working and migrate when they are next touched.
 | 2 | Lint the contract, warnings first | S | convergence of everything written after it | done, as errors over a recorded baseline |
 | 3 | `ownName()` and the `cleanup` fixture, with data fixtures built on them (`throwawayFleet`, `borrowSims`, `seed.policy/report/script/label`) | M | timeout-safe cleanup, shard-safe names | done (PR #141); specs move to it as they are touched |
 | 4 | API-level `test` for the API specs the repo already has | S | no browser per API test; the seam for the separate API suite | done |
-| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs | tags built (PR #141); the gate built for the VMs as a preflight test (2026-11-15); lanes undecided |
+| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs | tags built (PR #141); the gate built for the VMs as a preflight test, and for the hosts outside the pool as the first of their per-OS smokes (2026-11-15); lanes undecided |
 | 6 | `results.json`, the history file, the summary line | S | flake memory | done |
 
 **While growing**

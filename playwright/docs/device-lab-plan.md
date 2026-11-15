@@ -38,7 +38,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial is deferred |
-| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Awaiting its branch run (`--ref`, `-f os-smokes=true`) |
+| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15, and green locally; awaiting the branch run of its head (`--ref`, `-f os-smokes=true`) |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -214,29 +214,42 @@ entries, and picked the right hosts and fleets).
 
 A smoke per OS version: `tests/e2e/premium/matrix/os-smokes.spec.ts`, one describe per manifest `os`, over the
 fifteen matrix hosts **and** the pool's four OS versions (Ubuntu 24.04, Windows 11, macOS 15 and 26), so each
-version gets the same checks every night while the main suite spreads over the pool by worker. 100 tests,
+version gets the same checks every night while the main suite spreads over the pool by worker. 140 tests,
 through the UI like the rest of the suite. PR #146, against `main`; its description has every run behind it.
 
-**Where it stands, 2026-11-15.** Everything below is in PR #146 (`playwright/device-lab-smokes`), rebased
-onto `main` after #145 merged. Run on premium
-(4.95.0-rc, `d6df44a`), all local: the whole project with its login and teardown at 3 workers, 109 of 109
-(100 smokes, the cleanup's steps with the new sweep among them); before that at 4 workers without them, 99
-of 100, the one red being the tarball's title, since fixed; and RHEL 9, Windows 10 and macOS 26 again after
-the self-review's fixes, 17 of 17. Seen failing first, on scratch edits since reverted: a wrong OS major, a
-wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, six skipped),
-vulnerabilities on Debian 13, Fleet Desktop on the headless server. **Not run:** the `Playwright — OS smokes` workflow as it now stands (branch run 43680528701 ran the smokes as a step of premium's job),
-`--repeat-each` and a headed pass, and the sweep with something to sweep (it has
-only met a clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
-Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on a host, no host moved.
+**Where it stands, 2026-11-15.** Everything below is in PR #146 (`playwright/device-lab-smokes`), based on
+`main` after #145 merged. On premium (4.95.0-rc, `d6df44a`):
+
+- **Branch run 43680528701**, on `e9f08b9`, when the smokes were seven checks and the last step of premium's
+  job: both suites and every gitops job green, and 99 of the 100 smokes at 3 workers. The one red was
+  `prem-zorin18-luks`'s install, refused six times over because the host's own daily upgrade held dpkg's
+  lock (*Facts*, below): the host's, not the smoke's.
+- **The head, locally**, with the checks as the table has them: the whole project with its login and
+  teardown at 6 workers, 148 of 149 in 9.2 minutes. The one red was a test bug (a tarball has no version
+  for the Library to show), fixed and green on its own run.
+- **Seen failing first**, on scratch edits since reverted. From the first seven checks: a wrong OS major, a
+  wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, the rest
+  skipped), vulnerabilities on Debian 13, Fleet Desktop on the headless server. From the rest: a memory
+  shape no host has, the wrong platform's label, a platform the host doesn't answer with, a tarball held
+  to an inventory it never reaches (red after five minutes with "inventory never listed"), and openSUSE
+  with Fleet's own `.rpm` scripts (red as soon as Fleet gives up, with `dnf: command not found` in the
+  message).
+- **Not run:** `--repeat-each` and a headed pass, and the sweep with something to sweep (it has only met a
+  clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
+
+Premium was left at rest after each: nothing of the smokes on OS matrix or VMs, nothing queued on a host, no
+host moved.
 
 | Smoke | Hosts | How |
 |---|---|---|
 | Online on its fleet, with the right OS name and major version, and its fleetd and osquery versions | all 19 | The host page's vitals and Agent tooltip; the `platform` Fleet records is checked against the manifest's `fleet_platform` through the API (Kubuntu `ubuntu`, Fedora `rhel`) |
+| Its page shows the vitals Fleet reads of the machine, and its local users | all 19 | Disk space available, Memory, Hardware model, Private IP address and MAC address each hold a value of the right shape, not "---" or "No data available"; the Local user accounts card lists a user |
+| It is in the built-in label of its platform | all 19 | The Hosts list on the host's fleet, filtered to the platform (the filter's Platforms group is the built-in labels: "All Linux", "MS Windows", "macOS") and searched by the host's name. The host's own page hides built-in labels |
 | The software inventory lists a package known to be installed, as its package type | all 19 | fleetd's own package (`fleet-osquery`; `Fleet osquery` on Windows), Safari on macOS; the Type column reads Package (deb), Package (RPM), Package (pacman), App (Windows), App (macOS) |
-| Fleet Desktop is running | the 17 with a desktop | A live report of `processes`, run from the host's Actions. Not Ubuntu server or Amazon Linux (`desktop: "none"`). The agent's "Fleet Desktop: 1.63.0" says only that the binary answers `--version` |
+| A live report comes back with the host's own answer, and finds Fleet Desktop running | all 19; Fleet Desktop on the 17 with a desktop | One report, run from the host's Actions: `os_version.platform`, which has to be the manifest's `fleet_platform`, and whether a `fleet-desktop` process is up. Ubuntu server and Amazon Linux (`desktop: "none"`) are held to the platform only. The agent's "Fleet Desktop: 1.63.0" says only that the binary answers `--version` |
 | A script runs and returns its output | all 19 | Run script modal; the script prints the host's own name |
 | Vulnerabilities are listed for the OS | Ubuntu 22.04, 24.04 (pool) and 26.04, RHEL 9 and 10 | Software › OS on the host's fleet, then the OS's Kernels card |
-| A custom package installs and uninstalls | all 19 | Per-test `.deb` (7 hosts) and `.rpm` (5), built in memory under a name of their own; openSUSE's `.rpm` with `zypper` scripts; a tarball on Omarchy; `fleet-playwright-smoke-1.0.0.msi` on Windows 10 and Server, which take turns; the VMs fleet's durable `.msi` and `.pkg` on Windows 11 and macOS |
+| A custom package installs and the inventory lists it; it uninstalls and the inventory drops it | all 19; the inventory on 18 (a tarball is no inventory source) | Each half is followed past its status to the host's next collection, the one Fleet asks for itself when an install or uninstall succeeds (`waitForInventoryToFollow`): the Library row shows the installed version and the Inventory lists the title, then both are empty again. Per-test `.deb` (7 hosts) and `.rpm` (5), built in memory under a name of their own; openSUSE's `.rpm` with `zypper` scripts; a tarball on Omarchy; `fleet-playwright-smoke-1.0.0.msi` on Windows 10 and Server, which take turns; the VMs fleet's durable `.msi` and `.pkg` on Windows 11 and macOS |
 | A package installed by a policy automation | Debian 13, RHEL 9 | A policy held to the host by a manual label, failing while the package is absent |
 
 - [x] The spec, its project (`premium-matrix`, in `PROJECT_TO_SUITE`) and its own workflow, `Playwright — OS
@@ -296,7 +309,7 @@ BitLocker PIN.
 - **Host expiry on VMs and OS matrix is 30 days** (Andrey, 2026-11-14).
 - **A matrix host that is offline fails its first smoke, and no switch makes it skip** (Andrey, 2026-11-15):
   the first smoke of that OS is red with `labHostProblem`'s reason and the rest of that OS skip, naming
-  it, so an offline host is one red row a night, not seven. A pool version with no VM left reads the same.
+  it, so an offline host is one red row a night, not one per smoke. A pool version with no VM left reads the same.
 - **The three old UTM VMs' records were deleted from the VMs fleet** (Andrey, 2026-11-15): under the fleet's
   own 30 days they would no longer have expired in a day. The fleet holds exactly the eight pool VMs. Free's
   three old records are on Unassigned and expire by themselves under the global day.
@@ -314,6 +327,9 @@ BitLocker PIN.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
+- The smokes' job runs at 6 workers, set in #146 from a clean local run at that count: each host is one
+  worker's, so nothing is shared. Say if it should follow premium's 3 instead, which is about 16 minutes
+  where 6 is about 9.
 - When to run the deferred trial of a fourth premium worker; premium's worker count, D4 and the lanes wait on
   it (C's last two boxes). By the branch run's numbers, 97 test-minutes over 4 workers is a main project of
   about 24 minutes, if the instance holds up.
@@ -372,12 +388,37 @@ BitLocker PIN.
   page; `rm -rf`, `installer -pkg`, `dnf`, `zypper` and `rpm -e` reached Fleet. A JSON body to
   `POST /scripts/run` with `rm -rf` reached Fleet too. So an `.msi` is uploaded without scripts (Fleet fills
   in its own), and a script that has to name `msiexec` can't be sent.
+- **Fleet changes a host's inventory only from the host's own report.** An install or uninstall result sets
+  the title's status and queues a refetch (`SaveHostSoftwareInstallResult` and the uninstall branch of the
+  script result, `server/service/orbit.go`); the inventory is written only when a collection is ingested. So
+  "Installed" in the Library and the title in the Inventory are two paths, and the second is the one that
+  differs by package source (`deb_packages`, `rpm_packages`, Windows' programs, macOS' apps).
+- **Every lab host is in the built-in label of its platform** (read through the API, 2026-11-15, all 24 on
+  premium). "macOS" and "MS Windows" read `os_version.platform`. "All Linux" reads osquery's own build
+  (`osquery_info`), not the distribution, so it holds all sixteen Linux hosts, Omarchy and openSUSE included.
+  A host's own page lists only its custom labels (`Labels.tsx` filters the built-in ones out): membership
+  shows in the Hosts list's platform filter, whose Platforms group is those labels under shorter names.
+- **Fleet's `platform` for a host is `os_version.platform` as osquery gives it** (the `os_version` detail
+  query's ingest): Fedora `rhel`, Kubuntu `ubuntu`, Amazon Linux `amzn`, openSUSE `opensuse-leap`, Omarchy
+  `omarchy`, Zorin `zorin`. The manifest's `fleet_platform` holds each, and a live report of the same column
+  has to come back with it.
 - **"Fleet Desktop: 1.63.0" in the Agent tooltip is not "Fleet Desktop is running".** orbit reports what
   `fleet-desktop --version` printed when orbit started (`orbit/cmd/orbit/orbit.go`); the two headless hosts
   report "unknown". The smoke asks the host for the process instead.
-- **A per-OS smoke run is about a quarter of an hour.** 100 tests in 15.6 min at 3 workers with login and
-  teardown, 12.2 at 4 without them (2026-11-15, local). An install and an uninstall are 1.0 to 1.7 min a
-  host when followed to their status; the Windows matrix hosts, which take turns, are the last five minutes.
+- **A per-OS smoke run is 45 test-minutes, and about nine minutes at 6 workers.** 140 tests in 9.2 min with
+  login and teardown (2026-11-15, local); an OS version takes 1.8 to 3.8 min, and its install and uninstall
+  with the inventory after each 1.2 to 2.5 of them. Following both into the inventory costs little, because
+  the wait rides the refetch Fleet queues itself and that lands within half a minute. With seven checks the
+  run was 100 tests in 15.6 min at 3 workers. The three Windows matrix hosts take turns, about 6 minutes
+  in all: declared first, so they start with the run, they are its floor however many workers there are.
+- **A Debian-family lab VM's own upgrade can refuse an install** (seen once, branch run 43680528701). The
+  daily `unattended-upgrade` held dpkg's lock on `prem-zorin18-luks` for over six minutes, and Fleet's
+  default `.deb` script is a bare `apt-get install`, which gives up at once when the lock is held: six
+  tries in a row failed with "Could not get lock /var/lib/dpkg/lock-frontend". The hosts are on UTC and
+  Ubuntu's default timer fires between 06:00 and 07:00 (the timer itself wasn't read on the host). In
+  containers the same day: `apt-get` and `zypper` fail at once when their lock is held, `dnf` 4 and 5 wait
+  and then install. Left as it is (Andrey, 2026-11-15): the run-reviewer's signatures know it, and a
+  smoke's failed install now quotes what the host printed.
 - **The steps of `setup/cleanup.steps.ts` run in parallel** (`fullyParallel`), so one step can't count on
   another having run. That is why the return of lab hosts to their fleets sits inside the resting-state
   step, ahead of its walk through the pool, and not in a step of its own.
