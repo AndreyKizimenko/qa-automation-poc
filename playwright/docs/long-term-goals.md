@@ -16,10 +16,11 @@ being set up, outside this list.
 1. **A way for a run to reset a host** (*Host types*). The lab rolls a Linux or Windows VM back to its
    baseline in seconds, by hand. A hook CI can call turns Lock, Wipe, OS-update enforcement and disk
    encryption into nightly tests, and it is the one item here that needs no new machine.
-2. **A third pool Mac, and macOS 27** (*Host types*). macOS is the pool's tight platform: at three workers
-   about 20 test-minutes of premium's main project wait on two Macs, which are also two OS versions, while one
-   of the four Ubuntu VMs sits idle all run (branch run 43667531465). A fourth worker would meet this first.
-   Both wait for the lab's January Macs.
+2. **A third pool Mac, and macOS 27** (*Host types*). macOS is the pool's tight platform: premium's four
+   workers share two Macs, which are also two OS versions, and each Mac held two results at some moment of the
+   first run at four (branch run 43753582054), where every Ubuntu VM and Windows VM held one. At three workers
+   about 20 test-minutes of the main project waited on the Macs (43667531465). Both wait for the lab's
+   January Macs.
 3. **A Mac that enrolls through ADE** (*Host types*). The setup experience is the largest desktop flow with no
    real device behind it.
 4. **A readable mailbox, and a certificate authority** (*A readable mailbox*, *Elsewhere*). Neither needs a
@@ -55,7 +56,7 @@ fits where: the server its Linux and Windows VMs run on is full by memory, and a
 | **Android** | enrollment, profile delivery to a device, Managed Google Play installs. Adding a Play app already runs without one |
 | **A host a run can reset by itself**, one per platform | firing **Lock** and **Wipe** on a real device, and whatever else a test can't undo: an OS-update deadline, a lock or passcode profile, disk encryption from a clean start every night. Today the availability of Lock and Wipe is asserted on every platform (`premium/hosts/mdm-actions-availability.spec.ts`) but they never run, because a locked or wiped VM can't be recovered from here. The lab has the reset already: a Linux or Windows VM rolls back to its baseline in seconds and is back online, as the same host in Fleet, about 2.5 minutes later, and a macOS VM is a clone of its baseline. What is missing is a way for a run to ask for it: only the lab's owner can, and CI doesn't reach the lab's network |
 | **A Mac that enrolls automatically (ADE)** | the setup experience on a device: end-user authentication, the bootstrap package, software and a script during setup, the setup assistant. Their settings are covered without a device (`premium/controls/setup-experience/`). The lab's Macs enroll by hand: ADE isn't possible at MacStadium |
-| **A third pool Mac** | a Mac per worker at three workers, and room for a fourth worker: the pool's two Macs serve three workers today, on two macOS versions, so which version a macOS test met is chance and the busiest platform's waits are shared. The Mac that holds them is at Apple's limit of two macOS VMs |
+| **A third pool Mac** | less sharing on the busiest platform: the pool's two Macs serve premium's four workers today, two each, on two macOS versions, so which version a macOS test met is chance and the busiest platform's waits are shared. A Mac per worker takes four. The Mac that holds them is at Apple's limit of two macOS VMs |
 | **macOS 27** | the newest macOS in the pool, and its DDM-focused smoke ([`device-lab-plan.md`](device-lab-plan.md), step D). A VM can't be newer than the Mac it runs on, so it waits for the lab's January Macs |
 | **A Mac kept for FileVault** | disk encryption on macOS: FileVault ends auto-login on a VM, so it needs a VM of its own and a way to unlock it at boot ([`device-lab-plan.md`](device-lab-plan.md), step E) |
 | **The oldest release Fleet supports of a Linux or Windows Server family** | a per-OS smoke at the floor, where an older package manager or osquery table is most likely to differ: RHEL 8 and Debian 12 first. The lab's flavours are each family's current release, while Fleet supports back to Ubuntu 20.04, Debian 11, RHEL 7, Amazon Linux 2, openSUSE 15.6 and Windows Server 2012 (Fleet's `docs/Get started/FAQ.md`). macOS and Windows desktop are already at their floor (macOS 15, Windows 10). A new flavour is a manifest entry and a row in the smokes' `REPORTED_OS` |

@@ -17,8 +17,9 @@ moving the suite onto it. Its steps A to C are on `main` (PRs #144 and #145, the
 43667531465): they built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per pool
 VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146, green on
 branch run 43690094173) gives every OS version the lab holds the same smokes every night, in a project and a
-workflow of their own: nineteen versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on Andrey's reading of
-the four-worker run on the pool (43753582054, green, 2026-11-15). The rebuilt instances and the shards have not arrived, so
+workflow of their own: nineteen versions where the suite met three. Premium runs at four workers since the
+four-worker run on the pool was green (43753582054, 2026-11-15); whether 5's lanes are still needed, and D4,
+are still Andrey's to decide from it. The rebuilt instances and the shards have not arrived, so
 14, 15 and 16 still wait, and
 [*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
 smaller open items. How to read the rest:
@@ -99,7 +100,7 @@ below hold the reasoning.
       frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11, both built in PR #141.
 - [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform. D4 is decided from the
       numbers of the first four-worker run on the pool ([`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C*);
-      that run was green on 2026-11-15 (43753582054), and the decisions it feeds are still open.
+      that run was green on 2026-11-15 (43753582054) and put premium at four workers; D4 itself is still open.
 - [ ] Three rows of *Where the written contract and the practice differ* have no answer yet: assertions in
       page objects, page-object members nothing references, and class selectors without a comment.
 - [ ] Three changes the sections propose have no roadmap row: the config lock (section 2), `serial` only
@@ -479,7 +480,9 @@ and the `serial` blocks used as a mutex are untouched and have no roadmap row.
 
 **Since then (2026-11-15).** The pool took premium's main project from 123.5 to 97.0 test-minutes at the
 same three workers, and its tests over 30 s that wait on a VM from 81 minutes to 53: the VMs removed
-queueing, not work ([`device-lab-plan.md`](device-lab-plan.md) › *What proved it*). The per-OS smokes add
+queueing, not work ([`device-lab-plan.md`](device-lab-plan.md) › *What proved it*). A fourth premium worker,
+switched on the same day, spends about the same test-minutes (108) in 27 minutes of wall clock where three
+took 33 to 36. The per-OS smokes add
 57 test-minutes a night in CI, in a job of their own, on hosts the main project doesn't use but for the
 pool's four OS versions. Neither is a budget: D4 is still open.
 
@@ -695,7 +698,8 @@ is additive; existing specs keep working and migrate when they are next touched.
   the generator is roadmap item 11, built in PR #141 as `npm run catalogue` (on demand, not committed).
 - **D4. The shape of the 5,000.** Decided 2026-11-12: the 5,000 are UI tests; API coverage is a separate
   suite. Still open: whether each VM platform gets a minute budget that new tests must fit inside; it is
-  decided from the first four-worker run on the device lab's pool (`device-lab-plan.md`).
+  decided from the first four-worker run on the device lab's pool (`device-lab-plan.md`), which was green on
+  2026-11-15 and put premium at four workers.
 - **D5. Click-through navigation.** **Decided 2026-11-13: rewrite.** The rule is "one click-through test
   per area; the rest go straight to the page", which is what most specs do. `CLAUDE.md` says so now.
 

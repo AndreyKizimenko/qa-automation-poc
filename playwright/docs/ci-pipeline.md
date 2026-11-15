@@ -15,7 +15,7 @@ QA — Nightly (one chain, both tiers)
     └─ free:    gitops chain ─► free suite job          (the two tiers side by side)
 
 a gitops chain            apply baseline → verify → apply min → verify → fleetctl checks
-a suite job (premium)     main project (3 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
+a suite job (premium)     main project (4 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
 the per-OS smokes job     after premium's suite job: the premium-matrix project (6 workers), with a report of its own
 a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
 
@@ -127,7 +127,7 @@ apply too late. The gitops-mode teardown puts them back at the end of every gito
 pinned in that script and in `GITOPS_EXCEPTIONS_BASELINE` (`helpers/api/gitops-mode.ts`).
 
 **Worker counts are measured, not guessed.** The count is per tier because the instances differ, and it is a
-CI-only number: locally the default is higher and the specs that touch a VM are run with `--workers=2`. The
+CI-only number: locally the default is 4 and the specs that touch a VM are run with `--workers=2`. The
 measurements that set the current numbers are in [*What bounds a run*](#what-bounds-a-run). A trial at another
 count is a branch run with `-f workers=N`, read with `run_timeline.py` (below), never a config commit first.
 The input sets premium's count only: free has one VM per platform and a smaller instance, and always runs at
@@ -251,10 +251,19 @@ installs.
 **Since 2026-11-15 each worker has its own VM** of a platform, out of the device lab's pool (constraint 2), so
 the Linux queue no longer couples the workers: at four workers each has an Ubuntu VM to itself, and Windows
 and macOS are shared two ways. That removes two of the three reasons the four-worker run was red (four Linux
-installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and only a
-run can say whether it still bites: a branch run with `-f workers=4`, read with `run_timeline.py --platforms`,
-whose per-VM lines show which workers each VM served and whether any held two results at once.
-[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial, deferred on 2026-11-15.
+installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and it
+didn't show in the run that tried it: branch run 43753582054 (2026-11-15, `-f workers=4`) was green with
+nothing retried.
+
+| workers | premium main step | test-minutes | outcome | what bound it |
+|---|---|---|---|---|
+| 3 | 32.6 and 35.6 min | 97 and 106 | green, twice (43690094173, 43696536354) | workers: all three busy to the last minute |
+| 4 | 27.3 min | 108 | green (43753582054) | workers: four results in flight in every minute |
+
+Read with `run_timeline.py --platforms`, whose per-VM lines show which workers each VM served and whether any
+held two results at once: each Ubuntu VM and each Windows VM held one result at a time, each Mac two at some
+moment. **Premium runs at four since.** It is one run's evidence, so the nightlies' run history is what
+watches the count. [`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has the trial.
 
 At three workers the pool took premium's main project from 41.4 to 32.6 minutes (nightly 43413291769 against
 branch run 43667531465): 26 fewer test-minutes, nearly all of it VM tests that had queued behind each other

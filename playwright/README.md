@@ -264,7 +264,7 @@ render-latency issue, not intended defaults: neither instance's Cloudflare edge 
 bundle, so every cold browser context pulls it from origin. They revert once a repeat request for
 the bundle answers `cf-cache-status: HIT` — see [TODO.md](TODO.md#config-workarounds).
 
-Worker counts are per tier in CI and higher locally; the current numbers and why they are what they are
+Worker counts are per tier in CI, and 4 by default locally; the current numbers and why they are what they are
 live in [CLAUDE.md's facts table](CLAUDE.md#ci-and-the-shared-instances--current-facts) and
 [docs/ci-pipeline.md](docs/ci-pipeline.md). Override either with `WORKERS=N` or `--workers=N`.
 

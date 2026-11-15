@@ -9,7 +9,7 @@ name: QA — Branch run
 # waiting for another dispatch.
 #
 #   gh workflow run "QA — Branch run" -f branch=<branch>
-#   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial, premium's
+#   gh workflow run "QA — Branch run" -f branch=main -f workers=<N>   # a worker-count trial, premium's
 #   gh workflow run "QA — Branch run" -f branch=<branch> -f os-smokes=true   # with the per-OS smokes
 #
 # The per-OS smokes (playwright-os-smokes.yml, after premium's suite) are the

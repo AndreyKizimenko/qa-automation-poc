@@ -169,19 +169,21 @@ export default defineConfig({
   // report at all. The real-VM specs are what make a run long: each VM works one
   // queue, and a retried VM test can cost 5–15 min.
   globalTimeout: process.env.CI ? 100 * 60_000 : 0,
-  // CI runs free at 2 and premium at 3 — the shared Fleet QA instances have
+  // CI runs free at 2 and premium at 4 — the shared Fleet QA instances have
   // limited concurrency headroom, and more workers there surface as flaky
   // navigation timeouts under load even when the test logic is correct.
-  // Premium's third worker leans on its MySQL's 2 CPU / 4 GB. Each worker is
-  // handed its own real VM of a platform while that platform's pool has one to
-  // give (premium: four Ubuntu, two Windows, two macOS; free: one of each), and
-  // a VM works one queue, so workers beyond a pool's size share its VMs. Local
-  // dev defaults to 4 for faster feedback. `WORKERS` env or `--workers=N`
-  // overrides either.
+  // Premium's count leans on its MySQL's 2 CPU / 4 GB and on its pool of VMs.
+  // Each worker is handed its own real VM of a platform while that platform's
+  // pool has one to give (premium: four Ubuntu, two Windows, two macOS; free:
+  // one of each), and a VM works one queue, so workers beyond a pool's size
+  // share its VMs: premium's four have an Ubuntu VM each, and go two to a
+  // Windows VM and two to a Mac. A project with no count of its own (the
+  // gitops checks) runs at its tier's. Local dev defaults to 4 for faster
+  // feedback. `WORKERS` env or `--workers=N` overrides either.
   workers: process.env.WORKERS
     ? Number(process.env.WORKERS)
     : process.env.CI
-      ? suite === 'premium' ? 3 : 2
+      ? suite === 'premium' ? 4 : 2
       : 4,
   // The QA instances' Cloudflare doesn't edge-cache /assets/bundle-*.js — a
   // repeat request still answers cf-cache-status: DYNAMIC, although Fleet
