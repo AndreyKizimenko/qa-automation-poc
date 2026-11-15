@@ -49,3 +49,30 @@ The script writes the `ar` archive itself instead of shelling out to `ar`.
 macOS's `ar` always prepends a `__.SYMDEF` member, and Fleet detects a `.deb`
 by the magic bytes `!<arch>\ndebian` — the `debian-binary` member has to come
 first or the upload is rejected as an unsupported file type.
+
+## No `.rpm` on disk
+
+The suite's `.rpm` is built in memory, per test, by `helpers/rpm.ts`
+(`inertRpm(name, version)`), and its tarball by `helpers/tarball.ts`. Fleet
+names an `.rpm`'s title after the package's `Name`, and a fleet holds one
+installer per title, so a file kept here could serve one test at a time: the
+per-OS smokes (`premium/matrix/os-smokes.spec.ts`) install on the lab's five
+rpm hosts side by side, on one fleet, and each needs a package of its own name.
+`helpers/deb.ts` exists for the same reason.
+
+What the built `.rpm` is, and why it is safe on a real host: `noarch`, one
+marker file under `/usr/share/<name>/` and that directory itself, no scriptlets,
+no dependencies, unsigned. Listing the directory is what makes `rpm -e` (which
+`dnf remove` and `zypper remove` end in) remove it with the package, so an
+install and an uninstall leave the host as it was. The helper's header has the
+format and the rpm versions it was checked on. To look at one, from
+`playwright/`:
+
+```sh
+node -e "require('fs').writeFileSync('look.rpm', require('./helpers/rpm.ts').inertRpm('fleet-pw-look', '1.0.0'))"
+rpm -K -v look.rpm && rpm -qpl look.rpm      # on any rpm-based system, or in its container
+```
+
+The tarball holds one `marker.txt` and runs nothing: a `.tar.gz` package is
+whatever its install and uninstall scripts do, and those are the test's.
+

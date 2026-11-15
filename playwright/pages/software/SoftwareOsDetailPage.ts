@@ -6,7 +6,8 @@ import { Navbar } from '../components/Navbar';
 /**
  * /software/os/:id — detail page for a specific operating system version.
  * Titles itself with the OS name and version together ("macOS 14.1.2"), summarises
- * the hosts running it, and lists that OS's vulnerabilities.
+ * the hosts running it, and lists that OS's vulnerabilities: in a Vulnerabilities
+ * card for macOS and Windows, per kernel in a Kernels card for Linux.
  */
 export class SoftwareOsDetailPage {
   readonly page: Page;
@@ -18,6 +19,12 @@ export class SoftwareOsDetailPage {
   /** "<name> <version>" — the OS name and version are one heading, not two. */
   readonly nameHeading: Locator;
   readonly vulnerabilitiesHeading: Locator;
+  /**
+   * A Linux OS has no Vulnerabilities card: its page lists the kernels its
+   * hosts run, each with the vulnerabilities Fleet matched to it
+   * (`SoftwareOSDetailsPage.tsx`, `isLinuxLike`).
+   */
+  readonly kernelsHeading: Locator;
   /** "N items" above the vulnerabilities table. */
   readonly vulnerabilitiesCount: Locator;
 
@@ -33,6 +40,7 @@ export class SoftwareOsDetailPage {
       name: 'Vulnerabilities',
       exact: true,
     });
+    this.kernelsHeading = page.getByRole('heading', { level: 2, name: 'Kernels', exact: true });
     this.vulnerabilitiesCount = page.locator('.table-container__results-count');
   }
 

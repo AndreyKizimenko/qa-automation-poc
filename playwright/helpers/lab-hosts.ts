@@ -6,8 +6,10 @@
  * device-lab folder), and `npm run lab:sync` copies that one over this one;
  * `npm run lint:lab`, inside `npm run check`, fails while the two differ on a
  * machine that has the lab folder. The suite reads an entry's name, tier,
- * platform, `os` and role. The rest (package type, desktop, LUKS, …) is the
- * per-OS smokes' to read.
+ * platform, `os` and role, and, for the per-OS smokes, what the lab says of the
+ * OS itself: the platform Fleet reports it as, its package type and package
+ * manager, its desktop, and whether it is enrolled in MDM. The rest (LUKS, the
+ * passphrase dialog) waits for the disk-encryption specs.
  *
  * A host's **role** decides what the suite does with it:
  *
@@ -36,6 +38,8 @@ import { VMS_FLEET } from './api/static-users';
 export type LabPlatform = 'darwin' | 'windows' | 'linux';
 export type LabRole = 'pool' | 'matrix' | 'special' | 'physical';
 export type LabTier = 'free' | 'premium';
+/** `pkg.tar.zst` is Arch's own format, which Fleet takes no custom package of. */
+export type LabPackage = 'deb' | 'rpm' | 'msi' | 'pkg' | 'pkg.tar.zst';
 
 export interface LabHost {
   /** The host's display name in Fleet, lower-cased. */
@@ -50,6 +54,23 @@ export interface LabHost {
   role: LabRole;
   /** A `special` host's one purpose, as the manifest words it. */
   purpose?: string;
+  /**
+   * The host's `platform` in Fleet's API (`ubuntu`, `rhel`, `amzn`), which is
+   * the distribution's own id and not always its name: Kubuntu reports
+   * `ubuntu`, Fedora `rhel`.
+   */
+  fleetPlatform: string;
+  /** The package type its OS installs. */
+  package: LabPackage;
+  /**
+   * What installs that package, where it isn't the type's usual tool: openSUSE
+   * installs an `.rpm` with `zypper` and has no `dnf`.
+   */
+  packageManager?: string;
+  /** Its desktop session (`gnome`, `kde`, `hyprland`, `windows`, `macos`), or `none` for a headless host, which runs no Fleet Desktop. */
+  desktop: string;
+  /** Whether the lab enrolled it in Fleet's MDM. */
+  mdm: boolean;
 }
 
 /** Premium's fleet for the hosts no pool spec touches: one per OS flavour, and the special ones. */
@@ -65,16 +86,23 @@ interface ManifestEntry {
   os?: string;
   role?: string;
   purpose?: string;
+  fleet_platform?: string;
+  package?: string;
+  package_manager?: string;
+  desktop?: string;
+  mdm?: boolean;
 }
 const PLATFORMS: readonly string[] = ['darwin', 'windows', 'linux'];
 const ROLES: readonly string[] = ['pool', 'matrix', 'special', 'physical'];
 const TIERS: readonly string[] = ['free', 'premium'];
+const PACKAGES: readonly string[] = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst'];
 
 /**
  * Reads the manifest, refusing an entry the suite can't place: a host with an
  * unknown role or platform would otherwise be a lab machine nothing targets
- * and nothing reports. `npm run lint:lab` makes the same checks before a run
- * does (`scripts/lab-manifest.js`).
+ * and nothing reports, and one with an unknown package type a host the smokes
+ * would have no package for. `npm run lint:lab` makes the same checks before a
+ * run does (`scripts/lab-manifest.js`).
  */
 function loadManifest(): LabHost[] {
   const doc = JSON.parse(fs.readFileSync(MANIFEST, 'utf8')) as { hosts?: ManifestEntry[] };
@@ -87,6 +115,9 @@ function loadManifest(): LabHost[] {
       !ROLES.includes(raw.role ?? '') && `role "${raw.role}"`,
       !raw.os && 'no os',
       raw.role === 'special' && !raw.purpose && 'no purpose (a special host is asked for by it)',
+      !raw.fleet_platform && 'no fleet_platform',
+      !PACKAGES.includes(raw.package ?? '') && `package "${raw.package}"`,
+      !raw.desktop && 'no desktop ("none" for a headless host)',
     ].filter(Boolean);
     if (problems.length) {
       throw new Error(`[lab-hosts] ${MANIFEST}: host "${raw.name}" has ${problems.join(', ')}`);
@@ -98,6 +129,11 @@ function loadManifest(): LabHost[] {
       os: raw.os!,
       role: raw.role as LabRole,
       purpose: raw.purpose,
+      fleetPlatform: raw.fleet_platform!,
+      package: raw.package as LabPackage,
+      packageManager: raw.package_manager,
+      desktop: raw.desktop!,
+      mdm: raw.mdm === true,
     };
   });
   const twice = hosts.map((h) => h.name).filter((name, i, names) => names.indexOf(name) !== i);

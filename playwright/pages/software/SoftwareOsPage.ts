@@ -103,6 +103,18 @@ export class SoftwareOsPage {
     return null;
   }
 
+  /**
+   * The row of one OS version, by its exact Name and Version cells ("Ubuntu",
+   * "24.04.5 LTS"): several versions of one OS share the name, and one version
+   * string can open another ("9.9.0", "9.9.0.1").
+   */
+  osRow(name: string, version: string): Locator {
+    return this.table.table
+      .locator('tbody tr')
+      .filter({ has: this.page.getByRole('cell', { name, exact: true }) })
+      .filter({ has: this.page.getByRole('cell', { name: version, exact: true }) });
+  }
+
   /** Name, Version, Vulnerabilities and Hosts of one OS row, as rendered. */
   async rowValues(row: Locator): Promise<{
     name: string;

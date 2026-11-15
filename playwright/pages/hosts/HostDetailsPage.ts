@@ -159,6 +159,12 @@ export class HostDetailsPage {
 
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
+  /**
+   * The Agent vital's tooltip, shown by {@link hoverAgentVersion}: "osquery: …",
+   * "Orbit: …" and, where fleetd has it, "Fleet Desktop: …". The only tooltip
+   * open while the Agent value is hovered.
+   */
+  readonly agentTooltip: Locator;
 
   /**
    * The Details tab's Activity card: Past and Upcoming tabs of host activities.
@@ -264,6 +270,7 @@ export class HostDetailsPage {
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
+    this.agentTooltip = page.getByRole('tooltip');
 
     this.activityCard = page.locator('.host-activity-card');
     this.pastActivityTab = this.activityCard.getByRole('tab', { name: 'Past' });
@@ -458,6 +465,11 @@ export class HostDetailsPage {
    */
   softwareNameLink(name: string): Locator {
     return this.softwareTable.getByRole('link', { name, exact: true });
+  }
+
+  /** The inventory row of one software title, by the exact name of its Name-column link. */
+  softwareRow(name: string): Locator {
+    return this.softwareRows.filter({ has: this.page.getByRole('link', { name, exact: true }) });
   }
 
   /** Filters the host's software table by name (server-side `query` param). */

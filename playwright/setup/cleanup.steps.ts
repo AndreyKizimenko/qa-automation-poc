@@ -43,16 +43,21 @@ import {
   findFleetByName,
   getAgentOptions,
   getFleetRecoveryLock,
+  getHostRefetchRequested,
+  getHostSoftwareState,
   getSoftwarePackage,
+  labHostProblem,
   listFleetHosts,
   listFleetMaintainedTitles,
   listFleetPolicies,
   listHostSoftwareNames,
   listInstallableTitles,
+  listLabHostRecords,
   listLabHostsAstray,
   listPoolHosts,
   listReports,
   listUpcomingActivities,
+  newestRecord,
   queueAdHocScript,
   requestHostRefetch,
   resetSetupExperience,
@@ -60,10 +65,18 @@ import {
   setFleetRecoveryLock,
   setPinnedVersion,
   transferHosts,
+  uninstallSoftwareOnHost,
+  waitForHostSoftwareStatus,
   type UpcomingActivity,
 } from '@helpers/api';
-import { labHostsOfRun } from '@helpers/lab-hosts';
-import { VM_SOFTWARE_FIXTURES, ensureVmFixtureUninstalled, findVmFixtureTitle, type VmPlatform } from '@helpers/vm-fixtures';
+import { OS_MATRIX_FLEET, labHostFleet, labHostsOfRun, type LabPackage } from '@helpers/lab-hosts';
+import {
+  OS_SMOKE_MSI,
+  VM_SOFTWARE_FIXTURES,
+  ensureVmFixtureUninstalled,
+  findVmFixtureTitle,
+  type VmPlatform,
+} from '@helpers/vm-fixtures';
 
 const WORKSTATIONS_FLEET = 'Workstations';
 
@@ -226,6 +239,16 @@ premiumStep('clear stranded version pins on the durable app fleets', async ({ re
 // before any install this run queues after it.
 const OWN_PACKAGE = /^fleet-pw-/;
 
+/**
+ * What takes the suite's own per-run packages off a host whose fleet no longer
+ * holds their titles, by the host's package type. Each is a no-op where none is
+ * installed.
+ */
+const OWN_PACKAGE_PURGE: { deb: string; rpm: string } & Partial<Record<LabPackage, string>> = {
+  deb: "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
+  rpm: "#!/bin/sh\nrpm -qa 'fleet-pw-*' | xargs -r rpm -e\n",
+};
+
 premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ request }) => {
   const vms = await findFleetByName(request, 'VMs');
   if (!vms) throw new Error('VMs fleet not found on premium instance — gitops apply likely missing');
@@ -266,11 +289,84 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
   await Promise.all(
     (await listPoolHosts(request, 'linux')).map(async (linux) => {
       if (!(await listHostSoftwareNames(request, linux.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) return;
-      await queueAdHocScript(
-        request,
-        linux.id,
-        "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
-      );
+      await queueAdHocScript(request, linux.id, OWN_PACKAGE_PURGE.deb);
+    }),
+  );
+});
+
+// The per-OS smokes (`tests/e2e/premium/matrix/os-smokes.spec.ts`) are the one
+// thing that puts anything on the OS matrix fleet, which gitops declares empty:
+// per test, a library script and a package nothing installs until the test asks
+// its own host to, and for the policy automation a policy with the label that
+// holds it to that host. Each test removes what it made, even when it times out;
+// a killed run doesn't, and this takes what it left, by the smokes' names
+// (`pw-*`, `fleet-pw-*`, and the one `.msi`, whose title is fixed). Nothing
+// else is touched: what a person put on the fleet is the next gitops apply's to
+// remove, and its verify's to report.
+//
+// On the fleet: the policies first (Fleet refuses to delete a title or a script
+// a policy automation uses), then the scripts, then the titles, each uninstalled
+// first from any host a dead run left it installed on. A title still on the
+// fleet is the one thing that knows how to take itself off a host, with the
+// uninstall script Fleet stored for it. The labels go last, once nothing targets
+// them (the VMs step sweeps `pw-*` labels too, and can meet one before its
+// policy is gone).
+//
+// On the hosts (every online lab host of the fleet): the smokes' queued scripts
+// and installs are cancelled, and a per-run `.deb` or `.rpm` whose title is
+// already gone (a gitops apply since the dead run deleted it) is purged by a
+// script, as on the Ubuntu pool. Only where the host's inventory lists one and
+// no refetch is outstanding: after an uninstall the inventory lists the package
+// until the host's next collection, which Fleet has asked for by then. The
+// `.msi` and the tarball need no purge: their names don't change, so the next
+// smoke's install lands on what was left and its uninstall removes it.
+premiumStep("sweep the per-OS smokes' leftovers from the OS matrix fleet and its hosts", async ({ request }) => {
+  // An uninstall a dead run left to do is a queued action on its host.
+  test.setTimeout(600_000);
+  const matrix = await findFleetByName(request, OS_MATRIX_FLEET);
+  if (!matrix) throw new Error(`${OS_MATRIX_FLEET} fleet not found on premium instance — gitops apply likely missing`);
+
+  const entries = labHostsOfRun().filter((entry) => labHostFleet(entry) === OS_MATRIX_FLEET);
+  const records = await listLabHostRecords(request, entries);
+  const hosts = entries
+    .filter((entry) => labHostProblem(entry, records) === null)
+    .map((entry) => newestRecord(entry, records)!);
+
+  const policies = await listFleetPolicies(request, matrix.id);
+  await deleteFleetPolicies(
+    request,
+    matrix.id,
+    policies.filter((p) => p.name.startsWith('pw-')).map((p) => p.id),
+  );
+  await deleteAllScripts(request, matrix.id, (name) => name.startsWith('pw-'));
+
+  const titles = (await listInstallableTitles(request, matrix.id)).filter(
+    (t) => OWN_PACKAGE.test(t.packageName) || t.packageName === OS_SMOKE_MSI.packageName,
+  );
+  for (const title of titles) {
+    await Promise.all(
+      hosts.map(async (host) => {
+        if ((await getHostSoftwareState(request, host.id, title.titleId))?.status !== 'installed') return;
+        console.warn(`[os matrix] ${title.packageName} was left installed on ${host.displayName} — uninstalling it`);
+        await uninstallSoftwareOnHost(request, host.id, title.titleId);
+        await waitForHostSoftwareStatus(request, host.id, title.titleId, null);
+      }),
+    );
+    await deleteSoftwareTitle(request, matrix.id, title.titleId);
+  }
+  await deleteLabelsWithPrefix(request, 'pw-');
+
+  await Promise.all(
+    hosts.map(async (host) => {
+      for (const activity of (await listUpcomingActivities(request, host.id)).filter(OWN_QUEUED)) {
+        await cancelUpcomingActivity(request, host.id, activity.uuid);
+      }
+      const purge = OWN_PACKAGE_PURGE[host.entry.package];
+      if (!purge) return;
+      if (!(await listHostSoftwareNames(request, host.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) return;
+      if (await getHostRefetchRequested(request, host.id)) return;
+      console.warn(`[os matrix] ${host.displayName} still lists a fleet-pw-* package with no title — purging it`);
+      await queueAdHocScript(request, host.id, purge);
     }),
   );
 });
@@ -301,6 +397,7 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
 const OWN_QUEUED = (a: UpcomingActivity): boolean =>
   !!a.scriptName?.startsWith('pw-') ||
   !!a.softwarePackage?.startsWith('fleet-pw-') ||
+  a.softwarePackage === OS_SMOKE_MSI.packageName ||
   VM_SOFTWARE_FIXTURES.some(
     (f) => (f.packageName && f.packageName === a.softwarePackage) || f.fleetMaintainedName === a.softwareTitle,
   );

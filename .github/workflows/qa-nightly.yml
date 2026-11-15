@@ -7,8 +7,8 @@ name: QA — Nightly
 # signal, and the night's test results still come in.
 #
 #   Render deploy hooks ─► wait (30 min) + both instances healthy
-#     ├─► gitops premium ─► Playwright premium (whatever gitops did) ─┐
-#     └─► gitops free    ─► Playwright free    (whatever gitops did) ─┴─► run history
+#     ├─► gitops premium ─► Playwright premium (whatever gitops did) ─► OS smokes ─┐
+#     └─► gitops free    ─► Playwright free    (whatever gitops did) ──────────────┴─► run history
 #
 # Scheduled for 03:17 UTC (10:17 PM CDT) — off the top of the hour, which GitHub
 # documents as its most-delayed slot. GitHub starts scheduled runs late — every
@@ -167,6 +167,14 @@ jobs:
     uses: ./.github/workflows/playwright-premium.yml
     secrets: inherit
 
+  # A smoke per OS version of the device lab, on the premium instance. After
+  # premium's suite, whatever it did: both work the pool's VMs.
+  playwright-os-smokes:
+    needs: [render-settle, playwright-premium]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/playwright-os-smokes.yml
+    secrets: inherit
+
   gitops-free:
     needs: render-settle
     if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
@@ -183,7 +191,7 @@ jobs:
   # the nights before, written to the run's summary. Given the one secret it
   # needs rather than all of them, and it never fails the night.
   run-history:
-    needs: [playwright-premium, playwright-free]
+    needs: [playwright-premium, playwright-free, playwright-os-smokes]
     if: ${{ !cancelled() }}
     permissions:
       contents: read

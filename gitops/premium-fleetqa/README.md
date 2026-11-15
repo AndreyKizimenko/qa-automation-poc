@@ -212,8 +212,11 @@ every platform, not merely absent. An apply deletes what a fleet file doesn't de
 anything that found its way onto the fleet, and the verify then holds it to that: `gitops-verify`'s entity
 specs compare the fleet against empty lists, its controls spec asserts encryption off, and its `_sanity` spec
 fails the file itself if it ever declares an entity or an OS-update or setup-experience setting
-(`EMPTY_FLEETS` in `playwright/tests/api/gitops-verify/_config.ts`). What the per-OS smokes put there will be
-per-run `pw-*` things, deleted in the test.
+(`EMPTY_FLEETS` in `playwright/tests/api/gitops-verify/_config.ts`). The one thing that puts anything there is
+the suite's per-OS smokes (`playwright/tests/e2e/premium/matrix/os-smokes.spec.ts`), for the length of a test:
+a `pw-*` script, a `fleet-pw-*` package or the smoke `.msi`, and a `pw-*` policy held to one host by a label,
+each deleted by the test, and by the suite's cleanup after a killed run. The gitops chain runs before the
+suite, so a verify never meets them.
 
 Its agent options and features are the VMs fleet's, which are also what the fleet had when it was created by
 hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reason the VMs fleet's is.

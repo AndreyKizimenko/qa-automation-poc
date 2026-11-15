@@ -6,10 +6,10 @@
  * (`tests/e2e/shared/settings/host-status-webhook.spec.ts`): this one lives on
  * the fleet and fires separately from the global one.
  *
- * The webhook config is a global-config-style mutation, so the fleet's whole
- * `webhook_settings` subtree is snapshotted and restored — Fleet replaces that
- * subtree wholesale on PATCH, so a write carrying only the host-status webhook
- * would wipe the fleet's failing-policies and host-activities webhooks.
+ * The webhook sits in the fleet's `webhook_settings`, beside its
+ * failing-policies and host-activities webhooks. A save replaces only the
+ * webhooks it carries, so the test snapshots and restores its own key,
+ * `host_status_webhook`, and leaves the other two to the specs that write them.
  *
  * Host expiry on a fleet stacks on the global setting instead of replacing it:
  * Fleet ticks the fleet-level checkbox for the fleet's own setting *or* the
@@ -33,47 +33,53 @@ import {
 } from '@helpers/api';
 
 const DESTINATION_URL = 'https://example.com/fleet-team-host-status';
+/**
+ * The webhook switched off, for a fleet that never had one: Fleet takes a
+ * webhook sent as `null` as not sent. The percentage and the days are the ones
+ * the fleet's Settings form starts from.
+ */
+const HOST_STATUS_WEBHOOK_OFF = { enable_host_status_webhook: false, destination_url: '', host_percentage: 1, days_count: 1 };
 
 test.describe('Premium • Settings • fleet host status webhook', () => {
   test('a team admin enables their fleet host status webhook and it persists', async ({
     browser,
     workstationsFleetId,
+    cleanup,
     request,
   }) => {
-    // Snapshot/restore lives in the test, not a hook: the read-only test below
+    // Restored by this test alone, not by a hook: the read-only test below
     // shares this fleet and runs in parallel, so a hook-based restore there
     // would roll this one back mid-flight.
-    const savedWebhookSettings = await getFleetWebhookSettings(request, workstationsFleetId);
+    const saved = (await getFleetWebhookSettings(request, workstationsFleetId)).host_status_webhook;
+    cleanup.add("restore Workstations' host-status webhook", (r) =>
+      setFleetWebhookSettings(r, workstationsFleetId, { host_status_webhook: saved ?? HOST_STATUS_WEBHOOK_OFF }),
+    );
 
-    try {
-      await withStaticUser(browser, 'team-admin', async (page) => {
-        const teamSettings = new TeamSettingsPage(page);
+    await withStaticUser(browser, 'team-admin', async (page) => {
+      const teamSettings = new TeamSettingsPage(page);
 
-        await teamSettings.goto(workstationsFleetId);
-        await teamSettings.setHostStatusWebhookEnabled(true);
+      await teamSettings.goto(workstationsFleetId);
+      await teamSettings.setHostStatusWebhookEnabled(true);
 
-        // The URL field only renders once the webhook is enabled.
-        await teamSettings.destinationUrlInput.fill(DESTINATION_URL);
-        await teamSettings.save();
+      // The URL field only renders once the webhook is enabled.
+      await teamSettings.destinationUrlInput.fill(DESTINATION_URL);
+      await teamSettings.save();
 
-        await teamSettings.toast.expectSuccess('Successfully updated settings.');
+      await teamSettings.toast.expectSuccess('Successfully updated settings.');
 
-        // Reload rather than trusting the form's own state.
-        await teamSettings.goto(workstationsFleetId);
-        await expect(teamSettings.hostStatusWebhookCheckbox).toHaveAttribute(
-          'aria-checked',
-          'true',
-        );
-        await expect(teamSettings.destinationUrlInput).toHaveValue(DESTINATION_URL);
-      });
+      // Reload rather than trusting the form's own state.
+      await teamSettings.goto(workstationsFleetId);
+      await expect(teamSettings.hostStatusWebhookCheckbox).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      await expect(teamSettings.destinationUrlInput).toHaveValue(DESTINATION_URL);
+    });
 
-      const webhook = (await getFleetWebhookSettings(request, workstationsFleetId))
-        .host_status_webhook as Record<string, unknown> | undefined;
-      expect(webhook?.enable_host_status_webhook).toBe(true);
-      expect(webhook?.destination_url).toBe(DESTINATION_URL);
-    } finally {
-      await setFleetWebhookSettings(request, workstationsFleetId, savedWebhookSettings);
-    }
+    const webhook = (await getFleetWebhookSettings(request, workstationsFleetId))
+      .host_status_webhook as Record<string, unknown> | undefined;
+    expect(webhook?.enable_host_status_webhook).toBe(true);
+    expect(webhook?.destination_url).toBe(DESTINATION_URL);
   });
 
   test('the fleet host expiry checkbox derives from the global and fleet settings', async ({

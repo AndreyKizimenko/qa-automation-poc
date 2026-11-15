@@ -27,13 +27,11 @@
  * details" with the marker in its output; the Library then reads Ran / Rerun.
  * Only a real host proves the package ran: a simulation with orbit reports a
  * random result for a script it never runs. The Mac rather than the Linux VM,
- * whose install and script queue is the busiest in the suite. The script exits 0
- * because a failed install script backs orbit off for minutes and stalls every
- * spec queued on that VM (fleetdm/fleet#54607). Every check is keyed to the
- * run's nonce title, so a late result from a dead attempt can't satisfy a
- * retry. The title is deleted in an `afterEach`, which still runs when the test
- * times out, and deleting it cancels a run still queued; the VMs sweep in
- * cleanup removes a `fleet-pw-*` title a killed run left.
+ * whose install and script queue is the busiest in the suite. Every check is
+ * keyed to the run's nonce title, so a late result from a dead attempt can't
+ * satisfy a retry. The title is deleted in an `afterEach`, which still runs when
+ * the test times out, and deleting it cancels a run still queued; the VMs sweep
+ * in cleanup removes a `fleet-pw-*` title a killed run left.
  */
 import * as fs from 'fs';
 import * as path from 'path';

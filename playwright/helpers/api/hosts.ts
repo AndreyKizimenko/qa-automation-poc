@@ -76,6 +76,33 @@ export async function getHostSummary(request: APIRequestContext, hostId: number)
   return { id: host.id, displayName: host.display_name, uuid: host.uuid, osVersion: host.os_version };
 }
 
+/** What a host reports of its OS and its agent: the identity a per-OS smoke asserts. */
+export interface HostAgentReport {
+  /** osquery's `os_version.platform`: `ubuntu`, `rhel`, `amzn`, `windows`, `darwin`. */
+  platform: string;
+  /** "Ubuntu 24.04.5 LTS", "Red Hat Enterprise Linux 9.9.0". */
+  osVersion: string;
+  osqueryVersion: string;
+  /** fleetd's version; empty for a host that runs osquery without it. */
+  orbitVersion: string;
+  /** The local users the host reports, as its users card lists them; empty until its `users` query has answered. */
+  usernames: string[];
+}
+
+/** The OS, the agent versions and the local users a host reports, read from `GET /hosts/:id`. */
+export async function getHostAgentReport(request: APIRequestContext, hostId: number): Promise<HostAgentReport> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read host ${hostId}`);
+  const host = (await res.json()).host;
+  return {
+    platform: host.platform ?? '',
+    osVersion: host.os_version ?? '',
+    osqueryVersion: host.osquery_version ?? '',
+    orbitVersion: host.orbit_version ?? '',
+    usernames: ((host.users ?? []) as Array<{ username: string }>).map((u) => u.username),
+  };
+}
+
 /** Find a host of a given platform that has vulnerable software. */
 export async function findHostByPlatform(
   baseURL: string,

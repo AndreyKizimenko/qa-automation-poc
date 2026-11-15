@@ -10,7 +10,7 @@ Both run `setup/cleanup.steps.ts`, as a dependency of each main project and as i
 
 Wipes unassigned state (queries, policies — global ones and Unassigned's own, deleted before its software and scripts, since Fleet refuses to delete a title or script a policy automation uses — packs, installable software, profiles, scripts on `fleet_id=0`, and the test users a dead run left: `qa-test-*` addresses and `QA API <label> <stamp>` API-only users) plus MDM setup-experience entities, and on Workstations its policies, installable software, profiles, scripts, setup experience and OS-update settings, returning to Unassigned any simulation a dead run left staged there — but **not its reports**, which gitops declares, beyond the copies specs save there by exact prefix (`pw-role-`, `Copy of playwright-saveasnew-`): a spec that puts a report on Workstations deletes it itself, and adds its prefix to that sweep. On premium it also removes throwaway `pw-*` fleets, and on both tiers any test-added (`pw-enroll-`) global enroll secret and any `PW_VAR_*` custom variable (after the scripts, since Fleet refuses to delete a variable a script references). `pw-*` labels are swept on premium only, inside the VMs-fleet step, so a free spec deletes its own. Self-heals the instance regardless of how state got there (Playwright leftovers, manual UI uploads, gitops-blind items). It does **not** reset disk encryption or the BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these, too*), and a spec that writes one of the others restores it in an `afterEach`, or works on a throwaway `pw-*` fleet.
 
-The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the fleet steps inside `cleanup.steps.ts` are missing on free (fleets are premium-only): Workstations, the `pw-*` fleet sweep, the version-pin clear and the VMs-fleet sweep with its `pw-*` labels. They are declared with `premiumStep`, which declares nothing on free, so a free report's skipped count is tests only. `wipe unassigned state`, the enroll-secret sweep and the VM resting state run on both, and `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
+The `free` project runs the **same cleanup chain as premium** — `dependencies: ['free-setup', 'cleanup-setup']` and `teardown: 'cleanup-teardown'`. Only the fleet steps inside `cleanup.steps.ts` are missing on free (fleets are premium-only): Workstations, the `pw-*` fleet sweep, the version-pin clear, the VMs-fleet sweep with its `pw-*` labels and the OS matrix sweep. They are declared with `premiumStep`, which declares nothing on free, so a free report's skipped count is tests only. `wipe unassigned state`, the enroll-secret sweep and the VM resting state run on both, and `deleteAllQueries` is global. **Do not plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable software, profiles and scripts are all wiped on free too.
 
 `cleanup-setup` also turns script execution back on: the exclusive projects turn it off, a teardown project
 doesn't run on a `SIGKILL`, and a run killed mid-spec would otherwise leave every script spec of the next run
@@ -36,6 +36,19 @@ returned host is asked for a refetch, which re-runs its fleet's policies (that i
 pool Mac or Windows VM). It is the one place the suite moves a host onto or off OS matrix, approved by Andrey
 on 2026-11-14; it lives inside the resting-state step, not in a step of its own, because the steps of this
 file run in parallel and the resting state has to see the pool where it belongs.
+
+On premium it also sweeps **the OS matrix fleet and its hosts** for what a killed run of the per-OS smokes
+left (`tests/e2e/premium/matrix/os-smokes.spec.ts`, the one thing that puts anything on that fleet). On the
+fleet, by the smokes' names: `pw-*` policies first, then `pw-*` scripts, then the `fleet-pw-*` titles and the
+one `.msi` (`OS_SMOKE_MSI`, whose title is fixed), each uninstalled first from any host that still has it
+installed, since a title on the fleet is what knows how to take itself off a host; then the `pw-*` labels.
+On each online lab host of the fleet: the smokes' queued scripts and installs are cancelled, and where the
+inventory lists a `fleet-pw-*` package with no refetch outstanding (a per-run `.deb` or `.rpm` whose title a
+gitops apply has since deleted), a `dpkg --purge` or `rpm -e` is queued, as on the Ubuntu pool. A refetch
+outstanding means the host hasn't re-reported since its last uninstall, and the listing is that one going
+stale. The `.msi` and the tarball keep their names from run to run, so the next smoke's install lands on what
+was left and its uninstall removes it. Nothing else on the fleet is touched: gitops declares it empty, and
+what a person put there is the next apply's to remove.
 
 `cleanup-setup` also turns gitops mode off: a teardown project doesn't run on a `SIGKILL`, and a stuck flag
 disables the next run's entire suite (`tests/e2e/premium/gitops-mode/CLAUDE.md`).

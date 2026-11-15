@@ -14,11 +14,12 @@
  *     has ≥1 policy). With no ticket integration on the instance, choosing
  *     Ticket offers "Add integration", which leads to Settings › Integrations.
  *   - **A fleet's own** — the same modal at a fleet's scope saves the fleet's
- *     failing-policies webhook through the fleet, not global config. On a
- *     throwaway `pw-fleet-webhook-*` fleet: a fleet's automations save replaces
- *     its whole `webhook_settings` (fleetdm/fleet#54619), so on Workstations it
- *     would race `team-host-status-webhook.spec.ts`, which writes the same
- *     subtree (docs/blocked-by-product-bugs.md).
+ *     failing-policies webhook through the fleet, not global config, and leaves
+ *     the fleet's other webhooks as they were: the save carries only the
+ *     failing-policies webhook, and Fleet replaces only the webhooks a save
+ *     carries. On a throwaway fleet, where the test can turn the fleet's
+ *     host-status webhook on first and nothing else writes the fleet's settings;
+ *     on Workstations `team-host-status-webhook.spec.ts` writes that webhook.
  *   - **One policy's** — a row's Automations cell opens that policy's own
  *     "Manage automations" modal (Fleet's ManageAutomationsModal, around
  *     PolicyAutomationsFields): Install software, Run script and Continuous
@@ -38,10 +39,8 @@ import { withStaticUser } from '@helpers/auth';
 import { inertDeb } from '@helpers/deb';
 import { runNonce } from '@helpers/profiles';
 import {
-  createFleet,
   createFleetPolicy,
   createPolicy,
-  deleteFleet,
   deleteFleetPolicies,
   deletePolicies,
   deleteScript,
@@ -50,6 +49,7 @@ import {
   getFleetPolicy,
   getFleetWebhookSettings,
   patchAppConfig,
+  setFleetWebhookSettings,
   uploadScript,
   uploadSoftwarePackageBuffer,
   type FailingPoliciesWebhook,
@@ -378,42 +378,32 @@ test.describe('Premium • Policies • automations with no ticket integration',
 });
 
 test.describe("Premium • Policies • a fleet's failing-policies webhook", () => {
-  // A throwaway fleet: saving a fleet's policy automations replaces the fleet's
-  // whole `webhook_settings` (fleetdm/fleet#54619), so on Workstations this
-  // would wipe the host-status webhook `team-host-status-webhook.spec.ts` is
-  // writing there in parallel. The test deletes the fleet itself; this hook
-  // catches a failed body, and `cleanup.steps.ts` sweeps `pw-*` fleets a dead
-  // run left.
-  // TODO(fleetdm/fleet#54619): once the save writes only its own keys, run this
-  // on Workstations instead of a throwaway fleet.
-  let fleetId: number | undefined;
-
-  test.afterEach(async ({ request }) => {
-    if (fleetId !== undefined) await deleteFleet(request, fleetId, { ignoreMissing: true });
-    fleetId = undefined;
-  });
-
-  test("enabling it at a fleet's scope stores it on that fleet, not in global config", async ({
+  test("enabling it at a fleet's scope stores it on that fleet, not in global config, and keeps the fleet's host-status webhook", async ({
     policiesList,
+    throwawayFleet,
+    seed,
     request,
   }) => {
-    const n = runNonce();
-    const fleetName = `pw-fleet-webhook-${n}`;
     const webhookUrl = 'https://example.com/pw-fleet-policy-webhook';
+    const hostStatusWebhook = {
+      enable_host_status_webhook: true,
+      destination_url: 'https://example.com/pw-fleet-host-status',
+      host_percentage: 5,
+      days_count: 3,
+    };
 
-    const fleet = await createFleet(request, fleetName);
-    fleetId = fleet.id;
+    // A fleet of the test's own: the save below is the fleet's, and no other
+    // spec writes this fleet's settings.
+    const fleet = await throwawayFleet('fleet-webhook');
     // The Manage automations button stays disabled until the scope has a policy.
-    await createFleetPolicy(request, fleet.id, {
-      name: `pw-fleet-webhook-policy-${n}`,
-      query: 'SELECT 1;',
-      platform: 'linux',
-    });
+    await seed.policy('fleet-webhook', { fleetId: fleet.id, query: 'SELECT 1;', platform: 'linux' });
+    // A webhook the modal doesn't manage, on before the modal saves.
+    await setFleetWebhookSettings(request, fleet.id, { host_status_webhook: hostStatusWebhook });
 
     // Straight to the fleet's list by id: a menu of similarly named throwaway
     // fleets (another worker's, or batch runs') is where picking by label slips.
     await policiesList.goto({ fleetId: fleet.id });
-    await expect(policiesList.teamDropdown.currentValue).toHaveText(fleetName);
+    await expect(policiesList.teamDropdown.currentValue).toHaveText(fleet.name);
 
     await policiesList.openAutomations();
     await expect(policiesList.automationsModal.getByRole('heading', { name: 'Webhooks or tickets' })).toBeVisible();
@@ -423,11 +413,15 @@ test.describe("Premium • Policies • a fleet's failing-policies webhook", () 
     await policiesList.saveAutomations();
     await policiesList.toast.expectSuccess('Successfully updated policy automations.');
 
-    const stored = (await getFleetWebhookSettings(request, fleet.id)).failing_policies_webhook as
-      | FailingPoliciesWebhook
-      | undefined;
+    const settings = await getFleetWebhookSettings(request, fleet.id);
+    const stored = settings.failing_policies_webhook as FailingPoliciesWebhook | undefined;
     expect(stored?.enable_failing_policies_webhook).toBe(true);
     expect(stored?.destination_url).toBe(webhookUrl);
+    // The modal's save carried only the failing-policies webhook, and Fleet
+    // replaces only the webhooks a save carries.
+    expect(settings.host_status_webhook, "the save changed the fleet's host-status webhook").toEqual(
+      hostStatusWebhook,
+    );
     // Global config never sees this URL. (The global webhook itself may be on:
     // the serial describe above drives it from another worker.)
     const global = (await getAppConfig(request)).webhook_settings?.failing_policies_webhook ?? {};
@@ -437,8 +431,5 @@ test.describe("Premium • Policies • a fleet's failing-policies webhook", () 
     await policiesList.openAutomations();
     await expect(policiesList.policyAutomationsToggle).toHaveAttribute('aria-checked', 'true');
     await expect(policiesList.policyWebhookUrlInput).toHaveValue(webhookUrl);
-
-    await deleteFleet(request, fleet.id);
-    fleetId = undefined;
   });
 });

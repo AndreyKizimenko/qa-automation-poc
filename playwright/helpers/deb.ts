@@ -67,8 +67,11 @@ function tarEntry(path: string, data: Buffer, type: '0' | '5' = '0'): Buffer {
   return Buffer.concat([header, data, padding]);
 }
 
-/** A gzipped tar of `entries`, with the parent directories dpkg expects. */
-function tarGz(entries: Array<{ path: string; data: Buffer }>, level: number): Buffer {
+/**
+ * A gzipped tar of `entries`, with the parent directories dpkg expects. Also
+ * what `helpers/tarball.ts` writes a `.tar.gz` package with.
+ */
+export function tarGz(entries: Array<{ path: string; data: Buffer }>, level: number): Buffer {
   const dirs = new Set<string>();
   for (const { path } of entries) {
     const parts = path.replace(/^\.\//, '').split('/').slice(0, -1);

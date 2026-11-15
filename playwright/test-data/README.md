@@ -98,9 +98,19 @@ matters* on a real VM. The macOS package installs an app bundle because Fleet's
 macOS inventory lists `.app` bundles only. **Rebuilding one changes its hash**:
 commit it, then point its `*.package.yml` at the new commit and hash, and re-apply.
 
+`windows/software/fleet-playwright-smoke-1.0.0.msi` (`make-msi.sh smoke`) is the
+same inert `.msi` under a title of its own, "Fleet Playwright Smoke": the per-OS
+smokes (`premium/matrix/os-smokes.spec.ts`) upload it to the OS matrix fleet for
+a Windows matrix host, for the length of a test, so no gitops file declares it
+and a rebuild needs no hash anywhere. One marker file under `C:\Program
+Files\Fleet Playwright Smoke\`, no custom actions, no services, no registry
+beyond Windows Installer's own entry; uninstalling removes the folder.
+
 Packages whose name, version or size is decided at run time — a per-run `.deb`,
 a build for the architecture the Linux VM isn't, a ~100 MB upload — aren't files here at
-all: `helpers/deb.ts` builds them in memory.
+all: `helpers/deb.ts` builds them in memory. So does `helpers/rpm.ts` for an
+`.rpm`, and `helpers/tarball.ts` for a `.tar.gz`
+([`linux/software/README.md`](linux/software/README.md) › *No `.rpm` on disk*).
 
 `shared/software/fleet-playwright-script-package.sh` is written by hand but
 belongs to the same family: Fleet titles a script package after its filename

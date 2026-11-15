@@ -7,6 +7,7 @@
     "test:premium:headed": "SUITE=premium playwright test --project=premium --headed; s=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-exclusive playwright test --project=premium-exclusive --headed; e=$?; SUITE=premium PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-gitops-mode playwright test --project=gitops-mode --headed; g=$?; exit $((s || e || g))",
     "test:premium:ui": "SUITE=premium playwright test --project=premium --ui",
     "test:premium:exclusive": "SUITE=premium playwright test --project=premium-exclusive",
+    "test:premium:matrix": "SUITE=premium playwright test --project=premium-matrix",
     "test:gitops-mode": "SUITE=premium playwright test --project=gitops-mode",
     "test:gitops-mode:only": "SUITE=premium playwright test --project=gitops-mode --no-deps",
     "test:gitops-mode:headed": "SUITE=premium playwright test --project=gitops-mode --no-deps --headed",

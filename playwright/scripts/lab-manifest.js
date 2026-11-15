@@ -6,7 +6,8 @@
 // fixtures.ts (helpers/lab-hosts.ts). Nothing carries a change across by
 // itself, so:
 //   - `lint:lab` fails on an entry the suite couldn't place (no name, an
-//     unknown tier, platform or role, a name listed twice), and, on a machine
+//     unknown tier, platform, role or package type, no `fleet_platform` or
+//     `desktop`, a name listed twice), and, on a machine
 //     that has the lab's folder, while the two files differ, naming the hosts
 //     that do. Where the lab's folder isn't (CI, another machine) there is
 //     nothing to compare and only the shape is checked.
@@ -25,6 +26,7 @@ const labCopy =
 const TIERS = ['free', 'premium'];
 const PLATFORMS = ['darwin', 'windows', 'linux'];
 const ROLES = ['pool', 'matrix', 'special', 'physical'];
+const PACKAGES = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst'];
 
 function hostsOf(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8')).hosts ?? [];
@@ -43,6 +45,9 @@ function shapeProblems(hosts) {
       !ROLES.includes(host.role) && `role "${host.role}"`,
       !host.os && 'no os',
       host.role === 'special' && !host.purpose && 'no purpose (a special host is asked for by it)',
+      !host.fleet_platform && 'no fleet_platform',
+      !PACKAGES.includes(host.package) && `package "${host.package}"`,
+      !host.desktop && 'no desktop ("none" for a headless host)',
     ].filter(Boolean);
     if (wrong.length) problems.push(`"${host.name}" has ${wrong.join(', ')}`);
     if (seen.has(name)) problems.push(`"${host.name}" is listed twice`);
