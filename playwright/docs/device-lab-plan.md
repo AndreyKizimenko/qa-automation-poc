@@ -13,7 +13,8 @@ them, and where the handoff turned out wrong.
 (PR #145): the manifest decides what each lab host is, each worker is handed its own pool VM, and the eight
 pool VMs are on the VMs fleet. Its branch run, at the usual 3 and 2 workers, is the first full run of the
 suite on the lab's VMs. C's trial of a fourth premium worker follows the merge as a run of its own, and the
-last two boxes under C wait on its numbers. Step D is being built on top of this branch by another session.
+last two boxes under C wait on its numbers. Step D is built on top of this branch (`playwright/device-lab-smokes`)
+and opens its PR once #145 is on `main`.
 
 ## What the suite has to work with
 
@@ -24,7 +25,7 @@ The lab replaced them. Its Linux and Windows VMs are x86_64; its Macs are Apple 
 |---|---|---|---|
 | Free | `free-ubu2404d-01`, `free-win11-01`, `free-macos26-01` | pool | Unassigned (free has no fleets) |
 | Premium | `prem-ubu2404d-01` to `-04` (Ubuntu 24.04), `prem-win11-01` and `-02` (Windows 11), `prem-macos15-01` (macOS 15.7) and `prem-macos26-01` (macOS 26.6) | pool | **VMs** fleet, all eight since 2026-11-14 |
-| Premium | One VM per OS flavour: Ubuntu 22.04, 26.04 and 24.04 server, Debian 13, RHEL 9 and 10, Amazon Linux 2023, Fedora 45, openSUSE Leap 16.1, Kubuntu 24.04, Zorin OS 18, Omarchy 4.5, Windows 10, Windows Server 2022 and 2025 | matrix | **OS matrix** fleet. Wait for step D. Four are LUKS-encrypted |
+| Premium | One VM per OS flavour: Ubuntu 22.04, 26.04 and 24.04 server, Debian 13, RHEL 9 and 10, Amazon Linux 2023, Fedora 45, openSUSE Leap 16.1, Kubuntu 24.04, Zorin OS 18, Omarchy 4.5, Windows 10, Windows Server 2022 and 2025 | matrix | **OS matrix** fleet. The per-OS smokes run on them (step D). Four are LUKS-encrypted |
 | Premium | `prem-ubu2404-luks` (the LUKS escrow control) | special | **OS matrix** fleet. Waits for step E |
 
 Every lab host runs fleetd 1.63.0. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
@@ -37,7 +38,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Built, 2026-11-15. The 4-worker trial follows its merge |
-| **D** | A smoke per OS version, on the matrix and pool hosts | its own PR | **Next**: started 2026-11-15, on top of #145's branch |
+| **D** | A smoke per OS version, on the matrix and pool hosts | its own PR, opened once #145 is on `main` | Built, 2026-11-15, on top of #145's branch |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -186,35 +187,60 @@ Not proven by a run: the cleanup's return of a stray host has not yet moved a re
 astray (its decision was replayed on live data with doctored entries, and picked the right hosts and
 fleets). And the full suite, which is the branch run's.
 
-## Step D: a smoke per OS version
+## Step D: built, waiting for #145 to merge
 
-One spec, parametrized by the manifest's `os`, over the matrix hosts **and** the pool's OS versions, so each
-version gets the same checks every night while the main suite splits across the pool at random. Through the
-UI, like the rest of the suite.
+A smoke per OS version: `tests/e2e/premium/matrix/os-smokes.spec.ts`, one describe per manifest `os`, over the
+fifteen matrix hosts **and** the pool's four OS versions (Ubuntu 24.04, Windows 11, macOS 15 and 26), so each
+version gets the same checks every night while the main suite spreads over the pool by worker. 100 tests,
+through the UI like the rest of the suite. Its PR opens against `main` once #145 is there.
 
-| Smoke | Hosts | Notes |
+**Where it stopped, 2026-11-15 02:15 UTC.** Everything below is committed on `playwright/device-lab-smokes`
+(the worktree `../qa-automation-smokes`; local, not pushed), on top of #145's branch. Run on premium
+(4.95.0-rc, `d6df44a`), all local: the whole project with its login and teardown at 3 workers, 109 of 109
+(100 smokes, the cleanup's steps with the new sweep among them); before that at 4 workers without them, 99
+of 100, the one red being the tarball's title, since fixed; and RHEL 9, Windows 10 and macOS 26 again after
+the self-review's fixes, 17 of 17. Seen failing first, on scratch edits since reverted: a wrong OS major, a
+wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, six skipped),
+vulnerabilities on Debian 13, Fleet Desktop on the headless server. **Not run:** the CI step and its input,
+`--repeat-each` and a headed pass, `UNUSABLE_HOST = 'skip'`, and the sweep with something to sweep (it has
+only met a clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
+Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on a host, no host moved.
+
+| Smoke | Hosts | How |
 |---|---|---|
-| Online, with the right OS name and major version, and its fleetd and osquery versions | all | Kubuntu reports `ubuntu`, Fedora `rhel`. Fleet showed Zorin OS 18.1 as 18.0.0 on 2026-11-14: check which is right before asserting a full version |
-| The software inventory lists a package known to be installed | all | deb, rpm and pacman sources |
-| A script runs and returns its output | all | |
-| A custom package installs and uninstalls | deb: Ubuntu, Debian, Kubuntu, Zorin. rpm: RHEL 9 and 10, Fedora, Amazon Linux, openSUSE. `.msi`: Windows 10 and Server | No `.rpm` fixture exists yet: add an inert `noarch` one. **openSUSE has no `dnf`** (checked on the host), and Fleet's default rpm install script calls it: either a custom install script with `zypper`, or a Fleet bug to file. **Fleet has no `.pkg.tar.zst` custom packages**, so Omarchy takes a `.sh` or `.tar.gz` package, which also installs everywhere |
-| A package installed by a policy automation | one deb host, one rpm host | |
-| Fleet Desktop is running | hosts with a desktop | Not Ubuntu server or Amazon Linux (`desktop: "none"`) |
-| Vulnerabilities are reported for the OS | RHEL 9 and 10, the Ubuntu LTS versions | |
+| Online on its fleet, with the right OS name and major version, and its fleetd and osquery versions | all 19 | The host page's vitals and Agent tooltip; the `platform` Fleet records is checked against the manifest's `fleet_platform` through the API (Kubuntu `ubuntu`, Fedora `rhel`) |
+| The software inventory lists a package known to be installed, as its package type | all 19 | fleetd's own package (`fleet-osquery`; `Fleet osquery` on Windows), Safari on macOS; the Type column reads Package (deb), Package (RPM), Package (pacman), App (Windows), App (macOS) |
+| Fleet Desktop is running | the 17 with a desktop | A live report of `processes`, run from the host's Actions. Not Ubuntu server or Amazon Linux (`desktop: "none"`). The agent's "Fleet Desktop: 1.63.0" says only that the binary answers `--version` |
+| A script runs and returns its output | all 19 | Run script modal; the script prints the host's own name |
+| Vulnerabilities are listed for the OS | Ubuntu 22.04, 24.04 (pool) and 26.04, RHEL 9 and 10 | Software › OS on the host's fleet, then the OS's Kernels card |
+| A custom package installs and uninstalls | all 19 | Per-test `.deb` (7 hosts) and `.rpm` (5), built in memory under a name of their own; openSUSE's `.rpm` with `zypper` scripts; a tarball on Omarchy; `fleet-playwright-smoke-1.0.0.msi` on Windows 10 and Server, which take turns; the VMs fleet's durable `.msi` and `.pkg` on Windows 11 and macOS |
+| A package installed by a policy automation | Debian 13, RHEL 9 | A policy held to the host by a manual label, failing while the package is absent |
 
-- [ ] The spec, its project (`premium-matrix`, in `PROJECT_TO_SUITE`) and its own step in the premium job,
-      after the main project, skipped in a branch run unless asked for. Every suite on an instance shares
-      one concurrency group, so a separate workflow would queue behind the nightly, not overlap it; lift the
-      step into its own workflow later if it proves noisy.
-- [ ] Its things go on the OS matrix fleet with `pw-*` names, target one host, and are deleted in the test;
-      a sweep takes what a dead run left. (Since step B the nightly's apply of `fleets/os-matrix.yml` also
-      deletes whatever is on the fleet, and its verify fails on anything left: the gitops chain runs before
-      the suite, so only a leftover from a dead run meets it, and the apply has removed that by then.) Never disk encryption, an OS-update setting or a passcode profile
-      on that fleet. Don't install `zenity` or `kdialog` on `prem-fedora45-luks` or `prem-omarchy-01`: they
-      reproduce fleetdm/fleet#58776.
+- [x] The spec, its project (`premium-matrix`, in `PROJECT_TO_SUITE`) and its own step in the premium job,
+      last, skipped in a branch run unless dispatched with `-f os-smokes=true`. Every suite on an instance
+      shares one concurrency group, so a separate workflow would queue behind the nightly, not overlap it;
+      lift the step into its own workflow later if it proves noisy.
+- [x] Its things go on the OS matrix fleet with `pw-*` / `fleet-pw-*` names, target one host, and are deleted
+      in the test; `setup/cleanup.steps.ts` sweeps what a killed run left, on the fleet and on its hosts.
+      (The nightly's apply of `fleets/os-matrix.yml` also deletes whatever is on the fleet, and its verify
+      fails on anything left: the gitops chain runs before the suite, so only a leftover from a dead run
+      meets it, and the apply has removed that by then.) Never disk encryption, an OS-update setting or a
+      passcode profile on that fleet, and never `zenity` or `kdialog` on `prem-fedora45-luks` or
+      `prem-omarchy-01`: they reproduce fleetdm/fleet#58776.
+- [x] An `.rpm` to install: none on disk. `helpers/rpm.ts` builds a `noarch` one per test, as `helpers/deb.ts`
+      does a `.deb`, because Fleet titles an `.rpm` after its `Name` and five rpm hosts install side by side
+      on one fleet. Checked in containers of each rpm host's distribution before it met a host.
+- [x] Closes `long-term-goals.md`'s Fedora, RHEL and Omarchy rows. The Omarchy row's `pkg.tar.zst` was the
+      fleetd agent package, not a custom package: Fleet takes none of that type.
+- [ ] Its PR. Not open yet: #145 has to be on `main` first (no stacked PR). Then: rebase
+      `playwright/device-lab-smokes` onto `main`, check the merge-base, push, open the PR, and dispatch
+      `gh workflow run "QA — Branch run" --ref playwright/device-lab-smokes -f branch=playwright/device-lab-smokes -f os-smokes=true`
+      (the branch changes workflow files, and a branch run leaves the smokes out unless asked). That run
+      is the first time the new CI step and its `os-smokes` input run at all.
 - [ ] macOS 27, when its VM exists, gets a DDM-focused smoke.
-- [ ] Closes `long-term-goals.md`'s Fedora, RHEL and Omarchy rows. The Omarchy row's `pkg.tar.zst` is the
-      fleetd agent package, not a custom package.
+- [ ] openSUSE's `zypper` scripts are a workaround for a Fleet gap (its default `.rpm` scripts call `dnf`): a
+      bug is drafted, and the workaround's `TODO(fleetdm/fleet#N)` and its row in
+      `blocked-by-product-bugs.md` wait for Andrey to file it.
 
 ## Step E: disk encryption
 
@@ -254,7 +280,18 @@ BitLocker PIN.
 
 ## Open questions for Andrey
 
-- A matrix host that is offline: does its smoke fail or skip? (Step D.)
+- A matrix host that is offline: does its smoke fail or skip? Built as one switch, `UNUSABLE_HOST` in
+  `os-smokes.spec.ts`, set to **fail**: the first smoke of that OS fails with `labHostProblem`'s reason and
+  the rest of that OS skip, naming it, so an offline host is one red row a night, not seven. Set to `skip`,
+  the first one skips too and the night stays green. (The pool's versions follow the same rule: a version
+  with no pool VM left.)
+- Fleet's default scripts for an `.rpm` call `dnf`, which openSUSE lacks, so a custom `.rpm` fails to install
+  there unless it comes with `zypper` scripts (seen on `prem-opensuse16-01`, 2026-11-15: `dnf: command not
+  found`). A bug is drafted; file it? The smoke installs with `zypper` scripts either way.
+- Two things Fleet shows that may be worth a report of their own: a Linux OS version built from
+  `VERSION_ID` alone (Zorin OS 18.1 as "18.0.0", Amazon Linux 2023.12 as "2023.0.0", Debian 13.7 as
+  "13.0.0"), and Software › OS listing `prem-omarchy-01` as "Arch Linux Rolling" while its host page says
+  "Omarchy 4.5.0".
 - The lab's side of the manifest: the `device-lab` skill should end a change to `lab-hosts.json` with `npm
   run lab:sync` here and a PR. Until it says so, a host whose role the lab changed is moved back by the
   suite's cleanup to where the suite's stale copy puts it.
@@ -292,6 +329,27 @@ BitLocker PIN.
   its 5-minute interval. The cleanup asks a returned host for that refetch.
 - **`fleetctl gitops` 4.94.1 applies `os-matrix.yml` to the 4.95 RC**, per-platform disk-encryption keys
   included: dry-run and apply both succeeded on 2026-11-14, with nothing proposed for deletion.
+- **Zorin OS 18.1 is right, and so is Fleet's "18.0.0", after a fashion.** The host's `os-release` says
+  `VERSION="18.1"` and `VERSION_ID="18"`; osquery reads major, minor and patch from `VERSION_ID`, and Fleet
+  prints the three for every Linux but Ubuntu (`parseOSVersion`). The same makes Amazon Linux 2023.12
+  "2023.0.0" and Debian 13.7 "13.0.0". The smokes assert the name and the major version only.
+- **What installs an unsigned local `.rpm`.** `dnf install <file>` does, on RHEL 9 and 10, Amazon Linux 2023
+  and Fedora 45, whose rpm 6 enforces signatures by itself (`%_pkgverify_level all`) while dnf5 skips the
+  check for a file on the command line. `zypper install` refuses ("File is unsigned") without
+  `--allow-unsigned-rpm`. openSUSE Leap 16.1 has no `dnf` at all.
+- **Fleet titles a tarball after its whole file name**, `.tar.gz` included, and an `.msi` after the product
+  inside it whatever the file is called. A `.deb` and an `.rpm` are titled after the package name.
+- **Premium's firewall and install scripts, as measured on 2026-11-15** on `POST /software/package` (requests
+  with no file, which can't succeed): `msiexec /i …` in `install_script` came back as the HTML "Blocked"
+  page; `rm -rf`, `installer -pkg`, `dnf`, `zypper` and `rpm -e` reached Fleet. A JSON body to
+  `POST /scripts/run` with `rm -rf` reached Fleet too. So an `.msi` is uploaded without scripts (Fleet fills
+  in its own), and a script that has to name `msiexec` can't be sent.
+- **"Fleet Desktop: 1.63.0" in the Agent tooltip is not "Fleet Desktop is running".** orbit reports what
+  `fleet-desktop --version` printed when orbit started (`orbit/cmd/orbit/orbit.go`); the two headless hosts
+  report "unknown". The smoke asks the host for the process instead.
+- **A per-OS smoke run is about a quarter of an hour.** 100 tests in 15.6 min at 3 workers with login and
+  teardown, 12.2 at 4 without them (2026-11-15, local). An install and an uninstall are 1.0 to 1.7 min a
+  host when followed to their status; the Windows matrix hosts, which take turns, are the last five minutes.
 - **The steps of `setup/cleanup.steps.ts` run in parallel** (`fullyParallel`), so one step can't count on
   another having run. That is why the return of lab hosts to their fleets sits inside the resting-state
   step, ahead of its walk through the pool, and not in a step of its own.
