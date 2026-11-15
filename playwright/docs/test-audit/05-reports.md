@@ -20,8 +20,8 @@ it. `premium/reports/report-label-targets.spec.ts` is audited with label targeti
 single-fleet maintainer, and an observer's and an observer+'s one-host live runs (RPT-29…35).
 `shared/reports/live-report-export.spec.ts` runs a report live on the three real VMs and exports the results (RPT-36).
 
-**Standing environment note for this area:** apart from three real VMs per tier (macOS,
-Windows, Ubuntu; on the **VMs** fleet on premium), the ~300 online hosts on each QA instance are
+**Standing environment note for this area:** apart from the device lab's real VMs (macOS,
+Windows, Ubuntu; the pool on the **VMs** fleet on premium, [README](README.md)), the ~300 online hosts on each QA instance are
 osquery-perf simulations, which answer a live query with a canned row whatever its SQL. Nothing
 in this area asserts live-query *results* on simulations; the real-host specs
 [`shared/hosts/host-live-query.spec.ts`](../../tests/e2e/shared/hosts/host-live-query.spec.ts)

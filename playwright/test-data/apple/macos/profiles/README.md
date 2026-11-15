@@ -9,8 +9,9 @@
 > So nothing in this folder may gate access to a host: **no passcode payload**
 > (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`, `maxInactivity`, `allowSimple`), no screen
 > lock, inactivity timeout, FileVault, login-window restriction, and nothing that disables SSH, remote
-> management or the MDM channel. There are only a few real VMs per tier and no re-provisioning automation: one
-> such payload delivered ends every real-host spec until someone rebuilds the machine by hand.
+> management or the MDM channel. The real hosts are the device lab's few pool VMs per tier, and nothing in the
+> suite re-provisions them: one such payload delivered ends every real-host spec on that VM until the lab's
+> owner rolls it back to its baseline by hand.
 >
 > This folder used to hold a passcode profile, `fleet-test-passcode.mobileconfig`, on the belief that the
 > library lifecycle never reaches a host. On free it did — the free macOS VM acknowledged it 7 times. Don't add

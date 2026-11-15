@@ -668,8 +668,8 @@ other:
 4. ☐ *(finally)* Run `fleetctl hosts transfer --fleet '' --hosts <hostname>` to restore.
    - ✅ *(API)* Polls until `team_id` is back to `originalFleetId` (`null` = Unassigned).
 
-**Manual repro** — pick a simulated macOS host (avoid anything reporting `VirtualMac2,1` or
-`QEMU Virtual Machine` — those are the real VMs), note its **hostname** from the host details page,
+**Manual repro** — pick a simulated macOS host (avoid the device lab's hosts, named `prem-…` or
+`free-…` in [`lab-hosts.json`](../../lab-hosts.json): those are the real VMs), note its **hostname** from the host details page,
 then `fleetctl hosts transfer --fleet Workstations --hosts <hostname>` and watch the host's fleet
 change in the UI. Restore with `--fleet ''`.
 

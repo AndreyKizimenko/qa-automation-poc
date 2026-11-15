@@ -18,16 +18,17 @@ counts once the host's own inventory says so. **Adding** software through the UI
 
 **This area is unlike every other one in the audit, in eight ways.** Read them before running anything.
 
-**1. It runs on the real VMs, not the simulations.** Three genuine machines — **macOS, Windows 11 and
-Ubuntu, all ARM** (Apple M4, ARM Windows, aarch64) — on the **VMs** fleet (id 103 on premium QA, resolved by
-name through the `vmsFleetId` worker fixture). Specs pick them with `requireRealHost(request, platform)`
-([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts)), which wraps
-`findOnlineHost(request, platform, { kind: 'real' })` — keyed on `hardware_model` matching
-`/virtual|qemu/i`, **not** on MDM enrollment — and throws *"no online real <platform> VM on <url> … Check the
-<platform> VM is powered on and enrolled."* when there is none. Never by name or id. An osquery-perf simulation never installs
-anything, so a green assertion against one proves nothing. ARM decides which installers can land at all:
-that is why the Windows `.exe` is `7z2601-arm64.exe` and why an `amd64` `.deb` is a *deterministic* failed
-install on the Ubuntu VM.
+**1. It runs on the real VMs, not the simulations.** Genuine machines — the device lab's pool of
+**Ubuntu 24.04 and Windows 11 (x86_64) and macOS (Apple silicon VMs)**, listed in
+[`lab-hosts.json`](../../lab-hosts.json) — on the **VMs** fleet (id 103 on premium QA, resolved by name
+through the `vmsFleetId` worker fixture). Specs pick them with `requireRealHost(request, platform)`
+([`helpers/api/hosts.ts`](../../helpers/api/hosts.ts)), which hands each worker its own pool host of the
+platform, by the manifest, and throws *"no online real <platform> VM on <url>: …"* with what is wrong with
+each pool host when there is none. Never by name or id. An osquery-perf simulation never installs
+anything, so a green assertion against one proves nothing. The architecture decides which installers can
+land at all: that is why the Windows `.exe` is `7z2601-x64.exe`, and why a `.deb` built for the other
+architecture (`foreignDebArch`: `arm64` on these VMs) is a *deterministic* failed install on the Ubuntu VM.
+Until 2026-11-14 these were three ARM UTM VMs, and the fixtures were the ARM builds.
 
 **2. The VMs fleet is under gitops, and holds the software these specs install.**
 `gitops/premium-fleetqa/fleets/vms.yml` declares the `pw-host-report-results` report, keeps **Claude**
@@ -57,7 +58,7 @@ never changes and Fleet skips the download once it holds the file. Consumed by S
 |---|---|---|---|
 | `fleet-playwright-install-1.0.0.pkg` | from the package | [`test-data/apple/macos/software/make-pkg.sh`](../../test-data/apple/macos/software/make-pkg.sh) (committed output) | one empty app bundle, `/Applications/Fleet Playwright Install.app` — an app bundle because macOS inventory lists `.app` bundles only; a files-only `.pkg` installs but never shows up |
 | `fleet-playwright-install-1.0.0.msi` | from the package | [`test-data/windows/software/make-msi.sh`](../../test-data/windows/software/make-msi.sh) (committed output) | one marker file under `C:\Program Files\Fleet Playwright Install\` |
-| `7z2601-arm64.exe` | **7-Zip** (ProductName) when new, **7-zip** once Fleet's Windows-title reconcile links it — Windows lists it as **7-Zip 26.01 (arm64)** | committed vendor binary; install/uninstall scripts `gitops/lib/platforms/windows/software/7-zip-{install,uninstall}.ps1` (`/S`) | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
+| `7z2601-x64.exe` | **7-Zip** (ProductName) when new, **7-zip** once Fleet's Windows-title reconcile links it — Windows lists it as **7-Zip 26.01 (x64)** | committed vendor binary; install/uninstall scripts `gitops/lib/platforms/windows/software/7-zip-{install,uninstall}.ps1` (`/S`) | 7-Zip, into `C:\Program Files\7-Zip` — nothing else on the fleet uses 7-Zip |
 | `fleet-playwright-install_1.0.0_all.deb` | from the package | [`test-data/linux/software/make-deb.py`](../../test-data/linux/software/make-deb.py) `fleet-playwright-install 1.0.0 all` (committed output) | one marker under `/usr/share/fleet-playwright-install/`, no maintainer scripts, `Architecture: all` |
 | **Itsycal** (`itsycal/darwin`) | Itsycal | Fleet-maintained | a menu-bar calendar, never launched |
 | **DB Browser for SQLite** (`db-browser-for-sqlite/windows`) | DB Browser for SQLite | Fleet-maintained | an MSI, no service, never launched |
@@ -173,7 +174,7 @@ So by hand:
 1. **A durable fixture left installed** (you stopped SWH-14 midway): host details → **Software** →
    **Library** → search the title → **Uninstall**, and wait for the Status to clear (a refetch lands 60–120 s
    later and the Installed version goes back to `---`; for 7-Zip, check the **Inventory** tab for
-   `7-Zip 26.01 (arm64)` instead). Or leave it: the next run's preflight uninstalls it. **Never delete the
+   `7-Zip 26.01 (x64)` instead). Or leave it: the next run's preflight uninstalls it. **Never delete the
    title** to clean up.
 2. **A per-run `fleet-pw-*` item** (you walked SWH-03/05/06/07/08 by hand): it needs deleting, in this order —
    - **If a "Deploy" policy exists**, delete it first: **Policies** → fleet **VMs** →
@@ -271,13 +272,13 @@ two on a day it runs. The CI workflows share a concurrency group with their tier
 |---|---|---|---|---|
 | macOS `.pkg` | from the package | `fleet-playwright-install-1.0.0.pkg` | Fleet's, from the package IDs | the title (linked) |
 | Windows `.msi` | from the package | `fleet-playwright-install-1.0.0.msi` | Fleet's, from the product code | the title (linked) |
-| Windows `.exe` | **`7-zip`** (reconciled; **`7-Zip`**, the ProductName, when new) | `7z2601-arm64.exe` | **ours**, declared in gitops — `7-zip-uninstall.ps1` runs `C:\Program Files\7-Zip\Uninstall.exe /S` (Fleet requires both scripts for an `.exe`) | **`7-Zip 26.01 (arm64)`**, the host's own name for it (unlinked, `linked = false`) |
+| Windows `.exe` | **`7-zip`** (reconciled; **`7-Zip`**, the ProductName, when new) | `7z2601-x64.exe` | **ours**, declared in gitops — `7-zip-uninstall.ps1` runs `C:\Program Files\7-Zip\Uninstall.exe /S` (Fleet requires both scripts for an `.exe`) | **`7-Zip 26.01 (x64)`**, the host's own name for it (unlinked, `linked = false`) |
 | Linux `.deb` | from the package | `fleet-playwright-install_1.0.0_all.deb` | Fleet's `apt-get remove` | the title (linked) |
 | macOS Fleet-maintained | **Itsycal** | the build Fleet cached — its file name read at run time | Fleet's, for the app | the title (linked) |
 | Windows Fleet-maintained | **DB Browser for SQLite** | the build Fleet cached | Fleet's, for the app | the title (linked) |
 
 **The `.exe` row has two states.** Fleet names a new custom `.exe` title from the installer's ProductName
-(`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (arm64)`), so it starts
+(`7-Zip`) while Windows lists the program by its DisplayName (`7-Zip 26.01 (x64)`), so it starts
 **unlinked** ([fleetdm/fleet#20440](https://github.com/fleetdm/fleet/issues/20440)): no installed version in the
 Library, and the inventory lists it under the DisplayName. Because 7-Zip is in the Fleet-maintained catalog,
 Fleet's hourly `reconcile_windows_maintained_app_titles` cron then merges the DisplayName title into ours —
@@ -291,7 +292,7 @@ installed version and the Inventory row for that state.
 1. ☐ (No user action) Resolve the VM; find the fixture's title; read the title's state for this host (`GET /hosts/:id/software?available_for_install=true`).
    - ✅ *(API)* The title is on the VMs fleet (and, for an FMA, has an installer).
    - ✅ *(API)* It is offered to the VM with a library version.
-2. ☐ (No user action) `ensureVmFixtureUninstalled` — returns the fixture to rest: no install state on record and the inventory agreeing. It waits out a queued install or uninstall of the title first. Status `installed` → uninstall by API. `failed_install` / `failed_uninstall` → install, then uninstall: Fleet keeps a failed result as the title's status until another action replaces it, and an uninstall of software that isn't there fails again. No status but the inventory lists it (an installed version; or, for the `.exe` while unlinked, the host's inventory lists `7-Zip 26.01 (arm64)`) → request a collection, and uninstall only if the listing survives it, since right after a clean uninstall the inventory still lists the software until Fleet's refetch lands. Every uninstall then waits for the inventory to agree.
+2. ☐ (No user action) `ensureVmFixtureUninstalled` — returns the fixture to rest: no install state on record and the inventory agreeing. It waits out a queued install or uninstall of the title first. Status `installed` → uninstall by API. `failed_install` / `failed_uninstall` → install, then uninstall: Fleet keeps a failed result as the title's status until another action replaces it, and an uninstall of software that isn't there fails again. No status but the inventory lists it (an installed version; or, for the `.exe` while unlinked, the host's inventory lists `7-Zip 26.01 (x64)`) → request a collection, and uninstall only if the listing survives it, since right after a clean uninstall the inventory still lists the software until Fleet's refetch lands. Every uninstall then waits for the inventory to agree.
 
    **`install` step**
 3. ☐ Open the host's details page (via URL `/hosts/<id>`; anchored on **Disk space available**) → **Software** tab → **Library** tab → type the title in **Search by name**.
@@ -306,7 +307,7 @@ installed version and the Inventory row for that state.
    - ✅ *(API)* Status reaches `installed` (≤ 5 min).
    - ✅ *(API, macOS Fleet-maintained app only)* The status is read every second, and at the moment it reaches `installed` the host has a refetch outstanding (`refetch_requested`, polled ≤ 15 s): Fleet asks for fresh vitals by itself once an install succeeds. By hand: the host header's Refetch button reads **Fetching fresh vitals...** without anyone pressing it.
    - ✅ *(API)* No refetch outstanding (≤ 4 min), then `detail_updated_at` moves past a baseline taken after that (≤ 4 min, refetch requested).
-   - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for an unlinked `.exe` the host's inventory by `7-Zip 26.01 (arm64)`. The test records which: **linked** iff the title now shows an installed version (only the `.exe` may lack one).
+   - ✅ *(API)* The inventory lists it (≤ 1 min; one more refetch round if not) — the title's installed versions, or for an unlinked `.exe` the host's inventory by `7-Zip 26.01 (x64)`. The test records which: **linked** iff the title now shows an installed version (only the `.exe` may lack one).
 6. ☐ Reload the host page → **Software** → **Library** → search the title.
    - ✅ *(UI)* **Installed version** equals the library version — or `---` for the `.exe` while unlinked.
    - ✅ *(UI)* The row's install-side button reads **Reinstall**.
@@ -317,7 +318,7 @@ installed version and the Inventory row for that state.
    ☐ Reload the host page → in the **Activity** card, click the **Past** tab → click the **first** (newest) item matching "… installed <title> on this host." (word boundary, so not "uninstalled").
    - ✅ *(UI)* **Past** is selected; the Install details modal opens with **"installed <title> (<package file>)"**.
    - ☐ Click **Close**. ✅ *(UI)* hidden.
-9. ☐ Reload the host page → **Software** → **Inventory** tab → type the **inventory name** in **Search by name or vulnerability (CVE)** (the title's name — `7-zip` for the linked `.exe`; `7-Zip 26.01 (arm64)` while it's unlinked).
+9. ☐ Reload the host page → **Software** → **Inventory** tab → type the **inventory name** in **Search by name or vulnerability (CVE)** (the title's name — `7-zip` for the linked `.exe`; `7-Zip 26.01 (x64)` while it's unlinked).
    - ✅ *(UI)* A Name-column link reading exactly the inventory name is visible — `HostDetailsPage.softwareNameLink()`.
 
    **`uninstall` step**
@@ -326,7 +327,7 @@ installed version and the Inventory row for that state.
     - ✅ *(UI)* Toast **"Software is uninstalling. To see details, go to Details > Activity."**
     - ✅ *(API)* The host's status for the title is `pending_uninstall`.
 11. ☐ Wait for the status to clear, then as step 5 — `waitForSoftwareSettled(…, null, { inventoryName })`.
-    - ✅ *(API)* Status clears to `null` (≤ 5 min) — for the macOS Fleet-maintained app read every second, and at that moment the host has a refetch outstanding (Fleet's own, as in step 5); a post-status refetch lands; the inventory no longer lists it (the title's installed versions, or the host's inventory by `7-Zip 26.01 (arm64)`).
+    - ✅ *(API)* Status clears to `null` (≤ 5 min) — for the macOS Fleet-maintained app read every second, and at that moment the host has a refetch outstanding (Fleet's own, as in step 5); a post-status refetch lands; the inventory no longer lists it (the title's installed versions, or the host's inventory by `7-Zip 26.01 (x64)`).
 12. ☐ Reload the host → **Software** → **Library** → search the title.
     - ✅ *(UI)* **Installed version** reads `---`.
     - ✅ *(UI)* The install-side button reads **Install**.
@@ -446,7 +447,7 @@ other:
 - **Grep:** `npx playwright test --project=premium-exclusive deploy-install-retries` (by file name)
 - **Project:** `premium-exclusive` — alone after the main project: a policy's installs queue at priority 0, below every user-requested one, and each failed install script backs orbit off for 1, 2, 4… min (fleetdm/fleet#54607) · **Host:** the Ubuntu VM · **Timeout:** 15 min, CI `HOST_RETRIES`
 - **Mode:** UI+API
-- **Preconditions (API):** a per-run `fleet-pw-deploy-fails-<stamp>` `.deb` built for **amd64**, uploaded to the VMs fleet with Deploy (`automatic_install`) — the aarch64 VM's dpkg refuses it, so every attempt fails without touching the host, and the package never arriving keeps Fleet's `[Install software] … (deb)` policy failing.
+- **Preconditions (API):** a per-run `fleet-pw-deploy-fails-<stamp>` `.deb` built for the architecture the Ubuntu VM isn't (`foreignDebArch` of its `cpu_type`: **arm64** on the x86_64 pool VMs), uploaded to the VMs fleet with Deploy (`automatic_install`) — the VM's dpkg refuses it, so every attempt fails without touching the host, and the package never arriving keeps Fleet's `[Install software] … (deb)` policy failing.
 - **Data created:** the package and its policy, deleted in the `finally` (policy first, any queued attempt cancelled); the VMs sweep removes `[Install software] fleet-pw-*` policies and `fleet-pw-*` titles a dead run leaves.
 
 **Flow**
@@ -582,7 +583,7 @@ other:
 
 - **File:** [`playwright/tests/e2e/premium/software/inventory-reflects-install.spec.ts`](../../tests/e2e/premium/software/inventory-reflects-install.spec.ts)
 - **Grep:** `npx playwright test --project=premium -g "a pending or failed install never appears in the Inventory"`
-- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the real **aarch64** Ubuntu VM
+- **Project:** premium · **Scope:** the **VMs** fleet · **Host:** the worker's real Ubuntu VM
 - **Mode:** UI+API · **Isolation:** parallel; describe timeout 900 s; `finally` waits (≤ 5 min, errors swallowed) for `failed_install` to stick, then deletes the title
 - **Preconditions:** online real Ubuntu VM
 - **Data created:** a per-run `fleet-pw-precondition-<base36>` title (arch `all`) with a **pre-install query that returns no rows** (`SELECT 1 WHERE 1 = 0;`). No install script ever runs, so nothing reaches the host. Deleted in `finally`.

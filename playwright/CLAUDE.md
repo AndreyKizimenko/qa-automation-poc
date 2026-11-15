@@ -160,9 +160,9 @@ regenerate both on every restart.
 
 ### Never deploy a passcode profile to a real host
 
-**A passcode profile blocks access to the VM permanently.** There is no recovery path and no re-provisioning
-automation — one deployed passcode payload ends every other real-host spec until somebody rebuilds the machine
-by hand. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, no `forcePIN`, `minLength`,
+**A passcode profile locks the VM out of reach.** The suite has no way back: only the device lab's owner can
+recover it, by rolling the VM back to its baseline by hand, and until then one deployed passcode payload ends
+every real-host spec on that VM. This is absolute: no `com.apple.mobiledevice.passwordpolicy` payload, no `forcePIN`, `minLength`,
 `maxInactivity` or `allowSimple`, on any real host, for any reason.
 
 The same caution covers anything else gating entry to the machine — screen lock, inactivity timeout,
