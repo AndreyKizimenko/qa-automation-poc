@@ -1,7 +1,7 @@
 import { APIRequestContext, APIResponse, expect, test } from '@playwright/test';
 import { apiLatestUrl, apiUrl, authHeaders, expectOk, type HostRef } from './core';
 import { simClaim, TRANSFER_POOL_END, type SimClaimKey } from '../claims';
-import { VMS_FLEET } from './static-users';
+import { labHostFleet, labHostNamed, poolHostsOfRun, type LabHost } from '../lab-hosts';
 
 /**
  * Every value Fleet records as a Linux host's `platform`: `HostLinuxOSs` in
@@ -147,6 +147,8 @@ export interface OnlineHostRef extends HostRef {
   /** fleetd/Orbit version, or null for a vanilla-osquery host. */
   orbitVersion: string | null;
   osqueryVersion: string | null;
+  /** The OS the host reports (`os_version`): "macOS 26.6.2", "Ubuntu 24.04.5 LTS". */
+  osVersion: string;
 }
 
 /**
@@ -154,26 +156,31 @@ export interface OnlineHostRef extends HostRef {
  * lab's machines and a large **simulated** (osquery-perf) load fleet, and they
  * suit opposite purposes:
  *
- *  - `'real'` — a lab machine the suite's real-host specs run on. Runs real
- *    osquery, so it answers live queries with the query's actual results,
- *    reports real local users and agent versions, and supports MDM-gated
- *    features. Use for any spec asserting real device behaviour. On premium
- *    these are the lab machines on the **VMs** fleet; free has no fleets, so
- *    there it is every lab machine.
+ *  - `'real'` — one of the lab's **pool** hosts of the run's tier
+ *    (`helpers/lab-hosts.ts`): the interchangeable machines the real-host specs
+ *    run on. It runs real osquery, so it answers live queries with the query's
+ *    actual results, reports real local users and agent versions, and supports
+ *    MDM-gated features. Use for any spec asserting real device behaviour. Each
+ *    worker is handed one pool host per platform and keeps it
+ *    ({@link findOnlineHost}).
  *  - `'simulated'` — the disposable load fleet. Plentiful and self-regenerating,
  *    but it ignores live-query SQL, returns no rows for a fraction of runs, and
  *    reports contradictory label membership. Use where the test needs *volume*
  *    (bulk select/transfer/delete) and the individual host is incidental.
  *
- * A lab machine on any other premium fleet (the OS-flavour VMs on **OS matrix**)
- * is neither: no real-host spec targets it, and no simulation picker may move,
- * delete, lock or run anything on it.
+ * The lab's other machines (the OS-flavour and special-purpose hosts on
+ * premium's **OS matrix** fleet, a physical machine) are neither: no real-host
+ * spec is handed one, and no simulation picker may move, delete, lock or run
+ * anything on it.
  *
- * A lab machine is told from a simulation by its **hardware**: the lab runs on
- * virtualized hardware, while osquery-perf reports fixed consumer models
- * (`MacBookPro11,4`, `Surface Laptop 2`) or none at all (its Linux hosts). The
- * hardware is a property of the machine, so it holds on both tiers and across
- * re-enrollment.
+ * A lab machine is one the lab's manifest **lists by name**, and the manifest's
+ * role says what it is for. A host the manifest doesn't list yet is still told
+ * from a simulation by its **hardware**: the lab's VMs run on virtualized
+ * hardware, while osquery-perf reports fixed consumer models (`MacBookPro11,4`,
+ * `Surface Laptop 2`) or none at all (its Linux hosts). So a machine the lab
+ * enrolled a minute ago is out of every simulation picker's reach, and waits
+ * for its manifest entry to be anything more. A physical machine reports a
+ * real hardware model, and only the manifest knows it.
  *
  * MDM enrollment is deliberately *not* the discriminator. It used to be, on the
  * premise that only real VMs were enrolled — which stopped being true once the
@@ -183,40 +190,41 @@ export interface OnlineHostRef extends HostRef {
  */
 export type HostKind = 'real' | 'simulated';
 
-/** The hardware fields the hosts list reports, which tell a lab machine from a simulation. */
-interface HostHardware {
+/** What the hosts list reports of a host that tells a lab machine from a simulation. */
+interface HostIdentity {
+  display_name?: string;
   hardware_model?: string;
   hardware_vendor?: string;
 }
 
 /**
- * The lab's machines are the only hosts on virtualized hardware: the macOS VMs
- * report the model `VirtualMac2,1`, and the Linux and Windows VMs the vendor
- * `QEMU` with the model `Standard PC (Q35 + ICH9, 2009)` or `QEMU Virtual
- * Machine`. A host that has reported no hardware yet reads as a simulation.
+ * The hardware of a lab VM: the macOS ones report the model `VirtualMac2,1`,
+ * and the Linux and Windows ones the vendor `QEMU` with the model `Standard PC
+ * (Q35 + ICH9, 2009)` or `QEMU Virtual Machine`. A host that has reported no
+ * hardware yet, and that the manifest doesn't list, reads as a simulation.
  */
 const LAB_HARDWARE_MODEL = /virtual|qemu|standard pc/i;
 const LAB_HARDWARE_VENDOR = /qemu/i;
 
-function isLabMachine(host: HostHardware): boolean {
-  return LAB_HARDWARE_MODEL.test(host.hardware_model ?? '') || LAB_HARDWARE_VENDOR.test(host.hardware_vendor ?? '');
+function isLabMachine(host: HostIdentity): boolean {
+  return (
+    !!labHostNamed(host.display_name) ||
+    LAB_HARDWARE_MODEL.test(host.hardware_model ?? '') ||
+    LAB_HARDWARE_VENDOR.test(host.hardware_vendor ?? '')
+  );
 }
 
 /**
- * Whether a lab machine sits where the suite's real-host specs work. Premium
- * keeps those on the VMs fleet, beside the durable software and settings the
- * specs count on; which lab machines are on it is the lab's decision, not a
- * name's or a model's. Free has no fleets, so every lab machine there counts.
- * Anything but free is held to the fleet, so a run that doesn't know its tier
- * can't take a lab machine the suite doesn't target.
+ * The manifest entry of a host a real-host spec may be handed: a pool host of
+ * the run's tier, sitting on the fleet its role puts it on (VMs on premium,
+ * beside the durable software and settings the specs count on). A pool host
+ * found anywhere else is not handed out: the cleanup returns it before a run,
+ * and the lab preflight names one that is still astray.
  */
-function isSuiteTarget(host: { team_name?: string | null }): boolean {
-  return process.env.SUITE === 'free' || host.team_name === VMS_FLEET;
-}
-
-function matchesKind(host: OnlineHost, kind?: HostKind): boolean {
-  if (!kind) return true;
-  return kind === 'real' ? isLabMachine(host) && isSuiteTarget(host) : !isLabMachine(host);
+function poolEntryOf(host: { display_name?: string; team_name?: string | null }): LabHost | undefined {
+  const entry = labHostNamed(host.display_name);
+  if (!entry || entry.role !== 'pool' || entry.tier !== process.env.SUITE) return undefined;
+  return (host.team_name ?? null) === labHostFleet(entry) ? entry : undefined;
 }
 
 /**
@@ -228,6 +236,12 @@ function matchesKind(host: OnlineHost, kind?: HostKind): boolean {
 export interface OnlineHostRequirements {
   /** Restrict to real devices or to the simulated load fleet. */
   kind?: HostKind;
+  /**
+   * With `kind: 'real'`: only the pool hosts of this manifest `os` (`macos-26`),
+   * for a spec whose assertions depend on the OS version. The macOS pool holds
+   * two versions, and a worker's Mac is otherwise either.
+   */
+  os?: string;
   /**
    * Only match hosts reporting local user accounts. A host's users card stays
    * empty ("No users detected on this host") until its `users` detail query has
@@ -244,24 +258,21 @@ export interface OnlineHostRequirements {
 }
 
 /**
- * First online host (ordered by display name) of the given platform that meets
- * `requirements` — the resolver behind the `liveMacosHost` fixture and any spec
- * needing a host that actually answers live reports, refetches, and transfers.
+ * An online host of the given platform that meets `requirements` — the resolver
+ * behind the `liveMacosHost` fixture and any spec needing a host that actually
+ * answers live reports, refetches, and transfers.
  *
- * Fleet's `platform` param filters by *label group*, which can return hosts of
- * other platforms, so results are re-filtered on each host's own `platform`
- * field. Ordering by display name keeps the pick stable across calls in a run.
+ * **`kind: 'real'` is the worker's own pool host** of the platform
+ * ({@link leasePoolHost}): the same one for every test the worker runs, and a
+ * different one from the neighbouring worker's while the pool has a host each.
  *
- * The pool is **paged** rather than read off one window. `kind` is decided from
- * the host's hardware, which Fleet has no query param for, so it can only be
- * applied client-side — and a handful of real VMs among hundreds of simulations
- * will not reliably land in the first page.
- *
- * Each page's candidates are tried before the next page is fetched, so the walk
- * stops on the page holding the first host that satisfies `requirements`. That
- * matters for `kind: 'real'`: only a few hosts on the instance can ever match,
- * so collecting candidates up-front would read every page on every call and put
- * a needless multiple of that load on a shared QA instance.
+ * Otherwise it is the first match by display name. Fleet's `platform` param
+ * filters by *label group*, which can return hosts of other platforms, so
+ * results are re-filtered on each host's own `platform` field, and ordering by
+ * display name keeps the pick stable across calls in a run. The hosts are
+ * **paged** rather than read off one window, since `kind: 'simulated'` is
+ * decided client-side, and each page's candidates are tried before the next
+ * page is fetched, so the walk stops on the page holding the first match.
  *
  * `maxScan` bounds how many candidates have their vitals fetched, which is the
  * expensive part — one extra request each.
@@ -272,6 +283,14 @@ export async function findOnlineHost(
   requirements: OnlineHostRequirements = {},
   maxScan = 100,
 ): Promise<OnlineHostRef | null> {
+  if (requirements.kind === 'real') {
+    const host = await leasePoolHost(request, platform, requirements.os);
+    if (!host) return null;
+    if (requirements.withUsers && host.usernames.length === 0) return null;
+    if (requirements.withOrbit && !host.orbitVersion) return null;
+    return host;
+  }
+
   const perPage = 100;
   // Bounds the walk at 1000 online hosts so an instance with no matching host
   // returns null instead of paging indefinitely.
@@ -284,7 +303,7 @@ export async function findOnlineHost(
     for (const candidate of batch) {
       if (scanned >= maxScan) break;
       if (!matchesPlatform(candidate.platform, platform)) continue;
-      if (!matchesKind(candidate, requirements.kind)) continue;
+      if (requirements.kind === 'simulated' && isLabMachine(candidate)) continue;
 
       scanned += 1;
       const host = await getOnlineHostVitals(request, candidate);
@@ -299,10 +318,239 @@ export async function findOnlineHost(
   return null;
 }
 
+/** One record Fleet holds of a host the lab's manifest lists. */
+export interface LabHostRecord {
+  /** The manifest's entry for it. */
+  entry: LabHost;
+  id: number;
+  displayName: string;
+  /** `online`, `offline`, …, as the hosts list reports it. */
+  status: string;
+  seenTime: string;
+  /** Its fleet, null for Unassigned. */
+  fleetId: number | null;
+  fleetName: string | null;
+  /** The OS it reports: "Ubuntu 24.04.5 LTS". */
+  osVersion: string;
+}
+
+/**
+ * Every record Fleet holds of the given manifest hosts, online or not, on
+ * whatever fleet. One search per host: Fleet's `query` matches the hostname,
+ * which carries the manifest's name whatever its case or domain suffix, and a
+ * hit is kept only when its display name is the entry's. A host that
+ * re-enrolled can leave a second, older record under the same name, so an
+ * entry may come back more than once ({@link newestRecord}) or not at all.
+ */
+export async function listLabHostRecords(
+  request: APIRequestContext,
+  entries: readonly LabHost[],
+): Promise<LabHostRecord[]> {
+  const found = await Promise.all(
+    entries.map(async (entry) => {
+      const res = await request.get(apiUrl('hosts'), {
+        headers: authHeaders(),
+        params: { query: entry.name, per_page: '50' },
+      });
+      await expectOk(res, `Failed to look up the lab host ${entry.name}`);
+      const hosts = ((await res.json()).hosts ?? []) as Array<{
+        id: number;
+        display_name?: string;
+        status: string;
+        seen_time: string;
+        team_id?: number | null;
+        team_name?: string | null;
+        os_version?: string;
+      }>;
+      return hosts
+        .filter((h) => (h.display_name ?? '').toLowerCase() === entry.name)
+        .map((h): LabHostRecord => ({
+          entry,
+          id: h.id,
+          displayName: h.display_name!,
+          status: h.status,
+          seenTime: h.seen_time,
+          fleetId: h.team_id ?? null,
+          fleetName: h.team_name ?? null,
+          osVersion: h.os_version ?? '',
+        }));
+    }),
+  );
+  return found.flat();
+}
+
+/** The record of a manifest host that checked in last: the live one, where a re-enrollment left an older record behind. */
+export function newestRecord(entry: LabHost, records: readonly LabHostRecord[]): LabHostRecord | undefined {
+  return records
+    .filter((r) => r.entry.name === entry.name)
+    .sort((a, b) => b.seenTime.localeCompare(a.seenTime))[0];
+}
+
+/**
+ * What keeps a manifest host from being used, or null when it is online on the
+ * fleet its role puts it on: not enrolled (deleted, or expired after its fleet's
+ * host-expiry window offline), on another fleet (a host that re-enrolled lands
+ * on VMs, whose enroll secret every lab host carries), or offline since its
+ * last check-in. The lab preflight and the real-host pickers' errors both say
+ * this, so one host's outage reads the same wherever it shows.
+ */
+export function labHostProblem(entry: LabHost, records: readonly LabHostRecord[]): string | null {
+  const record = newestRecord(entry, records);
+  if (!record) return `"${entry.name}" is not enrolled (deleted or expired, and not re-enrolled since)`;
+  const fleet = labHostFleet(entry);
+  if (fleet !== undefined && record.fleetName !== fleet) {
+    return `"${entry.name}" (id ${record.id}) is on ${record.fleetName ?? 'Unassigned'}, not on ${fleet ?? 'Unassigned'}, where a ${entry.role} host belongs`;
+  }
+  if (record.status !== 'online') {
+    return `"${entry.name}" (id ${record.id}) is ${record.status}, last seen ${record.seenTime}`;
+  }
+  return null;
+}
+
+/**
+ * The online record of a lab host outside the pool: a matrix host
+ * (`matrixHostOfRun('rhel-9')`) or a special one (`specialHostOfRun('LUKS key
+ * escrow')`), from `helpers/lab-hosts.ts`. Throws with what is wrong with it
+ * ({@link labHostProblem}) when it isn't online on its role's fleet. A pool
+ * host is never asked for by name: a worker gets its own from
+ * {@link requireRealHost}.
+ */
+export async function requireLabHost(request: APIRequestContext, entry: LabHost): Promise<LabHostRecord> {
+  if (entry.role === 'pool') {
+    throw new Error(`[requireLabHost] ${entry.name} is a pool host: take the worker's own from requireRealHost`);
+  }
+  const records = await listLabHostRecords(request, [entry]);
+  const problem = labHostProblem(entry, records);
+  if (problem) throw new Error(`the ${entry.role} host for ${entry.purpose ?? entry.os} can't be used: ${problem}`);
+  return newestRecord(entry, records)!;
+}
+
+/**
+ * The pool of a platform as it stands now: this tier's pool hosts that are
+ * online and on their fleet, by name. With `os`, only the hosts of that
+ * manifest `os`. The cleanup and the lab preflight work through every member;
+ * a test gets one of them from {@link requireRealHost}.
+ */
+export async function listPoolHosts(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  opts: { os?: string } = {},
+): Promise<LabHostRecord[]> {
+  const entries = poolHostsOfRun(platform, opts.os);
+  const records = await listLabHostRecords(request, entries);
+  return entries
+    .filter((entry) => labHostProblem(entry, records) === null)
+    .map((entry) => newestRecord(entry, records)!);
+}
+
+/**
+ * Online hosts on the lab's virtualized hardware that the manifest doesn't
+ * list: machines the lab enrolled after the suite's copy of the manifest was
+ * last synced with the lab's. Each is out of every simulation picker's reach
+ * already ({@link HostKind}) and is nothing more until it has an entry.
+ */
+export async function listUnlistedLabMachines(
+  request: APIRequestContext,
+): Promise<Array<HostRef & { fleetName: string | null }>> {
+  const perPage = 500;
+  const unlisted: Array<HostRef & { fleetName: string | null }> = [];
+  for (let page = 0; page < 10; page++) {
+    const res = await request.get(apiUrl('hosts'), {
+      headers: authHeaders(),
+      params: { status: 'online', per_page: String(perPage), page: String(page) },
+    });
+    await expectOk(res, 'Failed to list the online hosts');
+    const batch = ((await res.json()).hosts ?? []) as OnlineHost[];
+    unlisted.push(
+      ...batch
+        .filter((h) => isLabMachine(h) && !labHostNamed(h.display_name))
+        .map((h) => ({ id: h.id, displayName: h.display_name, fleetName: h.team_name ?? null })),
+    );
+    if (batch.length < perPage) break;
+  }
+  return unlisted;
+}
+
+/**
+ * The pool host each lease of this worker process holds, by platform and `os`.
+ * A worker process runs one test at a time, so its host's one queue of scripts
+ * and installs is never shared with a test of the same worker.
+ */
+const leases = new Map<string, number>();
+
+/**
+ * The worker's pool host of a platform: the pool's online members by name, and
+ * `pool[parallelIndex % pool.length]`. A worker keeps its host for as long as
+ * it stays online on its fleet, so a test and the fixtures beside it name the
+ * same machine; one that drops out is replaced from the pool as it then stands,
+ * which is how a dead member shrinks the pool instead of failing every test
+ * that wanted its platform. Two workers share a host only when the platform
+ * has fewer members than the run has workers.
+ *
+ * `parallelIndex` is the worker's slot (0 to workers - 1): unlike the worker
+ * index, it stays the same when Playwright replaces a worker after a failure.
+ */
+async function leasePoolHost(
+  request: APIRequestContext,
+  platform: 'darwin' | 'windows' | 'linux',
+  os?: string,
+): Promise<RealHostRef | null> {
+  const key = `${platform}/${os ?? 'any'}`;
+  const held = leases.get(key);
+  if (held !== undefined) {
+    const host = await readPoolHost(request, held);
+    if (host) return recordVmOnReport(host);
+    leases.delete(key);
+  }
+
+  const pool = await listPoolHosts(request, platform, { os });
+  const slot = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
+  // From the worker's own member on: one that left the pool since the listing gives way to the next.
+  for (let i = 0; i < pool.length; i++) {
+    const member = pool[(slot + i) % pool.length];
+    const host = await readPoolHost(request, member.id);
+    if (!host) continue;
+    leases.set(key, member.id);
+    return recordVmOnReport(host);
+  }
+  return null;
+}
+
+/** A pool host with its vitals, or null once it is gone, offline or off its fleet. */
+async function readPoolHost(request: APIRequestContext, hostId: number): Promise<RealHostRef | null> {
+  const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  if (res.status() === 404) return null;
+  await expectOk(res, `Failed to read host ${hostId}`);
+  const { host } = await res.json();
+  if (host.status !== 'online' || !poolEntryOf(host)) return null;
+  return { ...vitalsOf(host), fleetId: host.team_id ?? 0 };
+}
+
+/**
+ * Notes on the running test's report which VM it ran on and the OS that VM
+ * reports (`vm: prem-macos26-01 (macOS 26.6.2)`). The pool's members differ by
+ * OS version, and a worker's host is its slot's, so the report is where a
+ * failure on one of them shows as that. Outside a test (a worker fixture's
+ * setup) there is no report to note it on.
+ */
+export function recordVmOnReport<T extends { displayName: string; osVersion: string }>(host: T): T {
+  let info: ReturnType<typeof test.info>;
+  try {
+    info = test.info();
+  } catch {
+    return host;
+  }
+  const description = `${host.displayName} (${host.osVersion})`;
+  if (!info.annotations.some((a) => a.type === 'vm' && a.description === description)) {
+    info.annotations.push({ type: 'vm', description });
+  }
+  return host;
+}
+
 /**
  * Simulated hosts of a platform — the disposable pool for specs that mutate or
- * destroy hosts. Excludes every host on virtualized hardware so a lab machine
- * can never be selected, whatever fleet it's on (see {@link HostKind}).
+ * destroy hosts. Excludes every lab machine, whatever fleet it's on, so one can
+ * never be selected (see {@link HostKind}).
  *
  * Drawn from the **end** of the display-name ordering on purpose: the read-only
  * pickers other specs use (`findOnlineHost`, `findHostWithSoftware`) all take the
@@ -338,7 +586,7 @@ export async function findSimulatedHostIds(
     const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
     matches.push(
       ...batch.filter(
-        (h) => matchesPlatform(h.platform, platform) && matchesKind(h, 'simulated'),
+        (h) => matchesPlatform(h.platform, platform) && !isLabMachine(h),
       ),
     );
     if (batch.length < perPage) break;
@@ -406,7 +654,7 @@ export async function findSimulations(request: APIRequestContext, claim: SimClai
  *
  * The most recently seen come first: they belong to the newest abandoned set,
  * a day from expiry, rather than to an older one expiry is about to delete.
- * Lab machines are excluded by hardware, as everywhere. Returns fewer than `count`
+ * Lab machines are excluded, as everywhere. Returns fewer than `count`
  * when the set is thin (a refresh that didn't run) — callers assert on the
  * length they need.
  *
@@ -427,7 +675,7 @@ export async function findOfflineSimulations(request: APIRequestContext, claim: 
     },
   });
   await expectOk(res, 'Failed to list the offline hosts on Unassigned');
-  const hosts = (await res.json()).hosts as Array<HostHardware & { id: number; platform: string }>;
+  const hosts = (await res.json()).hosts as Array<HostIdentity & { id: number; platform: string }>;
   return hosts
     .filter((h) => matchesPlatform(h.platform, platform) && !isLabMachine(h))
     .slice(0, count)
@@ -446,7 +694,7 @@ async function findBorrowableSimulations(
   const simulated: OnlineHost[] = [];
   for (let page = 0; page < maxPages; page++) {
     const batch = await listOnlineHosts(request, platform, perPage, 'desc', page);
-    simulated.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && matchesKind(h, 'simulated')));
+    simulated.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && !isLabMachine(h)));
     const eligible = simulated.slice(BORROW_SKIP).filter(keep);
     if (eligible.length >= offset + count || batch.length < perPage) {
       return eligible.slice(offset, offset + count).map((h) => h.id);
@@ -547,7 +795,7 @@ export async function findSimulatedHostForMdm(
       ...batch.filter(
         (h) =>
           matchesPlatform(h.platform, platform) &&
-          matchesKind(h, 'simulated') &&
+          !isLabMachine(h) &&
           Boolean(h.mdm?.connected_to_fleet) === mdmConnected &&
           (!withOrbit || Boolean(h.orbit_version)) &&
           Boolean(h.hostname),
@@ -877,7 +1125,7 @@ export async function listFleetHosts(
   const res = await request.get(apiUrl('hosts'), { headers: authHeaders(), params });
   await expectOk(res, `Failed to list the hosts of fleet ${fleetId}`);
   const hosts = (await res.json()).hosts as Array<
-    HostHardware & {
+    HostIdentity & {
       id: number;
       display_name: string;
       platform: string;
@@ -895,7 +1143,7 @@ export async function listFleetHosts(
   }));
 }
 
-/** A real VM, with the fleet it's on (0 for Unassigned). */
+/** A pool host a test was handed, with the fleet it's on (0 for Unassigned). */
 export type RealHostRef = OnlineHostRef & { fleetId: number };
 
 /**
@@ -924,68 +1172,47 @@ export function assertVmTagged(platform: 'darwin' | 'windows' | 'linux', asker: 
 }
 
 /**
- * The online real VM of `platform` (the first by display name of those the suite
- * targets, see {@link HostKind}), with its fleet: VMs on premium, 0 for
- * Unassigned on free. Throws rather than returning null: a spec that needs a
- * real device has nothing to test without one, and the message says what to
- * check. The calling test must carry the platform's {@link VM_TAGS} tag.
+ * The worker's online real VM of `platform` (its pool host, see
+ * {@link leasePoolHost}), with its fleet: VMs on premium, 0 for Unassigned on
+ * free. With `os`, the pool is only the hosts of that manifest `os`, for a spec
+ * that depends on the OS version. Throws rather than returning null: a spec
+ * that needs a real device has nothing to test without one, and the message
+ * says what to check. The calling test must carry the platform's
+ * {@link VM_TAGS} tag, and its report notes the VM it was handed.
  */
 export async function requireRealHost(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
+  opts: { os?: string } = {},
 ): Promise<RealHostRef> {
   assertVmTagged(platform, 'requireRealHost');
-  const host = await findOnlineHost(request, platform, { kind: 'real' });
+  const host = await leasePoolHost(request, platform, opts.os);
   if (!host) {
     throw new Error(
-      `no online real ${platform} VM on ${process.env.FLEET_URL}: ${await missingRealHostReason(request, platform)}. ` +
+      `no online real ${platform} VM on ${process.env.FLEET_URL}: ${await missingRealHostReason(request, platform, opts.os)}. ` +
         'Scripts, installs and MDM commands only reach a real device.',
     );
   }
-  return { ...host, fleetId: (await getHostFleetId(request, host.id)) ?? 0 };
+  return host;
 }
 
 /**
- * Why no online real VM of a platform was found, for the error a real-device
- * spec fails with. A lab machine is told apart by its hardware (see
- * {@link HostKind}), not by MDM enrolment, which a third of the simulations
- * share. So this reads every lab machine of the platform, online or not, and
- * says which case it is: where the suite looks but offline since its last
- * check-in (powered off, asleep, or its network down), online but its details
- * didn't load, enrolled but on another fleet than VMs (a machine that
- * re-enrolled, or one that was never moved there), or not enrolled at all
- * (deleted, or not re-enrolled since).
+ * Why a platform's pool has no host to hand out, for the error a real-device
+ * spec fails with: what is wrong with each pool host the manifest lists
+ * ({@link labHostProblem}), or that it lists none.
  */
 export async function missingRealHostReason(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
+  os?: string,
 ): Promise<string> {
-  const perPage = 500;
-  const lab: Array<OnlineHost & { status: string; seen_time: string }> = [];
-  for (let page = 0; page < 10; page++) {
-    const res = await request.get(apiUrl('hosts'), {
-      headers: authHeaders(),
-      params: { per_page: String(perPage), page: String(page) },
-    });
-    if (!res.ok()) return `the hosts list answered ${res.status()}, so whether one is enrolled is unknown`;
-    const batch = ((await res.json()).hosts ?? []) as Array<OnlineHost & { status: string; seen_time: string }>;
-    lab.push(...batch.filter((h) => matchesPlatform(h.platform, platform) && isLabMachine(h)));
-    if (batch.length < perPage) break;
+  const entries = poolHostsOfRun(platform, os);
+  if (entries.length === 0) {
+    return `lab-hosts.json lists no ${platform} pool host${os ? ` running ${os}` : ''} for the ${process.env.SUITE} tier`;
   }
-  if (lab.length === 0) {
-    return `no ${platform} host on virtualized hardware is enrolled at all (deleted, or not re-enrolled since)`;
-  }
-  const targets = lab.filter(isSuiteTarget);
-  if (targets.length === 0) {
-    const elsewhere = lab.map((h) => `"${h.display_name}" (${h.team_name ?? 'Unassigned'})`).join(', ');
-    return `no ${platform} lab machine is on the ${VMS_FLEET} fleet, where the suite looks for one; enrolled elsewhere: ${elsewhere}`;
-  }
-  return targets
-    .map((h) =>
-      h.status === 'online'
-        ? `"${h.display_name}" (id ${h.id}) is online, but its details didn't load`
-        : `"${h.display_name}" (id ${h.id}) is ${h.status}, last seen ${h.seen_time}`,
-    )
+  const records = await listLabHostRecords(request, entries);
+  return entries
+    .map((entry) => labHostProblem(entry, records) ?? `"${entry.name}" is online on its fleet, but its details didn't load`)
     .join('; ');
 }
 
@@ -1015,23 +1242,34 @@ async function getOnlineHostVitals(
   const res = await request.get(apiUrl(`hosts/${candidate.id}`), { headers: authHeaders() });
   if (res.status() === 404) return null;
   await expectOk(res, `Failed to read host ${candidate.id}`);
-  const { host } = await res.json();
+  return vitalsOf((await res.json()).host);
+}
+
+/** The vitals a host spec asserts against, from a `GET /hosts/:id` body's `host`. */
+function vitalsOf(host: {
+  id: number;
+  display_name: string;
+  users?: Array<{ username: string }> | null;
+  orbit_version?: string | null;
+  osquery_version?: string | null;
+  os_version?: string;
+}): OnlineHostRef {
   return {
-    id: candidate.id,
-    displayName: candidate.display_name,
-    usernames: ((host?.users ?? []) as Array<{ username: string }>).map((u) => u.username),
-    orbitVersion: host?.orbit_version ?? null,
-    osqueryVersion: host?.osquery_version ?? null,
+    id: host.id,
+    displayName: host.display_name,
+    usernames: (host.users ?? []).map((u) => u.username),
+    orbitVersion: host.orbit_version ?? null,
+    osqueryVersion: host.osquery_version ?? null,
+    osVersion: host.os_version ?? '',
   };
 }
 
 /**
- * A host as the hosts list reports it. Its hardware model and vendor are what
- * {@link matchesKind} reads to tell a lab machine from an osquery-perf
- * simulation; both are absent on a host that hasn't reported vitals yet, which
- * reads as "not a lab machine".
+ * A host as the hosts list reports it. Its display name, hardware model and
+ * vendor are what {@link isLabMachine} reads to tell a lab machine from an
+ * osquery-perf simulation.
  */
-interface OnlineHost extends HostHardware {
+interface OnlineHost extends HostIdentity {
   id: number;
   display_name: string;
   platform: string;
