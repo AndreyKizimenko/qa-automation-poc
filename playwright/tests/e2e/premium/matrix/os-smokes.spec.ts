@@ -215,10 +215,13 @@ const VITALS: Array<[vital: string, shape: RegExp]> = [
 /**
  * The Hosts list's platform filter for each platform. Its Platforms group is
  * Fleet's built-in labels under shorter names: Linux is "All Linux", Windows
- * "MS Windows". A host is in one once it has answered that label's query, as
- * for any label, so membership says the label queries reach the host and its
- * answers come back. The macOS and Windows queries read `os_version`; the
- * Linux one reads osquery's own build, so it holds whatever the distribution.
+ * "MS Windows". A Linux or Windows host is in one once it has answered that
+ * label's query, as for any label, so membership says the label queries reach
+ * the host and its answers come back. A Mac that enrolled in MDM is put in
+ * "macOS" by Fleet itself, before osquery answers anything, so there it says
+ * less: the host is in the label, and has not answered that it isn't. The
+ * macOS and Windows queries read `os_version`; the Linux one reads osquery's
+ * own build, so it holds whatever the distribution.
  */
 const PLATFORM_FILTER: Record<LabPlatform, string> = { linux: 'Linux', windows: 'Windows', darwin: 'macOS' };
 
@@ -453,6 +456,11 @@ async function durablePackage(
  * then, and the reason is the host's (its package manager busy or locked, a
  * dependency, a refused package): a longer wait changes nothing, and the red
  * row should say it.
+ *
+ * A failed status counts once it has been read twice, five seconds apart.
+ * Fleet records a failed attempt and queues its retry in two writes of one
+ * request, so a single read between them shows a failure that is about to
+ * become pending again.
  */
 async function waitForPackage(
   request: APIRequestContext,
@@ -464,11 +472,13 @@ async function waitForPackage(
   const done: HostSoftwareStatus = action === 'install' ? 'installed' : null;
   const failed: HostSoftwareStatus = action === 'install' ? 'failed_install' : 'failed_uninstall';
   let status: HostSoftwareStatus | undefined;
+  let failedReads = 0;
   await expect
     .poll(
       async () => {
         status = (await getHostSoftwareState(request, host.id, pkg.titleId))?.status;
-        return status === done || status === failed;
+        failedReads = status === failed ? failedReads + 1 : 0;
+        return status === done || failedReads >= 2;
       },
       { message: `the ${action} of ${pkg.title} on ${host.displayName} never ended`, timeout, intervals: [5_000] },
     )
@@ -532,9 +542,13 @@ function smokesOf(subject: Subject): void {
       for (const [vital, shape] of VITALS) {
         await expect(hostDetails.vitals.value(vital), `${vital} of ${host.displayName}`).toHaveText(shape);
       }
-      // The card shows "No users detected" until the host's users query has answered.
+      // The card shows "No users detected" until the host's users query has
+      // answered. Then it lists what the host reported: one of them, by name.
+      const { usernames } = await getHostAgentReport(request, host.id);
+      expect(usernames, `${host.displayName} reports no local user`).not.toHaveLength(0);
       await expect(hostDetails.usersHeading).toBeVisible();
-      await expect(hostDetails.usersRows.first()).toBeVisible();
+      await hostDetails.searchUsers(usernames[0]);
+      await expect(hostDetails.userRow(usernames[0])).toBeVisible();
     });
 
     test('is in the built-in label of its platform', async ({ hostsList, request }) => {

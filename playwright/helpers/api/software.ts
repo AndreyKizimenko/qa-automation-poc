@@ -956,7 +956,10 @@ export async function waitForInventoryToFollow(
     .poll(
       async () => {
         state = await getHostSoftwareState(request, hostId, titleId);
-        if (((state?.installedVersions.length ?? 0) > 0) === (expected === 'listed')) return true;
+        // Deleted, or no longer offered: its inventory can't be read, and an
+        // empty answer would pass for "gone".
+        if (!state) throw new Error(`title ${titleId} isn't offered to host ${hostId}, so its inventory can't be followed`);
+        if ((state.installedVersions.length > 0) === (expected === 'listed')) return true;
         quiet = (await getHostRefetchRequested(request, hostId)) ? 0 : quiet + 1;
         if (quiet >= 4) {
           await requestHostRefetch(request, hostId);
