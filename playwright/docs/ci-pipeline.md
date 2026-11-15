@@ -109,6 +109,8 @@ pinned in that script and in `GITOPS_EXCEPTIONS_BASELINE` (`helpers/api/gitops-m
 CI-only number: locally the default is higher and the specs that touch a VM are run with `--workers=2`. The
 measurements that set the current numbers are in [*What bounds a run*](#what-bounds-a-run). A trial at another
 count is a branch run with `-f workers=N`, read with `run_timeline.py` (below), never a config commit first.
+The input sets premium's count only: free has one VM per platform and a smaller instance, and always runs at
+its own.
 
 **Retries: two, except where an attempt is long.** CI retries so that a transient does not fail a night; a
 pass on retry is reported as `flaky` and triaged as such. Every describe that waits on a real VM takes one retry
@@ -242,7 +244,7 @@ Free is small enough that none of this applies: two workers, worker-bound; its r
   blob directory, included in the merge, and a new pairing in the config's guard.
 - **Adding a workflow that touches an instance.** Put it in that instance's concurrency group. Take a `ref`
   input on `workflow_call` so `QA — Branch run` can run it against a branch.
-- **Changing a worker count.** One branch run with `-f workers=N`, then the timeline: if every worker is busy
+- **Changing a worker count.** One branch run with `-f workers=N` (premium's count), then the timeline: if every worker is busy
   to the last minute the count still helps; if the tail is installs on one platform, or a VM describe sits
   near its budget, it does not. Record the result in the facts table with the date.
 - **Uploading anything from a run.** Through `./.github/upload-report`, never `actions/upload-artifact`

@@ -350,7 +350,7 @@ Browser specs run via per-tier workflows
 job runs the main project, then the exclusive specs and (premium) gitops-mode as separate steps, and merges
 the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
-`-f workers=N` for a worker-count trial, and `--ref <branch>` as well when the branch changes a workflow file.
+`-f workers=N` for a trial of premium's worker count (free keeps its own), and `--ref <branch>` as well when the branch changes a workflow file.
 
 Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in
 [docs/ci-pipeline.md](docs/ci-pipeline.md).
