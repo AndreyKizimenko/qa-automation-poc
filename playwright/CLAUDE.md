@@ -118,11 +118,14 @@ regenerate both on every restart.
   uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
   changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
   `fleet-pw-*` package, and deletes it in the same test.
-- **A failed install stalls the VM it ran on.** Orbit treats a failed install *script* as a failed config
-  cycle and backs its whole loop off — 1, 2, 4, then 5 min — so every install and script queued on that VM
-  waits (fleetdm/fleet#54607). Make an install fail with a pre-install query that returns no rows
-  (`preInstallQuery` on `uploadSoftwarePackageBuffer`), which stops before the script and doesn't trigger it;
-  a spec whose point is the script failure itself goes in `exclusive/` (`deploy-install-retries.spec.ts`).
+- **A failed install costs its VM only the attempts.** Fleet tries a failed install three times, half a
+  minute to a minute apart, before the failure sticks, and fleetd 1.63.0, which every lab host runs, doesn't
+  back its config loop off after one (fleetdm/fleet#54607), so nothing else queued on the VM waits. To make an
+  install fail on the host, build the package for the architecture the VM isn't (`foreignDebArch`,
+  `inventory-reflects-install.spec.ts`): its dpkg refuses the package before unpacking, so nothing is left
+  behind. To stop one before it reaches the host, give it a pre-install query that returns no rows
+  (`preInstallQuery` on `uploadSoftwarePackageBuffer`). A *policy's* failing install still goes in
+  `exclusive/` (`deploy-install-retries.spec.ts`): Fleet queues it below every user-requested install.
 - **`kind: 'simulated'`** — ~300 osquery-perf simulations per tier for volume work (bulk select, transfer,
   pagination). They answer every live query with the same canned row, whatever the SQL (the daemons run with
   `--live_query_no_results_prob 0`, so they always answer), and pass every policy except `SELECT 0;`. The ~half

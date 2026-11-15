@@ -79,11 +79,13 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
   wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
   Platforms chip or All hosts.
-- **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
-  `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
-  config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
-  (fleetdm/fleet#54607, fixed in fleetd 1.63.0: the rule holds while a VM runs an older agent). Where the
-  script failure itself is the point, the spec goes in `exclusive/`.
+- **To make an install fail, choose where it fails.** On the host: build the package for the architecture
+  the VM isn't (`foreignDebArch` in `helpers/deb.ts`), so its dpkg refuses it before unpacking and nothing
+  is left behind; Fleet tries three times, half a minute to a minute apart, before the failure sticks.
+  Before it reaches the host: a pre-install query that returns no rows (`preInstallQuery` on
+  `uploadSoftwarePackageBuffer`). A failed install script doesn't hold up the VM's other work: fleetd
+  1.63.0, which the lab's hosts run, doesn't back its config loop off after one (fleetdm/fleet#54607). A
+  *policy's* failing install still goes in `exclusive/`: Fleet queues it below every user-requested one.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.
 - **A policy's result on a host moves only on a refetch** (or the hourly policy interval), not on the

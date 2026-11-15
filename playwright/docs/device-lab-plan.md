@@ -345,8 +345,9 @@ BitLocker PIN.
   Simulation names are random and redrawn every day; on 2026-11-14 the first seven hosts of the Linux `plain`
   pool were lab VMs. Step A closed it by hardware; the manifest closes it by name.
 - **fleetdm/fleet#54607 is closed in fleetd 1.63.0**, which every lab host runs, so a failed install script
-  no longer stalls a VM. Its row in `blocked-by-product-bugs.md` stands until someone retests it and lifts
-  the workaround.
+  no longer stalls a VM. Retested on 2026-11-15: three failed attempts land 37 to 68 s apart on the pool's
+  Ubuntu VMs, where they were 1 then 2 min. The workaround is lifted and the row is under *Resolved* in
+  `blocked-by-product-bugs.md`.
 - **`update-on-host`'s two "updates when it is behind" tests skip on a fresh VM.** Claude is level with the
   library until the vendor ships a build; the guard lifts by itself.
 - **The skip for fleetdm/fleet#50059** was reproduced by `fuse3` on the old Ubuntu VM. Check it still
