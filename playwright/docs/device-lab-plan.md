@@ -13,8 +13,8 @@ them, and where the handoff turned out wrong.
 (PR #145): the manifest decides what each lab host is, each worker is handed its own pool VM, and the eight
 pool VMs are on the VMs fleet. Its branch run, at the usual 3 and 2 workers, is the first full run of the
 suite on the lab's VMs. C's trial of a fourth premium worker follows the merge as a run of its own, and the
-last two boxes under C wait on its numbers. Step D is built on top of this branch (`playwright/device-lab-smokes`)
-and opens its PR once #145 is on `main`.
+last two boxes under C wait on its numbers. Step D is PR #146 (`playwright/device-lab-smokes`), awaiting
+its branch run.
 
 ## What the suite has to work with
 
