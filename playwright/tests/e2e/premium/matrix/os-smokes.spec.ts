@@ -39,8 +39,7 @@
  *
  * **A host that can't be used is one red row, not seven.** The first smoke of
  * an OS fails with what is wrong with its host (`labHostProblem`: offline, on
- * another fleet, not enrolled) and the rest skip, naming it. `UNUSABLE_HOST`
- * makes the first one skip as well.
+ * another fleet, not enrolled) and the rest skip, naming it.
  *
  * **One host, one worker.** A host works one queue of scripts and installs, so
  * each OS's smokes run in order in one worker (`mode: 'default'`), and the OS
@@ -136,12 +135,6 @@ import {
   ensureVmFixtureUninstalled,
   findVmFixtureTitle,
 } from '@helpers/vm-fixtures';
-
-/**
- * What the first smoke of an OS does when its host can't be used: fail, with
- * the reason, or skip like the smokes after it.
- */
-const UNUSABLE_HOST: 'fail' | 'skip' = 'fail';
 
 /**
  * The OS name Fleet shows for each manifest `os`, and the major version the
@@ -255,16 +248,15 @@ const GATE = 'is online on its fleet, and reports its OS and its agent versions'
 
 /**
  * The OS's host, online on its fleet. When it isn't, the first smoke of the OS
- * fails with the reason (see `UNUSABLE_HOST`) and every other one skips,
- * naming that smoke.
+ * (`gate`) fails with the reason and every other one skips, naming that smoke.
  */
 async function hostOf(request: APIRequestContext, { os, entry }: Subject, gate = false): Promise<SmokeHost> {
   const candidates = entry.role === 'pool' ? poolHostsOfRun(entry.platform, os) : [entry];
   const records = await listLabHostRecords(request, candidates);
   const problems = candidates.map((candidate) => labHostProblem(candidate, records));
   const unusable = problems.every((problem) => problem !== null) ? problems.join('; ') : null;
-  if (unusable && gate && UNUSABLE_HOST === 'fail') throw new Error(`no host to smoke ${os} on: ${unusable}`);
-  test.skip(unusable !== null, gate ? `${unusable}` : `${unusable} (the failure of "${GATE}")`);
+  if (unusable && gate) throw new Error(`no host to smoke ${os} on: ${unusable}`);
+  test.skip(unusable !== null, `${unusable} (the failure of "${GATE}")`);
 
   const fleetName = labHostFleet(entry);
   if (typeof fleetName !== 'string') throw new Error(`[os-smokes] ${entry.name} (${entry.role}, ${entry.tier}) has no fleet of its own`);

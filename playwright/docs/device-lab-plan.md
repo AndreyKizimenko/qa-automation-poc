@@ -225,7 +225,7 @@ of 100, the one red being the tarball's title, since fixed; and RHEL 9, Windows 
 the self-review's fixes, 17 of 17. Seen failing first, on scratch edits since reverted: a wrong OS major, a
 wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, six skipped),
 vulnerabilities on Debian 13, Fleet Desktop on the headless server. **Not run:** the CI step and its input,
-`--repeat-each` and a headed pass, `UNUSABLE_HOST = 'skip'`, and the sweep with something to sweep (it has
+`--repeat-each` and a headed pass, and the sweep with something to sweep (it has
 only met a clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
 Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on a host, no host moved.
 
@@ -293,6 +293,9 @@ BitLocker PIN.
 - **The fleets are as they will stay**: the pool on VMs, everything else on OS matrix, from 2026-11-14, and
   B + C merge before the next nightly (Andrey, 2026-11-14).
 - **Host expiry on VMs and OS matrix is 30 days** (Andrey, 2026-11-14).
+- **A matrix host that is offline fails its first smoke, and no switch makes it skip** (Andrey, 2026-11-15):
+  the first smoke of that OS is red with `labHostProblem`'s reason and the rest of that OS skip, naming
+  it, so an offline host is one red row a night, not seven. A pool version with no VM left reads the same.
 - **The three old UTM VMs' records were deleted from the VMs fleet** (Andrey, 2026-11-15): under the fleet's
   own 30 days they would no longer have expired in a day. The fleet holds exactly the eight pool VMs. Free's
   three old records are on Unassigned and expire by themselves under the global day.
@@ -304,18 +307,6 @@ BitLocker PIN.
 
 ## Open questions for Andrey
 
-- A matrix host that is offline: does its smoke fail or skip? Built as one switch, `UNUSABLE_HOST` in
-  `os-smokes.spec.ts`, set to **fail**: the first smoke of that OS fails with `labHostProblem`'s reason and
-  the rest of that OS skip, naming it, so an offline host is one red row a night, not seven. Set to `skip`,
-  the first one skips too and the night stays green. (The pool's versions follow the same rule: a version
-  with no pool VM left.)
-- Fleet's default scripts for an `.rpm` call `dnf`, which openSUSE lacks, so a custom `.rpm` fails to install
-  there unless it comes with `zypper` scripts (seen on `prem-opensuse16-01`, 2026-11-15: `dnf: command not
-  found`). A bug is drafted; file it? The smoke installs with `zypper` scripts either way.
-- Two things Fleet shows that may be worth a report of their own: a Linux OS version built from
-  `VERSION_ID` alone (Zorin OS 18.1 as "18.0.0", Amazon Linux 2023.12 as "2023.0.0", Debian 13.7 as
-  "13.0.0"), and Software › OS listing `prem-omarchy-01` as "Arch Linux Rolling" while its host page says
-  "Omarchy 4.5.0".
 - The lab's side of the manifest: the `device-lab` skill should end a change to `lab-hosts.json` with `npm
   run lab:sync` here and a PR. Until it says so, a host whose role the lab changed is moved back by the
   suite's cleanup to where the suite's stale copy puts it.
