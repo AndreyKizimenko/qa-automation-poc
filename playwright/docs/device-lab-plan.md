@@ -260,9 +260,8 @@ Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on 
       (the branch changes workflow files, and a branch run leaves the smokes out unless asked). That run
       is the first time the new CI step and its `os-smokes` input run at all.
 - [ ] macOS 27, when its VM exists, gets a DDM-focused smoke.
-- [ ] openSUSE's `zypper` scripts are a workaround for a Fleet gap (its default `.rpm` scripts call `dnf`): a
-      bug is drafted, and the workaround's `TODO(fleetdm/fleet#N)` and its row in
-      `blocked-by-product-bugs.md` wait for Andrey to file it.
+- [x] openSUSE's `zypper` scripts are a workaround for a Fleet gap (its default `.rpm` scripts call `dnf`):
+      fleetdm/fleet#58784, with the `TODO` at the scripts and a row in `blocked-by-product-bugs.md`.
 
 ## Step E: disk encryption
 
@@ -354,7 +353,12 @@ BitLocker PIN.
 - **Zorin OS 18.1 is right, and so is Fleet's "18.0.0", after a fashion.** The host's `os-release` says
   `VERSION="18.1"` and `VERSION_ID="18"`; osquery reads major, minor and patch from `VERSION_ID`, and Fleet
   prints the three for every Linux but Ubuntu (`parseOSVersion`). The same makes Amazon Linux 2023.12
-  "2023.0.0" and Debian 13.7 "13.0.0". The smokes assert the name and the major version only.
+  "2023.0.0" and Debian 13.7 "13.0.0". The smokes assert the name and the major version only. Filed for
+  Zorin as fleetdm/fleet#58785, since there osquery does report 18.1 (`os_version.version`); for the other
+  two osquery has nothing finer (fleetdm/fleet#23000, closed in 2024 as an osquery issue).
+- **Software › OS lists an Omarchy host as "Arch Linux rolling" on purpose.** `directIngestOSUnixLike`
+  files Omarchy and CachyOS under the Arch Linux row of the OS inventory, while the host page keeps
+  "Omarchy 4.5.0". Not a bug.
 - **What installs an unsigned local `.rpm`.** `dnf install <file>` does, on RHEL 9 and 10, Amazon Linux 2023
   and Fedora 45, whose rpm 6 enforces signatures by itself (`%_pkgverify_level all`) while dnf5 skips the
   check for a file on the command line. `zypper install` refuses ("File is unsigned") without

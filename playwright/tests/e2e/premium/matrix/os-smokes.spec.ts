@@ -56,7 +56,7 @@
  *   |---|---|---|
  *   | `.deb` host | `fleet-pw-os-smoke-*_1.0.0_all.deb`, built per test | Fleet's own (`apt-get`) |
  *   | `.rpm` host | `fleet-pw-os-smoke-*-1.0.0-1.noarch.rpm`, built per test | Fleet's own (`dnf`) |
- *   | openSUSE | the same `.rpm` | `zypper`, given here: openSUSE has no `dnf`, which Fleet's own call |
+ *   | openSUSE | the same `.rpm` | `zypper`, given here: openSUSE has no `dnf`, which Fleet's own call (fleetdm/fleet#58784) |
  *   | Omarchy (Arch) | `fleet-pw-os-smoke-*.tar.gz`, built per test (its title is the file name, extension and all) | given here, as a tarball needs: Fleet takes no `.pkg.tar.zst` |
  *   | Windows matrix host | `fleet-playwright-smoke-1.0.0.msi` (`make-msi.sh smoke`) | Fleet's own |
  *   | Windows and macOS pool VM | the VMs fleet's durable fixture (`helpers/vm-fixtures.ts`), left uninstalled | Fleet's own |
@@ -293,9 +293,10 @@ function perRunPackage(entry: LabHost): { fileName: string; buffer: Buffer; scri
       return {
         fileName: `${name}-1.0.0-1.noarch.rpm`,
         buffer: inertRpm(name, '1.0.0'),
-        // Fleet's own scripts for an .rpm call dnf. A host that installs with
-        // zypper gets the same two steps in its words; the package is unsigned,
-        // which zypper has to be told to accept.
+        // TODO(fleetdm/fleet#58784): Fleet's own scripts for an .rpm call dnf,
+        // which openSUSE doesn't have, so its install fails with them. A host
+        // that installs with zypper gets the same two steps in its words; the
+        // package is unsigned, which zypper has to be told to accept.
         scripts:
           entry.packageManager === 'zypper'
             ? {
