@@ -628,7 +628,7 @@
       "count": 4
     },
     "suite/use-own-name": {
-      "count": 7
+      "count": 5
     }
   },
   "tests/e2e/premium/policies/role-access.spec.ts": {
@@ -728,9 +728,6 @@
     }
   },
   "tests/e2e/premium/settings/team-host-status-webhook.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    },
     "suite/no-page-locator-in-spec": {
       "count": 1
     },
