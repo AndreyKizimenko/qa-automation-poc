@@ -3,10 +3,18 @@
  *
  * Add a package with **Deploy** switched on, and Fleet creates an
  * `[Install software] <title> (<ext>)` policy whose automation installs it on
- * every host that fails it. The test follows that on the Ubuntu VM: the policy
- * exists and is announced in the feed, the VM fails it at its next policy run,
- * and Fleet installs the package — "Fleet installed …" in the host's Past
+ * every host that fails it. The test follows that on the worker's Ubuntu VM: the
+ * policy exists and is announced in the feed, the VM fails it at its next policy
+ * run, and Fleet installs the package — "Fleet installed …" in the host's Past
  * activity.
+ *
+ * **Every host that fails it** is every Linux host on the fleet, so the pool's
+ * other Ubuntu VMs are sent the same install when they next run their policies
+ * while the policy exists. It queues below whatever their own workers asked for
+ * (a policy's installs run at priority 0), deleting the title cancels the ones
+ * still queued, and a VM that did install the package keeps an inert `.deb`
+ * that the cleanup's purge removes from every Ubuntu pool VM. The test reads
+ * and uninstalls only its own.
  *
  * Premium only, on the real VMs of the **VMs** fleet. The package is built per
  * run by `helpers/deb.ts` and named `fleet-pw-deploy-*`: the test adds it and a

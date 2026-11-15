@@ -53,7 +53,7 @@ test('the Pass count opens exactly the hosts passing the policy, and Fail those 
         .map((h) => h.displayName)
         .sort();
       if (response === 'passing') {
-        expect(expected.length, 'the Mac VM keeps Claude installed, so it passes').toBeGreaterThan(0);
+        expect(expected.length, 'the pool Macs keep Claude installed, so at least one passes').toBeGreaterThan(0);
       }
       expect((await hostsList.hostNames()).sort(), `the hosts listed under ${label}`).toEqual(expected);
     }).toPass({ timeout: 30_000 });

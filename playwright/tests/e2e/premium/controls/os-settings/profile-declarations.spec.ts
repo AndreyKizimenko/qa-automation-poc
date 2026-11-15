@@ -12,6 +12,11 @@
  *  - Include **all** of two labels — only the VM;
  *  - Exclude one label — only a simulation; the VM never gets it.
  *
+ * "Ours" is the worker's Mac and the two simulations. The first and the last
+ * declaration also reach the fleet's other pool Mac, which is outside both
+ * labels: it applies Apple's no-op test declaration and drops it when the test
+ * deletes it, and nothing here reads it.
+ *
  * Asserted the way `profile-label-targets.spec.ts` asserts profiles, and for the
  * same reasons (see its header): set membership over the VM and two MDM-enrolled
  * simulations borrowed onto the fleet — the server-side decision a simulation

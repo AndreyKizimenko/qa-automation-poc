@@ -1,9 +1,9 @@
 /**
- * Shared • Reports • A report run live against the three real VMs, its results
- * exported to CSV.
+ * Shared • Reports • A report run live against three real VMs, one per platform,
+ * its results exported to CSV.
  *
- * Reports → the report → Live report → target the macOS, Windows and Linux VMs by
- * host search → Run → "Report finished" → each VM's row carries the value its own
+ * Reports → the report → Live report → target the worker's macOS, Windows and
+ * Linux VMs by host search → Run → "Report finished" → each VM's row carries the value its own
  * osquery returned → "Export results" downloads a CSV holding exactly those rows.
  *
  * **Why the real VMs.** The query reads `os_version.platform`, so each VM answers
@@ -13,7 +13,7 @@
  * results it shows or exports.
  *
  * **Why not "All hosts".** On both tiers All hosts is ~300 simulations beside the
- * three VMs. A simulation that drops offline
+ * lab's VMs. A simulation that drops offline
  * mid-run keeps it from finishing, and their canned rows don't carry the query's
  * columns. The three VMs give a run that finishes, and a CSV whose every row is
  * known.

@@ -114,7 +114,7 @@ PR #145. Its description has what each commit changed and every run behind it.
       `requireRealHost`, because `liveMacosHost` asks there too: no call site changed.
 - [x] Everything the cleanup does "per VM" is done per pool member: the queue cancel, the durable
       fixtures' resting state, and the `fleet-pw-*` purge on every Ubuntu member.
-- [ ] Specs that change something every host on the VMs fleet receives were surveyed on 2026-11-14 (all 50
+- [x] Specs that change something every host on the VMs fleet receives were surveyed on 2026-11-14 (all 50
       spec files that touch the fleet). None asserts a fleet-wide count. One interfered with a neighbour
       and moved: the script-timeout case of `host-run-script` is now
       `shared/exclusive/script-execution-timeout.spec.ts`. The others were checked with the pool on VMs,
@@ -124,7 +124,7 @@ PR #145. Its description has what each commit changed and every run behind it.
       the cleanup's purge covers them all), the all-hosts profile of `configuration-profiles`, and the
       no-target and exclude declarations of `profile-declarations` and `profile-label-targets` (inert, and
       removed in the test). `update-on-host`'s pin is fleet state nothing else reads.
-- [ ] Specs that lean on the VMs fleet without a tag were read: `premium/hosts/host-actions-role-access`,
+- [x] Specs that lean on the VMs fleet without a tag were read: `premium/hosts/host-actions-role-access`,
       `premium/policies/policy-host-counts`, `premium/dashboard/fleet-scoped-cards`,
       `premium/reports/reports`, `premium/hosts/cta-visibility`, `premium/hosts/host-delete`. None needs
       one: each reads the fleet (a host of any platform, a recorded policy pass, a chart, a chip, a row) or

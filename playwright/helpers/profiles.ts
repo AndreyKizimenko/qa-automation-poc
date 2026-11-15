@@ -172,8 +172,9 @@ export function inertDeclaration(name: string): InertDeclaration {
  * key a Wi-Fi payload can't do without — Andrey's
  * `device-rejects/macos-wifi-missing-ssid.mobileconfig`, approved for the VMs,
  * with `AutoJoin` off. Were it ever accepted it would still change nothing:
- * a network with no name can't be joined, and the VMs have no Wi-Fi interface
- * — their network is virtual ethernet. (An unknown `com.apple.` payload type,
+ * a network with no name can't be joined. The VMs also have no Wi-Fi interface
+ * (their network is virtual ethernet), which a physical Mac does have: there,
+ * the missing name and `AutoJoin` off are all that keep it inert. (An unknown `com.apple.` payload type,
  * the obvious choice, isn't refused: macOS 26.6 installs it as a preference
  * domain.)
  */

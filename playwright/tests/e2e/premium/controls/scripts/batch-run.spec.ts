@@ -9,7 +9,7 @@
  *
  * Two shapes, because they prove different things:
  *
- *   - **Three real VMs, one of each platform**, with a script that succeeds on
+ *   - **Three real VMs, the worker's one of each platform**, with a script that succeeds on
  *     macOS and fails on Linux. A `.sh` can't run on Windows, so each VM lands
  *     in a different tab — Ran, Errored, Incompatible — and each tab is asserted
  *     to list exactly that host. This is the behaviour: the right host in the

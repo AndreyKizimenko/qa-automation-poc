@@ -210,7 +210,8 @@ test.describe('MDM • OS settings — a profile for all hosts, delivered and re
       await controls.goToOsSettings();
       await osSettings.goToConfigurationProfiles();
       await configurationProfiles.teamDropdown.selectByLabel('VMs');
-      // No target chosen: the form's default is All hosts.
+      // No target chosen: the form's default is All hosts, so every Mac on the
+      // fleet installs the inert profile. The worker's own is the one read.
       await configurationProfiles.uploadProfile(writeProfile(profile, testInfo.outputDir));
       await expect(configurationProfiles.itemByName(profile.name)).toContainText('macOS, iOS, iPadOS');
       await expect(configurationProfiles.labelCount(profile.name)).toHaveCount(0);
