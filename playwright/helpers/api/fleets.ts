@@ -51,10 +51,10 @@ export async function setFleetWebhookSettings(
  * `enable_software_inventory` and the `historical_data` collection switches the
  * dashboard's chart card reads.
  *
- * Snapshot and restore the **entire** object: a
- * PATCH replaces the subtree wholesale, so sending back only `historical_data`
- * would silently turn off the fleet's host-users and software-inventory
- * collection.
+ * A PATCH merges the keys it carries (`enable_software_inventory`, and
+ * `historical_data`'s `uptime` and `vulnerabilities`) and leaves the rest as
+ * they are. A spec snapshots the object and writes it back, which restores
+ * whichever of those it changed.
  */
 export async function getFleetFeatures(
   request: APIRequestContext,
@@ -65,7 +65,7 @@ export async function getFleetFeatures(
   return ((await res.json()).team?.features ?? {}) as Record<string, unknown>;
 }
 
-/** Writes a fleet's `features` subtree back verbatim. */
+/** Writes a snapshot of a fleet's `features` back: the keys a PATCH takes are restored, the others ignored. */
 export async function setFleetFeatures(
   request: APIRequestContext,
   fleetId: number,

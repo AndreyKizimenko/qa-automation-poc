@@ -138,12 +138,13 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   `apple_require_hardware_attestation` / `only_allow_apple_business_enrollment` and
   `sso_settings.sso_server_url` as loaded. `shared/settings/organization/advanced-options.spec.ts` asserts
   they're unchanged, so no main-project spec writes them.
-- **A fleet subtree Fleet replaces wholesale has one writer per fleet.** A fleet's enroll secrets and its
-  `webhook_settings` are saved whole, so two specs writing them on the same fleet undo each other's write through
-  their snapshot restores. Before 4.95, saving a fleet's policy automations or its Settings tab also sent the
-  whole `webhook_settings` and wiped the webhook the other one owned (fleetdm/fleet#54619); the snapshot
-  restores still collide. Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong
-  to one, so a fleet-scoped *role* write there needs a disposable `qa-test-*` user given that fleet.
+- **A fleet's settings have one writer per fleet.** A fleet's enroll secrets are saved whole, so two specs
+  writing them on the same fleet undo each other's write through their snapshot restores. Its
+  `webhook_settings` are not: a save replaces only the webhooks it carries (fleetdm/fleet#54619, fixed in
+  4.95), so a spec snapshots and restores its own webhook, never the subtree, and as an object, because a
+  webhook sent as `null` counts as not sent. Use a throwaway `pw-*` fleet for a fleet-level write all the
+  same. The static users never belong to one, so a fleet-scoped *role* write there needs a disposable
+  `qa-test-*` user given that fleet.
 - **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
   premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
   enroll secret. Only the `gitops-mode` project writes them, it restores them in a hook, and its

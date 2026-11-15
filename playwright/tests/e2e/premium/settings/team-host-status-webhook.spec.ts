@@ -33,8 +33,12 @@ import {
 } from '@helpers/api';
 
 const DESTINATION_URL = 'https://example.com/fleet-team-host-status';
-/** The webhook switched off, for a fleet that never had one: Fleet takes a webhook sent as `null` as not sent. */
-const HOST_STATUS_WEBHOOK_OFF = { enable_host_status_webhook: false, destination_url: '', host_percentage: 0, days_count: 0 };
+/**
+ * The webhook switched off, for a fleet that never had one: Fleet takes a
+ * webhook sent as `null` as not sent. The percentage and the days are the ones
+ * the fleet's Settings form starts from.
+ */
+const HOST_STATUS_WEBHOOK_OFF = { enable_host_status_webhook: false, destination_url: '', host_percentage: 1, days_count: 1 };
 
 test.describe('Premium • Settings • fleet host status webhook', () => {
   test('a team admin enables their fleet host status webhook and it persists', async ({
