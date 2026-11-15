@@ -38,7 +38,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Built, 2026-11-15. The 4-worker trial follows its merge |
-| **D** | A smoke per OS version, on the matrix and pool hosts | its own PR, opened once #145 is on `main` | Built, 2026-11-15, on top of #145's branch |
+| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Awaiting its branch run (`--ref`, `-f os-smokes=true`) |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -187,15 +187,15 @@ Not proven by a run: the cleanup's return of a stray host has not yet moved a re
 astray (its decision was replayed on live data with doctored entries, and picked the right hosts and
 fleets). And the full suite, which is the branch run's.
 
-## Step D: built, waiting for #145 to merge
+## Step D: built, awaiting its branch run
 
 A smoke per OS version: `tests/e2e/premium/matrix/os-smokes.spec.ts`, one describe per manifest `os`, over the
 fifteen matrix hosts **and** the pool's four OS versions (Ubuntu 24.04, Windows 11, macOS 15 and 26), so each
 version gets the same checks every night while the main suite spreads over the pool by worker. 100 tests,
-through the UI like the rest of the suite. Its PR opens against `main` once #145 is there.
+through the UI like the rest of the suite. PR #146, against `main`; its description has every run behind it.
 
-**Where it stopped, 2026-11-15 02:15 UTC.** Everything below is committed on `playwright/device-lab-smokes`
-(the worktree `../qa-automation-smokes`; local, not pushed), on top of #145's branch. Run on premium
+**Where it stands, 2026-11-15.** Everything below is in PR #146 (`playwright/device-lab-smokes`), rebased
+onto `main` after #145 merged. Run on premium
 (4.95.0-rc, `d6df44a`), all local: the whole project with its login and teardown at 3 workers, 109 of 109
 (100 smokes, the cleanup's steps with the new sweep among them); before that at 4 workers without them, 99
 of 100, the one red being the tarball's title, since fixed; and RHEL 9, Windows 10 and macOS 26 again after
@@ -232,8 +232,7 @@ Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on 
       on one fleet. Checked in containers of each rpm host's distribution before it met a host.
 - [x] Closes `long-term-goals.md`'s Fedora, RHEL and Omarchy rows. The Omarchy row's `pkg.tar.zst` was the
       fleetd agent package, not a custom package: Fleet takes none of that type.
-- [ ] Its PR. Not open yet: #145 has to be on `main` first (no stacked PR). Then: rebase
-      `playwright/device-lab-smokes` onto `main`, check the merge-base, push, open the PR, and dispatch
+- [ ] Its branch run, which Andrey dispatches:
       `gh workflow run "QA — Branch run" --ref playwright/device-lab-smokes -f branch=playwright/device-lab-smokes -f os-smokes=true`
       (the branch changes workflow files, and a branch run leaves the smokes out unless asked). That run
       is the first time the new CI step and its `os-smokes` input run at all.
