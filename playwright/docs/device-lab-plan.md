@@ -324,6 +324,9 @@ BitLocker PIN.
   premium's count only.
 - **Premium stays at 3 workers for now; the trial of a fourth is deferred** (Andrey, 2026-11-15, after the
   branch run above took premium's job from 57 to 50 minutes at 3).
+- **The per-OS smokes run at 6 workers** (Andrey, 2026-11-15). Each host is one worker's, so nothing is
+  shared, and both branch runs at that count were clean: about 12 minutes, nothing retried, where premium's
+  3 would be about 20.
 
 ## Open questions for Andrey
 
@@ -333,9 +336,6 @@ BitLocker PIN.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
-- The smokes' job runs at 6 workers, set in #146: each host is one worker's, so nothing is shared, and its
-  first run in CI at that count was clean (12 minutes, nothing retried). Say if it should follow premium's
-  3 instead, which would be about 20 minutes in CI.
 - When to run the deferred trial of a fourth premium worker; premium's worker count, D4 and the lanes wait on
   it (C's last two boxes). By the branch run's numbers, 97 test-minutes over 4 workers is a main project of
   about 24 minutes, if the instance holds up.
