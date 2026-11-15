@@ -12,11 +12,6 @@ on:
         required: false
         type: string
         default: ''
-      os-smokes:
-        description: Run the per-OS smokes (the premium-matrix project) after the suite
-        required: false
-        type: boolean
-        default: true
   workflow_call:
     inputs:
       ref:
@@ -29,11 +24,6 @@ on:
         required: false
         type: string
         default: ''
-      os-smokes:
-        description: Run the per-OS smokes (the premium-matrix project) after the suite. The nightly does; a branch run only when asked
-        required: false
-        type: boolean
-        default: true
 
 # Shared with nightly-qa-gitops-premium.yml, so a gitops apply and a test run
 # never overlap, and one test run waits for another: the real VMs work one
@@ -52,10 +42,10 @@ permissions:
 jobs:
   test:
     # A guard against a hung run, with room for growth: Playwright stops the
-    # main suite at 100 min (globalTimeout), the exclusive specs at 60, the
-    # gitops-mode specs at 15 and the per-OS smokes at 45, so a run that uses
-    # all of it still merges and uploads its report inside this limit.
-    timeout-minutes: 230
+    # main suite at 100 min (globalTimeout), the exclusive specs at 60 and the
+    # gitops-mode specs at 15, so a run that uses all of it still merges and
+    # uploads its report inside this limit.
+    timeout-minutes: 185
     runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -130,19 +120,18 @@ jobs:
           npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
           fleetctl --version
 
-      # The main project, the exclusive specs, the gitops-mode specs and the
-      # per-OS smokes run as four steps. The exclusive specs flip global switches
-      # or need a real VM's queue to themselves, gitops mode makes every mutating
-      # control read-only, and the smokes work the pool's VMs too, so each must
-      # run after every parallel spec has finished — but not only when those
-      # specs passed: as a Playwright dependency, one unrelated failure would
-      # skip them all. Each step writes a blob report to its own directory (the
-      # blob reporter clears its directory first), and the last step merges them
-      # into the one HTML report. The suite stops itself at 100 min
-      # (globalTimeout), the exclusive specs at 60 (13 min measured; two VM specs
-      # of up to 20 and 15 min an attempt, each retried once in CI), the
-      # gitops-mode specs at 15 and the smokes at 45, so even a run that uses all
-      # of it merges and uploads its report inside the job's 230.
+      # The main project, the exclusive specs and the gitops-mode specs run as
+      # three steps. The exclusive specs flip global switches or need a real VM's
+      # queue to themselves, and gitops mode makes every mutating control
+      # read-only, so each must run after every parallel spec has finished — but
+      # not only when those specs passed: as a Playwright dependency, one
+      # unrelated failure would skip them all. Each step writes a blob report to
+      # its own directory (the blob reporter clears its directory first), and the
+      # last step merges them into the one HTML report. The suite stops itself at
+      # 100 min (globalTimeout), the exclusive specs at 60 (13 min measured; two
+      # VM specs of up to 20 and 15 min an attempt, each retried once in CI) and
+      # the gitops-mode specs at 15, so even a run that uses all of it merges and
+      # uploads its report inside the job's 185.
       - name: Run the suite
         id: suite
         env:
@@ -164,18 +153,6 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/gitops-mode
         run: SUITE=premium npx playwright test --project=gitops-mode --reporter=github,blob --global-timeout=900000
 
-      # A smoke per OS version, on the OS matrix fleet's hosts and on a pool VM of
-      # each version the pool holds (the premium-matrix project). Last, so a
-      # flavour's trouble never costs the steps above a minute, and left out of
-      # a run that didn't ask for it (a branch run, unless dispatched with
-      # `-f os-smokes=true`). About a quarter of an hour at the suite's worker
-      # count: each host works its own queue, and one worker walks one host.
-      - name: Run the per-OS smokes
-        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' && inputs.os-smokes }}
-        env:
-          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/matrix
-        run: SUITE=premium npx playwright test --project=premium-matrix --reporter=github,blob --global-timeout=2700000
-
       # The merge writes the run twice: the HTML report, and `results.json`, the
       # same run as data. The run-reviewer's run_history.py builds each test's
       # history from it. The JSON is written beside the report and then copied
@@ -187,7 +164,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: blob-report/results.json
         run: |
           mkdir -p blob-report/all
-          find blob-report/suite blob-report/exclusive blob-report/gitops-mode blob-report/matrix -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          find blob-report/suite blob-report/exclusive blob-report/gitops-mode -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
           npx playwright merge-reports --reporter html,json blob-report/all
           cp blob-report/results.json playwright-report/results.json
 

@@ -224,7 +224,7 @@ onto `main` after #145 merged. Run on premium
 of 100, the one red being the tarball's title, since fixed; and RHEL 9, Windows 10 and macOS 26 again after
 the self-review's fixes, 17 of 17. Seen failing first, on scratch edits since reverted: a wrong OS major, a
 wrong inventory type, a matrix host Fleet doesn't know (first smoke red with the reason, six skipped),
-vulnerabilities on Debian 13, Fleet Desktop on the headless server. **Not run:** the CI step and its input,
+vulnerabilities on Debian 13, Fleet Desktop on the headless server. **Not run:** the `Playwright — OS smokes` workflow as it now stands (branch run 43680528701 ran the smokes as a step of premium's job),
 `--repeat-each` and a headed pass, and the sweep with something to sweep (it has
 only met a clean fleet: its uninstall-then-delete path and its `rpm -e` purge are untried on a host).
 Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on a host, no host moved.
@@ -239,10 +239,12 @@ Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on 
 | A custom package installs and uninstalls | all 19 | Per-test `.deb` (7 hosts) and `.rpm` (5), built in memory under a name of their own; openSUSE's `.rpm` with `zypper` scripts; a tarball on Omarchy; `fleet-playwright-smoke-1.0.0.msi` on Windows 10 and Server, which take turns; the VMs fleet's durable `.msi` and `.pkg` on Windows 11 and macOS |
 | A package installed by a policy automation | Debian 13, RHEL 9 | A policy held to the host by a manual label, failing while the package is absent |
 
-- [x] The spec, its project (`premium-matrix`, in `PROJECT_TO_SUITE`) and its own step in the premium job,
-      last, skipped in a branch run unless dispatched with `-f os-smokes=true`. Every suite on an instance
-      shares one concurrency group, so a separate workflow would queue behind the nightly, not overlap it;
-      lift the step into its own workflow later if it proves noisy.
+- [x] The spec, its project (`premium-matrix`, in `PROJECT_TO_SUITE`) and its own workflow, `Playwright — OS
+      smokes` (`playwright-os-smokes.yml`), like the two suites' (Andrey, 2026-11-15): the nightly runs it
+      after premium's suite, a branch run only when dispatched with `-f os-smokes=true`, and it can be
+      dispatched alone. It holds premium's concurrency group, so it queues behind a suite or an apply and
+      never overlaps one. It was first built as the last step of premium's job, which is how branch run
+      43680528701 ran it.
 - [x] Its things go on the OS matrix fleet with `pw-*` / `fleet-pw-*` names, target one host, and are deleted
       in the test; `setup/cleanup.steps.ts` sweeps what a killed run left, on the fleet and on its hosts.
       (The nightly's apply of `fleets/os-matrix.yml` also deletes whatever is on the fleet, and its verify
@@ -258,7 +260,7 @@ Premium was left at rest: nothing of the smokes on OS matrix, nothing queued on 
 - [ ] Its branch run, which Andrey dispatches:
       `gh workflow run "QA — Branch run" --ref playwright/device-lab-smokes -f branch=playwright/device-lab-smokes -f os-smokes=true`
       (the branch changes workflow files, and a branch run leaves the smokes out unless asked). That run
-      is the first time the new CI step and its `os-smokes` input run at all.
+      is the first time the `Playwright — OS smokes` workflow runs at all.
 - [ ] macOS 27, when its VM exists, gets a DDM-focused smoke.
 - [x] openSUSE's `zypper` scripts are a workaround for a Fleet gap (its default `.rpm` scripts call `dnf`):
       fleetdm/fleet#58784, with the `TODO` at the scripts and a row in `blocked-by-product-bugs.md`.

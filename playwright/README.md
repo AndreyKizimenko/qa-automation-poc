@@ -349,8 +349,10 @@ Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
 `.github/workflows/playwright-premium.yml`) — run nightly by `QA — Nightly`
 (`qa-nightly.yml`) after each tier's gitops chain, and runnable on demand via `workflow_dispatch`. Each
-job runs the main project, then the exclusive specs and (premium) gitops-mode and the per-OS smokes as separate
-steps, and merges the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
+job runs the main project, then the exclusive specs and (premium) gitops-mode as separate
+steps, and merges the reports. The per-OS smokes are a workflow of their own
+(`.github/workflows/playwright-os-smokes.yml`), which the nightly runs after premium's suite and
+`gh workflow run "Playwright — OS smokes"` runs alone. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
 `-f workers=N` for a trial of premium's worker count (free keeps its own), `-f os-smokes=true` to include the
 per-OS smokes (a branch run leaves them out otherwise), and `--ref <branch>` as well when the branch changes a workflow file.

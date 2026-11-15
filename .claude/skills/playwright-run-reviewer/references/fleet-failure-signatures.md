@@ -182,8 +182,8 @@ Each of these looked like something else at first.
   2026-09-20, 2026-10-05 (32 failures in one nightly) and 2026-10-10 (55 on each of two
   runs) → `infra-env`, **one row** with its count; check the host's `seen_time`, then
   re-run once it's back.
-- **A per-OS smoke is red** (`premium/matrix/os-smokes.spec.ts`, the premium job's last step, one
-  describe per OS version). "is online on its fleet…" red with the rest of that OS skipped is the
+- **A per-OS smoke is red** (`premium/matrix/os-smokes.spec.ts`, one describe per OS version; its own
+  job, `playwright-os-smokes`, and its own report, `playwright-report-os-smokes`). "is online on its fleet…" red with the rest of that OS skipped is the
   host, not Fleet: the error is `labHostProblem`'s (offline since when, on another fleet, not
   enrolled) → `infra-env`, the lab owner's. Any other smoke red on **one** OS is that flavour's own
   behaviour (its package manager, its inventory source, what Fleet shows for its OS): read the

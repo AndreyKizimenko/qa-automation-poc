@@ -304,9 +304,10 @@ export default defineConfig({
     // A smoke per OS version: the same few checks on the one host of each OS
     // flavour (premium's OS matrix fleet) and on a pool VM of each OS version the
     // pool holds, so every version is covered every night while the main suite
-    // spreads over the pool by worker. A step of its own so that a flavour's
-    // failure reads as that flavour's and never costs the main suite a minute,
-    // and so a branch run can leave it out. Each host works its own queue: the
+    // spreads over the pool by worker. An invocation of its own (in CI the
+    // `Playwright — OS smokes` workflow), so that a flavour's failure reads as
+    // that flavour's, never costs the main suite a minute, and can be re-run
+    // alone, and so a branch run can leave it out. Each host works its own queue: the
     // spec keeps one host's tests in one worker, and the hosts run side by side.
     //
     // Like the exclusive projects it depends only on login setup and shares

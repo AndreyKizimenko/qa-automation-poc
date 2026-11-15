@@ -35,7 +35,8 @@ WORK="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/run-history-XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 HISTORY="$WORK/history.jsonl"
 
-# A run's two suite reports, decrypted in place. Fails when the run kept none.
+# A run's suite reports (premium, free and, where the run had them, the per-OS
+# smokes), decrypted in place. Fails when the run kept none.
 fetch_suite_reports() {
   local id="$1" dest="$2"
   if ! find "$dest" -maxdepth 2 \( -name index.html -o -name '*.tar.gz.enc' \) 2>/dev/null | grep -q .; then
@@ -59,7 +60,7 @@ for id in $earlier; do
     log "run $id: no suite report to read (expired, or the suites never ran)"
     continue
   fi
-  for tier in premium free; do
+  for tier in premium free os-smokes; do
     if [ -d "$dest/playwright-report-$tier" ]; then
       python3 "$SCRIPTS/run_history.py" add "$dest/playwright-report-$tier" --run "$id" --tier "$tier" --history "$HISTORY" >&2
     fi
@@ -79,10 +80,13 @@ echo
 echo "Earlier nightlies with a report still in retention: $recorded (the last $NIGHTS are looked at)."
 echo
 echo '```'
-for tier in premium free; do
+for tier in premium free os-smokes; do
   if [ -d "$CURRENT_DIR/playwright-report-$tier" ]; then
     python3 "$SCRIPTS/run_history.py" show "$CURRENT_DIR/playwright-report-$tier" \
       --run "$CURRENT" --tier "$tier" --history "$HISTORY" --last "$NIGHTS"
+  elif [ "$tier" = os-smokes ]; then
+    # A branch run has the per-OS smokes only when it asked for them.
+    continue
   else
     echo "Run $CURRENT ($tier): no suite report, so nothing to compare."
   fi
