@@ -262,7 +262,9 @@ Folder conventions:
   say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). So does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs at priority 0, below
   every user-requested one, so beside the install specs its attempts wait out their budget
-  (`premium/exclusive/policies/policy-automation-runs.spec.ts`). The
+  (`premium/exclusive/policies/policy-automation-runs.spec.ts`). And so does one that changes what every VM on
+  the fleet runs under while other workers are on theirs (`shared/exclusive/script-execution-timeout.spec.ts`
+  lowers the fleet's script timeout). The
   `premium-exclusive` / `free-exclusive` projects run those on one worker, **in their own `playwright test`
   invocation after the main project has finished** — whether or not it passed. CI runs them as a second step
   (`if: !cancelled()`) and merges both into one report; `npm run test:premium` / `test:free` run the two in

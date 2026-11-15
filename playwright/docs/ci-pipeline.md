@@ -85,8 +85,9 @@ on one; the `testIgnore` matrix in `playwright.config.ts` is the source of truth
 every spec and can be wrong silently; a folder cannot.
 
 **The specs that hold a global lock run alone, as their own invocation — not as a dependent project.** The
-exclusive specs (script execution off; a policy automation that needs the Ubuntu VM's queue to itself — Fleet
-runs its attempts below every user-requested activity) and gitops-mode live in their own projects on one worker, and CI runs
+exclusive specs (script execution off; a script timeout lowered for every VM on the fleet; a policy automation
+that needs an Ubuntu VM's queue to itself — Fleet runs its attempts below every user-requested activity) and
+gitops-mode live in their own projects on one worker, and CI runs
 each as a separate `playwright test` step after the main project, pass or fail, merging the blob reports into
 one HTML report. A Playwright *dependency* on the main project would have done the ordering but with the wrong
 failure semantics: one unrelated red test skips every dependent, and a local run of the small project would

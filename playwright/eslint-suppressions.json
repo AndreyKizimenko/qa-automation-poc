@@ -1053,13 +1053,13 @@
   },
   "tests/e2e/shared/hosts/host-run-script.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
-      "count": 4
+      "count": 3
     },
     "suite/no-date-now-in-name": {
       "count": 1
     },
     "suite/use-own-name": {
-      "count": 5
+      "count": 4
     }
   },
   "tests/e2e/shared/hosts/host-software.spec.ts": {
