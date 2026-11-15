@@ -39,7 +39,6 @@ checks on one host. What it leaves for a spec of its own:
 | Gap | What to do |
 |---|---|
 | An `.rpm` through the Add software form | `premium/software/library.spec.ts` adds and deletes a `.pkg`, an `.msi` and a `.deb` through the UI; the smokes upload their `.rpm` through the API. Add an `.rpm` row there, built by `helpers/rpm.ts`: the form's default install and uninstall scripts for it (`dnf`) are what the row would show |
-| A flavour's inventory after an install | The smokes follow an install and an uninstall to their status, not to the host's inventory; `premium/software/software-lifecycle-on-host.spec.ts` follows both for the pool's `.deb`, `.msi` and `.pkg`. If an OS flavour's inventory refresh is wanted nightly, the smoke's two waits become `waitForSoftwareSettled`, at two refetches (two to four minutes) a host |
 
 **Free coverage.** Behaviour free has too, tested only on premium today. Checked against the source (no
 `isPremiumTier`, no license gate) when each row was written.

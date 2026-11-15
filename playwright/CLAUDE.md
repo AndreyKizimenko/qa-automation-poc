@@ -92,8 +92,8 @@ regenerate both on every restart.
   baseline snapshot and only the lab's owner can roll it back.
 - **The per-OS smokes run the same few checks on every OS version every night**: on the matrix host of each
   flavour and on a pool VM of each version the pool holds (the `premium-matrix` project; in CI the
-  `Playwright — OS smokes` workflow, after premium's suite). They are where a flavour's own behaviour is asserted: what Fleet shows for its OS, its inventory's
-  package type, its package manager's install and uninstall. A spec in the main project that needs one OS
+  `Playwright — OS smokes` workflow, after premium's suite). They are where a flavour's own behaviour is asserted: what Fleet shows for its OS and reads of the machine, its inventory's
+  package type, its answer to a live report, its package manager's install and uninstall and the inventory that follows each. A spec in the main project that needs one OS
   version of the pool still asks `requireRealHost` for it by `os`.
 - **The lab preflight** (`tests/api/lab-hosts.spec.ts`) is one test per pool host. One that is offline, on the
   wrong fleet or no longer enrolled is a red row naming it and saying which, while the workers go on with the

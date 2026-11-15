@@ -187,7 +187,9 @@ Each of these looked like something else at first.
   host, not Fleet: the error is `labHostProblem`'s (offline since when, on another fleet, not
   enrolled) → `infra-env`, the lab owner's. Any other smoke red on **one** OS is that flavour's own
   behaviour (its package manager, its inventory source, what Fleet shows for its OS): read the
-  install's or script's recorded output before calling it a flake, and expect a `product-defect` or
+  install's or script's recorded output before calling it a flake (an install smoke red at "inventory
+  never listed" or "never dropped" had its install or uninstall succeed: the host's next collection
+  is what didn't carry the change), and expect a `product-defect` or
   a lab change (an OS update moved the host a major version) more often than a test bug. The same
   smoke red on **every** OS is the smoke's code or the instance.
 - **Every App Store or setup-assistant test red at once.** Apple's side. A revoked VPP
