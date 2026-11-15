@@ -13,6 +13,8 @@ export class LabelFilter {
   readonly page: Page;
   readonly trigger: Locator;
   readonly options: Locator;
+  /** The platform or label the list is filtered by, as the closed control shows it. Absent while none is chosen. */
+  readonly selected: Locator;
   /** The open menu's "Filter by label name" box: what shows the menu is open. */
   readonly searchBox: Locator;
   /** The "+" beside that box, for a role that may add labels. */
@@ -22,6 +24,7 @@ export class LabelFilter {
     this.page = page;
     this.trigger = page.locator('.label-filter-select__control');
     this.options = page.locator('.label-filter-select__option');
+    this.selected = page.locator('.label-filter-select__single-value');
     this.searchBox = page.getByPlaceholder('Filter by label name');
     this.addLabelButton = page.getByRole('button', { name: 'Add label', exact: true });
   }

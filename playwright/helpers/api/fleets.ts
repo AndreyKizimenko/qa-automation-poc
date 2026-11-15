@@ -4,10 +4,11 @@ import { deleteBootstrapPackage } from './mdm';
 import { compareVersions } from './software';
 
 /**
- * A fleet's whole `webhook_settings` subtree. Specs that touch one webhook
- * snapshot and restore the **entire** object: Fleet replaces the subtree
- * wholesale on PATCH, so sending back only the key you changed would wipe the
- * fleet's other webhooks (the failing-policies and host-activities ones).
+ * A fleet's whole `webhook_settings` subtree: its host-status, failing-policies
+ * and host-activities webhooks. A PATCH replaces only the webhooks it carries
+ * and leaves the others as they are, so a spec that changes one snapshots and
+ * restores that key alone, as an object: Fleet takes a webhook sent as `null`
+ * as not sent.
  */
 export async function getFleetWebhookSettings(
   request: APIRequestContext,
@@ -32,7 +33,7 @@ export async function getFleetHostExpirySettings(
   return (await res.json()).team?.host_expiry_settings ?? {};
 }
 
-/** Writes a fleet's `webhook_settings` subtree back verbatim. */
+/** Writes the webhooks given into a fleet's `webhook_settings`; the ones left out stay as they are. */
 export async function setFleetWebhookSettings(
   request: APIRequestContext,
   fleetId: number,
@@ -50,10 +51,10 @@ export async function setFleetWebhookSettings(
  * `enable_software_inventory` and the `historical_data` collection switches the
  * dashboard's chart card reads.
  *
- * Snapshot and restore the **entire** object, same as `webhook_settings`: a
- * PATCH replaces the subtree wholesale, so sending back only `historical_data`
- * would silently turn off the fleet's host-users and software-inventory
- * collection.
+ * A PATCH merges the keys it carries (`enable_software_inventory`, and
+ * `historical_data`'s `uptime` and `vulnerabilities`) and leaves the rest as
+ * they are. A spec snapshots the object and writes it back, which restores
+ * whichever of those it changed.
  */
 export async function getFleetFeatures(
   request: APIRequestContext,
@@ -64,7 +65,7 @@ export async function getFleetFeatures(
   return ((await res.json()).team?.features ?? {}) as Record<string, unknown>;
 }
 
-/** Writes a fleet's `features` subtree back verbatim. */
+/** Writes a snapshot of a fleet's `features` back: the keys a PATCH takes are restored, the others ignored. */
 export async function setFleetFeatures(
   request: APIRequestContext,
   fleetId: number,

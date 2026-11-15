@@ -14,19 +14,12 @@
  * host and installer, giving up for 24 hours after 10
  * (`MaxPolicyAutomationInstallAttempts`) — so the package is new each run.
  *
- * **Why `exclusive/`.** Two things make it a bad neighbour on a shared VM, both
- * ways round:
- *   - Fleet queues what a policy automation installs at priority 0, below every
- *     user-requested install or script, and picks a host's next activity by
- *     priority before age. Beside the main project's install specs, its retries
- *     wait out the test's budget.
- *   - A failed install *script* puts orbit's config loop into a backoff — 1, 2, 4,
- *     then 5 min — that delays everything else queued on the host
- *     (TODO(fleetdm/fleet#54607); docs/blocked-by-product-bugs.md). Three
- *     failures in a row would stall every other spec's work on the Ubuntu VM.
- * The `premium-exclusive` project runs it alone, after the main project, and after
- * `policy-automation-runs` (files run in path order), so its own backoff delays
- * nothing that's measured. The policy is the fleet's, so a pool Ubuntu VM other
+ * **Why `exclusive/`.** Fleet queues what a policy automation installs at
+ * priority 0, below every user-requested install or script, and picks a host's
+ * next activity by priority before age. Beside the main project's install
+ * specs, its retries wait out the test's budget. The `premium-exclusive` project
+ * runs it alone, after the main project, and after `policy-automation-runs`
+ * (files run in path order). The policy is the fleet's, so a pool Ubuntu VM other
  * than the test's that runs its policies meanwhile is sent the same doomed
  * install; nothing is using those VMs then, nothing lands on them (dpkg refuses
  * the package), and deleting the title cancels what is still queued.
@@ -58,7 +51,8 @@ test.describe('Premium • Software • Deploy install retries', () => {
   test.describe.configure({ retries: HOST_RETRIES });
 
   test('a Deploy whose install fails is tried 3 times, then reads Failed', { tag: '@vm-linux' }, async ({ hostDetails, vmsFleetId, request }) => {
-    // Three install attempts, each followed by orbit's backoff (1, then 2 min).
+    // Three install attempts, each picked up at one of the host's check-ins,
+    // behind whatever a refetch has the host doing.
     test.setTimeout(900_000);
     const host = await requireRealHost(request, 'linux');
     const arch = foreignDebArch(await getHostCpuType(request, host.id));

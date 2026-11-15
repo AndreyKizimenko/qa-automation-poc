@@ -1,0 +1,143 @@
+name: Playwright — OS smokes
+
+# Runs the per-OS smokes (the premium-matrix project, tests/e2e/premium/matrix)
+# against the premium Fleet instance: the same few checks on the matrix host of
+# each OS flavour, on the OS matrix fleet, and on a pool VM of each OS version
+# the pool holds. Nightly in `QA — Nightly` (qa-nightly.yml), after premium's
+# suite; in `QA — Branch run` only when asked for (`-f os-smokes=true`); and by
+# itself:
+#
+#   gh workflow run "Playwright — OS smokes"                  # main's smokes
+#   gh workflow run "Playwright — OS smokes" --ref <branch>   # a branch's
+#
+# A workflow of its own, like the two suites, and not a step of premium's job:
+# it can be run and re-run alone (after a lab change, or one flavour's red
+# night), and it is its own line on a run's page with a report of its own.
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: Worker count for the smokes (blank — 6)
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or SHA whose code and config to use (default — the workflow's own ref)
+        required: false
+        type: string
+        default: ''
+      workers:
+        description: Worker count for the smokes (blank — 6)
+        required: false
+        type: string
+        default: ''
+
+# The premium instance's group, shared with playwright-premium.yml and
+# nightly-qa-gitops-premium.yml. The smokes work the pool's VMs, which the suite
+# queues on too, and put per-test things on the OS matrix fleet, which a gitops
+# apply deletes: so this workflow waits for a suite or an apply that is running,
+# and they wait for it.
+concurrency:
+  group: premium-fleetqa-instance
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # A guard against a hung run: Playwright stops the smokes at 45 min
+    # (--global-timeout), so a run that uses all of it still writes and uploads
+    # its report inside this limit. Twelve to fourteen minutes is usual.
+    timeout-minutes: 60
+    runs-on: ubuntu-26.04
+    # The same image and user as the suites' jobs: browsers are pre-installed in
+    # it, so `playwright install` is skipped.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --user 1001
+    defaults:
+      run:
+        # A job-level `defaults` replaces the workflow's, so the shell is set
+        # again here — the container would otherwise run steps under `sh`.
+        shell: bash
+        working-directory: playwright
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - run: npm ci
+
+      - name: Write .env.premium from secrets
+        run: |
+          cat > .env.premium <<EOF
+          FLEET_URL=${{ secrets.FLEET_PREMIUM_URL }}
+          FLEET_API_TOKEN=${{ secrets.FLEET_PREMIUM_API_TOKEN }}
+          FLEET_ADMIN_EMAIL=${{ secrets.FLEET_PREMIUM_ADMIN_EMAIL }}
+          FLEET_ADMIN_PASSWORD=${{ secrets.FLEET_PREMIUM_ADMIN_PASSWORD }}
+          FLEET_SSO_LOGIN_USERNAME=${{ secrets.FLEET_SSO_LOGIN_USERNAME }}
+          FLEET_SSO_LOGIN_PASSWORD=${{ secrets.FLEET_SSO_LOGIN_PASSWORD }}
+          FLEET_TEST_USER_PASSWORD=${{ secrets.FLEET_PREMIUM_TEST_USER_PASSWORD }}
+          FLEET_STATIC_USER_PASSWORD=${{ secrets.FLEET_PREMIUM_STATIC_USER_PASSWORD }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_ADMIN=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_ADMIN }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_MAINTAINER=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_MAINTAINER }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_OBSERVER=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_OBSERVER }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_OBSERVER_PLUS=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_OBSERVER_PLUS }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_TECHNICIAN=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_TECHNICIAN }}
+          FLEET_STATIC_TOKEN_API_GLOBAL_GITOPS=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_GLOBAL_GITOPS }}
+          FLEET_STATIC_TOKEN_API_WS_MAINTAINER=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_WS_MAINTAINER }}
+          FLEET_STATIC_TOKEN_API_WS_OBSERVER=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_WS_OBSERVER }}
+          FLEET_STATIC_TOKEN_API_WS_MAINT_QA_OBS=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_WS_MAINT_QA_OBS }}
+          FLEET_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_GLOBAL=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_GLOBAL }}
+          FLEET_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_WS=${{ secrets.FLEET_PREMIUM_STATIC_TOKEN_API_SPECIFIC_ENDPOINTS_WS }}
+          EOF
+
+      # One invocation: login, the smokes, then the cleanup's steps as their
+      # teardown, which sweep what a smoke left on OS matrix and on its hosts.
+      # Each host works its own queue, so one worker walks one host through its
+      # smokes while the others walk theirs: six workers, where the suites'
+      # count is bounded by a pool of VMs and by the instance under a suite's
+      # page loads. Most of a smoke is a wait on its host. Past six the run is
+      # as long as the three Windows matrix hosts' turn. No fleetctl is
+      # installed: the project has no CLI spec.
+      - name: Run the per-OS smokes
+        id: smokes
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/os-smokes
+          WORKERS: ${{ inputs.workers || '6' }}
+        run: SUITE=premium npx playwright test --project=premium-matrix --reporter=github,blob --global-timeout=2700000
+
+      # The HTML report, and `results.json`, the same run as data, which the
+      # run-reviewer's run_history.py builds each test's history from. The JSON
+      # is written beside the report and then copied in, because the HTML
+      # reporter empties its folder before it writes; it carries error text, so
+      # it leaves CI only inside the encrypted report.
+      - name: Write the report
+        if: ${{ !cancelled() && steps.smokes.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: blob-report/results.json
+        run: |
+          npx playwright merge-reports --reporter html,json blob-report/os-smokes
+          cp blob-report/results.json playwright-report/results.json
+
+      # Uploaded on every outcome, and encrypted: a report holds typed passwords
+      # and the API token, and this repository's artifacts are public
+      # (.github/upload-report).
+      - uses: ./.github/upload-report
+        if: ${{ always() }}
+        with:
+          name: playwright-report-os-smokes
+          # Long enough for a test's history to be rebuilt from the reports alone.
+          retention-days: 90

@@ -9,12 +9,12 @@ name: QA — Branch run
 # waiting for another dispatch.
 #
 #   gh workflow run "QA — Branch run" -f branch=<branch>
-#   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial, premium's
+#   gh workflow run "QA — Branch run" -f branch=main -f workers=<N>   # a worker-count trial, premium's
 #   gh workflow run "QA — Branch run" -f branch=<branch> -f os-smokes=true   # with the per-OS smokes
 #
-# The per-OS smokes (the premium-matrix project, the premium job's last step)
-# are the nightly's: a branch run leaves them out unless `os-smokes` asks for
-# them, which a branch that changes them, or what they stand on, does.
+# The per-OS smokes (playwright-os-smokes.yml, after premium's suite) are the
+# nightly's: a branch run leaves them out unless `os-smokes` asks for them,
+# which a branch that changes them, or what they stand on, does.
 #
 # `workers` is premium's count only. Premium has a pool of real VMs per platform
 # for its workers to spread over; free has one VM per platform and a smaller
@@ -43,7 +43,7 @@ on:
         type: string
         default: ''
       os-smokes:
-        description: Also run the per-OS smokes (premium-matrix) after the premium suite
+        description: Also run the per-OS smokes (Playwright — OS smokes) after the premium suite
         required: false
         type: boolean
         default: false
@@ -65,7 +65,16 @@ jobs:
     with:
       ref: ${{ inputs.branch }}
       workers: ${{ inputs.workers }}
-      os-smokes: ${{ inputs.os-smokes }}
+    secrets: inherit
+
+  # After premium's suite, whatever it did: the smokes work the same instance
+  # and the pool's VMs. Skipped unless the dispatch asked for them.
+  playwright-os-smokes:
+    needs: playwright-premium
+    if: ${{ !cancelled() && inputs.os-smokes }}
+    uses: ./.github/workflows/playwright-os-smokes.yml
+    with:
+      ref: ${{ inputs.branch }}
     secrets: inherit
 
   gitops-free:
@@ -86,7 +95,7 @@ jobs:
   # written to the run's summary: a failure the branch brought is one main's
   # nights never had. Given the one secret it needs, and it never fails the run.
   run-history:
-    needs: [playwright-premium, playwright-free]
+    needs: [playwright-premium, playwright-free, playwright-os-smokes]
     if: ${{ !cancelled() }}
     permissions:
       contents: read

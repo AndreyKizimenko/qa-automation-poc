@@ -9,8 +9,8 @@
  * Mutates global config, so `webhook_settings.activities_webhook` is
  * snapshotted and restored. Only the touched subtree is sent, and PATCH /config
  * merges *within* `webhook_settings` (verified — the sibling vulnerabilities,
- * failing-policies and host-status webhooks survive untouched). Note this
- * differs from PATCH on a *fleet*, which replaces that subtree wholesale.
+ * failing-policies and host-status webhooks survive untouched). A PATCH on a
+ * *fleet* treats the fleet's webhooks the same way.
  *
  * There is one global activity webhook, so this test cannot run concurrently
  * with a copy of itself — `--repeat-each` with parallel workers will fail it.

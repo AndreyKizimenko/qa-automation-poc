@@ -11,11 +11,13 @@
  *   | smoke | on |
  *   |---|---|
  *   | Online on its fleet, with its OS name and major version and its agent versions, and in MDM where the lab enrolled it | every OS |
+ *   | Its page shows the vitals Fleet reads of the machine (disk, memory, model, IP, MAC) and its local users | every OS |
+ *   | It is in the built-in label of its platform | every OS |
  *   | The inventory lists a package known to be on the host, as its package type | every OS |
- *   | Fleet Desktop is running: a live report of the host's processes finds it | hosts with a desktop |
+ *   | A live report comes back with the host's own platform, and finds Fleet Desktop running | every OS; Fleet Desktop on hosts with a desktop |
  *   | A script runs and its output comes back | every OS |
  *   | Vulnerabilities are listed for the OS | the Ubuntu LTS versions, RHEL 9 and 10 |
- *   | A custom package installs and uninstalls | every OS |
+ *   | A custom package installs and the inventory lists it; it uninstalls and the inventory drops it | every OS (a tarball has no inventory) |
  *   | A policy's automation installs a package on a host that fails it | one `.deb` host, one `.rpm` host |
  *
  * Premium only, in the `premium-matrix` project: its own invocation after the
@@ -37,10 +39,9 @@
  * 2023.12 "Amazon Linux 2023.0.0", Debian 13.7 "Debian GNU/Linux 13.0.0".
  * Kubuntu is Ubuntu to `os-release`, and so to Fleet.
  *
- * **A host that can't be used is one red row, not seven.** The first smoke of
+ * **A host that can't be used is one red row, not one per smoke.** The first smoke of
  * an OS fails with what is wrong with its host (`labHostProblem`: offline, on
- * another fleet, not enrolled) and the rest skip, naming it. `UNUSABLE_HOST`
- * makes the first one skip as well.
+ * another fleet, not enrolled) and the rest skip, naming it.
  *
  * **One host, one worker.** A host works one queue of scripts and installs, so
  * each OS's smokes run in order in one worker (`mode: 'default'`), and the OS
@@ -57,7 +58,7 @@
  *   |---|---|---|
  *   | `.deb` host | `fleet-pw-os-smoke-*_1.0.0_all.deb`, built per test | Fleet's own (`apt-get`) |
  *   | `.rpm` host | `fleet-pw-os-smoke-*-1.0.0-1.noarch.rpm`, built per test | Fleet's own (`dnf`) |
- *   | openSUSE | the same `.rpm` | `zypper`, given here: openSUSE has no `dnf`, which Fleet's own call |
+ *   | openSUSE | the same `.rpm` | `zypper`, given here: openSUSE has no `dnf`, which Fleet's own call (fleetdm/fleet#58784) |
  *   | Omarchy (Arch) | `fleet-pw-os-smoke-*.tar.gz`, built per test (its title is the file name, extension and all) | given here, as a tarball needs: Fleet takes no `.pkg.tar.zst` |
  *   | Windows matrix host | `fleet-playwright-smoke-1.0.0.msi` (`make-msi.sh smoke`) | Fleet's own |
  *   | Windows and macOS pool VM | the VMs fleet's durable fixture (`helpers/vm-fixtures.ts`), left uninstalled | Fleet's own |
@@ -66,15 +67,16 @@
  * with the package (each fixture's README, and the helpers' headers, say how
  * that was checked).
  *
- * **An install is followed to its status, not to the inventory.** Fleet marks
- * an install or uninstall done when its script exits 0, and that is the smoke:
- * the OS's package manager took the package and gave it back. Waiting for the
- * inventory as well costs two refetches of one to two minutes on each of
- * nineteen hosts; `software-lifecycle-on-host.spec.ts` follows it on the pool.
- * So after the uninstall the Library row isn't read: until the host's next
- * collection it can still show the version it had. A pool VM's durable fixture
- * is the one case that is seen through to rest (`ensureVmFixtureUninstalled`),
- * because the next spec to use it counts on that.
+ * **An install and an uninstall are each followed into the inventory.** Fleet
+ * marks either done when its script exits 0, which says the OS's package
+ * manager took the package and gave it back. What the host then reports is a
+ * second path, and the one that differs most by flavour: the inventory is read
+ * from `deb_packages`, `rpm_packages`, Windows' programs or macOS' apps. So
+ * after the install the package has to appear in the host's inventory, with
+ * its version in the Library row, and after the uninstall it has to be gone
+ * from both. Each wait rides the refetch Fleet asks for itself when an install
+ * or uninstall succeeds (`waitForInventoryToFollow`): one collection a half.
+ * A tarball is no inventory source, so Omarchy's stops at the status.
  *
  * **Nothing here reaches a host it wasn't aimed at.** OS matrix is declared
  * empty in gitops, and this spec is the one thing that puts anything on it,
@@ -83,8 +85,8 @@
  * to the test's host by a manual label holding only it. Never a package with
  * automatic install, a profile, an OS-update or disk-encryption setting, or
  * agent options: each of those is the fleet's, and sixteen hosts would get it.
- * The reports the Fleet Desktop smoke runs are global, with no schedule, so
- * they run only where the live run targets them.
+ * The report the live-report smoke runs is global, with no schedule, so it
+ * runs only where the live run targets it.
  *
  * **What it leaves, and who removes it.** Nothing: each test registers the undo
  * of what it made with `cleanup` the moment it exists (a title is uninstalled
@@ -93,9 +95,14 @@
  * the one `.msi`, and the cleanup's OS matrix step sweeps what a killed run
  * left, on the fleet and on its hosts (`setup/cleanup.steps.ts`).
  *
- * Grounded in: `Vitals.tsx` (the Agent tooltip), `HostSoftwareLibrary`,
+ * Grounded in: `Vitals.tsx` (the Agent tooltip, the vitals' titles),
+ * `DiskSpaceIndicator.tsx`, `LocalUserAccounts.tsx`, `LabelFilterSelect.tsx`
+ * (the Platforms group), the built-in labels' queries
+ * (`server/datastore/mysql/migrations/data/`), `HostSoftwareLibrary`,
  * `RunScriptModal`, `SoftwareOSDetailsPage.tsx` (the Kernels card),
- * `pkg/file/scripts/` (Fleet's install and uninstall scripts per package type).
+ * `pkg/file/scripts/` (Fleet's install and uninstall scripts per package type),
+ * `server/service/orbit.go` (the refetch Fleet queues after an install or an
+ * uninstall succeeds).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -111,6 +118,7 @@ import {
   getHostScriptLastExecution,
   getHostSoftwareState,
   labHostProblem,
+  lastSoftwareActionOutput,
   listHostActivities,
   listLabHostRecords,
   newestRecord,
@@ -121,11 +129,20 @@ import {
   vmTag,
   waitForHostRefetch,
   waitForHostSoftwareStatus,
+  waitForInventoryToFollow,
   waitForNoPendingRefetch,
+  type HostSoftwareStatus,
   type PackageScripts,
 } from '@helpers/api';
 import { inertDeb } from '@helpers/deb';
-import { labHostFleet, labHostsOfRun, poolHostsOfRun, type LabHost, type LabPackage } from '@helpers/lab-hosts';
+import {
+  labHostFleet,
+  labHostsOfRun,
+  poolHostsOfRun,
+  type LabHost,
+  type LabPackage,
+  type LabPlatform,
+} from '@helpers/lab-hosts';
 import { ownName } from '@helpers/own-name';
 import { runNonce } from '@helpers/profiles';
 import { inertRpm } from '@helpers/rpm';
@@ -136,12 +153,6 @@ import {
   ensureVmFixtureUninstalled,
   findVmFixtureTitle,
 } from '@helpers/vm-fixtures';
-
-/**
- * What the first smoke of an OS does when its host can't be used: fail, with
- * the reason, or skip like the smokes after it.
- */
-const UNUSABLE_HOST: 'fail' | 'skip' = 'fail';
 
 /**
  * The OS name Fleet shows for each manifest `os`, and the major version the
@@ -188,6 +199,40 @@ const KNOWN_PACKAGE: Record<LabPackage, { name: string; type: string }> = {
   msi: { name: 'Fleet osquery', type: 'App (Windows)' },
   pkg: { name: 'Safari', type: 'App (macOS)' },
 };
+
+/**
+ * What the host page shows of the machine, from Fleet's own detail queries, and
+ * the shape a filled-in value has. An empty one reads "---".
+ */
+const VITALS: Array<[vital: string, shape: RegExp]> = [
+  ['Disk space available', /\d+(\.\d+)? GB/],
+  ['Memory', /\d+(\.\d+)? GB/],
+  ['Hardware model', /\w/],
+  ['Private IP address', /\b\d{1,3}(\.\d{1,3}){3}\b/],
+  ['MAC address', /\b[0-9a-f]{2}(:[0-9a-f]{2}){5}\b/i],
+];
+
+/**
+ * The Hosts list's platform filter for each platform. Its Platforms group is
+ * Fleet's built-in labels under shorter names: Linux is "All Linux", Windows
+ * "MS Windows". A Linux or Windows host is in one once it has answered that
+ * label's query, as for any label, so membership says the label queries reach
+ * the host and its answers come back. A Mac that enrolled in MDM is put in
+ * "macOS" by Fleet itself, before osquery answers anything, so there it says
+ * less: the host is in the label, and has not answered that it isn't. The
+ * macOS and Windows queries read `os_version`; the Linux one reads osquery's
+ * own build, so it holds whatever the distribution.
+ */
+const PLATFORM_FILTER: Record<LabPlatform, string> = { linux: 'Linux', windows: 'Windows', darwin: 'macOS' };
+
+/**
+ * One row from the host: the platform osquery reports, which the manifest
+ * knows, and whether a Fleet Desktop process is up (`fleet-desktop` on Linux
+ * and macOS, `fleet-desktop.exe` on Windows).
+ */
+const LIVE_QUERY =
+  "SELECT (SELECT platform FROM os_version) AS platform, " +
+  "CASE WHEN EXISTS (SELECT 1 FROM processes WHERE name LIKE 'fleet-desktop%') THEN 'yes' ELSE 'no' END AS fleet_desktop_running;";
 
 /** The Windows matrix hosts' package (`OS_SMOKE_MSI`, which the cleanup's sweep knows by the same name). */
 const SMOKE_MSI_PATH = path.resolve(__dirname, '../../../../test-data/windows/software', OS_SMOKE_MSI.packageName);
@@ -255,16 +300,15 @@ const GATE = 'is online on its fleet, and reports its OS and its agent versions'
 
 /**
  * The OS's host, online on its fleet. When it isn't, the first smoke of the OS
- * fails with the reason (see `UNUSABLE_HOST`) and every other one skips,
- * naming that smoke.
+ * (`gate`) fails with the reason and every other one skips, naming that smoke.
  */
 async function hostOf(request: APIRequestContext, { os, entry }: Subject, gate = false): Promise<SmokeHost> {
   const candidates = entry.role === 'pool' ? poolHostsOfRun(entry.platform, os) : [entry];
   const records = await listLabHostRecords(request, candidates);
   const problems = candidates.map((candidate) => labHostProblem(candidate, records));
   const unusable = problems.every((problem) => problem !== null) ? problems.join('; ') : null;
-  if (unusable && gate && UNUSABLE_HOST === 'fail') throw new Error(`no host to smoke ${os} on: ${unusable}`);
-  test.skip(unusable !== null, gate ? `${unusable}` : `${unusable} (the failure of "${GATE}")`);
+  if (unusable && gate) throw new Error(`no host to smoke ${os} on: ${unusable}`);
+  test.skip(unusable !== null, `${unusable} (the failure of "${GATE}")`);
 
   const fleetName = labHostFleet(entry);
   if (typeof fleetName !== 'string') throw new Error(`[os-smokes] ${entry.name} (${entry.role}, ${entry.tier}) has no fleet of its own`);
@@ -287,6 +331,8 @@ interface SmokePackage {
   title: string;
   /** The installer's file name. */
   fileName: string;
+  /** Whether the host's inventory lists it once installed. A tarball is no inventory source. */
+  inventoried: boolean;
   /** For a pool VM's durable fixture: sees it through to rest, inventory included. */
   rest?: () => Promise<void>;
 }
@@ -301,9 +347,10 @@ function perRunPackage(entry: LabHost): { fileName: string; buffer: Buffer; scri
       return {
         fileName: `${name}-1.0.0-1.noarch.rpm`,
         buffer: inertRpm(name, '1.0.0'),
-        // Fleet's own scripts for an .rpm call dnf. A host that installs with
-        // zypper gets the same two steps in its words; the package is unsigned,
-        // which zypper has to be told to accept.
+        // TODO(fleetdm/fleet#58784): Fleet's own scripts for an .rpm call dnf,
+        // which openSUSE doesn't have, so its install fails with them. A host
+        // that installs with zypper gets the same two steps in its words; the
+        // package is unsigned, which zypper has to be told to accept.
         scripts:
           entry.packageManager === 'zypper'
             ? {
@@ -369,7 +416,7 @@ async function addPerRunPackage(
   if (entry.package === 'msi') {
     await ensureVmFixtureUninstalled(request, host.id, { titleId, name: title, packageName: built.fileName });
   }
-  return { titleId, title, fileName: built.fileName };
+  return { titleId, title, fileName: built.fileName, inventoried: entry.package !== 'pkg.tar.zst' };
 }
 
 /**
@@ -398,8 +445,50 @@ async function durablePackage(
     titleId: title.titleId,
     title: title.name,
     fileName: title.packageName,
+    inventoried: true,
     rest: () => ensureVmFixtureUninstalled(request, host.id, title),
   };
+}
+
+/**
+ * Waits for the host's install or uninstall of a package to end, and fails with
+ * what the host printed when it ends failed. Fleet has made its retries by
+ * then, and the reason is the host's (its package manager busy or locked, a
+ * dependency, a refused package): a longer wait changes nothing, and the red
+ * row should say it.
+ *
+ * A failed status counts once it has been read twice, five seconds apart.
+ * Fleet records a failed attempt and queues its retry in two writes of one
+ * request, so a single read between them shows a failure that is about to
+ * become pending again.
+ */
+async function waitForPackage(
+  request: APIRequestContext,
+  host: SmokeHost,
+  pkg: SmokePackage,
+  action: 'install' | 'uninstall',
+  timeout = 300_000,
+): Promise<void> {
+  const done: HostSoftwareStatus = action === 'install' ? 'installed' : null;
+  const failed: HostSoftwareStatus = action === 'install' ? 'failed_install' : 'failed_uninstall';
+  let status: HostSoftwareStatus | undefined;
+  let failedReads = 0;
+  await expect
+    .poll(
+      async () => {
+        status = (await getHostSoftwareState(request, host.id, pkg.titleId))?.status;
+        failedReads = status === failed ? failedReads + 1 : 0;
+        return status === done || failedReads >= 2;
+      },
+      { message: `the ${action} of ${pkg.title} on ${host.displayName} never ended`, timeout, intervals: [5_000] },
+    )
+    .toBe(true);
+  if (status !== failed) return;
+  const output = (await lastSoftwareActionOutput(request, host.id, pkg.title, action)).trim();
+  throw new Error(
+    `${host.displayName} failed to ${action} ${pkg.title} (${pkg.fileName}). What the host printed last:\n` +
+      (output.slice(-1200) || '(nothing on record)'),
+  );
 }
 
 /** When the host's newest uninstall of `title` was recorded, or 0. */
@@ -446,6 +535,35 @@ function smokesOf(subject: Subject): void {
       await expect(hostDetails.agentTooltip).toContainText(`Orbit: ${reported.orbitVersion}`);
     });
 
+    test('shows its vitals and its local users', async ({ hostDetails, request }) => {
+      const host = await hostOf(request, subject);
+
+      await hostDetails.goto(host.id);
+      for (const [vital, shape] of VITALS) {
+        await expect(hostDetails.vitals.value(vital), `${vital} of ${host.displayName}`).toHaveText(shape);
+      }
+      // The card shows "No users detected" until the host's users query has
+      // answered. Then it lists what the host reported: one of them, by name.
+      const { usernames } = await getHostAgentReport(request, host.id);
+      expect(usernames, `${host.displayName} reports no local user`).not.toHaveLength(0);
+      await expect(hostDetails.usersHeading).toBeVisible();
+      await hostDetails.searchUsers(usernames[0]);
+      await expect(hostDetails.userRow(usernames[0])).toBeVisible();
+    });
+
+    test('is in the built-in label of its platform', async ({ hostsList, request }) => {
+      const host = await hostOf(request, subject);
+
+      await hostsList.goto({ fleetId: host.fleetId });
+      await hostsList.teamDropdown.selectByLabel(host.fleetName);
+      const platform = PLATFORM_FILTER[entry.platform];
+      await hostsList.filterTo({ platform, status: 'Online' });
+      await hostsList.searchFor(host.displayName);
+      await expect(hostsList.hostLink(host.displayName)).toBeVisible();
+      // The search alone would find the host: the list is still the label's.
+      await expect(hostsList.labelFilter.selected).toContainText(platform);
+    });
+
     test('lists a package known to be on it in its software inventory', async ({ hostDetails, request }) => {
       const host = await hostOf(request, subject);
       const known = KNOWN_PACKAGE[entry.package];
@@ -457,25 +575,17 @@ function smokesOf(subject: Subject): void {
       await expect(row.getByRole('cell', { name: known.type, exact: true })).toBeVisible();
     });
 
-    if (entry.desktop !== 'none') {
-      test('runs Fleet Desktop: a live report of its processes finds it', async ({
-        hostDetails,
-        reportEdit,
-        reportLive,
-        seed,
-        request,
-        page,
-      }) => {
+    const hasDesktop = entry.desktop !== 'none';
+
+    test(
+      `answers a live report with its own platform${hasDesktop ? ', and Fleet Desktop is running' : ''}`,
+      async ({ hostDetails, reportEdit, reportLive, seed, request, page }) => {
         // A live run ends only when the host has answered, and a host answers
         // nothing while it is collecting its vitals: the wait for a collection
         // under way, then the run's own.
         test.setTimeout(480_000);
         const host = await hostOf(request, subject);
-        // One row when the process is up, none when it isn't: the binary is
-        // `fleet-desktop` on Linux and macOS, `fleet-desktop.exe` on Windows.
-        const report = await seed.report('os-smoke-desktop', {
-          query: "SELECT name FROM processes WHERE name LIKE 'fleet-desktop%' LIMIT 1;",
-        });
+        const report = await seed.report('os-smoke-live', { query: LIVE_QUERY });
         await waitForNoPendingRefetch(request, host.id);
 
         await hostDetails.goto(host.id);
@@ -492,10 +602,22 @@ function smokesOf(subject: Subject): void {
         await expect(reportLive.finishedHeading).toBeVisible({ timeout: 180_000 });
         await expect(reportLive.runSummary).toContainText('100% responded');
         await expect(reportLive.resultsRows).toHaveCount(1);
-        await expect(reportLive.resultsRows.first()).toContainText(host.displayName);
-        await expect(reportLive.resultsRows.first()).toContainText('fleet-desktop');
-      });
-    }
+        const row = reportLive.resultsRows.first();
+        await expect(row).toContainText(host.displayName);
+        // What the host answered, not only that it did: its platform is the one
+        // the manifest has for it.
+        await expect(
+          row.getByRole('cell', { name: entry.fleetPlatform, exact: true }),
+          `the platform ${host.displayName} answered with`,
+        ).toBeVisible();
+        if (hasDesktop) {
+          await expect(
+            row.getByRole('cell', { name: 'yes', exact: true }),
+            `no Fleet Desktop process on ${host.displayName}`,
+          ).toBeVisible();
+        }
+      },
+    );
 
     test('runs a script, and its output comes back', async ({ hostDetails, seed, request }) => {
       // Upload, the host's next check-in, the run, and the result's way back.
@@ -566,9 +688,14 @@ function smokesOf(subject: Subject): void {
       });
     }
 
-    test('installs a custom package, and uninstalls it again', async ({ hostDetails, cleanup, request }) => {
-      // Two actions on the host's queue, each picked up at its next check-in;
-      // a pool VM's fixture is also brought to rest before and after.
+    test('installs a custom package and uninstalls it again, and its inventory follows both', async ({
+      hostDetails,
+      cleanup,
+      request,
+    }) => {
+      // Two actions on the host's queue, each picked up at its next check-in and
+      // each followed by a collection; a pool VM's fixture is also brought to
+      // rest before and after.
       test.setTimeout(900_000);
       const host = await hostOf(request, subject);
       const pkg =
@@ -576,13 +703,19 @@ function smokesOf(subject: Subject): void {
           ? await durablePackage(request, cleanup, host, entry)
           : await addPerRunPackage(request, cleanup, host, entry);
       const library = hostDetails.library;
+      const offered = await getHostSoftwareState(request, host.id, pkg.titleId);
+      expect(offered, `${pkg.title} isn't offered to ${host.displayName}`).not.toBeNull();
+      // What the Library row has to show once the host reports the package. A
+      // tarball carries no version, and its row is never read for one.
+      const version = offered!.libraryVersion;
+      if (pkg.inventoried) expect(version, `the Library gives ${pkg.title} no version`).toBeTruthy();
 
-      await test.step('install it from the Library', async () => {
+      await test.step('install it from the Library, and the inventory lists it', async () => {
         await hostDetails.goto(host.id);
         await hostDetails.openLibrary(pkg.title);
         await library.install(pkg.title);
         expect((await getHostSoftwareState(request, host.id, pkg.titleId))?.status).toBe('pending_install');
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, 'installed');
+        await waitForPackage(request, host, pkg, 'install');
 
         await hostDetails.goto(host.id);
         await hostDetails.openLibrary(pkg.title);
@@ -593,15 +726,26 @@ function smokesOf(subject: Subject): void {
           `installed ${pkg.title} (${pkg.fileName}) on ${host.displayName}`,
         );
         await details.close();
+        if (!pkg.inventoried) return;
+
+        await waitForInventoryToFollow(request, host.id, pkg.titleId, 'listed');
+        await hostDetails.goto(host.id);
+        await hostDetails.openLibrary(pkg.title);
+        await expect(await library.installedVersion(pkg.title)).toHaveText(version!);
+        await hostDetails.goto(host.id);
+        await hostDetails.openInventory(pkg.title);
+        await expect(hostDetails.softwareNameLink(pkg.title)).toBeVisible();
       });
 
-      await test.step('uninstall it from the Library', async () => {
+      await test.step('uninstall it from the Library, and the inventory drops it', async () => {
         // A title that keeps its name from run to run (the .msi, a durable
         // fixture) has earlier uninstalls on record, which read the same.
         const before = await lastUninstalledAt(request, host.id, pkg.title);
+        await hostDetails.goto(host.id);
+        await hostDetails.openLibrary(pkg.title);
         await library.uninstall(pkg.title);
         expect((await getHostSoftwareState(request, host.id, pkg.titleId))?.status).toBe('pending_uninstall');
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, null);
+        await waitForPackage(request, host, pkg, 'uninstall');
         expect(
           await lastUninstalledAt(request, host.id, pkg.title),
           'this uninstall recorded no activity of its own',
@@ -614,6 +758,18 @@ function smokesOf(subject: Subject): void {
         await details.expectOpen();
         await expect(details.statusMessage).toContainText(`uninstalled ${pkg.title} from ${host.displayName}`);
         await details.close();
+        if (!pkg.inventoried) return;
+
+        await waitForInventoryToFollow(request, host.id, pkg.titleId, 'gone');
+        await hostDetails.goto(host.id);
+        await hostDetails.openLibrary(pkg.title);
+        await expect(await library.installedVersion(pkg.title)).toHaveText('---');
+        await expect(library.installAction(pkg.title, 'Install')).toBeVisible();
+        await expect(library.uninstallAction(pkg.title)).toHaveCount(0);
+        await hostDetails.goto(host.id);
+        await hostDetails.openInventory(pkg.title);
+        await expect(hostDetails.softwareEmptyState).toBeVisible();
+        await expect(hostDetails.softwareNameLink(pkg.title)).toHaveCount(0);
       });
 
       // Only a durable fixture has one: the fleet keeps it, and the next spec
@@ -646,7 +802,7 @@ function smokesOf(subject: Subject): void {
         await waitForNoPendingRefetch(request, host.id);
         const since = await getHostCollectedAt(request, host.id, 'policy_updated_at');
         await waitForHostRefetch(request, host.id, { since, field: 'policy_updated_at', refetch: true });
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, 'installed', 420_000);
+        await waitForPackage(request, host, pkg, 'install', 420_000);
 
         const install = (await listHostActivities(request, host.id)).find(
           (a) => a.type === 'installed_software' && a.details.software_title === pkg.title,
@@ -667,10 +823,13 @@ function smokesOf(subject: Subject): void {
 const takesTurns = ({ entry }: Subject): boolean => entry.role === 'matrix' && entry.package === 'msi';
 
 test.describe('Premium • OS smoke', () => {
-  for (const subject of SUBJECTS.filter((s) => !takesTurns(s))) smokesOf(subject);
-
+  // Declared first, so a worker starts on it with the run: three hosts in turn
+  // are the longest thing here, and what the run's length comes down to once
+  // there are workers enough for the other OS versions.
   test.describe('the Windows matrix hosts, in turn', () => {
     test.describe.configure({ mode: 'default' });
     for (const subject of SUBJECTS.filter(takesTurns)) smokesOf(subject);
   });
+
+  for (const subject of SUBJECTS.filter((s) => !takesTurns(s))) smokesOf(subject);
 });

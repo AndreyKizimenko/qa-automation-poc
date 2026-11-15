@@ -79,11 +79,13 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   targeted host has answered (`FLEET_LIVE_QUERY_REST_PERIOD` bounds only the REST endpoint), so bound the
   wait on the finished heading, and target hosts you know answer: the real VMs by host search, never a
   Platforms chip or All hosts.
-- **To make an install fail, prefer a pre-install query that returns no rows** (`preInstallQuery` on
-  `uploadSoftwarePackageBuffer`) over a package the host refuses: a failed install *script* puts orbit's
-  config loop into a backoff of 1, 2, 4, then 5 min that stalls every install and script queued on that VM
-  (fleetdm/fleet#54607, fixed in fleetd 1.63.0: the rule holds while a VM runs an older agent). Where the
-  script failure itself is the point, the spec goes in `exclusive/`.
+- **To make an install fail, choose where it fails.** On the host: build the package for the architecture
+  the VM isn't (`foreignDebArch` in `helpers/deb.ts`), so its dpkg refuses it before unpacking and nothing
+  is left behind; Fleet tries three times, half a minute to a minute apart, before the failure sticks.
+  Before it reaches the host: a pre-install query that returns no rows (`preInstallQuery` on
+  `uploadSoftwarePackageBuffer`). A failed install script doesn't hold up the VM's other work: fleetd
+  1.63.0, which the lab's hosts run, doesn't back its config loop off after one (fleetdm/fleet#54607). A
+  *policy's* failing install still goes in `exclusive/`: Fleet queues it below every user-requested one.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.
 - **A policy's result on a host moves only on a refetch** (or the hourly policy interval), not on the
@@ -136,12 +138,13 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   `apple_require_hardware_attestation` / `only_allow_apple_business_enrollment` and
   `sso_settings.sso_server_url` as loaded. `shared/settings/organization/advanced-options.spec.ts` asserts
   they're unchanged, so no main-project spec writes them.
-- **A fleet subtree Fleet replaces wholesale has one writer per fleet.** A fleet's enroll secrets and its
-  `webhook_settings` are saved whole, so two specs writing them on the same fleet undo each other's write through
-  their snapshot restores. Before 4.95, saving a fleet's policy automations or its Settings tab also sent the
-  whole `webhook_settings` and wiped the webhook the other one owned (fleetdm/fleet#54619); the snapshot
-  restores still collide. Use a throwaway `pw-*` fleet for a fleet-level write. The static users never belong
-  to one, so a fleet-scoped *role* write there needs a disposable `qa-test-*` user given that fleet.
+- **A fleet's settings have one writer per fleet.** A fleet's enroll secrets are saved whole, so two specs
+  writing them on the same fleet undo each other's write through their snapshot restores. Its
+  `webhook_settings` are not: a save replaces only the webhooks it carries (fleetdm/fleet#54619, fixed in
+  4.95), so a spec snapshots and restores its own webhook, never the subtree, and as an object, because a
+  webhook sent as `null` counts as not sent. Use a throwaway `pw-*` fleet for a fleet-level write all the
+  same. The static users never belong to one, so a fleet-scoped *role* write there needs a disposable
+  `qa-test-*` user given that fleet.
 - **The gitops-mode exceptions act with the mode off.** `fleetctl gitops` reads them on every apply, and
   premium's YAML declares no `secrets:`, so `secrets: false` left behind makes the next apply delete every
   enroll secret. Only the `gitops-mode` project writes them, it restores them in a hook, and its

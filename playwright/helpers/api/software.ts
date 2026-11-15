@@ -1,8 +1,16 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { listHostActivities } from './activities';
 import { apiUrl, authHeaders, expectOk } from './core';
-import { getHostCollectedAt, waitForHostRefetch, waitForNoPendingRefetch } from './hosts';
+import {
+  getHostCollectedAt,
+  getHostRefetchRequested,
+  requestHostRefetch,
+  waitForHostRefetch,
+  waitForNoPendingRefetch,
+} from './hosts';
+import { getScriptResult } from './scripts';
 
 export interface SoftwareTitleRef {
   id: number;
@@ -748,6 +756,35 @@ export async function waitForHostSoftwareStatus(
 }
 
 /**
+ * What the host printed during its newest install or uninstall of a title: the
+ * install's output (`software/install/<uuid>/results`), or the uninstall
+ * script's. Fleet's status says only that one failed; why is in what the host's
+ * package manager said, so a wait that ends on a failure can quote it. Empty
+ * when the host has no such activity on record.
+ */
+export async function lastSoftwareActionOutput(
+  request: APIRequestContext,
+  hostId: number,
+  softwareTitle: string,
+  action: 'install' | 'uninstall',
+): Promise<string> {
+  const type = action === 'install' ? 'installed_software' : 'uninstalled_software';
+  const activity = (await listHostActivities(request, hostId)).find(
+    (a) => a.type === type && a.details.software_title === softwareTitle,
+  );
+  if (!activity) return '';
+  if (action === 'uninstall') {
+    const executionId = activity.details.script_execution_id as string | undefined;
+    return executionId ? (await getScriptResult(request, executionId)).output : '';
+  }
+  const uuid = activity.details.install_uuid as string | undefined;
+  if (!uuid) return '';
+  const res = await request.get(apiUrl(`software/install/${uuid}/results`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read the result of install ${uuid}`);
+  return ((await res.json()).results?.output as string | null) ?? '';
+}
+
+/**
  * Takes a title off a host and out of the fleet's library — the cleanup every
  * install spec ends with, and the pre-clean for a fixed-name fixture a dead run
  * may have left installed. Uninstalls first when the host still has it, since
@@ -884,6 +921,60 @@ export async function waitForSoftwareSettled(
     `host ${hostId}'s inventory never showed ${opts.inventoryName ?? `title ${titleId}`} ` +
       `${opts.version ?? inventory} after ${status}, over two collections`,
   );
+}
+
+/**
+ * Waits until the host's inventory lists a title (`listed`) or no longer does
+ * (`gone`), once its install or uninstall has settled. The cheaper sibling of
+ * {@link waitForSoftwareSettled}, for a title whose inventory is known to
+ * disagree at the start: a package the host never had, then one it has.
+ *
+ * Fleet asks the host for fresh vitals itself when an install or uninstall
+ * succeeds, and that collection normally carries the change, so this only
+ * watches the inventory. It asks for a refetch of its own only when none has
+ * been outstanding for 20 seconds while the inventory still disagrees: Fleet's
+ * request can merge into a collection that was already under way, and a
+ * refetch's software results can land seconds after its vitals. One collection
+ * a call, where `waitForSoftwareSettled` waits out one and then makes another.
+ *
+ * Not for a title that may already be in the state asked for (a durable
+ * fixture read before anything was done to it): there the inventory can agree
+ * for the wrong reason, and `waitForSoftwareSettled` is the one that proves a
+ * collection ran afterwards.
+ */
+export async function waitForInventoryToFollow(
+  request: APIRequestContext,
+  hostId: number,
+  titleId: number,
+  expected: 'listed' | 'gone',
+  timeout = 300_000,
+): Promise<HostSoftwareState> {
+  let state: HostSoftwareState | null = null;
+  // Consecutive reads, 5 s apart, with no refetch outstanding.
+  let quiet = 0;
+  await expect
+    .poll(
+      async () => {
+        state = await getHostSoftwareState(request, hostId, titleId);
+        // Deleted, or no longer offered: its inventory can't be read, and an
+        // empty answer would pass for "gone".
+        if (!state) throw new Error(`title ${titleId} isn't offered to host ${hostId}, so its inventory can't be followed`);
+        if ((state.installedVersions.length > 0) === (expected === 'listed')) return true;
+        quiet = (await getHostRefetchRequested(request, hostId)) ? 0 : quiet + 1;
+        if (quiet >= 4) {
+          await requestHostRefetch(request, hostId);
+          quiet = 0;
+        }
+        return false;
+      },
+      {
+        message: `host ${hostId}'s inventory never ${expected === 'listed' ? 'listed' : 'dropped'} title ${titleId}`,
+        timeout,
+        intervals: [5_000],
+      },
+    )
+    .toBe(true);
+  return state!;
 }
 
 /**

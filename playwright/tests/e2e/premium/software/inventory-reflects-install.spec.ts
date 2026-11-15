@@ -14,21 +14,22 @@
  *     pending window, a minute or two long.
  *
  * Both run on the Linux VM with packages built per run by
- * `helpers/deb.ts`. The failing one is an ordinary package with a pre-install
- * query that returns no rows (`SELECT 1 WHERE 1 = 0;`): orbit stops before the
- * install script and Fleet records the install failed, so nothing reaches the
- * host. Not a package dpkg refuses: a failed install *script* puts orbit's config
- * loop into a backoff of up to 5 min, which stalls every other spec's installs and
- * scripts on this VM; a failed pre-install query doesn't.
- * TODO(fleetdm/fleet#54607): see docs/blocked-by-product-bugs.md.
+ * `helpers/deb.ts`. The failing one is built for the architecture the VM isn't,
+ * so its dpkg refuses the package before unpacking anything: Fleet's install
+ * script runs on the host and exits non-zero on every attempt, and nothing is
+ * left behind. The failures don't hold up the VM's other installs and scripts:
+ * fleetd 1.63.0, which the lab's VMs run, doesn't back its config loop off
+ * after a failed install script (fleetdm/fleet#54607).
  *
  * Premium only (installing software is premium), on the VMs fleet; see
  * `install-on-host.spec.ts`.
  */
 import { test, expect, HOST_RETRIES } from '@fixtures';
-import { inertDeb } from '@helpers/deb';
+import { foreignDebArch, inertDeb } from '@helpers/deb';
+import { ownName } from '@helpers/own-name';
 import {
   deleteSoftwareTitle,
+  getHostCpuType,
   getHostSoftwareState,
   installSoftwareOnHost,
   listHostActivities,
@@ -93,15 +94,16 @@ test.describe('Premium • Software • Inventory reflects installs', { tag: '@v
     request,
   }) => {
     const host = await requireRealHost(request, 'linux');
-    const name = `fleet-pw-precondition-${Date.now().toString(36)}`;
-    // A pre-install query that can never pass: every attempt stops before the
-    // install script runs, and Fleet records it failed.
+    const name = `fleet-${ownName('refused')}`;
+    // Built for the architecture the VM isn't: its dpkg refuses the package, so
+    // every attempt's install script runs on the host and fails without
+    // touching it.
+    const arch = foreignDebArch(await getHostCpuType(request, host.id));
     const title = await uploadSoftwarePackageBuffer(
       request,
       vmsFleetId,
-      `${name}_1.0.0_all.deb`,
-      inertDeb(name, '1.0.0'),
-      { preInstallQuery: 'SELECT 1 WHERE 1 = 0;' },
+      `${name}_1.0.0_${arch}.deb`,
+      inertDeb(name, '1.0.0', arch),
     );
 
     try {

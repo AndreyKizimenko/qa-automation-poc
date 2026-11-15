@@ -169,19 +169,21 @@ export default defineConfig({
   // report at all. The real-VM specs are what make a run long: each VM works one
   // queue, and a retried VM test can cost 5–15 min.
   globalTimeout: process.env.CI ? 100 * 60_000 : 0,
-  // CI runs free at 2 and premium at 3 — the shared Fleet QA instances have
+  // CI runs free at 2 and premium at 4 — the shared Fleet QA instances have
   // limited concurrency headroom, and more workers there surface as flaky
   // navigation timeouts under load even when the test logic is correct.
-  // Premium's third worker leans on its MySQL's 2 CPU / 4 GB. Each worker is
-  // handed its own real VM of a platform while that platform's pool has one to
-  // give (premium: four Ubuntu, two Windows, two macOS; free: one of each), and
-  // a VM works one queue, so workers beyond a pool's size share its VMs. Local
-  // dev defaults to 4 for faster feedback. `WORKERS` env or `--workers=N`
-  // overrides either.
+  // Premium's count leans on its MySQL's 2 CPU / 4 GB and on its pool of VMs.
+  // Each worker is handed its own real VM of a platform while that platform's
+  // pool has one to give (premium: four Ubuntu, two Windows, two macOS; free:
+  // one of each), and a VM works one queue, so workers beyond a pool's size
+  // share its VMs: premium's four have an Ubuntu VM each, and go two to a
+  // Windows VM and two to a Mac. A project with no count of its own (the
+  // gitops checks) runs at its tier's. Local dev defaults to 4 for faster
+  // feedback. `WORKERS` env or `--workers=N` overrides either.
   workers: process.env.WORKERS
     ? Number(process.env.WORKERS)
     : process.env.CI
-      ? suite === 'premium' ? 3 : 2
+      ? suite === 'premium' ? 4 : 2
       : 4,
   // The QA instances' Cloudflare doesn't edge-cache /assets/bundle-*.js — a
   // repeat request still answers cf-cache-status: DYNAMIC, although Fleet
@@ -304,9 +306,10 @@ export default defineConfig({
     // A smoke per OS version: the same few checks on the one host of each OS
     // flavour (premium's OS matrix fleet) and on a pool VM of each OS version the
     // pool holds, so every version is covered every night while the main suite
-    // spreads over the pool by worker. A step of its own so that a flavour's
-    // failure reads as that flavour's and never costs the main suite a minute,
-    // and so a branch run can leave it out. Each host works its own queue: the
+    // spreads over the pool by worker. An invocation of its own (in CI the
+    // `Playwright — OS smokes` workflow), so that a flavour's failure reads as
+    // that flavour's, never costs the main suite a minute, and can be re-run
+    // alone, and so a branch run can leave it out. Each host works its own queue: the
     // spec keeps one host's tests in one worker, and the hosts run side by side.
     //
     // Like the exclusive projects it depends only on login setup and shares

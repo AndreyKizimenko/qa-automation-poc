@@ -24,7 +24,7 @@
  * `software-lifecycle-on-host.spec.ts`; a Deploy whose install fails, and Fleet's
  * retries of it, is `premium/exclusive/software/deploy-install-retries.spec.ts` —
  * in the exclusive project, because a policy's installs queue below every
- * user-requested one and a failed install stalls orbit (fleetdm/fleet#54607).
+ * user-requested one.
  */
 import * as fs from 'fs';
 import { test, expect, HOST_RETRIES } from '@fixtures';

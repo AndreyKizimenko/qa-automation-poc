@@ -15,7 +15,8 @@ QA — Nightly (one chain, both tiers)
     └─ free:    gitops chain ─► free suite job          (the two tiers side by side)
 
 a gitops chain            apply baseline → verify → apply min → verify → fleetctl checks
-a suite job (premium)     main project (3 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → per-OS smokes (3 workers; the nightly only) → merge reports
+a suite job (premium)     main project (4 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
+the per-OS smokes job     after premium's suite job: the premium-matrix project (6 workers), with a report of its own
 a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
 
 QA — Branch run           the same two tier chains without the redeploy, against a branch, on demand
@@ -99,16 +100,22 @@ beside another browser project in a single invocation, because side by side is e
 avoid. The order between the two steps does not matter; both put their lock back in their teardown, and
 `cleanup-setup` would anyway.
 
-**The per-OS smokes are a step of the same job, not a workflow of their own.** `premium-matrix` runs one spec:
-the same few checks on the matrix host of each OS flavour and on a pool VM of each OS version the pool holds
-(`tests/e2e/premium/matrix/os-smokes.spec.ts`). It works the pool's VMs, so like the exclusive specs it can't
-run beside the main project, and it holds no lock, so it runs at the suite's worker count, last: a flavour's
-trouble then costs the steps before it nothing. A workflow of its own would buy no overlap, since every suite
-on an instance shares one concurrency group, and would cost a second login, cleanup and report. Each host
-works its own queue, so one worker walks one host through its smokes (`mode: 'default'` per OS) while the
-others walk theirs; only the three Windows matrix hosts take turns, because they share one `.msi` title on
-the fleet. The nightly runs the step; a branch run leaves it out unless dispatched with `-f os-smokes=true`,
-which a branch that touches the smokes, the lab manifest or what they stand on should be.
+**The per-OS smokes are a workflow of their own, chained after premium's suite.** `premium-matrix` runs one
+spec: the same few checks on the matrix host of each OS flavour and on a pool VM of each OS version the pool
+holds (`tests/e2e/premium/matrix/os-smokes.spec.ts`). `Playwright — OS smokes` (`playwright-os-smokes.yml`) is
+built like the two suites' workflows: its own login, cleanup teardown and encrypted report
+(`playwright-report-os-smokes`), and premium's concurrency group, because it works the pool's VMs and puts
+per-test things on the OS matrix fleet, which a suite queues on and a gitops apply deletes. A group gives no
+overlap, so in a chain it costs a few minutes over a step of premium's job (a checkout, `npm ci`, a login, a
+second cleanup). What it buys is that the smokes can be run and re-run alone, after a lab change or one
+flavour's red night, and that a run's page shows them as their own line. Each host works its own queue, so
+one worker walks one host through its smokes (`mode: 'default'` per OS) while the others walk theirs; only
+the three Windows matrix hosts take turns, because they share one `.msi` title on the fleet. That is why the
+job runs at 6 workers where premium's suite runs at 3: no pool is shared, most of a smoke is a wait on its
+host: 57 test-minutes in CI are 12 minutes at 6 workers, nothing retried (branch run 43690094173). The
+Windows turn, declared first so it starts with the run, is the floor: more workers than that buy nothing. The nightly
+runs it after premium's suite, whatever that did; a branch run leaves it out unless dispatched with `-f
+os-smokes=true`, which a branch that touches the smokes, the lab manifest or what they stand on should be.
 
 **The gitops-mode exceptions are restored before every premium apply, not by the suite.** Unlike the mode flag,
 the exceptions act outside gitops mode: `fleetctl gitops` reads them on every apply, so a stuck `secrets: false`
@@ -120,7 +127,7 @@ apply too late. The gitops-mode teardown puts them back at the end of every gito
 pinned in that script and in `GITOPS_EXCEPTIONS_BASELINE` (`helpers/api/gitops-mode.ts`).
 
 **Worker counts are measured, not guessed.** The count is per tier because the instances differ, and it is a
-CI-only number: locally the default is higher and the specs that touch a VM are run with `--workers=2`. The
+CI-only number: locally the default is 4 and the specs that touch a VM are run with `--workers=2`. The
 measurements that set the current numbers are in [*What bounds a run*](#what-bounds-a-run). A trial at another
 count is a branch run with `-f workers=N`, read with `run_timeline.py` (below), never a config commit first.
 The input sets premium's count only: free has one VM per platform and a smaller instance, and always runs at
@@ -136,7 +143,7 @@ shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
 minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
-gitops-mode step and free's exclusive step at 15, and the per-OS smokes at 45; the job limit sits above the sum.
+gitops-mode step and free's exclusive step at 15; the job limit sits above the sum. The per-OS smokes stop at 45, in a job limited to 60.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.
 
@@ -193,8 +200,8 @@ there is to read. A failed one uploads its report, named for the job, and keeps 
 list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
 
 **The run page's annotations work the same way.** The suites run with the `github` reporter, which adds one
-"Run Summary" annotation per invocation (free two, premium four in the nightly: its main project, exclusive
-specs, gitops-mode and the per-OS smokes) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
+"Run Summary" annotation per invocation (free two, premium three: its main project, exclusive specs and
+gitops-mode; the per-OS smokes one more) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
 `list` instead (the config's CI reporter), so a green one adds none, and `reportSlowTests` is off, since the
 slow files are slow by design. A green nightly's page carries those six summaries and nothing else.
 
@@ -244,10 +251,25 @@ installs.
 **Since 2026-11-15 each worker has its own VM** of a platform, out of the device lab's pool (constraint 2), so
 the Linux queue no longer couples the workers: at four workers each has an Ubuntu VM to itself, and Windows
 and macOS are shared two ways. That removes two of the three reasons the four-worker run was red (four Linux
-installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and only a
-run can say whether it still bites: a branch run with `-f workers=4`, read with `run_timeline.py --platforms`,
-whose per-VM lines show which workers each VM served and whether any held two results at once.
-[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial and what was decided from it.
+installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and it
+didn't show in the run that tried it: branch run 43753582054 (2026-11-15, `-f workers=4`) was green with
+nothing retried.
+
+| workers | premium main step | test-minutes | outcome | what bound it |
+|---|---|---|---|---|
+| 3 | 32.6 and 35.6 min | 97 and 106 | green, twice (43690094173, 43696536354) | workers: all three busy to the last minute |
+| 4 | 27.3 min | 108 | green (43753582054) | workers: four results in flight in every minute |
+
+Read with `run_timeline.py --platforms`, whose per-VM lines show which workers each VM served and whether any
+held two results at once: each Ubuntu VM and each Windows VM held one result at a time, each Mac two at some
+moment. **Premium runs at four since.** It is one run's evidence, so the nightlies' run history is what
+watches the count. [`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has the trial.
+
+At three workers the pool took premium's main project from 41.4 to 32.6 minutes (nightly 43413291769 against
+branch run 43667531465): 26 fewer test-minutes, nearly all of it VM tests that had queued behind each other
+on one Ubuntu VM, over three workers still busy to the last minute. So the main project stays worker-bound,
+and what the pool frees is waiting, not work: an install and the refetch after it take minutes on any VM.
+The exclusive step's fourteen minutes are outside both, on one worker after the main project.
 
 Free is small enough that none of this applies: two workers, worker-bound; its runtime is in the facts table.
 
