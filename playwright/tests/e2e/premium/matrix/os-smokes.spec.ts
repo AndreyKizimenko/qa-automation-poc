@@ -118,6 +118,7 @@ import {
   getHostScriptLastExecution,
   getHostSoftwareState,
   labHostProblem,
+  lastSoftwareActionOutput,
   listHostActivities,
   listLabHostRecords,
   newestRecord,
@@ -130,6 +131,7 @@ import {
   waitForHostSoftwareStatus,
   waitForInventoryToFollow,
   waitForNoPendingRefetch,
+  type HostSoftwareStatus,
   type PackageScripts,
 } from '@helpers/api';
 import { inertDeb } from '@helpers/deb';
@@ -445,6 +447,40 @@ async function durablePackage(
   };
 }
 
+/**
+ * Waits for the host's install or uninstall of a package to end, and fails with
+ * what the host printed when it ends failed. Fleet has made its retries by
+ * then, and the reason is the host's (its package manager busy or locked, a
+ * dependency, a refused package): a longer wait changes nothing, and the red
+ * row should say it.
+ */
+async function waitForPackage(
+  request: APIRequestContext,
+  host: SmokeHost,
+  pkg: SmokePackage,
+  action: 'install' | 'uninstall',
+  timeout = 300_000,
+): Promise<void> {
+  const done: HostSoftwareStatus = action === 'install' ? 'installed' : null;
+  const failed: HostSoftwareStatus = action === 'install' ? 'failed_install' : 'failed_uninstall';
+  let status: HostSoftwareStatus | undefined;
+  await expect
+    .poll(
+      async () => {
+        status = (await getHostSoftwareState(request, host.id, pkg.titleId))?.status;
+        return status === done || status === failed;
+      },
+      { message: `the ${action} of ${pkg.title} on ${host.displayName} never ended`, timeout, intervals: [5_000] },
+    )
+    .toBe(true);
+  if (status !== failed) return;
+  const output = (await lastSoftwareActionOutput(request, host.id, pkg.title, action)).trim();
+  throw new Error(
+    `${host.displayName} failed to ${action} ${pkg.title} (${pkg.fileName}). What the host printed last:\n` +
+      (output.slice(-1200) || '(nothing on record)'),
+  );
+}
+
 /** When the host's newest uninstall of `title` was recorded, or 0. */
 async function lastUninstalledAt(request: APIRequestContext, hostId: number, title: string): Promise<number> {
   const uninstall = (await listHostActivities(request, hostId)).find(
@@ -665,7 +701,7 @@ function smokesOf(subject: Subject): void {
         await hostDetails.openLibrary(pkg.title);
         await library.install(pkg.title);
         expect((await getHostSoftwareState(request, host.id, pkg.titleId))?.status).toBe('pending_install');
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, 'installed');
+        await waitForPackage(request, host, pkg, 'install');
 
         await hostDetails.goto(host.id);
         await hostDetails.openLibrary(pkg.title);
@@ -695,7 +731,7 @@ function smokesOf(subject: Subject): void {
         await hostDetails.openLibrary(pkg.title);
         await library.uninstall(pkg.title);
         expect((await getHostSoftwareState(request, host.id, pkg.titleId))?.status).toBe('pending_uninstall');
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, null);
+        await waitForPackage(request, host, pkg, 'uninstall');
         expect(
           await lastUninstalledAt(request, host.id, pkg.title),
           'this uninstall recorded no activity of its own',
@@ -752,7 +788,7 @@ function smokesOf(subject: Subject): void {
         await waitForNoPendingRefetch(request, host.id);
         const since = await getHostCollectedAt(request, host.id, 'policy_updated_at');
         await waitForHostRefetch(request, host.id, { since, field: 'policy_updated_at', refetch: true });
-        await waitForHostSoftwareStatus(request, host.id, pkg.titleId, 'installed', 420_000);
+        await waitForPackage(request, host, pkg, 'install', 420_000);
 
         const install = (await listHostActivities(request, host.id)).find(
           (a) => a.type === 'installed_software' && a.details.software_title === pkg.title,

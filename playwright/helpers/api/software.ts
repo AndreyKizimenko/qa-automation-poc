@@ -1,6 +1,7 @@
 import { APIRequestContext, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { listHostActivities } from './activities';
 import { apiUrl, authHeaders, expectOk } from './core';
 import {
   getHostCollectedAt,
@@ -9,6 +10,7 @@ import {
   waitForHostRefetch,
   waitForNoPendingRefetch,
 } from './hosts';
+import { getScriptResult } from './scripts';
 
 export interface SoftwareTitleRef {
   id: number;
@@ -751,6 +753,35 @@ export async function waitForHostSoftwareStatus(
     )
     .toBe(status);
   return state!;
+}
+
+/**
+ * What the host printed during its newest install or uninstall of a title: the
+ * install's output (`software/install/<uuid>/results`), or the uninstall
+ * script's. Fleet's status says only that one failed; why is in what the host's
+ * package manager said, so a wait that ends on a failure can quote it. Empty
+ * when the host has no such activity on record.
+ */
+export async function lastSoftwareActionOutput(
+  request: APIRequestContext,
+  hostId: number,
+  softwareTitle: string,
+  action: 'install' | 'uninstall',
+): Promise<string> {
+  const type = action === 'install' ? 'installed_software' : 'uninstalled_software';
+  const activity = (await listHostActivities(request, hostId)).find(
+    (a) => a.type === type && a.details.software_title === softwareTitle,
+  );
+  if (!activity) return '';
+  if (action === 'uninstall') {
+    const executionId = activity.details.script_execution_id as string | undefined;
+    return executionId ? (await getScriptResult(request, executionId)).output : '';
+  }
+  const uuid = activity.details.install_uuid as string | undefined;
+  if (!uuid) return '';
+  const res = await request.get(apiUrl(`software/install/${uuid}/results`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read the result of install ${uuid}`);
+  return ((await res.json()).results?.output as string | null) ?? '';
 }
 
 /**
