@@ -13,11 +13,11 @@ and #135; tier 2 is #139, proven by branch run 43483630012; #140 cut the artifac
 Tier 3 is PR #141, merged 2026-11-14 at `e7585b5` and proven by branch run 43530391400: 696 premium and 368
 free tests passed, and none failed, was flaky or was retried. **Tier 4 has started.** The extra VMs arrived
 on 2026-11-14 as the device lab, and [`device-lab-plan.md`](device-lab-plan.md) is the plan of record for
-moving the suite onto it. Its steps A to C are on `main` (PRs #144 and #145, the second proven by branch run
-43667531465): they built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per pool
-VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146, green on
-branch run 43690094173) gives every OS version the lab holds the same smokes every night, in a project and a
-workflow of their own: nineteen versions where the suite met three. Premium runs at four workers since the
+moving the suite onto it. Its steps A to D are on `main`. A to C (PRs #144 and #145, the second proven by
+branch run 43667531465) built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per
+pool VM, and took premium's job from 57 to 50 minutes at the same three workers. Step D (PR #146, merged
+2026-11-15 after green branch runs 43690094173 and 43696536354) gives every OS version the lab holds the same
+smokes every night, in a project and a workflow of their own: nineteen versions where the suite met three. Premium runs at four workers since the
 four-worker run on the pool was green (43753582054, 2026-11-15); whether 5's lanes are still needed, and D4,
 are still Andrey's to decide from it. The rebuilt instances and the shards have not arrived, so
 14, 15 and 16 still wait, and

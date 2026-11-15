@@ -10,13 +10,15 @@ the machines' network and access. The `device-lab` skill checks and repairs the 
 keeps the manifest level with it. Read the handoff and the manifest before working on a step here; this file
 records what the suite decided to do about them, and where the handoff turned out wrong.
 
-**Where it stands, 2026-11-15.** Steps A, B and C are on `main`. A is PR #144. B + C are PR #145, merged at
+**Where it stands, 2026-11-15.** Steps A to D are on `main`. A is PR #144. B + C are PR #145, merged at
 `19ab2d1` after a green branch run (43667531465), the first full run of the suite on the lab's VMs: the
 manifest decides what each lab host is, each worker is handed its own pool VM, and the eight pool VMs are on
 the VMs fleet. Premium is at 4 workers: C's trial of a fourth ran green on 2026-11-15 (43753582054), and
-Andrey switched it on. D4 and the lanes are still his to decide (C's last box). Step D is PR #146 (`playwright/device-lab-smokes`): built, and green
-on its branch run (43690094173), the first run of the `Playwright — OS smokes` workflow. It waits only for
-its merge. Step E is next, after that.
+Andrey switched it on. D4 and the lanes are still his to decide (C's last box). D is PR #146, merged at
+`94a397e` after two green branch runs (43690094173 and 43696536354): every OS version the lab holds gets the
+same smokes each night, in the `Playwright — OS smokes` workflow. The first nightly after that merge is the
+first to run the smokes from the nightly's own chain, and the first with premium at 4 workers. Step E is
+next. It starts with Andrey's approval of its hosts, and its section says what step D changed for it.
 
 ## What the suite has to work with
 
@@ -40,7 +42,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial ran green, and premium is at 4 |
-| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Green on branch run 43690094173; awaiting its merge |
+| **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Done, 2026-11-15 |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -226,21 +228,23 @@ Not proven by a run: the cleanup's return of a stray host has not yet moved a re
 astray in any run so far, the branch run included (its decision was replayed on live data with doctored
 entries, and picked the right hosts and fleets).
 
-## Step D: built and green, awaiting its merge
+## Step D: done
 
 A smoke per OS version: `tests/e2e/premium/matrix/os-smokes.spec.ts`, one describe per manifest `os`, over the
 fifteen matrix hosts **and** the pool's four OS versions (Ubuntu 24.04, Windows 11, macOS 15 and 26), so each
 version gets the same checks every night while the main suite spreads over the pool by worker. 140 tests,
-through the UI like the rest of the suite. PR #146, against `main`; its description has every run behind it.
+through the UI like the rest of the suite. PR #146, merged 2026-11-15 at `94a397e`; its description has
+every run behind it.
 
-**Where it stands, 2026-11-15.** Everything below is in PR #146 (`playwright/device-lab-smokes`), based on
-`main` after #145 merged. On premium (4.95.0-rc, `d6df44a`):
+**What proved it, 2026-11-15.** On premium (4.95.0-rc, `d6df44a`):
 
 - **Branch run 43690094173**, on `f73aab7`, with the checks as the table has them: green throughout. The
   smokes' own workflow, on its first run, 149 of 149 (140 smokes, the login and the cleanup's steps) in
   12.0 minutes at 6 workers; premium 708 passed and 6 skipped, free 372 and 1; every gitops job green;
-  nothing flaky or retried. The PR's description has the run of its final head, which differs by a
-  review's small fixes.
+  nothing flaky or retried.
+- **Branch run 43696536354**, on `e3b9dbe`, after a review's small fixes: green throughout the same way,
+  the smokes in 11.7 minutes. It is the last full run before the merge. The merged head is three commits
+  past it: two of docs, and premium's 4-worker default, which ran as the trial under step C.
 - **Branch run 43680528701**, on `e9f08b9`, when the smokes were seven checks and the last step of premium's
   job: both suites and every gitops job green, and 99 of the 100 smokes at 3 workers. The one red was
   `prem-zorin18-luks`'s install, refused six times over because the host's own daily upgrade held dpkg's
@@ -318,6 +322,34 @@ for good. A standing fleet rather than a throwaway one, because a person types t
 that state has to survive runs. Compliance can't be it: it holds no hosts by design and requires the
 BitLocker PIN.
 
+### What step D changed for it
+
+The table and the proposal above were written before step D. Read against the code on `main`, 2026-11-15:
+
+- **Five of the six hosts now carry a nightly smoke on OS matrix.** `prem-kubuntu2404-luks`,
+  `prem-zorin18-luks`, `prem-fedora45-luks`, `prem-omarchy-01` and `prem-win10-01` are `matrix` hosts. Only
+  `prem-ubu2404-luks` has none: it is the `special` host the lab built for this ("LUKS key escrow
+  control"), and `specialHostOfRun` finds it.
+- **A host moved to another fleet doesn't stay there.** A lab host's fleet follows from its role
+  (`labHostFleet`: `matrix` and `special` hosts on OS matrix). Every premium run's cleanup returns a host
+  that is off its role's fleet, and the smokes fail an OS whose host is (`labHostProblem`). So E's first
+  change is where these hosts belong, in the manifest and in `labHostFleet`, before any host moves.
+- **The smokes follow a host to its fleet.** They take the fleet from `labHostFleet`, so on a new fleet
+  they would put their package, script and policy there, each held to the one host. Two things are tied
+  to OS matrix by name: the sweep of what a dead run left (`setup/cleanup.steps.ts`), and the turn the
+  three Windows matrix hosts take, which exists because they share a fleet and an `.msi`'s title is fixed.
+  `prem-win10-01` is one of the three.
+- **The new fleet's gitops has to leave room for the smokes**, as OS matrix's does: nothing declared but
+  the encryption settings, and its verify holding it to that. That works on OS matrix because a smoke
+  deletes what it uploads and the gitops chain runs before the suite.
+- **OS matrix stays as it is**: encryption and escrow declared off, and nothing of E on it. `CLAUDE.md`
+  (*Test hosts*) holds for every host that stays there.
+
+Not from step D, but not said above either: BitLocker on `prem-win10-01` can be watched once. After it the
+disk is encrypted and its key escrowed, so a later night finds it verified, as it finds a LUKS host after
+its one escrow by hand. The flow from a decrypted disk every night needs the VM rolled back, which a run
+can't ask for yet (`long-term-goals.md` › *What to provision next*, 1).
+
 ## Decided
 
 - **`playwright/lab-hosts.json` is the manifest's only copy** (Andrey, 2026-11-15; it replaces the two-copy
@@ -354,6 +386,10 @@ BitLocker PIN.
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
 - D4 and the lanes (C's last box), now that premium is at 4 workers: nothing in the trial asks for either.
+- Step E, before it starts: which of its hosts, and in what order (its section › *What step D changed for
+  it*). `prem-ubu2404-luks` alone needs no change to the smokes. The five matrix hosts either take their
+  smokes with them to the new fleet, or stay on OS matrix and out of E. And whether BitLocker on
+  `prem-win10-01` is watched once, with the later nights asserting the verified state.
 - `policy-automation-runs` (8 of the exclusive step's 14 minutes) is in `exclusive/` only to have an Ubuntu
   VM's queue to itself, and its policy is already scoped by label to that VM. With a VM no worker holds it
   could run beside the main project instead of after it. At 3 workers one Ubuntu VM sat idle all run; at 4
