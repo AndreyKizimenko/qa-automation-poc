@@ -13,8 +13,9 @@ and #135; tier 2 is #139, proven by branch run 43483630012; #140 cut the artifac
 Tier 3 is PR #141, merged 2026-11-14 at `e7585b5` and proven by branch run 43530391400: 696 premium and 368
 free tests passed, and none failed, was flaky or was retried. **Tier 4 has started.** The extra VMs arrived
 on 2026-11-14 as the device lab, and [`device-lab-plan.md`](device-lab-plan.md) is the plan of record for
-moving the suite onto it: its steps B + C build roadmap 13 (VM leases) and the environment gate of 5. The
-rebuilt instances and the shards have not arrived, so 14, 15 and 16 still wait, and
+moving the suite onto it: its steps B + C built roadmap 13 (VM leases) and the environment gate of 5, as a
+preflight test per pool VM (2026-11-15). Whether 5's lanes are still needed, and D4, wait on the first
+four-worker run on the pool. The rebuilt instances and the shards have not arrived, so 14, 15 and 16 still wait, and
 [*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
 smaller open items. How to read the rest:
 
@@ -92,7 +93,8 @@ below hold the reasoning.
 - [x] D2, D3 and D5: yes to each (2026-11-13). D5 and the first half of D3 are applied: `CLAUDE.md` carries
       the rewritten navigation rule, and a test no longer adds a `docs/test-audit/` entry (the folder is
       frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11, both built in PR #141.
-- [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform.
+- [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform. D4 is decided from the
+      numbers of the first four-worker run on the pool ([`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C*).
 - [ ] Three rows of *Where the written contract and the practice differ* have no answer yet: assertions in
       page objects, page-object members nothing references, and class selectors without a comment.
 - [ ] Three changes the sections propose have no roadmap row: the config lock (section 2), `serial` only
@@ -148,8 +150,8 @@ specs share the code it touches. The 4.96 upgrade is not close, so nothing here 
    [*Tier 3: the brief*](#tier-3-the-brief) has each one, and the working list what each measured.
 4. **Next, when the infrastructure arrives:** the lanes and the environment gate of 5, then 14, 13, 15 and
    16. [*Tier 4: the brief*](#tier-4-the-brief) has each one. The VMs arrived first (2026-11-14), so 13 and
-   the gate go ahead of the rest, under [`device-lab-plan.md`](device-lab-plan.md); whether the lanes are
-   still needed is decided there, from the first pooled run's numbers.
+   the gate went ahead of the rest, under [`device-lab-plan.md`](device-lab-plan.md), and are built
+   (2026-11-15); whether the lanes are still needed is decided there, from the first pooled run's numbers.
 
 Roadmap 9, a home for toast copy, was left out of this order when it was agreed; it joined tier 3, beside
 item 7, on 2026-11-13.
@@ -234,8 +236,14 @@ fail first, lint that fails or prints nothing, Andrey dispatches the full run an
 
 **2026-11-14: the VMs arrived**, as a device lab with a pool of VMs per platform on premium and one VM per
 OS flavour. [`device-lab-plan.md`](device-lab-plan.md) has what the lab is, what has landed and what is
-next. The table's *There today* column describes the day before: since PR #144 a real VM is a lab machine on
-the VMs fleet, picked first by display name, and one per platform is there until the lease is built.
+next. The table's *There today* column describes the day before, and two of its rows are built since
+(2026-11-15, the plan's steps B + C). **13**: `findOnlineHost(…, { kind: 'real' })`, and so `requireRealHost`
+and `liveMacosHost`, hand each worker `pool[parallelIndex % pool.length]` of the platform's online pool hosts
+(`lab-hosts.json`, role `pool`), and the resting-state step works through every pool VM. **5, environment
+gate**: built for the VMs only, and as a test, not a dependency: `tests/api/lab-hosts.spec.ts` has one row per
+pool VM, red with its reason when the VM is offline, astray or gone, while the run goes on with the rest of
+the pool. A dead pool VM now shrinks the pool instead of failing every test of its platform, which was the
+lanes' main reason; the token, disk and build checks are not built.
 
 | Roadmap | Build | There today | Watch for |
 |---|---|---|---|
@@ -248,8 +256,8 @@ the VMs fleet, picked first by display name, and one per platform is there until
 
 **To settle with Andrey before or during tier 4:** when the rebuilt instances and the extra VMs arrive, which
 decides when tier 4 starts; D4, a VM minute budget per platform (the tags make it measurable:
-`--grep @vm-linux` with `run_timeline.py`); and whether the lease (13) goes in ahead of the VMs, as
-recommended above.
+`--grep @vm-linux` with `run_timeline.py`, whose `--platforms` now also tallies minutes per VM); and whether
+the lanes (5) are still worth building now that the lease (13) spreads the workers over the pool.
 
 ## Tier 3: the brief
 
@@ -382,8 +390,9 @@ stops growing with the suite.
 
 **Since then (2026-11-13).** The registry is built (roadmap 10, PR #141): `helpers/claims.ts` holds every
 simulation and catalog-app claim, the pickers take a claim's key, and `npm run lint:claims` fails on an
-overlap or a claim past its pool. The lease is 13 (tier 4). The config lock has no roadmap row; the
-`cleanup` fixture it needs exists now.
+overlap or a claim past its pool. The lease (13) is built since 2026-11-15: each worker is handed its own
+real VM of a platform, by `parallelIndex`, from the pool `lab-hosts.json` lists. The config lock has no
+roadmap row; the `cleanup` fixture it needs exists now.
 `host-delete.spec.ts` returns the simulations it stages when it fails before its delete, but it still
 deletes hosts, so the offsets still index a list that shrinks.
 
@@ -414,6 +423,10 @@ deletes hosts, so the offsets still index a list that shrinks.
 **Since then (2026-11-13).** The tags are built (D2, PR #141): every test that needs a real VM carries
 `@vm-macos`, `@vm-windows` or `@vm-linux`, and `requireRealHost` and `liveMacosHost` refuse one that doesn't.
 The lanes and the environment gate are tier 4.
+
+**Since then (2026-11-15).** The gate is built for the VMs, as a preflight test per pool VM
+(`tests/api/lab-hosts.spec.ts`), and one dead VM is no longer dozens of red rows: the pool shrinks and the
+workers share what is left. The lanes are not built, and may not need to be.
 
 **What the code does.** Nothing machine-readable says "this test needs the macOS VM". There are no tags
 (verified), 12 specs name the platform statically and 5 more resolve it at run time (reported). Three costs
@@ -610,7 +623,7 @@ is additive; existing specs keep working and migrate when they are next touched.
 | 2 | Lint the contract, warnings first | S | convergence of everything written after it | done, as errors over a recorded baseline |
 | 3 | `ownName()` and the `cleanup` fixture, with data fixtures built on them (`throwawayFleet`, `borrowSims`, `seed.policy/report/script/label`) | M | timeout-safe cleanup, shard-safe names | done (PR #141); specs move to it as they are touched |
 | 4 | API-level `test` for the API specs the repo already has | S | no browser per API test; the seam for the separate API suite | done |
-| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs | tags built (PR #141); lanes and gate tier 4 |
+| 5 | VM fixtures with enforced tags, per-platform lanes, the environment gate | M | one red row per outage, lanes, readiness for more VMs | tags built (PR #141); the gate built for the VMs as a preflight test (2026-11-15); lanes undecided |
 | 6 | `results.json`, the history file, the summary line | S | flake memory | done |
 
 **While growing**
@@ -628,7 +641,7 @@ is additive; existing specs keep working and migrate when they are next touched.
 
 | # | Item | Size | Status, 2026-11-13 |
 |---|---|---|---|
-| 13 | VM leases across workers and shards | S on top of 5 | tier 4; worth building before the VMs arrive |
+| 13 | VM leases across workers and shards | S on top of 5 | built across workers (2026-11-15, `device-lab-plan.md`); across shards with 14 |
 | 14 | Cleanup as pre- and post-jobs; shards; sessions minted once | M | tier 4; needs the remaining names on `ownName` |
 | 15 | Quarantine project fed by the history | S on top of 6 | tier 4; the history it reads exists |
 | 16 | Per-worker throwaway fleets for fleet-scoped CRUD, if collisions on Workstations show up | M | tier 4 |
@@ -654,7 +667,8 @@ is additive; existing specs keep working and migrate when they are next touched.
   a hand-written entry per test. The requirement is gone as of that day and `docs/test-audit/` is frozen;
   the generator is roadmap item 11, built in PR #141 as `npm run catalogue` (on demand, not committed).
 - **D4. The shape of the 5,000.** Decided 2026-11-12: the 5,000 are UI tests; API coverage is a separate
-  suite. Still open: whether each VM platform gets a minute budget that new tests must fit inside.
+  suite. Still open: whether each VM platform gets a minute budget that new tests must fit inside; it is
+  decided from the first four-worker run on the device lab's pool (`device-lab-plan.md`).
 - **D5. Click-through navigation.** **Decided 2026-11-13: rewrite.** The rule is "one click-through test
   per area; the rest go straight to the page", which is what most specs do. `CLAUDE.md` says so now.
 

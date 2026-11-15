@@ -13,8 +13,8 @@ Skips are tracked in one of two places depending on who owns the fix:
 
 > A skip in the first two categories without a row in the matching file is a bug.
 
-Coverage that has no test yet because the instances lack the infrastructure — host types beyond the three
-VMs, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-term-goals.md), not here.
+Coverage that has no test yet because the instances lack the infrastructure — host types beyond the device
+lab's, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-term-goals.md), not here.
 
 ---
 
@@ -86,7 +86,7 @@ list, the hosts each row runs on and what is still missing (an `.rpm` fixture, o
 |---|---|---|
 | `playwright.config.ts` → top-level `timeout: 60000` | Cloudflare doesn't edge-cache Fleet's `/assets/bundle-*.js` on either QA instance. Fleet's half shipped in 4.90 ([fleetdm/fleet#45682](https://github.com/fleetdm/fleet/issues/45682), fixed by fleetdm/fleet#48409: the bundle carries `Cache-Control: public, max-age=31536000, immutable`), but both instances still answer `cf-cache-status: DYNAMIC` on a repeat request (checked 2026-10-13), so every cold browser context still pulls 4.7 MB from origin. Under origin load that can exceed the default 30 s and surface as `page.goto` timeouts with a blank screenshot. | A repeat request for the bundle answers `cf-cache-status: HIT` — then drop back to Playwright's default 30 s. |
 | `playwright.config.ts` → `expect: { timeout: 10_000 }` | Same root cause: the shared QA instance renders slowly under concurrent load, so transient render latency shouldn't surface as a flake. Twice Playwright's 5 s default. | Same as above — drop back to 5 s once a repeat request for the bundle answers `cf-cache-status: HIT`. |
-| `playwright.config.ts` → `workers` (CI: premium 3, free 2; local 4) | The shared Fleet QA instances have limited concurrency headroom; higher worker counts in CI surface as flaky navigation timeouts even when the test logic is correct. Premium's third worker leans on its MySQL's 2 CPU / 4 GB, and the real VMs still work one queue each. | The instances / render infra get more headroom — the tests themselves are not the constraint. `WORKERS=N` (or `-f workers=N` on a branch run) overrides for a one-off. |
+| `playwright.config.ts` → `workers` (CI: premium 3, free 2; local 4) | The shared Fleet QA instances have limited concurrency headroom; higher worker counts in CI surface as flaky navigation timeouts even when the test logic is correct. Premium's third worker leans on its MySQL's 2 CPU / 4 GB. The real VMs no longer bound premium at four workers: each worker has its own VM of a platform out of the device lab's pool (four Ubuntu, two Windows, two macOS). | Premium to 4 once a branch run with `-f workers=4` is green and still worker-bound ([docs/device-lab-plan.md](docs/device-lab-plan.md) › *Steps B + C*); beyond that, the instances / render infra get more headroom. `WORKERS=N` (or, for premium, `-f workers=N` on a branch run) overrides for a one-off. |
 
 ---
 

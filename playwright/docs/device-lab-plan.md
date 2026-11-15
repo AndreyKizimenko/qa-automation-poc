@@ -11,8 +11,9 @@ them, and where the handoff turned out wrong.
 
 **Where it stands, 2026-11-15.** Steps A, B and C are built. A is on `main` (PR #144). B + C are one PR
 (PR #145): the manifest decides what each lab host is, each worker is handed its own pool VM, and the eight
-pool VMs are on the VMs fleet. Its branch run is the first full run of the suite on the lab's VMs, and at 4
-workers it is C's trial: the last two boxes under C wait on its numbers. Step D is next.
+pool VMs are on the VMs fleet. Its branch run, at the usual 3 and 2 workers, is the first full run of the
+suite on the lab's VMs. C's trial of a fourth premium worker follows the merge as a run of its own, and the
+last two boxes under C wait on its numbers. Step D is being built on top of this branch by another session.
 
 ## What the suite has to work with
 
@@ -35,8 +36,8 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 | Step | What | PR | Status |
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
-| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Built, 2026-11-15. The 4-worker trial is its branch run |
-| **D** | A smoke per OS version, on the matrix and pool hosts | its own PR | **Next** |
+| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Built, 2026-11-15. The 4-worker trial follows its merge |
+| **D** | A smoke per OS version, on the matrix and pool hosts | its own PR | **Next**: started 2026-11-15, on top of #145's branch |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
@@ -137,12 +138,14 @@ PR #145. Its description has what each commit changed and every run behind it.
       through the API, on Andrey's word that the fleets should be as they will stay. The lab's manifest and
       README say so. Both new MDM members had Claude from the fleet's policy within minutes (a refetch
       runs the policies), and the new Mac its stored report result.
-- [ ] A trial at 4 workers: the PR's branch run, `gh workflow run "QA — Branch run" --ref <branch> -f
-      branch=<branch> -f workers=4`, read with `run_timeline.py --platforms` (its per-VM lines say which
-      workers each VM served, and whether one held two results at once). The 4-worker run of 2026-09-30 was
-      red for three reasons, and the lease removes two: three specs on one Mac, and four Linux installs on
-      one VM. The third, blank pages under load, is the instance. `-f workers=4` runs free at 4 as well,
-      where the pool is one VM per platform: a queue timeout there is the worker count's.
+- [ ] A trial at 4 premium workers, as a run of its own once B + C are merged: `gh workflow run "QA — Branch
+      run" -f branch=main -f workers=4`, read with `run_timeline.py --platforms` (its per-VM lines say which
+      workers each VM served, and whether one held two results at once). The PR's own branch run stays at
+      3 and 2, so that an instance problem at 4 can't hold up the merge, and `-f workers` sets premium's
+      count only: free has one VM per platform and a smaller instance, and always runs at 2 (Andrey,
+      2026-11-15). The 4-worker run of 2026-09-30 was red for three reasons, and the lease removes two:
+      three specs on one Mac, and four Linux installs on one VM. The third, blank pages under load, is the
+      instance.
 - [ ] Decide from the numbers, not before: premium's CI worker count (`playwright.config.ts`, 3 today), D4
       (a minute budget per VM platform), and whether the audit's per-platform lanes (roadmap 5) are still
       needed. A dead pool member now shrinks the pool instead of failing 55 tests, which was the lanes'
@@ -153,14 +156,35 @@ group and queue.
 
 ### What B + C close elsewhere
 
-- [ ] `architecture-audit.md`: tier 4's item 13 (leases) and the environment gate of item 5 are marked
+- [x] `architecture-audit.md`: tier 4's item 13 (leases) and the environment gate of item 5 are marked
       built. D4 and the lanes wait on the trial, and say so.
-- [ ] `TODO.md`: the `workers` row under *Config workarounds* names the trial as what lifts it.
-- [ ] `long-term-goals.md`: the opening of *Host types* and its closing paragraph on host plumbing.
-- [ ] `CLAUDE.md` › *Test hosts* (rewritten around the manifest and roles), `ci-pipeline.md` (its second
+- [x] `TODO.md`: the `workers` row under *Config workarounds* names the trial as what lifts it.
+- [x] `long-term-goals.md`: the opening of *Host types* and its closing paragraph on host plumbing.
+- [x] `CLAUDE.md` › *Test hosts* (rewritten around the manifest and roles), `ci-pipeline.md` (its second
       constraint, and *What bounds a run*), `vms.yml`'s header, the skills' shared real-host block, the
       comment in `tests/cli/premium/fleets.spec.ts` that named an old VM, and `helpers/profiles.ts` (a
       physical Mac has a Wi-Fi interface).
+
+### What proved it
+
+Scoped local runs on 2026-11-15, on 4.95.0-rc.2611140456 (`d6df44a7b25e`); the PR's description has each.
+
+- Every `@vm-*` test and the preflight, with dependencies, at 2 workers: 65 passed and 2 skipped on premium
+  (the two `update-on-host` guards), 27 passed on free. Worker slot 0 ran on `prem-ubu2404d-01`,
+  `PREM-WIN11-01` and `prem-macos15-01`, slot 1 on `prem-ubu2404d-02`, `PREM-WIN11-02` and
+  `prem-macos26-01`.
+- Every `@vm-linux` test at 4 workers on premium: 19 passed in 5.9 minutes, each worker on an Ubuntu VM of
+  its own and no VM holding two results at once (`run_timeline.py --platforms`).
+- `script-execution-timeout` in both exclusive projects; `gitops-verify` for OS matrix, VMs and the fleet
+  set after both files were applied to premium; the idempotence and dry-run CLI specs with fleetctl 4.94.1.
+- Seen failing first: the preflight and `lint:lab` on a doctored manifest, `_sanity` on a doctored
+  `os-matrix.yml`, and the OS matrix verify before the apply.
+- Every simulation picker replayed on live data, 39 on premium and 21 on free: none handed out a lab
+  machine.
+
+Not proven by a run: the cleanup's return of a stray host has not yet moved a real host, since none was
+astray (its decision was replayed on live data with doctored entries, and picked the right hosts and
+fleets). And the full suite, which is the branch run's.
 
 ## Step D: a smoke per OS version
 
@@ -221,6 +245,9 @@ BitLocker PIN.
 - **The fleets are as they will stay**: the pool on VMs, everything else on OS matrix, from 2026-11-14, and
   B + C merge before the next nightly (Andrey, 2026-11-14).
 - **Host expiry on VMs and OS matrix is 30 days** (Andrey, 2026-11-14).
+- **The PR's branch run is at 3 and 2 workers, the trial of a fourth premium worker is a run of its own after
+  the merge, and free stays at 2 for good** (Andrey, 2026-11-15). `-f workers=N` on a branch run sets
+  premium's count only.
 
 ## Open questions for Andrey
 

@@ -32,10 +32,13 @@ Everything below follows from four facts about the environment.
 1. **One Fleet instance per tier, shared by everyone.** Premium and free are separate Render deployments with
    their own databases. Anything that runs against an instance competes with everything else on it, and a
    gitops apply deletes whatever its config does not declare.
-2. **One real VM per platform per tier.** A macOS, a Windows and an Ubuntu VM, each running one queue: scripts,
+2. **A small pool of real VMs per platform, one queue each.** The device lab's pool: on premium four Ubuntu,
+   two Windows and two macOS VMs, on free one of each (`lab-hosts.json`). Each runs one queue: scripts,
    installs and uninstalls execute one at a time per host. Profiles travel a separate channel (MDM commands),
-   inventory a third (refetch). Roughly 300 osquery-perf simulations sit beside them for volume work and prove
-   nothing about host-side behaviour.
+   inventory a third (refetch). Each worker is handed its own VM of a platform (`pool[parallelIndex %
+   pool.length]`), so two tests share a host's queue only where a platform has fewer VMs than the run has
+   workers. Roughly 300 osquery-perf simulations sit beside them for volume work and prove nothing about
+   host-side behaviour.
 3. **Some settings are global locks.** Turning script execution off stops every script run on the instance.
    Turning gitops mode on makes every mutating control read-only. A spec that flips one breaks whatever runs
    beside it.
@@ -222,12 +225,18 @@ Measured on the same test set, 2026-09-29 to 09-30 (reconstructed from the repor
 | 4 | 37.1 min | 148 | 51 | red: blank pages under load, a Mac live-query timeout, the longest Linux wait at 9.9 of its 10-min budget | the Linux queue and instance latency |
 
 Reading it: each added worker converts some wall clock into queue contention (four Linux installs at once,
-each waiting behind the others), which is why test-minutes rise with workers. Three is the last count at
-which the run is still worker-bound and green. Four would need a single-worker lane per VM platform (so no two
-tests share a host queue) and a remedy for the render latency under load before it is safe. A second VM per
-platform, with a lease so two tests never pick the same host, is the only thing that shortens the host queue
-itself. Front-loading the VM specs was considered and dropped: it would add contention, and the tail of a
-three-worker run is short specs, not installs.
+each waiting behind the others), which is why test-minutes rise with workers. Three was the last count at
+which the run was still worker-bound and green. Those runs had one VM per platform. Front-loading the VM specs
+was considered and dropped: it would add contention, and the tail of a three-worker run is short specs, not
+installs.
+
+**Since 2026-11-15 each worker has its own VM** of a platform, out of the device lab's pool (constraint 2), so
+the Linux queue no longer couples the workers: at four workers each has an Ubuntu VM to itself, and Windows
+and macOS are shared two ways. That removes two of the three reasons the four-worker run was red (four Linux
+installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and only a
+run can say whether it still bites: a branch run with `-f workers=4`, read with `run_timeline.py --platforms`,
+whose per-VM lines show which workers each VM served and whether any held two results at once.
+[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial and what was decided from it.
 
 Free is small enough that none of this applies: two workers, worker-bound; its runtime is in the facts table.
 
