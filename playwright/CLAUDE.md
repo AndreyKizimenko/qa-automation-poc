@@ -54,26 +54,53 @@ Two host populations share each instance and are good at opposite jobs. Resolve 
 `findOnlineHost(request, platform, { kind })` — **never by stored name or id**, because the load-fleet daemons
 regenerate both on every restart.
 
-- **`kind: 'real'`** — a handful of genuine VMs per tier, on the **VMs** fleet on premium (`vmsFleetId` worker
-  fixture; `liveMacosHost` for a macOS one). They run real osquery, install real packages and receive real
-  profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
-  versions must use them. `kind: 'real'` is a device-lab machine, told by its hardware (the model
-  `VirtualMac2,1`, or the vendor `QEMU`) and not by MDM enrollment, that sits on the VMs fleet; free has no
-  fleets, so there it is every lab machine. Which lab machines are on VMs is the lab's decision. Where several
-  of a platform are, every spec gets the first by display name.
-- **The lab's other machines are neither kind.** Premium's **OS matrix** fleet holds one lab VM per OS flavour
-  and the spare ones. No spec targets them, `kind: 'real'` never returns one, and every simulation picker and
-  both of the cleanup's host sweeps skip a lab machine by its hardware, whatever fleet it is on. Nothing is
-  uploaded to that fleet or set on it, and no host is moved onto or off it.
+- **`kind: 'real'`** — the device lab's **pool** hosts of the tier: several genuine VMs per platform on
+  premium's **VMs** fleet (`vmsFleetId` worker fixture), one per platform in Unassigned on free. They run real
+  osquery, install real packages and receive real profiles, so anything asserting software inventory, script
+  output, profile delivery, certificates or agent versions must use them.
+- **Each worker is handed its own VM of a platform.** `requireRealHost(request, platform)` and `liveMacosHost`
+  sort the platform's online pool hosts by name and return `pool[parallelIndex % pool.length]`: the same VM
+  for every test the worker runs, and another worker's only where the platform has fewer VMs than the run has
+  workers (premium: four Ubuntu, two Windows, two macOS). A VM that drops out mid-run is replaced from the pool as it
+  then stands. The pool's Macs run two macOS versions and a worker's is either: a spec that depends on the
+  version asks for it (`requireRealHost(request, 'darwin', { os: 'macos-26' })`). Each test's report notes the
+  VM it ran on (`vm: prem-macos26-01 (macOS 26.6.2)`).
+- **`lab-hosts.json` says what every lab machine is** (`helpers/lab-hosts.ts`): its tier, platform, `os` and
+  **role**. `pool` is above. `matrix` is the one host of an OS flavour and `special` a host with a single
+  purpose: both live on premium's **OS matrix** fleet, no worker is handed one, and a spec asks for one by its
+  `os` or purpose (`requireLabHost(request, matrixHostOfRun('rhel-9'))`). `physical` is a bare-metal machine,
+  which can't be rolled back: never the subject of anything that needs a reset to recover from. A Fleet host
+  is matched to its entry by display name, lower-cased (Windows reports upper case). The file is a copy of the
+  lab's own, which is edited first: `npm run lab:sync` copies that over it, and `npm run lint:lab`, inside
+  `npm run check`, fails while the two differ on a machine that has the lab's folder.
+- **A lab machine is never a simulation.** Every simulation picker and both of the cleanup's host sweeps skip
+  whatever the manifest lists and, as the guard for a host the lab enrolled and nobody has listed yet,
+  whatever reports virtualized hardware (the model `VirtualMac2,1`, or the vendor `QEMU`).
+- **A lab host's fleet follows from its role, and the cleanup puts it there**: the pool on VMs, the matrix and
+  special hosts on OS matrix. Every lab host enrolled with the VMs fleet's secret, so one that re-enrolls
+  lands on VMs, whatever it is for; the resting-state step returns each to its role's fleet before a run and
+  after it. That step is the only thing that moves a host onto or off OS matrix. Nothing is uploaded to OS
+  matrix or set on it: gitops declares it empty, with disk encryption off, and `gitops-verify` holds it to that.
+- **The lab preflight** (`tests/api/lab-hosts.spec.ts`) is one test per pool host. One that is offline, on the
+  wrong fleet or no longer enrolled is a red row naming it and saying which, while the workers go on with the
+  rest of the pool. Hosts outside the pool, and online lab machines the manifest doesn't list, are noted on
+  its last test's report and in the job log, not failed.
+- **What a spec puts on the VMs fleet reaches every pool VM of the platform, not only its own.** A profile
+  with no label target, a policy with an install or script automation, a report, agent options, Recovery Lock:
+  each is the fleet's, and another worker's VM receives it mid-test. Scope it to the test's own host with a
+  label (`policy-automation-runs`), or keep it inert and say in the header what the other VMs get
+  (`install-on-host`, `profile-declarations`); what a neighbour must not receive at all goes in `exclusive/`
+  (`script-execution-timeout` lowers the fleet's script timeout). Assert on the test's own host, or on set
+  membership over hosts the test controls, never on a count over the fleet.
 - **A test that needs a real VM is tagged with it**: `@vm-macos`, `@vm-windows` or `@vm-linux`, on the test or
   its describe (`{ tag: '@vm-linux' }`; `vmTag(platform)` in a loop over platforms). `requireRealHost` and
   `liveMacosHost` refuse a test that lacks the tag of the VM it asks for, and lint allows no other tag. So the
-  tags list every test one VM's outage takes down: `npx playwright test --project=premium --grep @vm-macos`
-  runs them, and `--grep-invert` leaves them out. The tag means "needs this VM online", a read of its name
-  included, not "waits on its queue".
+  tags list every test a platform's outage takes down: `npx playwright test --project=premium --grep @vm-macos`
+  runs them, and `--grep-invert` leaves them out. The tag means "needs a VM of this platform online", a read
+  of its name included, not "waits on its queue".
 - **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
   7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
-  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`. A spec that installs or
+  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`, so every pool VM has the same. A spec that installs or
   uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
   changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
   `fleet-pw-*` package, and deletes it in the same test.
@@ -255,7 +282,7 @@ Folder conventions:
    prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`, since gitops declares `pw-host-report-results`
    there). A spec that leaves a new kind of per-run report on Workstations or VMs adds its prefix to that
    sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off and script
-   execution on, and brings the real VMs to their resting state. It does **not** reset disk encryption or the
+   execution on, returns every lab host to its role's fleet, and brings every pool VM to its resting state. It does **not** reset disk encryption or the
    BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user
    authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these,
    too*), and a spec that writes one of the others restores it, or works on a throwaway `pw-*` fleet.

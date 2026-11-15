@@ -87,7 +87,7 @@ PR #145. Its description has what each commit changed and every run behind it.
       and the rest of the run goes on with the hosts that are there. A matrix or special host that is
       missing is reported on its last test (an annotation, and a line in the job log), not failed, and so is
       an online host on lab hardware that the manifest doesn't list.
-- [ ] The cleanup returns every manifest host to its role's fleet (`returnLabHostsToTheirFleets`, inside the
+- [x] The cleanup returns every manifest host to its role's fleet (`returnLabHostsToTheirFleets`, inside the
       resting-state step; approved by Andrey 2026-11-14, every role). Every lab host enrolled with the VMs
       fleet's secret, so one that re-enrolls lands on VMs. `CLAUDE.md` and the skills' stop list now say
       this step is the only thing that moves a host onto or off OS matrix.
@@ -112,7 +112,7 @@ PR #145. Its description has what each commit changed and every run behind it.
       another from the pool as it then stands when it doesn't; two workers share one only when there are
       more workers than pool members. It lives in `findOnlineHost(…, { kind: 'real' })`, one level below
       `requireRealHost`, because `liveMacosHost` asks there too: no call site changed.
-- [ ] Everything the cleanup does "per VM" is done per pool member: the queue cancel, the durable
+- [x] Everything the cleanup does "per VM" is done per pool member: the queue cancel, the durable
       fixtures' resting state, and the `fleet-pw-*` purge on every Ubuntu member.
 - [ ] Specs that change something every host on the VMs fleet receives were surveyed on 2026-11-14 (all 50
       spec files that touch the fleet). None asserts a fleet-wide count. One interfered with a neighbour

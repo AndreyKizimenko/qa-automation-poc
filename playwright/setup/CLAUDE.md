@@ -16,15 +16,26 @@ The `free` project runs the **same cleanup chain as premium** — `dependencies:
 doesn't run on a `SIGKILL`, and a run killed mid-spec would otherwise leave every script spec of the next run
 failing.
 
-On premium it sweeps the VMs fleet for what the host-execution specs leave there when a test dies: `fleet-pw-*` titles and `pw-*` policies, scripts, profiles and labels by prefix, but reports only by exact prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), because gitops declares `pw-host-report-results` on that fleet. A spec that leaves a new kind of per-run report there adds its prefix to that sweep. Deleting a software title cancels its pending installs and script runs, so a per-run package deleted in an `afterEach` also clears that VM's queue. Deleting a title never uninstalls it, though, so when the Ubuntu VM's inventory lists a `fleet-pw-*` package the sweep queues a `dpkg --purge` for it.
+On premium it sweeps the VMs fleet for what the host-execution specs leave there when a test dies: `fleet-pw-*` titles and `pw-*` policies, scripts, profiles and labels by prefix, but reports only by exact prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`), because gitops declares `pw-host-report-results` on that fleet. A spec that leaves a new kind of per-run report there adds its prefix to that sweep. Deleting a software title cancels its pending installs and script runs, so a per-run package deleted in an `afterEach` also clears that VM's queue. Deleting a title never uninstalls it, though, so for each Ubuntu pool VM whose inventory lists a `fleet-pw-*` package the sweep queues a `dpkg --purge`: every member, because a Deploy install policy installs on each Linux host of the fleet and its spec uninstalls only its own.
 
 On premium it also clears any version pin on the QA and VMs fleets' Fleet-maintained apps, never deleting them: an exact pin a timed-out test leaves behind stops Fleet's hourly auto-update for that title, and with it the version history the pinning and update specs read.
 
-It also brings the real VMs to their resting state before the first test and after the last: it cancels the
-suite's own queued installs and scripts, resets the script timeout to Fleet's default, and on premium
-returns every durable fixture to rest — uninstalled, with no failed install or uninstall on record, which
-Fleet otherwise keeps as the title's status and which the Library then offers as Retry or Reinstall instead of
-Install. A VM that's offline is only logged — its specs fail on it with their own message.
+It also brings the real VMs to their resting state before the first test and after the last. The real VMs
+are the pool's online members (`listPoolHosts`), every one of them, since each worker is handed its own. On
+each it cancels the suite's own queued installs and scripts; for the fleet it resets the script timeout to
+Fleet's default; and on premium it returns every durable fixture to rest on every pool VM of its platform —
+uninstalled, with no failed install or uninstall on record, which Fleet otherwise keeps as the title's status
+and which the Library then offers as Retry or Reinstall instead of Install. A pool VM that's offline is left
+out: the lab preflight (`tests/api/lab-hosts.spec.ts`) names it, and the workers go on with the rest.
+
+On premium the same step first **returns every lab host to its role's fleet** (`returnLabHostsToTheirFleets`):
+the pool onto VMs, the matrix and special hosts onto OS matrix, as `lab-hosts.json` says. Every lab host
+carries the VMs fleet's enroll secret, so one that re-enrolls lands on VMs: a matrix host there would receive
+whatever the real-host specs put on that fleet, and a pool host anywhere else is one no worker is handed. A
+returned host is asked for a refetch, which re-runs its fleet's policies (that is what reinstalls Claude on a
+pool Mac or Windows VM). It is the one place the suite moves a host onto or off OS matrix, approved by Andrey
+on 2026-11-14; it lives inside the resting-state step, not in a step of its own, because the steps of this
+file run in parallel and the resting state has to see the pool where it belongs.
 
 `cleanup-setup` also turns gitops mode off: a teardown project doesn't run on a `SIGKILL`, and a stuck flag
 disables the next run's entire suite (`tests/e2e/premium/gitops-mode/CLAUDE.md`).

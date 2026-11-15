@@ -44,7 +44,7 @@ A change that does any of these is a blocker, whatever its tests show. None can 
 - **A configuration profile that could lock a real host, delivered to one.** No passcode payload
   (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`, `maxInactivity`, `allowSimple`), no
   screen lock, inactivity timeout, FileVault or login-window restriction, nothing that disables SSH, remote
-  management or MDM. There are three VMs per tier and no way to rebuild one from here. **Uploading a
+  management or MDM. A locked VM stays locked until the lab's owner rolls it back by hand. **Uploading a
   profile is delivering it:** on free, Unassigned is where the real VMs are, and Fleet's reconciler sends
   whatever it finds within 30 s, so a spec that deletes the profile a step later still reaches them. The
   suite's old "library-only" passcode and DeviceLock fixtures reached the free VMs 7 and 32 times before
@@ -65,9 +65,9 @@ A change that does any of these is a blocker, whatever its tests show. None can 
   and has the resting-state step turn it off after a dead run (`playwright/CLAUDE.md` → Test hosts).
 - **What other specs stand on, changed:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`; resting state uninstalled), a standing fleet created, renamed or
-  deleted (Workstations, VMs, QA and Compliance from gitops; Mobile and OS matrix by hand), a host moved onto
-  Compliance or onto or off OS matrix (the device lab's OS-flavour VMs: nothing is uploaded to that fleet
-  or set on it), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  deleted (Workstations, VMs, QA, OS matrix and Compliance from gitops; Mobile by hand), a host moved onto
+  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet; nothing is
+  uploaded to OS matrix or set on it), gitops config, static users (their tokens can't be re-minted). A global gitops file a
   spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
   `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either

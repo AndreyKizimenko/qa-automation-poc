@@ -6,7 +6,7 @@ description: "Write, extend or fix tests in Fleet's Playwright QA suite (`playwr
 # Writing tests for Fleet's QA suite
 
 The suite drives Fleet through its UI and API against two shared QA instances (free and premium). Each
-has ~300 osquery-perf simulated hosts and three real VMs (macOS, Windows, Ubuntu). Writing a Playwright test
+has ~300 osquery-perf simulated hosts and the device lab's real VMs (`lab-hosts.json`). Writing a Playwright test
 is the easy part. The mistakes that cost the most here are: locking a real VM, asserting against a simulated
 host that can't answer, leaving state behind for the next run, and running far more than you changed. Most
 of this skill is about not doing those.
@@ -24,7 +24,7 @@ Each has happened, or nearly happened, and none can be undone from a test.
 - **A configuration profile that could lock a real host, delivered to one.** No passcode payload
   (`com.apple.mobiledevice.passwordpolicy`, `forcePIN`, `minLength`, `maxInactivity`, `allowSimple`), no
   screen lock, inactivity timeout, FileVault or login-window restriction, nothing that disables SSH, remote
-  management or MDM. There are three VMs per tier and no way to rebuild one from here. **Uploading a
+  management or MDM. A locked VM stays locked until the lab's owner rolls it back by hand. **Uploading a
   profile is delivering it:** on free, Unassigned is where the real VMs are, and Fleet's reconciler sends
   whatever it finds within 30 s, so a spec that deletes the profile a step later still reaches them. The
   suite's old "library-only" passcode and DeviceLock fixtures reached the free VMs 7 and 32 times before
@@ -45,9 +45,9 @@ Each has happened, or nearly happened, and none can be undone from a test.
   and has the resting-state step turn it off after a dead run (`playwright/CLAUDE.md` → Test hosts).
 - **What other specs stand on, changed:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`; resting state uninstalled), a standing fleet created, renamed or
-  deleted (Workstations, VMs, QA and Compliance from gitops; Mobile and OS matrix by hand), a host moved onto
-  Compliance or onto or off OS matrix (the device lab's OS-flavour VMs: nothing is uploaded to that fleet
-  or set on it), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  deleted (Workstations, VMs, QA, OS matrix and Compliance from gitops; Mobile by hand), a host moved onto
+  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet; nothing is
+  uploaded to OS matrix or set on it), gitops config, static users (their tokens can't be re-minted). A global gitops file a
   spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
   `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either
@@ -95,7 +95,8 @@ When in doubt, the answer is to ask. A blocked afternoon costs less than a VM re
    reaches; an IdP username; a transfer) a simulation answers as well as a VM. What the host **does**
    (installs, runs, verifies, reports inventory) only a real VM can answer: `requireRealHost(request,
    platform)`, `vmsFleetId`, `liveMacosHost`, each refusing a test without its VM's tag
-   (`{ tag: '@vm-linux' }`). To put simulations on a fleet beside a VM, borrow them with
+   (`{ tag: '@vm-linux' }`). A worker has its own VM of a platform, and whatever a test puts on the
+   VMs fleet reaches the other workers' too: scope it by label, or keep it inert and say so. To put simulations on a fleet beside a VM, borrow them with
    the `borrowSims` fixture, on a claim of your own in `helpers/claims.ts` (pool `mdm` only for
    profiles: it's scarce); it returns them after the test.
 5. **Build the page objects first, then the spec.** Read `references/fleet-traps.md` before either, and

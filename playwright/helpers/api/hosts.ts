@@ -408,6 +408,25 @@ export function labHostProblem(entry: LabHost, records: readonly LabHostRecord[]
 }
 
 /**
+ * The records of the given manifest hosts that sit on another fleet than the
+ * one their role puts them on, each with the fleet it belongs on. Every lab
+ * host carries the VMs fleet's enroll secret, so that is where one that
+ * re-enrolled turns up. A host whose role names no fleet (a physical machine)
+ * is never astray, and neither is anything on free, which has no fleets. The
+ * cleanup moves what this returns; an older record a re-enrollment left behind
+ * is listed too, and goes with its host.
+ */
+export async function listLabHostsAstray(
+  request: APIRequestContext,
+  entries: readonly LabHost[],
+): Promise<Array<LabHostRecord & { belongsOn: string }>> {
+  const placed = entries.filter((entry) => typeof labHostFleet(entry) === 'string');
+  return (await listLabHostRecords(request, placed))
+    .map((record) => ({ ...record, belongsOn: labHostFleet(record.entry) as string }))
+    .filter((record) => record.fleetName !== record.belongsOn);
+}
+
+/**
  * The online record of a lab host outside the pool: a matrix host
  * (`matrixHostOfRun('rhel-9')`) or a special one (`specialHostOfRun('LUKS key
  * escrow')`), from `helpers/lab-hosts.ts`. Throws with what is wrong with it
