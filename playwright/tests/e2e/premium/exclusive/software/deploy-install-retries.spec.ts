@@ -26,7 +26,10 @@
  *     failures in a row would stall every other spec's work on the Ubuntu VM.
  * The `premium-exclusive` project runs it alone, after the main project, and after
  * `policy-automation-runs` (files run in path order), so its own backoff delays
- * nothing that's measured.
+ * nothing that's measured. The policy is the fleet's, so a pool Ubuntu VM other
+ * than the test's that runs its policies meanwhile is sent the same doomed
+ * install; nothing is using those VMs then, nothing lands on them (dpkg refuses
+ * the package), and deleting the title cancels what is still queued.
  *
  * Premium only, on the VMs fleet. The package is built per run by
  * `helpers/deb.ts` and named `fleet-pw-deploy-fails-*`; it and its policy are

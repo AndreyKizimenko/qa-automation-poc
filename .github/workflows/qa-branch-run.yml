@@ -9,7 +9,12 @@ name: QA — Branch run
 # waiting for another dispatch.
 #
 #   gh workflow run "QA — Branch run" -f branch=<branch>
-#   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial
+#   gh workflow run "QA — Branch run" -f branch=main -f workers=4   # a worker-count trial, premium's
+#
+# `workers` is premium's count only. Premium has a pool of real VMs per platform
+# for its workers to spread over; free has one VM per platform and a smaller
+# instance, so it always runs at the count playwright.config.ts gives it. A
+# trial of free's count is a dispatch of playwright-free.yml itself.
 #
 # The branch's gitops config stays applied to the QA instances until the next
 # nightly re-applies main's. A branch that changes gitops leaves that change in
@@ -28,7 +33,7 @@ on:
         type: string
         default: main
       workers:
-        description: Worker count for both suites (blank — what playwright.config.ts sets for CI)
+        description: Worker count for the premium suite (blank — what playwright.config.ts sets for CI). Free always runs at its own
         required: false
         type: string
         default: ''
@@ -64,7 +69,6 @@ jobs:
     uses: ./.github/workflows/playwright-free.yml
     with:
       ref: ${{ inputs.branch }}
-      workers: ${{ inputs.workers }}
     secrets: inherit
 
   # How this run's failed and flaky tests fared in the nightlies before it,

@@ -42,6 +42,7 @@ import {
   findSimulations,
   assertVmTagged,
   missingRealHostReason,
+  recordVmOnReport,
   transferHosts,
   uploadScript,
   withApiRequest,
@@ -157,7 +158,7 @@ type ApiWorkerFixtures = {
   loadtestFleetId: number;
 
   /**
-   * The online real macOS VM, looked up once per worker. Specs ask for
+   * The worker's real macOS VM, leased once per worker. Specs ask for
    * `liveMacosHost`, which checks the test's tag and hands this on.
    */
   liveMacosHostOfWorker: OnlineHostRef;
@@ -219,26 +220,27 @@ type ApiTestFixtures = {
   seed: Seed;
 
   /**
-   * The online **real** macOS VM, looked up once per worker via the Fleet API,
-   * with the vitals a spec asserts against. Backs every spec that needs genuine
-   * device behaviour — live reports that actually run the query's SQL, refetch,
-   * real local users and agent versions.
+   * The worker's online **real** macOS VM, with the vitals a spec asserts
+   * against. Backs every spec that needs genuine device behaviour — live
+   * reports that actually run the query's SQL, refetch, real local users and
+   * agent versions.
    *
-   * Resolved by platform + online status + hardware model rather than by name or
-   * a pinned id, since ids change on re-enrollment. A virtualized hardware model
-   * is what separates the real VMs from the osquery-perf load fleet sharing these
-   * instances (see `HostKind`); on premium the VMs also live in their own "VMs"
-   * fleet, but free has no fleets, so the hardware model is the cross-tier signal.
+   * It is the worker's pool host: one of the macOS hosts the lab's manifest
+   * gives the role `pool` (`helpers/lab-hosts.ts`), leased by the worker's slot
+   * and held for the worker's life, and the same Mac `requireRealHost(request,
+   * 'darwin')` hands a test of this worker. The pool's Macs run different macOS
+   * versions, so a test that depends on the version asks `requireRealHost` for
+   * its `os` instead.
    *
    * Specs needing *volume* rather than fidelity (bulk select/transfer/delete)
    * should draw from the simulated pool via `findSimulatedHostIds` instead —
-   * there are only a couple of real VMs per tier and they must not be destroyed.
+   * the lab's machines must not be destroyed.
    *
    * Fails loud when none is online, so a downed VM surfaces as a clear setup
    * error instead of a puzzling mid-spec assertion failure. The test (or its
    * describe) must carry `{ tag: '@vm-macos' }`: the fixture refuses one that
    * doesn't, as `requireRealHost` does, so the tag lists every test that needs
-   * the Mac.
+   * a Mac. The test's report notes which Mac it was.
    */
   liveMacosHost: OnlineHostRef;
 };
@@ -416,7 +418,7 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
 
   liveMacosHost: [async ({ liveMacosHostOfWorker }, use) => {
     assertVmTagged('darwin', 'liveMacosHost');
-    await use(liveMacosHostOfWorker);
+    await use(recordVmOnReport(liveMacosHostOfWorker));
   }, { box: true }],
 
   throwawayFleet: [async ({ request, cleanup }, use) => {
@@ -511,7 +513,7 @@ export const apiTest = base.extend<ApiTestFixtures, ApiWorkerFixtures>({
       const reason = await withApiRequest((request) => missingRealHostReason(request, 'darwin'));
       throw new Error(
         `[liveMacosHost] no online macOS VM on ${process.env.FLEET_URL}: ${reason}. ` +
-        'Real-device specs need one; a VM is found by its hardware model, not by MDM enrolment.',
+        'Real-device specs need one of the pool hosts lab-hosts.json lists.',
       );
     }
     await use(host);

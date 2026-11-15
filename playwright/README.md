@@ -65,12 +65,12 @@ but they're invisible if you're bringing up a fresh instance.
 | **Static users** (`api-*@fleetdm.com`, `team-admin@fleetdm.com`, the role users in `helpers/api/static-users.ts`) | both | the role-access and permission specs | recreate as that file's header says; a new human user comes back with `force_password_reset`, which `PATCH` can't clear |
 | **The `Workstations`, `VMs` and `QA` fleets**, declared in gitops | premium | most premium specs | re-apply [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) with `--context qa-premium`. The suite never creates, renames or deletes them |
 | **The `Compliance` fleet**, declared in gitops | premium | no spec — it exists for the nightly's `gitops-verify`, carrying every host-affecting control on a fleet with no hosts, and ABM's and Windows' automated enrollments default to it | the next apply recreates it in full. Never move a host into it |
-| Report **`pw-host-report-results`** on the **VMs** fleet (interval 300, `SELECT 'bar' AS foo`) | premium | `premium/hosts/host-report-details.spec.ts` | re-apply `fleets/vms.yml`, then allow ~3.5 min for one scheduled run. It lives on a fleet because `cleanup-setup` wipes global reports |
-| **Claude installed on the macOS and Windows VMs**, tracking latest, from the VMs fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
-| **Install/uninstall fixtures on the VMs fleet**: inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** | premium | `premium/software/software-lifecycle-on-host.spec.ts` and the other install specs | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` |
+| Report **`pw-host-report-results`** on the **VMs** fleet (interval 300, `SELECT 'bar' AS foo`), with a stored result on every pool Mac | premium | `premium/hosts/host-report-details.spec.ts`, `premium/reports/stored-results.spec.ts` | re-apply `fleets/vms.yml`, then allow ~3.5 min for one scheduled run; a Mac new to the fleet has its first result within five minutes. It lives on a fleet because `cleanup-setup` wipes global reports |
+| **Claude installed on every macOS and Windows pool VM**, tracking latest, from the VMs fleet | premium | `premium/software/update-on-host.spec.ts` | re-apply `fleets/vms.yml`; its "Claude is installed" policies reinstall Claude at each VM's next policy run (a refetch triggers one). The pin walk stays skipped until Fleet has cached a second Claude build |
+| **Install/uninstall fixtures on the VMs fleet**: inert `.pkg` / `.msi` / `.deb`, 7-Zip's `.exe`, Itsycal, DB Browser for SQLite; resting state **uninstalled** on every pool VM | premium | `premium/software/software-lifecycle-on-host.spec.ts` and the other install specs | re-apply `fleets/vms.yml` (the nightly does, before every premium run); one left installed is uninstalled by the next run's `cleanup-setup` |
 | **Fleet-maintained app shelf on the QA fleet**: 10 apps × macOS + Windows, unpinned, never installed | premium | `premium/software/version-pinning.spec.ts` | re-apply `fleets/qa.yml`; the older-version case stays skipped until Fleet's hourly cron caches a second build |
-| **Online hosts**: the device lab's VMs (macOS, Windows 11 and Ubuntu 24.04; MDM-enrolled where the platform allows), on the `VMs` fleet on premium and in Unassigned on free, and ~300 osquery-perf simulations | both | every host-dependent spec | a lab VM that is offline or broken is the lab owner's to restore; the simulations are [`../tools/perf-hosts/`](../tools/perf-hosts/README.md)' daemons. See CLAUDE.md › *Test hosts* |
-| **The `OS matrix` fleet**, kept by hand | premium | no spec: it keeps the lab's OS-flavour VMs and its spare ones away from everything on `VMs` | never upload to it, set anything on it, or move a host onto or off it. See [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) › *Do not pass `--delete-other-fleets`* |
+| **Online hosts**: the device lab's **pool** VMs, listed in [`lab-hosts.json`](lab-hosts.json) (premium: four Ubuntu 24.04, two Windows 11, macOS 15 and 26, on the `VMs` fleet; free: one of each platform, in Unassigned; MDM-enrolled where the platform allows), and ~300 osquery-perf simulations | both | every host-dependent spec; each worker is handed its own VM of a platform | `tests/api/lab-hosts.spec.ts` names a pool VM that is offline, on the wrong fleet or not enrolled; restoring it is the lab owner's. The simulations are [`../tools/perf-hosts/`](../tools/perf-hosts/README.md)' daemons. See CLAUDE.md › *Test hosts* |
+| **The `OS matrix` fleet**, declared empty in gitops | premium | no spec yet: it keeps the lab's OS-flavour and special-purpose hosts away from everything on `VMs` | the next apply recreates it; the cleanup returns its hosts to it (`lab-hosts.json` says which). Never upload to it or set anything on it, and never move a host onto or off it by hand or from a spec. See [`../gitops/premium-fleetqa/`](../gitops/premium-fleetqa/README.md) › *The OS matrix fleet* |
 | **Admin SSO and end-user auth (EUA)**, configured on the instance | both | the SSO and setup-experience specs | configure on the instance; the suite doesn't provision them |
 
 **Loadtest only — provision the fleet first.** The `loadtest` project
@@ -119,6 +119,7 @@ From `playwright/`:
 | `npm run test:gitops-verify:premium-workstations` | Verify Workstations team in premium-fleetqa |
 | `npm run test:gitops-verify:premium-qa` | Verify the QA fleet (the Fleet-maintained-app shelf) |
 | `npm run test:gitops-verify:premium-vms` | Verify the VMs fleet (the real VMs' durable fixtures) |
+| `npm run test:gitops-verify:premium-os-matrix` | Verify the OS matrix fleet (declared empty, disk encryption off) |
 | `npm run test:gitops-verify:premium-compliance` | Verify the Compliance fleet in premium-fleetqa (every host-affecting control, on a fleet with no hosts) |
 | `npm run test:gitops-verify:premium-min` | Verify premium-fleetqa-min (no-team scope) |
 | `npm run test:gitops-verify:premium-min-workstations` | Verify Workstations team in premium-fleetqa-min |
@@ -128,9 +129,11 @@ From `playwright/`:
 | `npm run lint:fix` | Lint and auto-fix what can be fixed |
 | `npm run lint:prune` | After fixing a recorded violation: shrink `eslint-suppressions.json` to match |
 | `npm run lint:rules` | Test the suite's own lint rules (`eslint-rules/tests.js`) |
+| `npm run lint:lab` | Check `lab-hosts.json`: every entry placeable, and, where the device lab's folder is on this machine, level with the lab's own copy |
+| `npm run lab:sync` | Copy the lab's `lab-hosts.json` over the suite's (the lab edits its copy first) |
 | `npm run lint:contract` | Count the places each rule still finds in the code, per rule |
 | `npm run typecheck` | Run `tsc --noEmit` on the whole project |
-| `npm run check` | Typecheck, the rule tests **and** lint — run this before opening a PR |
+| `npm run check` | Typecheck, the rule tests, the claims and lab-manifest checks **and** lint — run this before opening a PR |
 
 ---
 
@@ -235,7 +238,7 @@ playwright/
   Destructure what you need; TypeScript lists what's available.
 - **Worker fixtures**, resolved once per worker via the Fleet API so specs don't
   re-look-up shared state: `workstationsFleetId`, `qaFleetId`, `vmsFleetId` (fleet ids),
-  `liveMacosHost` (the online real macOS VM: a lab machine by its hardware, on the VMs fleet on premium), plus `loadtestFleetId` /
+  `liveMacosHost` (the worker's online real macOS VM: one of the lab's pool Macs, the same one `requireRealHost` hands the worker's tests), plus `loadtestFleetId` /
   `firstHostId` for the loadtest project.
 - **`pageHealth`** — auto-applied to every test. Monitors uncaught page exceptions, console
   errors and 5xx responses, and asserts at teardown. Opt out with `pageHealth.disable()` in specs that intentionally
@@ -347,7 +350,7 @@ Browser specs run via per-tier workflows
 job runs the main project, then the exclusive specs and (premium) gitops-mode as separate steps, and merges
 the reports. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
-`-f workers=N` for a worker-count trial, and `--ref <branch>` as well when the branch changes a workflow file.
+`-f workers=N` for a trial of premium's worker count (free keeps its own), and `--ref <branch>` as well when the branch changes a workflow file.
 
 Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in
 [docs/ci-pipeline.md](docs/ci-pipeline.md).

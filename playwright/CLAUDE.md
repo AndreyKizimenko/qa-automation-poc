@@ -38,13 +38,14 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 - `tests/loadtest/` — page-load and API timing tests, run locally only against a high-scale instance;
   [`tests/loadtest/CLAUDE.md`](tests/loadtest/CLAUDE.md).
 - `pages/` — page objects, with `pages/components/` for reusable UI widgets.
-- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates, `claims.ts` for which spec uses which simulations and catalog apps).
+- `helpers/` — non-UI utilities (API client, auth, console monitoring, perf timing, `team-scope.ts` for mapping a scope to its `fleet_id`, `activity-copy.ts` for expected activity-feed strings, `own-name.ts` for the name of anything a test creates, `claims.ts` for which spec uses which simulations and catalog apps, `lab-hosts.ts` for the device lab's manifest: which real host is which, and what each is for).
 - `fixtures.ts` — two test objects: `apiTest`, with the worker fixtures (fleet ids, `liveMacosHost`), the `cleanup` stack and the data fixtures built on it (`throwawayFleet`, `borrowSims`, `seed`), and nothing that needs a page, and `test`, which extends it with the page-object fixtures, the auto `pageHealth` fixture, and `palette` (the command palette — the one component object exposed as a fixture, since `CoreLayout` mounts it on every page and it belongs to no page object). Single file.
 - `setup/` — auth and project-scoped setup/teardown specs.
 - `eslint-rules/` — the suite's own lint rules (`suite/*`), their tests and the per-rule count; see *Pre-PR check*.
-- `scripts/` — `check-claims.js`, the check `npm run lint:claims` runs on `helpers/claims.ts`, and `catalogue.js`, which `npm run catalogue` runs to write the test catalogue (below).
+- `lab-hosts.json` — the device lab's manifest: every real host on the instances, with its tier, platform, OS and role (Test hosts).
+- `scripts/` — `check-claims.js`, the check `npm run lint:claims` runs on `helpers/claims.ts`; `lab-manifest.js`, which `npm run lint:lab` runs on `lab-hosts.json` and `npm run lab:sync` copies the lab's own over it with; and `catalogue.js`, which `npm run catalogue` runs to write the test catalogue (below).
 - `test-data/` — fixtures consumed by specs, organised platform-first (`apple/macos/`, `linux/`, `windows/`, plus `shared/`), then by category — e.g. `apple/macos/scripts/macos-create-marker.sh`; see `test-data/README.md`.
-- `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `architecture-audit.md` (what has to change for the suite to grow fivefold, with the working list of next steps), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `long-term-goals.md` (coverage that waits on infrastructure the instances lack), `gitops-coverage/` (the plan for the nightly's gitops coverage), `loadtest-runs/` (dated load-test write-ups), `test-audit/` (the manual audit's per-test breakdown and `FINDINGS.md`, frozen on 2026-11-13: a test no longer adds or updates an entry there), `test-catalogue/` (every test, the projects that run it, its spec's header and its `test.step` titles: built on demand by `npm run catalogue` from the suite itself, and gitignored, so it never drifts), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
+- `docs/` — `ci-pipeline.md` (why the CI flow is shaped as it is and what bounds a run), `architecture-audit.md` (what has to change for the suite to grow fivefold, with the working list of next steps), `device-lab-plan.md` (the plan of record for moving the suite onto the device lab: what has landed, what is next, and what was checked on the instances), `blocked-by-product-bugs.md` (skips owed to confirmed Fleet defects), `long-term-goals.md` (coverage that waits on infrastructure the instances lack), `gitops-coverage/` (the plan for the nightly's gitops coverage), `loadtest-runs/` (dated load-test write-ups), `test-audit/` (the manual audit's per-test breakdown and `FINDINGS.md`, frozen on 2026-11-13: a test no longer adds or updates an entry there), `test-catalogue/` (every test, the projects that run it, its spec's header and its `test.step` titles: built on demand by `npm run catalogue` from the suite itself, and gitignored, so it never drifts), and `test-plans/` (per-feature E2E coverage plans: what E2E owns vs. what unit tests already cover, the case list, and the environment facts an author needs). `docs/run-reviews/` holds per-run triage write-ups and `docs/upgrade-preflight/` holds pre-upgrade impact reports; both are gitignored.
 - `.auth/` — stored auth + setup state (gitignored).
 
 ## Test hosts
@@ -53,26 +54,53 @@ Two host populations share each instance and are good at opposite jobs. Resolve 
 `findOnlineHost(request, platform, { kind })` — **never by stored name or id**, because the load-fleet daemons
 regenerate both on every restart.
 
-- **`kind: 'real'`** — a handful of genuine VMs per tier, on the **VMs** fleet on premium (`vmsFleetId` worker
-  fixture; `liveMacosHost` for a macOS one). They run real osquery, install real packages and receive real
-  profiles, so anything asserting software inventory, script output, profile delivery, certificates or agent
-  versions must use them. `kind: 'real'` is a device-lab machine, told by its hardware (the model
-  `VirtualMac2,1`, or the vendor `QEMU`) and not by MDM enrollment, that sits on the VMs fleet; free has no
-  fleets, so there it is every lab machine. Which lab machines are on VMs is the lab's decision. Where several
-  of a platform are, every spec gets the first by display name.
-- **The lab's other machines are neither kind.** Premium's **OS matrix** fleet holds one lab VM per OS flavour
-  and the spare ones. No spec targets them, `kind: 'real'` never returns one, and every simulation picker and
-  both of the cleanup's host sweeps skip a lab machine by its hardware, whatever fleet it is on. Nothing is
-  uploaded to that fleet or set on it, and no host is moved onto or off it.
+- **`kind: 'real'`** — the device lab's **pool** hosts of the tier: several genuine VMs per platform on
+  premium's **VMs** fleet (`vmsFleetId` worker fixture), one per platform in Unassigned on free. They run real
+  osquery, install real packages and receive real profiles, so anything asserting software inventory, script
+  output, profile delivery, certificates or agent versions must use them.
+- **Each worker is handed its own VM of a platform.** `requireRealHost(request, platform)` and `liveMacosHost`
+  sort the platform's online pool hosts by name and return `pool[parallelIndex % pool.length]`: the same VM
+  for every test the worker runs, and another worker's only where the platform has fewer VMs than the run has
+  workers (premium: four Ubuntu, two Windows, two macOS). A VM that drops out mid-run is replaced from the pool as it
+  then stands. The pool's Macs run two macOS versions and a worker's is either: a spec that depends on the
+  version asks for it (`requireRealHost(request, 'darwin', { os: 'macos-26' })`). Each test's report notes the
+  VM it ran on (`vm: prem-macos26-01 (macOS 26.6.2)`).
+- **`lab-hosts.json` says what every lab machine is** (`helpers/lab-hosts.ts`): its tier, platform, `os` and
+  **role**. `pool` is above. `matrix` is the one host of an OS flavour and `special` a host with a single
+  purpose: both live on premium's **OS matrix** fleet, no worker is handed one, and a spec asks for one by its
+  `os` or purpose (`requireLabHost(request, matrixHostOfRun('rhel-9'))`). `physical` is a bare-metal machine,
+  which can't be rolled back: never the subject of anything that needs a reset to recover from. A Fleet host
+  is matched to its entry by display name, lower-cased (Windows reports upper case). The file is a copy of the
+  lab's own, which is edited first: `npm run lab:sync` copies that over it, and `npm run lint:lab`, inside
+  `npm run check`, fails while the two differ on a machine that has the lab's folder.
+- **A lab machine is never a simulation.** Every simulation picker and both of the cleanup's host sweeps skip
+  whatever the manifest lists and, as the guard for a host the lab enrolled and nobody has listed yet,
+  whatever reports virtualized hardware (the model `VirtualMac2,1`, or the vendor `QEMU`).
+- **A lab host's fleet follows from its role, and the cleanup puts it there**: the pool on VMs, the matrix and
+  special hosts on OS matrix. Every lab host enrolled with the VMs fleet's secret, so one that re-enrolls
+  lands on VMs, whatever it is for; the resting-state step returns each to its role's fleet before a run and
+  after it. That step is the only thing that moves a host onto or off OS matrix. Nothing is uploaded to OS
+  matrix or set on it: gitops declares it empty, with disk encryption off, and `gitops-verify` holds it to that.
+- **The lab preflight** (`tests/api/lab-hosts.spec.ts`) is one test per pool host. One that is offline, on the
+  wrong fleet or no longer enrolled is a red row naming it and saying which, while the workers go on with the
+  rest of the pool. Hosts outside the pool, and online lab machines the manifest doesn't list, are noted on
+  its last test's report and in the job log, not failed.
+- **What a spec puts on the VMs fleet reaches every pool VM of the platform, not only its own.** A profile
+  with no label target, a policy with an install or script automation, a report, agent options, Recovery Lock:
+  each is the fleet's, and another worker's VM receives it mid-test. Scope it to the test's own host with a
+  label (`policy-automation-runs`), or keep it inert and say in the header what the other VMs get
+  (`install-on-host`, `profile-declarations`); what a neighbour must not receive at all goes in `exclusive/`
+  (`script-execution-timeout` lowers the fleet's script timeout). Assert on the test's own host, or on set
+  membership over hosts the test controls, never on a count over the fleet.
 - **A test that needs a real VM is tagged with it**: `@vm-macos`, `@vm-windows` or `@vm-linux`, on the test or
   its describe (`{ tag: '@vm-linux' }`; `vmTag(platform)` in a loop over platforms). `requireRealHost` and
   `liveMacosHost` refuse a test that lacks the tag of the VM it asks for, and lint allows no other tag. So the
-  tags list every test one VM's outage takes down: `npx playwright test --project=premium --grep @vm-macos`
-  runs them, and `--grep-invert` leaves them out. The tag means "needs this VM online", a read of its name
-  included, not "waits on its queue".
+  tags list every test a platform's outage takes down: `npx playwright test --project=premium --grep @vm-macos`
+  runs them, and `--grep-invert` leaves them out. The tag means "needs a VM of this platform online", a read
+  of its name included, not "waits on its queue".
 - **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
   7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
-  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`. A spec that installs or
+  `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`, so every pool VM has the same. A spec that installs or
   uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
   changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
   `fleet-pw-*` package, and deletes it in the same test.
@@ -138,15 +166,17 @@ If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
 version or deadline, or a DDM software-update enforcement declaration — they make the real hosts download an
 OS update or reboot mid-suite. Exercise those settings on Workstations and restore them in the same test.
-**OS matrix** holds lab machines too, MDM-enrolled Windows and macOS among them, so all of this section
-applies to it, and so does disk encryption: turned on for that fleet, it would start BitLocker and FileVault
-on them.
+**OS matrix** holds lab machines too, an MDM-enrolled Windows host and five LUKS-encrypted Linux ones among
+them, so all of this section applies to it, and so does disk encryption: turned on for that fleet, it would
+start BitLocker on the one and prompt for the passphrase on the others.
 
 **Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
 2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and
 turning it off makes Fleet clear it from the Mac. That spec turns it on for the VMs fleet and off in an
-`afterEach`, and the resting-state step turns it off after a dead run. Nothing else sets it on the VMs fleet,
-and nothing sets it on free, where the global setting would reach the free Mac.
+`afterEach`, and the resting-state step turns it off after a dead run. Enforcement is the fleet's, so every
+pool Mac is sent a password while it is on: the spec waits until none holds one before it starts and before it
+ends. Nothing else sets it on the VMs fleet, and nothing sets it on free, where the global setting would reach
+the free Mac.
 
 ### Ask before any of these, too
 
@@ -186,7 +216,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Cross-module imports use the path aliases configured in `tsconfig.json`: `@fixtures`, `@helpers/*`, `@pages`, `@pages/*`. Sibling imports inside a module stay relative (`./Foo`) to keep intra-module coupling visible.
 - Specs target one of three scopes: Unassigned (no team), Workstations (the gitops-provisioned premium team), or All fleets (the global aggregate, used for reports/policies). Selection happens via `<page>.teamDropdown.select(scope)`, which is idempotent and a no-op on free (free has no dropdown). **Call it right after every `goto({ fleetId })` to one of those scopes, in every spec**: some of Fleet's pages keep the last-used fleet in localStorage and render that scope under a URL that names another.
 - Premium specs that need to call `<page>.goto({ fleetId })` for the Workstations variant pull the fleet id from the `workstationsFleetId` worker fixture (resolved once per worker via the Fleet API).
-- Do not create, rename or delete the instance's standing fleets: Workstations, VMs, QA and Compliance (declared in gitops) and Mobile and OS matrix (kept by hand, see `gitops/premium-fleetqa/README.md`). Compliance is gitops coverage only — it holds no hosts and no spec reads it, so the nightly's apply can change every control on it; a spec never puts a host there. It has end-user authentication on, so a global gitops file dry-run or applied against premium must declare the IdP (`org_settings.mdm.end_user_authentication`): fleetctl — and the server, under `--delete-other-fleets` — refuses a global file that would clear the IdP a fleet depends on. `carryLiveEndUserAuth` (`helpers/fleetctl.ts`) writes the instance's IdP into a `fleetctl new` scaffold for that reason. A spec that needs a fleet of its own takes a **throwaway `pw-*` fleet** from the `throwawayFleet` fixture, which deletes it after the test, a timed-out one included; the `cleanup-setup` / `cleanup-teardown` sweep removes any `pw-*` fleet a killed run left (approved by Andrey 2026-10-02; `fleets-lifecycle.spec.ts`, `historical-data-collection.spec.ts`). Scope a per-run fleet by URL (`<page>.goto({ fleetId })`), not by picking its name in the dropdown. One made without the fixture is deleted with `deleteFleet`, which deletes the fleet's bootstrap package first (a fleet delete leaves it behind). Never give a durable fleet a `pw-` name. Workstations is provisioned by gitops and never deleted; its content (all but its gitops reports) is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
+- Do not create, rename or delete the instance's standing fleets: Workstations, VMs, QA, OS matrix and Compliance (declared in gitops) and Mobile (kept by hand, see `gitops/premium-fleetqa/README.md`). Compliance is gitops coverage only — it holds no hosts and no spec reads it, so the nightly's apply can change every control on it; a spec never puts a host there. It has end-user authentication on, so a global gitops file dry-run or applied against premium must declare the IdP (`org_settings.mdm.end_user_authentication`): fleetctl — and the server, under `--delete-other-fleets` — refuses a global file that would clear the IdP a fleet depends on. `carryLiveEndUserAuth` (`helpers/fleetctl.ts`) writes the instance's IdP into a `fleetctl new` scaffold for that reason. A spec that needs a fleet of its own takes a **throwaway `pw-*` fleet** from the `throwawayFleet` fixture, which deletes it after the test, a timed-out one included; the `cleanup-setup` / `cleanup-teardown` sweep removes any `pw-*` fleet a killed run left (approved by Andrey 2026-10-02; `fleets-lifecycle.spec.ts`, `historical-data-collection.spec.ts`). Scope a per-run fleet by URL (`<page>.goto({ fleetId })`), not by picking its name in the dropdown. One made without the fixture is deleted with `deleteFleet`, which deletes the fleet's bootstrap package first (a fleet delete leaves it behind). Never give a durable fleet a `pw-` name. Workstations is provisioned by gitops and never deleted; its content (all but its gitops reports) is wiped by the `cleanup-setup` project (pre-test) and the `cleanup-teardown` project (post-test) — both reference the same `setup/cleanup.steps.ts`.
 - The `pageHealth` fixture is **auto-applied** to every test — it monitors uncaught page exceptions, console errors and 5xx server errors, and asserts at teardown. Uncaught exceptions come from `page.on('pageerror')`: Chromium doesn't surface them as console messages, so without that listener a render that throws passes silently. Tests that intentionally trigger console errors (negative-path auth, post-logout 401) opt out with `pageHealth.disable()`. An uncaught error owed to a filed, cosmetic Fleet defect is ignored by name instead, in `DEFAULT_IGNORED_PAGE_ERRORS` (`helpers/console.ts`), with its `TODO(fleetdm/fleet#N)` and a row in `docs/blocked-by-product-bugs.md`. 4xx is not flagged: it's normal app behaviour (auth probes, "no resource yet" 404s, premium-gated 402s) and assertions catch the meaningful ones. New specs need no setup to participate.
 - For per-test state (a script, a custom package), create it as a precondition and register its undo with the `cleanup` fixture the moment it exists: `cleanup.add('delete script', (r) => deleteScript(r, id))`. The undo actions run after the test, last registered first, whether it passed, failed or **timed out**: Playwright skips the rest of a timed-out test, its `finally` included, but still tears down its fixtures. Each undo gets an API context of its own and treats "already gone" as done, since the test may have deleted the thing itself. `apiTest` carries it, so API and CLI specs have it too. The common things come from fixtures that name them with `ownName` and register their own undo: `throwawayFleet(kind)` (premium), `borrowSims({ claim, to })` (premium) and `seed.label` / `seed.policy` / `seed.report` / `seed.script`. Specs written before it use an `afterEach` with a describe-level tracker, which is also timeout-safe; a `finally` that calls the API is not, and lint fails a new one.
 
@@ -234,7 +264,9 @@ Folder conventions:
   say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). So does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs at priority 0, below
   every user-requested one, so beside the install specs its attempts wait out their budget
-  (`premium/exclusive/policies/policy-automation-runs.spec.ts`). The
+  (`premium/exclusive/policies/policy-automation-runs.spec.ts`). And so does one that changes what every VM on
+  the fleet runs under while other workers are on theirs (`shared/exclusive/script-execution-timeout.spec.ts`
+  lowers the fleet's script timeout). The
   `premium-exclusive` / `free-exclusive` projects run those on one worker, **in their own `playwright test`
   invocation after the main project has finished** — whether or not it passed. CI runs them as a second step
   (`if: !cancelled()`) and merges both into one report; `npm run test:premium` / `test:free` run the two in
@@ -254,7 +286,7 @@ Folder conventions:
    prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`, since gitops declares `pw-host-report-results`
    there). A spec that leaves a new kind of per-run report on Workstations or VMs adds its prefix to that
    sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off and script
-   execution on, and brings the real VMs to their resting state. It does **not** reset disk encryption or the
+   execution on, returns every lab host to its role's fleet, and brings every pool VM to its resting state. It does **not** reset disk encryption or the
    BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user
    authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these,
    too*), and a spec that writes one of the others restores it, or works on a throwaway `pw-*` fleet.
@@ -314,20 +346,20 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | | |
 |---|---|
 | **the nightly** | `QA — Nightly` (`.github/workflows/qa-nightly.yml`): both Render deploy hooks → wait for the deploys (polls Render's API when `RENDER_API_KEY` + the two service ids are set, else 30 min) → both instances' `/healthz` → a notice with each instance's build → per tier, the nightly gitops chain, then that tier's suite (whatever gitops did). Cron `17 3 * * *`, but GitHub starts it late: every scheduled run from 2026-10-01 to 10-10 started 5.9–7.3 h after the cron (09:09–10:35 UTC) and took 1 h 29 m–1 h 44 m, 30 min of it the fixed Render wait, finishing around 11:15–12:15 UTC. If the deploy wait fails, neither tier's gitops chain or suite runs |
-| **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; the suite runs whatever gitops did, as in the nightly, and a red gitops step still fails the run. `-f workers=N` runs both suites at that count, for a trial without a config commit. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready. A PR that changes a workflow file is dispatched with `--ref <branch>`: without it the run uses `main`'s workflow YAML, and `-f branch=` supplies only the tests and config |
+| **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; the suite runs whatever gitops did, as in the nightly, and a red gitops step still fails the run. `-f workers=N` runs premium's suite at that count, for a trial without a config commit; free always runs at its configured count (it has one VM per platform and a smaller instance). **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready. A PR that changes a workflow file is dispatched with `--ref <branch>`: without it the run uses `main`'s workflow YAML, and `-f branch=` supplies only the tests and config |
 | **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
-| **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs |
+| **workers** | CI: free 2, premium 3 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs. A worker has a VM of a platform to itself up to the pool's size (premium: 4 Ubuntu, 2 Windows, 2 macOS; free: 1 each); a 4th premium worker is on trial (`docs/device-lab-plan.md`) |
 | **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. The `gitops-mode`, `gitops-verify` and `gitops-nightly` projects take `retries: 0`, so the suite's `trace: 'on-first-retry'` never fires there; `gitops-mode` keeps the trace of a failed attempt instead (`retain-on-failure`). Test timeout 60 s unless a spec sets its own (the VM describes mostly 10–15 min; `policy-automation-runs` 20, `recovery-lock` 25); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`), premium's exclusive step at 60 (free's at 15) and the gitops-mode step at 15, reports included; the premium job's limit is 185, free's 120 |
 | **runtime** | premium's main project ~42 min at 3 workers (job 57 min with the exclusive step's 12.6 and gitops-mode's 1.5), free's job ~15 at 2 (2026-11-13, nightly 43413291769: 702 and 381 results); ~47, 63.5 and ~15 on 2026-10-06 (branch run 37395809242). Both are worker-bound to the last minute: premium's main project was 122 test-minutes / 3 on 2026-11-13, 138 with the other two steps, and free's 28 / 2. Tests that wait on the real VMs take ~95 of the job's 138 minutes, ~83 of them in the main project (2026-11-13, results over 30 s: Linux 44, macOS 27, Windows 8, several platforms 15). On 2026-09-30 three workers picking Linux installs at once cost ~13 min to queue contention, so a 4th worker is worth ~31–34 min only while the Linux waits stay inside their budgets. `run_timeline.py` in the run-reviewer skill reconstructs this per worker, and `--platforms` splits it by VM |
-| **a run's reports** | a green `QA — Nightly` or `QA — Branch run` run uploads two artifacts, the suites' HTML reports: `playwright-report-{premium,free}` (the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report). The gitops chains' fourteen Playwright jobs upload a report only when they fail, named for the job: `gitops-verify-report-<tier>-<target>` (premium verifies its no-team config, Workstations, Compliance, QA and VMs after each of its two applies, the QA and VMs ones suffixed `-baseline` / `-min`; free verifies its no-team config after each) or `gitops-nightly-cli-report-<tier>`. A green gitops job uploads nothing and adds no annotation to the run page: its log lists each check it ran (the config's CI reporter is `list`; the suites pass `github,blob`, so the page's annotations are the suites' run summaries and their failures). Each artifact is one **encrypted** file, `<name>.tar.gz.enc`, because a report holds typed passwords and the API token and this repository's artifacts are public: `fetch_ci_run.sh` (the run-reviewer's) downloads and decrypts them with the report key at `~/.config/qa-automation/report-private-key.pem` (or `QA_REPORT_KEY`). The two suite reports also hold `results.json`, the merged run as data, and are kept 90 days (the others 7); the run-reviewer's `run_history.py` builds each test's history from them. The run's last job, `run-history`, writes that history into the run's summary: how each failed or flaky test fared in the 14 nightlies before, and whether the error is the same one. Never paste a report's request headers or typed values into an issue, PR or review ([`docs/ci-pipeline.md`](docs/ci-pipeline.md)) |
+| **a run's reports** | a green `QA — Nightly` or `QA — Branch run` run uploads two artifacts, the suites' HTML reports: `playwright-report-{premium,free}` (the main project, its exclusive specs and, on premium, gitops-mode run as separate steps and merge into this one report). The gitops chains' sixteen Playwright jobs upload a report only when they fail, named for the job: `gitops-verify-report-<tier>-<target>` (premium verifies its no-team config, Workstations, Compliance, QA, VMs and OS matrix after each of its two applies, the QA, VMs and OS matrix ones suffixed `-baseline` / `-min`; free verifies its no-team config after each) or `gitops-nightly-cli-report-<tier>`. A green gitops job uploads nothing and adds no annotation to the run page: its log lists each check it ran (the config's CI reporter is `list`; the suites pass `github,blob`, so the page's annotations are the suites' run summaries and their failures). Each artifact is one **encrypted** file, `<name>.tar.gz.enc`, because a report holds typed passwords and the API token and this repository's artifacts are public: `fetch_ci_run.sh` (the run-reviewer's) downloads and decrypts them with the report key at `~/.config/qa-automation/report-private-key.pem` (or `QA_REPORT_KEY`). The two suite reports also hold `results.json`, the merged run as data, and are kept 90 days (the others 7); the run-reviewer's `run_history.py` builds each test's history from them. The run's last job, `run-history`, writes that history into the run's summary: how each failed or flaky test fared in the 14 nightlies before, and whether the error is the same one. Never paste a report's request headers or typed values into an issue, PR or review ([`docs/ci-pipeline.md`](docs/ci-pipeline.md)) |
 | **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail |
-| **the instances' gitops state** | every gitops chain (the nightly, a branch run) applies the full config, verifies it, then applies the **min** config (`gitops/premium-fleetqa-min`, `free-fleetqa-min`) and ends there; the suite's cleanup then wipes every global report, policy, script and profile and Workstations' policies, profiles, scripts and software. So between runs an instance holds **min's org settings, labels and custom host vitals, Workstations' reports (3 of its 5), everything on QA, VMs and Compliance (min's version of it)**, and none of the rest until the next chain. Before calling a declared item missing, check which of those it is; a spec reads an item both configs declare and the cleanup keeps ("Collect default browser on macOS") |
+| **the instances' gitops state** | every gitops chain (the nightly, a branch run) applies the full config, verifies it, then applies the **min** config (`gitops/premium-fleetqa-min`, `free-fleetqa-min`) and ends there; the suite's cleanup then wipes every global report, policy, script and profile and Workstations' policies, profiles, scripts and software. So between runs an instance holds **min's org settings, labels and custom host vitals, Workstations' reports (3 of its 5), everything on QA, VMs and Compliance (min's version of it), and OS matrix declared empty**, and none of the rest until the next chain. Before calling a declared item missing, check which of those it is; a spec reads an item both configs declare and the cleanup keeps ("Collect default browser on macOS") |
 | **the instances' build** | both redeploy the 4.95 RC tag every night, and a failed deploy is silent: Render keeps the old instance serving. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
 
 ## Pre-PR check
 
 ```bash
-npm run check          # tsc --noEmit + the lint rules' own tests + the claims check + eslint
+npm run check          # tsc --noEmit + the lint rules' own tests + the claims check + the lab manifest check + eslint
 ```
 
 This is the pre-PR gate — it catches the common mistakes locally. The premium and free suites also run nightly in CI (`QA — Nightly`, above), but don't rely on that to catch what `npm run check` would.

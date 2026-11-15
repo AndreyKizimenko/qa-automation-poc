@@ -1,8 +1,8 @@
 /**
- * Shared • Policies • A policy run live against the three real VMs.
+ * Shared • Policies • A policy run live against three real VMs, one per platform.
  *
- * Policies → the policy → Run policy → target the macOS, Windows and Linux VMs by
- * host search → Run → "Policy finished". Then everything the results screen
+ * Policies → the policy → Run policy → target the worker's macOS, Windows and
+ * Linux VMs by host search → Run → "Policy finished". Then everything the results screen
  * derives from the answers: each host's Pass or Fail, the "(Yes: X%, No: Y%)"
  * summary and its host-count tooltips, the Host column sorting case-insensitively
  * in both directions, and "Export results" writing one yes / no row per host.
@@ -22,11 +22,12 @@
  * one VM offline the run would finish on two and every number below would be wrong
  * for that reason, not Fleet's.
  *
- * **The sort is evidence because of the names.** The VMs are called `WIN-…`,
- * `macos-…` and `ubuntu-…` on both tiers. A case-sensitive sort puts the
- * upper-case Windows name first; Fleet's case-insensitive one puts it last. The
- * test checks that the two orders differ before relying on it, so a renamed VM
- * fails loudly instead of letting the check pass without proving anything.
+ * **The sort is evidence because of the names.** Windows reports its name in
+ * upper case (`PREM-WIN11-01`) beside the lower-case `prem-macos…` and
+ * `prem-ubu…`, on both tiers. A case-sensitive sort puts the Windows name first;
+ * Fleet's case-insensitive one puts it last. The test checks that the two orders
+ * differ before relying on it, so a renamed VM fails loudly instead of letting
+ * the check pass without proving anything.
  *
  * **The policy is global** (free has no other kind) and deleted in an `afterEach`,
  * which still runs when the test times out. While it exists, any VM that refetches

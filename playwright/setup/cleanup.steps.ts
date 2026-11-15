@@ -39,8 +39,8 @@ import {
   deleteSoftwareTitle,
   disableGitOpsMode,
   enableScriptExecution,
+  failureSummary,
   findFleetByName,
-  findOnlineHost,
   getAgentOptions,
   getFleetRecoveryLock,
   getSoftwarePackage,
@@ -49,9 +49,12 @@ import {
   listFleetPolicies,
   listHostSoftwareNames,
   listInstallableTitles,
+  listLabHostsAstray,
+  listPoolHosts,
   listReports,
   listUpcomingActivities,
   queueAdHocScript,
+  requestHostRefetch,
   resetSetupExperience,
   setAgentOptions,
   setFleetRecoveryLock,
@@ -59,6 +62,7 @@ import {
   transferHosts,
   type UpcomingActivity,
 } from '@helpers/api';
+import { labHostsOfRun } from '@helpers/lab-hosts';
 import { VM_SOFTWARE_FIXTURES, ensureVmFixtureUninstalled, findVmFixtureTitle, type VmPlatform } from '@helpers/vm-fixtures';
 
 const WORKSTATIONS_FLEET = 'Workstations';
@@ -213,10 +217,13 @@ premiumStep('clear stranded version pins on the durable app fleets', async ({ re
 // profile still targets.
 //
 // Deleting a title never uninstalls it, and a per-run .deb never comes back to
-// be uninstalled by a later run — so the Ubuntu VM's own `fleet-pw-*` packages
-// are purged here, by a script queued only when its inventory lists one. A host
-// runs scripts and installs from one queue, so the purge finishes before any
-// install this run queues after it.
+// be uninstalled by a later run — so each Ubuntu pool VM's own `fleet-pw-*`
+// packages are purged here, by a script queued only when its inventory lists
+// one. Every member, not only the one a test ran on: a Deploy install policy
+// (`install-on-host`) installs its package on each Linux host of the fleet that
+// runs its policies while the policy exists, and the spec uninstalls only its
+// own. A host runs scripts and installs from one queue, so the purge finishes
+// before any install this run queues after it.
 const OWN_PACKAGE = /^fleet-pw-/;
 
 premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ request }) => {
@@ -256,38 +263,81 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
   // After the profiles and titles: Fleet refuses to delete a label either targets.
   await deleteLabelsWithPrefix(request, 'pw-');
 
-  const linux = await findOnlineHost(request, 'linux', { kind: 'real' });
-  if (linux && (await listHostSoftwareNames(request, linux.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) {
-    await queueAdHocScript(
-      request,
-      linux.id,
-      "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
-    );
-  }
+  await Promise.all(
+    (await listPoolHosts(request, 'linux')).map(async (linux) => {
+      if (!(await listHostSoftwareNames(request, linux.id, 'fleet-pw-')).some((n) => n.startsWith('fleet-pw-'))) return;
+      await queueAdHocScript(
+        request,
+        linux.id,
+        "#!/bin/sh\ndpkg-query -W -f='${Package}\\n' 'fleet-pw-*' 2>/dev/null | xargs -r dpkg --purge\n",
+      );
+    }),
+  );
 });
 
 // Every run starts the real VMs in the same state, and ends them there too
-// (the teardown project runs this file again):
+// (the teardown project runs this file again). "The real VMs" are the pool's
+// online members, every one of them: each worker is handed its own
+// (`requireRealHost`), so any of them may be what a dead run left mid-install.
 //
+//  - on premium, every lab host is on the fleet its role puts it on
+//    (`returnLabHostsToTheirFleets`, below);
 //  - nothing of the suite's is still queued on a VM — a dead run's installs
 //    and scripts would otherwise hold each VM's one queue ahead of this run's;
-//  - the script timeout is Fleet's default — the timeout case lowers it to 60 s
-//    and restores it in a `finally` a timed-out test never reaches;
-//  - on premium, every durable install/uninstall fixture is uninstalled with
-//    no failed install or uninstall on record — its resting state, which a
-//    dead run, or a test that failed partway, can leave otherwise;
+//  - the script timeout is Fleet's default — `script-execution-timeout.spec.ts`
+//    lowers it to 60 s for every host on the fleet, and a run killed before that
+//    test's cleanup leaves it there;
+//  - on premium, every durable install/uninstall fixture is uninstalled on
+//    every pool VM of its platform, with no failed install or uninstall on
+//    record — its resting state, which a dead run, or a test that failed
+//    partway, can leave otherwise;
 //  - on premium, Recovery Lock enforcement is off on the VMs fleet —
-//    `recovery-lock.spec.ts` turns it on and off, and Fleet clears the Mac's
+//    `recovery-lock.spec.ts` turns it on and off, and Fleet clears each Mac's
 //    password on its next cron tick once it's off.
 //
-// It repairs what the suite itself leaves behind and nothing else. A VM that's
-// offline is only logged: its specs fail on it with a message of their own.
+// It repairs what the suite itself leaves behind and nothing else. A pool VM
+// that's offline is left out: the lab preflight (`tests/api/lab-hosts.spec.ts`)
+// names it, and the workers go on with the rest of the pool.
 const OWN_QUEUED = (a: UpcomingActivity): boolean =>
   !!a.scriptName?.startsWith('pw-') ||
   !!a.softwarePackage?.startsWith('fleet-pw-') ||
   VM_SOFTWARE_FIXTURES.some(
     (f) => (f.packageName && f.packageName === a.softwarePackage) || f.fleetMaintainedName === a.softwareTitle,
   );
+
+// Every lab host enrolled with the VMs fleet's enroll secret, so one that
+// re-enrolls (deleted and back, fleetd reinstalled) lands on VMs whatever it is
+// for: a matrix host there would receive every install and profile the
+// real-host specs put on that fleet, and a pool host anywhere else is one no
+// worker is handed. This moves each manifest host that is off its role's fleet
+// back onto it (the pool on VMs; the matrix and special hosts on OS matrix),
+// and is the one thing in the suite that moves a host onto or off OS matrix. A
+// returned host is asked for a refetch, which re-runs its fleet's policies:
+// that is what puts Claude back on a pool Mac or Windows VM without waiting out
+// the hourly policy interval. The refetch only hurries that along, so one Fleet
+// doesn't queue is logged and left to the hourly run. Free has no fleets, so
+// there this does nothing.
+async function returnLabHostsToTheirFleets(request: APIRequestContext): Promise<void> {
+  const astray = new Map<string, number[]>();
+  for (const record of await listLabHostsAstray(request, labHostsOfRun())) {
+    console.warn(
+      `[lab hosts] ${record.displayName} (id ${record.id}, ${record.entry.role}) is on ${record.fleetName ?? 'Unassigned'} — returning it to ${record.belongsOn}`,
+    );
+    astray.set(record.belongsOn, [...(astray.get(record.belongsOn) ?? []), record.id]);
+  }
+  for (const [name, hostIds] of astray) {
+    const fleet = await findFleetByName(request, name);
+    if (!fleet) throw new Error(`${name} fleet not found on premium instance — gitops apply likely missing`);
+    await transferHosts(request, fleet.id, hostIds);
+    await Promise.all(
+      hostIds.map((id) =>
+        requestHostRefetch(request, id).catch((error) =>
+          console.warn(`[lab hosts] no refetch queued for host ${id}: ${failureSummary(error)}`),
+        ),
+      ),
+    );
+  }
+}
 
 test('bring the real VMs to their resting state', async ({ request }) => {
   // Only as long as a dead run left work for it to do: each uninstall is a
@@ -298,22 +348,23 @@ test('bring the real VMs to their resting state', async ({ request }) => {
   if (premium && !vms) throw new Error('VMs fleet not found on premium instance — gitops apply likely missing');
   const fleetId = vms?.id ?? 0;
 
+  await returnLabHostsToTheirFleets(request);
+
   // Uninstalls run as scripts, so they need script execution on.
   await enableScriptExecution(request);
 
   const { script_execution_timeout: timeout, ...options } = await getAgentOptions(request, fleetId);
   if (timeout !== undefined) await setAgentOptions(request, options, fleetId);
 
-  const hosts = new Map<VmPlatform, number>();
+  const pool = new Map<VmPlatform, number[]>();
   for (const platform of ['darwin', 'windows', 'linux'] as const) {
-    const host = await findOnlineHost(request, platform, { kind: 'real' });
-    if (!host) {
-      console.warn(`[vm preflight] no online real ${platform} VM`);
-      continue;
-    }
-    hosts.set(platform, host.id);
-    for (const activity of (await listUpcomingActivities(request, host.id)).filter(OWN_QUEUED)) {
-      await cancelUpcomingActivity(request, host.id, activity.uuid);
+    const members = await listPoolHosts(request, platform);
+    if (!members.length) console.warn(`[vm preflight] no online real ${platform} VM`);
+    pool.set(platform, members.map((member) => member.id));
+    for (const member of members) {
+      for (const activity of (await listUpcomingActivities(request, member.id)).filter(OWN_QUEUED)) {
+        await cancelUpcomingActivity(request, member.id, activity.uuid);
+      }
     }
   }
 
@@ -323,9 +374,11 @@ test('bring the real VMs to their resting state', async ({ request }) => {
     await setFleetRecoveryLock(request, vms.id, false);
   }
   await Promise.all(
-    VM_SOFTWARE_FIXTURES.filter((f) => hosts.has(f.platform)).map(async (fixture) => {
+    VM_SOFTWARE_FIXTURES.map(async (fixture) => {
+      const members = pool.get(fixture.platform) ?? [];
+      if (!members.length) return;
       const title = await findVmFixtureTitle(request, vms.id, fixture);
-      await ensureVmFixtureUninstalled(request, hosts.get(fixture.platform)!, title);
+      await Promise.all(members.map((hostId) => ensureVmFixtureUninstalled(request, hostId, title)));
     }),
   );
 });

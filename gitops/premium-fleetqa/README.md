@@ -1,6 +1,6 @@
 # premium-fleetqa
 
-GitOps config for the Premium QA Fleet instance. `default.yml` carries the free config's lists plus the premium-only surface described below, and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the real QA VMs; `fleets/compliance.yml` configures the **Compliance** fleet, which has no hosts and carries every control that would act on one.
+GitOps config for the Premium QA Fleet instance. `default.yml` carries the free config's lists plus the premium-only surface described below, and configures the **No team** (team_id=0) scope; `fleets/workstations.yml` configures the **Workstations** fleet; `fleets/qa.yml` configures the **QA** fleet; `fleets/vms.yml` configures the **VMs** fleet, home of the device lab's pool VMs, which the real-host specs run on; `fleets/os-matrix.yml` declares the **OS matrix** fleet, home of the lab's other hosts, empty; `fleets/compliance.yml` configures the **Compliance** fleet, which has no hosts and carries every control that would act on one.
 
 ```
 premium-fleetqa/
@@ -9,6 +9,7 @@ premium-fleetqa/
     ├── workstations.yml     # fleet "Workstations" — full scope
     ├── qa.yml               # fleet "QA" — the durable Fleet-maintained-app shelf
     ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, the install/uninstall packages and apps, a report)
+    ├── os-matrix.yml        # fleet "OS matrix" — the lab's OS-flavour and special-purpose hosts; declared empty, disk encryption off
     └── compliance.yml       # fleet "Compliance" — every host-affecting control, on a fleet with no hosts
 ```
 
@@ -23,13 +24,14 @@ fleetctl gitops --context qa-premium \
   -f gitops/premium-fleetqa/fleets/workstations.yml \
   -f gitops/premium-fleetqa/fleets/qa.yml \
   -f gitops/premium-fleetqa/fleets/vms.yml \
+  -f gitops/premium-fleetqa/fleets/os-matrix.yml \
   -f gitops/premium-fleetqa/fleets/compliance.yml
 ```
 
-The nightly applies all five: `.github/workflows/gitops-premium.yml` exactly as above, and
+The nightly applies all six: `.github/workflows/gitops-premium.yml` exactly as above, and
 `gitops-premium-min.yml` with the min variant's `default.yml`, `workstations.yml` and `compliance.yml` plus this
-directory's `qa.yml` and `vms.yml` — the QA and VMs fleets hold the suite's durable fixtures, which are the same
-in both passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
+directory's `qa.yml`, `vms.yml` and `os-matrix.yml` — the QA and VMs fleets hold the suite's durable fixtures and
+OS matrix is declared empty, so all three are the same in both passes. The Playwright premium job shares a concurrency group with the nightly apply, so the two never
 overlap: an apply deletes whatever its files don't declare, including a running test's per-run items.
 
 Any fleet file can be applied on its own — `fleetctl gitops` accepts at most one global file but any number of fleet files, and a fleet file only rewrites its own fleet.
@@ -40,7 +42,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, Compliance, Mobile and OS matrix (free has no fleets).
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, OS matrix, Compliance and Mobile (free has no fleets).
 
 ### Keep the client within a minor of the server
 
@@ -62,15 +64,15 @@ reason, and the `gitops-verify` project asserts each fleet's software set exactl
 
 ### Do not pass `--delete-other-fleets`
 
-`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has two fleets that are not under gitops**, and that flag would destroy them:
+`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has a fleet that is not under gitops**, and that flag would destroy it:
 
 | fleet | why it is not in gitops |
 |---|---|
 | **Mobile** (104) | Holds ABM/VPP-enrolled mobile state that isn't reproducible from this repo. |
-| **OS matrix** (621) | Holds the device lab's OS-flavour VMs and its spare ones, which enrolled by hand. Created by hand on 2026-11-14 with nothing declared on it: no software, policies, profiles, OS-update settings or disk encryption, since anything set there reaches those machines. Deleting it would drop them all into Unassigned. It is to be declared here, empty, once specs use it. |
 
 `playwright/tests/api/gitops-verify/fleets.spec.ts` checks the instance holds exactly the declared fleets plus
-these two (`HAND_KEPT_FLEETS`).
+that one (`HAND_KEPT_FLEETS`). A run that names only some of the fleet files would, with the flag, delete the
+fleets of the others too: OS matrix among them, which would drop the lab's hosts into Unassigned.
 
 A run that names only some fleet files also leaves the others alone without the flag — so applying
 `vms.yml` never touches QA or Workstations, and vice versa.
@@ -85,6 +87,7 @@ The flag is opt-in and off by default, so the command above is safe as written.
 | Workstations (fleets/workstations.yml) | 23 | 23 | 5 | — | 6 | — | — |
 | QA (fleets/qa.yml) | — | — | — | — | — | — | 20 Fleet-maintained apps |
 | VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 4 custom packages, 4 Fleet-maintained apps |
+| OS matrix (fleets/os-matrix.yml) | — | — | — | — | — | — | — |
 | Compliance (fleets/compliance.yml) | 6 | 7 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
 
 Label and report counts expand from multi-entry lib files, and the no-team numbers include the entities
@@ -137,10 +140,10 @@ decision), is in [`playwright/docs/gitops-coverage/README.md`](../../playwright/
 ## Verification
 
 After each apply the nightly runs the `gitops-verify` Playwright project against every file that apply
-carried: the no-team config, Workstations, Compliance, QA and VMs (`.github/workflows/nightly-qa-gitops-premium.yml`).
-QA and VMs are verified after the baseline *and* after the min apply, against the same files, since both
+carried: the no-team config, Workstations, Compliance, QA, VMs and OS matrix (`.github/workflows/nightly-qa-gitops-premium.yml`).
+QA, VMs and OS matrix are verified after the baseline *and* after the min apply, against the same files, since both
 applies carry them; the second pass proves the min apply left them alone. Locally:
-`npm run test:gitops-verify:premium`, `…:premium-workstations`, `…:premium-qa`, `…:premium-vms`,
+`npm run test:gitops-verify:premium`, `…:premium-workstations`, `…:premium-qa`, `…:premium-vms`, `…:premium-os-matrix`,
 `…:premium-compliance`, `…:premium-min`, `…:premium-min-workstations`, `…:premium-min-compliance` from
 `playwright/`. What each spec compares is in
 [`playwright/docs/test-audit/16-gitops-verify.md`](../../playwright/docs/test-audit/16-gitops-verify.md).
@@ -194,6 +197,27 @@ under `--delete-other-fleets`, where the client skips that check, the server ref
 `default.yml` variants declare it; the suite's scaffold-based dry-run specs write the instance's IdP into their
 `fleetctl new` scaffold first (`carryLiveEndUserAuth`, `playwright/helpers/fleetctl.ts`).
 
+## The OS matrix fleet
+
+`fleets/os-matrix.yml` declares the **OS matrix** fleet, where the device lab keeps the hosts no pool spec runs
+on: one VM per OS flavour (Ubuntu 22.04 and 26.04, Debian, RHEL, Fedora, openSUSE, Windows 10, Windows Server,
+…) and the special-purpose ones. `playwright/lab-hosts.json` lists them (roles `matrix` and `special`), and the
+suite's cleanup returns each to this fleet if it re-enrolls elsewhere: every lab host carries the VMs fleet's
+enroll secret, so that is where a re-enrolled one lands.
+
+**The file declares the fleet empty, on purpose.** Whatever is on a fleet reaches every host on it, and this one
+holds an MDM-enrolled Windows host and five LUKS-encrypted Linux ones. So it carries no software, policies,
+profiles, scripts, reports or OS-update settings, and it declares disk encryption and key escrow **off** for
+every platform, not merely absent. An apply deletes what a fleet file doesn't declare, so each apply clears
+anything that found its way onto the fleet, and the verify then holds it to that: `gitops-verify`'s entity
+specs compare the fleet against empty lists, its controls spec asserts encryption off, and its `_sanity` spec
+fails the file itself if it ever declares an entity or an OS-update or setup-experience setting
+(`EMPTY_FLEETS` in `playwright/tests/api/gitops-verify/_config.ts`). What the per-OS smokes put there will be
+per-run `pw-*` things, deleted in the test.
+
+Its agent options and features are the VMs fleet's, which are also what the fleet had when it was created by
+hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reason the VMs fleet's is.
+
 ## The QA fleet's Fleet-maintained-app shelf
 
 `fleets/qa.yml` parks 10 popular apps — each on both macOS and Windows, 20 catalog entries — on the QA fleet **permanently**. They exist to be listed, never installed.
@@ -231,14 +255,16 @@ Consumed by `playwright/tests/e2e/premium/software/version-pinning.spec.ts`, whi
 
 ## The VMs fleet's durable fixtures
 
-`fleets/vms.yml` brings the **VMs** fleet — the three real QA VMs (macOS, Windows, Ubuntu) — under gitops, for
-the fixtures that have to exist before a test starts:
+`fleets/vms.yml` brings the **VMs** fleet — the device lab's pool VMs (`playwright/lab-hosts.json`, role `pool`:
+several Ubuntu, Windows and macOS VMs, one of each platform to a Playwright worker) — under gitops, for the
+fixtures that have to exist before a test starts. Everything it declares reaches every pool VM of its
+platform, so whichever VM a worker is handed has the same:
 
-- **`pw-host-report-results`**, a 5-minute report on the macOS VM, so it always holds a stored result for
+- **`pw-host-report-results`**, a 5-minute report on the macOS VMs, so each always holds a stored result for
   `playwright/tests/e2e/premium/hosts/host-report-details.spec.ts`, and one refreshed within the hour for
   `playwright/tests/e2e/premium/reports/stored-results.spec.ts` (its answer never changes, so Fleet moves its
   `last_fetched` only once that is 50 minutes old, not on every run).
-- **Claude, kept installed** on the macOS and Windows VMs and tracking latest, the durable subject of
+- **Claude, kept installed** on every macOS and Windows VM and tracking latest, the durable subject of
   `playwright/tests/e2e/premium/software/update-on-host.spec.ts`. Its Fleet-maintained entries carry no pin,
   so the hourly auto-update cron caches each new build and keeps the previous one; two "Claude is installed"
   **presence** policies (not patch policies — those would erase the "behind" state the spec creates)
@@ -253,9 +279,13 @@ the fixtures that have to exist before a test starts:
 
 Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`): specs whose test changes the title itself add
 it and delete it. `playwright/setup/cleanup.steps.ts`, at the start and end of every run, sweeps the ones a
-timed-out test left behind, purges leftover `fleet-pw-*` packages from the Ubuntu VM, clears any version pin
-here and on QA, and brings the VMs to their resting state: nothing of the suite's queued, the script timeout
+timed-out test left behind, purges leftover `fleet-pw-*` packages from every Ubuntu VM, clears any version pin
+here and on QA, and brings each VM to its resting state: nothing of the suite's queued, the script timeout
 at Fleet's default, every install/uninstall fixture uninstalled. It never deletes what this file declares.
+
+The fleet's host expiry is its own, 30 days: with expiry off a fleet falls under the global one-day window
+that culls the abandoned osquery-perf simulations, and a lab VM offline for longer than that was deleted and
+re-enrolled under a new id.
 
 **Bringing VMs under gitops deleted what it didn't declare** on the first apply (2026-09-28): a `Fail` policy
 that ran `HelloWorld.sh` as its automation, and `HelloWorld.sh` itself. Neither was used by any spec. The enroll

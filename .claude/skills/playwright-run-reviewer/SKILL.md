@@ -100,7 +100,8 @@ its worker, what was still running in the last N minutes, and the worker time
 spent in failed attempts. `--platforms` tallies host-bound minutes per real-VM
 platform — from the test title when it names one, else from the platform the
 spec's source resolves its host for — and lists what it had to call `mixed` or
-`?`. Read the tail and the per-minute line together: workers all
+`?`; then minutes per VM, from the `vm` annotation each real-VM result carries,
+with the most results a VM held at once (above 1, two workers shared it). Read the tail and the per-minute line together: workers all
 busy to the last minute means the run is worker-bound; a tail of installs on one
 VM means that host's serial queue is the floor, and no worker count moves it.
 
@@ -112,7 +113,8 @@ before reading a spec, and give each cause **one row** with its count.
 1. **The environment.** Many unrelated specs red at once, connection-class errors
    (`ECONNREFUSED`, `ETIMEDOUT`, 502s, MySQL "table is full", `ENOSPC`), or the same
    failure on both tiers point here. Check what the failures share: a real VM
-   offline (the host picker's own message says since when — one Mac outage has
+   (each result's `vm` annotation names the one it ran on, and a pool VM that is
+   out is a red `lab-hosts.spec.ts` row saying why — one Mac outage has
    been 55 red tests), an Apple token (every App Store or setup-assistant test),
    the instance's build (`GET /api/latest/fleet/version`), its disk. A failed
    `*-setup` or `cleanup-*` project cascades into everything after it, so triage

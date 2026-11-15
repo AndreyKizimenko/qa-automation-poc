@@ -94,14 +94,15 @@ repo with `npm ci` done in `playwright/` (the screenshot scripts use its Playwri
 
 - **Playwright** — see [playwright/README.md](playwright/README.md).
 - **GitOps (free)** — `fleetctl gitops --context <your free-instance context> -f gitops/free-fleetqa/default.yml`
-- **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps two
-  fleets that are not under gitops; see `gitops/premium-fleetqa/README.md`):
+- **GitOps (premium)** — every fleet file, and never `--delete-other-fleets` (the instance keeps a
+  fleet that is not under gitops; see `gitops/premium-fleetqa/README.md`):
   ```bash
   fleetctl gitops --context qa-premium \
     -f gitops/premium-fleetqa/default.yml \
     -f gitops/premium-fleetqa/fleets/workstations.yml \
     -f gitops/premium-fleetqa/fleets/qa.yml \
     -f gitops/premium-fleetqa/fleets/vms.yml \
+    -f gitops/premium-fleetqa/fleets/os-matrix.yml \
     -f gitops/premium-fleetqa/fleets/compliance.yml
   ```
 
@@ -133,10 +134,10 @@ workflow supports `workflow_dispatch`; reusable ones also expose
 | `gitops-free-min.yml` / `gitops-premium-min.yml` | Manual, `workflow_call` | Apply the trimmed `-min` variant — used by gitops-verify to confirm gitops actually mutates the live instance. |
 | `gitops-verify.yml` | Manual, `workflow_call` | Runs the Playwright `gitops-verify` project against a chosen gitops target (directory or `fleets/*.yml`) and asserts the live instance matches. |
 | `nightly-qa-gitops-free.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Free chain: apply baseline → verify → apply min → verify → fleetctl checks. |
-| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, but each pass applies and verifies (in parallel) the no-team config and the Workstations, QA, VMs and Compliance fleets; the min pass reuses the baseline's `qa.yml` and `vms.yml`. |
+| `nightly-qa-gitops-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Premium chain: same as free, but each pass applies and verifies (in parallel) the no-team config and the Workstations, QA, VMs, OS matrix and Compliance fleets; the min pass reuses the baseline's `qa.yml`, `vms.yml` and `os-matrix.yml`. |
 | `gitops-nightly-cli.yml` | `workflow_call` (last step of each tier's gitops chain), manual (`suite`) | Read-only fleetctl checks right after the min apply: `generate-gitops` reproduces the min config, and a `gitops --dry-run` of it proposes no deletions (Playwright `gitops-nightly` project). |
 | `playwright-free.yml` / `playwright-premium.yml` | Nightly (via `qa-nightly.yml`), manual, `workflow_call` | Runs the Playwright suite against the matching instance — the main project, then the exclusive specs and (premium) gitops-mode as their own steps, merged into one report; project scope is folder-based (see `playwright/playwright.config.ts`). Test-state cleanup is owned by the suite: `cleanup-setup` runs before specs, `cleanup-teardown` after. Optional `workers` input. Like every workflow that produces a Playwright report, it uploads it encrypted, through `.github/upload-report` (see `playwright/docs/ci-pipeline.md`). |
-| `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a worker-count trial. |
+| `qa-branch-run.yml` | Manual (`branch` input, optional `workers`) | The nightly against a branch's code and config: per tier, the nightly gitops chain, then that tier's Playwright suite; the two tiers side by side. `gh workflow run "QA — Branch run" -f branch=<branch>`; add `-f workers=N` for a trial of premium's worker count (free always runs at its own). |
 | `playwright-check.yml` | Every PR, push to `main`, manual | Static gate: `tsc --noEmit` + `eslint` on the suite. Runs on every PR, with no path filter, because it is a required status check and one that never reports leaves a PR unmergeable. The only Playwright workflow that runs per-PR — the tier suites are nightly. The same job runs `.github/scripts/check-artifacts.sh`: no workflow may upload or publish anything from a run except through `.github/upload-report`, which encrypts it. |
 | `report-upload-check.yml` | Every PR touching the upload action, the encryption script, the report public key or a suite workflow; manual | Runs `.github/upload-report` once in the suites' container on a stand-in report, and checks that what it uploads is the encrypted file. Not a required check, so it keeps a path filter. |
 | `skills-check.yml` | Every PR touching the skills, plugin manifests, tools or docs; push to `main`; manual | Lints the Claude Code skills (`.github/scripts/check-skills.sh`): frontmatter (`name` = folder, a `description` that survives YAML and stays under 1,024 characters), `${CLAUDE_…}` paths that exist and stay out of reference files, shared rule blocks identical in every skill that carries them, no orphan `references/` or `scripts/` files, plugin manifests consistent with the marketplace, and no instance hostnames or credential-shaped strings in skill text or docs. Warns when a SKILL.md is longer than what Claude Code keeps after compaction. Not a required check, so it keeps a path filter. |

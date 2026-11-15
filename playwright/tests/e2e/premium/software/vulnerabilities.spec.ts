@@ -250,7 +250,7 @@ test('Vulnerabilities tab — exploited-vulnerabilities filter', async ({
 /**
  * A CVE's count and hosts are its fleet's: the count differs by fleet, and a
  * row's "View all hosts" opens the Hosts list filtered by the CVE. On the VMs
- * fleet: its hosts are the three real VMs plus whatever a
+ * fleet: its hosts are the pool's real VMs plus whatever a
  * label-targeting spec borrows for a minute, so the hosts behind a CVE are a
  * set small enough to compare whole.
  *

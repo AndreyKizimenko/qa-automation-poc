@@ -32,10 +32,13 @@ Everything below follows from four facts about the environment.
 1. **One Fleet instance per tier, shared by everyone.** Premium and free are separate Render deployments with
    their own databases. Anything that runs against an instance competes with everything else on it, and a
    gitops apply deletes whatever its config does not declare.
-2. **One real VM per platform per tier.** A macOS, a Windows and an Ubuntu VM, each running one queue: scripts,
+2. **A small pool of real VMs per platform, one queue each.** The device lab's pool: on premium four Ubuntu,
+   two Windows and two macOS VMs, on free one of each (`lab-hosts.json`). Each runs one queue: scripts,
    installs and uninstalls execute one at a time per host. Profiles travel a separate channel (MDM commands),
-   inventory a third (refetch). Roughly 300 osquery-perf simulations sit beside them for volume work and prove
-   nothing about host-side behaviour.
+   inventory a third (refetch). Each worker is handed its own VM of a platform (`pool[parallelIndex %
+   pool.length]`), so two tests share a host's queue only where a platform has fewer VMs than the run has
+   workers. Roughly 300 osquery-perf simulations sit beside them for volume work and prove nothing about
+   host-side behaviour.
 3. **Some settings are global locks.** Turning script execution off stops every script run on the instance.
    Turning gitops mode on makes every mutating control read-only. A spec that flips one breaks whatever runs
    beside it.
@@ -57,11 +60,11 @@ then): an apply deletes whatever its config doesn't declare, a running test's pe
 manual apply waits for a running suite instead of overlapping it.
 
 **gitops before the suite, and the suite runs whatever gitops did.** The suite assumes the instance is in the
-declared state (the Workstations, QA, VMs and Compliance fleets exist; the VMs fleet carries the durable software
-fixtures). Applying first makes that true every night. After each apply, `gitops-verify` runs against every file
-that apply carried — on premium the no-team config, Workstations, Compliance, QA and VMs, with the QA and VMs
-files verified after both the baseline and the min apply, since both carry them unchanged; the second pass
-proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
+declared state (the Workstations, QA, VMs, OS matrix and Compliance fleets exist; the VMs fleet carries the
+durable software fixtures; OS matrix carries nothing). Applying first makes that true every night. After each
+apply, `gitops-verify` runs against every file that apply carried — on premium the no-team config, Workstations,
+Compliance, QA, VMs and OS matrix, with the QA, VMs and OS matrix files verified after both the baseline and
+the min apply, since both carry them unchanged; the second pass proves the min apply left them alone. Compliance is the fleet with no hosts that carries every host-affecting
 control, so its verify is the only place those are checked. The suite runs even if a gitops step is red, in the
 nightly and in a branch run alike: a failed apply or check is its own signal and already fails the run, and the
 suite's results are still wanted. A branch run that stopped there would leave the branch's tests unjudged until a
@@ -85,8 +88,9 @@ on one; the `testIgnore` matrix in `playwright.config.ts` is the source of truth
 every spec and can be wrong silently; a folder cannot.
 
 **The specs that hold a global lock run alone, as their own invocation — not as a dependent project.** The
-exclusive specs (script execution off; a policy automation that needs the Ubuntu VM's queue to itself — Fleet
-runs its attempts below every user-requested activity) and gitops-mode live in their own projects on one worker, and CI runs
+exclusive specs (script execution off; a script timeout lowered for every VM on the fleet; a policy automation
+that needs an Ubuntu VM's queue to itself — Fleet runs its attempts below every user-requested activity) and
+gitops-mode live in their own projects on one worker, and CI runs
 each as a separate `playwright test` step after the main project, pass or fail, merging the blob reports into
 one HTML report. A Playwright *dependency* on the main project would have done the ordering but with the wrong
 failure semantics: one unrelated red test skips every dependent, and a local run of the small project would
@@ -108,6 +112,8 @@ pinned in that script and in `GITOPS_EXCEPTIONS_BASELINE` (`helpers/api/gitops-m
 CI-only number: locally the default is higher and the specs that touch a VM are run with `--workers=2`. The
 measurements that set the current numbers are in [*What bounds a run*](#what-bounds-a-run). A trial at another
 count is a branch run with `-f workers=N`, read with `run_timeline.py` (below), never a config commit first.
+The input sets premium's count only: free has one VM per platform and a smaller instance, and always runs at
+its own.
 
 **Retries: two, except where an attempt is long.** CI retries so that a transient does not fail a night; a
 pass on retry is reported as `flaky` and triaged as such. Every describe that waits on a real VM takes one retry
@@ -169,9 +175,9 @@ skill, records each reviewed run's tests in a local file and says how a failing 
 The two suite reports are kept 90 days so that history can be rebuilt from the reports alone.
 
 **A run's artifacts are the two suite reports, and the report of any gitops job that failed.** Each gitops
-chain is a row of small Playwright jobs (premium ten `gitops-verify` and one `fleetctl` job, free two and
+chain is a row of small Playwright jobs (premium twelve `gitops-verify` and one `fleetctl` job, free two and
 one). A green one uploads nothing: its report would be a list of passed API checks that nobody opens, its log
-already lists each check (the `list` reporter), and fourteen such artifacts beside the suites' two bury what
+already lists each check (the `list` reporter), and sixteen such artifacts beside the suites' two bury what
 there is to read. A failed one uploads its report, named for the job, and keeps it 7 days. So a run's artifact
 list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
 
@@ -219,12 +225,18 @@ Measured on the same test set, 2026-09-29 to 09-30 (reconstructed from the repor
 | 4 | 37.1 min | 148 | 51 | red: blank pages under load, a Mac live-query timeout, the longest Linux wait at 9.9 of its 10-min budget | the Linux queue and instance latency |
 
 Reading it: each added worker converts some wall clock into queue contention (four Linux installs at once,
-each waiting behind the others), which is why test-minutes rise with workers. Three is the last count at
-which the run is still worker-bound and green. Four would need a single-worker lane per VM platform (so no two
-tests share a host queue) and a remedy for the render latency under load before it is safe. A second VM per
-platform, with a lease so two tests never pick the same host, is the only thing that shortens the host queue
-itself. Front-loading the VM specs was considered and dropped: it would add contention, and the tail of a
-three-worker run is short specs, not installs.
+each waiting behind the others), which is why test-minutes rise with workers. Three was the last count at
+which the run was still worker-bound and green. Those runs had one VM per platform. Front-loading the VM specs
+was considered and dropped: it would add contention, and the tail of a three-worker run is short specs, not
+installs.
+
+**Since 2026-11-15 each worker has its own VM** of a platform, out of the device lab's pool (constraint 2), so
+the Linux queue no longer couples the workers: at four workers each has an Ubuntu VM to itself, and Windows
+and macOS are shared two ways. That removes two of the three reasons the four-worker run was red (four Linux
+installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and only a
+run can say whether it still bites: a branch run with `-f workers=4`, read with `run_timeline.py --platforms`,
+whose per-VM lines show which workers each VM served and whether any held two results at once.
+[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial and what was decided from it.
 
 Free is small enough that none of this applies: two workers, worker-bound; its runtime is in the facts table.
 
@@ -241,7 +253,7 @@ Free is small enough that none of this applies: two workers, worker-bound; its r
   blob directory, included in the merge, and a new pairing in the config's guard.
 - **Adding a workflow that touches an instance.** Put it in that instance's concurrency group. Take a `ref`
   input on `workflow_call` so `QA — Branch run` can run it against a branch.
-- **Changing a worker count.** One branch run with `-f workers=N`, then the timeline: if every worker is busy
+- **Changing a worker count.** One branch run with `-f workers=N` (premium's count), then the timeline: if every worker is busy
   to the last minute the count still helps; if the tail is installs on one platform, or a VM describe sits
   near its budget, it does not. Record the result in the facts table with the date.
 - **Uploading anything from a run.** Through `./.github/upload-report`, never `actions/upload-artifact`

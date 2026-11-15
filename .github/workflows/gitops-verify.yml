@@ -41,7 +41,7 @@ on:
         required: true
         type: string
       label:
-        description: Distinguishes two verifications of the same target in one run (the QA and VMs files are verified after both the baseline and the min apply); it suffixes the report artifact's name
+        description: Distinguishes two verifications of the same target in one run (the QA, VMs and OS matrix files are verified after both the baseline and the min apply); it suffixes the report artifact's name
         required: false
         type: string
         default: ''
@@ -107,7 +107,7 @@ jobs:
         run: npx playwright test --project=gitops-verify
 
       # Uploaded only when the job failed. A green verify's report is a list of
-      # passed checks nobody opens, and a chained run has twelve of these jobs:
+      # passed checks nobody opens, and a chained run has fourteen of these jobs:
       # uploading each would bury the two suite reports in the run's artifact
       # list. Encrypted like every report (.github/upload-report).
       - uses: ./.github/upload-report

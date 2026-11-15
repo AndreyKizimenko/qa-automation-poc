@@ -73,7 +73,7 @@ test.describe('fleetctl gitops --dry-run · premium', () => {
     // either noun is accepted so a terminology fix doesn't break the check. A
     // match on the noun alone would be satisfied by a throwaway `pw-fleet-*` that
     // another spec happens to hold at that moment, and by nothing else.
-    for (const fleet of ['Workstations', 'QA', 'VMs', 'Compliance']) {
+    for (const fleet of ['Workstations', 'QA', 'VMs', 'OS matrix', 'Compliance']) {
       expect(output(res), `${fleet} proposed for deletion`).toMatch(
         new RegExp(`would've deleted (team|fleet) ${fleet}\\b`),
       );

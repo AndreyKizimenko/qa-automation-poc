@@ -23,6 +23,9 @@ Usage:
                  source resolves its host for (`findOnlineHost(…, 'linux', …)`,
                  `liveMacosHost`). "mixed" is a spec that names several and a
                  title that settles nothing; "?" is one that names none.
+                 Then minutes per VM, from the `vm` annotation each real-VM
+                 test's report carries: which workers a VM served, and the most
+                 results it held at one moment (above 1, workers shared it).
   --specs DIR    the playwright/ dir holding those sources (default: this repo's)
 """
 import argparse
@@ -84,6 +87,12 @@ def collect(zf):
                     "start": to_ts(r["startTime"]),
                     "dur": (r.get("duration") or 0) / 1000.0,
                     "worker": r.get("workerIndex"),
+                    # `vm: <name> (<os>)`, noted by the suite's real-host pickers.
+                    "vms": sorted({
+                        a.get("description", "")
+                        for a in (r.get("annotations") or t.get("annotations") or [])
+                        if a.get("type") == "vm"
+                    }),
                 })
     return main, rows
 
@@ -255,6 +264,25 @@ def main():
                 print(f"  {label} — longest first:")
                 for r in sorted(group, key=lambda r: -r["dur"])[:8]:
                     print(f"    +{fmt_m(r['dur']):>5s}  {r['file']} :: {r['title'][:60]}")
+
+        # A test that was handed three VMs counts toward each of them.
+        per_vm = defaultdict(list)
+        for r in rows:
+            for vm in r["vms"]:
+                per_vm[vm].append(r)
+        if per_vm:
+            print("\nminutes per VM, from each result's `vm` annotation (total, results, most at one moment, workers):")
+            width = max(len(vm) for vm in per_vm)
+            for vm in sorted(per_vm):
+                rs = per_vm[vm]
+                # Ends sort before starts at the same instant, so back-to-back results don't count as overlapping.
+                edges = sorted([(r["start"], 1) for r in rs] + [(r["start"] + r["dur"], -1) for r in rs])
+                at_once = peak = 0
+                for _, step in edges:
+                    at_once += step
+                    peak = max(peak, at_once)
+                workers = ",".join(f"w{w}" for w in sorted({r["worker"] for r in rs}, key=lambda k: (k is None, k)))
+                print(f"  {vm:{width}s} {fmt_m(sum(r['dur'] for r in rs)):>7s}  n={len(rs):<3d} at once {peak}  {workers}")
 
 
 if __name__ == "__main__":

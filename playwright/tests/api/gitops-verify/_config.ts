@@ -37,13 +37,22 @@ export const gitopsConfig = loadAnyConfig(target);
 
 /**
  * The baseline and min variants of a tier declare the same fleets between them
- * (the nightly applies the baseline's QA and VMs files in both passes), so the
- * fleet set the instance should hold is the union of both directories' fleet
- * files. `HAND_KEPT_FLEETS` are the fleets gitops doesn't declare: Mobile, and
- * OS matrix, where the device lab keeps its OS-flavour VMs — see
- * gitops/premium-fleetqa/README.md › "Do not pass --delete-other-fleets".
+ * (the nightly applies the baseline's QA, VMs and OS matrix files in both
+ * passes), so the fleet set the instance should hold is the union of both
+ * directories' fleet files. `HAND_KEPT_FLEETS` are the fleets gitops doesn't
+ * declare: Mobile — see gitops/premium-fleetqa/README.md › "Do not pass
+ * --delete-other-fleets".
  */
-export const HAND_KEPT_FLEETS = ['Mobile', 'OS matrix'];
+export const HAND_KEPT_FLEETS = ['Mobile'];
+
+/**
+ * Fleets whose file declares nothing on purpose, and must keep declaring
+ * nothing: OS matrix holds the device lab's OS-flavour hosts, and anything
+ * declared on it would reach them (gitops/premium-fleetqa/fleets/os-matrix.yml).
+ * The entity specs compare such a fleet against empty lists, which is the
+ * check: the fleet holds no policy, script, profile, report or software.
+ */
+export const EMPTY_FLEETS = ['OS matrix'];
 export function siblingConfigDir(): string | undefined {
   const dir = gitopsConfig.scope === 'no-team' ? gitopsConfig.source : path.dirname(path.dirname(gitopsConfig.source));
   const base = path.basename(dir);

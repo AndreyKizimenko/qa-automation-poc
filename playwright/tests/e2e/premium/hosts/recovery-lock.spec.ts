@@ -1,5 +1,5 @@
 /**
- * Premium • Hosts • Recovery Lock password, end to end on the real Mac.
+ * Premium • Hosts • Recovery Lock password, end to end on a real Mac.
  *
  * Controls → OS settings → Passwords turns on *Recovery Lock password* for the
  * VMs fleet; Fleet's 30-second `send_recovery_lock_commands` cron sends the
@@ -23,6 +23,14 @@
  * that turns it on for the VMs fleet; its `afterEach` turns it off, and the
  * resting-state step in `setup/cleanup.steps.ts` turns it off after a run that
  * died first — Fleet then clears the password on its next cron tick.
+ *
+ * **Enforcement is the fleet's, so every pool Mac is set and cleared.** The test
+ * follows the worker's own Mac through each step; the pool's other Mac gets a
+ * password of its own while enforcement is on, and may be mid-test for another
+ * worker (a *Recovery Lock password* row on its Controls tab and one more
+ * action in its menu, which no other spec reads). The test starts and ends by
+ * waiting until **no** pool Mac holds a password, so "ends as it began" is
+ * checked for each of them.
  *
  * **Views have side effects.** Opening the modal is a read of the password:
  * Fleet records a `viewed_host_recovery_lock_password` activity and schedules an
@@ -55,12 +63,20 @@ import {
   getFleetRecoveryLock,
   getHostFleetId,
   latestActivityId,
+  listPoolHosts,
   setFleetRecoveryLock,
   waitForRecoveryLockStatus,
 } from '@helpers/api';
+import type { APIRequestContext } from '@playwright/test';
 
 const MAC_WAIT = 4 * 60_000;
 const ADMIN = process.env.FLEET_ADMIN_EMAIL;
+
+/** Waits until no pool Mac holds a Recovery Lock password: enforcement is the fleet's, so each of them was sent one. */
+async function waitForEveryMacCleared(request: APIRequestContext): Promise<void> {
+  const macs = await listPoolHosts(request, 'darwin');
+  await Promise.all(macs.map((mac) => waitForRecoveryLockStatus(request, mac.id, null, MAC_WAIT)));
+}
 
 test.describe('Premium • Hosts • Recovery Lock password', () => {
   test.describe.configure({ retries: HOST_RETRIES });
@@ -97,8 +113,8 @@ test.describe('Premium • Hosts • Recovery Lock password', () => {
       await getFleetRecoveryLock(request, vmsFleetId),
       'the VMs fleet should start with Recovery Lock off — the resting-state step turns it off',
     ).toBe(false);
-    // A dead run's password may still be clearing.
-    await waitForRecoveryLockStatus(request, hostId, null, MAC_WAIT);
+    // A dead run's password may still be clearing, on any of the pool's Macs.
+    await waitForEveryMacCleared(request);
 
     // ── Enforce ────────────────────────────────────────────────────────────
     let before = await latestActivityId(request);
@@ -172,6 +188,7 @@ test.describe('Premium • Hosts • Recovery Lock password', () => {
 
     const cleared = await waitForRecoveryLockStatus(request, hostId, null, MAC_WAIT);
     expect(cleared.passwordAvailable).toBe(false);
+    await waitForEveryMacCleared(request);
 
     await hostDetails.goto(hostId);
     await hostDetails.openControlsTab();

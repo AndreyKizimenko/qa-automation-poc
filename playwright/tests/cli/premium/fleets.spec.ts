@@ -12,9 +12,10 @@ import { fleetctl } from '@helpers/fleetctl';
 
 /**
  * `fleetctl hosts transfer --hosts` resolves each entry as a host *identifier*,
- * which is the hostname — not the display name the UI shows. The two diverge on
- * macOS ("macos-prem's Virtual Machine" vs "macos-prems-Virtual-Machine.local"),
- * so the hostname is read off the host record rather than assumed.
+ * which is the hostname — not the display name the UI shows. The two can diverge
+ * (a Mac's display name is its computer name, "Ada's MacBook Pro", beside the
+ * hostname "Adas-MacBook-Pro.local"), so the hostname is read off the host
+ * record rather than assumed.
  */
 async function hostnameFor(request: APIRequestContext, hostId: number): Promise<string> {
   const res = await request.get(apiLatestUrl(`hosts/${hostId}`), { headers: authHeaders() });

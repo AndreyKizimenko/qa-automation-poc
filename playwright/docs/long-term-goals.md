@@ -9,8 +9,14 @@ Skipped and deferred *tests* live in [`../TODO.md`](../TODO.md); skips owed to a
 
 ## Host types
 
-The instances have one real VM per platform: macOS 26.6, Windows 11 and Ubuntu 26.04. Everything else Fleet
-manages is untested on a real device.
+The suite runs on the device lab's pool VMs ([`lab-hosts.json`](../lab-hosts.json), role `pool`): Ubuntu
+24.04, Windows 11 and macOS, four, two and two of them on premium (macOS 15 and 26) and one of each on free
+(macOS 26), with each worker handed its own. Everything else Fleet manages is untested on a real device.
+
+The lab also enrolled what the first three rows below ask for, on premium's OS matrix fleet: Fedora 45, RHEL 9
+and 10, Omarchy, and a dozen more OS flavours (role `matrix`). No spec uses them yet.
+[`device-lab-plan.md`](device-lab-plan.md) has the plan; its step D writes a smoke per OS version and takes
+those rows out of this table.
 
 | host | what it would unblock |
 |---|---|
@@ -21,9 +27,12 @@ manages is untested on a real device.
 | **Android** | enrollment, profile delivery to a device, Managed Google Play installs. Adding a Play app already runs without one |
 | **A sacrificial macOS VM**, MDM-enrolled and rebuildable | firing **Lock** and **Wipe** on a real device. Today their availability is asserted on every platform (`premium/hosts/mdm-actions-availability.spec.ts`) but they never run on a real VM, because a locked or wiped VM can't be recovered from here. Unlocking a locked Mac needs the PIN Fleet shows, entered on the device |
 
-Each new VM also needs a place in the suite's host plumbing: `findOnlineHost` keys a real VM on its
-hardware model, `helpers/vm-fixtures.ts` lists durable software per platform, and the resting-state step in
-`setup/cleanup.steps.ts` returns each VM to rest before and after a run.
+A new host's place in the suite's plumbing is its entry in the lab's manifest: the role says what it is for
+(`pool`: a worker's target; `matrix`: one OS flavour's; `special`: one purpose's; `physical`: a bare-metal
+machine nothing destructive touches), and the cleanup puts it on its role's fleet. A new pool VM needs nothing
+more: `gitops/premium-fleetqa/fleets/vms.yml` gives it the durable software `helpers/vm-fixtures.ts` lists,
+and the resting-state step in `setup/cleanup.steps.ts` returns every pool VM to rest before and after a run.
+A new *platform* still needs its durable fixtures and a `platform` the pickers know.
 
 ## A readable mailbox
 

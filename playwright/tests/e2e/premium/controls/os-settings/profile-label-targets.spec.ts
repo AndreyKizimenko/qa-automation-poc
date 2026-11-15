@@ -8,15 +8,16 @@
  * on exactly these hosts and none of the others. A count on a fleet-wide
  * aggregate (`verifiedHostsCount >= 2`) passes whether targeting worked or not.
  *
- * **The hosts.** Each test works on the VMs fleet with the platform's real VM and
- * two MDM-enrolled simulations borrowed onto the fleet for the test
+ * **The hosts.** Each test works on the VMs fleet with the worker's real VM of the
+ * platform and two MDM-enrolled simulations borrowed onto the fleet for the test
  * (`findMdmSimulations`, returned in the `finally` and by the cleanup sweep):
  *
  *  - which hosts Fleet *lists* a profile for is its server-side decision, and an
  *    MDM-enrolled simulation shows it as well as a VM: it lists every profile
  *    that targets it (a macOS simulation even acknowledges the install and sits
  *    at "verifying"), and none that doesn't. That is how a host of the same
- *    platform can be outside the label — there is only one real VM per platform;
+ *    platform can be outside the label: the fleet's other real VMs of the
+ *    platform are other workers', and their labels are not this test's to set;
  *  - what the host *does* with it — installed, verified, and the setting actually
  *    there — only the VM can answer, read back on the device and filtered to the
  *    profile's own domain or policy value.
@@ -25,7 +26,9 @@
  * pool answers every dynamic label's query, so a dynamic label holds whatever the
  * simulations happened to report. Membership is asserted over *our* hosts, never
  * over the fleet: an Exclude-only profile targets every other host on the fleet
- * too, including simulations another spec has borrowed.
+ * too, including simulations another spec has borrowed and the pool's other VMs
+ * of the platform, which install the inert profile and lose it when the test
+ * deletes it.
  *
  * **Timing.** Fleet's profile reconciler runs every 30 s and decides every host in
  * the fleet for a profile in the same tick, so once the hosts expected to list it

@@ -1,0 +1,54 @@
+# "OS matrix" fleet — home of the device lab's hosts that no pool spec runs on:
+# one VM per OS flavour (Ubuntu 22.04 and 26.04, Debian, RHEL, Fedora, openSUSE,
+# Windows 10, Windows Server, …) and the special-purpose ones. The pool VMs,
+# which the real-host specs run on, are on the VMs fleet (fleets/vms.yml);
+# `playwright/lab-hosts.json` says which host is which, and the suite's cleanup
+# returns each to its role's fleet before a run.
+#
+# This file declares the fleet so that it exists, and declares it **empty** so
+# that it stays so: an apply deletes whatever a fleet file does not declare, so
+# every apply removes a policy, script, profile, report or software title that
+# found its way here, and `gitops-verify` then holds the fleet to exactly this.
+# Whatever is on this fleet reaches every host on it, MDM-enrolled Windows and
+# macOS among them, and five of its Linux hosts are LUKS-encrypted. So:
+#
+#   - No software, policies, profiles, scripts, reports or OS-update settings.
+#     `gitops-verify`'s `_sanity` spec fails this file if it declares one.
+#   - Disk encryption and key escrow are declared **off** for every platform,
+#     not left out, so the verify asserts them off after each apply: turned on
+#     here, they would start BitLocker and FileVault on these hosts and prompt
+#     for the LUKS passphrase on the encrypted ones.
+#   - The same agent options and features as the VMs fleet, which are also what
+#     the fleet had when it was created by hand.
+#
+# Host expiry is this fleet's own, like the VMs fleet's. A fleet with expiry off
+# falls under the global window, which is one day on this instance (it is what
+# culls the abandoned osquery-perf simulations): a lab host that was offline for
+# longer than that was deleted, and came back on the VMs fleet under a new id,
+# since every lab host carries that fleet's enroll secret. 30 days outlasts a
+# long weekend and a lab outage.
+#
+# Applied before every nightly premium run, in both the baseline and the min
+# pass, by `.github/workflows/gitops-premium{,-min}.yml`, like vms.yml.
+name: OS matrix
+
+agent_options:
+  path: ../../lib/agent-options.yml
+
+settings:
+  features:
+    enable_host_users: true
+    enable_software_inventory: true
+  host_expiry_settings:
+    host_expiry_enabled: true
+    host_expiry_window: 30
+
+controls:
+  apple_settings:
+    enable_disk_encryption: false
+    enable_escrow_disk_encryption_key: false
+  windows_settings:
+    enable_disk_encryption: false
+    require_bitlocker_pin: false
+  linux_settings:
+    enable_escrow_disk_encryption_key: false

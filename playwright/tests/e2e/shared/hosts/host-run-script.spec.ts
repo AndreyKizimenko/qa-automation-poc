@@ -10,17 +10,19 @@
  *     dashboard feed and the host's stored report results.
  *   - **Failure** — a non-zero exit reads "Error" in the modal and "Script
  *     failed." with the recorded output in the details.
- *   - **Timeout** — Fleet kills a script that outlives the agent's
- *     `script_execution_timeout` and says so in the details.
  *   - **Interpreters** — zsh, bash, Python and PowerShell, one row each.
+ *
+ * A script Fleet stops at the agent's timeout is
+ * `shared/exclusive/script-execution-timeout.spec.ts`'s: it lowers the timeout
+ * for every host on the fleet, so it runs when no other test is on a VM.
  *
  * Tier-agnostic: running a script is the same flow on free and premium. Scripts
  * are uploaded to whichever fleet the host is in — Unassigned on free, the VMs
  * fleet on premium — read off the host at run time.
  *
  * **Real VMs only.** osquery-perf simulations never execute a script, so a run
- * against one proves nothing. Each case resolves its host by platform through
- * `findOnlineHost(..., { kind: 'real' })`.
+ * against one proves nothing. Each case takes the worker's VM of its platform
+ * from `requireRealHost`.
  *
  * ## Why the effect is a file hash read back by a report
  *
@@ -33,19 +35,9 @@
  *
  * A 60-second interval lands the first stored row on the VM in about a minute
  * (measured at 66 s). The report is team-scoped to the host's fleet on premium
- * so only the VMs run it; on free it is global and the cleanup project would
- * sweep it if this test died before its `finally`.
- *
- * ## Why the timeout case writes agent options
- *
- * Fleet's default script timeout is 300 s, and a host runs its scripts one at a
- * time — a script that sat out the default would hold every other spec's script
- * on that VM for five minutes. The case lowers `script_execution_timeout` to 60 s
- * on the host's fleet (global agent options on free), and restores the snapshot
- * in a `finally`. The value reaches the host in the same orbit config poll that
- * delivers the pending script, so the new limit is in force for the run. While
- * lowered it also caps software uninstalls on those hosts, which all finish well
- * inside 60 s.
+ * so only the Macs on the VMs fleet run it, and only this test's Mac has the
+ * file, so only its row is read; on free it is global and the cleanup project
+ * would sweep it if this test died before its `finally`.
  */
 import * as crypto from 'crypto';
 import { test, expect } from '@fixtures';
@@ -54,13 +46,11 @@ import {
   createReport,
   deleteReport,
   deleteScript,
-  getAgentOptions,
   getHostReportRows,
   getHostScriptLastExecution,
   queueAdHocScript,
   requireRealHost,
   vmTag,
-  setAgentOptions,
   uploadScript,
   type RealHostRef,
   type ScriptExecutionStatus,
@@ -83,12 +73,11 @@ async function waitForScriptToFinish(
   host: RealHostRef,
   scriptName: string,
   expected: ScriptExecutionStatus,
-  timeout = 180_000,
 ): Promise<void> {
   await expect
     .poll(async () => (await getHostScriptLastExecution(request, host.id, scriptName))?.status, {
       message: `${scriptName} never finished on ${host.displayName}`,
-      timeout,
+      timeout: 180_000,
       intervals: [3_000],
     })
     .toBe(expected);
@@ -105,7 +94,6 @@ async function runFromModal(
   host: RealHostRef,
   scriptName: string,
   expected: ScriptExecutionStatus,
-  timeout?: number,
 ): Promise<void> {
   await hostDetails.goto(host.id);
   await hostDetails.openRunScript();
@@ -113,7 +101,7 @@ async function runFromModal(
   await expect(hostDetails.runScriptModal.status(scriptName)).toHaveText('---');
 
   await hostDetails.runScriptModal.run(scriptName, host.displayName);
-  await waitForScriptToFinish(request, host, scriptName, expected, timeout);
+  await waitForScriptToFinish(request, host, scriptName, expected);
 
   await hostDetails.runScriptModal.close();
   await hostDetails.openRunScript();
@@ -246,58 +234,6 @@ test.describe('Shared • Hosts • Run script', () => {
       await expect(details.statusMessage).toHaveText('Exit code: 3 (Script failed.)');
       await details.close();
     } finally {
-      await deleteScript(request, scriptId);
-    }
-  });
-
-  test('a script that outlives the agent timeout is stopped, and the details say why', { tag: '@vm-linux' }, async ({
-    hostDetails,
-    request,
-  }) => {
-    test.setTimeout(360_000);
-    const timeoutSeconds = 60;
-
-    const host = await requireRealHost(request, 'linux');
-    const id = nonce();
-    const scriptName = `pw-run-script-timeout-${id}.sh`;
-    // The snapshot this test restores. A value equal to its own override can only
-    // have been left by another run of this test — one that died before its
-    // `finally`, or a concurrent copy under --repeat-each — so it is dropped
-    // rather than restored, which would strand the lowered timeout.
-    const { script_execution_timeout: current, ...rest } = await getAgentOptions(request, host.fleetId);
-    const agentOptions = current === timeoutSeconds ? rest : { ...rest, script_execution_timeout: current };
-    const scriptId = await uploadScript(
-      request,
-      host.fleetId,
-      scriptName,
-      `#!/bin/bash\necho "started ${id}"\nsleep ${timeoutSeconds * 3}\necho "finished ${id}"\n`,
-    );
-
-    try {
-      await setAgentOptions(
-        request,
-        { ...agentOptions, script_execution_timeout: timeoutSeconds },
-        host.fleetId,
-      );
-
-      await runFromModal(hostDetails, request, host, scriptName, 'error', 240_000);
-      const details = hostDetails.scriptDetailsModal;
-
-      await expect(hostDetails.runScriptModal.status(scriptName)).toHaveText('Error');
-      await hostDetails.runScriptModal.showRunDetails(scriptName);
-      await details.expectOpen();
-      // `RunScriptDetailsModal` reads the duration from the server's message,
-      // which names the timeout the host ran under: the fleet's lowered one.
-      await expect(details.statusMessage).toHaveText(
-        `Error: Timeout. Fleet stopped the script after ${timeoutSeconds} seconds to protect host performance.`,
-      );
-      // Killed mid-run: what it printed before the sleep was kept, what came
-      // after never ran, and orbit records the kill.
-      await expect(details.output).toHaveText(
-        `started ${id} script execution error: signal: killed`,
-      );
-    } finally {
-      await setAgentOptions(request, agentOptions, host.fleetId);
       await deleteScript(request, scriptId);
     }
   });

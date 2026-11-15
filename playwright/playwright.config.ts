@@ -162,9 +162,12 @@ export default defineConfig({
   // CI runs free at 2 and premium at 3 — the shared Fleet QA instances have
   // limited concurrency headroom, and more workers there surface as flaky
   // navigation timeouts under load even when the test logic is correct.
-  // Premium's third worker leans on its MySQL's 2 CPU / 4 GB; the real VMs
-  // still work one queue each, so VM specs share it. Local dev defaults to 4
-  // for faster feedback. `WORKERS` env or `--workers=N` overrides either.
+  // Premium's third worker leans on its MySQL's 2 CPU / 4 GB. Each worker is
+  // handed its own real VM of a platform while that platform's pool has one to
+  // give (premium: four Ubuntu, two Windows, two macOS; free: one of each), and
+  // a VM works one queue, so workers beyond a pool's size share its VMs. Local
+  // dev defaults to 4 for faster feedback. `WORKERS` env or `--workers=N`
+  // overrides either.
   workers: process.env.WORKERS
     ? Number(process.env.WORKERS)
     : process.env.CI
