@@ -247,7 +247,13 @@ and macOS are shared two ways. That removes two of the three reasons the four-wo
 installs on one VM; three specs on one Mac). The third, blank pages under load, is the instance's, and only a
 run can say whether it still bites: a branch run with `-f workers=4`, read with `run_timeline.py --platforms`,
 whose per-VM lines show which workers each VM served and whether any held two results at once.
-[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial and what was decided from it.
+[`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C* has that trial, deferred on 2026-11-15.
+
+At three workers the pool took premium's main project from 41.4 to 32.6 minutes (nightly 43413291769 against
+branch run 43667531465): 26 fewer test-minutes, nearly all of it VM tests that had queued behind each other
+on one Ubuntu VM, over three workers still busy to the last minute. So the main project stays worker-bound,
+and what the pool frees is waiting, not work: an install and the refetch after it take minutes on any VM.
+The exclusive step's fourteen minutes are outside both, on one worker after the main project.
 
 Free is small enough that none of this applies: two workers, worker-bound; its runtime is in the facts table.
 

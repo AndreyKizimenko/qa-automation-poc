@@ -9,12 +9,12 @@ OS, package type and fleet) and `REVIEW-2026-11-14.md`. The `device-lab` skill c
 handoff and the manifest before working on a step here; this file records what the suite decided to do about
 them, and where the handoff turned out wrong.
 
-**Where it stands, 2026-11-15.** Steps A, B and C are built. A is on `main` (PR #144). B + C are one PR
-(PR #145): the manifest decides what each lab host is, each worker is handed its own pool VM, and the eight
-pool VMs are on the VMs fleet. Its branch run, at the usual 3 and 2 workers, is the first full run of the
-suite on the lab's VMs. C's trial of a fourth premium worker follows the merge as a run of its own, and the
-last two boxes under C wait on its numbers. Step D is PR #146 (`playwright/device-lab-smokes`), awaiting
-its branch run.
+**Where it stands, 2026-11-15.** Steps A, B and C are on `main`. A is PR #144. B + C are PR #145, merged at
+`19ab2d1` after a green branch run (43667531465), the first full run of the suite on the lab's VMs: the
+manifest decides what each lab host is, each worker is handed its own pool VM, and the eight pool VMs are on
+the VMs fleet. Premium stays at 3 workers for now (Andrey, 2026-11-15), so C's trial of a fourth, and the
+last two boxes under C, are deferred. Step D is PR #146 (`playwright/device-lab-smokes`), awaiting its
+branch run.
 
 ## What the suite has to work with
 
@@ -37,7 +37,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 | Step | What | PR | Status |
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
-| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Built, 2026-11-15. The 4-worker trial follows its merge |
+| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial is deferred |
 | **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Awaiting its branch run (`--ref`, `-f os-smokes=true`) |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
@@ -58,14 +58,16 @@ PR #144, merged 2026-11-14 at `7855f9c`. What it changed is in its description. 
 
 Proven by scoped local runs on both tiers (in the PR), not by a branch run.
 
-- [ ] Review the first full run on the lab's VMs with `playwright-run-reviewer`. That is the branch run of
+- [x] Review the first full run on the lab's VMs with `playwright-run-reviewer`. That is the branch run of
       B + C: Andrey decided on 2026-11-14 to merge B + C before the next nightly, so no nightly runs step A
       alone. It is the first run on the lab's VMs for everything the scoped runs left out: every test
       without a `@vm-*` tag, `gitops-mode`, the exclusive specs but one, and the gitops chain end to end.
+      Branch run 43667531465 (2026-11-15): all of it green, nothing flaky or retried.
 
-## Steps B + C: built, awaiting the branch run
+## Steps B + C: done
 
-PR #145. Its description has what each commit changed and every run behind it.
+PR #145, merged 2026-11-15 at `19ab2d1`. Its description has what each commit changed and every run behind
+it.
 
 ### B: the manifest and roles
 
@@ -146,11 +148,11 @@ PR #145. Its description has what each commit changed and every run behind it.
       count only: free has one VM per platform and a smaller instance, and always runs at 2 (Andrey,
       2026-11-15). The 4-worker run of 2026-09-30 was red for three reasons, and the lease removes two:
       three specs on one Mac, and four Linux installs on one VM. The third, blank pages under load, is the
-      instance.
+      instance. **Deferred** (Andrey, 2026-11-15): premium stays at 3 workers for now.
 - [ ] Decide from the numbers, not before: premium's CI worker count (`playwright.config.ts`, 3 today), D4
       (a minute budget per VM platform), and whether the audit's per-platform lanes (roadmap 5) are still
       needed. A dead pool member now shrinks the pool instead of failing 55 tests, which was the lanes'
-      main reason.
+      main reason. Deferred with the trial.
 
 Not in C: two runs on the instance at once (a branch run during the nightly). They share one concurrency
 group and queue.
@@ -168,7 +170,28 @@ group and queue.
 
 ### What proved it
 
-Scoped local runs on 2026-11-15, on 4.95.0-rc.2611140456 (`d6df44a7b25e`); the PR's description has each.
+**Branch run 43667531465** (2026-11-15, 3 and 2 workers, 4.95.0-rc.2611140456, `d6df44a7b25e`): premium 711
+results, 705 passed and 6 skipped (the five standing skips and a second `update-on-host` guard); free 373,
+372 passed and 1 skipped; nothing failed, was flaky or was retried, and every gitops job was green, the two
+OS matrix verifies among them. Against nightly 43413291769 (2026-11-13, the same 3 workers with one VM per
+platform):
+
+| Premium | 2026-11-13 | 2026-11-15 |
+|---|---|---|
+| Main project, wall clock | 41.4 min | 32.6 min |
+| Main project, test-minutes | 123.5 | 97.0 |
+| Of those, tests over 30 s that wait on a VM | 81: Linux 33, macOS 27, Windows 8, several 13 | 53: Linux 15, macOS 20, Windows 7, several 12 |
+| Exclusive step, one worker | 12.5 min | 14.1 min (`script-execution-timeout` moved there) |
+| Job | 57.3 min | 50.2 min |
+
+Free's job was 15.4 and 16.1 minutes: it has one VM per platform. The main project was worker-bound in both
+runs (three results in flight in every minute), so the pool removed queueing, not work: the specs that gained
+most are the install, update and uninstall ones that had waited behind each other on one Ubuntu VM
+(`update-on-host` −6.1 test-minutes, `inventory-reflects-install` −5.7, `software-lifecycle-on-host` −5.2).
+At 3 workers each slot kept its VMs all run, `prem-ubu2404d-04` sat idle, and `prem-macos15-01` and
+`PREM-WIN11-01` served two workers each.
+
+Before it, scoped local runs on the same build; the PR's description has each.
 
 - Every `@vm-*` test and the preflight, with dependencies, at 2 workers: 65 passed and 2 skipped on premium
   (the two `update-on-host` guards), 27 passed on free. Worker slot 0 ran on `prem-ubu2404d-01`,
@@ -184,8 +207,8 @@ Scoped local runs on 2026-11-15, on 4.95.0-rc.2611140456 (`d6df44a7b25e`); the P
   machine.
 
 Not proven by a run: the cleanup's return of a stray host has not yet moved a real host, since none was
-astray (its decision was replayed on live data with doctored entries, and picked the right hosts and
-fleets). And the full suite, which is the branch run's.
+astray in any run so far, the branch run included (its decision was replayed on live data with doctored
+entries, and picked the right hosts and fleets).
 
 ## Step D: built, awaiting its branch run
 
@@ -276,6 +299,8 @@ BitLocker PIN.
 - **The PR's branch run is at 3 and 2 workers, the trial of a fourth premium worker is a run of its own after
   the merge, and free stays at 2 for good** (Andrey, 2026-11-15). `-f workers=N` on a branch run sets
   premium's count only.
+- **Premium stays at 3 workers for now; the trial of a fourth is deferred** (Andrey, 2026-11-15, after the
+  branch run above took premium's job from 57 to 50 minutes at 3).
 
 ## Open questions for Andrey
 
@@ -297,7 +322,14 @@ BitLocker PIN.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
-- After the trial: premium's worker count, D4 and the lanes (C's last box).
+- When to run the deferred trial of a fourth premium worker; premium's worker count, D4 and the lanes wait on
+  it (C's last two boxes). By the branch run's numbers, 97 test-minutes over 4 workers is a main project of
+  about 24 minutes, if the instance holds up.
+- `policy-automation-runs` (8 of the exclusive step's 14 minutes) is in `exclusive/` only to have an Ubuntu
+  VM's queue to itself, and its policy is already scoped by label to that VM. At 3 workers one Ubuntu VM
+  sits idle all run, so it could lease a VM no worker holds and run beside the main project instead of
+  after it. It competes with a fourth worker for that VM, unless the lab adds a fifth Ubuntu one.
+  `deploy-install-retries` (4 minutes) can't follow as it is: its Deploy policy is fleet-wide.
 
 ## Facts worth not rediscovering
 
