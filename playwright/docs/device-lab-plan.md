@@ -12,8 +12,8 @@ them, and where the handoff turned out wrong.
 **Where it stands, 2026-11-15.** Steps A, B and C are on `main`. A is PR #144. B + C are PR #145, merged at
 `19ab2d1` after a green branch run (43667531465), the first full run of the suite on the lab's VMs: the
 manifest decides what each lab host is, each worker is handed its own pool VM, and the eight pool VMs are on
-the VMs fleet. Premium stays at 3 workers for now (Andrey, 2026-11-15), so C's trial of a fourth, and the
-last two boxes under C, are deferred. Step D is PR #146 (`playwright/device-lab-smokes`): built, and green
+the VMs fleet. Premium is at 3 workers; C's trial of a fourth ran green on 2026-11-15 (43753582054), and
+the count is Andrey's to decide (C's last box). Step D is PR #146 (`playwright/device-lab-smokes`): built, and green
 on its branch run (43690094173), the first run of the `Playwright — OS smokes` workflow. It waits only for
 its merge. Step E is next, after that.
 
@@ -38,7 +38,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 | Step | What | PR | Status |
 |---|---|---|---|
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
-| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial is deferred |
+| **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial ran green; the count is undecided |
 | **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Built, 2026-11-15. Green on branch run 43690094173; awaiting its merge |
 | **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first |
 
@@ -142,18 +142,27 @@ it.
       through the API, on Andrey's word that the fleets should be as they will stay. The lab's manifest and
       README say so. Both new MDM members had Claude from the fleet's policy within minutes (a refetch
       runs the policies), and the new Mac its stored report result.
-- [ ] A trial at 4 premium workers, as a run of its own once B + C are merged: `gh workflow run "QA — Branch
-      run" -f branch=main -f workers=4`, read with `run_timeline.py --platforms` (its per-VM lines say which
-      workers each VM served, and whether one held two results at once). The PR's own branch run stays at
-      3 and 2, so that an instance problem at 4 can't hold up the merge, and `-f workers` sets premium's
-      count only: free has one VM per platform and a smaller instance, and always runs at 2 (Andrey,
-      2026-11-15). The 4-worker run of 2026-09-30 was red for three reasons, and the lease removes two:
-      three specs on one Mac, and four Linux installs on one VM. The third, blank pages under load, is the
-      instance. **Deferred** (Andrey, 2026-11-15): premium stays at 3 workers for now.
+- [x] A trial at 4 premium workers, as a run of its own: branch run 43753582054 (2026-11-15, `-f
+      workers=4`, at Andrey's ask). It ran from #146's head and not from `main`: that was the code about to
+      land, and two 3-worker runs of it on the same build were hours old. **Green**: 708 passed, 6 skipped,
+      nothing flaky or retried, no blank page. Read with `run_timeline.py --platforms`:
+
+      | Premium | 3 workers (43690094173, 43696536354) | 4 workers (43753582054) |
+      |---|---|---|
+      | Main project, wall clock | 32.6 and 35.6 min | 27.3 min |
+      | Main project, test-minutes | 96.8 and 105.9 | 108.1 |
+      | Job | 48.4 and 51.8 min | 43.9 min |
+
+      Worker-bound to the end: four results in flight in every minute. Each Ubuntu VM and each Windows VM
+      held one result at a time; each Mac held two at some moment, as `prem-macos15-01` already did at 3.
+      `-f workers` sets premium's count only: free has one VM per platform and a smaller instance, and
+      always runs at 2 (Andrey, 2026-11-15). The 4-worker run of 2026-09-30 was red for three reasons, and
+      the lease removes two: three specs on one Mac, and four Linux installs on one VM. The third, blank
+      pages under load, is the instance, and didn't show in this run. One run's evidence.
 - [ ] Decide from the numbers, not before: premium's CI worker count (`playwright.config.ts`, 3 today), D4
       (a minute budget per VM platform), and whether the audit's per-platform lanes (roadmap 5) are still
       needed. A dead pool member now shrinks the pool instead of failing 55 tests, which was the lanes'
-      main reason. Deferred with the trial.
+      main reason. The trial's numbers are in (the box above); the decisions are Andrey's.
 
 Not in C: two runs on the instance at once (a branch run during the nightly). They share one concurrency
 group and queue.
@@ -323,7 +332,8 @@ BitLocker PIN.
   the merge, and free stays at 2 for good** (Andrey, 2026-11-15). `-f workers=N` on a branch run sets
   premium's count only.
 - **Premium stays at 3 workers for now; the trial of a fourth is deferred** (Andrey, 2026-11-15, after the
-  branch run above took premium's job from 57 to 50 minutes at 3).
+  branch run above took premium's job from 57 to 50 minutes at 3). The trial ran later the same day, at
+  his ask (43753582054, green); the count stays 3 until he says.
 - **The per-OS smokes run at 6 workers** (Andrey, 2026-11-15). Each host is one worker's, so nothing is
   shared, and both branch runs at that count were clean: about 12 minutes, nothing retried, where premium's
   3 would be about 20.
@@ -336,9 +346,9 @@ BitLocker PIN.
 - Free's three VMs stay under the global one-day expiry: one that is offline for over a day is deleted and
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
-- When to run the deferred trial of a fourth premium worker; premium's worker count, D4 and the lanes wait on
-  it (C's last two boxes). By the branch run's numbers, 97 test-minutes over 4 workers is a main project of
-  about 24 minutes, if the instance holds up.
+- Premium's worker count, now that the trial of a fourth is green (C's last box): 4 takes five to eight
+  minutes off the main project and off the job, on one run's evidence. D4 and the lanes go with the answer:
+  nothing in the trial asks for either.
 - `policy-automation-runs` (8 of the exclusive step's 14 minutes) is in `exclusive/` only to have an Ubuntu
   VM's queue to itself, and its policy is already scoped by label to that VM. At 3 workers one Ubuntu VM
   sits idle all run, so it could lease a VM no worker holds and run beside the main project instead of

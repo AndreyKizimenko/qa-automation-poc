@@ -17,8 +17,8 @@ moving the suite onto it. Its steps A to C are on `main` (PRs #144 and #145, the
 43667531465): they built roadmap 13 (VM leases) and the environment gate of 5, as a preflight test per pool
 VM, and took premium's job from 57 to 50 minutes at the same three workers. Its step D (PR #146, green on
 branch run 43690094173) gives every OS version the lab holds the same smokes every night, in a project and a
-workflow of their own: nineteen versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on a four-worker run on
-the pool, which is deferred (Andrey, 2026-11-15). The rebuilt instances and the shards have not arrived, so
+workflow of their own: nineteen versions where the suite met three. Whether 5's lanes are still needed, and D4, wait on Andrey's reading of
+the four-worker run on the pool (43753582054, green, 2026-11-15). The rebuilt instances and the shards have not arrived, so
 14, 15 and 16 still wait, and
 [*Tier 4: the brief*](#tier-4-the-brief) is written for whoever takes them. The working list holds the
 smaller open items. How to read the rest:
@@ -99,7 +99,7 @@ below hold the reasoning.
       frozen). D2's tags and D3's generated catalogue are roadmap items 5 and 11, both built in PR #141.
 - [ ] D1's role-matrix and scope-loop pairs, and D4's minute budget per VM platform. D4 is decided from the
       numbers of the first four-worker run on the pool ([`device-lab-plan.md`](device-lab-plan.md) › *Steps B + C*);
-      that run is deferred (Andrey, 2026-11-15), with premium at three workers.
+      that run was green on 2026-11-15 (43753582054), and the decisions it feeds are still open.
 - [ ] Three rows of *Where the written contract and the practice differ* have no answer yet: assertions in
       page objects, page-object members nothing references, and class selectors without a comment.
 - [ ] Three changes the sections propose have no roadmap row: the config lock (section 2), `serial` only
