@@ -8,6 +8,11 @@ This file loads when work happens under `tests/cli/`; everything in `playwright/
   holding the suite's context (`helpers/fleetctl.ts`). Locally, install the one matching the server
   (`npm i -g fleetctl@<server version>`), as CI does: a client more than a minor behind fails (4.92.1's
   `generate-gitops` exits 1 on free), so with an older one the CLI specs can't be run locally at all.
+  **The one on your `PATH` is not always the one a test runs.** `npx` puts the `node_modules/.bin` of every
+  directory above the suite ahead of the rest of `PATH`, so a `fleetctl` installed in the home directory's
+  `node_modules` runs instead of the global one, whatever `fleetctl --version` says in a shell. A dry-run
+  that fails on `unknown key` for a key the config has long carried (`notify_before_patching`) is that.
+  Point `FLEETCTL_BIN` at the binary you mean.
 - `fleetctl([...])` never throws on a non-zero exit: assert the exit code and the output.
 - A global gitops file a spec dry-runs or applies on premium must declare the IdP: `carryLiveEndUserAuth`
   writes the instance's into a `fleetctl new` scaffold (Compliance has end-user authentication on, and
