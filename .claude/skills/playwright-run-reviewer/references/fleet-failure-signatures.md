@@ -210,6 +210,23 @@ Each of these looked like something else at first.
   replaced by hand.
 - **`ENOSPC` on an upload, then a 0-byte file and 409s.** The instance's installer disk
   is full: the first upload fails, and the retries meet its residue → `infra-env`.
+- **`502` from `server: cloudflare` with `x-render-routing: dynamic-paid-error`, static `/assets/*.js`
+  included.** Render's proxy couldn't reach the Fleet process → `infra-env`, **one row** for the window.
+  A window of seconds is a blip. A window of minutes is usually the process restarting: in
+  `GET /debug/pprof/goroutine?debug=2` (admin token), the cron schedulers' goroutines
+  (`created by …schedule.(*Schedule).Start`) have waited since boot, so their `N minutes` dates the
+  start. If calls that succeed inside the window run at normal speed (the traces' `.network` entries),
+  the server wasn't overloaded. Only the service's Events tab in the Render dashboard says why it
+  restarted (out of memory, a failed health check, Render's own maintenance). Seen 2026-09-28 (minutes, no
+  CI running), 2026-10-16 (5 s) and 2026-11-16 (a restart at 12:00, 44 tests at 4 workers; Render's event
+  log said out of memory on the 4 GB web service, raised to 8 GB the same day).
+- **"no online … simulation", "the claimed simulations should be online", or a batch on simulations that
+  "never finished", all within minutes after 17:00 UTC.** Both instances' osquery-perf simulations are
+  replaced daily at about 17:00 UTC: the old set goes offline at once and ~300 new hosts enroll over the
+  next two minutes. `GET /hosts` grouped by `created_at` hour shows it (one set per day at `T17`). The
+  nightly (11:17 UTC) never meets it; a branch run that spans 17:00 does → `infra-env`, **one row**, and
+  re-run outside that window. Seen 2026-11-16 (branch run 43911713665: 4 free tests at 17:01:20–17:01:45,
+  premium's every-simulation batch started at 16:59:28).
 - **The premium gitops apply fails on a Fleet-maintained app's SHA.** Fleet's catalog
   listed a hash the server never computed; it has cleared the same day each time →
   `infra-env`, re-check with a gitops-only dispatch.
