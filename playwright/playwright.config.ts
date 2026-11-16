@@ -273,6 +273,8 @@ export default defineConfig({
         '**/exclusive/**',
         // The per-OS smokes; see premium-matrix.
         '**/matrix/**',
+        // The disk-encryption tests, which move OS matrix hosts; see premium-encryption.
+        '**/encryption/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
