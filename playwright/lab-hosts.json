@@ -336,6 +336,34 @@
       "purpose": "BitLocker from Windows 11's stock state"
     },
     {
+      "name": "prem-ubu2404-luks-02",
+      "tier": "premium",
+      "platform": "linux",
+      "os": "ubuntu-24.04",
+      "fleet_platform": "ubuntu",
+      "role": "special",
+      "package": "deb",
+      "desktop": "gnome",
+      "fleet": "OS matrix",
+      "luks": true,
+      "dialog_tool": "zenity",
+      "purpose": "Test-driven LUKS escrow on Ubuntu: the passphrase dialog answered by script"
+    },
+    {
+      "name": "prem-omarchy-02",
+      "tier": "premium",
+      "platform": "linux",
+      "os": "omarchy-4.5",
+      "fleet_platform": "omarchy",
+      "role": "special",
+      "package": "pkg.tar.zst",
+      "desktop": "hyprland",
+      "fleet": "OS matrix",
+      "luks": true,
+      "dialog_tool": "zenity",
+      "purpose": "Test-driven LUKS escrow on Omarchy: the passphrase dialog answered by script"
+    },
+    {
       "name": "prem-opensuse16-01",
       "tier": "premium",
       "platform": "linux",
