@@ -8,8 +8,8 @@ and the fifth occurrence of a race nobody fixed. This keeps one line per test
 per run in a local history file and reads it back.
 
 Usage:
-    run_history.py add  <report-dir> [--run ID] [--tier premium|free|os-smokes] [--build REV]
-    run_history.py show <report-dir> [--run ID] [--tier premium|free|os-smokes] [--last 14]
+    run_history.py add  <report-dir> [--run ID] [--tier premium|free|os-smokes|encryption] [--build REV]
+    run_history.py show <report-dir> [--run ID] [--tier premium|free|os-smokes|encryption] [--last 14]
 
   add    append the report's tests to the history. A run already recorded for
          that tier is left alone, so adding twice is harmless.
@@ -18,7 +18,7 @@ Usage:
 
   --run      the GitHub run id. Read from a `run-<id>` folder in the path when
              omitted (what fetch_ci_run.sh's callers name their download dir).
-  --tier     the report it is: a tier's suite, or `os-smokes`, the per-OS smokes'
+  --tier     the report it is: a tier's suite, `os-smokes`, the per-OS smokes', or `encryption`, the disk-encryption tests'
              own report. Read from a `playwright-report-<tier>` folder name when
              omitted.
   --build    the Fleet revision the instance ran, when known.
@@ -147,11 +147,11 @@ def read_report(report_dir):
 def infer(args):
     path = os.path.abspath(args.report_dir)
     run = args.run or (re.search(r"run-(\d{6,})", path) or [None, None])[1]
-    tier = args.tier or (re.search(r"playwright-report-(premium|free|os-smokes)", path) or [None, None])[1]
+    tier = args.tier or (re.search(r"playwright-report-(premium|free|os-smokes|encryption)", path) or [None, None])[1]
     if not run:
         sys.exit("Which run is this? Pass --run <id> (the path has no run-<id> folder to read it from).")
     if not tier:
-        sys.exit("Which report is this? Pass --tier premium|free|os-smokes (the path has no playwright-report-<tier> folder).")
+        sys.exit("Which report is this? Pass --tier premium|free|os-smokes|encryption (the path has no playwright-report-<tier> folder).")
     return str(run), tier
 
 
@@ -226,7 +226,7 @@ def main():
         p = sub.add_parser(name)
         p.add_argument("report_dir", help="a report directory, as fetch_ci_run.sh prints them")
         p.add_argument("--run")
-        p.add_argument("--tier", choices=("premium", "free", "os-smokes"))
+        p.add_argument("--tier", choices=("premium", "free", "os-smokes", "encryption"))
         p.add_argument("--history", default=None)
         if name == "add":
             p.add_argument("--build", help="the Fleet revision the instance ran")

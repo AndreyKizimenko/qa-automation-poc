@@ -60,7 +60,7 @@ for id in $earlier; do
     log "run $id: no suite report to read (expired, or the suites never ran)"
     continue
   fi
-  for tier in premium free os-smokes; do
+  for tier in premium free os-smokes encryption; do
     if [ -d "$dest/playwright-report-$tier" ]; then
       python3 "$SCRIPTS/run_history.py" add "$dest/playwright-report-$tier" --run "$id" --tier "$tier" --history "$HISTORY" >&2
     fi
@@ -80,12 +80,12 @@ echo
 echo "Earlier nightlies with a report still in retention: $recorded (the last $NIGHTS are looked at)."
 echo
 echo '```'
-for tier in premium free os-smokes; do
+for tier in premium free os-smokes encryption; do
   if [ -d "$CURRENT_DIR/playwright-report-$tier" ]; then
     python3 "$SCRIPTS/run_history.py" show "$CURRENT_DIR/playwright-report-$tier" \
       --run "$CURRENT" --tier "$tier" --history "$HISTORY" --last "$NIGHTS"
-  elif [ "$tier" = os-smokes ]; then
-    # A branch run has the per-OS smokes only when it asked for them.
+  elif [ "$tier" = os-smokes ] || [ "$tier" = encryption ]; then
+    # A branch run has the per-OS smokes and the disk-encryption tests only when it asked for them.
     continue
   else
     echo "Run $CURRENT ($tier): no suite report, so nothing to compare."

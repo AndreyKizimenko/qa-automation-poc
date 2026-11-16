@@ -175,6 +175,14 @@ jobs:
     uses: ./.github/workflows/playwright-os-smokes.yml
     secrets: inherit
 
+  # Disk encryption on the device lab's hosts. After the smokes, whatever they
+  # did: both take OS matrix hosts, and neither may run beside the other.
+  playwright-encryption:
+    needs: [render-settle, playwright-os-smokes]
+    if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
+    uses: ./.github/workflows/playwright-encryption.yml
+    secrets: inherit
+
   gitops-free:
     needs: render-settle
     if: ${{ !cancelled() && needs.render-settle.result == 'success' }}
@@ -191,7 +199,7 @@ jobs:
   # the nights before, written to the run's summary. Given the one secret it
   # needs rather than all of them, and it never fails the night.
   run-history:
-    needs: [playwright-premium, playwright-free, playwright-os-smokes]
+    needs: [playwright-premium, playwright-free, playwright-os-smokes, playwright-encryption]
     if: ${{ !cancelled() }}
     permissions:
       contents: read

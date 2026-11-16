@@ -83,15 +83,25 @@ regenerate both on every restart.
 - **A lab host's fleet follows from its role, and the cleanup puts it there**: the pool on VMs, the matrix and
   special hosts on OS matrix. Every lab host enrolled with the VMs fleet's secret, so one that re-enrolls
   lands on VMs, whatever it is for; the resting-state step returns each to its role's fleet before a run and
-  after it. That step is the only thing that moves a host onto or off OS matrix. Nothing is uploaded to OS
-  matrix or set on it: gitops declares it empty, with disk encryption off, and `gitops-verify` holds it to that.
-  **The one exception is the per-OS smokes** (`premium/matrix/os-smokes.spec.ts`), for the length of a test:
+  after it. That step, and the disk-encryption tests below, are the only things that move a host onto or off
+  OS matrix. Nothing is uploaded to OS matrix or set on it: gitops declares it empty, with disk encryption off,
+  and `gitops-verify` holds it to that. **The one exception is the per-OS smokes** (`premium/matrix/os-smokes.spec.ts`), for the length of a test:
   a library script and a package nothing installs until the test asks its own host to, and a policy held to
   that host by a manual label holding only it. Whatever else goes on that fleet reaches all eighteen hosts, so
   never a package with automatic install, a profile, agent options, or an OS-update or disk-encryption
   setting; never `zenity` or `kdialog` on `prem-fedora45-luks` or `prem-omarchy-01`, which reproduce
   fleetdm/fleet#58776 by lacking them; and nothing that leaves a matrix host changed, since each has one
   baseline snapshot and only the lab's owner can roll it back.
+- **The disk-encryption tests move their own host off OS matrix, for the length of a test** (the
+  `premium-encryption` project, `tests/e2e/premium/encryption/`; approved by Andrey 2026-11-16, step E of
+  `docs/device-lab-plan.md`). Each test takes one LUKS, BitLocker or Windows Server host onto a throwaway `pw-*`
+  fleet with one platform's disk-encryption setting on (`setFleetDiskEncryption`, never the BitLocker PIN or a
+  macOS setting), drives the flow, and moves it back, which drops Fleet's key and any failure; the cleanup
+  returns a host a dead test left there. Only the hosts the lab built for it are changed on disk: a key slot
+  on `prem-ubu2404-luks-02` and `prem-omarchy-02`, removed by the test, and BitLocker protectors on
+  `prem-win11-bde`, which the test resets. On the matrix hosts and the control, a test clicks *Create key*
+  and leaves the prompt unanswered, which changes nothing. A disk key reaches the page there, so the project
+  keeps no trace, screenshot or video, and a key is checked in code, never printed or given to a matcher.
 - **The per-OS smokes run the same few checks on every OS version every night**: on the matrix host of each
   flavour and on a pool VM of each version the pool holds (the `premium-matrix` project; in CI the
   `Playwright — OS smokes` workflow, after premium's suite). They are where a flavour's own behaviour is asserted: what Fleet shows for its OS and reads of the machine, its inventory's
@@ -191,8 +201,9 @@ Windows enforcement turned on there acts on both Windows hosts: fleetd encrypts 
 itself, and on `prem-win11-bde`, which the lab keeps in Windows 11's stock BitLocker state for tests, it
 adds protectors and turns protection on. Nothing in Fleet undoes either. Linux key escrow turned on
 prompts nobody by itself: fleetd acts only after *Create key* is clicked on a host's My device page, and
-until then the encrypted hosts read "Action required" (Fleet's source at the 4.95 RC, not yet seen on a
-host; [`docs/device-lab-step-e-analysis.md`](docs/device-lab-step-e-analysis.md)).
+until then the encrypted hosts read "Action required" (seen on the lab's hosts on 2026-11-16;
+[`docs/device-lab-step-e-analysis.md`](docs/device-lab-step-e-analysis.md)). The disk-encryption tests turn
+these settings on only on a throwaway fleet of their own, holding the one host they moved there (*Test hosts*).
 
 **Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
 2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and
@@ -271,6 +282,7 @@ matrix in `playwright.config.ts` is the source of truth:
 | `gitops-mode` | `tests/e2e/premium/gitops-mode/**` only (`testDir`), one worker, its own invocation after `premium-exclusive` | n/a | `.auth/premium-admin.json` |
 | `premium-exclusive` | `tests/e2e/{shared,premium}/exclusive/**`, one worker, its own invocation after `premium` | n/a | `.auth/premium-admin.json` |
 | `premium-matrix` | `tests/e2e/premium/matrix/**` only (`testDir`), its own invocation after the others | n/a | `.auth/premium-admin.json` |
+| `premium-encryption` | `tests/e2e/premium/encryption/**` only (`testDir`), its own invocation after the smokes; no trace, screenshot or video | n/a | `.auth/premium-admin.json` |
 | `free-exclusive` | `tests/e2e/{shared,free}/exclusive/**`, one worker, its own invocation after `free` | n/a | `.auth/free-admin.json` |
 
 Folder conventions:
@@ -307,6 +319,10 @@ Folder conventions:
   premium's suite and a branch run only when dispatched with `-f os-smokes=true`). It works the pool's VMs too, so the config refuses it beside `premium` or
   `premium-exclusive`; like them it depends only on login and shares `cleanup-teardown`. Filter by OS:
   `--project=premium-matrix -g "rhel-9 \("`.
+- A disk-encryption flow on a real host → `tests/e2e/premium/encryption/`, the `premium-encryption` project
+  (`npm run test:premium:encryption`; in CI `Playwright — Disk encryption`, which the nightly runs after the
+  smokes and a branch run only with `-f encryption=true`). It takes OS matrix hosts, so the config refuses it
+  beside `premium`, `premium-exclusive` or `premium-matrix`.
 
 ## Project pipeline (premium)
 
@@ -380,6 +396,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | **the nightly** | `QA — Nightly` (`.github/workflows/qa-nightly.yml`): both Render deploy hooks → wait for the deploys (polls Render's API when `RENDER_API_KEY` + the two service ids are set, else 30 min) → both instances' `/healthz` → a notice with each instance's build → per tier, the nightly gitops chain, then that tier's suite (whatever gitops did), then on premium the per-OS smokes. Cron `17 3 * * *`, but GitHub starts it late: every scheduled run from 2026-10-01 to 10-10 started 5.9–7.3 h after the cron (09:09–10:35 UTC) and took 1 h 29 m–1 h 44 m, 30 min of it the fixed Render wait, finishing around 11:15–12:15 UTC. If the deploy wait fails, neither tier's gitops chain or suite runs |
 | **a branch's full run** | `QA — Branch run` (`qa-branch-run.yml`): each tier's gitops chain, then its suite, against the branch; the suite runs whatever gitops did, as in the nightly, and a red gitops step still fails the run. `-f workers=N` runs premium's suite at that count, for a trial without a config commit; free always runs at its configured count (it has one VM per platform and a smaller instance). `-f os-smokes=true` adds the per-OS smokes, which a branch run otherwise leaves to the nightly. **Andrey dispatches it**: at the end of a piece of work, open the PR and tell him it's ready. A PR that changes a workflow file is dispatched with `--ref <branch>`: without it the run uses `main`'s workflow YAML, and `-f branch=` supplies only the tests and config |
 | **the per-OS smokes** | `Playwright — OS smokes` (`playwright-os-smokes.yml`): the `premium-matrix` project against premium, as a workflow of its own. The nightly runs it after premium's suite, whatever that did; a branch run only with `-f os-smokes=true`; and it runs alone with `gh workflow run "Playwright — OS smokes"` (`--ref <branch>` for a branch's smokes). It holds premium's concurrency group, so it waits for a suite or a gitops apply that is running. Its report is its own artifact, `playwright-report-os-smokes` |
+| **the disk-encryption tests** | `Playwright — Disk encryption` (`playwright-encryption.yml`): the `premium-encryption` project against premium, after the smokes in the nightly, with `-f encryption=true` in a branch run, or alone with `gh workflow run "Playwright — Disk encryption"`. Premium's concurrency group, 6 workers (one host each), report `playwright-report-encryption` |
 | **is anything running?** | `gh run list --limit 5`, before any run that touches the instances. Two runs on one VM corrupt each other: one queue per VM, and each run's cleanup removes the other's state |
 | **workers** | CI: free 2, premium 4 (`playwright.config.ts`); local default 4; `--workers=2` for anything on the real VMs. A worker has a VM of a platform to itself up to the pool's size (premium: 4 Ubuntu, 2 Windows, 2 macOS; free: 1 each), so premium's four have an Ubuntu VM each and share the Windows VMs and the Macs two ways. Premium went from 3 to 4 on 2026-11-15, on one green trial (branch run 43753582054: the main project 27 min against 33–36, still worker-bound; `docs/device-lab-plan.md`), so a flake that first shows in a nightly after that date is read against the count first, and 3 is the way back. The per-OS smokes run at 6 (`playwright-os-smokes.yml`): one worker walks one host through its smokes, so their count follows from their hosts, not from a pool |
 | **retries and timeouts** | CI `retries: 2` (a report's `outcome: flaky` means it passed on a retry), local 0 — except the describes that wait on a real VM, which take `HOST_RETRIES` from `@fixtures` (1 in CI): a 15-min attempt three times is 45 min of one worker. The `gitops-mode`, `gitops-verify` and `gitops-nightly` projects take `retries: 0`, so the suite's `trace: 'on-first-retry'` never fires there; `gitops-mode` keeps the trace of a failed attempt instead (`retain-on-failure`). Test timeout 60 s unless a spec sets its own (the VM describes mostly 10–15 min; `policy-automation-runs` 20, `recovery-lock` 25); `expect` 10 s. In CI Playwright stops the main run at 100 min (`globalTimeout`), premium's exclusive step at 60 (free's at 15) and the gitops-mode step at 15, reports included; the premium job's limit is 185, free's 120. The per-OS smokes stop at 45 in a job whose limit is 60 |
