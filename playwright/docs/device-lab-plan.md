@@ -20,7 +20,9 @@ same smokes each night, in the `Playwright — OS smokes` workflow. The first ni
 first to run the smokes from the nightly's own chain, and the first with premium at 4 workers. Step E is
 next. It starts with Andrey's approval of its hosts, and its section says what step D changed for it. Its
 analysis is written ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md), 2026-11-16) and waits
-for his decisions; no test of it is built. The lab built two hosts for it the same day.
+for his decisions. The lab built four hosts for it the same day, and overnight, at Andrey's word, the
+experiments ran and the `premium-encryption` project was built (its own PR); the tests on hosts that carry
+smokes wait for the first nightly since the merges.
 
 ## What the suite has to work with
 
@@ -32,7 +34,7 @@ The lab replaced them. Its Linux and Windows VMs are x86_64; its Macs are Apple 
 | Free | `free-ubu2404d-01`, `free-win11-01`, `free-macos26-01` | pool | Unassigned (free has no fleets) |
 | Premium | `prem-ubu2404d-01` to `-04` (Ubuntu 24.04), `prem-win11-01` and `-02` (Windows 11), `prem-macos15-01` (macOS 15.7) and `prem-macos26-01` (macOS 26.6) | pool | **VMs** fleet, all eight since 2026-11-14 |
 | Premium | One VM per OS flavour: Ubuntu 22.04, 26.04 and 24.04 server, Debian 13, RHEL 9 and 10, Amazon Linux 2023, Fedora 45, openSUSE Leap 16.1, Kubuntu 24.04, Zorin OS 18, Omarchy 4.5, Windows 10, Windows Server 2022 and 2025 | matrix | **OS matrix** fleet. The per-OS smokes run on them (step D). Four are LUKS-encrypted |
-| Premium | `prem-ubu2404-luks` (the LUKS escrow control) and, since 2026-11-16, `prem-ubu2604-tpm` (Ubuntu 26.04 with TPM-backed encryption) and `prem-win11-bde` (Windows 11 in its stock BitLocker state) | special | **OS matrix** fleet. They wait for step E |
+| Premium | `prem-ubu2404-luks` (the LUKS escrow control) and, since 2026-11-16, `prem-ubu2604-tpm` (Ubuntu 26.04 with TPM-backed encryption), `prem-win11-bde` (Windows 11 in its stock BitLocker state), and `prem-ubu2404-luks-02` and `prem-omarchy-02` (LUKS hosts whose passphrase prompt a test answers) | special | **OS matrix** fleet. Step E's tests run on them |
 
 Every lab host runs fleetd 1.63.0. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
 says what each is for; `helpers/lab-hosts.ts` reads it. A host the manifest doesn't list yet is still kept out
@@ -45,7 +47,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial ran green, and premium is at 4 |
 | **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Done, 2026-11-15 |
-| **E** | Disk encryption on real hosts, on a fleet of its own | its own PR | Last; needs Andrey's approval first. Analysed 2026-11-16: the analysis recommends throwaway fleets over a fleet of its own |
+| **E** | Disk encryption on real hosts, on throwaway fleets | its own PR | Approved 2026-11-16; built overnight: the `premium-encryption` project and its own workflow (`docs/device-lab-step-e-analysis.md` › *What the experiments showed*) |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
 branch run.

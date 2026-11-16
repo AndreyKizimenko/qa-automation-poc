@@ -188,6 +188,31 @@ a passphrase disk the server compares the stored slot and salt with the host's o
 deletes the key when they differ (`server/service/osquery_utils/queries.go:4045-4182`). So a test removes
 its slot after the host has moved back, or before that on purpose, as the test of that check.
 
+## What the experiments showed, 2026-11-16
+
+Andrey approved all of step E for the night of 2026-11-16, and the experiments ran from 06:47 UTC, before
+the first nightly since the merges. Each ran as a scratch spec of the new project: a throwaway fleet, the
+host moved in, the flow driven in the browser, the host moved back. Times are from the click or the move.
+
+| # | Host | Predicted | Seen |
+|---|---|---|---|
+| 6 | `prem-ubu2404-luks-02` | The helper answers fleetd's prompt; a key in slot 2; the key survives a refetch; with its slot removed, Fleet drops it | All of it. The dialog opened 27 s after *Create key* (fleetd 1.63.0, so the launch without `XDG_RUNTIME_DIR` works on GNOME); the helper answered in 1 s; "Verified" and the escrow activity 2.5 min after the click, the key work on a 4 GB VM taking about two minutes. Two refetches kept it (#58617 did not show). With slot 2 removed by script, the next refetch dropped the key and the host read "Action required" again |
+| 1 | `prem-ubu2404-luks` | The prompt opens and times out; "Already asking" while it is open; "Action required" throughout | The prompt opened 29 s after the click and closed a minute later; the status stayed "Action required" with no key. **No "already asking" ever**: fleetd 1.63.0 doesn't report the prompt's state, so the server never marks the request in flight, and eleven clicks in five and a half minutes queued three prompts in a row (#46529's symptom). A click before fleetd picks the request up gets the ordinary answer too |
+| 4 | `prem-ubu2604-tpm` | No prompt; snapd's path; a second escrow replaces the first | "Verified" 29 s after the click, with no helper; after a move out and in, the second escrow took 7 s. Each logged `escrowed_disk_encryption_key` in the global feed (not in the host's own activities) |
+| 5 | `prem-win11-bde` | From the stock state: a key, a TPM protector, protection on; fleetd re-encrypts a decrypted disk; an unattended boot | From the stock state: a recovery password and a TPM protector within 30 s ("Enforcing"), protection on and "Verified" at 80 s, one escrow activity (no repeated rotation). Decrypted by script in 3 min, during which Fleet showed "Verifying" with the disk read as not encrypted, then "Enforcing"; **fleetd encrypted it again** (XTS-AES 256, where Windows' own was 128) and it read "Verified" 2.5 min after the decryption ended. A restart with Fleet's protectors on the disk came back unattended. The reset left it encrypted, protection off, no protectors, with XTS-AES 256 |
+| 2, 3 | The four matrix LUKS hosts; `prem-ws2022-01` | | Held until tonight's nightly has finished: those hosts carry smokes |
+
+What the experiments add to the source:
+
+- **Premium's firewall passes scripts that name `cryptsetup`, `Disable-BitLocker` and `Remove-BitLockerKeyProtector`.**
+- **A helper started by a Fleet script outlives it** (`setsid`), and answers a dialog fleetd opens.
+- **fleetd's success notice after an escrow holds its queue** until it closes or its minute runs out, so
+  the helper closes it, and the notice's text is the host's own word that the escrow worked.
+- **The move back drops a pending request too**: a click followed at once by the move never reached fleetd.
+- **A run that stops mid-decryption leaves `prem-win11-bde` decrypted**: the first run of the BitLocker test
+  failed there (a test bug), and Windows had not encrypted the disk again ten minutes later. The BitLocker test starts by encrypting such a disk
+  as Windows does (XTS-AES 128, a TPM protector) and resetting it.
+
 ## How each flow works at this build
 
 ### Linux: LUKS key escrow
@@ -536,25 +561,14 @@ with `_sanity`'s `EMPTY_FLEETS` check changed beside it.
 
 ## Not exercised
 
-Read from the source and still to be seen on a host:
+Read from the source and still to be seen on a host (the rest of this list was seen on 2026-11-16, *What the
+experiments showed*):
 
-- That zenity and kdialog time out on the lab's desktops as coded, and that the minute in flight tells an
-  open dialog from a failed one.
-- That fleetd 1.63.0 recognises `prem-ubu2604-tpm`'s disk as snapd's and escrows with no prompt, and that a
-  second escrow replaces the first.
-- That `prem-win11-bde` boots unattended on the TPM protector Fleet adds, how long the two passes take, and
-  that a script returns its disk to the stock state.
-- That a Windows 11 disk decrypted by script stays decrypted long enough for Fleet to be the one that
-  encrypts it.
-- That fleetd rotates a BitLocker key every five minutes until the host's first vitals refresh after
-  encryption (inferred from `server/service/orbit.go:1255-1261` and fleetd's five-minute wait).
-- That premium's firewall passes scripts naming `manage-bde` or `cryptsetup`.
-- That the Windows Servers lack the BitLocker feature, which is #55549's precondition.
-- That the accessibility helper answers the prompt when fleetd itself opens it, and that a helper started
-  by a Fleet script outlives the script.
-- That `cryptsetup luksKillSlot` frees a slot from a Fleet script, and that fleetd's own rollback, which
-  calls it with no key and no batch flag (`luks_linux.go:491-498`), frees anything.
-- That a throwaway fleet's default agent options leave a moved host as quick to answer as OS matrix's do.
+- That kdialog times out as zenity does, and what Fedora and Omarchy show (experiment 2, after the nightly).
+- That a Windows Server on an enforcing fleet keeps answering (experiment 3, after the nightly), and that
+  the Servers lack the BitLocker feature, which is #55549's precondition.
+- That fleetd's own rollback of a slot, which calls `cryptsetup luksKillSlot` with no key and no batch flag
+  (`luks_linux.go:491-498`), frees anything.
 - Everything about FileVault on a Tart VM.
 
 Seen while reading, and worth a look once a host is in hand; none is filed or confirmed:
