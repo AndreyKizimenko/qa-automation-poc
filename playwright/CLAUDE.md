@@ -186,8 +186,12 @@ The same goes for fleet settings that act on the VMs: on the **VMs** fleet, neve
 version or deadline, or a DDM software-update enforcement declaration — they make the real hosts download an
 OS update or reboot mid-suite. Exercise those settings on Workstations and restore them in the same test.
 **OS matrix** holds lab machines too, an MDM-enrolled Windows host and five LUKS-encrypted Linux ones among
-them, so all of this section applies to it, and so does disk encryption: turned on for that fleet, it would
-start BitLocker on the one and prompt for the passphrase on the others.
+them, so all of this section applies to it, and so does disk encryption, which stays off for that fleet.
+Windows enforcement turned on there starts BitLocker on the one: fleetd encrypts `C:` by itself, and
+nothing in Fleet decrypts it again. Linux key escrow turned on prompts nobody by itself: fleetd asks for
+the passphrase only after *Create key* is clicked on a host's My device page, and until then the encrypted
+hosts read "Action required" (Fleet's source at the 4.95 RC, not yet seen on a host;
+[`docs/device-lab-step-e-analysis.md`](docs/device-lab-step-e-analysis.md)).
 
 **Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
 2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and
