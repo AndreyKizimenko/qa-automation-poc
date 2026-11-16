@@ -19,6 +19,8 @@ import { Toast } from '../components/Toast';
 import { TransferHostModal } from '../components/TransferHostModal';
 import { UpdateEndUserModal } from '../components/UpdateEndUserModal';
 import { RecoveryLockPasswordModal } from '../components/RecoveryLockPasswordModal';
+import { fleetModal } from '../components/Modal';
+import { MyDevicePage } from './MyDevicePage';
 
 /**
  * /hosts/:id/details — detailed view of a single host with tabs for Details,
@@ -60,6 +62,19 @@ export class HostDetailsPage {
   readonly toast: Toast;
   /** Confirmation raised by Actions → Delete; its own modal class. */
   readonly deleteModal: Locator;
+  /**
+   * Raised by Actions → Show disk encryption key. The key is the value of a masked text field, in the page
+   * before its eye is clicked (`InputFieldHiddenContent.tsx`): a spec that opens this runs with no trace,
+   * screenshot or video, and never prints the field's value or lets a matcher do so.
+   */
+  readonly diskEncryptionKeyModal: Locator;
+  readonly diskEncryptionKeyField: Locator;
+  /**
+   * The User card's *My device*, shown to global admins: opens the host's My device page in a new window, and
+   * logs a "retrieved the My device URL" activity, which the Activity card then lists under a name of its own
+   * that also contains "My device". Hence the exact match.
+   */
+  readonly myDeviceButton: Locator;
 
   readonly hostHeading: Locator;
   readonly backButton: Locator;
@@ -208,6 +223,10 @@ export class HostDetailsPage {
     this.scriptPackageDetailsModal = new ScriptPackageDetailsModal(page);
     this.toast = new Toast(page);
     this.deleteModal = page.locator('.delete-host-modal');
+    this.diskEncryptionKeyModal = fleetModal(page, 'Disk encryption key');
+    // A password-type input has no ARIA role, and the modal holds no other input.
+    this.diskEncryptionKeyField = this.diskEncryptionKeyModal.locator('input');
+    this.myDeviceButton = page.getByRole('button', { name: 'My device', exact: true });
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
@@ -551,6 +570,31 @@ export class HostDetailsPage {
     const option = this.actionOption(label);
     await expect(option).toBeVisible();
     await option.click();
+  }
+
+  /**
+   * Opens the host's My device page from the User card, as a global admin, and returns it. The page arrives in
+   * a new window once Fleet has minted its URL.
+   */
+  async openMyDevice(): Promise<MyDevicePage> {
+    // The User card is on the Details tab.
+    await this.detailsTab.click();
+    await expect(this.myDeviceButton).toBeVisible();
+    const popup = this.page.waitForEvent('popup');
+    await this.myDeviceButton.click();
+    const device = await popup;
+    await device.waitForLoadState('domcontentloaded');
+    return new MyDevicePage(device);
+  }
+
+  /**
+   * Opens Actions → Show disk encryption key and waits for the key to load into the modal. Every fetch of the
+   * key logs a "viewed the disk encryption key" activity; reopening on the same page load fetches nothing.
+   */
+  async showDiskEncryptionKey(): Promise<void> {
+    await this.runAction('Show disk encryption key');
+    await expect(this.diskEncryptionKeyModal).toBeVisible();
+    await expect(this.diskEncryptionKeyField).not.toHaveValue('');
   }
 
   /** Opens the Run script modal via Actions → Run script. */

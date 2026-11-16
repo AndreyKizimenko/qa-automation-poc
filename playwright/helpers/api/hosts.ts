@@ -793,6 +793,31 @@ export async function getHostDeviceState(
   return { deviceStatus: mdm.device_status ?? null, pendingAction: mdm.pending_action ?? null };
 }
 
+/** A host's disk encryption as Fleet reports it. */
+export interface HostDiskEncryption {
+  /**
+   * The OS setting's status: `verified`, `verifying`, `action_required`, `enforcing`, `failed`, or null where
+   * the host's fleet has no disk-encryption setting for its platform.
+   */
+  status: string | null;
+  /** Whether Fleet holds a key it can show (`encryption_key_available`). */
+  keyAvailable: boolean;
+  /** Whether the host reports its disk encrypted; null before it has said. */
+  encrypted: boolean | null;
+}
+
+/** Reads a host's disk encryption from its detail record, which alone carries the OS setting's status. */
+export async function getHostDiskEncryption(request: APIRequestContext, hostId: number): Promise<HostDiskEncryption> {
+  const res = await request.get(apiLatestUrl(`hosts/${hostId}`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read host ${hostId}`);
+  const host = (await res.json()).host ?? {};
+  return {
+    status: host.mdm?.os_settings?.disk_encryption?.status ?? null,
+    keyAvailable: !!host.mdm?.encryption_key_available,
+    encrypted: host.disk_encryption_enabled ?? null,
+  };
+}
+
 /**
  * Deletes a host. Used as the last-resort cleanup for lock/wipe specs: a
  * simulation left locked would otherwise sit in the pool misreporting its state
