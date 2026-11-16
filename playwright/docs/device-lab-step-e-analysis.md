@@ -8,7 +8,8 @@ only. It waits for his decisions, which are listed at the end.
 **Revised later the same day.** After reading it, Andrey had the lab build two hosts kept for these tests,
 `prem-win11-bde` and `prem-ubu2604-tpm` (*What the lab built*). They move the second slice to a host of its
 own, add a third, and take both off the hosts that carry smokes. What the lab's session reported is marked
-"the lab".
+"the lab". A second round had the lab test whether a script can answer fleetd's passphrase prompt. It can
+(*What the lab tested*), which adds a fourth slice, on a host that is still to be built.
 
 ## The answer
 
@@ -36,9 +37,10 @@ own, add a third, and take both off the hosts that carry smokes. What the lab's 
   TPM-backed encryption, which fleetd escrows through snapd with no prompt, and a second escrow replaces
   the first in place. None of the 41 bugs is on that path, which shipped in July: the value is a real
   escrow, key and all, that repeats.
-- **A completed escrow on a passphrase disk still waits for the lab.** Nothing in fleetd answers the
-  passphrase prompt. It needs the reset hook, already first on the list to provision, to type a passphrase
-  as well. The key-slot bugs, the largest Linux cluster, are on that path only.
+- **Fourth slice, on a host still to be built: a completed escrow on a passphrase disk.** Nothing in fleetd
+  answers the passphrase prompt, but a script on the host can: the lab tested it through the desktop's
+  accessibility API, with nobody at the host. The host gets a second passphrase that is for tests only and
+  never leaves it. The key-slot bugs, the largest Linux cluster, are on this path only.
 - **Not the pool, and no FileVault.** FileVault enforcement can't be undone by Fleet and the pool Macs
   would lose auto-login; Andrey set FileVault aside on 2026-11-16. BitLocker would change the pool's
   Windows 11 VMs for good.
@@ -79,7 +81,8 @@ BitLocker (fleetdm/fleet#55549's fleetd half). The server gates Omarchy's escrow
 3. **Nothing in fleetd answers the passphrase prompt but a person**, with one exception: a disk under
    Ubuntu's TPM-backed encryption is escrowed over snapd's socket with no dialog
    (`orbit/pkg/luks/luks_linux.go:121-136`, `orbit/pkg/luks/snapd_fde.go:70-127`). The lab has such a host
-   since 2026-11-16, `prem-ubu2604-tpm`. The click is still what starts it.
+   since 2026-11-16, `prem-ubu2604-tpm`. The click is still what starts it. On a passphrase disk, a script
+   on the host can answer the prompt in a person's place (the lab, *What the lab tested*).
 4. **Moving a host to a fleet whose setting for its platform is off deletes its key row**
    (`server/datastore/mysql/disk_encryption.go:606-659`). Live: `prem-ubu2404-luks` shows its key archived
    and not available, after the move that ended the escrow by hand on 2026-11-14.
@@ -150,6 +153,40 @@ What the lab found that bears on a test:
   the one setting.
 - **The Ubuntu host's snaps are held**, its kernel among them, like every update in the lab. The monthly
   pass refreshes them and restarts once to see that the disk still unlocks.
+
+## What the lab tested, 2026-11-16
+
+A second round of questions, about more hosts. Nothing was built for it: the lab tried the first on a
+throwaway clone of its Ubuntu 24.04 desktop template (GNOME on Wayland, zenity, a user logged in
+automatically) and deleted the clone. This section is the lab's report, except its last paragraph.
+
+**Can a script answer fleetd's passphrase prompt with nobody at the host? Yes.** A root script opened the
+dialog with fleetd's own command line, and a run passed when zenity returned the passphrase with exit code
+0, which is what fleetd reads.
+
+| Method | On the stock Wayland session | Needs keyboard focus | Notes |
+|---|---|---|---|
+| The accessibility API (`python3-pyatspi`), run as the desktop user | 4 of 4 | No | Finds the window by its title, fills the hidden field and presses OK. One package more than a stock install |
+| `ydotool`, as root | 4 of 4 | Yes | Types into whatever has focus. The dialog took focus by itself each time |
+| `xdotool` | Not tried: it needs an Xorg session | No | The host would no longer be a stock install |
+| A stand-in `zenity` ahead of the real one | 1 of 1 | No | Replaces the dialog, so it tests the escrow and not the prompt |
+
+- **The dialog takes 5 to 8 seconds to show** on a VM with no GPU, so the script waits for the window and
+  doesn't sleep a fixed time.
+- **The passphrase belongs in a root-only file or on stdin.** As an argument it shows in the process list.
+- **What was tested is the dialog, not fleetd.** A script replayed fleetd's command line. fleetd opening the
+  dialog and taking the answer is experiment 6.
+- **fleetd 1.64.0 is not out**: Fleet's update server lists 1.63.0 on `stable` and on `edge`. Until it is, a
+  second Omarchy with zenity could show nothing. The server refuses the click, and the prompt can't open on
+  Hyprland without the change 1.64.0 carries.
+- **Room:** the lab's server takes one more 4 GB VM as it is. With a 6 GB one beside it, the margin for
+  every VM filling its memory at once is gone.
+
+**One line of the lab's reply disagrees with the source.** It says Fleet never checks a key against the
+disk, so removing an escrowed slot doesn't upset it. That holds for BitLocker and for a TPM-backed disk. For
+a passphrase disk the server compares the stored slot and salt with the host's on each vitals refresh, and
+deletes the key when they differ (`server/service/osquery_utils/queries.go:4045-4182`). So a test removes
+its slot after the host has moved back, or before that on purpose, as the test of that check.
 
 ## How each flow works at this build
 
@@ -295,7 +332,8 @@ Bugs labelled `bug` in fleetdm/fleet, created from 2026-05-01 to 2026-11-15: 41,
 - **Nine more are possible with extra setup.** Four need only the passphrase prompt answered (#46529,
   #46535, #52236, #58617), and two need a host prepared as well (#46227, #47589). #55701 needs zenity on
   Omarchy, which the lab keeps off on purpose; #53222 needs escrow-only on a pool Mac; #52159 needs
-  protectors rearranged by script.
+  protectors rearranged by script. Slice 4's host answers the prompt and has its test passphrase outside
+  slot 0, which is #46227's condition, so it reaches five of the nine.
 - **Windows bugs cluster on disks Fleet did not encrypt** (#49278, #49401, #51098, #51998, #52159).
   `prem-win11-bde` rests as such a disk. The plain path from a decrypted disk produced one, #53426, caught
   before release.
@@ -306,7 +344,7 @@ Bugs labelled `bug` in fleetdm/fleet, created from 2026-05-01 to 2026-11-15: 41,
 
 | Platform | With nobody at a host | Once per baseline | Only with a lab change | Not at all |
 |---|---|---|---|---|
-| **Linux** | "Action required" on the six encrypted hosts and on an unencrypted eligible one; the fleet's table and its link to the Hosts list; My device's banner and *Create key*; the prompt opening and timing out (zenity, kdialog); the failure on Fedora and the refusal on Omarchy; "Failed" cleared by the move back. On `prem-ubu2604-tpm`, a completed escrow: "Verified", the escrow activity, the key modal and its viewed activity, the action by role, and the key replaced by the next escrow | A completed escrow on a passphrase disk, typed by hand, which is a manual test. Seven per baseline at most, as each keeps a slot | A completed escrow on a passphrase disk every night: the lab types the passphrase. A passphrase in a slot other than 0 (#46227), or a noisy login shell (#47589), needs a host prepared for it | Multi-disk LVM (#47256): no such host |
+| **Linux** | "Action required" on the six encrypted hosts and on an unencrypted eligible one; the fleet's table and its link to the Hosts list; My device's banner and *Create key*; the prompt opening and timing out (zenity, kdialog); the failure on Fedora and the refusal on Omarchy; "Failed" cleared by the move back. On `prem-ubu2604-tpm`, a completed escrow: "Verified", the escrow activity, the key modal and its viewed activity, the action by role, and the key replaced by the next escrow | A completed escrow on a passphrase disk, typed by hand, which is a manual test. Seven per baseline at most, as each keeps a slot | A completed escrow on a passphrase disk every night: a host built to be driven by a test, whose method the lab has tested, or the lab typing the passphrase. A noisy login shell (#47589) needs a host prepared for it | Multi-disk LVM (#47256): no such host |
 | **Windows** | On `prem-win11-bde`: enforcement from the stock state to "Verified" (a key escrowed, then protection restored), the key modal, the viewed activity, the action by role, then the protectors removed by script. A Server on an enforcing fleet staying healthy and uncounted. The path from a decrypted disk (#53426) on the same host, once a script has decrypted it. Later, by script: protection suspended, a boot protector removed | The restore of protection, if no script can return the disk to its stock state: later nights then start from a protected disk and only rotate the key | Nothing more | The PIN past its creation: the next boot stops at a prompt. Migration from another MDM (#49278) |
 | **macOS** | Escrow-only: profile delivery, "Action required" and its copy | Nothing | FileVault itself: a third Mac VM and a way to unlock it at boot | ADE and Setup Assistant bugs: MacStadium has no ADE |
 
@@ -314,11 +352,17 @@ Bugs labelled `bug` in fleetdm/fleet, created from 2026-05-01 to 2026-11-15: 41,
 
 | Way | Is the real dialog path tested | Where a passphrase lives | Cost |
 |---|---|---|---|
-| **The lab types it**, on request, into the VM's console | Yes, all of it | Where it is today: on the lab's server, readable by root only | The reset hook (`long-term-goals.md`, *What to provision next*, 1), with typing a passphrase added to what it does. The request can be a pull: the lab watches a signal in Fleet, such as a label the test puts on the host, so nothing in the lab is opened to the internet |
+| **A script on the host answers the dialog**, through the accessibility API | Yes: the real zenity, opened by fleetd | A second passphrase, for tests only, in its own slot and in a root-only file on that host. Nothing passes through Fleet, the repository or a report | A host built for it, with one package more than a stock install. The lab tested the method on 2026-11-16. **Recommended**, on that one host |
+| **The lab types it**, on request, into the VM's console | Yes, all of it | Where it is today: on the lab's server, readable by root only | The reset hook (`long-term-goals.md`, *What to provision next*, 1), with typing a passphrase added to what it does. The request can be a pull: the lab watches a signal in Fleet, such as a label the test puts on the host, so nothing in the lab is opened to the internet. No longer needed first. It is the way to cover the other passphrase hosts without changing them |
 | **A TPM-backed Ubuntu 26.04 VM** | There is no dialog on this path; it is a different one, added in 4.90 | Nowhere: no passphrase | Built on 2026-11-16, as `prem-ubu2604-tpm`. It doesn't stand in for the passphrase path, where the key-slot bugs are |
-| **A Fleet script types into the dialog** | Yes | The lab's passphrase, or a second one added for tests, in a Fleet custom variable | A keystroke tool installed on each host and a new baseline. A disk passphrase leaves the lab. Not recommended |
-| **A fake `zenity` first on the PATH** | No: the dialog is the part replaced | As above | A file on each host. Never on Fedora or Omarchy. Not recommended |
+| **A fake `zenity` first on the PATH** | No: the dialog is the part replaced | As the first row | A file on the host. The lab tried it, and it works. Never on Fedora or Omarchy. Not recommended |
 | **A runner on the lab's network** | Yes | On the lab's server | A self-hosted runner for a public repository is the risk GitHub warns against. Not recommended |
+
+**How a test uses the first.** The script that answers has to be waiting before *Create key* is clicked, and
+has to detach. fleetd fetches its next script only after every receiver of the current round has returned,
+the dialog among them (`client/orbit_client.go:398-437`). So the test runs a script that starts the helper
+in the background and returns, and then clicks. The helper reads the passphrase from the file on the host,
+so the script's body holds no secret. It can also cancel the prompt, or give a wrong passphrase first.
 
 fleetd's own endpoint would also store a key sent with the host's node key, with no request pending
 (`server/service/orbit.go:1870-1906`). That fabricates the result and tests nothing, and the next vitals
@@ -330,10 +374,12 @@ refresh would delete the key.
   pending request (`disk_encryption.go:606-659`). On a standing fleet nothing does: turning the setting off
   and on leaves the row as it was.
 - **The disk's side does not, on a passphrase disk.** Each completed escrow keeps a slot, and fleetd stops
-  at 8; each baseline starts with one (the lab). A nightly escrow needs the slot removed by a script
-  (`cryptsetup luksKillSlot` in batch mode, by the slot number a live report showed appearing) or a
-  rollback. Removing the wrong slot leaves a VM that can't unlock at boot, so this is an experiment with
-  Andrey present before it is a test.
+  at 8. The control hosts' baselines hold one slot, and the driven host's would hold two, the boot's and
+  the test's, so six escrows fit before the seventh fails (the lab). A nightly escrow removes its slot by
+  script (`cryptsetup luksKillSlot`, by the slot number a live report showed appearing, authorized by the
+  test passphrase), and starts by removing any slot a dead run left above those two. Removing the wrong
+  slot leaves a VM that can't unlock at boot. On a host kept for this, that costs a rollback and no smoke,
+  and it is still an experiment before it is a test.
 - **A TPM-backed disk has no such limit.** fleetd replaces its one named key in place
   (`snapd_fde.go:86-113`). The first escrow after a rollback adds the key and every later one replaces it.
   snapd has no call that removes a recovery key (`luks.go:119-123`), so only a rollback takes it off the
@@ -375,7 +421,7 @@ refresh would delete the key.
 | **3. FileVault on the pool Macs** | None | Not applicable | Not applicable | Both pool Macs lose auto-login at their next restart, and Fleet can't undo it | Not possible on the pool |
 | **4. A standing fleet of its own** | As 2 | As 2, plus the manifest, `labHostFleet`, the smokes' sweep and the Windows hosts' turn | Seconds | Five hosts that carry smokes change fleet for good | As 2 |
 | **5. Nothing** | None | Nothing | Nothing | None | Nothing |
-| **6. A project of this suite on throwaway fleets** | 7 with no host changed (slice 1); #49401, #51998, #53426 and the scripted BitLocker states (slice 2); none on the TPM-backed path (slice 3); the prompt bugs with the hook | A project and its workflow, a My device page object, the disk-encryption table and the Controls row, a host move that undoes itself | About 5 minutes for slice 1; slices 2 and 3 to be timed | A host is off OS matrix for the length of a test. Slices 2 and 3 change only the two hosts kept for them, which carry no smoke | Andrey's word for the moves, and for the two flows that change a host |
+| **6. A project of this suite on throwaway fleets** | 7 with no host changed (slice 1); #49401, #51998, #53426 and the scripted BitLocker states (slice 2); none on the TPM-backed path (slice 3); five more on a host built to be driven (slice 4) | A project and its workflow, a My device page object, the disk-encryption table and the Controls row, a host move that undoes itself | About 5 minutes for slice 1; slices 2 to 4 to be timed | A host is off OS matrix for the length of a test. Slices 2 to 4 change only the hosts kept for them, which carry no smoke | Andrey's word for the moves, and for the flows that change a host |
 
 **Why 6 and not 2.** Shape 2 is the cheapest to write and keeps every host where it is. But a state on a
 standing fleet is entered once (*What decides it*, 5), so from the second night it asserts a photograph,
@@ -384,7 +430,7 @@ the fleet's counts are exactly the hosts the test moved in, and OS matrix keeps 
 hand on 2026-11-14 already ran this way.
 
 **What 6 costs the smokes: nothing in the code.** The manifest, `labHostFleet`, the sweep and the Windows
-hosts' turn stay as they are. Slice 1 moves five hosts that carry smokes, each for minutes; slices 2 and 3
+hosts' turn stay as they are. Slice 1 moves five hosts that carry smokes, each for minutes; slices 2 to 4
 run on special hosts, which no smoke uses. The project must never run beside the smokes, which the shared
 concurrency group and the config's refusal already give `premium-matrix`. A run killed mid-test leaves a
 host on a `pw-*` fleet, or on Unassigned if the fleet was deleted first; the next run's cleanup returns it
@@ -415,26 +461,37 @@ need its own way into the lab, and everything except the passphrase is reachable
    fleet; "Action required"; *Create key* from My device; "Verified" and the escrow activity with nobody at
    the host; the key modal, its viewed activity and the action by role, on a real Linux key; out and in
    again for a second escrow, which replaces the first; then back.
-4. **Ask the lab for one thing: the reset hook able to type a passphrase.** It turns the largest Linux
-   cluster (key slots: #46227, #46535, #52236, #58617) into a nightly test. The TPM-backed host doesn't
-   reach those: its path has no slot and no salt.
-5. **Leave out:** FileVault, the BitLocker PIN, the pool's Windows 11 VMs, and a standing escrowed host.
+4. **Slice 4, once its host is built and after experiment 6: a completed escrow on a passphrase disk.** The
+   host is an Ubuntu 24.04 desktop like the control, with a second passphrase in slot 1 that is for tests
+   only and also sits in a root-only file on the host. Linux escrow on a `pw-*` fleet; a script starts the
+   helper that answers the prompt; *Create key* from My device; "Verified" and the escrow activity; a
+   refetch that leaves the key in place (#58617); the key modal; the slot removed by script, and a refetch
+   after which Fleet has dropped the key (#52236); then back. The same helper cancels the prompt or gives
+   a wrong passphrase first, for those paths. It turns the largest Linux cluster, the key slots, into a
+   nightly test. The TPM-backed host doesn't reach it: its path has no slot and no salt.
+5. **Ask the lab for that host now, and for a second Omarchy with zenity once fleetd 1.64.0 is on a
+   channel.** The reset hook no longer has to type a passphrase for a first nightly escrow. It stays the
+   way to complete one on the other passphrase hosts, kdialog's among them, without changing them.
+6. **Leave out:** FileVault, the BitLocker PIN, the pool's Windows 11 VMs, and a standing escrowed host.
 
-**The order.** Slices 2 and 3 don't depend on each other. Slice 3 is the smaller: one host, no script on
-it, and the least that can go wrong. I would build it straight after slice 1.
+**The order.** Slices 2 to 4 don't depend on each other. Slice 3 is the smallest: one host, no script on
+it, and the least that can go wrong. I would build it straight after slice 1. Slice 4 has the most bugs
+behind it and waits only for its host.
 
 **What the slices reach.** Of the eleven bugs reachable with nobody at a host, slice 1 has seven and slice 2
 three (#49401 and #51998, and #53426 in its second step). The smokes already cover #50069. Slice 3 has
-none: it is there for a real escrow that repeats, on a path nothing here has run yet.
+none: it is there for a real escrow that repeats, on a path nothing here has run yet. Slice 4 adds five
+that need the prompt answered (#46227, #46529, #46535, #52236, #58617).
 
-**What they don't do.** No slice completes an escrow on a passphrase disk. Until the lab can answer the
-prompt, the key-slot bugs stay a manual test.
+**What they don't do.** No slice completes an escrow on the other passphrase hosts: Kubuntu's kdialog,
+Zorin, and Fedora and Omarchy once they can prompt. Slice 1 sees their prompts open and time out.
 
 ## Experiments, for Andrey's approval
 
 All wait until the first nightly since the merges has finished, with nothing else running on premium. Each
 is one item to approve. The list's first item used to be a count of the key slots, which the lab has since
-answered (*The live state*); the TPM-backed escrow is new, and the BitLocker one has moved to its own host.
+answered (*The live state*). The TPM-backed escrow is new, the BitLocker one has moved to its own host, and
+the last no longer needs Andrey to type: it waits for a host instead.
 
 | # | Host | The change | What it answers | How it is undone | If it goes wrong |
 |---|---|---|---|---|---|
@@ -443,23 +500,25 @@ answered (*The live state*); the TPM-backed escrow is new, and the BitLocker one
 | 3 | `prem-ws2022-01` | A `pw-*` fleet with Windows enforcement on, PIN off; the host moved in for ten minutes and back | That a Server stays healthy, with no status and no count | The move back | It stops answering (#55549's symptom): moving it back ends it |
 | 4 | `prem-ubu2604-tpm` | A `pw-*` fleet with Linux escrow on; the host moved in; *Create key* clicked; a refetch; the key viewed once; moved out and in, and clicked again; moved back; fleet deleted | That fleetd 1.63.0 takes the snapd path on this disk and escrows with no prompt, how long it takes, that "Verified" survives a refetch, and that the second escrow replaces the first | Fleet's side by the move back. fleetd's own key stays on the disk until a rollback, and harms nothing there | "Failed" on the host, which the move back clears, or a passphrase prompt nobody answers, if fleetd doesn't recognise the disk. At worst the disk doesn't unlock at its next boot: the lab types its recovery key or rolls back. No restart is part of this |
 | 5 | `prem-win11-bde` | A `pw-*` fleet with Windows enforcement on, PIN off; the host moved in; the key escrowed and protection restored; one restart by script while Fleet still holds the key; the disk decrypted by script, and Fleet left to encrypt it; moved back; a script that suspends protection and deletes the protectors | That it needs nobody, how long the two passes and the two conversions take, whether fleetd rotates the key repeatedly before the first refetch, whether the VM boots unattended on Fleet's TPM protector, whether Fleet or Windows encrypts a disk a script has decrypted, whether a script returns the disk to its stock state, whether premium's firewall passes those scripts | The script; failing that, a rollback to the baseline, which only the lab's owner can do | It stops at the recovery prompt at boot: the lab's owner types the key Fleet holds, or rolls it back. No smoke runs on it |
-| 6 | `prem-ubu2404-luks`, with Andrey typing the passphrase | One completed escrow; a refetch; the key viewed; the slot removed by script; a refetch | Whether the key survives the first refetch (#58617), whether Fleet drops it when the slot goes, whether a slot can be freed without a rollback | A rollback to the baseline | The wrong slot is removed and the VM can't unlock at boot: a rollback |
+| 6 | The passphrase host built to be driven, once it exists | A `pw-*` fleet with Linux escrow on; the host moved in; the helper started by script; *Create key* clicked; a refetch; the key viewed once; the slot removed by script; a refetch; moved back; fleet deleted | That the helper answers the prompt when fleetd opens it, whether the key survives the first refetch (#58617), whether Fleet drops it when the slot goes, whether a script frees the slot, whether premium's firewall passes those scripts | The slot's removal, which is part of it; failing that, a rollback to the baseline | The wrong slot is removed and the VM can't unlock at boot: a rollback. No smoke runs on it, and `prem-ubu2404-luks` is not touched. Nobody has to type |
 
 ## Decisions that are Andrey's
 
 | # | Decision | My answer |
 |---|---|---|
-| 1 | Build step E at all | Yes, slices 1 to 3 |
+| 1 | Build step E at all | Yes, slices 1 to 3, and slice 4 when its host exists |
 | 2 | Throwaway fleets, or a standing setting on OS matrix | Throwaway fleets. It needs a new exception in `CLAUDE.md`: this one project may move its own host off OS matrix for the length of a test |
-| 3 | Which hosts | The five passphrase hosts and one Server for slice 1, `prem-win11-bde` for slice 2, `prem-ubu2604-tpm` for slice 3. No pool host, and `prem-win10-01` keeps to its smoke |
+| 3 | Which hosts | The five passphrase hosts and one Server for slice 1, `prem-win11-bde` for slice 2, `prem-ubu2604-tpm` for slice 3, the host of decision 12 for slice 4. No pool host, and `prem-win10-01` keeps to its smoke |
 | 4 | BitLocker every night, or once per baseline | Every night. Experiment 5 says whether each night starts from the stock state or from a protected disk |
 | 5 | May a test read a key and check it against the disk | Yes, in this project only, with traces and screenshots off, and only a key the same test destroys or replaces. Otherwise the modal is asserted without its value |
-| 6 | Typing a passphrase, added to the reset hook | Yes. It is what makes a nightly escrow on a passphrase disk possible with the passphrase left where it is |
+| 6 | Typing a passphrase, added to the reset hook | Not for a first nightly escrow any more: the host of decision 12 does that. Later, for the other passphrase hosts |
 | 7 | A TPM-backed Ubuntu host | **Decided, 2026-11-16:** built as a host of its own, `prem-ubu2604-tpm`. `prem-ubu2604d-01` is unchanged |
 | 8 | FileVault | **Decided, 2026-11-16:** set aside for now. My answer stays: no enforcement, ever, on a pool Mac |
-| 9 | The experiments above | 1 to 4 as soon as the nightly is read; 5 and 6 when he is at the lab |
+| 9 | The experiments above | 1 to 4 as soon as the nightly is read; 5 when he is at the lab; 6 once its host is built |
 | 10 | This branch | It is local: the docs commit `833c534`, a merge of `main` for the two manifest entries, this analysis, and the corrections below. A docs PR of its own, or held until slice 1 |
 | 11 | Hosts kept for these tests | **Decided, 2026-11-16:** two built, and in the manifest by PR #148 |
+| 12 | A passphrase host built to be driven by a test | Yes, now: Ubuntu 24.04 at 4 GB. The lab has tested the method and has the room |
+| 13 | A second Omarchy with zenity | When fleetd 1.64.0 is on a channel, at 4 GB. Nothing could run on it before that |
 
 ## Corrected in this branch
 
@@ -491,8 +550,10 @@ Read from the source and still to be seen on a host:
   encryption (inferred from `server/service/orbit.go:1255-1261` and fleetd's five-minute wait).
 - That premium's firewall passes scripts naming `manage-bde` or `cryptsetup`.
 - That the Windows Servers lack the BitLocker feature, which is #55549's precondition.
-- That `cryptsetup luksKillSlot` in batch mode frees a slot from a Fleet script, and that fleetd's own
-  rollback, which calls it with no key and no batch flag (`luks_linux.go:491-498`), frees anything.
+- That the accessibility helper answers the prompt when fleetd itself opens it, and that a helper started
+  by a Fleet script outlives the script.
+- That `cryptsetup luksKillSlot` frees a slot from a Fleet script, and that fleetd's own rollback, which
+  calls it with no key and no batch flag (`luks_linux.go:491-498`), frees anything.
 - That a throwaway fleet's default agent options leave a moved host as quick to answer as OS matrix's do.
 - Everything about FileVault on a Tart VM.
 
@@ -506,9 +567,9 @@ Seen while reading, and worth a look once a host is in hand; none is filed or co
 
 ## Appendix: the 41 bugs
 
-"Reach" is whether a nightly on this lab would have met the bug: **1** in slice 1, **2** in slice 2, **P**
-with the passphrase answered, **+** with a host prepared for it, **no** not on this lab. The classification
-is a reader's, from each issue's text.
+"Reach" is whether a nightly on this lab would have met the bug: **1** in slice 1, **2** in slice 2, **4**
+in slice 4, where the prompt is answered, **+** with a host prepared for it, **no** not on this lab. The
+classification is a reader's, from each issue's text.
 
 | Issue | What | Platform | Reach |
 |---|---|---|---|
@@ -522,7 +583,7 @@ is a reader's, from each issue's text.
 | #47617 | My device lacks FileVault instructions | macOS | no: ADE |
 | #49059 | The table doesn't count every eligible Linux host | Linux | 1 |
 | #50069 | Omarchy missing from the supported-Linux checks | Linux | the smokes cover it |
-| #52236 | No status change when the escrowed key becomes invalid | Linux | P |
+| #52236 | No status change when the escrowed key becomes invalid | Linux | 4 |
 | #52520 | Tooltip wrapping | all | no: visual |
 | #53222 | Wrong copy for enforce-only and escrow-only | macOS | + : escrow-only on a pool Mac |
 | #53503 | "Action required" flashes after a transfer to a fleet with encryption off | macOS | no: needs a Mac with a key |
@@ -530,14 +591,14 @@ is a reader's, from each issue's text.
 | #55011 | Rotation returns 502 on a push failure and stays pending | macOS | no |
 | #55549 | Windows hosts without BitLocker stop answering when encryption is enforced | Windows | 1 |
 | #55895 | Windows counts show 0 while the host shows Enforcing | Windows | 1 |
-| #46227 | Escrow fails when the passphrase isn't in slot 0 | Linux | P + |
-| #46529 | *Create key* can prompt twice | Linux | P |
-| #46535 | Escrowed slot deleted, new key never stored | Linux | P |
-| #47589 | "Incorrect passphrase" for a valid one, noisy login shell | Linux | P + |
+| #46227 | Escrow fails when the passphrase isn't in slot 0 | Linux | 4: the test's passphrase is in slot 1 |
+| #46529 | *Create key* can prompt twice | Linux | 4 |
+| #46535 | Escrowed slot deleted, new key never stored | Linux | 4 |
+| #47589 | "Incorrect passphrase" for a valid one, noisy login shell | Linux | 4 + : a noisy login shell |
 | #52717 | fleetd reports no progress: a dismissed prompt locks *Create key* | Linux | 1 |
 | #54821 | An old failure keeps showing "Failed" | Linux | 1 |
 | #55701 | The dialog fails silently on some Wayland sessions | Linux | no: needs zenity on Omarchy, which the lab keeps off |
-| #58617 | The verify query deletes a key escrowed seconds earlier | Linux | P |
+| #58617 | The verify query deletes a key escrowed seconds earlier | Linux | 4 |
 | #58776 | No zenity or kdialog on stock Fedora | Linux | 1 |
 | #49278 | Migrated Windows device stuck at Enforcing | Windows | no |
 | #49401 | Fleet never restores BitLocker protection | Windows | 2 |

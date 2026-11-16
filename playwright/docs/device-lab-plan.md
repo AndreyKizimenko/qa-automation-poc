@@ -386,6 +386,11 @@ He set FileVault aside for now. The lab also counted the LUKS key slots: the esc
 `prem-ubu2404-luks`, which it removed before retaking that host's baseline. The analysis has the detail
 (*What the lab built*) and the experiments that come before either flow is a test.
 
+A second round the same day: on a throwaway VM, the lab tested that a script can answer fleetd's passphrase
+prompt through the desktop's accessibility API. On that the analysis proposes one more host, a passphrase
+LUKS host a test can drive, and a second Omarchy with zenity once fleetd 1.64.0 is out. Neither is built,
+and both are Andrey's to decide.
+
 ## Decided
 
 - **`playwright/lab-hosts.json` is the manifest's only copy** (Andrey, 2026-11-15; it replaces the two-copy
