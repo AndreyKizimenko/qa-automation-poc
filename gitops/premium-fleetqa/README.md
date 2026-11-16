@@ -206,7 +206,7 @@ suite's cleanup returns each to this fleet if it re-enrolls elsewhere: every lab
 enroll secret, so that is where a re-enrolled one lands.
 
 **The file declares the fleet empty, on purpose.** Whatever is on a fleet reaches every host on it, and this one
-holds an MDM-enrolled Windows host and five LUKS-encrypted Linux ones. So it carries no software, policies,
+holds two MDM-enrolled Windows hosts (one of them BitLocker-encrypted) and eight encrypted Linux ones. So it carries no software, policies,
 profiles, scripts, reports or OS-update settings, and it declares disk encryption and key escrow **off** for
 every platform, not merely absent. An apply deletes what a fleet file doesn't declare, so each apply clears
 anything that found its way onto the fleet, and the verify then holds it to that: `gitops-verify`'s entity
@@ -216,7 +216,9 @@ fails the file itself if it ever declares an entity or an OS-update or setup-exp
 the suite's per-OS smokes (`playwright/tests/e2e/premium/matrix/os-smokes.spec.ts`), for the length of a test:
 a `pw-*` script, a `fleet-pw-*` package or the smoke `.msi`, and a `pw-*` policy held to one host by a label,
 each deleted by the test, and by the suite's cleanup after a killed run. The gitops chain runs before the
-suite, so a verify never meets them.
+suite, so a verify never meets them. The suite's disk-encryption tests (`playwright/tests/e2e/premium/encryption/`)
+change nothing here: they move one host at a time off this fleet, onto a throwaway `pw-*` fleet with one
+disk-encryption setting on, and back.
 
 Its agent options and features are the VMs fleet's, which are also what the fleet had when it was created by
 hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reason the VMs fleet's is.

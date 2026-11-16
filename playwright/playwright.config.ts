@@ -16,6 +16,7 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'gitops-mode-teardown': 'premium',
   'premium-exclusive': 'premium',
   'premium-matrix': 'premium',
+  'premium-encryption': 'premium',
   free: 'free',
   'free-exclusive': 'free',
   'free-setup': 'free',
@@ -119,6 +120,14 @@ function resolveSuite(): Suite {
   if (named.includes('premium-matrix') && besideMatrix.length) {
     fail(
       `--project=premium-matrix can't run in one invocation with --project=${besideMatrix.join(', ')} — the smokes would queue on the same VMs. Run it on its own, after them (npm run test:premium:matrix).`,
+    );
+  }
+  // The disk-encryption tests move OS matrix hosts onto throwaway fleets, where
+  // the smokes would find them gone, and they share the hosts' queues with them.
+  const besideEncryption = named.filter((n) => n === 'premium' || n === 'premium-exclusive' || n === 'premium-matrix');
+  if (named.includes('premium-encryption') && besideEncryption.length) {
+    fail(
+      `--project=premium-encryption can't run in one invocation with --project=${besideEncryption.join(', ')} — it moves lab hosts off OS matrix. Run it on its own, after them (npm run test:premium:encryption).`,
     );
   }
   // One invocation loads one `.env.<suite>`, so projects of two tiers in one
@@ -264,6 +273,8 @@ export default defineConfig({
         '**/exclusive/**',
         // The per-OS smokes; see premium-matrix.
         '**/matrix/**',
+        // The disk-encryption tests, which move OS matrix hosts; see premium-encryption.
+        '**/encryption/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -321,6 +332,25 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/premium-admin.json',
+      },
+      dependencies: ['premium-setup'],
+      teardown: 'cleanup-teardown',
+    },
+
+    // ── Disk encryption on the lab's hosts (its own invocation, after the smokes) ─
+    // Each test moves one lab host from OS matrix onto a throwaway fleet with one
+    // disk-encryption setting on, drives the flow, and moves it back. A disk key
+    // reaches the page in these tests, so nothing that records the page is kept:
+    // no trace, screenshot or video, on a failure either.
+    {
+      name: 'premium-encryption',
+      testDir: './tests/e2e/premium/encryption',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/premium-admin.json',
+        trace: 'off',
+        screenshot: 'off',
+        video: 'off',
       },
       dependencies: ['premium-setup'],
       teardown: 'cleanup-teardown',

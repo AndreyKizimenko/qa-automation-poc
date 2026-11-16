@@ -19,7 +19,8 @@ pages/
 ├── DashboardPage.ts    # Top-level nav entries live at root
 ├── auth/               # LoginPage, ForgotPasswordPage
 ├── account/            # MyAccountPage
-├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage
+├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage, MyDevicePage
+│                       #   (MyDevicePage: the end user's page, opened from Host details)
 │                       #   (HostDetailsPage has Controls/Software/Reports/Policies tabs,
 │                       #   but hosts is its primary nav context)
 ├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
@@ -27,6 +28,8 @@ pages/
 ├── controls/           # ControlsPage, OsUpdates, OsSettings, DiskEncryption, profiles,
 │                       #   certificates, Passwords (Recovery Lock), scripts, variables,
 │                       #   and the setup-experience pages
+│                       #   (DiskEncryptionPage: the settings, and the fleet's status
+│                       #   table with its counts and its link to the Hosts list)
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
 ├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage, PolicyLivePage (a ReportLivePage for a policy's run, plus its Yes / No summary)
 ├── labels/             # LabelsPage

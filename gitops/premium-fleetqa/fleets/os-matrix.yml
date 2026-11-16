@@ -9,15 +9,20 @@
 # that it stays so: an apply deletes whatever a fleet file does not declare, so
 # every apply removes a policy, script, profile, report or software title that
 # found its way here, and `gitops-verify` then holds the fleet to exactly this.
-# Whatever is on this fleet reaches every host on it, MDM-enrolled Windows and
-# macOS among them, and five of its Linux hosts are LUKS-encrypted. So:
+# Whatever is on this fleet reaches every host on it. Two of them are Windows
+# hosts in Fleet's MDM, and six of its Linux hosts have an encrypted disk. So:
 #
 #   - No software, policies, profiles, scripts, reports or OS-update settings.
 #     `gitops-verify`'s `_sanity` spec fails this file if it declares one.
 #   - Disk encryption and key escrow are declared **off** for every platform,
-#     not left out, so the verify asserts them off after each apply: turned on
-#     here, they would start BitLocker and FileVault on these hosts and prompt
-#     for the LUKS passphrase on the encrypted ones.
+#     not left out, so the verify asserts them off after each apply. Turned on
+#     here, Windows enforcement would encrypt the Windows 10 host and add
+#     protectors on the Windows 11 one, which the lab keeps in its stock
+#     BitLocker state for tests, and nothing in Fleet undoes either. Linux key
+#     escrow would put the encrypted hosts at "Action required"; fleetd acts
+#     only once Create key is clicked on a host's My device page
+#     (playwright/docs/device-lab-step-e-analysis.md). The fleet holds no Mac,
+#     so the macOS settings reach nothing today.
 #   - The same agent options and features as the VMs fleet, which are also what
 #     the fleet had when it was created by hand.
 #

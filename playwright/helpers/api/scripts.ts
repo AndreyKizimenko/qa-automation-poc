@@ -87,6 +87,37 @@ export async function getScriptResult(
 }
 
 /**
+ * Runs an ad-hoc script (no library entry) on a host and waits for its result.
+ * For a spec's work *on* the host — reading or resetting state it then asserts
+ * through the UI — not for a script run under test, which goes through the Run
+ * script modal. The wait covers the host's queue, so give it the time a
+ * script behind an install or a dialog needs. Throws when the host never
+ * answered; a non-zero exit is the caller's to judge.
+ */
+export async function runAdHocScript(
+  request: APIRequestContext,
+  hostId: number,
+  scriptContents: string,
+  { timeout = 300_000 }: { timeout?: number } = {},
+): Promise<{ exitCode: number; output: string }> {
+  const res = await postAdHocScript(request, hostId, scriptContents);
+  await expectOk(res, `Failed to queue a script on host ${hostId}`);
+  const { execution_id: executionId } = await res.json();
+  let result: ScriptResult = { exitCode: null, output: '', hostTimeout: false };
+  await expect
+    .poll(
+      async () => {
+        result = await getScriptResult(request, executionId);
+        return result.exitCode !== null || result.hostTimeout;
+      },
+      { timeout, intervals: [2_000], message: `script ${executionId} never finished on host ${hostId}` },
+    )
+    .toBe(true);
+  if (result.exitCode === null) throw new Error(`[runAdHocScript] host ${hostId} timed out running script ${executionId}`);
+  return { exitCode: result.exitCode, output: result.output };
+}
+
+/**
  * Queues an ad-hoc script (no library entry) on a host and returns without
  * waiting for it. Used for cleanup that must happen on the device itself — the
  * run-script specs remove their marker file this way — so it is fire-and-forget

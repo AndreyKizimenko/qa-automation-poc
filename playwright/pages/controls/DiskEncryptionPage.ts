@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Toast } from '../components/Toast';
 import { TeamDropdown } from '../components/TeamDropdown';
+import { HostsListPage } from '../hosts/HostsListPage';
 
 /** The platform tabs the disk-encryption page renders, in render order. */
 export type DiskEncryptionPlatform = 'macos' | 'windows' | 'linux';
@@ -9,6 +10,25 @@ const TAB_NAMES: Record<DiskEncryptionPlatform, string> = {
   macos: 'macOS',
   windows: 'Windows',
   linux: 'Linux',
+};
+
+/** A host's disk-encryption status as Fleet's API names it (`os_settings_disk_encryption`). */
+export type DiskEncryptionStatus =
+  | 'verified'
+  | 'verifying'
+  | 'failed'
+  | 'action_required'
+  | 'enforcing'
+  | 'removing_enforcement';
+
+/** Each status's row in the status table, in the table's own fixed order (`DiskEncryptionTableConfig.tsx`). */
+const STATUS_NAMES: Record<DiskEncryptionStatus, string> = {
+  verified: 'Verified',
+  verifying: 'Verifying',
+  failed: 'Failed',
+  action_required: 'Action required',
+  enforcing: 'Enforcing',
+  removing_enforcement: 'Removing enforcement',
 };
 
 /**
@@ -22,6 +42,9 @@ const TAB_NAMES: Record<DiskEncryptionPlatform, string> = {
  * disabled until enforcement is on), and Linux has key escrow only. Each
  * checkbox is a Fleet `<Checkbox>` — a real `role="checkbox"` whose accessible
  * name is its visible label — so state reads off `toBeChecked()`.
+ *
+ * Below the form, once the tab's setting is on, a table counts the fleet's
+ * hosts of that platform by status, and a click on a row lists them.
  */
 export class DiskEncryptionPage {
   readonly page: Page;
@@ -77,6 +100,72 @@ export class DiskEncryptionPage {
       new RegExp(`/controls/os-settings/disk-encryption/${platform}\\b`),
     );
     await expect(this.tab(platform)).toHaveAttribute('aria-selected', 'true');
+  }
+
+  /**
+   * The status table's row for one status. The table is rendered only while the
+   * tab's setting is on, and then it lists all six statuses, a count of 0
+   * included, each row named by its status cell ("Verified", not "Verifying").
+   */
+  statusRow(status: DiskEncryptionStatus): Locator {
+    return this.page
+      .getByRole('row')
+      .filter({ has: this.page.getByRole('cell', { name: STATUS_NAMES[status], exact: true }) });
+  }
+
+  /**
+   * The number of the fleet's hosts on this platform with `status`: the second of
+   * the row's three cells (Status, Hosts, and a *View all hosts* button), which
+   * carry no column name of their own.
+   */
+  hostCount(status: DiskEncryptionStatus): Locator {
+    return this.statusRow(status).getByRole('cell').nth(1);
+  }
+
+  /**
+   * Checks every status's count on the open tab: `expected`'s where it names
+   * one, 0 for the rest. Only exact on a fleet whose hosts the caller controls.
+   */
+  async expectHostCounts(expected: Partial<Record<DiskEncryptionStatus, number>>): Promise<void> {
+    for (const status of Object.keys(STATUS_NAMES) as DiskEncryptionStatus[]) {
+      await expect(this.hostCount(status), `${STATUS_NAMES[status]} hosts`).toHaveText(String(expected[status] ?? 0));
+    }
+  }
+
+  /**
+   * Clicks a status's row, which opens the Hosts list on the platform's built-in
+   * label, filtered to the fleet and the status, and waits for that list.
+   */
+  async openHostsWith(status: DiskEncryptionStatus, fleetId: number): Promise<HostsListPage> {
+    await this.statusRow(status).click();
+    await expect(this.page).toHaveURL(
+      new RegExp(
+        `/hosts/manage/labels/\\d+\\?(?=.*\\bfleet_id=${fleetId}\\b)(?=.*\\bos_settings_disk_encryption=${status}\\b)`,
+      ),
+    );
+    const hosts = new HostsListPage(this.page);
+    await expect(hosts.resultsCount).toBeVisible();
+    await hosts.table.waitForSettled();
+    return hosts;
+  }
+
+  /**
+   * Checks the table of a fleet that holds one host of the platform: `status`
+   * counted 1 and every other status 0, and the row's click listing that host
+   * alone. With `status` null the host has none, and every count is 0.
+   */
+  async expectOneHost(opts: {
+    fleetId: number;
+    platform: DiskEncryptionPlatform;
+    status: DiskEncryptionStatus | null;
+    hostName: string;
+  }): Promise<void> {
+    await this.goto({ fleetId: opts.fleetId, platform: opts.platform });
+    await this.expectHostCounts(opts.status ? { [opts.status]: 1 } : {});
+    if (!opts.status) return;
+    const hosts = await this.openHostsWith(opts.status, opts.fleetId);
+    await expect(hosts.resultsCount).toHaveText('1 host');
+    await expect(hosts.hostLink(opts.hostName)).toBeVisible();
   }
 
   /**

@@ -11,10 +11,13 @@ name: QA — Branch run
 #   gh workflow run "QA — Branch run" -f branch=<branch>
 #   gh workflow run "QA — Branch run" -f branch=main -f workers=<N>   # a worker-count trial, premium's
 #   gh workflow run "QA — Branch run" -f branch=<branch> -f os-smokes=true   # with the per-OS smokes
+#   gh workflow run "QA — Branch run" -f branch=<branch> -f encryption=true  # with the disk-encryption tests
 #
 # The per-OS smokes (playwright-os-smokes.yml, after premium's suite) are the
 # nightly's: a branch run leaves them out unless `os-smokes` asks for them,
-# which a branch that changes them, or what they stand on, does.
+# which a branch that changes them, or what they stand on, does. The same goes
+# for the disk-encryption tests (playwright-encryption.yml, after the smokes),
+# with `encryption`.
 #
 # `workers` is premium's count only. Premium has a pool of real VMs per platform
 # for its workers to spread over; free has one VM per platform and a smaller
@@ -44,6 +47,11 @@ on:
         default: ''
       os-smokes:
         description: Also run the per-OS smokes (Playwright — OS smokes) after the premium suite
+        required: false
+        type: boolean
+        default: false
+      encryption:
+        description: Also run the disk-encryption tests (Playwright — Disk encryption) after the per-OS smokes
         required: false
         type: boolean
         default: false
@@ -77,6 +85,16 @@ jobs:
       ref: ${{ inputs.branch }}
     secrets: inherit
 
+  # After the smokes, whatever they did, or skipped: both take OS matrix hosts.
+  # Skipped unless the dispatch asked for them.
+  playwright-encryption:
+    needs: [playwright-premium, playwright-os-smokes]
+    if: ${{ !cancelled() && inputs.encryption }}
+    uses: ./.github/workflows/playwright-encryption.yml
+    with:
+      ref: ${{ inputs.branch }}
+    secrets: inherit
+
   gitops-free:
     uses: ./.github/workflows/nightly-qa-gitops-free.yml
     with:
@@ -95,7 +113,7 @@ jobs:
   # written to the run's summary: a failure the branch brought is one main's
   # nights never had. Given the one secret it needs, and it never fails the run.
   run-history:
-    needs: [playwright-premium, playwright-free, playwright-os-smokes]
+    needs: [playwright-premium, playwright-free, playwright-os-smokes, playwright-encryption]
     if: ${{ !cancelled() }}
     permissions:
       contents: read

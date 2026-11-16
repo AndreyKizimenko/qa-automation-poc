@@ -66,8 +66,9 @@ A change that does any of these is a blocker, whatever its tests show. None can 
 - **What other specs stand on, changed:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`; resting state uninstalled), a standing fleet created, renamed or
   deleted (Workstations, VMs, QA, OS matrix and Compliance from gitops; Mobile by hand), a host moved onto
-  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet; nothing
-  goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet, and the
+  `premium-encryption` project moves its own host onto a throwaway fleet and back, approved by Andrey on
+  2026-11-16; nothing goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
   spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
   `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either

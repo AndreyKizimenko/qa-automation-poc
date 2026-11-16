@@ -39,7 +39,8 @@ tests/
 │   │   ├── software/         # library (premium-only, paywalled on free), edit-package, os, vulnerabilities
 │   │   ├── exclusive/        # specs that need a VM queue or a global switch to themselves (premium-exclusive only)
 │   │   ├── gitops-mode/      # specs that turn gitops mode on (gitops-mode project only)
-│   │   └── matrix/           # a smoke per OS version of the device lab (premium-matrix project only)
+│   │   ├── matrix/           # a smoke per OS version of the device lab (premium-matrix project only)
+│   │   └── encryption/       # disk encryption on the lab's encrypted hosts (premium-encryption project only)
 │   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs
 ├── api/                      # Pure-API specs (no browser)
 │   ├── config.spec.ts        # Agnostic config-shape checks
@@ -202,6 +203,7 @@ Routing is purely by folder — no tags. Each browser project's `testIgnore` in
 | `tests/e2e/{shared,premium,free}/exclusive/**` | no — `premium-exclusive` runs shared + premium | no — `free-exclusive` runs shared + free |
 | `tests/e2e/premium/gitops-mode/**` | no — gitops-mode project only | no |
 | `tests/e2e/premium/matrix/**` | no — premium-matrix project only | no |
+| `tests/e2e/premium/encryption/**` | no — premium-encryption project only | no |
 | `tests/cli/shared/**` | yes | yes |
 | `tests/cli/premium/**` | yes | no |
 | `tests/cli/free/**` | no | yes |

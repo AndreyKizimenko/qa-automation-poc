@@ -46,8 +46,9 @@ Each has happened, or nearly happened, and none can be undone from a test.
 - **What other specs stand on, changed:** the durable VM software (`helpers/vm-fixtures.ts`, declared in
   `gitops/premium-fleetqa/fleets/vms.yml`; resting state uninstalled), a standing fleet created, renamed or
   deleted (Workstations, VMs, QA, OS matrix and Compliance from gitops; Mobile by hand), a host moved onto
-  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet; nothing
-  goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet, and the
+  `premium-encryption` project moves its own host onto a throwaway fleet and back, approved by Andrey on
+  2026-11-16; nothing goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
   spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
   `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either
@@ -139,8 +140,8 @@ wrong reason, so:
 **A local run is scoped, and never `npm run test:<tier>`.** From `playwright/`:
 `npx playwright test --project=<tier> <spec-file-names>`, with `premium` or `free` (both, for anything in
 `shared/`), `<tier>-exclusive <file-name>` for an `exclusive/` spec (its own invocation, never beside the main
-project), `premium-matrix -g "<os> \("` for the per-OS smokes, and `npm run test:gitops-mode` for a
-`gitops-mode/` one. Three things turn a scoped run into
+project), `premium-matrix -g "<os> \("` for the per-OS smokes, `premium-encryption <file-name>` for an
+`encryption/` spec (its own invocation too), and `npm run test:gitops-mode` for a `gitops-mode/` one. Three things turn a scoped run into
 something else:
 - `npm run test:<tier> -- <spec>` runs the **whole** suite: npm appends the arguments after the script's
   final `exit`, so no `playwright test` sees them.

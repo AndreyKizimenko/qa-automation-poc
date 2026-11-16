@@ -73,6 +73,7 @@ export type {
 // Hosts
 export { HostsListPage } from './hosts/HostsListPage';
 export { HostDetailsPage } from './hosts/HostDetailsPage';
+export { MyDevicePage } from './hosts/MyDevicePage';
 export { HostQueryReportPage } from './hosts/HostQueryReportPage';
 
 // Software + vulnerabilities

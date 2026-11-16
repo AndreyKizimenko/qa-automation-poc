@@ -205,6 +205,30 @@ export async function getFleetWindowsDiskEncryption(
   };
 }
 
+/**
+ * Writes a fleet's disk-encryption settings, every platform at once: Linux key escrow and Windows enforcement
+ * as given, the BitLocker PIN and both macOS settings off. Only for a throwaway `pw-*` fleet that holds the
+ * lab hosts a disk-encryption spec moved there: Windows enforcement acts on every MDM-enrolled Windows host
+ * on the fleet with nobody asked, the PIN would stop every boot of one at a prompt, and nothing in Fleet
+ * undoes either.
+ */
+export async function setFleetDiskEncryption(
+  request: APIRequestContext,
+  fleetId: number,
+  settings: { linuxEscrowEnabled?: boolean; windowsEnabled?: boolean },
+): Promise<void> {
+  const res = await request.post(apiUrl('disk_encryption'), {
+    headers: authHeaders(),
+    data: {
+      fleet_id: fleetId,
+      macos_settings: { enable_disk_encryption: false, enable_escrow_disk_encryption_key: false },
+      windows_settings: { enable_disk_encryption: !!settings.windowsEnabled, require_bitlocker_pin: false },
+      linux_settings: { enable_escrow_disk_encryption_key: !!settings.linuxEscrowEnabled },
+    },
+  });
+  await expectOk(res, `Failed to set disk encryption on fleet ${fleetId}`);
+}
+
 /** The OS update settings a fleet enforces. */
 export async function getFleetOsUpdates(
   request: APIRequestContext,

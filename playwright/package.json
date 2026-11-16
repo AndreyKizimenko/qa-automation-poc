@@ -8,6 +8,7 @@
     "test:premium:ui": "SUITE=premium playwright test --project=premium --ui",
     "test:premium:exclusive": "SUITE=premium playwright test --project=premium-exclusive",
     "test:premium:matrix": "SUITE=premium playwright test --project=premium-matrix",
+    "test:premium:encryption": "SUITE=premium playwright test --project=premium-encryption",
     "test:gitops-mode": "SUITE=premium playwright test --project=gitops-mode",
     "test:gitops-mode:only": "SUITE=premium playwright test --project=gitops-mode --no-deps",
     "test:gitops-mode:headed": "SUITE=premium playwright test --project=gitops-mode --no-deps --headed",

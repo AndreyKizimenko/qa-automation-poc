@@ -24,10 +24,12 @@ test-data/
 │   │   └── software/            # .pkg custom packages
 │   └── ios-ipados/              # (future) .mobileconfig, declarations
 ├── linux/
+│   ├── disk-encryption/         # LUKS escrow scripts: answer fleetd's prompt, key slots, fleetd's log (README)
 │   ├── scripts/                 # marker-create .sh script
 │   ├── setup-experience/        # .deb installed during setup experience
 │   └── software/                # .deb custom packages (README)
 ├── windows/
+│   ├── disk-encryption/         # BitLocker status, decrypt and reset scripts (README)
 │   ├── profiles/                # .xml profiles
 │   ├── scripts/                 # marker-create .ps1 script
 │   ├── setup-experience/        # .msi installed during setup experience
