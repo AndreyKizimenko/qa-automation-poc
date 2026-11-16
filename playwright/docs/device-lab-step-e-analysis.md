@@ -30,7 +30,8 @@ own, add a third, and take both off the hosts that carry smokes. What the lab's 
 - **Second slice: BitLocker on `prem-win11-bde`, end to end,** which needs nobody. The host rests in
   Windows 11's stock state (encrypted, protection off), where most of Fleet's Windows bugs were. Fleet adds
   a recovery key and a TPM protector and turns protection on, the test reads the key, and a script takes
-  the protectors off again. One experiment by hand comes first.
+  the protectors off again. Its second step, on the same host: a script decrypts the disk and Fleet
+  encrypts it. One experiment by hand comes first.
 - **Third slice: a completed Linux escrow every night, on `prem-ubu2604-tpm`.** Its disk is under Ubuntu's
   TPM-backed encryption, which fleetd escrows through snapd with no prompt, and a second escrow replaces
   the first in place. None of the 41 bugs is on that path, which shipped in July: the value is a real
@@ -136,7 +137,10 @@ What the lab found that bears on a test:
 
 - **Windows 11 encrypts itself.** A fresh clone boots decrypted, and Windows' automatic device encryption
   brings it to the state above within minutes. So this host has no decrypted disk at rest, and a disk
-  decrypted by script may be encrypted again by Windows before Fleet is asked (inferred).
+  decrypted by script may be encrypted again by Windows before Fleet is asked (inferred). On an enforcing
+  fleet, with a refetch while the disk decrypts, fleetd is asked before the decryption ends and encrypts
+  as soon as it does (`orbit/pkg/update/notifications.go:982-987, 1043-1051`), so it should get there
+  first. Experiment 5 shows which.
 - **BitLocker can't bind to Secure Boot on these VMs**: the event log reports PCR 7 as unusable. The TPM
   protector Fleet adds would then be sealed to the firmware's measurements, and a firmware update on the
   lab's server could leave an encrypted VM at the recovery prompt. The lab inferred it from the log and did
@@ -303,7 +307,7 @@ Bugs labelled `bug` in fleetdm/fleet, created from 2026-05-01 to 2026-11-15: 41,
 | Platform | With nobody at a host | Once per baseline | Only with a lab change | Not at all |
 |---|---|---|---|---|
 | **Linux** | "Action required" on the six encrypted hosts and on an unencrypted eligible one; the fleet's table and its link to the Hosts list; My device's banner and *Create key*; the prompt opening and timing out (zenity, kdialog); the failure on Fedora and the refusal on Omarchy; "Failed" cleared by the move back. On `prem-ubu2604-tpm`, a completed escrow: "Verified", the escrow activity, the key modal and its viewed activity, the action by role, and the key replaced by the next escrow | A completed escrow on a passphrase disk, typed by hand, which is a manual test. Seven per baseline at most, as each keeps a slot | A completed escrow on a passphrase disk every night: the lab types the passphrase. A passphrase in a slot other than 0 (#46227), or a noisy login shell (#47589), needs a host prepared for it | Multi-disk LVM (#47256): no such host |
-| **Windows** | On `prem-win11-bde`: enforcement from the stock state to "Verified" (a key escrowed, then protection restored), the key modal, the viewed activity, the action by role, then the protectors removed by script. A Server on an enforcing fleet staying healthy and uncounted. Later, by script on the same host: protection suspended, a boot protector removed. The path from a decrypted disk (#53426) is there on `prem-win10-01` only, and is left out | The restore of protection, if no script can return the disk to its stock state: later nights then start from a protected disk and only rotate the key | Nothing more | The PIN past its creation: the next boot stops at a prompt. Migration from another MDM (#49278) |
+| **Windows** | On `prem-win11-bde`: enforcement from the stock state to "Verified" (a key escrowed, then protection restored), the key modal, the viewed activity, the action by role, then the protectors removed by script. A Server on an enforcing fleet staying healthy and uncounted. The path from a decrypted disk (#53426) on the same host, once a script has decrypted it. Later, by script: protection suspended, a boot protector removed | The restore of protection, if no script can return the disk to its stock state: later nights then start from a protected disk and only rotate the key | Nothing more | The PIN past its creation: the next boot stops at a prompt. Migration from another MDM (#49278) |
 | **macOS** | Escrow-only: profile delivery, "Action required" and its copy | Nothing | FileVault itself: a third Mac VM and a way to unlock it at boot | ADE and Setup Assistant bugs: MacStadium has no ADE |
 
 ## Answering the passphrase prompt
@@ -371,7 +375,7 @@ refresh would delete the key.
 | **3. FileVault on the pool Macs** | None | Not applicable | Not applicable | Both pool Macs lose auto-login at their next restart, and Fleet can't undo it | Not possible on the pool |
 | **4. A standing fleet of its own** | As 2 | As 2, plus the manifest, `labHostFleet`, the smokes' sweep and the Windows hosts' turn | Seconds | Five hosts that carry smokes change fleet for good | As 2 |
 | **5. Nothing** | None | Nothing | Nothing | None | Nothing |
-| **6. A project of this suite on throwaway fleets** | 7 with no host changed (slice 1); #49401, #51998 and the scripted BitLocker states (slice 2); none on the TPM-backed path (slice 3); the prompt bugs with the hook | A project and its workflow, a My device page object, the disk-encryption table and the Controls row, a host move that undoes itself | About 5 minutes for slice 1; slices 2 and 3 to be timed | A host is off OS matrix for the length of a test. Slices 2 and 3 change only the two hosts kept for them, which carry no smoke | Andrey's word for the moves, and for the two flows that change a host |
+| **6. A project of this suite on throwaway fleets** | 7 with no host changed (slice 1); #49401, #51998, #53426 and the scripted BitLocker states (slice 2); none on the TPM-backed path (slice 3); the prompt bugs with the hook | A project and its workflow, a My device page object, the disk-encryption table and the Controls row, a host move that undoes itself | About 5 minutes for slice 1; slices 2 and 3 to be timed | A host is off OS matrix for the length of a test. Slices 2 and 3 change only the two hosts kept for them, which carry no smoke | Andrey's word for the moves, and for the two flows that change a host |
 
 **Why 6 and not 2.** Shape 2 is the cheapest to write and keeps every host where it is. But a state on a
 standing fleet is entered once (*What decides it*, 5), so from the second night it asserts a photograph,
@@ -403,7 +407,10 @@ need its own way into the lab, and everything except the passphrase is reachable
 2. **Slice 2, after experiment 5: BitLocker on `prem-win11-bde`.** Enforcement on a `pw-*` fleet; the key
    escrowed, and its activity; protection restored; "Verified" after a refetch, and the fleet's counts; the
    key modal and its viewed activity; the action by role; then back to OS matrix, and a script that takes
-   the protectors off. The cleanup's resting state gains "this host has no protectors".
+   the protectors off. The cleanup's resting state gains "this host has no protectors". A second step,
+   once the first is stable: while the host is still on the enforcing fleet, a script decrypts the disk,
+   and Fleet encrypts it and replaces the key (#53426's path). It needs no second host, and it is the slow
+   part: two conversions of the disk a night.
 3. **Slice 3, after experiment 4: the TPM-backed escrow on `prem-ubu2604-tpm`.** Linux escrow on a `pw-*`
    fleet; "Action required"; *Create key* from My device; "Verified" and the escrow activity with nobody at
    the host; the key modal, its viewed activity and the action by role, on a real Linux key; out and in
@@ -411,15 +418,14 @@ need its own way into the lab, and everything except the passphrase is reachable
 4. **Ask the lab for one thing: the reset hook able to type a passphrase.** It turns the largest Linux
    cluster (key slots: #46227, #46535, #52236, #58617) into a nightly test. The TPM-backed host doesn't
    reach those: its path has no slot and no salt.
-5. **Leave out:** FileVault, the BitLocker PIN, the pool's Windows 11 VMs, a standing escrowed host, and
-   for now the path from a decrypted disk, which only `prem-win10-01` has at rest.
+5. **Leave out:** FileVault, the BitLocker PIN, the pool's Windows 11 VMs, and a standing escrowed host.
 
 **The order.** Slices 2 and 3 don't depend on each other. Slice 3 is the smaller: one host, no script on
 it, and the least that can go wrong. I would build it straight after slice 1.
 
 **What the slices reach.** Of the eleven bugs reachable with nobody at a host, slice 1 has seven and slice 2
-two (#49401, #51998). The smokes already cover #50069, and #53426 is the path left out. Slice 3 has none:
-it is there for a real escrow that repeats, on a path nothing here has run yet.
+three (#49401 and #51998, and #53426 in its second step). The smokes already cover #50069. Slice 3 has
+none: it is there for a real escrow that repeats, on a path nothing here has run yet.
 
 **What they don't do.** No slice completes an escrow on a passphrase disk. Until the lab can answer the
 prompt, the key-slot bugs stay a manual test.
@@ -436,7 +442,7 @@ answered (*The live state*); the TPM-backed escrow is new, and the BitLocker one
 | 2 | `prem-kubuntu2404-luks`, `prem-zorin18-luks`, `prem-fedora45-luks`, `prem-omarchy-01` | The same, one host at a time | kdialog's timeout; Fedora's and Omarchy's "Failed", and that the move back clears it | As 1 | As 1. Their smokes are not running then |
 | 3 | `prem-ws2022-01` | A `pw-*` fleet with Windows enforcement on, PIN off; the host moved in for ten minutes and back | That a Server stays healthy, with no status and no count | The move back | It stops answering (#55549's symptom): moving it back ends it |
 | 4 | `prem-ubu2604-tpm` | A `pw-*` fleet with Linux escrow on; the host moved in; *Create key* clicked; a refetch; the key viewed once; moved out and in, and clicked again; moved back; fleet deleted | That fleetd 1.63.0 takes the snapd path on this disk and escrows with no prompt, how long it takes, that "Verified" survives a refetch, and that the second escrow replaces the first | Fleet's side by the move back. fleetd's own key stays on the disk until a rollback, and harms nothing there | "Failed" on the host, which the move back clears, or a passphrase prompt nobody answers, if fleetd doesn't recognise the disk. At worst the disk doesn't unlock at its next boot: the lab types its recovery key or rolls back. No restart is part of this |
-| 5 | `prem-win11-bde` | A `pw-*` fleet with Windows enforcement on, PIN off; the host moved in; the key escrowed and protection restored; one restart by script while Fleet still holds the key; moved back; a script that suspends protection and deletes the protectors | That it needs nobody, how long the two passes take, whether fleetd rotates the key repeatedly before the first refetch, whether the VM boots unattended on Fleet's TPM protector, whether a script returns the disk to its stock state, whether premium's firewall passes that script | The script; failing that, a rollback to the baseline, which only the lab's owner can do | It stops at the recovery prompt at boot: the lab's owner types the key Fleet holds, or rolls it back. No smoke runs on it |
+| 5 | `prem-win11-bde` | A `pw-*` fleet with Windows enforcement on, PIN off; the host moved in; the key escrowed and protection restored; one restart by script while Fleet still holds the key; the disk decrypted by script, and Fleet left to encrypt it; moved back; a script that suspends protection and deletes the protectors | That it needs nobody, how long the two passes and the two conversions take, whether fleetd rotates the key repeatedly before the first refetch, whether the VM boots unattended on Fleet's TPM protector, whether Fleet or Windows encrypts a disk a script has decrypted, whether a script returns the disk to its stock state, whether premium's firewall passes those scripts | The script; failing that, a rollback to the baseline, which only the lab's owner can do | It stops at the recovery prompt at boot: the lab's owner types the key Fleet holds, or rolls it back. No smoke runs on it |
 | 6 | `prem-ubu2404-luks`, with Andrey typing the passphrase | One completed escrow; a refetch; the key viewed; the slot removed by script; a refetch | Whether the key survives the first refetch (#58617), whether Fleet drops it when the slot goes, whether a slot can be freed without a rollback | A rollback to the baseline | The wrong slot is removed and the VM can't unlock at boot: a rollback |
 
 ## Decisions that are Andrey's
@@ -539,7 +545,7 @@ is a reader's, from each issue's text.
 | #51098 | fleetd encrypts an encrypted disk when the status read fails | Windows | no |
 | #51998 | PIN not required, yet stuck at "Action required" | Windows | 2 |
 | #52159 | Rotation drops the PIN prompt; a paused conversion is ignored | Windows | + : risky |
-| #53426 | "Action required" shown while the disk encrypts | Windows | + : a decrypted disk, which only `prem-win10-01` has at rest |
+| #53426 | "Action required" shown while the disk encrypts | Windows | 2, in its second step |
 | #45369 | FileVault key not escrowed after ADE | macOS | no: ADE |
 | #46977 | Stale key shown after wipe and re-enroll | macOS | no |
 | #47680 | FileVault can't be turned on by `_fleetadmin` | macOS | no |
