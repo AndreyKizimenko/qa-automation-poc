@@ -55,8 +55,8 @@ jobs:
   test:
     # A guard against a hung run: Playwright stops the tests at 45 min
     # (--global-timeout), so a run that uses all of it still writes and uploads
-    # its report inside this limit. The BitLocker test, about 20 minutes, is the
-    # longest.
+    # its report inside this limit. The BitLocker test and the Server's, about 10
+    # minutes each, are the longest (the BitLocker test's own limit is 30).
     timeout-minutes: 60
     runs-on: ubuntu-26.04
     # The same image and user as the suites' jobs: browsers are pre-installed in

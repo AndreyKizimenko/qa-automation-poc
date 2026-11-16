@@ -34,7 +34,9 @@ carries the VMs fleet's enroll secret, so one that re-enrolls lands on VMs: a ma
 whatever the real-host specs put on that fleet, and a pool host anywhere else is one no worker is handed. A
 returned host is asked for a refetch, which re-runs its fleet's policies (that is what reinstalls Claude on a
 pool Mac or Windows VM). It is the one place the suite moves a host onto or off OS matrix, approved by Andrey
-on 2026-11-14; it lives inside the resting-state step, not in a step of its own, because the steps of this
+on 2026-11-14, besides the disk-encryption tests (`premium-encryption`, approved 2026-11-16), which move their
+own host onto a throwaway fleet and back; this step returns one a killed run of theirs left there, and the
+`pw-*` fleet sweep removes the fleet. It lives inside the resting-state step, not in a step of its own, because the steps of this
 file run in parallel and the resting state has to see the pool where it belongs.
 
 On premium it also sweeps **the OS matrix fleet and its hosts** for what a killed run of the per-OS smokes

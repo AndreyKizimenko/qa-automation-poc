@@ -17,12 +17,11 @@ the VMs fleet. Premium is at 4 workers: C's trial of a fourth ran green on 2026-
 Andrey switched it on. D4 and the lanes are still his to decide (C's last box). D is PR #146, merged at
 `94a397e` after two green branch runs (43690094173 and 43696536354): every OS version the lab holds gets the
 same smokes each night, in the `Playwright — OS smokes` workflow. The first nightly after that merge is the
-first to run the smokes from the nightly's own chain, and the first with premium at 4 workers. Step E is
-next. It starts with Andrey's approval of its hosts, and its section says what step D changed for it. Its
-analysis is written ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md), 2026-11-16) and waits
-for his decisions. The lab built four hosts for it the same day, and overnight, at Andrey's word, the
-experiments ran and the `premium-encryption` project was built (its own PR); the tests on hosts that carry
-smokes wait for the first nightly since the merges.
+first to run the smokes from the nightly's own chain, and the first with premium at 4 workers. Step E
+followed on 2026-11-16: its analysis ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md)), Andrey's
+approval, four hosts the lab built for it, the experiments, and the `premium-encryption` project with its own
+workflow, `Playwright — Disk encryption`, which the nightly runs after the smokes (PR #150). Every test ran on
+the lab, the ones on smoke hosts after that day's nightly, and branch run 43911713665 had the job green.
 
 ## What the suite has to work with
 
@@ -47,7 +46,7 @@ of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`
 | **A** | The suite runs on the lab's VMs with the coverage it had, and no picker can take a lab machine | #144 | Done, 2026-11-14 |
 | **B + C** | The manifest decides what a lab host is and what it is for; each worker gets its own pool VM; a 4th worker | #145 | Done, 2026-11-15. The 4-worker trial ran green, and premium is at 4 |
 | **D** | A smoke per OS version, on the matrix and pool hosts | #146 | Done, 2026-11-15 |
-| **E** | Disk encryption on real hosts, on throwaway fleets | its own PR | Approved 2026-11-16; built overnight: the `premium-encryption` project and its own workflow (`docs/device-lab-step-e-analysis.md` › *What the experiments showed*) |
+| **E** | Disk encryption on real hosts, on throwaway fleets | #150 | Approved and built 2026-11-16: the `premium-encryption` project and its own workflow, after the smokes in the nightly; branch run 43911713665 green for it (`docs/device-lab-step-e-analysis.md` › *What the experiments showed*) |
 
 One PR per step, one commit per concern, based on `main`, never on another open PR. Andrey dispatches the
 branch run.
@@ -309,6 +308,16 @@ host moved.
 
 ## Step E: disk encryption
 
+**Built 2026-11-16 (PR #150), on throwaway fleets, not the standing fleet proposed below.** Each test of the
+`premium-encryption` project (`tests/e2e/premium/encryption/`) moves one host off OS matrix onto a `pw-*`
+fleet with one setting on, drives the flow in the browser, checks each status on the host's page and in the
+fleet's Disk encryption table, and moves the host back, which clears what Fleet recorded. Linux escrow on the
+TPM-backed and the script-answered Ubuntu hosts (Omarchy's skipped behind fleetdm/fleet#55069); Create key
+left unanswered on each passphrase desktop (Fedora's failure is fleetdm/fleet#58776); BitLocker from Windows
+11's stock state and from a decrypted disk on `prem-win11-bde`; a Windows Server left alone on an enforcing
+fleet. FileVault is set aside. The analysis has the reasoning and the experiments; what follows is the plan
+as it stood before them.
+
 Discussed last (Andrey, 2026-11-14). `CLAUDE.md` forbids FileVault and anything else that gates entry to a
 real host, so nothing here starts without his approval of the hosts.
 
@@ -429,12 +438,9 @@ and both are Andrey's to decide.
   comes back under a new id. The suite finds a host by name, so nothing breaks, but the host's history in
   Fleet is gone. Accept it, or cull the abandoned simulations another way?
 - D4 and the lanes (C's last box), now that premium is at 4 workers: nothing in the trial asks for either.
-- Step E, before it starts: which of its hosts, and in what order (its section › *What step D changed for
-  it*). `prem-ubu2404-luks` alone needs no change to the smokes. The five matrix hosts either take their
-  smokes with them to the new fleet, or stay on OS matrix and out of E. And whether BitLocker on
-  `prem-win10-01` is watched once, with the later nights asserting the verified state. The analysis puts
-  these as eleven decisions with a recommended answer each, three of them made on 2026-11-16, and six
-  experiments to approve
+- Step E's hosts and their order, settled 2026-11-16: every host stays
+  on OS matrix and each test borrows its own onto a throwaway fleet, after the smokes; BitLocker runs on the
+  dedicated `prem-win11-bde`, and `prem-win10-01` keeps to its smoke
   ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md) › *Decisions that are Andrey's*).
 - `policy-automation-runs` (8 of the exclusive step's 14 minutes) is in `exclusive/` only to have an Ubuntu
   VM's queue to itself, and its policy is already scoped by label to that VM. With a VM no worker holds it

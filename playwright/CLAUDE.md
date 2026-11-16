@@ -273,7 +273,7 @@ matrix in `playwright.config.ts` is the source of truth:
 
 | Project | Picks up | Skips | Auth state |
 |---|---|---|---|
-| `premium` | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**`, `**/matrix/**` | `.auth/premium-admin.json` |
+| `premium` | `tests/e2e/{shared,premium}/**`, `tests/cli/{shared,premium}/**`, `tests/api/**` outside `free/` and `gitops-verify/` | `**/free/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/gitops-mode/**`, `**/exclusive/**`, `**/matrix/**`, `**/encryption/**` | `.auth/premium-admin.json` |
 | `free` | `tests/e2e/{shared,free}/**`, `tests/cli/{shared,free}/**`, `tests/api/**` outside `premium/` and `gitops-verify/` | `**/premium/**`, `**/loadtest/**`, `**/gitops-verify/**`, `**/cli/nightly/**`, `**/exclusive/**` | `.auth/free-admin.json` |
 | `loadtest` | `tests/loadtest/**` only (`testDir`), one worker | `**/api/**` | `.auth/loadtest-admin.json` |
 | `loadtest-api` | `tests/loadtest/api/**` only (`testDir`), one worker, no browser | n/a | bearer token |

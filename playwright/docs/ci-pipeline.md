@@ -17,6 +17,7 @@ QA — Nightly (one chain, both tiers)
 a gitops chain            apply baseline → verify → apply min → verify → fleetctl checks
 a suite job (premium)     main project (4 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
 the per-OS smokes job     after premium's suite job: the premium-matrix project (6 workers), with a report of its own
+the disk-encryption job   after the smokes: the premium-encryption project (6 workers), with a report of its own
 a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
 
 QA — Branch run           the same two tier chains without the redeploy, against a branch, on demand
@@ -111,11 +112,23 @@ second cleanup). What it buys is that the smokes can be run and re-run alone, af
 flavour's red night, and that a run's page shows them as their own line. Each host works its own queue, so
 one worker walks one host through its smokes (`mode: 'default'` per OS) while the others walk theirs; only
 the three Windows matrix hosts take turns, because they share one `.msi` title on the fleet. That is why the
-job runs at 6 workers where premium's suite runs at 3: no pool is shared, most of a smoke is a wait on its
+job runs at 6 workers where premium's suite runs at 4: no pool is shared, most of a smoke is a wait on its
 host: 57 test-minutes in CI are 12 minutes at 6 workers, nothing retried (branch run 43690094173). The
 Windows turn, declared first so it starts with the run, is the floor: more workers than that buy nothing. The nightly
 runs it after premium's suite, whatever that did; a branch run leaves it out unless dispatched with `-f
 os-smokes=true`, which a branch that touches the smokes, the lab manifest or what they stand on should be.
+
+**The disk-encryption tests are a workflow of their own too, chained after the smokes.** `premium-encryption`
+(`tests/e2e/premium/encryption/`) moves one of the lab's encrypted hosts at a time off OS matrix onto a
+throwaway `pw-*` fleet with one disk-encryption setting on, drives the flow in the browser, and moves it back,
+which clears what Fleet recorded. Five of its hosts are matrix hosts the smokes run on, which is why it runs
+after them and never beside them (the config refuses `premium-encryption` beside `premium`,
+`premium-exclusive` or `premium-matrix`), and why it holds premium's concurrency group. `Playwright — Disk
+encryption` (`playwright-encryption.yml`) is built like the smokes' workflow: its own login, cleanup teardown
+and encrypted report (`playwright-report-encryption`). A real disk key reaches the page in these tests, so
+the project keeps no trace, screenshot or video. It runs at 6 workers for the smokes' reason, one host each:
+about 37 test-minutes are 11 or 12 minutes, the BitLocker test and the Server's ten minutes each the floor.
+A branch run leaves it out unless dispatched with `-f encryption=true`.
 
 **The gitops-mode exceptions are restored before every premium apply, not by the suite.** Unlike the mode flag,
 the exceptions act outside gitops mode: `fleetctl gitops` reads them on every apply, so a stuck `secrets: false`
@@ -143,7 +156,7 @@ shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
 minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
-gitops-mode step and free's exclusive step at 15; the job limit sits above the sum. The per-OS smokes stop at 45, in a job limited to 60.
+gitops-mode step and free's exclusive step at 15; the job limit sits above the sum. The per-OS smokes stop at 45, in a job limited to 60, and so do the disk-encryption tests.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.
 
@@ -201,9 +214,9 @@ list reads as what there is to look at: Premium, Free, and whatever in gitops we
 
 **The run page's annotations work the same way.** The suites run with the `github` reporter, which adds one
 "Run Summary" annotation per invocation (free two, premium three: its main project, exclusive specs and
-gitops-mode; the per-OS smokes one more) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
+gitops-mode; the per-OS smokes and the disk-encryption tests one more each) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
 `list` instead (the config's CI reporter), so a green one adds none, and `reportSlowTests` is off, since the
-slow files are slow by design. A green nightly's page carries those six summaries and nothing else.
+slow files are slow by design. A green nightly's page carries those seven summaries and nothing else.
 
 **One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
 nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14

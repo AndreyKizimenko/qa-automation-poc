@@ -20,6 +20,7 @@ on:
       - '.github/workflows/playwright-premium.yml'
       - '.github/workflows/playwright-free.yml'
       - '.github/workflows/playwright-os-smokes.yml'
+      - '.github/workflows/playwright-encryption.yml'
   workflow_dispatch:
 
 defaults:
@@ -33,8 +34,9 @@ jobs:
   upload:
     timeout-minutes: 10
     runs-on: ubuntu-26.04
-    # The same image and user as playwright-premium.yml, playwright-free.yml and
-    # playwright-os-smokes.yml: change the tag in all four together.
+    # The same image and user as playwright-premium.yml, playwright-free.yml,
+    # playwright-os-smokes.yml and playwright-encryption.yml: change the tag in
+    # all five together.
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-noble
       options: --user 1001
