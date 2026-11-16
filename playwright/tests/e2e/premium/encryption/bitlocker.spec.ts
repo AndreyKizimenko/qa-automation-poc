@@ -40,7 +40,7 @@
  * `DiskEncryptionKeyModal.tsx`, and experiment 5 of `docs/device-lab-step-e-analysis.md`.
  */
 import type { APIRequestContext } from '@playwright/test';
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   assertActivityAfter,
   findFleetByName,
@@ -123,7 +123,7 @@ async function restoreStock(request: APIRequestContext, hostId: number): Promise
 
 test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 host', () => {
   // Two passes of fleetd's five-minute cycle, a decryption and an encryption of the disk, and the reset.
-  test.describe.configure({ timeout: 1_800_000 });
+  test.describe.configure({ timeout: 1_800_000, retries: HOST_RETRIES });
 
   test('from the stock state and from a decrypted disk, Fleet escrows a key and protects the disk', async ({
     hostDetails,

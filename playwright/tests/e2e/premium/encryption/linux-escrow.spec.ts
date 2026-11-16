@@ -46,7 +46,7 @@
  * (`docs/device-lab-step-e-analysis.md`).
  */
 import type { APIRequestContext } from '@playwright/test';
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   assertActivityAfter,
   findFleetByName,
@@ -110,7 +110,7 @@ async function refetchVitals(request: APIRequestContext, hostId: number): Promis
 
 test.describe('Premium • Disk encryption • Linux key escrow on a real host', () => {
   // A host's queue, fleetd's check-in, a passphrase key's work on a slow VM (two minutes), and two refetches.
-  test.describe.configure({ timeout: 900_000 });
+  test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   for (const c of CASES) {
     test(`${c.title}: Create key escrows a key Fleet shows`, async ({ hostDetails, request, throwawayFleet, cleanup }) => {
@@ -153,7 +153,7 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
         const page = await hostDetails.openMyDevice();
         await expect(page.createKeyBanner).toBeVisible();
         await page.createKey();
-        await expect(page.createKeyModal).toContainText('If a pop-up appears asking for your passphrase');
+        await expect(page.createKeyInstructions).toBeVisible();
         await page.closeCreateKeyModal();
         return page;
       });

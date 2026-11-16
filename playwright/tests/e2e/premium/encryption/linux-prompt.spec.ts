@@ -31,7 +31,7 @@
  * statuses), `DeviceUserPage.tsx` (the refused click's toast), `server/datastore/mysql/disk_encryption.go`
  * (the move back), and experiments 1 and 2 of `docs/device-lab-step-e-analysis.md`.
  */
-import { test, expect } from '@fixtures';
+import { test, expect, HOST_RETRIES } from '@fixtures';
 import {
   compareVersions,
   findFleetByName,
@@ -91,7 +91,7 @@ const CASES: Case[] = [
 
 test.describe('Premium • Disk encryption • Create key on each Linux desktop, unanswered', () => {
   // The host's queue, fleetd's check-in, a minute's prompt and the notice after it.
-  test.describe.configure({ timeout: 600_000 });
+  test.describe.configure({ timeout: 600_000, retries: HOST_RETRIES });
 
   for (const c of CASES) {
     test(`${c.title}: Fleet asks, and the host is as it was`, async ({ hostDetails, request, throwawayFleet, cleanup }) => {
@@ -122,7 +122,7 @@ test.describe('Premium • Disk encryption • Create key on each Linux desktop,
           await device.toast.expectError(toastCopy.diskEncryption.createKeyRefused);
           await expect(device.createKeyModal).toBeHidden();
         } else {
-          await expect(device.createKeyModal).toContainText('If a pop-up appears asking for your passphrase');
+          await expect(device.createKeyInstructions).toBeVisible();
           await device.closeCreateKeyModal();
         }
       });
@@ -138,8 +138,15 @@ test.describe('Premium • Disk encryption • Create key on each Linux desktop,
         });
 
         await test.step('unanswered, it records nothing: the host is still Action required, with no key', async () => {
-          // The prompt is up for a minute; a script queued behind it waits that out, so this read follows it.
-          await runAdHocScript(request, host.id, fleetdEscrowLogScript(clicked));
+          // fleetd 1.63.0 launches its dialog program a second time when the prompt's minute is up (seen on
+          // 2026-11-16): the end of the request, which Fleet hears nothing of.
+          await expect
+            .poll(
+              async () =>
+                (await runAdHocScript(request, host.id, fleetdEscrowLogScript(clicked))).output.split(`program=${outcome.program}`).length - 1,
+              { message: `the ${outcome.program} prompt never ended`, timeout: 300_000, intervals: [15_000] },
+            )
+            .toBeGreaterThanOrEqual(2);
           expect(await getHostDiskEncryption(request, host.id)).toMatchObject({ keyAvailable: false, status: 'action_required' });
           await hostDetails.goto(host.id);
           await hostDetails.openControlsTab();

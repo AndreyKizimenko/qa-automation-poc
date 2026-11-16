@@ -313,6 +313,8 @@ export class HostDetailsPage {
    * controls, the tab renders both.
    */
   async openControlsTab(): Promise<void> {
+    // Asserted first: a click on a tab the host doesn't have would wait out the test.
+    await expect(this.controlsTab).toBeVisible();
     await this.controlsTab.click();
     await expect(
       this.controlsPanel.getByRole('table').or(this.controlsPanel.getByText('No controls')).first(),

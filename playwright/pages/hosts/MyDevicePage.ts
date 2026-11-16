@@ -24,6 +24,8 @@ export class MyDevicePage {
    * the prompt open, "Fleet is already asking this device for a disk encryption key" (`CreateLinuxKeyModal.tsx`).
    */
   readonly createKeyModal: Locator;
+  /** The ordinary body's instructions for the passphrase prompt, as opposed to the in-flight one. */
+  readonly createKeyInstructions: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -32,6 +34,7 @@ export class MyDevicePage {
     this.createKeyBanner = page.getByText(/^Disk encryption: Create a new disk encryption key/);
     this.createKeyButton = page.getByRole('button', { name: 'Create key' });
     this.createKeyModal = fleetModal(page, 'Create key');
+    this.createKeyInstructions = this.createKeyModal.getByText('If a pop-up appears asking for your passphrase');
   }
 
   /**
