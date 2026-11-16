@@ -192,7 +192,8 @@ its slot after the host has moved back, or before that on purpose, as the test o
 
 Andrey approved all of step E for the night of 2026-11-16, and the experiments ran from 06:47 UTC, before
 the first nightly since the merges. Each ran as a scratch spec of the new project: a throwaway fleet, the
-host moved in, the flow driven in the browser, the host moved back. Times are from the click or the move.
+host moved in, the flow driven in the browser, the host moved back. Experiments 2 and 3, on hosts that carry
+smokes, ran after that nightly, as the project's own tests. Times are from the click or the move.
 
 | # | Host | Predicted | Seen |
 |---|---|---|---|
@@ -200,7 +201,8 @@ host moved in, the flow driven in the browser, the host moved back. Times are fr
 | 1 | `prem-ubu2404-luks` | The prompt opens and times out; "Already asking" while it is open; "Action required" throughout | The prompt opened 29 s after the click and closed a minute later; the status stayed "Action required" with no key. **No "already asking" ever**: fleetd 1.63.0 doesn't report the prompt's state, so the server never marks the request in flight, and eleven clicks in five and a half minutes queued three prompts in a row (#46529's symptom). A click before fleetd picks the request up gets the ordinary answer too |
 | 4 | `prem-ubu2604-tpm` | No prompt; snapd's path; a second escrow replaces the first | "Verified" 29 s after the click, with no helper; after a move out and in, the second escrow took 7 s. Each logged `escrowed_disk_encryption_key` in the global feed (not in the host's own activities) |
 | 5 | `prem-win11-bde` | From the stock state: a key, a TPM protector, protection on; fleetd re-encrypts a decrypted disk; an unattended boot | From the stock state: a recovery password and a TPM protector within 30 s ("Enforcing"), protection on and "Verified" at 80 s, one escrow activity (no repeated rotation). Decrypted by script in 3 min, during which Fleet showed "Verifying" with the disk read as not encrypted, then "Enforcing"; **fleetd encrypted it again** (XTS-AES 256, where Windows' own was 128) and it read "Verified" 2.5 min after the decryption ended. A restart with Fleet's protectors on the disk came back unattended. The reset left it encrypted, protection off, no protectors, with XTS-AES 256 |
-| 2, 3 | The four matrix LUKS hosts; `prem-ws2022-01` | | Held until tonight's nightly has finished: those hosts carry smokes |
+| 2 | `prem-zorin18-luks`, `prem-kubuntu2404-luks`, `prem-fedora45-luks`, `prem-omarchy-01` | kdialog's prompt times out as zenity's does; Fedora and Omarchy show "Failed"; the move back clears it | Run as `linux-prompt.spec.ts` after the nightly (12:52 UTC), with the control host as its first case. Zorin: zenity, then "Action required" with no key, as on the control (2.7 min). Kubuntu: kdialog, then "Action required" with no key, as zenity (2.6 min; the first run lost its connection to premium mid-test, `socket hang up`, and passed when re-run alone). Fedora: "Failed" with "No supported dialog tool found" 25 s after the move (#58776), cleared by the move back. Omarchy on fleetd 1.63.0: the click refused at once ("Failed to trigger key creation."), so it never reaches "Failed" |
+| 3 | `prem-ws2022-01` | A Server stays healthy on an enforcing fleet, with no status and no count | Ten minutes on the fleet: it answered every refetch, its disk-encryption status stayed empty, and Controls listed no disk-encryption row. Back home with nothing to undo |
 
 What the experiments add to the source:
 
@@ -564,9 +566,9 @@ with `_sanity`'s `EMPTY_FLEETS` check changed beside it.
 Read from the source and still to be seen on a host (the rest of this list was seen on 2026-11-16, *What the
 experiments showed*):
 
-- That kdialog times out as zenity does, and what Fedora and Omarchy show (experiment 2, after the nightly).
-- That a Windows Server on an enforcing fleet keeps answering (experiment 3, after the nightly), and that
-  the Servers lack the BitLocker feature, which is #55549's precondition.
+- That the Servers lack the BitLocker feature, which is #55549's precondition. Experiment 3 saw a Server
+  stay healthy on an enforcing fleet, not why.
+- What Omarchy shows once fleetd is 1.64.0: `linux-prompt.spec.ts` expects "Failed" with no dialog tool then.
 - That fleetd's own rollback of a slot, which calls `cryptsetup luksKillSlot` with no key and no batch flag
   (`luks_linux.go:491-498`), frees anything.
 - Everything about FileVault on a Tart VM.
