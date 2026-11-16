@@ -87,7 +87,7 @@ regenerate both on every restart.
   matrix or set on it: gitops declares it empty, with disk encryption off, and `gitops-verify` holds it to that.
   **The one exception is the per-OS smokes** (`premium/matrix/os-smokes.spec.ts`), for the length of a test:
   a library script and a package nothing installs until the test asks its own host to, and a policy held to
-  that host by a manual label holding only it. Whatever else goes on that fleet reaches all sixteen hosts, so
+  that host by a manual label holding only it. Whatever else goes on that fleet reaches all eighteen hosts, so
   never a package with automatic install, a profile, agent options, or an OS-update or disk-encryption
   setting; never `zenity` or `kdialog` on `prem-fedora45-luks` or `prem-omarchy-01`, which reproduce
   fleetdm/fleet#58776 by lacking them; and nothing that leaves a matrix host changed, since each has one
@@ -185,13 +185,14 @@ If you are unsure whether a payload is safe to deploy, it is not. Ask first.
 The same goes for fleet settings that act on the VMs: on the **VMs** fleet, never set an OS-update minimum
 version or deadline, or a DDM software-update enforcement declaration — they make the real hosts download an
 OS update or reboot mid-suite. Exercise those settings on Workstations and restore them in the same test.
-**OS matrix** holds lab machines too, an MDM-enrolled Windows host and five LUKS-encrypted Linux ones among
+**OS matrix** holds lab machines too, two MDM-enrolled Windows hosts and six encrypted Linux ones among
 them, so all of this section applies to it, and so does disk encryption, which stays off for that fleet.
-Windows enforcement turned on there starts BitLocker on the one: fleetd encrypts `C:` by itself, and
-nothing in Fleet decrypts it again. Linux key escrow turned on prompts nobody by itself: fleetd asks for
-the passphrase only after *Create key* is clicked on a host's My device page, and until then the encrypted
-hosts read "Action required" (Fleet's source at the 4.95 RC, not yet seen on a host;
-[`docs/device-lab-step-e-analysis.md`](docs/device-lab-step-e-analysis.md)).
+Windows enforcement turned on there acts on both Windows hosts: fleetd encrypts `prem-win10-01`'s `C:` by
+itself, and on `prem-win11-bde`, which the lab keeps in Windows 11's stock BitLocker state for tests, it
+adds protectors and turns protection on. Nothing in Fleet undoes either. Linux key escrow turned on
+prompts nobody by itself: fleetd acts only after *Create key* is clicked on a host's My device page, and
+until then the encrypted hosts read "Action required" (Fleet's source at the 4.95 RC, not yet seen on a
+host; [`docs/device-lab-step-e-analysis.md`](docs/device-lab-step-e-analysis.md)).
 
 **Recovery Lock password enforcement is the one exception, and only for `recovery-lock.spec.ts`** (approved
 2026-09-29). It guards only entry to macOS Recovery — not login, SSH or MDM — Fleet escrows the password, and

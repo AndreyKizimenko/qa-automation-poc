@@ -20,7 +20,7 @@ same smokes each night, in the `Playwright — OS smokes` workflow. The first ni
 first to run the smokes from the nightly's own chain, and the first with premium at 4 workers. Step E is
 next. It starts with Andrey's approval of its hosts, and its section says what step D changed for it. Its
 analysis is written ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md), 2026-11-16) and waits
-for his decisions; nothing of it is built.
+for his decisions; no test of it is built. The lab built two hosts for it the same day.
 
 ## What the suite has to work with
 
@@ -32,7 +32,7 @@ The lab replaced them. Its Linux and Windows VMs are x86_64; its Macs are Apple 
 | Free | `free-ubu2404d-01`, `free-win11-01`, `free-macos26-01` | pool | Unassigned (free has no fleets) |
 | Premium | `prem-ubu2404d-01` to `-04` (Ubuntu 24.04), `prem-win11-01` and `-02` (Windows 11), `prem-macos15-01` (macOS 15.7) and `prem-macos26-01` (macOS 26.6) | pool | **VMs** fleet, all eight since 2026-11-14 |
 | Premium | One VM per OS flavour: Ubuntu 22.04, 26.04 and 24.04 server, Debian 13, RHEL 9 and 10, Amazon Linux 2023, Fedora 45, openSUSE Leap 16.1, Kubuntu 24.04, Zorin OS 18, Omarchy 4.5, Windows 10, Windows Server 2022 and 2025 | matrix | **OS matrix** fleet. The per-OS smokes run on them (step D). Four are LUKS-encrypted |
-| Premium | `prem-ubu2404-luks` (the LUKS escrow control) | special | **OS matrix** fleet. Waits for step E |
+| Premium | `prem-ubu2404-luks` (the LUKS escrow control) and, since 2026-11-16, `prem-ubu2604-tpm` (Ubuntu 26.04 with TPM-backed encryption) and `prem-win11-bde` (Windows 11 in its stock BitLocker state) | special | **OS matrix** fleet. They wait for step E |
 
 Every lab host runs fleetd 1.63.0. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
 says what each is for; `helpers/lab-hosts.ts` reads it. A host the manifest doesn't list yet is still kept out
@@ -373,6 +373,19 @@ and the proposal above stand as the plan, with these corrections from the analys
   1.64.0 it becomes Fedora's case.
 - **macOS has two settings.** Escrow alone sends no FileVault payload and can't encrypt a Mac.
 
+After reading it, Andrey had the lab build two `special` hosts for these tests (2026-11-16, manifest PR
+#148). Both are on OS matrix and neither carries a smoke:
+
+- **`prem-win11-bde`**, a Windows 11 VM in Fleet's MDM, left in Windows 11's stock BitLocker state
+  (encrypted, protection off, no protectors). The BitLocker flow moves to it from `prem-win10-01`, which
+  keeps to its smoke.
+- **`prem-ubu2604-tpm`**, Ubuntu 26.04 with TPM-backed encryption, which fleetd escrows through snapd with
+  no prompt. It makes a completed Linux escrow possible every night. `prem-ubu2604d-01` is unchanged.
+
+He set FileVault aside for now. The lab also counted the LUKS key slots: the escrow by hand had left one on
+`prem-ubu2404-luks`, which it removed before retaking that host's baseline. The analysis has the detail
+(*What the lab built*) and the experiments that come before either flow is a test.
+
 ## Decided
 
 - **`playwright/lab-hosts.json` is the manifest's only copy** (Andrey, 2026-11-15; it replaces the two-copy
@@ -413,7 +426,8 @@ and the proposal above stand as the plan, with these corrections from the analys
   it*). `prem-ubu2404-luks` alone needs no change to the smokes. The five matrix hosts either take their
   smokes with them to the new fleet, or stay on OS matrix and out of E. And whether BitLocker on
   `prem-win10-01` is watched once, with the later nights asserting the verified state. The analysis puts
-  these as ten decisions with a recommended answer each, and six experiments to approve
+  these as eleven decisions with a recommended answer each, three of them made on 2026-11-16, and six
+  experiments to approve
   ([`device-lab-step-e-analysis.md`](device-lab-step-e-analysis.md) › *Decisions that are Andrey's*).
 - `policy-automation-runs` (8 of the exclusive step's 14 minutes) is in `exclusive/` only to have an Ubuntu
   VM's queue to itself, and its policy is already scoped by label to that VM. With a VM no worker holds it
