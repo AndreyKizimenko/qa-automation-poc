@@ -19,6 +19,14 @@
  * Nobody is asked for anything at any step, and nothing restarts the host. A restart with Fleet's protectors
  * on the disk was tried once by hand (the step E experiments): the VM booted unattended.
  *
+ * **What an admin sees, at each state the host holds.** Host details' *Disk encryption* vital is the host's
+ * own report (C: fully encrypted or not), so it reads On, then Off once the decryption has landed, then On
+ * again: fleetd's encryption takes minutes and the vital moves only on a refetch, so Off holds long enough to
+ * read. The Controls tab and the fleet's Controls › OS settings › Disk encryption table follow Fleet's status,
+ * and are read only where it rests (Verified, and nothing once the host is home): the statuses between
+ * (Enforcing, Verifying) last as long as a refetch, and are recorded through the API instead. The table's
+ * counts are exact because the fleet holds this one host, and its Verified row must list it.
+ *
  * **Each run puts the disk back.** Fleet never decrypts and never removes a protector, and turning the setting
  * off changes nothing on the disk. So the host moves back to OS matrix, which drops Fleet's key, and a script
  * suspends protection and deletes the protectors (`test-data/windows/disk-encryption/`), which is the stock
@@ -31,8 +39,8 @@
  *
  * **A Windows Server on the same kind of fleet is left alone.** Fleet manages BitLocker only on hosts in its
  * MDM that aren't servers, and the lab's Servers aren't in MDM: `prem-ws2022-01` spends ten minutes on an
- * enforcing fleet and must keep answering, with no status. fleetdm/fleet#55549 was a Server that stopped
- * answering on such a fleet. It is an OS matrix host the per-OS smokes run on, off OS matrix for that test only.
+ * enforcing fleet and must keep answering, with no status, no control and no count in the fleet's table; its
+ * Disk encryption vital reads Off. fleetdm/fleet#55549 was a Server that stopped answering on such a fleet. It is an OS matrix host the per-OS smokes run on, off OS matrix for that test only.
  *
  * Grounded in: `orbit/pkg/bitlocker/bitlocker_management_windows.go` (encrypt, rotate), `notifications.go`
  * (`attemptBitlockerEncryption`, `attemptEnableBitlockerProtection`), `server/service/orbit.go`
@@ -127,6 +135,7 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
 
   test('from the stock state and from a decrypted disk, Fleet escrows a key and protects the disk', async ({
     hostDetails,
+    diskEncryption,
     request,
     throwawayFleet,
     cleanup,
@@ -138,6 +147,13 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
 
     await test.step('the disk is in the stock state: encrypted, protection off, no protectors', async () => {
       expect(await restoreStock(request, host.id)).toMatchObject({ volume: 'FullyEncrypted', protection: 'Off', protectors: [] });
+    });
+
+    await test.step('Host details, on its own fleet: the disk encrypted, and no disk-encryption control', async () => {
+      await hostDetails.goto(host.id);
+      await expect(hostDetails.vitalsDiskEncryption).toHaveText('On');
+      await hostDetails.openControlsTab();
+      await expect(hostDetails.controlRow('Disk encryption')).toHaveCount(0);
     });
 
     const fleet = await throwawayFleet('bitlocker');
@@ -161,6 +177,7 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
 
     await test.step('Host details: Verified, and the key', async () => {
       await hostDetails.goto(host.id);
+      await expect(hostDetails.vitalsDiskEncryption).toHaveText('On');
       await hostDetails.openControlsTab();
       await expect(hostDetails.controlRow('Disk encryption')).toContainText('Verified');
       const beforeView = await latestActivityId(request);
@@ -171,6 +188,10 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
       await assertActivityAfter(request, 'read_host_disk_encryption_key', beforeView, (d) => d.host_id === host.id);
     });
 
+    await test.step('Controls › Disk encryption: the fleet counts the host under Verified, and lists it', () =>
+      diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'windows', status: 'verified', hostName: host.displayName }),
+    );
+
     await test.step('a disk decrypted by script is encrypted again by fleetd, never "Action required" on the way', async () => {
       const beforeReEscrow = await latestActivityId(request);
       const { exitCode, output } = await runAdHocScript(request, host.id, bitlockerDecryptScript());
@@ -180,6 +201,8 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
         .toBe('FullyDecrypted');
       // Fleet reads the decryption from the host's vitals before it asks fleetd to encrypt again.
       const seen = await waitForFleet(request, host.id, 'the disk decrypted', (e) => e.encrypted === false, 6);
+      await hostDetails.goto(host.id);
+      await expect(hostDetails.vitalsDiskEncryption, 'Host details reads the decrypted disk').toHaveText('Off');
       seen.push(...(await waitForFleet(request, host.id, 'Verified', (e) => e.encrypted === true && e.status === 'verified', 20)));
       // fleetdm/fleet#53426 showed "Action required" while the disk encrypted.
       expect(seen, `statuses on the way: ${seen.join(' → ')}`).not.toContain('action_required');
@@ -193,13 +216,19 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
         actor: null,
       });
       await hostDetails.goto(host.id);
+      await expect(hostDetails.vitalsDiskEncryption).toHaveText('On');
       await hostDetails.openControlsTab();
       await expect(hostDetails.controlRow('Disk encryption')).toContainText('Verified');
+      await diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'windows', status: 'verified', hostName: host.displayName });
     });
 
-    await test.step('back on its own fleet, Fleet holds no key, and the reset leaves the stock state', async () => {
+    await test.step('back on its own fleet, Fleet holds no key and shows no status, and the reset leaves the stock state', async () => {
       await transferHosts(request, home.id, [host.id]);
       expect(await getHostDiskEncryption(request, host.id)).toMatchObject({ keyAvailable: false, status: null });
+      await hostDetails.goto(host.id);
+      await hostDetails.openControlsTab();
+      await expect(hostDetails.controlRow('Disk encryption')).toHaveCount(0);
+      await diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'windows', status: null, hostName: host.displayName });
       expect(await resetToStock(request, host.id)).toMatchObject({
         volume: 'FullyEncrypted',
         protection: 'Off',
@@ -210,6 +239,7 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
 
   test('a Windows Server on an enforcing fleet keeps answering, with no disk-encryption status', async ({
     hostDetails,
+    diskEncryption,
     request,
     throwawayFleet,
     cleanup,
@@ -237,11 +267,16 @@ test.describe('Premium • Disk encryption • BitLocker on a real Windows 11 ho
       }
     });
 
-    await test.step('Host details lists no disk-encryption control', async () => {
+    await test.step('Host details lists no disk-encryption control, and reads the disk as unencrypted', async () => {
       await hostDetails.goto(host.id);
+      await expect(hostDetails.vitalsDiskEncryption).toHaveText('Off');
       await hostDetails.openControlsTab();
       // The Controls table, or its empty state, rendered: the row's absence below means something.
       await expect(hostDetails.controlRow('Disk encryption')).toHaveCount(0);
     });
+
+    await test.step('Controls › Disk encryption: the fleet counts the Server nowhere', () =>
+      diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'windows', status: null, hostName: host.displayName }),
+    );
   });
 });

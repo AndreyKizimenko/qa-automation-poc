@@ -5,7 +5,11 @@
  * end user clicks *Create key* on My device; fleetd then asks the user for the disk's passphrase, adds a key
  * of its own and sends it (`ee/server/service/devices.go`, `orbit/pkg/luks/`). Each test does that as an admin
  * does it: Host details › *My device*, *Create key*, and then the host's Controls tab, the key and the
- * activity feed. Three hosts, each one the lab built for this (`lab-hosts.json`, role `special`):
+ * activity feed. Each status the API reports, and the host keeps until the test acts again, is also checked
+ * where an admin sees it: the host's Controls tab, and the fleet's Controls › OS settings › Disk encryption
+ * table, whose counts are exact because the fleet holds this one host, and whose row lists it (fleetdm/fleet#49059
+ * was an eligible Linux host the table didn't count). Three hosts, each one the lab built for this
+ * (`lab-hosts.json`, role `special`):
  *
  *   | host | how fleetd escrows | the passphrase prompt |
  *   |---|---|---|
@@ -113,7 +117,13 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
   test.describe.configure({ timeout: 900_000, retries: HOST_RETRIES });
 
   for (const c of CASES) {
-    test(`${c.title}: Create key escrows a key Fleet shows`, async ({ hostDetails, request, throwawayFleet, cleanup }) => {
+    test(`${c.title}: Create key escrows a key Fleet shows`, async ({
+      hostDetails,
+      diskEncryption,
+      request,
+      throwawayFleet,
+      cleanup,
+    }) => {
       test.skip(c.skip !== undefined, c.skip);
       const entry = specialHostOfRun(c.purpose);
       const host = await requireLabHost(request, entry);
@@ -134,11 +144,16 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
       }
       await transferHosts(request, fleet.id, [host.id]);
 
-      await test.step('on a fleet that escrows Linux keys, the host is Action required', async () => {
+      await test.step('on a fleet that escrows Linux keys, the host is Action required, its disk encrypted', async () => {
         await hostDetails.goto(host.id);
+        await expect(hostDetails.vitalsDiskEncryption).toHaveText('On');
         await hostDetails.openControlsTab();
         await expect(hostDetails.controlRow('Disk encryption')).toContainText('Action required');
       });
+
+      await test.step('Controls › Disk encryption: the fleet counts the host under Action required, and lists it', () =>
+        diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'linux', status: 'action_required', hostName: host.displayName }),
+      );
 
       if (c.prompt) {
         await test.step('a script waits for the passphrase prompt', async () => {
@@ -150,6 +165,7 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
       const beforeEscrow = await latestActivityId(request);
 
       const device = await test.step('My device: Create key', async () => {
+        await hostDetails.goto(host.id);
         const page = await hostDetails.openMyDevice();
         await expect(page.createKeyBanner).toBeVisible();
         await page.createKey();
@@ -195,6 +211,10 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
         await assertActivityAfter(request, 'read_host_disk_encryption_key', beforeView, (d) => d.host_id === host.id);
       });
 
+      await test.step('Controls › Disk encryption: the fleet counts the host under Verified, and lists it', () =>
+        diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'linux', status: 'verified', hostName: host.displayName }),
+      );
+
       await test.step('My device no longer asks for a key', async () => {
         await device.page.reload();
         await expect(device.heading).toBeVisible();
@@ -216,12 +236,19 @@ test.describe('Premium • Disk encryption • Linux key escrow on a real host',
           await hostDetails.goto(host.id);
           await hostDetails.openControlsTab();
           await expect(hostDetails.controlRow('Disk encryption')).toContainText('Action required');
+          await diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'linux', status: 'action_required', hostName: host.displayName });
         });
       }
 
-      await test.step('back on its own fleet, the host has no key and no status', async () => {
+      await test.step('back on its own fleet, the host has no key and no status, and the fleet counts nothing', async () => {
         await transferHosts(request, home.id, [host.id]);
         expect(await getHostDiskEncryption(request, host.id)).toMatchObject({ keyAvailable: false, status: null });
+        await hostDetails.goto(host.id);
+        // A Linux host with no control has no Controls tab at all (`shouldShowControlsTab`): Details, there, says
+        // the tab list has rendered.
+        await expect(hostDetails.detailsTab).toBeVisible();
+        await expect(hostDetails.controlsTab).toBeHidden();
+        await diskEncryption.expectOneHost({ fleetId: fleet.id, platform: 'linux', status: null, hostName: host.displayName });
       });
     });
   }

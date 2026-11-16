@@ -175,6 +175,12 @@ export class HostDetailsPage {
   readonly vitalsDiskSpace: Locator;
   readonly vitalsOperatingSystem: Locator;
   /**
+   * The Disk encryption vital: On, Off or Unknown, from what the host itself reports
+   * (`disk_encryption_enabled`; on Windows, C: fully encrypted), whatever Fleet's own
+   * disk-encryption status says. Rendered on the platforms Fleet checks.
+   */
+  readonly vitalsDiskEncryption: Locator;
+  /**
    * The Agent vital's tooltip, shown by {@link hoverAgentVersion}: "osquery: …",
    * "Orbit: …" and, where fleetd has it, "Fleet Desktop: …". The only tooltip
    * open while the Agent value is hovered.
@@ -289,6 +295,7 @@ export class HostDetailsPage {
 
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
+    this.vitalsDiskEncryption = this.vitals.value('Disk encryption');
     this.agentTooltip = page.getByRole('tooltip');
 
     this.activityCard = page.locator('.host-activity-card');
@@ -576,10 +583,12 @@ export class HostDetailsPage {
 
   /**
    * Opens the host's My device page from the User card, as a global admin, and returns it. The page arrives in
-   * a new window once Fleet has minted its URL.
+   * a new window once Fleet has minted its URL. Call it on the host's own page (`goto`).
    */
   async openMyDevice(): Promise<MyDevicePage> {
-    // The User card is on the Details tab.
+    // The User card is on the Details tab. Asserted first: a click on a tab that isn't there (another page is
+    // open) would wait out the test.
+    await expect(this.detailsTab).toBeVisible();
     await this.detailsTab.click();
     await expect(this.myDeviceButton).toBeVisible();
     const popup = this.page.waitForEvent('popup');
