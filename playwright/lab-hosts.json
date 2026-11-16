@@ -8,7 +8,7 @@
     "dialog_tool": "what fleetd can use for the LUKS passphrase prompt; null means escrow fails (fleetdm/fleet#58776)",
     "package_manager": "only where it differs from the package type's usual one (openSUSE installs rpm with zypper, not dnf)"
   },
-  "updated": "2026-11-15",
+  "updated": "2026-11-16",
   "hosts": [
     {
       "name": "free-ubu2404d-01",
@@ -307,6 +307,33 @@
       "luks": true,
       "dialog_tool": "zenity",
       "purpose": "LUKS key escrow control"
+    },
+    {
+      "name": "prem-ubu2604-tpm",
+      "tier": "premium",
+      "platform": "linux",
+      "os": "ubuntu-26.04",
+      "fleet_platform": "ubuntu",
+      "role": "special",
+      "package": "deb",
+      "desktop": "gnome",
+      "fleet": "OS matrix",
+      "luks": true,
+      "dialog_tool": "zenity",
+      "purpose": "TPM-backed disk encryption, escrowed through snapd"
+    },
+    {
+      "name": "prem-win11-bde",
+      "tier": "premium",
+      "platform": "windows",
+      "os": "windows-11",
+      "fleet_platform": "windows",
+      "role": "special",
+      "package": "msi",
+      "desktop": "windows",
+      "fleet": "OS matrix",
+      "mdm": true,
+      "purpose": "BitLocker from Windows 11's stock state"
     },
     {
       "name": "prem-opensuse16-01",
