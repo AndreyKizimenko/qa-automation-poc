@@ -29,7 +29,8 @@ export interface PolicyFormValues {
  * Fields collected by the "Save policy" modal that pops on Save for a
  * new policy. Target and critical are left at their modal defaults (All
  * hosts, not critical). `platforms` names the exact set to leave ticked; left
- * out, it is all four (see `saveNew`).
+ * out, it is all four, so SQL that reads one platform's table passes it (see
+ * `saveNew`).
  */
 export interface SavePolicyValues {
   name: string;
@@ -273,9 +274,12 @@ export class PolicyEditPage {
     await this.saveNewNameInput.fill(values.name);
     await this.saveNewDescriptionInput.fill(values.description);
     await this.saveNewResolutionInput.fill(values.resolution);
-    // TODO(fleetdm/fleet#58701): the modal opens with no platform ticked, so a
-    // save without `platforms` ticks the four Fleet ticked by default before.
-    // Once it opens with them again, leave the modal's own default alone.
+    // TODO(fleetdm/fleet#58701): the modal opens with no platform ticked, where
+    // it should tick the platforms the query's tables support. A save without
+    // `platforms` ticks all four, which is that set for every caller's SQL
+    // today (no tables, or `osquery_info`); a caller whose SQL reads a
+    // platform's own table passes `platforms`. Once the modal ticks the
+    // compatible platforms again, leave its default alone.
     await this.setPlatforms(values.platforms ?? ['macOS', 'Windows', 'Linux', 'ChromeOS']);
     if (target) {
       await this.saveNewTargets.chooseCustom();

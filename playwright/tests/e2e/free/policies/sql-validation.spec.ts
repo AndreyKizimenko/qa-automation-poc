@@ -1,12 +1,13 @@
 /**
  * Free • Policies • SQL validation. The /policies/new form: the
  * platform-compatibility badge, a syntax error surfaced without blocking the
- * save — the policy is saved, reopened and deleted — and no-platform save
- * gating. All tier-agnostic (same PolicyForm component); this covers the
- * free-listed subset.
+ * save — the policy is saved, reopened and deleted — the Save policy modal
+ * refusing a save with no platform ticked, and its starting platforms (skipped:
+ * fleetdm/fleet#58701 opens it with none). All tier-agnostic (same PolicyForm
+ * component); this covers the free-listed subset.
  *
- * Grounded in frontend/components/PlatformCompatibility, PolicyForm
- * (disableSaveFormErrors), and SaveNewPolicyModal (disableSave).
+ * Grounded in frontend/components/PlatformCompatibility, PolicyForm and
+ * SaveNewPolicyModal (`platformError`).
  */
 import { test, expect } from '@fixtures';
 import { deletePolicies } from '@helpers/api';
@@ -62,7 +63,7 @@ test.describe('Free • Policies • SQL validation', () => {
     await policyEdit.gotoEdit(createdId);
     await expect(policyEdit.nameInput).toHaveValue(name);
     expect(await policyEdit.sqlText()).toBe(badSql);
-    // TODO(fleetdm/fleet#57393): Fleet 5 validates a saved query on blur, not
+    // TODO(fleetdm/fleet#59085): Fleet 5 validates a saved query on blur, not
     // when it loads, so the error shows only once the editor is left. Drop the
     // blur once a reopened query shows its error by itself.
     await policyEdit.blurSql();
@@ -83,5 +84,21 @@ test.describe('Free • Policies • save gating', () => {
     await policyEdit.saveNewSubmitButton.click();
     await expect(policyEdit.saveNewPlatformError).toBeVisible();
     await expect(policyEdit.saveNewModal).toBeVisible();
+  });
+
+  // TODO(fleetdm/fleet#58701): the modal opens with no platform ticked. Lift
+  // once it ticks the query's compatible platforms again, as it did on 4.95 and
+  // as the new-report modal still does.
+  test.skip('the Save policy modal starts with the platforms the query can run on', async ({ policyEdit }) => {
+    await policyEdit.gotoNew();
+    await policyEdit.setSql('SELECT 1 FROM gatekeeper WHERE assessments_enabled = 1;');
+    await expect(policyEdit.compatiblePlatforms).toHaveCount(1);
+    await expect(policyEdit.compatiblePlatform('macOS')).toBeVisible();
+    await policyEdit.saveButton.click();
+    await expect(policyEdit.saveNewModal).toBeVisible();
+    await expect(policyEdit.platformCheckbox('macOS')).toBeChecked();
+    for (const os of ['Windows', 'Linux', 'ChromeOS'] as const) {
+      await expect(policyEdit.platformCheckbox(os)).not.toBeChecked();
+    }
   });
 });
