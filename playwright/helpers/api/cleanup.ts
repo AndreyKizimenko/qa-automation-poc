@@ -1,7 +1,7 @@
 // Bulk-delete helpers used by the suite-level teardown to leave no-team
 // in a known-empty state. Each helper is safe to call on an already
 // empty scope, and throws when the list it works from can't be read: a
-// failed request is not an empty instance. The query and pack wipes send
+// failed request is not an empty instance. The report wipe sends
 // every delete before they throw (`deleteEach`), so one stuck item doesn't
 // stop the rest of the cleanup and still fails it; the policy wipes throw
 // on a non-OK answer, because a policy left behind also keeps the titles and
@@ -20,20 +20,6 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
   const queries = (body.queries ?? []) as Array<{ id: number; name: string }>;
   await deleteEach('cleanup queries', queries, (q) => `report ${q.id} "${q.name}"`, (q) =>
     request.delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() }),
-  );
-}
-
-/** Deletes every pack on the instance. */
-export async function deleteAllPacks(request: APIRequestContext): Promise<void> {
-  const res = await request.get(apiUrl('packs'), {
-    headers: authHeaders(),
-    params: { per_page: '500' },
-  });
-  await expectOk(res, '[cleanup packs] failed to list the packs');
-  const body = await res.json();
-  const packs = (body.packs ?? []) as Array<{ id: number; name: string }>;
-  await deleteEach('cleanup packs', packs, (p) => `pack ${p.id} "${p.name}"`, (p) =>
-    request.delete(apiUrl(`packs/id/${p.id}`), { headers: authHeaders() }),
   );
 }
 

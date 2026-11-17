@@ -30,7 +30,7 @@ Good: `// Targets the row's edit button by accessible name so reordering doesn't
 ## Layout
 
 - `tests/e2e/` — browser specs in three sibling folders:
-  - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `command-palette/`, `controls/`, `dashboard/`, `hosts/`, `labels/`, `packs/`, `policies/`, `reports/`, `settings/`, `software/`, plus `exclusive/`); both premium and free pick these up via folder structure.
+  - `shared/<area>/` — tier-agnostic flows (`account/`, `auth/`, `command-palette/`, `controls/`, `dashboard/`, `hosts/`, `labels/`, `policies/`, `reports/`, `settings/`, `software/`, plus `exclusive/`); both premium and free pick these up via folder structure.
   - `premium/<area>/` — premium-only flows. Each spec says which scope it works in: Unassigned, Workstations, All fleets, or a throwaway `pw-*` fleet of its own. The CRUD lifecycles and the setup-experience specs run once per scope; most specs work in one. `premium/matrix/` holds the per-OS smokes, which the `premium-matrix` project runs on its own (Projects).
   - `free/<area>/` — free-tier counterparts (no dropdown) + paywall-presence specs.
 - `tests/api/gitops-verify/` — pure-API drift checks against a gitops target (no browser). Sits alongside `tests/api/*.spec.ts` (agnostic API contracts), `tests/api/premium/` and `tests/api/free/` (tier-only contracts), and `tests/api/role-access/{free,premium}/` (per-role endpoint allow/deny probes).
@@ -260,7 +260,7 @@ General locator priority and wait rules — see the `playwright-test-author` ski
 - Build URLs through `apiUrl(path)` from `@helpers/api`. Never inline `/api/v1/...` or `/api/latest/...` in test code.
 - API helpers are split per area under `helpers/api/` (`core`, `activities`, `app-store`, `cleanup`, `config`, `enroll-secrets`, `fleets`, `fma`, `gitops-mode`, `hosts`, `labels`, `mdm`, `policies`, `profiles`, `reports`, `role-access`, `scripts`, `software`, `static-users`, `users`, `variables`). The barrel `@helpers/api` re-exports everything; specs can also reach for a specific module (`@helpers/api/software`) when they want narrower deps.
 - Check a response with `expectOk(res, what)` from `@helpers/api`, never `expect(res).toBeOK()`: when that assertion fails, Playwright prints the request's headers with it, the bearer token among them, into the job log and the report. A helper throws on a response it didn't expect; it never returns `null` or an empty list for one, because a failed request is not "nothing there". A status that *is* an answer (a `404` for something already gone, a `402` on free) is named before the check.
-- Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/packs`, `/queries`, `/policies`, etc.
+- Use `authHeaders()` for every API call. The `FLEET_API_TOKEN` env user has admin perms across `/software`, `/queries`, `/policies`, etc.
 - Use the Playwright `request` fixture; do not use raw `fetch()` from inside specs.
 - `POST /login` is throttled to 10 a minute in one bucket shared by every user and worker. Browser specs sign in through `withStaticUser`'s cached sessions; an API-only login uses `apiLogin` (`helpers/api/users.ts`), which waits out a 429. A throttled UI login lands back on `/login` looking like a wrong password.
 
@@ -289,7 +289,7 @@ Folder conventions:
 
 - Premium-only flow → `tests/e2e/premium/<area>/` (or `tests/api/role-access/premium/`).
 - Free-only flow (paywall checks, free-license assertions) → `tests/e2e/free/<area>/` (or `tests/api/free/`, `tests/api/role-access/free/`).
-- Tier-agnostic flow (auth, packs, generic API contracts) → `tests/e2e/shared/<area>/` or root of `tests/api/`.
+- Tier-agnostic flow (auth, generic API contracts) → `tests/e2e/shared/<area>/` or root of `tests/api/`.
 - Loadtest spec → `tests/loadtest/**`.
 - Anything that turns gitops mode **on** → `tests/e2e/premium/gitops-mode/`. Enabling it is a global config
   write that makes every mutating control in the UI read-only, so it cannot share a window with any other
@@ -297,8 +297,7 @@ Folder conventions:
   invocation, and the config refuses to run it beside another browser project. Adding a `--project` name also
   means adding it to `PROJECT_TO_SUITE` in `playwright.config.ts`, which throws at config load for a name it
   doesn't know.
-- A spec that flips a global setting which breaks specs running beside it — turning off script execution,
-  say — goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). So does one that
+- A spec that flips a global setting which breaks specs running beside it goes under an `exclusive/` folder in its tier's tree (`tests/e2e/shared/exclusive/`, …). So does one that
   needs a real VM's queue to itself: Fleet runs a policy automation's scripts and installs at priority 0, below
   every user-requested one, so beside the install specs its attempts wait out their budget
   (`premium/exclusive/policies/policy-automation-runs.spec.ts`). And so does one that changes what every VM on
@@ -310,7 +309,7 @@ Folder conventions:
   sequence. They depend only on the tier's login setup and share `cleanup-teardown`, so **never name a main
   project and its exclusive one in the same invocation**: they'd run side by side, and the config refuses to.
   Filter by file name, not path, when running one (`playwright test --project=free-exclusive
-  script-execution-disabled`): the exclusive projects' `testDir` is `tests/e2e`, so a `tests/e2e/…` path filter
+  script-execution-timeout`): the exclusive projects' `testDir` is `tests/e2e`, so a `tests/e2e/…` path filter
   never matches.
 - A check every OS version should get → a smoke in `tests/e2e/premium/matrix/os-smokes.spec.ts`, not a spec
   of its own: one describe per OS version of `lab-hosts.json`, each host's smokes in order in one worker, the
@@ -367,7 +366,7 @@ Do not introduce new env-var skip gates without a load-bearing reason.
 
 Default: a spec is a single end-to-end flow; cleanup runs at the end of the same test (no shared mutable state between tests).
 
-**Exception — CRUD lifecycle specs** (policies, reports, packs, scripts, profiles, software). These split each lifecycle step (create / edit / delete + a final dashboard activity-feed assertion) into its own sub-test inside a `test.describe.configure({ mode: 'serial' })` block, sharing identifiers via closure (`let policyId`, `let titleName`, etc.). The win is granular failure attribution while flake-fixing. Conventions:
+**Exception — CRUD lifecycle specs** (policies, reports, scripts, profiles, software). These split each lifecycle step (create / edit / delete + a final dashboard activity-feed assertion) into its own sub-test inside a `test.describe.configure({ mode: 'serial' })` block, sharing identifiers via closure (`let policyId`, `let titleName`, etc.). The win is granular failure attribution while flake-fixing. Conventions:
 - Only the first sub-test does the dashboard → navbar → list dropdown dance. Subsequent sub-tests go straight to the master list with `<page>.goto({ fleetId })`, resolving `fleetId` via `fleetIdFor(scope, workstationsFleetId)` from `@helpers/team-scope` (`'Workstations'` → the worker fixture, `'Unassigned'` → `0`, `'All fleets'` → `undefined`).
 - Each of those `goto({ fleetId })` calls is followed by `<page>.teamDropdown.select(scope)`, as after any scoped `goto` (Imports + fixtures).
 - The final sub-test asserts the dashboard activity feed via `dashboard.expectActivities([matcher, …])`: every matcher must match a row, and it reloads and re-walks the feed while one is missing. Build the strings with `activityCopy` (`@helpers/activity-copy`). Matchers use explicit verbs and the rendered scope suffix — they differ per resource and per tier, so scout the live feed when authoring a new one.

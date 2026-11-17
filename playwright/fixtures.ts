@@ -101,8 +101,6 @@ import {
   PolicyDetailsPage,
   PolicyLivePage,
   LabelsPage,
-  PacksListPage,
-  PackEditPage,
   OrganizationInfoPage,
   OrganizationAdvancedPage,
   FleetsPage,
@@ -331,10 +329,8 @@ type FleetFixtures = {
   policyDetails: PolicyDetailsPage;
   policyLive: PolicyLivePage;
 
-  // Labels + Packs
+  // Labels
   labelsPage: LabelsPage;
-  packsList: PacksListPage;
-  packEdit: PackEditPage;
 
   // Settings
   organizationInfo: OrganizationInfoPage;
@@ -716,15 +712,9 @@ export const test = apiTest.extend<FleetFixtures, BrowserWorkerFixtures>({
     await use(new PolicyLivePage(page));
   }, { box: true }],
 
-  // Labels + Packs
+  // Labels
   labelsPage: [async ({ page }, use) => {
     await use(new LabelsPage(page));
-  }, { box: true }],
-  packsList: [async ({ page }, use) => {
-    await use(new PacksListPage(page));
-  }, { box: true }],
-  packEdit: [async ({ page }, use) => {
-    await use(new PackEditPage(page));
   }, { box: true }],
 
   // Settings

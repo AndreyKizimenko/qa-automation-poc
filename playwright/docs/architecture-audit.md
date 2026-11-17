@@ -128,9 +128,9 @@ below hold the reasoning.
       lifts by itself: the Windows "updates when it is behind" test runs on the nights Fleet's catalog is
       ahead of the VM, and its sibling asserts the Update / Reinstall state every night. One stood on a
       wrong reason:
-- [ ] `shared/packs/packs.spec.ts` → "pack query executes on targeted host", skipped since May on a 405
+- [x] `shared/packs/packs.spec.ts` → "pack query executes on targeted host", skipped since May on a 405
       that was the test's own wrong path, and unsound with the path fixed (it reads a simulation's random
-      stats). Rewrite it on a real VM or delete it; `TODO.md` has both. Andrey's call.
+      stats). Settled by Fleet 5, which removed packs: the spec went with them (2026-11-17).
 
 **The order, agreed 2026-11-13.** Sorted by whether a change needs a live run to prove it, and by how many
 specs share the code it touches. The 4.96 upgrade is not close, so nothing here waits on it.
