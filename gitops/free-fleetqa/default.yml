@@ -66,7 +66,6 @@ org_settings:
     enable_analytics: false
     live_reporting_disabled: false
     report_cap: 0
-    scripts_disabled: false
     server_url: $FLEET_URL
   sso_settings:
     enable_sso: true
@@ -77,7 +76,7 @@ org_settings:
     metadata_url: $FLEET_SSO_METADATA_URL
 
 controls:
-  windows_enabled_and_configured: true
+  windows_mdm_enabled: true
   # Android MDM was turned on in the UI; the server ignores this key on a
   # config write, so it records the assumption and gitops-verify reads it back.
   android_enabled_and_configured: true

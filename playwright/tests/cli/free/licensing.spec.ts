@@ -17,15 +17,8 @@ test.describe('fleetctl · free licence gating', () => {
     expect(res.stderr).toMatch(LICENCE_ERROR);
   });
 
-  test('get teams (deprecated alias) is refused', async () => {
-    const res = await fleetctl(['get', 'teams']);
-    expect(res.code).toBe(1);
-    expect(output(res)).toMatch(/'fleetctl teams' is deprecated; use 'fleets' instead/);
-    expect(res.stderr).toMatch(LICENCE_ERROR);
-  });
-
-  test('get mdm-apple-bm is refused', async () => {
-    const res = await fleetctl(['get', 'mdm-apple-bm']);
+  test('get mdm-ab is refused', async () => {
+    const res = await fleetctl(['get', 'mdm-ab']);
     expect(res.code).toBe(1);
     expect(res.stderr).toMatch(LICENCE_ERROR);
   });

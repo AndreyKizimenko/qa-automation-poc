@@ -63,7 +63,7 @@ export function siblingConfigDir(): string | undefined {
 
 /**
  * Resolves the fleet id for the loaded config: 0 for the no-team scope, else a
- * lookup by name through GET /teams. Cached per worker process.
+ * lookup by name through GET /fleets. Cached per worker process.
  */
 let cachedTeamId: number | undefined;
 export async function resolveTeamId(request: APIRequestContext): Promise<number> {
@@ -72,10 +72,10 @@ export async function resolveTeamId(request: APIRequestContext): Promise<number>
     cachedTeamId = 0;
     return 0;
   }
-  const body = await getJson(request, 'teams?per_page=200');
-  const team = (body.teams as Array<{ id: number; name: string }>).find((t) => t.name === gitopsConfig.teamName);
+  const body = await getJson(request, 'fleets?per_page=200');
+  const team = (body.fleets as Array<{ id: number; name: string }>).find((t) => t.name === gitopsConfig.teamName);
   if (!team) {
-    const known = (body.teams as Array<{ name: string }>).map((t) => t.name).join(', ');
+    const known = (body.fleets as Array<{ name: string }>).map((t) => t.name).join(', ');
     throw new Error(`fleet "${gitopsConfig.teamName}" not found on the server. Existing: [${known}]`);
   }
   cachedTeamId = team.id;
@@ -227,19 +227,19 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
     pending = (async () => {
       const listed = await getAll<Record<string, any>>(
         request,
-        `software/titles?team_id=${teamId}&available_for_install=true`,
+        `software/titles?fleet_id=${teamId}&available_for_install=true`,
         'software_titles',
       );
       const titles = await Promise.all(
         listed.map(async (t) => {
-          const detail = (await getJson(request, `software/titles/${t.id}?team_id=${teamId}`)).software_title;
+          const detail = (await getJson(request, `software/titles/${t.id}?fleet_id=${teamId}`)).software_title;
           return {
             id: t.id as number,
             name: t.name as string,
             displayName: (detail.display_name ?? '') as string,
             source: t.source as string,
-            package: detail.software_package ?? undefined,
-            appStoreApp: detail.app_store_app ?? undefined,
+            package: detail.packages?.[0] ?? undefined,
+            appStoreApp: detail.app_store_apps?.[0] ?? undefined,
           };
         }),
       );
@@ -247,16 +247,20 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
       for (const platform of ['macos', 'windows', 'linux']) {
         const body = await getJson(
           request,
-          `setup_experience/software?team_id=${teamId}&platform=${platform}&per_page=200`,
+          `setup_experience/software?fleet_id=${teamId}&platform=${platform}&per_page=200`,
         );
         for (const t of (body.software_titles ?? []) as Array<Record<string, any>>) {
-          if (t.software_package?.install_during_setup || t.app_store_app?.install_during_setup) {
+          const items: Array<{ install_during_setup?: boolean }> = [
+            ...(t.packages ?? []),
+            ...(t.app_store_apps ?? []),
+          ];
+          if (items.some((item) => item.install_during_setup)) {
             setupExperienceTitleIds.add(t.id);
           }
         }
       }
       // One page holds the whole catalog: it is read with a page size above its count.
-      const catalogBody = await getJson(request, `software/fleet_maintained_apps?team_id=${teamId}&per_page=5000`);
+      const catalogBody = await getJson(request, `software/fleet_maintained_apps?fleet_id=${teamId}&per_page=5000`);
       const apps = catalogBody.fleet_maintained_apps as Array<Record<string, any>>;
       if (catalogBody.meta?.has_next_results) {
         throw new Error(`the Fleet-maintained-app catalog has more than ${apps.length} entries; raise the page size`);

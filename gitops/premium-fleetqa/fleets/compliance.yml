@@ -99,7 +99,7 @@ labels:
     query: SELECT 1 FROM os_version WHERE platform = 'darwin';
 
 controls:
-  enable_recovery_lock_password: true
+  macos_recovery_lock_password_enabled: true
   name_template: compliance-$FLEET_VAR_HOST_HARDWARE_SERIAL
   macos_updates:
     minimum_version: "15.0"
@@ -131,7 +131,6 @@ controls:
   windows_settings:
     enable_disk_encryption: true
     require_bitlocker_pin: true
-    enable_managed_local_account: true
     configuration_profiles:
       - path: ../../lib/platforms/windows/configuration-profiles/enable-firewall.xml
         labels_include_any:
@@ -157,10 +156,11 @@ controls:
     enable_end_user_authentication: true
     lock_end_user_info: true
     apple_enable_release_device_manually: false
-    require_all_software_macos: true
-    require_all_software_windows: false
-    enable_create_local_admin_account: true
-    end_user_local_account_type: standard
+    macos_require_all_software: true
+    windows_require_all_software: false
+    macos_managed_local_account_enabled: true
+    macos_end_user_local_account_type: standard
+    windows_managed_local_account_enabled: true
     macos_script: ../../lib/platforms/macos/setup/compliance-setup.sh
 
 software:

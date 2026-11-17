@@ -261,7 +261,7 @@ The coverage-branch column says whether its example is the starting point.
 | key | decision | note | coverage branch |
 |---|---|---|---|
 | `org_info` (all four) | **1** verify | `org_logo_url*` stay `""` (custom-logo skips otherwise) | — |
-| `server_settings` (all documented keys) | **1** declare + verify | premium `enable_analytics: true` (item 5); `scripts_disabled`, `live_reporting_disabled`, `ai_features_disabled` stay `false` (specs need them); min changes nothing here (a forced key can't carry a delta, and `report_cap` stays 0 in both) | yes |
+| `server_settings` (all documented keys) | **1** declare + verify | premium `enable_analytics: true` (item 5); `live_reporting_disabled`, `ai_features_disabled` stay `false` (specs need them); min changes nothing here (a forced key can't carry a delta, and `report_cap` stays 0 in both) | yes |
 | `features.enable_*` | **1** verify | — | — |
 | `features.historical_data` | **1** declare `true`/`true` + verify | matches live on both tiers; never `false` | — |
 | `features.additional_queries` | **1** both | reaches every host as an extra benign detail query (`SELECT * FROM time`), approved (§8); `features` is overwritten when present, so both configs carry the map and min drops one entry | — |
@@ -277,7 +277,7 @@ The coverage-branch column says whether its example is the starting point.
 | `secrets` | free: already **1** verify via `GET /spec/enroll_secret`; premium **—** | excepted on premium | — |
 | `sso_settings` (6 keys) | **1** verify all six | `metadata_url` compared to the env var | — |
 | `mdm.end_user_authentication` | **1** premium verify | entity_id, idp_name, metadata_url | — |
-| `mdm.apple_business_manager` | **1** premium verify | both tokens: org name, `default` and the fleet mappings, in `GET /config` and against `GET /abm_tokens`, where every token must be declared | — |
+| `mdm.apple_business` | **1** premium verify | both tokens: org name, `default` and the fleet mappings, in `GET /config` and against `GET /ab_tokens`, where every token must be declared | — |
 | `mdm.volume_purchasing_program` | **1** premium verify | location + fleets | — |
 | `mdm.apple_server_url`, `only_allow_apple_business_enrollment` | **—** | saving `server_url`/`apple_server_url` re-syncs DEP (author skill); declaring the live `""`/`false` adds nothing a verify can't read anyway | — |
 | `mdm.end_user_license_agreement` | **3** | needs a hosted PDF; `automatic-enrollment.spec.ts` uploads and deletes the EULA → conflict to resolve first | — |
@@ -300,7 +300,7 @@ The coverage-branch column says whether its example is the starting point.
 | `controls.scripts` via `paths:` glob | **1** both (the two Linux scripts) | harness expands the glob; a new lib file would join silently — only there | — |
 | `controls.android_enabled_and_configured` | **1** free declare + verify (live `true`), premium verify | a server no-op on PATCH (item 7b): the verify is a consistency check, not proof of an apply | — |
 | premium `fleets/unassigned.yml` | **deferred** (§10) | the layout `generate-gitops` itself emits (the nightly spec already expects `fleets.has('unassigned')`): no-team `controls`, `policies`, `software` and `webhook_settings` move there from `default.yml` (`controls` may live in one of the two, never both). Lets premium declare Unassigned software (hash-pinned, wiped by cleanup after verify) and Unassigned webhooks. First check what `software/library.spec.ts:56,76` expects on Unassigned (Bear, ChatGPT): a `software:` key replaces Unassigned's software as a batch | — |
-| `controls.windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation` | **2** premium declare live `false` + verify | no min delta: flipping any reaches the Windows VMs' enrollment or DEP | yes |
+| `controls.windows_mdm_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation` | **2** premium declare live `false` + verify | no min delta: flipping any reaches the Windows VMs' enrollment or DEP | yes |
 | `controls.macos_migration` | **2** premium | `enable: false`, `mode`, `webhook_url`; `integrations/mdm.spec.ts` snapshots/restores it; min changes the URL | yes |
 | `controls.windows_entra_*` | **—** | Entra tenant | — |
 
@@ -313,17 +313,17 @@ The coverage-branch column says whether its example is the starting point.
 | `settings.webhook_settings`: `failing_policies_webhook` (enabled, the target of `webhooks_and_tickets_enabled`), `host_activities_webhook` (disabled) | example URLs; min changes a path; no `host_status_webhook` (fleetctl doesn't manage a fleet's, §10) |
 | `agent_options` with `command_line_flags`, `update_channels` | the only place these are declared |
 | `apple_settings.enable_disk_encryption`, `enable_escrow_disk_encryption_key` | min turns escrow off |
-| `windows_settings.enable_disk_encryption`, `require_bitlocker_pin`, `enable_managed_local_account` | min turns the PIN off |
-| `setup_experience.enable_create_local_admin_account` (deprecated alias `enable_managed_local_account`), `end_user_local_account_type` | the keys the code has (the docs' `apple_settings.managed_local_account_settings` doesn't exist — item 7b); min flips the account type |
+| `windows_settings.enable_disk_encryption`, `require_bitlocker_pin` | min turns the PIN off |
+| `setup_experience.macos_managed_local_account_enabled`, `macos_end_user_local_account_type`, `windows_managed_local_account_enabled` (Fleet 5's names; Fleet 4's `enable_create_local_admin_account`, `end_user_local_account_type` and `windows_settings.enable_managed_local_account` are refused) | min flips the account type |
 | `linux_settings.enable_escrow_disk_encryption_key` | — |
-| `enable_recovery_lock_password` | min off |
+| `macos_recovery_lock_password_enabled` | min off |
 | `macos_updates` (3 keys), `ios_updates`, `ipados_updates`, `windows_updates` | min moves one deadline and one version |
 | `name_template` | `$FLEET_VAR_HOST_HARDWARE_SERIAL`-based; renames via MDM, nothing to rename |
 | `apple_settings.configuration_profiles` with `labels_include_all` / `labels_include_any` / `labels_exclude_any` | the existing inert `.mobileconfig`s, scoped to gitops labels; min drops one |
 | `windows_settings.configuration_profiles` with label scoping; `android_settings.configuration_profiles` | same |
 | DDM `.json` declaration, `assets/` | **3** — a new payload type, approval first (author skill) |
 | `scripts` via `paths:` | `.sh` + `.ps1` + `.py` |
-| `setup_experience`: `enable_end_user_authentication` (the IdP is configured), `lock_end_user_info` (requires EUA on), `apple_enable_release_device_manually`, `require_all_software_macos`, `require_all_software_windows`, `macos_script` | all apply with Apple MDM on and no ADE host; min flips a boolean |
+| `setup_experience`: `enable_end_user_authentication` (the IdP is configured), `lock_end_user_info` (requires EUA on), `apple_enable_release_device_manually`, `macos_require_all_software`, `windows_require_all_software`, `macos_script` | all apply with Apple MDM on and no ADE host; min flips a boolean |
 | `setup_experience.bootstrap_package` (+ `macos_manual_agent_install`, which requires one), `apple_setup_assistant` | **3** — need a signed `.pkg` URL and an ADE JSON fixture; the setup assistant needs the ABM token, which premium has |
 | `apple_settings.assets[]` (DDM assets) | **3** — with the DDM declaration |
 | `software.packages` by `hash_sha256` (the four inert fixtures) with `install_script`, `uninstall_script`, `post_install_script`, `pre_install_query`, `self_service`, `categories`, `labels_exclude_any`, `display_name`, `icon` | zero download. `url`/`hash`/`install_script` live only in a package `.yml`, so each gets a second `lib/…/*.compliance.package.yml` beside the VMs one, same hash, more options; `paths:` isn't supported for packages; icon is a 128 px PNG fixture |

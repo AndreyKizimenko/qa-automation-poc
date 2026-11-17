@@ -94,7 +94,6 @@ org_settings:
     enable_analytics: true
     live_reporting_disabled: false
     report_cap: 0
-    scripts_disabled: false
     server_url: $FLEET_URL
   sso_settings:
     enable_sso: true
@@ -105,9 +104,9 @@ org_settings:
     metadata_url: $FLEET_SSO_METADATA_URL
 
 controls:
-  windows_enabled_and_configured: true
+  windows_mdm_enabled: true
   android_enabled_and_configured: true
-  windows_migration_enabled: false
+  windows_mdm_migration_enabled: false
   enable_turn_on_windows_mdm_manually: false
   apple_require_hardware_attestation: false
   macos_migration:

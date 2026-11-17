@@ -17,7 +17,7 @@ let live: ApiScript[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
-  live = await getAll<ApiScript>(request, `scripts?team_id=${teamId}`, 'scripts');
+  live = await getAll<ApiScript>(request, `scripts?fleet_id=${teamId}`, 'scripts');
 });
 
 test.describe(`GitOps verify · scripts · ${gitopsLabel}`, () => {

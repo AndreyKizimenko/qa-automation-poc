@@ -3,7 +3,7 @@
  * carries the declared query, platform, flags, label targets and automation.
  *
  * Policies have separate endpoints by scope — GET /policies for the global
- * ones, GET /fleets/{id}/policies for a fleet's — and `?team_id=` on the first
+ * ones, GET /fleets/{id}/policies for a fleet's — and `?fleet_id=` on the first
  * is ignored. An automation is reported by what it resolved to (a title id and
  * name, a script name), so the declared slug or package is mapped through the
  * fleet's software before comparing.
@@ -60,7 +60,7 @@ test.beforeAll(async ({ request }) => {
   }
   if (gitopsConfig.policies.some((p) => p.webhooksAndTicketsEnabled !== undefined)) {
     const settings =
-      teamId === 0 ? await getJson(request, 'config') : (await getJson(request, `fleets/${teamId}`)).team;
+      teamId === 0 ? await getJson(request, 'config') : (await getJson(request, `fleets/${teamId}`)).fleet;
     webhookPolicyIds = settings?.webhook_settings?.failing_policies_webhook?.policy_ids ?? [];
   }
 });

@@ -32,7 +32,7 @@ test.describe(`GitOps verify · fleets · ${gitopsLabel}`, () => {
     }
     for (const name of HAND_KEPT_FLEETS) declared.add(name);
 
-    const live = ((await getJson(request, 'teams?per_page=200')).teams as Array<{ name: string }>).map((t) => t.name);
+    const live = ((await getJson(request, 'fleets?per_page=200')).fleets as Array<{ name: string }>).map((t) => t.name);
     const throwaway = live.filter((n) => n.startsWith('pw-'));
     if (throwaway.length) console.warn(`[gitops-verify] throwaway fleets left by a dead run, ignored: ${throwaway.join(', ')}`);
     const standing = live.filter((n) => !n.startsWith('pw-')).sort();

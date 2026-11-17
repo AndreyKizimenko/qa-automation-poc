@@ -335,7 +335,7 @@ Folder conventions:
    there). A spec that leaves a new kind of per-run report on Workstations or VMs adds its prefix to that
    sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off,
    returns every lab host to its role's fleet, brings every pool VM to its resting state, and takes what a dead run of the per-OS smokes left on the OS matrix fleet and its hosts. It does **not** reset disk encryption or the
-   BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user
+   BitLocker PIN, `macos_end_user_local_account_type`, the global macOS migration settings or the global end-user
    authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these,
    too*), and a spec that writes one of the others restores it, or works on a throwaway `pw-*` fleet.
    [`setup/CLAUDE.md`](setup/CLAUDE.md) has each step.
