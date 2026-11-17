@@ -151,7 +151,7 @@ test.describe('Premium • Software • Package scripts', () => {
 
     try {
       await softwareTitleDetail.goto({ titleId, fleetId: FLEET_ID });
-      // The row's own "Edit software" action, as the test above uses; it renders once the row is open.
+      // The row's own pencil ("Edit version" on a premium custom package), as the test above uses; it renders once the row is open.
       await softwareTitleDetail.installerCard.expand();
       await softwareTitleDetail.installerCard.editSoftwareButton.click();
       const modal = softwareTitleDetail.editSoftwareModal;
@@ -162,7 +162,8 @@ test.describe('Premium • Software • Package scripts', () => {
       await modal.setScript(modal.installScriptEditor, edited.installScript);
       await modal.setScript(modal.postInstallScriptEditor, edited.postInstallScript);
       await modal.setScript(modal.uninstallScriptEditor, edited.uninstallScript);
-      await modal.save();
+      // A script edit reaches the hosts, so Fleet asks before it cancels their pending installs.
+      await modal.save({ confirm: true });
       await softwareTitleDetail.toast.expectSuccess(/Successfully edited/);
 
       const pkg = await getSoftwarePackage(request, FLEET_ID, titleId);

@@ -145,23 +145,27 @@ export class EditSoftwareModal {
   }
 
   /**
-   * Saves the edit and waits for both modals to clear. An edit that reaches the
-   * hosts (the package, its scripts, its targets) asks "Save changes?" first,
-   * which this confirms; one to Self-service or the categories alone saves
-   * directly (`hasChangeSideEffects` in Fleet's `EditSoftwareModal/helpers.tsx`).
-   * While the confirmation is up Fleet hides the edit modal with CSS and keeps
-   * it in the page, so only its removal says a direct save went through.
+   * Saves the edit and waits for both modals to clear. The caller says which way
+   * Fleet must take it, and the save fails if Fleet takes the other: an edit that
+   * reaches the hosts (the package, its scripts, its targets) asks "Save
+   * changes?" first (`confirm: true`, which this confirms), and one to
+   * Self-service or the categories alone saves directly (`confirm: false`;
+   * `hasChangeSideEffects` in Fleet's `EditSoftwareModal/helpers.tsx`). While the
+   * confirmation is up Fleet hides the edit modal with CSS and keeps it in the
+   * page, so only its removal says a direct save went through.
    */
-  async save(): Promise<void> {
+  async save({ confirm }: { confirm: boolean }): Promise<void> {
     await this.saveButton.click();
+    const asks = 'asks "Save changes?"';
+    const direct = 'saves without asking';
     await expect
       .poll(
         async () =>
-          (await this.confirmModal.isVisible()) ? 'confirm' : (await this.modal.count()) === 0 ? 'saved' : 'pending',
-        { message: 'the edit saves, or asks "Save changes?"', timeout: 30_000 },
+          (await this.confirmModal.isVisible()) ? asks : (await this.modal.count()) === 0 ? direct : 'still saving',
+        { message: `the edit ${confirm ? asks : direct}`, timeout: 30_000 },
       )
-      .not.toBe('pending');
-    if (await this.confirmModal.isVisible()) await this.confirmSaveButton.click();
+      .toBe(confirm ? asks : direct);
+    if (confirm) await this.confirmSaveButton.click();
     await expect(this.confirmModal).toBeHidden();
     await expect(this.modal).toBeHidden();
   }

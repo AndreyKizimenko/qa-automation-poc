@@ -81,7 +81,8 @@ test.describe('Premium • Software — label-scoped software', () => {
       await softwareTitleDetail.installerCard.openScopeEditor();
       await softwareTitleDetail.editSoftwareModal.expectOpen();
       await softwareTitleDetail.editSoftwareModal.setTarget(target);
-      await softwareTitleDetail.editSoftwareModal.save();
+      // A new target changes which hosts are offered the package, so Fleet asks first.
+      await softwareTitleDetail.editSoftwareModal.save({ confirm: true });
       await softwareTitleDetail.toast.expectSuccess(`Successfully edited ${fileName} version.`);
     };
     const offered = () => hostsOfferedTitle(request, ours, titleId!);
