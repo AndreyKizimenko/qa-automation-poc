@@ -14,6 +14,7 @@ export class SetupExperiencePage {
   readonly usersLink: Locator;
   readonly bootstrapPackageLink: Locator;
   readonly installSoftwareLink: Locator;
+  /** Not in the side navigation on Fleet 5: what a spec checks is absent. {@link goToRunScript} goes by URL. */
   readonly runScriptLink: Locator;
   readonly setupAssistantLink: Locator;
 
@@ -45,8 +46,15 @@ export class SetupExperiencePage {
     await expect(this.page).toHaveURL(/\/controls\/setup-experience\/install-software/);
   }
 
+  /**
+   * Opens the Run script card on the fleet the page is showing. Fleet 5 keeps the
+   * card out of the side navigation (a deprecated step, `exclude: true` in
+   * `SetupExperienceNavItems.tsx`) and still serves it at its URL, so it is
+   * reached by URL, carrying the page's `fleet_id`.
+   */
   async goToRunScript(): Promise<void> {
-    await this.runScriptLink.click();
+    const fleetId = new URL(this.page.url()).searchParams.get('fleet_id');
+    await this.page.goto(`/controls/setup-experience/run-script${fleetId !== null ? `?fleet_id=${fleetId}` : ''}`);
     await expect(this.page).toHaveURL(/\/controls\/setup-experience\/run-script/);
   }
 

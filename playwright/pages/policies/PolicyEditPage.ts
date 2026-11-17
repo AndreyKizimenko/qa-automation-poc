@@ -28,8 +28,8 @@ export interface PolicyFormValues {
 /**
  * Fields collected by the "Save policy" modal that pops on Save for a
  * new policy. Target and critical are left at their modal defaults (All
- * hosts, not critical); the platforms are too unless `platforms` names the
- * exact set to leave ticked.
+ * hosts, not critical). `platforms` names the exact set to leave ticked; left
+ * out, it is all four (see `saveNew`).
  */
 export interface SavePolicyValues {
   name: string;
@@ -86,6 +86,8 @@ export class PolicyEditPage {
   readonly saveNewDescriptionInput: Locator;
   readonly saveNewResolutionInput: Locator;
   readonly saveNewSubmitButton: Locator;
+  /** What the Save policy modal shows when Save is clicked with no platform ticked. */
+  readonly saveNewPlatformError: Locator;
   readonly saveNewCancelButton: Locator;
   /** The Save policy modal's label target (premium, on a fleet). */
   readonly saveNewTargets: TargetLabelSelector;
@@ -128,6 +130,7 @@ export class PolicyEditPage {
     this.saveNewDescriptionInput = this.saveNewModal.locator('textarea[name="description"]');
     this.saveNewResolutionInput = this.saveNewModal.locator('textarea[name="resolution"]');
     this.saveNewSubmitButton = this.saveNewModal.getByRole('button', { name: 'Save', exact: true });
+    this.saveNewPlatformError = this.saveNewModal.getByText('Select at least one platform', { exact: true });
     this.saveNewCancelButton = this.saveNewModal.getByRole('button', { name: 'Cancel', exact: true });
     this.saveNewTargets = new TargetLabelSelector(this.saveNewModal);
   }
@@ -253,6 +256,11 @@ export class PolicyEditPage {
     return this.sqlEditor.text();
   }
 
+  /** Focuses the SQL editor and leaves it, which runs Fleet's SQL validation (`SqlEditor.blur`). */
+  async blurSql(): Promise<void> {
+    await this.sqlEditor.blur();
+  }
+
   /**
    * New-policy save flow: clicks Save → opens "Save policy" modal → fills
    * name + description + resolution (and the platforms, when given) → submits → waits for the success
@@ -265,7 +273,10 @@ export class PolicyEditPage {
     await this.saveNewNameInput.fill(values.name);
     await this.saveNewDescriptionInput.fill(values.description);
     await this.saveNewResolutionInput.fill(values.resolution);
-    if (values.platforms) await this.setPlatforms(values.platforms);
+    // TODO(fleetdm/fleet#58701): the modal opens with no platform ticked, so a
+    // save without `platforms` ticks the four Fleet ticked by default before.
+    // Once it opens with them again, leave the modal's own default alone.
+    await this.setPlatforms(values.platforms ?? ['macOS', 'Windows', 'Linux', 'ChromeOS']);
     if (target) {
       await this.saveNewTargets.chooseCustom();
       if (target.include) await this.saveNewTargets.include(target.include.labels, target.include.mode);

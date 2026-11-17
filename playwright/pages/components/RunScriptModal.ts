@@ -23,7 +23,6 @@ export class RunScriptModal {
   readonly page: Page;
   readonly toast: Toast;
   readonly modal: Locator;
-  readonly closeButton: Locator;
   /** The "Run script?" confirmation raised by a row's Run action. */
   readonly confirmForm: Locator;
   readonly confirmRunButton: Locator;
@@ -32,7 +31,6 @@ export class RunScriptModal {
     this.page = page;
     this.toast = new Toast(page);
     this.modal = page.locator('.run-script-modal');
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
     this.confirmForm = page.locator('.confirm-run-script-modal__form');
     this.confirmRunButton = this.confirmForm.getByRole('button', { name: 'Run', exact: true });
   }
@@ -90,8 +88,13 @@ export class RunScriptModal {
     await this.rowActionOption('Show run details').click();
   }
 
+  /**
+   * Closes the modal with Escape, which Fleet's `Modal` honours while none of its
+   * menus is open. The modal has no footer, and its header ✕ carries no
+   * accessible name to find it by.
+   */
   async close(): Promise<void> {
-    await this.closeButton.click();
+    await this.page.keyboard.press('Escape');
     await expect(this.modal).toBeHidden();
   }
 }

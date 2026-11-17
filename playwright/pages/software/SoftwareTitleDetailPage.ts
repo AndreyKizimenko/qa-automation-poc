@@ -107,7 +107,7 @@ export class SoftwareTitleDetailPage {
     this.headerPills = summaryCard.locator('.software-details-summary__header-pills .chip');
 
     const actionsWrapper = summaryCard.locator('.software-details-summary__actions-wrapper');
-    this.editAppearanceButton = actionsWrapper.getByRole('button', { name: 'Edit', exact: true });
+    this.editAppearanceButton = actionsWrapper.getByRole('button', { name: 'Edit appearance', exact: true });
     // Fleet's ActionsDropdown is a react-select control whose trigger keeps no
     // usable role; `.actions-dropdown__wrapper` is the outer element, unique
     // within the card.

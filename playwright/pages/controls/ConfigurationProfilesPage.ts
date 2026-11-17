@@ -51,6 +51,12 @@ export class ConfigurationProfilesPage {
 
   readonly heading: Locator;
   readonly addProfileButton: Locator;
+  /**
+   * The AI profile builder's way to the upload form. Add profile opens the
+   * builder whenever AI features are on, gitops mode is off and Apple or Windows
+   * MDM is on (`ProfileFormPage.tsx`'s `showAIView`); this leads to `/new/manual`.
+   */
+  readonly createManuallyButton: Locator;
   readonly listItem: Locator;
 
   /** The Add / Edit profile page's form. */
@@ -86,6 +92,7 @@ export class ConfigurationProfilesPage {
     // The "Add profile" button label is shared between the empty-state card
     // and the populated-list heading; both open the Add profile page.
     this.addProfileButton = page.getByRole('button', { name: 'Add profile' }).first();
+    this.createManuallyButton = page.getByRole('button', { name: 'Create manually', exact: true });
     this.listItem = page.locator('.profile-list-item');
 
     // A <form> has no role without an accessible name and Fleet gives this one
@@ -125,10 +132,20 @@ export class ConfigurationProfilesPage {
     return this.listItem.filter({ has: this.page.getByText(name, { exact: true }) });
   }
 
-  /** Opens the Add profile page from the list. It has no heading, so its form and submit button are the anchor. */
+  /**
+   * Opens the upload form from the list. Add profile opens the AI profile
+   * builder when the instance offers it, and the builder's "Create manually"
+   * leads on to the form; with AI off the form opens directly. The form has no
+   * heading, so it and its submit button are the anchor.
+   */
   async openAddProfile(): Promise<void> {
     await this.addProfileButton.click();
     await expect(this.page).toHaveURL(/\/configuration-profiles\/new/);
+    await expect(this.profileForm.or(this.createManuallyButton)).toBeVisible();
+    if (await this.createManuallyButton.isVisible()) {
+      await this.createManuallyButton.click();
+      await expect(this.page).toHaveURL(/\/configuration-profiles\/new\/manual/);
+    }
     await expect(this.profileForm).toBeVisible();
     await expect(this.addProfileSubmitButton).toBeVisible();
   }
@@ -217,13 +234,12 @@ export class ConfigurationProfilesPage {
 
   /**
    * One of a profile row's action buttons, by the name `ProfileListItem` gives
-   * it: "View <name> details", "Edit <name>", "Download <name>", "Delete <name>".
-   * They render only while the row is hovered, so hover `itemByName(name)` before
-   * reading one.
+   * it: "Edit <name>", "Download <name>", "Delete <name>". (The row itself is
+   * the button that opens its details.) They render only while the row is
+   * hovered, so hover `itemByName(name)` before reading one.
    */
-  rowButton(name: string, action: 'View' | 'Edit' | 'Download' | 'Delete'): Locator {
-    const label = action === 'View' ? `View ${name} details` : `${action} ${name}`;
-    return this.itemByName(name).getByRole('button', { name: label, exact: true });
+  rowButton(name: string, action: 'Edit' | 'Download' | 'Delete'): Locator {
+    return this.itemByName(name).getByRole('button', { name: `${action} ${name}`, exact: true });
   }
 
   /**

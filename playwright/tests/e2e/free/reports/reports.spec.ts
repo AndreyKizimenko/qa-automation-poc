@@ -159,6 +159,10 @@ test.describe('Reports — SQL validation', () => {
     // A fresh load shows Fleet's default query until the report arrives.
     await reportEdit.gotoEdit(createdId);
     await expect.poll(() => reportEdit.sqlText()).toBe(badSql);
+    // TODO(fleetdm/fleet#57393): Fleet 5 validates a saved query on blur, not
+    // when it loads, so the error shows only once the editor is left. Drop the
+    // blur once a reopened query shows its error by itself.
+    await reportEdit.blurSql();
     await expect(reportEdit.sqlSyntaxError).toBeVisible();
   });
 });

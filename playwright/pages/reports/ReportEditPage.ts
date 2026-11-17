@@ -237,6 +237,11 @@ export class ReportEditPage {
     return this.sqlEditor.text();
   }
 
+  /** Focuses the SQL editor and leaves it, which runs Fleet's SQL validation (`SqlEditor.blur`). */
+  async blurSql(): Promise<void> {
+    await this.sqlEditor.blur();
+  }
+
   /**
    * New-report save flow: clicks Save → opens "Save report" modal → fills
    * name + description + interval + observers-can-run, and the platforms,

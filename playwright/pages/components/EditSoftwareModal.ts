@@ -145,13 +145,23 @@ export class EditSoftwareModal {
   }
 
   /**
-   * Saves the edit, confirms the "Save changes?" dialog, and waits for both
-   * modals to clear. The confirm-button click auto-waits for the dialog, so
-   * it also covers the brief gap between the edit save and the confirmation.
+   * Saves the edit and waits for both modals to clear. An edit that reaches the
+   * hosts (the package, its scripts, its targets) asks "Save changes?" first,
+   * which this confirms; one to Self-service or the categories alone saves
+   * directly (`hasChangeSideEffects` in Fleet's `EditSoftwareModal/helpers.tsx`).
+   * While the confirmation is up Fleet hides the edit modal with CSS and keeps
+   * it in the page, so only its removal says a direct save went through.
    */
   async save(): Promise<void> {
     await this.saveButton.click();
-    await this.confirmSaveButton.click();
+    await expect
+      .poll(
+        async () =>
+          (await this.confirmModal.isVisible()) ? 'confirm' : (await this.modal.count()) === 0 ? 'saved' : 'pending',
+        { message: 'the edit saves, or asks "Save changes?"', timeout: 30_000 },
+      )
+      .not.toBe('pending');
+    if (await this.confirmModal.isVisible()) await this.confirmSaveButton.click();
     await expect(this.confirmModal).toBeHidden();
     await expect(this.modal).toBeHidden();
   }

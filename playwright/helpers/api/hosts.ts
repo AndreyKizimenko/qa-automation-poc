@@ -1404,12 +1404,8 @@ async function listOnlineHosts(
 
 /**
  * Transfer specific hosts to a fleet. Pass `null` (or `0`) to send hosts
- * to "No team" — the server expects `team_id: null` for unassigned, since
- * `team_id: 0` references a non-existent row and trips the FK constraint.
- *
- * The server rejects payloads that include both `team_id` and `fleet_id`
- * during the rename transition; we send `team_id` (the legacy field name)
- * since the server still accepts it on every supported version.
+ * to Unassigned: the server expects `fleet_id: null` for it, since
+ * `fleet_id: 0` references a non-existent row and trips the FK constraint.
  */
 export async function transferHosts(
   request: APIRequestContext,

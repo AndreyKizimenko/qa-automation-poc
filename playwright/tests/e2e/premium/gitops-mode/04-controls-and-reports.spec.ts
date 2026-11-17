@@ -8,7 +8,7 @@
  *   wrapper or tip, and only Save goes through the wrapper. The checkbox would
  *   also be disabled with MDM off, so Save's wrapper is the half that fails when
  *   gitops mode stops gating this page.
- * - A profile row: Delete is gated. View, Edit and Download aren't, Edit on
+ * - A profile row: Delete is gated. Edit and Download aren't, Edit on
  *   purpose: its modal is the only place to read a profile's targets, so the
  *   modal gates its own *Update profile* instead.
  * - Variables: *Add variable* is gated, while deleting a variable stays allowed
@@ -83,7 +83,7 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
     await expectGatedByGitOps(diskEncryption.saveButton, repoUrl);
   });
 
-  test('Configuration profiles — Add and Delete are gated, View, Edit and Download stay open', async ({
+  test('Configuration profiles — Add and Delete are gated, Edit and Download stay open', async ({
     configurationProfiles: profiles,
     request,
     workstationsFleetId,
@@ -101,7 +101,7 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
     const row = profiles.itemByName(name);
     await row.hover();
     await expectGatedByGitOps(profiles.rowButton(name, 'Delete'), repoUrl, { reveal: row });
-    for (const action of ['View', 'Edit', 'Download'] as const) {
+    for (const action of ['Edit', 'Download'] as const) {
       await row.hover();
       await expectNotGatedByGitOps(profiles.rowButton(name, action));
     }

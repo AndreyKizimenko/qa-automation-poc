@@ -62,17 +62,26 @@ test.describe('Free • Policies • SQL validation', () => {
     await policyEdit.gotoEdit(createdId);
     await expect(policyEdit.nameInput).toHaveValue(name);
     expect(await policyEdit.sqlText()).toBe(badSql);
+    // TODO(fleetdm/fleet#57393): Fleet 5 validates a saved query on blur, not
+    // when it loads, so the error shows only once the editor is left. Drop the
+    // blur once a reopened query shows its error by itself.
+    await policyEdit.blurSql();
     await expect(policyEdit.sqlSyntaxError).toBeVisible();
   });
 });
 
 test.describe('Free • Policies • save gating', () => {
-  test('the Save policy modal disables Save until a platform is selected', async ({ policyEdit }) => {
+  // Save stays enabled, as Fleet's forms now are everywhere: the modal refuses
+  // the save when it is clicked, and stays open.
+  test('the Save policy modal refuses to save until a platform is selected', async ({ policyEdit }) => {
     await policyEdit.gotoNew();
     await policyEdit.setSql('SELECT 1 FROM osquery_info;');
     await policyEdit.saveButton.click();
     await expect(policyEdit.saveNewModal).toBeVisible();
     await policyEdit.clearNewPolicyPlatforms();
-    await expect(policyEdit.saveNewSubmitButton).toBeDisabled();
+    await expect(policyEdit.saveNewSubmitButton).toBeEnabled();
+    await policyEdit.saveNewSubmitButton.click();
+    await expect(policyEdit.saveNewPlatformError).toBeVisible();
+    await expect(policyEdit.saveNewModal).toBeVisible();
   });
 });

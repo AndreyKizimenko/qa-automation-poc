@@ -4,7 +4,7 @@ import { deleteUser, listUsers } from '@helpers/api';
 import { activityCopy } from '@helpers/activity-copy';
 import type { ApiGlobalRole } from '@pages';
 
-const FREE_API_ROLES: readonly ApiGlobalRole[] = ['Observer', 'Maintainer', 'Admin'];
+const FREE_API_ROLES: readonly ApiGlobalRole[] = ['Observer', 'GitOps', 'Maintainer', 'Admin'];
 
 async function findApiUserIdByName(
   request: APIRequestContext,
@@ -94,8 +94,8 @@ test.describe('Create API-only user (free)', () => {
 
     await createApiUserPage.goto();
     await createApiUserPage.name.fill(name);
-    // Default role on free is Observer (the gitops branch doesn't apply
-    // on the free tier).
+    // No role is picked: an API-only user defaults to GitOps, on free as on
+    // premium (`ApiUserForm.tsx`).
     await createApiUserPage.submitButton.click();
 
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
@@ -123,7 +123,7 @@ test.describe('Create API-only user (free)', () => {
     await createApiUserPage.doneButton.click();
     await expect(page).toHaveURL(/\/settings\/users\b/);
     await usersPage.toast.expectSuccess(`${name} has been created!`);
-    await assertApiUserRow(await usersPage.findRowByName(name), name, 'Observer');
+    await assertApiUserRow(await usersPage.findRowByName(name), name, 'GitOps');
 
     const id = await findApiUserIdByName(request, name);
     if (id !== null) createdUserIds.push(id);

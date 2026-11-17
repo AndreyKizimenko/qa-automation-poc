@@ -38,4 +38,14 @@ export class SqlEditor {
   async text(): Promise<string> {
     return (await this.content.innerText()).trim();
   }
+
+  /**
+   * Focuses the editor and leaves it, which is what makes Fleet validate the
+   * SQL it holds: the forms check it on blur, on submit and 3 s after typing
+   * stops, not when a saved query loads.
+   */
+  async blur(): Promise<void> {
+    await this.textarea.focus();
+    await this.textarea.blur();
+  }
 }
