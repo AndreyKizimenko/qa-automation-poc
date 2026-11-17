@@ -40,7 +40,7 @@ import { DashboardPage, FleetUsersPage } from '@pages';
 
 /** The user's fleet roles as `{ id, role }`, whichever key this Fleet version uses. */
 function fleetRoles(user: UserRef | null): { id: number; role: string }[] {
-  return (user?.fleets ?? user?.teams ?? []).map(({ id, role }) => ({ id, role }));
+  return (user?.fleets ?? []).map(({ id, role }) => ({ id, role }));
 }
 
 test.describe('Premium • Settings • team admin scope', () => {

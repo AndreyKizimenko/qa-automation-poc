@@ -169,7 +169,7 @@ export async function getAgentOptions(
   const res = await request.get(apiUrl(`fleets/${fleetId}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read fleet ${fleetId}`);
   const body = await res.json();
-  return ((body.fleet ?? body.team)?.agent_options ?? {}) as Record<string, unknown>;
+  return (body.fleet?.agent_options ?? {}) as Record<string, unknown>;
 }
 
 /**

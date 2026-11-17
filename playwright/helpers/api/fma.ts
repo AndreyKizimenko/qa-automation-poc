@@ -167,21 +167,26 @@ export async function listFleetMaintainedTitles(
   const titles = (body.software_titles ?? []) as Array<{
     id: number;
     name: string;
-    software_package?: {
+    packages?: Array<{
       platform?: string;
       fleet_maintained_app_id?: number | null;
       fleet_maintained_versions?: { version: string }[] | null;
-    } | null;
+    }> | null;
   }>;
 
-  return titles
-    .filter((t) => t.software_package?.fleet_maintained_app_id)
-    .map((t) => ({
-      titleId: t.id,
-      name: t.name,
-      platform: t.software_package?.platform ?? '',
-      versions: (t.software_package?.fleet_maintained_versions ?? []).map((v) => v.version),
-    }));
+  return titles.flatMap((t) => {
+    const pkg = t.packages?.find((p) => p.fleet_maintained_app_id);
+    return pkg
+      ? [
+          {
+            titleId: t.id,
+            name: t.name,
+            platform: pkg.platform ?? '',
+            versions: (pkg.fleet_maintained_versions ?? []).map((v) => v.version),
+          },
+        ]
+      : [];
+  });
 }
 
 /**

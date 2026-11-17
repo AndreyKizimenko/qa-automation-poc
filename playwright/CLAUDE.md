@@ -333,8 +333,8 @@ Folder conventions:
    `PW_VAR_*` variables; on the VMs fleet it takes `pw-*` things and borrowed simulations, reports only by exact
    prefix (`pw-run-script-`, `pw-rl-`, `pw-stored-results-`, since gitops declares `pw-host-report-results`
    there). A spec that leaves a new kind of per-run report on Workstations or VMs adds its prefix to that
-   sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off and script
-   execution on, returns every lab host to its role's fleet, brings every pool VM to its resting state, and takes what a dead run of the per-OS smokes left on the OS matrix fleet and its hosts. It does **not** reset disk encryption or the
+   sweep. It also clears version pins on QA's and VMs' Fleet-maintained apps, turns gitops mode off,
+   returns every lab host to its role's fleet, brings every pool VM to its resting state, and takes what a dead run of the per-OS smokes left on the OS matrix fleet and its hosts. It does **not** reset disk encryption or the
    BitLocker PIN, `end_user_local_account_type`, the global macOS migration settings or the global end-user
    authentication (IdP) settings: no spec saves the IdP settings (Test hosts → *Ask before any of these,
    too*), and a spec that writes one of the others restores it, or works on a throwaway `pw-*` fleet.
@@ -344,7 +344,7 @@ Folder conventions:
 Admin SSO and end-user auth (EUA) are assumed to be pre-configured on the instance — the suite does not provision them.
 
 The `free` project runs the **same cleanup chain**, minus the fleet steps (fleets are premium-only). **Do not
-plan a free spec around "nothing wipes this on free"** — global reports, policies, packs, installable
+plan a free spec around "nothing wipes this on free"** — global reports, policies, installable
 software, profiles and scripts are all wiped on free too. The other way round, `pw-*` labels are swept on
 premium only (inside the VMs-fleet step), so a free spec deletes its own.
 

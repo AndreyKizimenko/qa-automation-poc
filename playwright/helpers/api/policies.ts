@@ -207,7 +207,7 @@ interface RawFleetPolicy {
   id: number;
   name: string;
   query: string;
-  team_id: number | null;
+  fleet_id: number | null;
   author_email?: string;
   platform?: string;
   type?: string;
@@ -225,7 +225,7 @@ function toFleetPolicy(p: RawFleetPolicy): FleetPolicy {
     id: p.id,
     name: p.name,
     query: p.query,
-    teamId: p.team_id ?? 0,
+    teamId: p.fleet_id ?? 0,
     authorEmail: p.author_email ?? '',
     platform: p.platform ?? '',
     type: p.type ?? 'dynamic',

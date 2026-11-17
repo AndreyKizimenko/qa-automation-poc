@@ -142,11 +142,11 @@ export async function findSoftwareTitleByPackageName(
     const titles = (body.software_titles ?? []) as Array<{
       id: number;
       name: string;
-      software_package?: { name: string } | null;
+      packages?: Array<{ name: string }> | null;
     }>;
     if (!titles.length) return null;
 
-    const match = titles.find((t) => t.software_package?.name === packageName);
+    const match = titles.find((t) => (t.packages ?? []).some((p) => p.name === packageName));
     if (match) {
       return { titleId: match.id, name: match.name, packageName };
     }
@@ -271,26 +271,22 @@ export async function deleteLibraryTitlesWhere(
   const titles = ((await res.json()).software_titles ?? []) as Array<{
     id: number;
     name: string;
-    software_package?: { name: string; platform: string; fleet_maintained_app_id?: number | null } | null;
-    app_store_app?: { app_store_id: string | number; platform: string } | null;
+    packages?: Array<{ name: string; platform: string; fleet_maintained_app_id?: number | null }> | null;
+    app_store_apps?: Array<{ app_store_id: string | number; platform: string }> | null;
   }>;
   const matched = titles
-    .map(
-      (t): LibraryTitle => ({
+    .map((t): LibraryTitle => {
+      const pkg = t.packages?.[0];
+      const app = t.app_store_apps?.[0];
+      return {
         titleId: t.id,
         name: t.name,
-        package: t.software_package
-          ? {
-              name: t.software_package.name,
-              platform: t.software_package.platform,
-              fleetMaintained: !!t.software_package.fleet_maintained_app_id,
-            }
+        package: pkg
+          ? { name: pkg.name, platform: pkg.platform, fleetMaintained: !!pkg.fleet_maintained_app_id }
           : undefined,
-        appStoreApp: t.app_store_app
-          ? { appStoreId: String(t.app_store_app.app_store_id), platform: t.app_store_app.platform }
-          : undefined,
-      }),
-    )
+        appStoreApp: app ? { appStoreId: String(app.app_store_id), platform: app.platform } : undefined,
+      };
+    })
     .filter(match);
   for (const title of matched) await deleteSoftwareTitle(request, fleetId, title.titleId);
   return matched.length;
@@ -327,7 +323,7 @@ export async function getAppStoreAppConfiguration(
     params: { fleet_id: String(fleetId) },
   });
   await expectOk(res, `Failed to fetch software title ${titleId}`);
-  const app = (await res.json()).software_title?.app_store_app;
+  const app = (await res.json()).software_title?.app_store_apps?.[0];
   if (!app) throw new Error(`Software title ${titleId} has no app store app on fleet ${fleetId}`);
   return app.configuration ?? null;
 }
@@ -376,7 +372,7 @@ export async function getSoftwarePackage(
   await expectOk(res, `Failed to fetch software title ${titleId}`);
   const body = await res.json();
   const t = body.software_title;
-  const pkg = t?.software_package ?? t?.packages?.[0];
+  const pkg = t?.packages?.[0];
   if (!pkg) return null;
   return {
     name: pkg.name,
@@ -1021,20 +1017,17 @@ export async function listInstallableTitles(
     params: { fleet_id: String(fleetId), available_for_install: 'true', per_page: '200' },
   });
   await expectOk(res, `Failed to list installable titles on fleet ${fleetId}`);
-  return ((await res.json()).software_titles ?? [])
-    .filter((t: { software_package?: unknown }) => t.software_package)
-    .map(
-      (t: {
-        id: number;
-        name: string;
-        software_package: { name: string; fleet_maintained_app_id?: number | null };
-      }) => ({
-        titleId: t.id,
-        name: t.name,
-        packageName: t.software_package.name,
-        fleetMaintained: !!t.software_package.fleet_maintained_app_id,
-      }),
-    );
+  const titles = ((await res.json()).software_titles ?? []) as Array<{
+    id: number;
+    name: string;
+    packages?: Array<{ name: string; fleet_maintained_app_id?: number | null }> | null;
+  }>;
+  return titles.flatMap((t) => {
+    const pkg = t.packages?.[0];
+    return pkg
+      ? [{ titleId: t.id, name: t.name, packageName: pkg.name, fleetMaintained: !!pkg.fleet_maintained_app_id }]
+      : [];
+  });
 }
 
 /** Names in a host's software inventory that contain `query` (Fleet's own search). */

@@ -9,17 +9,9 @@ export interface OrgInfo {
   org_name?: string;
   // The "Organization support URL" field maps to `contact_url` in the API.
   contact_url?: string;
-  /**
-   * Custom org logo URLs. Fleet keeps two pairs: the mode-aware fields the UI
-   * writes today (`*_light_mode` / `*_dark_mode`) and the deprecated aliases
-   * they shadow (`org_logo_url_light_background` / `org_logo_url`). A logo
-   * upload writes both members of a pair, and Fleet reads the alias when the
-   * mode-aware field is empty — so anything clearing a logo must clear both.
-   */
+  /** Custom org logo URLs, one per mode the UI shows. */
   org_logo_url_light_mode?: string;
-  org_logo_url_light_background?: string;
   org_logo_url_dark_mode?: string;
-  org_logo_url?: string;
   [key: string]: unknown;
 }
 
@@ -173,23 +165,20 @@ export async function setGlobalDiskEncryption(
 }
 
 /**
- * The custom org-logo URL currently in force for each mode, resolved the same
- * way Fleet resolves it: the mode-aware field wins, the deprecated alias is
- * the fallback. Use as the snapshot a logo-mutating spec restores from.
+ * The custom org-logo URL currently in force for each mode. Use as the
+ * snapshot a logo-mutating spec restores from.
  */
 export async function getOrgLogoUrls(request: APIRequestContext): Promise<OrgLogoUrls> {
   const org = (await getAppConfig(request)).org_info ?? {};
   return {
-    light: org.org_logo_url_light_mode || org.org_logo_url_light_background || '',
-    dark: org.org_logo_url_dark_mode || org.org_logo_url || '',
+    light: org.org_logo_url_light_mode || '',
+    dark: org.org_logo_url_dark_mode || '',
   };
 }
 
 /**
- * Remove the stored logo for one mode (DELETE /logo?mode=). This is the only
- * call that clears *both* the mode-aware field and its deprecated alias and
- * drops the blob from the object store — a `PATCH /config` that empties one
- * field leaves the other pointing at the old URL.
+ * Remove the stored logo for one mode (DELETE /logo?mode=): clears the mode's
+ * URL and drops the blob from the object store.
  *
  * Tolerates "nothing stored": the endpoint is the restore path for a spec that
  * may have failed before it uploaded anything.
@@ -228,11 +217,8 @@ export async function restoreOrgLogo(
     await deleteOrgLogo(request, mode);
     return;
   }
-  const restored: Record<string, string> =
-    mode === 'light'
-      ? { org_logo_url_light_mode: url, org_logo_url_light_background: url }
-      : { org_logo_url_dark_mode: url, org_logo_url: url };
-  await patchAppConfig(request, { org_info: restored });
+  const key = mode === 'light' ? 'org_logo_url_light_mode' : 'org_logo_url_dark_mode';
+  await patchAppConfig(request, { org_info: { [key]: url } });
 }
 
 /**

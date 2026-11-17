@@ -61,7 +61,6 @@ export async function findLabelByName(request: APIRequestContext, name: string):
       name: string;
       description?: string;
       author_id?: number | null;
-      team_id?: number | null;
       fleet_id?: number | null;
     }>
   ).find((l) => l.name === name);
@@ -71,7 +70,7 @@ export async function findLabelByName(request: APIRequestContext, name: string):
     name: label.name,
     description: label.description ?? '',
     authorId: label.author_id ?? null,
-    fleetId: label.fleet_id ?? label.team_id ?? null,
+    fleetId: label.fleet_id ?? null,
   };
 }
 

@@ -3,6 +3,26 @@ import { apiUrl, authHeaders, expectOk, type FleetRef } from './core';
 import { deleteBootstrapPackage } from './mdm';
 import { compareVersions } from './software';
 
+/** What the helpers here read of a fleet's stored settings. */
+interface FleetSettings {
+  webhook_settings?: Record<string, unknown>;
+  host_expiry_settings?: { host_expiry_enabled?: boolean; host_expiry_window?: number };
+  features?: Record<string, unknown>;
+  mdm?: {
+    windows_settings?: { enable_disk_encryption?: boolean; require_bitlocker_pin?: boolean };
+    macos_updates?: { minimum_version?: string; deadline?: string; deadline_days?: number | null };
+    windows_updates?: { deadline_days?: number | null; grace_period_days?: number | null };
+    macos_recovery_lock_password_enabled?: boolean;
+  };
+}
+
+/** A fleet's stored settings, as `GET /fleets/:id` returns them under `fleet`. */
+async function readFleet(request: APIRequestContext, fleetId: number): Promise<FleetSettings> {
+  const res = await request.get(apiUrl(`fleets/${fleetId}`), { headers: authHeaders() });
+  await expectOk(res, `Failed to read fleet ${fleetId}`);
+  return ((await res.json()).fleet ?? {}) as FleetSettings;
+}
+
 /**
  * A fleet's whole `webhook_settings` subtree: its host-status, failing-policies
  * and host-activities webhooks. A PATCH replaces only the webhooks it carries
@@ -14,9 +34,7 @@ export async function getFleetWebhookSettings(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<Record<string, unknown>> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  return ((await res.json()).team?.webhook_settings ?? {}) as Record<string, unknown>;
+  return (await readFleet(request, fleetId)).webhook_settings ?? {};
 }
 
 /**
@@ -28,9 +46,7 @@ export async function getFleetHostExpirySettings(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<{ host_expiry_enabled?: boolean; host_expiry_window?: number }> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  return (await res.json()).team?.host_expiry_settings ?? {};
+  return (await readFleet(request, fleetId)).host_expiry_settings ?? {};
 }
 
 /** Writes the webhooks given into a fleet's `webhook_settings`; the ones left out stay as they are. */
@@ -39,7 +55,7 @@ export async function setFleetWebhookSettings(
   fleetId: number,
   webhookSettings: Record<string, unknown>,
 ): Promise<void> {
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
     data: { webhook_settings: webhookSettings },
   });
@@ -60,9 +76,7 @@ export async function getFleetFeatures(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<Record<string, unknown>> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  return ((await res.json()).team?.features ?? {}) as Record<string, unknown>;
+  return (await readFleet(request, fleetId)).features ?? {};
 }
 
 /** Writes a snapshot of a fleet's `features` back: the keys a PATCH takes are restored, the others ignored. */
@@ -71,7 +85,7 @@ export async function setFleetFeatures(
   fleetId: number,
   features: Record<string, unknown>,
 ): Promise<void> {
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
     data: { features },
   });
@@ -108,7 +122,7 @@ export async function findFleetByName(
   });
   await expectOk(res, `Failed to look up the fleet "${name}"`);
   const body = await res.json();
-  const match = (body.fleets ?? body.teams ?? []).find(
+  const match = (body.fleets ?? []).find(
     (t: { id: number; name: string }) => t.name === name,
   );
   return match ? { id: match.id, name: match.name } : null;
@@ -123,10 +137,8 @@ export async function createFleet(
     data: { name },
   });
   await expectOk(res, `Failed to create fleet "${name}"`);
-  const body = await res.json();
-  // The teams→fleets rename is in transition; prefer `fleet`, fall back to `team`.
-  const ref = body.fleet ?? body.team;
-  return { id: ref.id, name: ref.name };
+  const { fleet } = await res.json();
+  return { id: fleet.id, name: fleet.name };
 }
 
 /**
@@ -156,7 +168,7 @@ export async function deleteFleetsWithPrefix(request: APIRequestContext, prefix:
   const res = await request.get(apiUrl('fleets'), { headers: authHeaders(), params: { per_page: '500' } });
   await expectOk(res, 'Failed to list fleets');
   const body = await res.json();
-  const fleets = (body.fleets ?? body.teams ?? []) as Array<{ id: number; name: string }>;
+  const fleets = (body.fleets ?? []) as Array<{ id: number; name: string }>;
   for (const fleet of fleets.filter((f) => f.name.startsWith(prefix))) {
     await deleteFleet(request, fleet.id, { ignoreMissing: true });
   }
@@ -191,14 +203,12 @@ export interface FleetWindowsDiskEncryption {
   bitlockerPinRequired: boolean;
 }
 
-/** Reads `mdm.windows_settings` from `/teams/:id`. Not for Unassigned (see `getGlobalDiskEncryption`). */
+/** Reads `mdm.windows_settings` from `/fleets/:id`. Not for Unassigned (see `getGlobalDiskEncryption`). */
 export async function getFleetWindowsDiskEncryption(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<FleetWindowsDiskEncryption> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  const windows = (await res.json()).team?.mdm?.windows_settings ?? {};
+  const windows = (await readFleet(request, fleetId)).mdm?.windows_settings ?? {};
   return {
     enabled: windows.enable_disk_encryption ?? false,
     bitlockerPinRequired: windows.require_bitlocker_pin ?? false,
@@ -234,9 +244,7 @@ export async function getFleetOsUpdates(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<{ macos: AppleOsUpdates; windows: WindowsOsUpdates }> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  const mdm = (await res.json()).team?.mdm ?? {};
+  const mdm = (await readFleet(request, fleetId)).mdm ?? {};
   return {
     macos: {
       minimumVersion: mdm.macos_updates?.minimum_version ?? '',
@@ -257,7 +265,7 @@ export async function getFleetOsUpdates(
  */
 export async function clearFleetOsUpdates(request: APIRequestContext, fleetId: number): Promise<void> {
   const none = { minimum_version: '', deadline: '', deadline_days: null };
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
     data: {
       mdm: {
@@ -295,7 +303,7 @@ export async function setFleetMacosUpdates(
   fleetId: number,
   updates: { minimumVersion: string; deadline: string },
 ): Promise<void> {
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
     data: {
       mdm: { macos_updates: { minimum_version: updates.minimumVersion, deadline: updates.deadline, deadline_days: null } },
@@ -314,7 +322,7 @@ export async function setFleetWindowsUpdates(
   fleetId: number,
   updates: { deadlineDays: number; gracePeriodDays: number },
 ): Promise<void> {
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
     data: {
       mdm: { windows_updates: { deadline_days: updates.deadlineDays, grace_period_days: updates.gracePeriodDays } },
@@ -323,11 +331,9 @@ export async function setFleetWindowsUpdates(
   await expectOk(res, `Failed to set fleet ${fleetId}'s Windows updates: ${await res.text()}`);
 }
 
-/** Whether the fleet enforces Recovery Lock passwords (`mdm.enable_recovery_lock_password`). */
+/** Whether the fleet enforces Recovery Lock passwords (`mdm.macos_recovery_lock_password_enabled`). */
 export async function getFleetRecoveryLock(request: APIRequestContext, fleetId: number): Promise<boolean> {
-  const res = await request.get(apiUrl(`teams/${fleetId}`), { headers: authHeaders() });
-  await expectOk(res, `Failed to read fleet ${fleetId}`);
-  return !!(await res.json()).team?.mdm?.enable_recovery_lock_password;
+  return !!(await readFleet(request, fleetId)).mdm?.macos_recovery_lock_password_enabled;
 }
 
 /**
@@ -342,9 +348,9 @@ export async function setFleetRecoveryLock(
   fleetId: number,
   enabled: boolean,
 ): Promise<void> {
-  const res = await request.patch(apiUrl(`teams/${fleetId}`), {
+  const res = await request.patch(apiUrl(`fleets/${fleetId}`), {
     headers: authHeaders(),
-    data: { mdm: { enable_recovery_lock_password: enabled } },
+    data: { mdm: { macos_recovery_lock_password_enabled: enabled } },
   });
   await expectOk(res, `Failed to set fleet ${fleetId}'s Recovery Lock enforcement: ${await res.text()}`);
 }
