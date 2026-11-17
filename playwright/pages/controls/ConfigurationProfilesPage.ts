@@ -1,6 +1,7 @@
 import { Page, Locator, expect, Download } from '@playwright/test';
 import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
+import { fleetModal } from '../components/Modal';
 import { Navbar } from '../components/Navbar';
 import { TargetLabelSelector, type LabelMode } from '../components/TargetLabelSelector';
 import { TeamDropdown } from '../components/TeamDropdown';
@@ -234,12 +235,34 @@ export class ConfigurationProfilesPage {
 
   /**
    * One of a profile row's action buttons, by the name `ProfileListItem` gives
-   * it: "Edit <name>", "Download <name>", "Delete <name>". (The row itself is
-   * the button that opens its details.) They render only while the row is
+   * it: "Edit <name>", "Download <name>", "Delete <name>". (The row itself opens
+   * its status: {@link openStatus}.) They render only while the row is
    * hovered, so hover `itemByName(name)` before reading one.
    */
   rowButton(name: string, action: 'Edit' | 'Download' | 'Delete'): Locator {
     return this.itemByName(name).getByRole('button', { name: `${action} ${name}`, exact: true });
+  }
+
+  /** A profile's status modal (`ConfigProfileStatusModal`): titled with its name, its delivery counts below. */
+  statusModal(name: string): Locator {
+    return fleetModal(this.page, name);
+  }
+
+  /**
+   * Opens a profile's status modal the way a user does, by clicking its row: no
+   * action button opens it. The click lands on the name, clear of the action
+   * buttons, which keep their own clicks from reaching the row.
+   */
+  async openStatus(name: string): Promise<void> {
+    await this.itemByName(name).getByText(name, { exact: true }).click();
+    await expect(this.statusModal(name)).toBeVisible();
+  }
+
+  /** Closes a profile's status modal with its Close button. */
+  async closeStatus(name: string): Promise<void> {
+    const modal = this.statusModal(name);
+    await modal.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(modal).toBeHidden();
   }
 
   /**

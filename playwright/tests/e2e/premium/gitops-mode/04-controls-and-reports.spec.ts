@@ -10,7 +10,8 @@
  *   gitops mode stops gating this page.
  * - A profile row: Delete is gated. Edit and Download aren't, Edit on
  *   purpose: its modal is the only place to read a profile's targets, so the
- *   modal gates its own *Update profile* instead.
+ *   modal gates its own *Update profile* instead. Nor is the row itself, which
+ *   opens the profile's status: it is checked by opening and closing it.
  * - Variables: *Add variable* is gated, while deleting a variable stays allowed
  *   in gitops mode.
  * - A report: Save and Save as new are gated; Live report is an operation, not
@@ -83,7 +84,7 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
     await expectGatedByGitOps(diskEncryption.saveButton, repoUrl);
   });
 
-  test('Configuration profiles — Add and Delete are gated, Edit and Download stay open', async ({
+  test('Configuration profiles — Add and Delete are gated, Edit, Download and the status stay open', async ({
     configurationProfiles: profiles,
     request,
     workstationsFleetId,
@@ -105,6 +106,8 @@ test.describe('Premium • gitops mode — Controls and Reports', () => {
       await row.hover();
       await expectNotGatedByGitOps(profiles.rowButton(name, action));
     }
+    await profiles.openStatus(name);
+    await profiles.closeStatus(name);
 
     await profiles.openEdit(name);
     await expectGatedByGitOps(profiles.updateProfileButton, repoUrl);
