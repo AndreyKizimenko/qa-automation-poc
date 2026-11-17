@@ -1,5 +1,6 @@
 /**
- * Tier-agnostic • API • `GET /hosts/identifier/:identifier`. The
+ * Tier-agnostic • API • a host looked up by identifier (`GET /hosts/:identifier`,
+ * which takes a hostname, UUID or serial as well as an id). The
  * `exclude_software=true` parameter exists so integrations can poll a host's
  * details without paying for its software inventory, which is by far the
  * largest part of the payload. The contract is narrow and easy to break: it
@@ -16,14 +17,14 @@
  * in mid-test. What cannot legitimately differ is the host's identity or the
  * set of keys returned, so those are what is asserted.
  *
- * Grounded in server/service/hosts.go (`hostByIdentifierRequest.ExcludeSoftware`
- * → `fleet.HostDetailOptions{ExcludeSoftware}`).
+ * Grounded in server/service/hosts.go (`ExcludeSoftware` →
+ * `fleet.HostDetailOptions{ExcludeSoftware}`).
  */
 import { apiTest as test, expect } from '@fixtures';
 import { apiUrl, authHeaders, expectOk, findHostWithSoftware } from '@helpers/api';
 
 /** Identity fields that must survive the parameter untouched. */
-const IDENTITY_FIELDS = ['id', 'uuid', 'hostname', 'hardware_serial', 'platform', 'team_id'];
+const IDENTITY_FIELDS = ['id', 'uuid', 'hostname', 'hardware_serial', 'platform', 'fleet_id'];
 
 test.describe('API • host by identifier', () => {
   test('exclude_software drops the software list and nothing else', async ({ request }) => {
@@ -36,20 +37,21 @@ test.describe('API • host by identifier', () => {
     expect(hostname, 'the resolved host must have a hostname to look up by').toBeTruthy();
 
     const identifier = encodeURIComponent(hostname);
-    const withSoftware = await request.get(apiUrl(`hosts/identifier/${identifier}`), {
+    const withSoftware = await request.get(apiUrl(`hosts/${identifier}`), {
       headers: authHeaders(),
     });
-    await expectOk(withSoftware, 'GET /hosts/identifier/:identifier');
+    await expectOk(withSoftware, 'GET /hosts/:identifier');
     const full = (await withSoftware.json()).host;
 
+    expect(full.id, 'the hostname resolves to the host it was read from').toBe(host!.id);
     expect(full.hostname).toBe(hostname);
     expect(full.software?.length ?? 0).toBeGreaterThan(0);
 
-    const withoutSoftware = await request.get(apiUrl(`hosts/identifier/${identifier}`), {
+    const withoutSoftware = await request.get(apiUrl(`hosts/${identifier}`), {
       headers: authHeaders(),
       params: { exclude_software: 'true' },
     });
-    await expectOk(withoutSoftware, 'GET /hosts/identifier/:identifier with exclude_software');
+    await expectOk(withoutSoftware, 'GET /hosts/:identifier with exclude_software');
     const trimmed = (await withoutSoftware.json()).host;
 
     expect(trimmed.software?.length ?? 0).toBe(0);
