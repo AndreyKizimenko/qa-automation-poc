@@ -42,6 +42,8 @@ test.describe('fleetctl gitops · free skips team configs', () => {
     expect(output(res)).toContain('gitops dry run succeeded');
 
     // fleetctl names them fleets from fleetdm/fleet#58892 on, teams before it.
+    // TODO(fleetdm/fleet#58892): once it merges and a nightly redeploy has run
+    // it here, expect the "fleet" line alone; "team" coming back is then a regression.
     const said = output(res);
     for (const file of fleetFiles) {
       const lines = ['team', 'fleet'].map(
