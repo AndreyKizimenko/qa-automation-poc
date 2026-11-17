@@ -5,9 +5,10 @@
  * accounts — every `controls` key a fleet file declares beyond its profile and
  * script lists, read back from GET /fleets/{id} → `fleet.mdm`.
  *
- * The API names each key as the YAML does. `setup_experience.macos_script` is
- * echoed as the path the YAML gave, so it is compared by basename. Only
- * declared keys are compared.
+ * The API names each key as the YAML does. The setup-experience script is read
+ * from its own endpoint (`GET /setup_experience/script`), which names the
+ * uploaded file, and compared with the YAML path's basename. Only declared
+ * keys are compared.
  *
  * These controls reach the hosts of the fleet that carries them, which is why
  * only the Compliance fleet — which has none — declares them; the no-team
@@ -35,9 +36,10 @@ test.describe(`GitOps verify · controls · ${gitopsLabel}`, () => {
   test.skip(gitopsConfig.scope !== 'team', 'the per-platform controls are declared by fleet files');
 
   let mdm: Record<string, any> = {};
+  let teamId = 0;
 
   test.beforeAll(async ({ request }) => {
-    const teamId = await resolveTeamId(request);
+    teamId = await resolveTeamId(request);
     mdm = (await getJson(request, `fleets/${teamId}`)).fleet?.mdm ?? {};
   });
 
@@ -79,14 +81,13 @@ test.describe(`GitOps verify · controls · ${gitopsLabel}`, () => {
     }
   });
 
-  test('setup experience matches gitops', async () => {
+  test('setup experience matches gitops', async ({ request }) => {
     test.skip(!setup(), 'the fleet file declares no setup_experience');
     const { macos_script: script, ...declared } = setup()!;
     expectSubset('mdm.setup_experience', mdm.setup_experience, declared);
     if (script !== undefined) {
-      expect
-        .soft(path.basename(String(mdm.setup_experience?.macos_script ?? '')), 'mdm.setup_experience.macos_script')
-        .toBe(path.basename(String(script)));
+      const live = await getJson(request, `setup_experience/script?fleet_id=${teamId}`);
+      expect.soft(live.name, 'the setup-experience script').toBe(path.basename(String(script)));
     }
   });
 });
