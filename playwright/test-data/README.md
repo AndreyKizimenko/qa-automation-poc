@@ -36,6 +36,7 @@ test-data/
 │   └── software/                # .msi / .exe custom packages
 └── shared/
     ├── images/                  # PNG icons + org logo (README)
+    ├── setup-experience/        # script-only package (.sh) run during macOS and Linux setup
     └── software/                # script-only package (.sh — macOS & Linux)
 ```
 
@@ -117,6 +118,10 @@ all: `helpers/deb.ts` builds them in memory. So does `helpers/rpm.ts` for an
 `shared/software/fleet-playwright-script-package.sh` is written by hand but
 belongs to the same family: Fleet titles a script package after its filename
 minus the extension, so the filename *is* the title and has to stay unique.
+`shared/setup-experience/playwright-setup-exp-script.sh` is the same kind of
+file under a title of its own, which the setup-experience Install software spec
+selects for macOS and Linux setup (`premium/controls/setup-experience/install-software.spec.ts`).
+It only prints, and nothing in the suite enrolls a host through setup, so it never runs.
 
 ## Adding new fixtures
 
