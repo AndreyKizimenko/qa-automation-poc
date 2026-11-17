@@ -153,7 +153,8 @@ applies carry them; the second pass proves the min apply left them alone. Locall
 `fleets/compliance.yml` is where the controls that *act on a host* are declared and verified: OS-update
 minimum versions and deadlines for all four platforms, disk encryption and key escrow per platform, the
 BitLocker PIN and managed local account, Recovery Lock, a host name template, the credential-free
-setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script),
+setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script,
+which Fleet 5 deprecates, and its replacement: a script-only package with `setup_experience_platform: darwin, linux`),
 `agent_options.command_line_flags` and `update_channels`, label-targeted profiles on three platforms, scripts of
 all three kinds through `paths:` globs, custom packages by `hash_sha256` with every option (self-service,
 categories, label targets, a display name, an icon, a pre-install query and the three scripts), script-only

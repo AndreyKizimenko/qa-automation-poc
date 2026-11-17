@@ -214,11 +214,13 @@ export interface FleetSoftware {
   /** Every catalog entry, by slug. */
   catalog: Map<string, { id: number; name: string; platform: string }>;
   /**
-   * Titles that install during setup experience on this fleet. The title
-   * detail doesn't carry the flag for a Fleet-maintained app; the setup
-   * experience listing, per platform, does.
+   * The setup platforms (`darwin`, `windows`, `linux`) each title installs on
+   * during setup experience on this fleet, for the titles that install on any.
+   * The title detail doesn't carry the flag for a Fleet-maintained app; the
+   * setup experience listing, per platform, does. A script-only `.sh` package
+   * can be on two (`setup_experience_platform: darwin, linux`).
    */
-  setupExperienceTitleIds: Set<number>;
+  setupExperiencePlatforms: Map<number, Set<string>>;
 }
 const softwareCache = new Map<number, Promise<FleetSoftware>>();
 export function resolveFleetSoftware(request: APIRequestContext, teamId: number): Promise<FleetSoftware> {
@@ -243,11 +245,12 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
           };
         }),
       );
-      const setupExperienceTitleIds = new Set<number>();
-      for (const platform of ['macos', 'windows', 'linux']) {
+      const setupExperiencePlatforms = new Map<number, Set<string>>();
+      // The listing names macOS `macos`; gitops names it `darwin`, as the result here does.
+      for (const [listing, platform] of [['macos', 'darwin'], ['windows', 'windows'], ['linux', 'linux']]) {
         const body = await getJson(
           request,
-          `setup_experience/software?fleet_id=${teamId}&platform=${platform}&per_page=200`,
+          `setup_experience/software?fleet_id=${teamId}&platform=${listing}&per_page=200`,
         );
         for (const t of (body.software_titles ?? []) as Array<Record<string, any>>) {
           const items: Array<{ install_during_setup?: boolean }> = [
@@ -255,7 +258,9 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
             ...(t.app_store_apps ?? []),
           ];
           if (items.some((item) => item.install_during_setup)) {
-            setupExperienceTitleIds.add(t.id);
+            const platforms = setupExperiencePlatforms.get(t.id) ?? new Set<string>();
+            platforms.add(platform);
+            setupExperiencePlatforms.set(t.id, platforms);
           }
         }
       }
@@ -279,7 +284,7 @@ export function resolveFleetSoftware(request: APIRequestContext, teamId: number)
         if (!slug) throw new Error(`title ${title.id} (${title.name}) names Fleet-maintained app ${appId}, which the catalog doesn't list`);
         addedSlugs.set(slug, title.id);
       }
-      return { titles, addedSlugs, catalog, setupExperienceTitleIds };
+      return { titles, addedSlugs, catalog, setupExperiencePlatforms };
     })();
     softwareCache.set(teamId, pending);
   }

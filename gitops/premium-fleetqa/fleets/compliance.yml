@@ -23,7 +23,8 @@
 # account, OS updates for all four platforms, Recovery Lock, a name template,
 # label-targeted profiles on three platforms, scripts of all three kinds via
 # globs, the credential-free setup-experience keys), `software` (packages by
-# hash with every option, script-only packages, Fleet-maintained apps with
+# hash with every option, script-only packages, one run during macOS and Linux
+# setup, Fleet-maintained apps with
 # options and a caret pin), policies with every automation and targeting key,
 # and reports with label targeting. The min variant changes a value in every
 # section but the fleet label, and drops an entry from every list but the
@@ -161,6 +162,10 @@ controls:
     macos_managed_local_account_enabled: true
     macos_end_user_local_account_type: standard
     windows_managed_local_account_enabled: true
+    # Deprecated in Fleet 5 (fleetdm/fleet#53274), which warns on every apply,
+    # and kept until Fleet 6 removes it: until then customers' files still
+    # carry it. Its replacement, a script-only package run during setup, is the
+    # Linux marker below with `setup_experience_platform`.
     macos_script: ../../lib/platforms/macos/setup/compliance-setup.sh
 
 software:
@@ -169,9 +174,11 @@ software:
     - path: ../../lib/platforms/windows/software/fleet-playwright-install.compliance.package.yml
     - path: ../../lib/platforms/linux/software/fleet-playwright-install.compliance.package.yml
     # Script-only packages: the script is the installer, and self-service,
-    # categories, label targeting and the icon are declared here.
+    # categories, label targeting, the icon and setup experience are declared
+    # here. The `.sh` runs during setup on both platforms it can.
     - path: ../../lib/platforms/linux/software/compliance-marker.sh
       display_name: Compliance marker (Linux)
+      setup_experience_platform: darwin, linux
       self_service: true
       categories:
         - Utilities

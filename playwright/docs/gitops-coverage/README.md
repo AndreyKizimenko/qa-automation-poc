@@ -328,6 +328,7 @@ The coverage-branch column says whether its example is the starting point.
 | `apple_settings.assets[]` (DDM assets) | **3** — with the DDM declaration |
 | `software.packages` by `hash_sha256` (the four inert fixtures) with `install_script`, `uninstall_script`, `post_install_script`, `pre_install_query`, `self_service`, `categories`, `labels_exclude_any`, `display_name`, `icon` | zero download. `url`/`hash`/`install_script` live only in a package `.yml`, so each gets a second `lib/…/*.compliance.package.yml` beside the VMs one, same hash, more options; `paths:` isn't supported for packages; icon is a 128 px PNG fixture |
 | `software.packages` script-only (`.sh`, `.ps1`) | — |
+| `software.packages[].setup_experience_platform` on the `.sh` (`darwin, linux`) | Fleet 5's replacement for the deprecated `macos_script`, which stays declared until Fleet 6 removes it; min narrows it to `darwin` |
 | `software.packages` two versions of one title | **3** — needs a second inert build |
 | `software.fleet_maintained_apps` (Itsycal, DB Browser) with `self_service`, `categories`, `labels_include_any`, `post_install_script`, `display_name`, caret `version` | min turns DB Browser's `self_service` off; no `pre_install_query` on an app whose patch policy sets `notify_before_patching` / `patch_when_closed` (Fleet manages it) |
 | `software.app_store_apps` (VPP: Bear; Android: ChatGPT) | **3** — fleetdm/fleet#54013 (an unavailable app halts the apply) and #54625; gate behind its own apply step or accept the risk |
@@ -505,7 +506,8 @@ the script compared by basename. `policies.spec.ts` compares `resend_configurati
 `patch_software` and `webhooks_and_tickets_enabled` (through the scope's `failing_policies_webhook.policy_ids`).
 `software.spec.ts` compares every option: self-service, categories past Fleet's emoji prefix (`🛠️ Utilities`),
 setup experience from the per-platform `GET /setup_experience/software` (the title detail doesn't carry the flag
-for a Fleet-maintained app; undeclared means `false`), the display name, icon presence, label targets, the
+for a Fleet-maintained app; undeclared means `false`; a declared `setup_experience_platform` is compared as the
+exact set of platforms), the display name, icon presence, label targets, the
 pre-install query lifted out of its apply-format file, and the three scripts. The loader records an `icon`.
 
 **CI**: both premium apply workflows carry `compliance.yml`; `verify-baseline-compliance` and

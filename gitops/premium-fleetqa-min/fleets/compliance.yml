@@ -124,6 +124,7 @@ software:
     # 1 of 2 script-only packages: drops the Windows one
     - path: ../../lib/platforms/linux/software/compliance-marker.sh
       display_name: Compliance marker (Linux)
+      setup_experience_platform: darwin # baseline darwin, linux
       self_service: true
       categories:
         - Utilities

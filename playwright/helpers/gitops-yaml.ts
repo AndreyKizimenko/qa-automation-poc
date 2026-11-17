@@ -105,6 +105,11 @@ export interface PackageEntry extends LabelTargets {
   selfService?: boolean;
   categories?: string[];
   setupExperience?: boolean;
+  /**
+   * `setup_experience_platform`: the platforms (`darwin`, `linux`, `windows`,
+   * `ios`, `ipados`) a script-only or `.ipa` package installs on during setup.
+   */
+  setupExperiencePlatforms?: string[];
   displayName?: string;
   /** Whether an `icon.path` is declared (the image itself isn't compared). */
   hasIcon?: boolean;
@@ -362,6 +367,7 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
       selfService: entry.self_service,
       categories: entry.categories,
       setupExperience: entry.setup_experience,
+      setupExperiencePlatforms: platformList(entry.setup_experience_platform),
       displayName: entry.display_name,
       hasIcon: entry.icon ? true : undefined,
       ...labelTargets(entry),
@@ -392,6 +398,7 @@ function parseSoftware(section: any, baseDir: string): SoftwareSection {
           selfService: item.self_service,
           categories: item.categories,
           setupExperience: item.setup_experience,
+          setupExperiencePlatforms: platformList(item.setup_experience_platform),
           displayName: item.display_name,
           hasIcon: item.icon ? true : undefined,
           ...labelTargets(item),
@@ -544,6 +551,13 @@ function expandEnv(node: unknown, file: string, key?: string): unknown {
 
 function asList(doc: unknown): any[] {
   return Array.isArray(doc) ? doc : doc == null ? [] : [doc];
+}
+
+/** A `setup_experience_platform` value, a comma-separated string as `fleetctl generate-gitops` writes it, as a list. */
+function platformList(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== 'string') throw new Error(`setup_experience_platform must be a string, got ${JSON.stringify(value)}`);
+  return value.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean);
 }
 
 function labelTargets(item: any): LabelTargets {

@@ -38,7 +38,7 @@ authentication IdP and the VPP token carry no delta either.
 On Compliance every section but the fleet label has a changed value too: `agent_options.command_line_flags.events_max`,
 `host_expiry_window`, both webhook paths, Recovery Lock off, the macOS minimum version, the iPadOS deadline, the
 Windows deadline days, macOS key escrow off, the BitLocker PIN off, `lock_end_user_info` off, the local account
-type (`admin`), DB Browser's `self_service` off, the Gatekeeper policy without its script automation, and the
+type (`admin`), the Linux marker's setup platforms (`darwin` alone), DB Browser's `self_service` off, the Gatekeeper policy without its script automation, and the
 FileVault report's interval — and every list but the label, the Android profile and the two Fleet-maintained
 apps drops an entry (a macOS and a Windows profile, the Windows scripts
 glob, the Linux package and the Windows script-only package, the "Itsycal is installed" policy, the uptime report).
