@@ -20,7 +20,31 @@ interface FleetSettings {
 async function readFleet(request: APIRequestContext, fleetId: number): Promise<FleetSettings> {
   const res = await request.get(apiUrl(`fleets/${fleetId}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read fleet ${fleetId}`);
-  return ((await res.json()).fleet ?? {}) as FleetSettings;
+  const { fleet } = await res.json();
+  if (!fleet || typeof fleet !== 'object') throw new Error(`GET /fleets/${fleetId} returned no \`fleet\` object`);
+  return fleet as FleetSettings;
+}
+
+/**
+ * `value`, or an error naming `key` when the fleet's settings don't carry it.
+ * Fleet returns every key the readers here take, so a missing one is a key the
+ * running build renamed or removed. Read as off or empty instead, it would let
+ * a check that a setting is off pass without reading the setting, and let the
+ * cleanup leave Recovery Lock on.
+ */
+function setting<T>(value: T | undefined | null, fleetId: number, key: string): T {
+  if (value === undefined || value === null) {
+    throw new Error(`Fleet ${fleetId}'s settings have no \`${key}\`: renamed or removed in this Fleet build?`);
+  }
+  return value;
+}
+
+/** Like {@link setting}, for a switch: anything but a boolean is an error. */
+function switchSetting(value: unknown, fleetId: number, key: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error(`Fleet ${fleetId}'s \`${key}\` is ${JSON.stringify(value)}, not a boolean: renamed or removed in this Fleet build?`);
+  }
+  return value;
 }
 
 /**
@@ -34,7 +58,7 @@ export async function getFleetWebhookSettings(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<Record<string, unknown>> {
-  return (await readFleet(request, fleetId)).webhook_settings ?? {};
+  return setting((await readFleet(request, fleetId)).webhook_settings, fleetId, 'webhook_settings');
 }
 
 /**
@@ -46,7 +70,7 @@ export async function getFleetHostExpirySettings(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<{ host_expiry_enabled?: boolean; host_expiry_window?: number }> {
-  return (await readFleet(request, fleetId)).host_expiry_settings ?? {};
+  return setting((await readFleet(request, fleetId)).host_expiry_settings, fleetId, 'host_expiry_settings');
 }
 
 /** Writes the webhooks given into a fleet's `webhook_settings`; the ones left out stay as they are. */
@@ -76,7 +100,7 @@ export async function getFleetFeatures(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<Record<string, unknown>> {
-  return (await readFleet(request, fleetId)).features ?? {};
+  return setting((await readFleet(request, fleetId)).features, fleetId, 'features');
 }
 
 /** Writes a snapshot of a fleet's `features` back: the keys a PATCH takes are restored, the others ignored. */
@@ -208,10 +232,11 @@ export async function getFleetWindowsDiskEncryption(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<FleetWindowsDiskEncryption> {
-  const windows = (await readFleet(request, fleetId)).mdm?.windows_settings ?? {};
+  const mdm = setting((await readFleet(request, fleetId)).mdm, fleetId, 'mdm');
+  const windows = setting(mdm.windows_settings, fleetId, 'mdm.windows_settings');
   return {
-    enabled: windows.enable_disk_encryption ?? false,
-    bitlockerPinRequired: windows.require_bitlocker_pin ?? false,
+    enabled: switchSetting(windows.enable_disk_encryption, fleetId, 'mdm.windows_settings.enable_disk_encryption'),
+    bitlockerPinRequired: switchSetting(windows.require_bitlocker_pin, fleetId, 'mdm.windows_settings.require_bitlocker_pin'),
   };
 }
 
@@ -244,16 +269,19 @@ export async function getFleetOsUpdates(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<{ macos: AppleOsUpdates; windows: WindowsOsUpdates }> {
-  const mdm = (await readFleet(request, fleetId)).mdm ?? {};
+  const mdm = setting((await readFleet(request, fleetId)).mdm, fleetId, 'mdm');
+  const macos = setting(mdm.macos_updates, fleetId, 'mdm.macos_updates');
+  const windows = setting(mdm.windows_updates, fleetId, 'mdm.windows_updates');
+  // The two deadline counts are null while nothing is enforced; the two strings are empty.
   return {
     macos: {
-      minimumVersion: mdm.macos_updates?.minimum_version ?? '',
-      deadline: mdm.macos_updates?.deadline ?? '',
-      deadlineDays: mdm.macos_updates?.deadline_days ?? null,
+      minimumVersion: setting(macos.minimum_version, fleetId, 'mdm.macos_updates.minimum_version'),
+      deadline: setting(macos.deadline, fleetId, 'mdm.macos_updates.deadline'),
+      deadlineDays: macos.deadline_days ?? null,
     },
     windows: {
-      deadlineDays: mdm.windows_updates?.deadline_days ?? null,
-      gracePeriodDays: mdm.windows_updates?.grace_period_days ?? null,
+      deadlineDays: windows.deadline_days ?? null,
+      gracePeriodDays: windows.grace_period_days ?? null,
     },
   };
 }
@@ -333,7 +361,8 @@ export async function setFleetWindowsUpdates(
 
 /** Whether the fleet enforces Recovery Lock passwords (`mdm.macos_recovery_lock_password_enabled`). */
 export async function getFleetRecoveryLock(request: APIRequestContext, fleetId: number): Promise<boolean> {
-  return !!(await readFleet(request, fleetId)).mdm?.macos_recovery_lock_password_enabled;
+  const mdm = setting((await readFleet(request, fleetId)).mdm, fleetId, 'mdm');
+  return switchSetting(mdm.macos_recovery_lock_password_enabled, fleetId, 'mdm.macos_recovery_lock_password_enabled');
 }
 
 /**

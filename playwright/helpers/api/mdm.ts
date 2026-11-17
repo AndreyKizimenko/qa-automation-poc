@@ -80,6 +80,10 @@ export interface MacosSetupSettings {
  * A fleet's stored `mdm.setup_experience` settings: from `/config` for `fleetId` 0
  * (Unassigned), from `/fleets/:id` otherwise. What a setup-experience save is
  * read back against.
+ *
+ * Throws when the response lacks the object or one of its four switches. Fleet
+ * returns all of them, so a missing one is a key the running build renamed, and
+ * reading it as off would pass every check that a switch was turned off.
  */
 export async function getMacosSetupSettings(
   request: APIRequestContext,
@@ -90,12 +94,22 @@ export async function getMacosSetupSettings(
   });
   await expectOk(res, `Failed to read fleet ${fleetId}'s setup experience`);
   const body = await res.json();
-  const setup = (fleetId === 0 ? body.mdm : body.fleet?.mdm)?.setup_experience ?? {};
+  const setup = (fleetId === 0 ? body.mdm : body.fleet?.mdm)?.setup_experience as
+    | Record<string, unknown>
+    | undefined;
+  if (!setup) throw new Error(`Fleet ${fleetId}'s settings have no \`mdm.setup_experience\``);
+  const on = (key: string): boolean => {
+    const value = setup[key];
+    if (typeof value !== 'boolean') {
+      throw new Error(`Fleet ${fleetId}'s \`mdm.setup_experience.${key}\` is ${JSON.stringify(value)}, not a boolean`);
+    }
+    return value;
+  };
   return {
-    endUserAuthentication: setup.enable_end_user_authentication ?? false,
-    lockEndUserInfo: setup.lock_end_user_info ?? false,
-    managedLocalAccount: setup.macos_managed_local_account_enabled ?? false,
-    manualAgentInstall: setup.macos_manual_agent_install ?? false,
+    endUserAuthentication: on('enable_end_user_authentication'),
+    lockEndUserInfo: on('lock_end_user_info'),
+    managedLocalAccount: on('macos_managed_local_account_enabled'),
+    manualAgentInstall: on('macos_manual_agent_install'),
   };
 }
 
