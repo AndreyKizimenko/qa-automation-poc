@@ -36,8 +36,8 @@ test('Host details — refetch re-collects the host vitals', { tag: '@vm-macos' 
   await hostDetails.goto(liveMacosHost.id);
   await hostDetails.refetch();
 
-  // Fleet took the request: the header button reports the collection in flight.
-  await expect(hostDetails.refetchingButton).toBeVisible();
+  // Fleet took the request: the header reports the collection in flight.
+  await expect(hostDetails.refetchingStatus).toBeVisible();
 
   // Fleet stored a newer set of vitals — proves the refresh came from the
   // refetch and not from a background detail cycle that was already recent.

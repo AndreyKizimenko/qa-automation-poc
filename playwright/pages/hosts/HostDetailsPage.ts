@@ -80,10 +80,12 @@ export class HostDetailsPage {
   readonly backButton: Locator;
   readonly refetchButton: Locator;
   /**
-   * The same header button while a refetch is in flight: `HostHeader` keeps its
-   * "Refetch" label and disables it, so this resolves only while one runs.
+   * The header's "Refetching... This can take up to 1 minute.", which `HostHeader`
+   * shows in place of the "Last fetched" time while a refetch of the host is
+   * outstanding (`showRefetchSpinner`), and only then. A disabled Refetch button
+   * doesn't say as much: Fleet also disables it for an offline host.
    */
-  readonly refetchingButton: Locator;
+  readonly refetchingStatus: Locator;
   readonly actionsButton: Locator;
   /**
    * The header's "Last fetched <relative time>" line. `HostHeader` renders it as
@@ -235,13 +237,14 @@ export class HostDetailsPage {
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
-    // The button reads "Refetch" throughout. While a refetch is under way it is
-    // disabled (and the header reads "Refetching..."), which is what
-    // `refetchingButton` matches.
+    // The button reads "Refetch" throughout, and is disabled while a refetch is
+    // under way and while the host is offline.
     this.refetchButton = page.getByRole('button', { name: 'Refetch', exact: true });
-    this.refetchingButton = page.getByRole('button', { name: 'Refetch', exact: true, disabled: true });
     this.actionsButton = page.getByRole('button', { name: 'Actions' });
     this.lastFetched = page.locator('.host-header__last-fetched');
+    this.refetchingStatus = this.lastFetched.filter({
+      hasText: /^Refetching\.\.\. This can take up to 1 minute\.$/,
+    });
 
     // `local-user-accounts-card` is the card's own modifier class; Fleet's Card
     // renders as a role-less div, so it's the only stable scope for the card.
