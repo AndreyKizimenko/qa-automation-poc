@@ -34,7 +34,6 @@ export interface UserRef {
   api_only: boolean;
   /** Fleet MFA — the emailed magic-link sign-in (premium). */
   mfa_enabled?: boolean;
-  teams?: FleetRoleAssignment[];
   fleets?: FleetRoleAssignment[];
 }
 
@@ -155,7 +154,7 @@ export async function createUser(
  */
 export async function createApiUser(
   request: APIRequestContext,
-  params: { name: string; global_role?: UserRole | null; teams?: FleetRoleAssignment[] },
+  params: { name: string; global_role?: UserRole | null; fleets?: FleetRoleAssignment[] },
 ): Promise<CreateUserResult> {
   const res = await request.post(apiUrl('users/api_only'), {
     headers: authHeaders(),

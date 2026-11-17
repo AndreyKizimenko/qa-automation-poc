@@ -14,7 +14,7 @@
  * forces it on for a premium license, so the YAML has to say true.
  *
  * The ABM list `GET /config` returns is the list the apply sent, so the tokens
- * themselves are read from `GET /abm_tokens` too: every token there has to be
+ * themselves are read from `GET /ab_tokens` too: every token there has to be
  * declared, with the default and fleets the config gives it. With more than one
  * token, an apply that marks none `default` leaves Fleet without a default
  * token, and a token added by hand that the config doesn't name would go
@@ -74,9 +74,9 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
       config.mdm?.windows_automatic_enrollment,
       mdm.windows_automatic_enrollment,
     );
-    const abm = mdm.apple_business_manager ?? mdm.apple_business;
+    const abm = mdm.apple_business;
     if (abm) {
-      const liveAbm = (config.mdm?.apple_business_manager ?? []) as Array<Record<string, unknown>>;
+      const liveAbm = (config.mdm?.apple_business ?? []) as Array<Record<string, unknown>>;
       for (const declared of abm) {
         const token = liveAbm.find((t) => t.organization_name === declared.organization_name);
         expect.soft(token, `ABM token "${declared.organization_name}" is configured`).toBeTruthy();
@@ -98,9 +98,9 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
 
   test('every ABM token on the instance is declared, with its default and fleets', async ({ request }) => {
     const mdm = org().mdm ?? {};
-    const abm = (mdm.apple_business_manager ?? mdm.apple_business) as Array<Record<string, any>> | undefined;
+    const abm = mdm.apple_business as Array<Record<string, any>> | undefined;
     test.skip(!abm, 'the config declares no ABM tokens');
-    const tokens = ((await getJson(request, 'abm_tokens')).abm_tokens ?? []) as Array<Record<string, any>>;
+    const tokens = ((await getJson(request, 'ab_tokens')).ab_tokens ?? []) as Array<Record<string, any>>;
     expect(tokens.length, 'ABM tokens on the instance').toBeGreaterThan(0);
     for (const token of tokens) {
       const name = token.org_name as string;
@@ -111,7 +111,7 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
       // An undeclared fleet is Unassigned, which the token reports as fleet 0.
       for (const key of ['macos_fleet', 'ios_fleet', 'ipados_fleet', 'byod_fleet']) {
         const live = token[key]?.fleet_id ? token[key].name : '';
-        const want = declared[key] ?? declared[key.replace(/_fleet$/, '_team')] ?? '';
+        const want = declared[key] ?? '';
         expect.soft(live, `ABM token "${name}" ${key}`).toBe(want);
       }
     }
@@ -120,9 +120,9 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
   test('the global MDM flags under controls match gitops', async () => {
     const controls = gitopsConfig.controls;
     expectSubset('mdm', config.mdm, {
-      windows_enabled_and_configured: controls.windows_enabled_and_configured,
+      windows_mdm_enabled: controls.windows_mdm_enabled,
       android_enabled_and_configured: controls.android_enabled_and_configured,
-      windows_migration_enabled: controls.windows_migration_enabled,
+      windows_mdm_migration_enabled: controls.windows_mdm_migration_enabled,
       enable_turn_on_windows_mdm_manually: controls.enable_turn_on_windows_mdm_manually,
       apple_require_hardware_attestation: controls.apple_require_hardware_attestation,
       only_allow_apple_business_enrollment: controls.only_allow_apple_business_enrollment,
@@ -153,7 +153,7 @@ test.describe(`GitOps verify · fleet settings · ${gitopsLabel}`, () => {
 
   test.beforeAll(async ({ request }) => {
     const teamId = await resolveTeamId(request);
-    fleet = (await getJson(request, `fleets/${teamId}`)).team;
+    fleet = (await getJson(request, `fleets/${teamId}`)).fleet;
   });
 
   test("the fleet's settings match gitops", async () => {

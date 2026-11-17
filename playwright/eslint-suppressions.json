@@ -1002,17 +1002,6 @@
       "count": 1
     }
   },
-  "tests/e2e/shared/exclusive/script-execution-disabled.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    },
-    "suite/no-page-locator-in-spec": {
-      "count": 1
-    },
-    "suite/no-toast-copy-in-spec": {
-      "count": 2
-    }
-  },
   "tests/e2e/shared/hosts/filters.spec.ts": {
     "suite/no-date-now-in-name": {
       "count": 2
@@ -1078,17 +1067,6 @@
     },
     "suite/no-toast-copy-in-spec": {
       "count": 6
-    }
-  },
-  "tests/e2e/shared/packs/packs.spec.ts": {
-    "suite/activity-needs-baseline": {
-      "count": 3
-    },
-    "suite/no-date-now-in-name": {
-      "count": 3
-    },
-    "suite/no-page-locator-in-spec": {
-      "count": 1
     }
   },
   "tests/e2e/shared/policies/live-policy-run.spec.ts": {

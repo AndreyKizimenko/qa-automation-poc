@@ -33,7 +33,6 @@ pages/
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
 ├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage, PolicyLivePage (a ReportLivePage for a policy's run, plus its Yes / No summary)
 ├── labels/             # LabelsPage
-├── packs/              # PacksListPage, PackEditPage
 └── settings/           # Organization info/advanced, Integrations, ChangeManagementPage,
     │                   #   TeamSettings, FleetUsersPage (a fleet's Users tab + its header),
     │                   #   FleetsPage (Settings › Fleets: add / rename / delete)

@@ -35,7 +35,7 @@ let live: ApiProfile[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
-  live = await getAll<ApiProfile>(request, `configuration_profiles?team_id=${teamId}`, 'profiles');
+  live = await getAll<ApiProfile>(request, `configuration_profiles?fleet_id=${teamId}`, 'profiles');
 });
 
 const key = (p: { platform: string; name: string }) => `${p.platform}:${p.name}`;

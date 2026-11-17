@@ -47,7 +47,7 @@ export async function createReport(
       name: opts.name,
       query: opts.query ?? 'SELECT 1;',
       description: opts.description ?? '',
-      ...(opts.teamId !== undefined ? { team_id: opts.teamId } : {}),
+      ...(opts.teamId !== undefined ? { fleet_id: opts.teamId } : {}),
       ...(opts.platform !== undefined ? { platform: opts.platform } : {}),
       ...(opts.observerCanRun !== undefined ? { observer_can_run: opts.observerCanRun } : {}),
       ...(opts.interval !== undefined ? { interval: opts.interval, logging: 'snapshot' } : {}),
@@ -74,7 +74,7 @@ export async function listReports(
 ): Promise<ReportRef[]> {
   const res = await request.get(apiUrl('queries'), {
     headers: authHeaders(),
-    params: { per_page: '500', ...(fleetId !== undefined ? { team_id: String(fleetId) } : {}) },
+    params: { per_page: '500', ...(fleetId !== undefined ? { fleet_id: String(fleetId) } : {}) },
   });
   await expectOk(res, `Failed to list the reports of ${fleetId === undefined ? 'the global scope' : `fleet ${fleetId}`}`);
   const body = await res.json();
@@ -120,7 +120,7 @@ export async function getReport(request: APIRequestContext, id: number): Promise
     name: q.name,
     description: q.description ?? '',
     query: q.query,
-    fleetId: q.fleet_id ?? q.team_id ?? null,
+    fleetId: q.fleet_id ?? null,
     interval: q.interval ?? 0,
     platform: q.platform ?? '',
     logging: q.logging ?? '',

@@ -118,9 +118,9 @@ fails the next verify:
   all fleets. Both ABM tokens are listed (`FLEET_ABM_ORG_NAME`, `FLEET_ABM_ORG_NAME_2`) and the first is marked
   `default`: with more than one token, an apply that marks none `default` leaves Fleet with no default token,
   and one the list leaves out drops out of `GET /config`. A token added in the UI needs an entry here too —
-  `gitops-verify` fails on any token `GET /abm_tokens` lists that the config doesn't declare.
-- The global MDM flags under `controls`: `windows_enabled_and_configured`, `android_enabled_and_configured`,
-  `windows_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`, each
+  `gitops-verify` fails on any token `GET /ab_tokens` lists that the config doesn't declare.
+- The global MDM flags under `controls`: `windows_mdm_enabled`, `android_enabled_and_configured`,
+  `windows_mdm_migration_enabled`, `enable_turn_on_windows_mdm_manually`, `apple_require_hardware_attestation`, each
   at the value the instance has (flipping one changes how the real Windows VMs or Apple DEP enroll, so the min
   variant leaves them), and `macos_migration` off with a mode and webhook URL (the min variant changes the URL;
   `premium/settings/integrations/mdm.spec.ts` restores it after its own edit).
@@ -153,7 +153,8 @@ applies carry them; the second pass proves the min apply left them alone. Locall
 `fleets/compliance.yml` is where the controls that *act on a host* are declared and verified: OS-update
 minimum versions and deadlines for all four platforms, disk encryption and key escrow per platform, the
 BitLocker PIN and managed local account, Recovery Lock, a host name template, the credential-free
-setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script),
+setup-experience keys (end-user authentication, locked end-user info, the local account type, a setup script,
+which Fleet 5 deprecates, and its replacement: a script-only package with `setup_experience_platform: darwin, linux`),
 `agent_options.command_line_flags` and `update_channels`, label-targeted profiles on three platforms, scripts of
 all three kinds through `paths:` globs, custom packages by `hash_sha256` with every option (self-service,
 categories, label targets, a display name, an icon, a pre-install query and the three scripts), script-only

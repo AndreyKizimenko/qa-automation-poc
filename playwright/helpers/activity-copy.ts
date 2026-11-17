@@ -133,19 +133,6 @@ export const activityCopy = {
       new RegExp(`deleted the report ${esc(name)}${fleetSuffix(scope, { unassignedFallsThrough: true })}\\.`),
   },
 
-  // Packs are global on the Fleet API (no team scope). Fleet has no
-  // dedicated pack renderer; activities fall through to defaultActivityTemplate
-  // (GlobalActivityItem.tsx:848), which prints `<activityType> <b>NAME</b>.`
-  // — "created pack NAME.", "edited pack NAME.", "deleted pack NAME.".
-  pack: {
-    created: ({ name }: { name: string }) =>
-      new RegExp(`created pack ${esc(name)}\\.`),
-    edited: ({ name }: { name: string }) =>
-      new RegExp(`edited pack ${esc(name)}\\.`),
-    deleted: ({ name }: { name: string }) =>
-      new RegExp(`deleted pack ${esc(name)}\\.`),
-  },
-
   script: {
     /** @see frontend/.../GlobalActivityItem.tsx:1095 — `added script <b>NAME</b> to <scope>.` */
     added: ({ name, scope }: { name: string; scope: TeamScope }) =>

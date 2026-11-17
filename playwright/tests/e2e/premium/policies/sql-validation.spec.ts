@@ -7,10 +7,13 @@
  *     teams capture false-positives), and the policy saves and reopens with
  *     its SQL and the error — the one test here that creates a policy, deleted
  *     in an afterEach,
- *   - the "Save policy" modal disables Save until a platform is selected.
+ *   - the "Save policy" modal keeps Save enabled and refuses a save with no
+ *     platform ticked, staying open with "Select at least one platform",
+ *   - the modal starts with the query's compatible platforms ticked (skipped:
+ *     fleetdm/fleet#58701 opens it with none).
  *
- * Grounded in frontend/components/PlatformCompatibility, PolicyForm
- * (disableSaveFormErrors), and SaveNewPolicyModal (disableSave).
+ * Grounded in frontend/components/PlatformCompatibility, PolicyForm and
+ * SaveNewPolicyModal (`platformError`).
  */
 import { test, expect } from '@fixtures';
 import { deletePolicies } from '@helpers/api';
@@ -85,17 +88,42 @@ test.describe('Premium • Policies • SQL validation', () => {
     await policyEdit.gotoEdit(createdId);
     await expect(policyEdit.nameInput).toHaveValue(name);
     expect(await policyEdit.sqlText()).toBe(badSql);
+    // TODO(fleetdm/fleet#59085): Fleet 5 validates a saved query on blur, not
+    // when it loads, so the error shows only once the editor is left. Drop the
+    // blur once a reopened query shows its error by itself.
+    await policyEdit.blurSql();
     await expect(policyEdit.sqlSyntaxError).toBeVisible();
   });
 });
 
 test.describe('Premium • Policies • save gating', () => {
-  test('the Save policy modal disables Save until a platform is selected', async ({ policyEdit }) => {
+  // Save stays enabled, as Fleet's forms now are everywhere: the modal refuses
+  // the save when it is clicked, and stays open.
+  test('the Save policy modal refuses to save until a platform is selected', async ({ policyEdit }) => {
     await policyEdit.gotoNew();
     await policyEdit.setSql('SELECT 1 FROM osquery_info;');
     await policyEdit.saveButton.click();
     await expect(policyEdit.saveNewModal).toBeVisible();
     await policyEdit.clearNewPolicyPlatforms();
-    await expect(policyEdit.saveNewSubmitButton).toBeDisabled();
+    await expect(policyEdit.saveNewSubmitButton).toBeEnabled();
+    await policyEdit.saveNewSubmitButton.click();
+    await expect(policyEdit.saveNewPlatformError).toBeVisible();
+    await expect(policyEdit.saveNewModal).toBeVisible();
+  });
+
+  // TODO(fleetdm/fleet#58701): the modal opens with no platform ticked. Lift
+  // once it ticks the query's compatible platforms again, as it did on 4.95 and
+  // as the new-report modal still does.
+  test.skip('the Save policy modal starts with the platforms the query can run on', async ({ policyEdit }) => {
+    await policyEdit.gotoNew();
+    await policyEdit.setSql('SELECT 1 FROM gatekeeper WHERE assessments_enabled = 1;');
+    await expect(policyEdit.compatiblePlatforms).toHaveCount(1);
+    await expect(policyEdit.compatiblePlatform('macOS')).toBeVisible();
+    await policyEdit.saveButton.click();
+    await expect(policyEdit.saveNewModal).toBeVisible();
+    await expect(policyEdit.platformCheckbox('macOS')).toBeChecked();
+    for (const os of ['Windows', 'Linux', 'ChromeOS'] as const) {
+      await expect(policyEdit.platformCheckbox(os)).not.toBeChecked();
+    }
   });
 });

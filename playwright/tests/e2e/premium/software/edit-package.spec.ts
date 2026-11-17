@@ -3,11 +3,13 @@
  *
  * Round-trips the Self-service setting on a custom package: upload → open the
  * Edit-software modal from the Library accordion row → flip the Self-service
- * slider → Save → confirm the "Save changes?" dialog → verify it persisted via
- * the API → delete. On premium a custom package is a multi-package title, so
- * the edit modal is titled "Edit version" and opens from the accordion row (not
- * the summary Actions dropdown). Enabling self-service reveals the categories
- * field, so Fleet treats it as a material change and shows the confirmation.
+ * slider → Save, which saves without a "Save changes?" dialog → verify it
+ * persisted via the API → delete. On premium a custom package is a
+ * multi-package title, so the edit modal is titled "Edit version" and opens from
+ * the accordion row (not the summary Actions dropdown). Self-service and the
+ * categories it reveals are the two changes that reach no host, so Fleet saves
+ * them without asking (`hasChangeSideEffects` in its `EditSoftwareModal/helpers.tsx`);
+ * the save fails if Fleet asks.
  *
  * Scope: Unassigned only. The add/delete lifecycle across scopes and package
  * kinds is covered by library.spec; the concern unique to this spec is the
@@ -98,7 +100,8 @@ test.describe('Software edit — custom package self-service (Unassigned)', () =
     expect(await softwareTitleDetail.editSoftwareModal.isSelfServiceOn()).toBe(false);
 
     await softwareTitleDetail.editSoftwareModal.toggleSelfService();
-    await softwareTitleDetail.editSoftwareModal.save();
+    // Self-service changes nothing on the hosts, so Fleet saves it without asking.
+    await softwareTitleDetail.editSoftwareModal.save({ confirm: false });
 
     // Verify persistence via the API — a reopened modal renders stale config.
     const pkg = await getSoftwarePackage(request, FLEET_ID, titleId);

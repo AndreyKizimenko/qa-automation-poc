@@ -148,10 +148,6 @@ export { PolicyLivePage } from './policies/PolicyLivePage';
 // Labels
 export { LabelsPage } from './labels/LabelsPage';
 
-// Packs
-export { PacksListPage } from './packs/PacksListPage';
-export { PackEditPage } from './packs/PackEditPage';
-
 // Settings
 export { OrganizationInfoPage } from './settings/OrganizationInfoPage';
 export { OrganizationAdvancedPage } from './settings/OrganizationAdvancedPage';

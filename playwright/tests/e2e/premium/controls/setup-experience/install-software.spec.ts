@@ -5,6 +5,12 @@
  * setup-experience-specific selection/save flow. Runs once per scope
  * (Unassigned + Workstations).
  *
+ * A script-only `.sh` package is a case on the macOS and the Linux tab: it is
+ * how Fleet 5 runs a script during setup, in place of the Run script step it
+ * deprecated (fleetdm/fleet#53274; `run-script.spec.ts` covers that page while
+ * Fleet still serves it). Fleet stores a `.sh` package as Linux software and
+ * lists it on both tabs.
+ *
  * Picks software titles that don't overlap with `tests/e2e/premium/software/
  * library.spec.ts` (dummy custom packages, 1Password FMA, Canva VPP,
  * AllTrails Android) so cross-spec parallel runs don't race on the same
@@ -24,7 +30,8 @@ import type { CatalogSlug } from '@helpers/claims';
 import type { InstallSoftwarePlatform, TeamScope } from '@pages';
 
 interface CustomCase {
-  kind: 'custom';
+  /** `script`: a script-only package, the file itself the installer. */
+  kind: 'custom' | 'script';
   platform: InstallSoftwarePlatform;
   fixture: string;
 }
@@ -55,6 +62,8 @@ const CASES: SoftwareCase[] = [
   { kind: 'custom', platform: 'macos', fixture: 'apple/macos/setup-experience/playwright-setup-exp.pkg' },
   { kind: 'custom', platform: 'windows', fixture: 'windows/setup-experience/playwright-setup-exp.msi' },
   { kind: 'custom', platform: 'linux', fixture: 'linux/setup-experience/playwright-setup-exp.deb' },
+  { kind: 'script', platform: 'macos', fixture: 'shared/setup-experience/playwright-setup-exp-script.sh' },
+  { kind: 'script', platform: 'linux', fixture: 'shared/setup-experience/playwright-setup-exp-script.sh' },
   { kind: 'fma', platform: 'macos', slug: '1password/darwin' },
   { kind: 'fma', platform: 'windows', slug: '1password/windows' },
   { kind: 'vpp', platform: 'macos', appStorePlatform: 'darwin', appStoreId: '897446215', appName: 'Canva' },
@@ -67,6 +76,8 @@ const caseLabel = (c: SoftwareCase): string => {
   switch (c.kind) {
     case 'custom':
       return `Custom package — ${c.platform}`;
+    case 'script':
+      return `Script-only package — ${c.platform}`;
     case 'fma':
       return `FMA — ${c.slug}`;
     case 'vpp':
@@ -116,7 +127,8 @@ for (const scope of SCOPES) {
 
         let titleId: number;
         switch (c.kind) {
-          case 'custom': {
+          case 'custom':
+          case 'script': {
             const fixturePath = path.resolve(__dirname, '../../../../../test-data', c.fixture);
             const ref = await uploadSoftwarePackage(request, fleetId, fixturePath);
             titleId = ref.titleId;

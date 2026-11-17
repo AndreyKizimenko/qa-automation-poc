@@ -1,5 +1,7 @@
 /**
- * MDM Setup Experience — Run script. Singleton per fleet.
+ * MDM Setup Experience — Run script. Singleton per fleet. Fleet 5 keeps the
+ * card out of the setup experience's side navigation and still serves it at its
+ * URL, so the spec checks the nav leaves it out and goes there by URL.
  *
  * Verifying the script actually runs on an enrolled ADE host requires a
  * physical Mac and is left to manual QA. Runs once per scope (Unassigned +
@@ -30,6 +32,8 @@ for (const scope of SCOPES) {
       await dashboard.navbar.goToControls();
       await controls.teamDropdown.select(scope);
       await controls.goToSetupExperience();
+      await expect(setupExperience.usersLink).toBeVisible();
+      await expect(setupExperience.runScriptLink).toHaveCount(0);
       await setupExperience.goToRunScript();
 
       await expect(runScript.heading).toBeVisible();

@@ -64,7 +64,7 @@ test.describe(`GitOps verify · target · ${gitopsLabel}`, () => {
     expect
       .soft(linux?.enable_escrow_disk_encryption_key, 'controls.linux_settings.enable_escrow_disk_encryption_key')
       .toBe(false);
-    for (const key of ['macos_updates', 'ios_updates', 'ipados_updates', 'windows_updates', 'setup_experience', 'macos_setup']) {
+    for (const key of ['macos_updates', 'ios_updates', 'ipados_updates', 'windows_updates', 'setup_experience']) {
       expect.soft(gitopsConfig.controls[key], `controls.${key}`).toBeUndefined();
     }
   });

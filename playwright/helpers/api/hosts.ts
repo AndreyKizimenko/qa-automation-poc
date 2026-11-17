@@ -58,13 +58,25 @@ export async function getHostCpuType(request: APIRequestContext, hostId: number)
   return (await res.json()).host.cpu_type as string;
 }
 
+/**
+ * A host's OS as Fleet's UI writes it: the OS name and its version joined by a
+ * space ("Ubuntu 24.04.5 LTS", "Windows 11 Pro 26H2 10.0.26300.9974"), what the
+ * Hosts list's Operating system column, Vitals and the host's header show
+ * (`getHostOSDisplayName` in Fleet's `frontend/utilities/helpers.tsx`). The API
+ * returns the two apart, `os_name` and `os_version`; an empty part, or Fleet's
+ * `---` placeholder, is left out.
+ */
+export function osDisplayName(host: { os_name?: string | null; os_version?: string | null }): string {
+  return [host.os_name, host.os_version].filter((part) => part && part !== '---').join(' ');
+}
+
 /** What the Hosts list shows of a host and searches it by. */
 export interface HostSummary {
   id: number;
   displayName: string;
   /** One of the identifiers the Hosts list search matches, beside the name, hostname, serial and IPs. */
   uuid: string;
-  /** The raw value the Operating system column shows and sorts by (`os_version`). */
+  /** What the Operating system column shows ({@link osDisplayName}). */
   osVersion: string;
 }
 
@@ -73,14 +85,14 @@ export async function getHostSummary(request: APIRequestContext, hostId: number)
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read host ${hostId}`);
   const host = (await res.json()).host;
-  return { id: host.id, displayName: host.display_name, uuid: host.uuid, osVersion: host.os_version };
+  return { id: host.id, displayName: host.display_name, uuid: host.uuid, osVersion: osDisplayName(host) };
 }
 
 /** What a host reports of its OS and its agent: the identity a per-OS smoke asserts. */
 export interface HostAgentReport {
   /** osquery's `os_version.platform`: `ubuntu`, `rhel`, `amzn`, `windows`, `darwin`. */
   platform: string;
-  /** "Ubuntu 24.04.5 LTS", "Red Hat Enterprise Linux 9.9.0". */
+  /** "Ubuntu 24.04.5 LTS", "Red Hat Enterprise Linux 9.9.0" ({@link osDisplayName}). */
   osVersion: string;
   osqueryVersion: string;
   /** fleetd's version; empty for a host that runs osquery without it. */
@@ -96,7 +108,7 @@ export async function getHostAgentReport(request: APIRequestContext, hostId: num
   const host = (await res.json()).host;
   return {
     platform: host.platform ?? '',
-    osVersion: host.os_version ?? '',
+    osVersion: osDisplayName(host),
     osqueryVersion: host.osquery_version ?? '',
     orbitVersion: host.orbit_version ?? '',
     usernames: ((host.users ?? []) as Array<{ username: string }>).map((u) => u.username),
@@ -174,7 +186,7 @@ export interface OnlineHostRef extends HostRef {
   /** fleetd/Orbit version, or null for a vanilla-osquery host. */
   orbitVersion: string | null;
   osqueryVersion: string | null;
-  /** The OS the host reports (`os_version`): "macOS 26.6.2", "Ubuntu 24.04.5 LTS". */
+  /** The OS the host reports ({@link osDisplayName}): "macOS 26.6.2", "Ubuntu 24.04.5 LTS". */
   osVersion: string;
 }
 
@@ -248,10 +260,10 @@ function isLabMachine(host: HostIdentity): boolean {
  * found anywhere else is not handed out: the cleanup returns it before a run,
  * and the lab preflight names one that is still astray.
  */
-function poolEntryOf(host: { display_name?: string; team_name?: string | null }): LabHost | undefined {
+function poolEntryOf(host: { display_name?: string; fleet_name?: string | null }): LabHost | undefined {
   const entry = labHostNamed(host.display_name);
   if (!entry || entry.role !== 'pool' || entry.tier !== process.env.SUITE) return undefined;
-  return (host.team_name ?? null) === labHostFleet(entry) ? entry : undefined;
+  return (host.fleet_name ?? null) === labHostFleet(entry) ? entry : undefined;
 }
 
 /**
@@ -385,8 +397,9 @@ export async function listLabHostRecords(
         display_name?: string;
         status: string;
         seen_time: string;
-        team_id?: number | null;
-        team_name?: string | null;
+        fleet_id?: number | null;
+        fleet_name?: string | null;
+        os_name?: string;
         os_version?: string;
       }>;
       return hosts
@@ -397,9 +410,9 @@ export async function listLabHostRecords(
           displayName: h.display_name!,
           status: h.status,
           seenTime: h.seen_time,
-          fleetId: h.team_id ?? null,
-          fleetName: h.team_name ?? null,
-          osVersion: h.os_version ?? '',
+          fleetId: h.fleet_id ?? null,
+          fleetName: h.fleet_name ?? null,
+          osVersion: osDisplayName(h),
         }));
     }),
   );
@@ -510,7 +523,7 @@ export async function listUnlistedLabMachines(
     unlisted.push(
       ...batch
         .filter((h) => isLabMachine(h) && !labHostNamed(h.display_name))
-        .map((h) => ({ id: h.id, displayName: h.display_name, fleetName: h.team_name ?? null })),
+        .map((h) => ({ id: h.id, displayName: h.display_name, fleetName: h.fleet_name ?? null })),
     );
     if (batch.length < perPage) break;
   }
@@ -569,7 +582,7 @@ async function readPoolHost(request: APIRequestContext, hostId: number): Promise
   await expectOk(res, `Failed to read host ${hostId}`);
   const { host } = await res.json();
   if (host.status !== 'online' || !poolEntryOf(host)) return null;
-  return { ...vitalsOf(host), fleetId: host.team_id ?? 0 };
+  return { ...vitalsOf(host), fleetId: host.fleet_id ?? 0 };
 }
 
 /**
@@ -1298,7 +1311,7 @@ export async function getHostFleetId(
 ): Promise<number | null> {
   const res = await request.get(apiUrl(`hosts/${hostId}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read host ${hostId}`);
-  return (await res.json()).host?.team_id ?? null;
+  return (await res.json()).host?.fleet_id ?? null;
 }
 
 /**
@@ -1323,6 +1336,7 @@ function vitalsOf(host: {
   users?: Array<{ username: string }> | null;
   orbit_version?: string | null;
   osquery_version?: string | null;
+  os_name?: string;
   os_version?: string;
 }): OnlineHostRef {
   return {
@@ -1331,7 +1345,7 @@ function vitalsOf(host: {
     usernames: (host.users ?? []).map((u) => u.username),
     orbitVersion: host.orbit_version ?? null,
     osqueryVersion: host.osquery_version ?? null,
-    osVersion: host.os_version ?? '',
+    osVersion: osDisplayName(host),
   };
 }
 
@@ -1353,9 +1367,9 @@ interface OnlineHost extends HostIdentity {
   /** Set only when the simulation runs orbit — see {@link findSimulatedHostForMdm}. */
   orbit_version?: string | null;
   /** The host's fleet; null for Unassigned. */
-  team_id?: number | null;
+  fleet_id?: number | null;
   /** That fleet's name; null for Unassigned. */
-  team_name?: string | null;
+  fleet_name?: string | null;
 }
 
 async function listOnlineHosts(
@@ -1390,12 +1404,8 @@ async function listOnlineHosts(
 
 /**
  * Transfer specific hosts to a fleet. Pass `null` (or `0`) to send hosts
- * to "No team" — the server expects `team_id: null` for unassigned, since
- * `team_id: 0` references a non-existent row and trips the FK constraint.
- *
- * The server rejects payloads that include both `team_id` and `fleet_id`
- * during the rename transition; we send `team_id` (the legacy field name)
- * since the server still accepts it on every supported version.
+ * to Unassigned: the server expects `fleet_id: null` for it, since
+ * `fleet_id: 0` references a non-existent row and trips the FK constraint.
  */
 export async function transferHosts(
   request: APIRequestContext,
@@ -1403,10 +1413,9 @@ export async function transferHosts(
   hostIds: number[],
 ): Promise<void> {
   if (!hostIds.length) return;
-  const teamId = fleetId === 0 ? null : fleetId;
   const res = await request.post(apiUrl('hosts/transfer'), {
     headers: authHeaders(),
-    data: { team_id: teamId, hosts: hostIds },
+    data: { fleet_id: fleetId === 0 ? null : fleetId, hosts: hostIds },
   });
   await expectOk(res, `Failed to transfer hosts to fleet ${fleetId}`);
 }
@@ -1414,18 +1423,16 @@ export async function transferHosts(
 /**
  * Transfer hosts to a fleet by filter (e.g. all online, or all on a given
  * source fleet). Returns silently when no hosts match. Pass `null` (or `0`)
- * for the destination to mean "No team". Filter keys must also use only
- * one of `team_id` / `fleet_id`.
+ * for the destination to mean Unassigned. A fleet filter is `fleet_id`.
  */
 export async function transferHostsByFilter(
   request: APIRequestContext,
   fleetId: number | null,
   filters: Record<string, string | number>,
 ): Promise<void> {
-  const teamId = fleetId === 0 ? null : fleetId;
   const res = await request.post(apiUrl('hosts/transfer/filter'), {
     headers: authHeaders(),
-    data: { team_id: teamId, filters },
+    data: { fleet_id: fleetId === 0 ? null : fleetId, filters },
   });
   await expectOk(res, `Failed to transfer hosts to fleet ${fleetId}`);
 }
@@ -1446,7 +1453,10 @@ export async function listHostsRunningOs(
     params: { fleet_id: String(fleetId), os_name: osName, os_version: osVersion, per_page: '1000' },
   });
   await expectOk(res, `Failed to list hosts running ${osName} ${osVersion}`);
-  return ((await res.json()).hosts ?? []).map((h: { id: number; os_version: string }) => ({ id: h.id, os: h.os_version }));
+  return ((await res.json()).hosts ?? []).map((h: { id: number; os_name?: string; os_version?: string }) => ({
+    id: h.id,
+    os: osDisplayName(h),
+  }));
 }
 
 // ── End user (IdP username) ──────────────────────────────────────────────────

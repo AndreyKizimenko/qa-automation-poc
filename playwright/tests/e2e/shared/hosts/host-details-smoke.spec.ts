@@ -12,7 +12,7 @@
  * identically on both tiers, so this runs shared rather than duplicated per tier.
  */
 import { test, expect } from '@fixtures';
-import { getHostDetailUpdatedAt, waitForHostRefetch } from '@helpers/api';
+import { getHostDetailUpdatedAt, waitForHostRefetch, waitForNoPendingRefetch } from '@helpers/api';
 
 /**
  * A username no other username on the host contains, so filtering by it leaves
@@ -27,20 +27,25 @@ test('Host details — refetch re-collects the host vitals', { tag: '@vm-macos' 
   request,
 }) => {
   // The round trip against the real VM is bounded by the host's poll cadence and
-  // measures 70-120s, on top of waiting out any refetch already in flight.
-  test.setTimeout(300_000);
+  // measures 70-120s, on top of waiting out any refetch already in flight before
+  // and after it.
+  test.setTimeout(420_000);
 
   const before = await getHostDetailUpdatedAt(request, liveMacosHost.id);
 
   await hostDetails.goto(liveMacosHost.id);
   await hostDetails.refetch();
 
-  // Fleet took the request: the header button reports the collection in flight.
-  await expect(hostDetails.refetchingButton).toBeVisible();
+  // Fleet took the request: the header reports the collection in flight.
+  await expect(hostDetails.refetchingStatus).toBeVisible();
 
   // Fleet stored a newer set of vitals — proves the refresh came from the
   // refetch and not from a background detail cycle that was already recent.
   await waitForHostRefetch(request, liveMacosHost.id, { since: before, timeout: 180_000 });
+  // While any refetch of the host is outstanding — this test's, or one a test
+  // on the same Mac asked for since — the header reads "Refetching..." in place
+  // of the time, so the reload waits until none is.
+  await waitForNoPendingRefetch(request, liveMacosHost.id, 180_000);
 
   // `HostDetailsPage` polls for the result for 60s, then gives up with "You'll
   // see an update when the host responds" and leaves the open page on the old

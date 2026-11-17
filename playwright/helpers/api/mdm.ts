@@ -67,35 +67,49 @@ export async function uploadBootstrapPackage(
 
 // ── Setup Experience ─────────────────────────────────────────────────────────
 
-/** The `macos_setup` settings the Users and Bootstrap package cards save. */
+/** The `setup_experience` settings the Users and Bootstrap package cards save. */
 export interface MacosSetupSettings {
   endUserAuthentication: boolean;
   lockEndUserInfo: boolean;
-  /** "Create hidden admin" (`enable_managed_local_account`). */
+  /** "Create hidden admin" (`macos_managed_local_account_enabled`). */
   managedLocalAccount: boolean;
   manualAgentInstall: boolean;
 }
 
 /**
- * A fleet's stored `mdm.macos_setup` settings: from `/config` for `fleetId` 0
- * (Unassigned), from `/teams/:id` otherwise. What a setup-experience save is
+ * A fleet's stored `mdm.setup_experience` settings: from `/config` for `fleetId` 0
+ * (Unassigned), from `/fleets/:id` otherwise. What a setup-experience save is
  * read back against.
+ *
+ * Throws when the response lacks the object or one of its four switches. Fleet
+ * returns all of them, so a missing one is a key the running build renamed, and
+ * reading it as off would pass every check that a switch was turned off.
  */
 export async function getMacosSetupSettings(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<MacosSetupSettings> {
-  const res = await request.get(apiUrl(fleetId === 0 ? 'config' : `teams/${fleetId}`), {
+  const res = await request.get(apiUrl(fleetId === 0 ? 'config' : `fleets/${fleetId}`), {
     headers: authHeaders(),
   });
   await expectOk(res, `Failed to read fleet ${fleetId}'s setup experience`);
   const body = await res.json();
-  const setup = (fleetId === 0 ? body.mdm : body.team?.mdm)?.macos_setup ?? {};
+  const setup = (fleetId === 0 ? body.mdm : body.fleet?.mdm)?.setup_experience as
+    | Record<string, unknown>
+    | undefined;
+  if (!setup) throw new Error(`Fleet ${fleetId}'s settings have no \`mdm.setup_experience\``);
+  const on = (key: string): boolean => {
+    const value = setup[key];
+    if (typeof value !== 'boolean') {
+      throw new Error(`Fleet ${fleetId}'s \`mdm.setup_experience.${key}\` is ${JSON.stringify(value)}, not a boolean`);
+    }
+    return value;
+  };
   return {
-    endUserAuthentication: setup.enable_end_user_authentication ?? false,
-    lockEndUserInfo: setup.lock_end_user_info ?? false,
-    managedLocalAccount: setup.enable_managed_local_account ?? false,
-    manualAgentInstall: setup.manual_agent_install ?? false,
+    endUserAuthentication: on('enable_end_user_authentication'),
+    lockEndUserInfo: on('lock_end_user_info'),
+    managedLocalAccount: on('macos_managed_local_account_enabled'),
+    manualAgentInstall: on('macos_manual_agent_install'),
   };
 }
 
@@ -144,7 +158,7 @@ export async function deleteSetupExperienceScript(
 ): Promise<void> {
   const res = await request.delete(apiUrl('setup_experience/script'), {
     headers: authHeaders(),
-    params: { team_id: String(fleetId) },
+    params: { fleet_id: String(fleetId) },
   });
   if (res.status() === 404 || res.status() === 402) return;
   await expectOk(res, `[setup-exp script cleanup] fleet ${fleetId}`);
@@ -194,42 +208,32 @@ export async function deleteSetupAssistant(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<void> {
-  const res = await request.delete(apiUrl('mdm/apple/enrollment_profile'), {
+  const res = await request.delete(apiUrl('enrollment_profiles/automatic'), {
     headers: authHeaders(),
-    params: { team_id: String(fleetId) },
+    params: { fleet_id: String(fleetId) },
   });
   if (res.status() === 404 || res.status() === 402) return;
   await expectOk(res, `[setup-assistant cleanup] fleet ${fleetId}`);
 }
 
 /**
- * Reset the macos_setup toggles (EUA + managed-local-account) to off for
- * a fleet. PATCH merges, so the other macos_setup fields (bootstrap,
- * setup-assistant, script, software) are untouched — those have their own
- * delete helpers above. For `fleet_id=0`, targets the global `/config`
- * endpoint; for any other id, targets `/teams/{id}`.
- * Silent on 402 ("Requires Premium") so the shared cleanup pipeline can
- * call it on both tiers — mirrors deleteBootstrapPackage above.
+ * Turns end-user authentication and the managed local account ("Create hidden
+ * admin") off for a fleet (`fleetId` 0 is Unassigned), through `PATCH
+ * /setup_experience`. The PATCH changes only the keys it carries, so the
+ * bootstrap package, setup assistant, script and software stay as they are:
+ * those have their own delete helpers above. Silent on 402 ("Requires
+ * Premium") so the shared cleanup pipeline can call it on both tiers.
  */
 export async function resetMacosSetupToggles(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<void> {
-  const body = {
-    mdm: {
-      macos_setup: {
-        enable_end_user_authentication: false,
-        enable_managed_local_account: false,
-      },
-    },
-  };
-  const path = fleetId === 0 ? 'config' : `teams/${fleetId}`;
-  const res = await request.patch(apiUrl(path), {
-    headers: authHeaders(),
-    data: body,
+  const res = await patchSetupExperience(request, fleetId, {
+    enable_end_user_authentication: false,
+    macos_managed_local_account_enabled: false,
   });
   if (res.status() === 402) return;
-  await expectOk(res, `[macos_setup reset] fleet ${fleetId}`);
+  await expectOk(res, `[setup experience toggles reset] fleet ${fleetId}`);
 }
 
 /**
@@ -280,8 +284,8 @@ export async function setSetupExperienceSoftware(
 /**
  * One-shot reset of every setup-experience field a test can touch:
  * bootstrap package, setup-assistant DEP profile, setup-experience script,
- * the install-software selection, the macos_setup toggles (EUA +
- * managed-local-account) and manual agent install. Idempotent and safe to call
+ * the install-software selection, the end-user authentication and
+ * managed-local-account toggles and manual agent install. Idempotent and safe to call
  * when no state is present. Intended for cleanup-setup / cleanup-teardown only —
  * test bodies still use the individual helpers for clearer per-test cleanup.
  */
@@ -299,7 +303,7 @@ export async function resetSetupExperience(
   ]);
 }
 
-/** The Apple Push Notification service certificate Fleet's Apple MDM runs on (`GET /mdm/apple`). */
+/** The Apple Push Notification service certificate Fleet's Apple MDM runs on (`GET /apns`). */
 export interface AppleApnsInfo {
   commonName: string;
   /** ISO timestamp. */
@@ -308,7 +312,7 @@ export interface AppleApnsInfo {
 
 /** Throws when Apple MDM isn't on. */
 export async function getAppleApnsInfo(request: APIRequestContext): Promise<AppleApnsInfo> {
-  const res = await request.get(apiUrl('mdm/apple'), { headers: authHeaders() });
+  const res = await request.get(apiUrl('apns'), { headers: authHeaders() });
   await expectOk(res, 'Failed to read the Apple MDM push certificate');
   const body = await res.json();
   return { commonName: body.common_name, renewDate: body.renew_date };
@@ -328,7 +332,7 @@ export async function deleteAllConfigurationProfiles(
 ): Promise<void> {
   const res = await request.get(apiUrl('configuration_profiles'), {
     headers: authHeaders(),
-    params: { team_id: String(fleetId), per_page: '200' },
+    params: { fleet_id: String(fleetId), per_page: '200' },
   });
   await expectOk(res, `[profile cleanup] failed to list the profiles of fleet ${fleetId}`);
   const body = await res.json();
@@ -352,7 +356,7 @@ export async function deleteAllScripts(
 ): Promise<void> {
   const res = await request.get(apiUrl('scripts'), {
     headers: authHeaders(),
-    params: { team_id: String(fleetId), per_page: '200' },
+    params: { fleet_id: String(fleetId), per_page: '200' },
   });
   await expectOk(res, `[script cleanup] failed to list the scripts of fleet ${fleetId}`);
   const body = await res.json();

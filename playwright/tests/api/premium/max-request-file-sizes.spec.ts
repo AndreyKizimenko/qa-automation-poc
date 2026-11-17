@@ -3,7 +3,7 @@
  * API layer, checked here with runtime-generated payloads (no committed
  * multi-MB fixtures):
  *   - a per-script business limit of 500,000 characters (POST /scripts);
- *   - a 1.573MB request-body limit on profile upload (POST /mdm/profiles);
+ *   - a 1.573MB request-body limit on profile upload (POST /configuration_profiles);
  *   - a 2.097MB limit on MDM commands (POST /commands/run);
  *   - a 26.21MB limit on EULA upload (POST /setup_experience/eula), batch
  *     profiles (POST /configuration_profiles/batch) and batch scripts
@@ -61,10 +61,10 @@ test.describe('Premium • API • max request/file sizes', () => {
     // is ever parsed, so the content need not be a valid .mobileconfig.
     const oversized = Buffer.alloc(2 * 1024 * 1024, 'a');
 
-    const res = await request.post(apiUrl('mdm/profiles'), {
+    const res = await request.post(apiUrl('configuration_profiles'), {
       headers: authHeaders(),
       multipart: {
-        team_id: '0',
+        fleet_id: '0',
         profile: {
           name: 'pw-oversized.mobileconfig',
           mimeType: 'application/x-apple-aspen-config',
@@ -145,7 +145,7 @@ test.describe('Premium • API • max request/file sizes', () => {
     const profile = Buffer.alloc(7 * MIB, 'a').toString('base64');
     const res = await request.post(apiUrl('configuration_profiles/batch'), {
       headers: authHeaders(),
-      params: { team_id: '0' },
+      params: { fleet_id: '0' },
       data: { profiles: Array.from({ length: 5 }, () => ({ profile })) },
     });
 
@@ -161,7 +161,7 @@ test.describe('Premium • API • max request/file sizes', () => {
     const scriptContents = Buffer.from(`#!/bin/sh\n# ${'a'.repeat(6 * MIB)}`).toString('base64');
     const res = await request.post(apiUrl('scripts/batch'), {
       headers: authHeaders(),
-      params: { team_id: '0' },
+      params: { fleet_id: '0' },
       data: {
         scripts: Array.from({ length: 5 }, (_, i) => ({
           name: `pw-oversized-${i}.sh`,

@@ -32,6 +32,11 @@ export class SoftwareInstallerCard {
   readonly latestBadge: Locator;
   readonly pinnedBadge: Locator;
   readonly majorVersionBadge: Locator;
+  /**
+   * The expanded row's pencil: "Edit version" on a row that is one version of
+   * its title (a premium custom package, an iOS / iPadOS App Store or Play Store
+   * app), "Edit software" on the rest (`LibraryItemAccordion.tsx`).
+   */
   readonly editSoftwareButton: Locator;
   /**
    * A multi-version App Store row's "Edit version" icon, which opens the Edit
@@ -39,6 +44,7 @@ export class SoftwareInstallerCard {
    */
   readonly editVersionButton: Locator;
   readonly downloadButton: Locator;
+  /** The expanded row's trash: "Delete version" or "Delete software", on the same split as the pencil. */
   readonly deleteButton: Locator;
   readonly deleteModal: Locator;
   readonly deleteConfirmButton: Locator;
@@ -78,13 +84,15 @@ export class SoftwareInstallerCard {
     this.pinnedBadge = this.card.getByRole('button', { name: 'Pinned', exact: true });
     this.majorVersionBadge = this.card.getByRole('button', { name: 'Major version', exact: true });
 
-    this.editSoftwareButton = this.card.getByRole('button', { name: 'Edit software' });
+    // The last match: on a per-version row the header's auto-update icon is an
+    // "Edit version" button too, and it comes first.
+    this.editSoftwareButton = this.card.getByRole('button', { name: /^Edit (software|version)$/ }).last();
     // Exact: the header's accessible name nests it. A row with auto updates on
     // shows a second "Edit version" icon that opens the same modal, so either
     // will do.
     this.editVersionButton = this.card.getByRole('button', { name: 'Edit version', exact: true }).first();
     this.downloadButton = this.card.getByRole('button', { name: 'Download installer' });
-    this.deleteButton = this.card.getByRole('button', { name: 'Delete this version' });
+    this.deleteButton = this.card.getByRole('button', { name: /^Delete (software|version)$/ });
 
     // Title is "Delete version" for titles that can hold several versions —
     // custom packages, iOS / iPadOS App Store and Play Store apps — and "Delete

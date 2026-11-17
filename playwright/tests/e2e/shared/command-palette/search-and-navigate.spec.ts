@@ -282,21 +282,6 @@ test.describe('Command palette • search and navigate', () => {
     await expect(softwareTitles.table.table).toBeVisible();
   });
 
-  test('the Packs rows appear only for a packs query', async ({ palette, dashboard }) => {
-    await dashboard.goto();
-    await palette.open();
-
-    // Packs is legacy surface, kept out of the browsable list on purpose.
-    await expect(palette.item('Hosts')).toBeVisible();
-    await expect(palette.item('Packs')).toHaveCount(0);
-    await expect(palette.item('Add new pack')).toHaveCount(0);
-
-    await palette.search('packs');
-
-    await expect(palette.item('Packs')).toBeVisible();
-    await expect(palette.item('Add new pack')).toBeVisible();
-  });
-
   test('group headings render in the canonical order', async ({ palette, dashboard }) => {
     await dashboard.goto();
     await palette.open();

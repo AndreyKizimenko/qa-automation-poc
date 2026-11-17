@@ -24,7 +24,6 @@ import {
   deleteAllConfigurationProfiles,
   deleteAllGlobalPolicies,
   deleteAllInstallSoftwareTitles,
-  deleteAllPacks,
   deleteAllQaTestUsers,
   deleteLeftoverApiTestUsers,
   deleteAllQueries,
@@ -38,7 +37,6 @@ import {
   deleteReport,
   deleteSoftwareTitle,
   disableGitOpsMode,
-  enableScriptExecution,
   failureSummary,
   findFleetByName,
   getAgentOptions,
@@ -88,9 +86,9 @@ const WORKSTATIONS_FLEET = 'Workstations';
 type CleanupStep = (title: string, body: (args: { request: APIRequestContext }) => Promise<void>) => void;
 const premiumStep: CleanupStep = process.env.SUITE === 'free' ? () => {} : test;
 
-// Queries and packs are global on the Fleet API (no per-team endpoint),
-// so deleting them with the unassigned wipe also drains anything created
-// from the "All fleets" UI scope. Policies are either global
+// Reports are global on the Fleet API (no per-fleet endpoint), so deleting
+// them with the unassigned wipe also drains anything created from the
+// "All fleets" UI scope. Policies are either global
 // (deleteAllGlobalPolicies) or a fleet's own (deleteAllFleetPolicies, here for
 // Unassigned and below for Workstations); the "All fleets" UI view is the
 // union of global and Workstations' policies, so those two calls cover it.
@@ -112,9 +110,6 @@ test('wipe unassigned state', async ({ request }) => {
   // same way the resource wipes do. No-ops when the flag is already off, which
   // is every run on free.
   await disableGitOpsMode(request);
-  // Script execution is the other global switch a dead run can strand: an
-  // exclusive spec turns it off, and nothing else in the suite turns it back on.
-  await enableScriptExecution(request);
   await resetSetupExperience(request, 0);
   // Unassigned's own policies go before its software and scripts: Fleet refuses
   // to delete a title or script that a policy automation uses, so a title added
@@ -124,7 +119,6 @@ test('wipe unassigned state', async ({ request }) => {
   await Promise.all([
     deleteAllQueries(request),
     deleteAllGlobalPolicies(request),
-    deleteAllPacks(request),
     deleteAllInstallSoftwareTitles(request, 0),
     deleteAllConfigurationProfiles(request, 0),
     deleteAllScripts(request, 0),
@@ -446,9 +440,6 @@ test('bring the real VMs to their resting state', async ({ request }) => {
   const fleetId = vms?.id ?? 0;
 
   await returnLabHostsToTheirFleets(request);
-
-  // Uninstalls run as scripts, so they need script execution on.
-  await enableScriptExecution(request);
 
   const { script_execution_timeout: timeout, ...options } = await getAgentOptions(request, fleetId);
   if (timeout !== undefined) await setAgentOptions(request, options, fleetId);

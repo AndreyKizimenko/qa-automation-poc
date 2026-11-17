@@ -16,14 +16,13 @@ interface EndpointCase {
 
 const READ_ENDPOINTS: EndpointCase[] = [
   { method: 'GET', path: 'fleets' },
-  { method: 'GET', path: 'setup_experience/script?team_id=0' },
+  { method: 'GET', path: 'setup_experience/script?fleet_id=0' },
   { method: 'GET', path: 'vpp_tokens' },
-  { method: 'GET', path: 'abm_tokens' },
+  { method: 'GET', path: 'ab_tokens' },
 ];
 
 const MUTATION_ENDPOINTS: EndpointCase[] = [
   { method: 'POST', path: 'fleets', body: { name: 'free-tier-attempt' } },
-  { method: 'POST', path: 'teams', body: { name: 'free-tier-attempt' } },
   { method: 'PATCH', path: 'fleets/1', body: { name: 'free-tier-attempt' } },
   { method: 'DELETE', path: 'fleets/1' },
 ];

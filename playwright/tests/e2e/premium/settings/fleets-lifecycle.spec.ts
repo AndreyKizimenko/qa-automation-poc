@@ -28,7 +28,7 @@ async function fleetName(request: APIRequestContext, id: number): Promise<string
   if (res.status() === 404) return null;
   await expectOk(res, `Failed to read fleet ${id}`);
   const body = await res.json();
-  return (body.fleet ?? body.team).name as string;
+  return body.fleet.name as string;
 }
 
 test.describe('Premium • Settings • fleet lifecycle', () => {

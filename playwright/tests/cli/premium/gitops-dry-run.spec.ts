@@ -9,9 +9,11 @@
  * and a global file that would clear the IdP is refused, by fleetctl and, under
  * `--delete-other-fleets`, by the server (`carryLiveEndUserAuth`).
  *
- * Everything here is `--dry-run`. A real apply of this scaffold would create a
- * `💻 Workstations` fleet distinct from the gitops-provisioned `Workstations`,
- * and — with `--delete-other-fleets` — remove every fleet the instance has.
+ * Everything here is `--dry-run`. With `--delete-other-fleets`, a real apply
+ * would remove every fleet the instance has. The scaffold's fleets are renamed
+ * "Dry run …" first: its `💻 Workstations` is the standing `Workstations` to a
+ * Fleet that compares fleet names ignoring case, symbols and emoji
+ * (fleetdm/fleet#53790), and would read as an edit of it.
  */
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
@@ -34,6 +36,11 @@ async function scaffoldWithFleets(request: APIRequestContext): Promise<{ root: s
     .filter((f) => f.endsWith('.yml'))
     .map((f) => path.join(root, 'fleets', f));
   expect(fleetFiles.length, 'scaffold should ship fleet manifests').toBeGreaterThan(0);
+  for (const file of fleetFiles) {
+    const yml = fs.readFileSync(file, 'utf-8');
+    expect(yml, `${file} names its fleet on a line of its own`).toMatch(/^name: /m);
+    fs.writeFileSync(file, yml.replace(/^name: "?(.*?)"?$/m, 'name: "Dry run $1"'));
+  }
 
   return { root, fleetFiles };
 }
@@ -50,8 +57,8 @@ test.describe('fleetctl gitops --dry-run · premium', () => {
     expect(res.code, `dry run failed:\n${output(res)}`).toBe(0);
     expect(output(res)).toContain('gitops dry run succeeded');
 
-    expect(output(res), 'premium must not skip team configs').not.toContain(
-      'teams are only supported for premium Fleet users',
+    expect(output(res), 'premium must not skip fleet configs').not.toMatch(
+      /(teams|fleets) are only supported for premium Fleet users/,
     );
     expect(output(res)).toMatch(/would've applied \d+ fleet/);
   });

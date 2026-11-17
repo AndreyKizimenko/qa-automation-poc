@@ -34,7 +34,7 @@ async function findUnassignedHost(
   const res = await request.get(apiUrl('hosts'), {
     headers: authHeaders(),
     params: {
-      team_id: '0',
+      fleet_id: '0',
       status: 'online',
       per_page: '1',
       order_key: 'display_name',

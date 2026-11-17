@@ -95,15 +95,6 @@ test.describe('activityCopy', () => {
       .test(`deleted the label ${NAME}.`)).toBe(true);
   });
 
-  test('pack.* — global, no scope variants', () => {
-    expect(activityCopy.pack.created({ name: NAME })
-      .test(`created pack ${NAME}.`)).toBe(true);
-    expect(activityCopy.pack.edited({ name: NAME })
-      .test(`edited pack ${NAME}.`)).toBe(true);
-    expect(activityCopy.pack.deleted({ name: NAME })
-      .test(`deleted pack ${NAME}.`)).toBe(true);
-  });
-
   test('script.* — to / for / from prepositions; unassigned + team', () => {
     expect(activityCopy.script.added({ name: NAME, scope: 'Unassigned' })
       .test(`added script ${NAME} to unassigned.`)).toBe(true);

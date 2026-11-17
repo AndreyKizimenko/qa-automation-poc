@@ -1,17 +1,14 @@
 /**
  * A fleet's MDM controls: disk encryption and key escrow per platform, the
- * BitLocker PIN and managed local account, Recovery Lock, the host name
- * template, the OS update settings for all four platforms, and the setup
- * experience — every `controls` key a fleet file declares beyond its profile
- * and script lists, read back from GET /fleets/{id} → `mdm`.
+ * BitLocker PIN, Recovery Lock, the host name template, the OS update settings
+ * for all four platforms, and the setup experience with both managed local
+ * accounts — every `controls` key a fleet file declares beyond its profile and
+ * script lists, read back from GET /fleets/{id} → `fleet.mdm`.
  *
- * The YAML names a few of these differently from the API: `apple_settings` is
- * `macos_settings`, `setup_experience` is `macos_setup` with
- * `apple_enable_release_device_manually` → `enable_release_device_manually`,
- * `enable_create_local_admin_account` → `enable_managed_local_account`,
- * `macos_manual_agent_install` → `manual_agent_install` and `macos_script` →
- * `script`, which Fleet echoes as the path the YAML gave, so it is compared by
- * basename. Only declared keys are compared.
+ * The API names each key as the YAML does. The setup-experience script is read
+ * from its own endpoint (`GET /setup_experience/script`), which names the
+ * uploaded file, and compared with the YAML path's basename. Only declared
+ * keys are compared.
  *
  * These controls reach the hosts of the fleet that carries them, which is why
  * only the Compliance fleet — which has none — declares them; the no-team
@@ -24,10 +21,10 @@ import * as path from 'path';
 import { gitopsConfig, gitopsLabel, resolveTeamId, getJson, expectSubset } from './_config';
 
 const controls = () => gitopsConfig.controls;
-const apple = () => controls().apple_settings ?? controls().macos_settings;
+const apple = () => controls().apple_settings;
 const windows = () => controls().windows_settings;
 const linux = () => controls().linux_settings;
-const setup = () => controls().setup_experience ?? controls().macos_setup;
+const setup = () => controls().setup_experience;
 const UPDATE_KEYS = ['macos_updates', 'ios_updates', 'ipados_updates', 'windows_updates'];
 
 /** Whether the fleet file declares any of `keys` under `section` (its `controls`, or one platform block of it). */
@@ -39,27 +36,27 @@ test.describe(`GitOps verify · controls · ${gitopsLabel}`, () => {
   test.skip(gitopsConfig.scope !== 'team', 'the per-platform controls are declared by fleet files');
 
   let mdm: Record<string, any> = {};
+  let teamId = 0;
 
   test.beforeAll(async ({ request }) => {
-    const teamId = await resolveTeamId(request);
-    mdm = (await getJson(request, `fleets/${teamId}`)).team?.mdm ?? {};
+    teamId = await resolveTeamId(request);
+    mdm = (await getJson(request, `fleets/${teamId}`)).fleet?.mdm ?? {};
   });
 
-  test('disk encryption, key escrow, the BitLocker PIN and the managed local account match gitops', async () => {
+  test('disk encryption, key escrow and the BitLocker PIN match gitops', async () => {
     test.skip(
       !declares(apple(), 'enable_disk_encryption', 'enable_escrow_disk_encryption_key') &&
-        !declares(windows(), 'enable_disk_encryption', 'require_bitlocker_pin', 'enable_managed_local_account') &&
+        !declares(windows(), 'enable_disk_encryption', 'require_bitlocker_pin') &&
         !declares(linux(), 'enable_escrow_disk_encryption_key'),
-      'the fleet file declares no disk encryption, key escrow, BitLocker PIN or managed local account setting',
+      'the fleet file declares no disk encryption, key escrow or BitLocker PIN setting',
     );
-    expectSubset('mdm.macos_settings', mdm.macos_settings, {
+    expectSubset('mdm.apple_settings', mdm.apple_settings, {
       enable_disk_encryption: apple()?.enable_disk_encryption,
       enable_escrow_disk_encryption_key: apple()?.enable_escrow_disk_encryption_key,
     });
     expectSubset('mdm.windows_settings', mdm.windows_settings, {
       enable_disk_encryption: windows()?.enable_disk_encryption,
       require_bitlocker_pin: windows()?.require_bitlocker_pin,
-      enable_managed_local_account: windows()?.enable_managed_local_account,
     });
     expectSubset('mdm.linux_settings', mdm.linux_settings, {
       enable_escrow_disk_encryption_key: linux()?.enable_escrow_disk_encryption_key,
@@ -68,11 +65,11 @@ test.describe(`GitOps verify · controls · ${gitopsLabel}`, () => {
 
   test('Recovery Lock and the host name template match gitops', async () => {
     test.skip(
-      !declares(controls(), 'enable_recovery_lock_password', 'name_template'),
+      !declares(controls(), 'macos_recovery_lock_password_enabled', 'name_template'),
       'the fleet file declares neither Recovery Lock nor a host name template',
     );
     expectSubset('mdm', mdm, {
-      enable_recovery_lock_password: controls().enable_recovery_lock_password,
+      macos_recovery_lock_password_enabled: controls().macos_recovery_lock_password_enabled,
       name_template: controls().name_template,
     });
   });
@@ -84,26 +81,13 @@ test.describe(`GitOps verify · controls · ${gitopsLabel}`, () => {
     }
   });
 
-  test('setup experience matches gitops', async () => {
+  test('setup experience matches gitops', async ({ request }) => {
     test.skip(!setup(), 'the fleet file declares no setup_experience');
-    const declared = setup()!;
-    expectSubset('mdm.macos_setup', mdm.macos_setup, {
-      enable_end_user_authentication: declared.enable_end_user_authentication,
-      lock_end_user_info: declared.lock_end_user_info,
-      enable_release_device_manually:
-        declared.apple_enable_release_device_manually ?? declared.enable_release_device_manually,
-      manual_agent_install: declared.macos_manual_agent_install ?? declared.manual_agent_install,
-      require_all_software_macos: declared.require_all_software_macos,
-      require_all_software_windows: declared.require_all_software_windows,
-      enable_managed_local_account:
-        declared.enable_create_local_admin_account ?? declared.enable_managed_local_account,
-      end_user_local_account_type: declared.end_user_local_account_type,
-    });
-    const script = declared.macos_script ?? declared.script;
+    const { macos_script: script, ...declared } = setup()!;
+    expectSubset('mdm.setup_experience', mdm.setup_experience, declared);
     if (script !== undefined) {
-      expect
-        .soft(path.basename(String(mdm.macos_setup?.script ?? '')), 'mdm.macos_setup.script')
-        .toBe(path.basename(String(script)));
+      const live = await getJson(request, `setup_experience/script?fleet_id=${teamId}`);
+      expect.soft(live.name, 'the setup-experience script').toBe(path.basename(String(script)));
     }
   });
 });

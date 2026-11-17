@@ -148,7 +148,7 @@ export class DashboardPage {
     // Rendered only where a single dataset is offered (free); premium swaps in
     // the dataset dropdown.
     this.chartTitle = page.locator('.chart-card__title');
-    this.chartInfoIcon = this.chartCard.getByTestId('info-outline-icon');
+    this.chartInfoIcon = this.chartCard.getByTestId('info-icon');
     // Appears once the applied filters differ from the card's seeded defaults.
     this.chartFilteredPill = this.chartCard.getByRole('button', { name: 'Filtered' });
     this.configureChartFiltersButton = this.chartCard.getByRole('button', {

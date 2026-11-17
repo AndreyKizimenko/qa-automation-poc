@@ -1,0 +1,105 @@
+name: Install fleetctl
+description: |
+  Puts on PATH the fleetctl that matches the Fleet server at FLEET_URL: its
+  release from npm when one is published, else one built from the server's own
+  revision. Needs FLEET_URL and FLEET_API_TOKEN in the step's env, and node.
+
+# Why a build: a server built from Fleet's main branch reports
+# "0.0.0-SNAPSHOT-<sha>", and an RC reports its release's version before that
+# release is on npm. Neither has a published client, and the latest release
+# can't stand in across a major version: fleetctl 4 against Fleet 5 meets 410s
+# for the routes Fleet 5 removed and 422s for the names it renamed, and Fleet
+# has no version check that would stop it first. So the client is built from
+# the exact revision the server runs, and cached by that revision, so only the
+# first job of a run on a new build pays for the build.
+#
+# Paths are relative to the workspace on purpose: in a container job the
+# `github.workspace` context names the host's path, which the container can't
+# see, and a cache saved under one absolute path never restores under another.
+
+runs:
+  using: composite
+  steps:
+    - name: Read the server's version
+      id: server
+      shell: bash
+      run: |
+        set -e
+        body="$(curl -fsSL "$FLEET_URL/api/v1/fleet/version" --header "Authorization: Bearer $FLEET_API_TOKEN")"
+        field() { node -e 'process.stdout.write(String(JSON.parse(process.argv[1])[process.argv[2]] ?? ""))' "$body" "$1"; }
+        version="$(field version)"
+        revision="$(field revision)"
+        branch="$(field branch)"
+        base="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' <<< "$version" || true)"
+        if [ -n "$base" ] && [ "$base" != 0.0.0 ] && npm view "fleetctl@$base" version >/dev/null 2>&1; then
+          source=npm
+        elif [ -n "$revision" ] && [ "$revision" != unknown ]; then
+          source=build
+        else
+          echo "::error::The server reports version '$version' and no revision: no fleetctl matches it"
+          exit 1
+        fi
+        echo "Server: $version, revision $revision ($branch); fleetctl from $source"
+        {
+          echo "source=$source"
+          echo "base=$base"
+          echo "version=$version"
+          echo "revision=$revision"
+          echo "branch=$branch"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Install fleetctl from npm
+      if: steps.server.outputs.source == 'npm'
+      shell: bash
+      run: npm install -g "fleetctl@${{ steps.server.outputs.base }}"
+
+    - name: Restore fleetctl built for this revision
+      if: steps.server.outputs.source == 'build'
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: .fleetctl-bin
+        key: fleetctl-${{ runner.os }}-${{ runner.arch }}-${{ steps.server.outputs.revision }}
+
+    - name: Check out Fleet at the server's revision
+      if: steps.server.outputs.source == 'build' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v5
+      with:
+        repository: fleetdm/fleet
+        ref: ${{ steps.server.outputs.revision }}
+        path: .fleet-src
+        fetch-depth: 1
+        persist-credentials: false
+
+    - name: Set up Go
+      if: steps.server.outputs.source == 'build' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: .fleet-src/go.mod
+        cache-dependency-path: .fleet-src/go.sum
+
+    - name: Build fleetctl
+      if: steps.server.outputs.source == 'build' && steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ steps.server.outputs.version }}
+        REVISION: ${{ steps.server.outputs.revision }}
+        BRANCH: ${{ steps.server.outputs.branch }}
+      run: |
+        set -e
+        pkg=github.com/fleetdm/fleet/v4/server/version
+        out="$GITHUB_WORKSPACE/.fleetctl-bin"
+        mkdir -p "$out"
+        cd "$GITHUB_WORKSPACE/.fleet-src"
+        CGO_ENABLED=0 go build -trimpath \
+          -ldflags "-X $pkg.appName=fleetctl -X $pkg.version=$VERSION -X $pkg.revision=$REVISION -X $pkg.branch=$BRANCH" \
+          -o "$out/fleetctl" ./cmd/fleetctl
+
+    - name: Put the built fleetctl on PATH
+      if: steps.server.outputs.source == 'build'
+      shell: bash
+      run: echo "$GITHUB_WORKSPACE/.fleetctl-bin" >> "$GITHUB_PATH"
+
+    - name: Show fleetctl's version
+      shell: bash
+      run: fleetctl --version

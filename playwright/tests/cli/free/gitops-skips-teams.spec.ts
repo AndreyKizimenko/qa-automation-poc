@@ -41,10 +41,15 @@ test.describe('fleetctl gitops · free skips team configs', () => {
     expect(res.code, `dry run failed:\n${output(res)}`).toBe(0);
     expect(output(res)).toContain('gitops dry run succeeded');
 
+    // fleetctl names them fleets from fleetdm/fleet#58892 on, teams before it.
+    // TODO(fleetdm/fleet#58892): once it merges and a nightly redeploy has run
+    // it here, expect the "fleet" line alone; "team" coming back is then a regression.
+    const said = output(res);
     for (const file of fleetFiles) {
-      expect(output(res)).toContain(
-        `[!] skipping team config ${file} since teams are only supported for premium Fleet users`,
+      const lines = ['team', 'fleet'].map(
+        (word) => `[!] skipping ${word} config ${file} since ${word}s are only supported for premium Fleet users`,
       );
+      expect(lines.some((line) => said.includes(line)), `skips ${file}:\n${said}`).toBe(true);
     }
   });
 });

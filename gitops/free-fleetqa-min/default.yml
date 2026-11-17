@@ -60,7 +60,6 @@ org_settings:
     enable_analytics: false
     live_reporting_disabled: false
     report_cap: 0
-    scripts_disabled: false
     server_url: $FLEET_URL
   sso_settings:
     enable_sso: true
@@ -71,7 +70,7 @@ org_settings:
     metadata_url: $FLEET_SSO_METADATA_URL
 
 controls:
-  windows_enabled_and_configured: true
+  windows_mdm_enabled: true
   android_enabled_and_configured: true
   scripts:
     # 9 of 11

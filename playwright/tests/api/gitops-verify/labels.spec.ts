@@ -16,7 +16,6 @@ interface ApiLabel {
   query: string;
   platform: string;
   fleet_id: number | null;
-  team_id: number | null;
   criteria: Record<string, unknown> | null;
 }
 
@@ -26,7 +25,7 @@ let live: ApiLabel[] = [];
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
   const all = (await getJson(request, 'labels')).labels as ApiLabel[];
-  live = all.filter((l) => l.label_type === 'regular' && (l.fleet_id ?? l.team_id ?? 0) === teamId);
+  live = all.filter((l) => l.label_type === 'regular' && (l.fleet_id ?? 0) === teamId);
 });
 
 test.describe(`GitOps verify · labels · ${gitopsLabel}`, () => {

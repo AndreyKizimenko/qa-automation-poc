@@ -80,11 +80,12 @@ export class HostDetailsPage {
   readonly backButton: Locator;
   readonly refetchButton: Locator;
   /**
-   * The same header button while a refetch is in flight — `HostHeader` swaps the
-   * one button's label and disables it, so this and `refetchButton` never
-   * resolve at the same time.
+   * The header's "Refetching... This can take up to 1 minute.", which `HostHeader`
+   * shows in place of the "Last fetched" time while a refetch of the host is
+   * outstanding (`showRefetchSpinner`), and only then. A disabled Refetch button
+   * doesn't say as much: Fleet also disables it for an offline host.
    */
-  readonly refetchingButton: Locator;
+  readonly refetchingStatus: Locator;
   readonly actionsButton: Locator;
   /**
    * The header's "Last fetched <relative time>" line. `HostHeader` renders it as
@@ -236,12 +237,14 @@ export class HostDetailsPage {
 
     this.hostHeading = page.getByRole('heading', { level: 1 });
     this.backButton = page.getByRole('button', { name: 'Back to all hosts' });
-    // Matches the idle-state label only; `refetchingButton` matches the same
-    // button once a refetch is under way.
-    this.refetchButton = page.getByRole('button', { name: 'Refetch' });
-    this.refetchingButton = page.getByRole('button', { name: 'Fetching fresh vitals' });
+    // The button reads "Refetch" throughout, and is disabled while a refetch is
+    // under way and while the host is offline.
+    this.refetchButton = page.getByRole('button', { name: 'Refetch', exact: true });
     this.actionsButton = page.getByRole('button', { name: 'Actions' });
     this.lastFetched = page.locator('.host-header__last-fetched');
+    this.refetchingStatus = this.lastFetched.filter({
+      hasText: /^Refetching\.\.\. This can take up to 1 minute\.$/,
+    });
 
     // `local-user-accounts-card` is the card's own modifier class; Fleet's Card
     // renders as a role-less div, so it's the only stable scope for the card.
@@ -528,9 +531,9 @@ export class HostDetailsPage {
 
   /**
    * Asks Fleet to re-collect the host's vitals. While a refetch is in flight
-   * `HostHeader` relabels the one button to "Fetching fresh vitals...this may
-   * take a moment" and disables it, so the idle "Refetch" label is what marks
-   * the control as clickable again. The wait spans a whole round trip: the live
+   * `HostHeader` disables the button (the header reads "Refetching... This can
+   * take up to 1 minute."), so its being enabled is what marks the control as
+   * clickable again. The wait spans a whole round trip: the live
    * hosts are shared, so another spec — or a previous attempt of this one — can
    * leave a refetch running, and this rides that out instead of failing on a
    * button that isn't rendered yet. The result lands on the host's own poll

@@ -72,10 +72,15 @@ export class MyAccountPage {
     this.changePasswordModal = page
       .locator('.modal__modal_container')
       .filter({ hasText: 'Change password' });
-    this.oldPasswordInput = this.changePasswordModal.getByLabel('Original password');
+    // Two of the labels read either way, by Fleet build: "Original password" or
+    // "Current password", "New password confirmation" or "Confirm password"
+    // (fleetdm/fleet#58868).
+    // TODO(fleetdm/fleet#58868): once it merges and a nightly redeploy has run
+    // it here, match "Current password" and "Confirm password" alone.
+    this.oldPasswordInput = this.changePasswordModal.getByLabel(/^(Original|Current) password$/);
     this.newPasswordInput = this.changePasswordModal.getByLabel('New password', { exact: true });
     this.newPasswordConfirmationInput = this.changePasswordModal.getByLabel(
-      'New password confirmation',
+      /^(New password confirmation|Confirm password)$/,
     );
     this.changePasswordSubmit = this.changePasswordModal.getByRole('button', {
       name: 'Change password',

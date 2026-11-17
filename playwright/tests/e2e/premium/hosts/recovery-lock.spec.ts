@@ -33,7 +33,7 @@
  * checked for each of them.
  *
  * **Views have side effects.** Opening the modal is a read of the password:
- * Fleet records a `viewed_host_recovery_lock_password` activity and schedules an
+ * Fleet records a `read_host_recovery_lock_password` activity and schedules an
  * automatic rotation an hour out. The test opens it twice (before and after the
  * rotation) and reads status through `GET /hosts/:id` in between, which is not a
  * view. Clearing the password drops the scheduled rotation.
@@ -99,7 +99,7 @@ test.describe('Premium • Hosts • Recovery Lock password', () => {
     const hostId = liveMacosHost.id;
     const modal = hostDetails.recoveryLockModal;
     const forThisHost = (d: Record<string, unknown>) => d.host_id === hostId;
-    const forVms = (d: Record<string, unknown>) => (d.fleet_id ?? d.team_id) === vmsFleetId;
+    const forVms = (d: Record<string, unknown>) => d.fleet_id === vmsFleetId;
     /** Reloads the host and reads its newest past activities for one line of Fleet's copy. */
     const expectHostActivity = async (copy: RegExp) => {
       await hostDetails.goto(hostId);
@@ -149,7 +149,7 @@ test.describe('Premium • Hosts • Recovery Lock password', () => {
     const firstPassword = await modal.revealPassword();
     // Viewing schedules Fleet's own rotation, and the modal says when.
     await expect(modal.autoRotateBanner).toBeVisible();
-    await assertActivityAfter(request, 'viewed_host_recovery_lock_password', before, forThisHost, {
+    await assertActivityAfter(request, 'read_host_recovery_lock_password', before, forThisHost, {
       actor: ADMIN,
     });
 

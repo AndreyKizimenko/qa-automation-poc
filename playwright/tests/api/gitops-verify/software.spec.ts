@@ -40,6 +40,7 @@ type Declared = {
   selfService?: boolean;
   categories?: string[];
   setupExperience?: boolean;
+  setupExperiencePlatforms?: string[];
   displayName?: string;
   hasIcon?: boolean;
   preInstallQuery?: string;
@@ -160,7 +161,14 @@ async function expectOptions(request: APIRequestContext, at: string, title: Titl
   // declared — because a title that installs during setup starts real work on any host enrolled into the fleet,
   // and the QA shelf and the VMs fleet must never carry one. An apply doesn't reset the flag (fleetctl sends
   // nothing for an undeclared key), so one toggled on by hand shows up here as drift until it is cleared by hand.
-  expect.soft(software.setupExperienceTitleIds.has(title.id), `${at} setup_experience`).toBe(declared.setupExperience ?? false);
+  // A declared `setup_experience_platform` names the platforms exactly: a script-only `.sh` on macOS is how Fleet 5
+  // runs a script during setup, in place of the deprecated `macos_script`.
+  const setupPlatforms = [...(software.setupExperiencePlatforms.get(title.id) ?? [])].sort();
+  if (declared.setupExperiencePlatforms) {
+    expect.soft(setupPlatforms, `${at} setup_experience_platform`).toEqual([...declared.setupExperiencePlatforms].sort());
+  } else {
+    expect.soft(setupPlatforms.length > 0, `${at} setup_experience`).toBe(declared.setupExperience ?? false);
+  }
   if (declared.displayName !== undefined) expect.soft(title.displayName, `${at} display_name`).toBe(declared.displayName);
   if (declared.hasIcon) {
     expect.soft(pkg.icon_url, `${at} icon`).toBeTruthy();
