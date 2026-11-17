@@ -178,7 +178,15 @@ clock, so the lag costs nothing but the start time.
 nightly changes only in a commit that had its branch run, never when GitHub repoints the `-latest` label
 (`ubuntu-latest` goes from 24.04 to 26.04 between 2026-10-19 and 11-19). The suite itself runs in the
 `mcr.microsoft.com/playwright` container, so the host image matters to the gitops, verify and Render jobs: the
-gitops action needs only bash, curl, jq, npm and the `fleetctl` npm package.
+gitops action needs only bash, curl, node and npm.
+
+**fleetctl matches the server, built from source when npm has no match.** Every job that runs fleetctl installs
+it through `.github/install-fleetctl`: the server's own release from npm when it is published, else a fleetctl
+built from the revision the server reports (`GET /version`), cached by that revision. A server on Fleet's
+`main` reports `0.0.0-SNAPSHOT-<sha>` and an RC its release's version before npm has it, and the latest release
+can't stand in across a major version: fleetctl 4 against Fleet 5 meets 410s and 422s on the removed routes and
+names, with no version check to stop it first. The first job on a new build pays for the Go build (a few
+minutes); every later one restores the binary.
 
 **A PR runs the static gate only.** The suites run against the shared instances, so a run per PR would have
 PRs corrupting each other's state and the nightly's. A branch gets its full run once, at the end of a piece of

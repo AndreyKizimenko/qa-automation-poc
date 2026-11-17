@@ -14,11 +14,17 @@ This file loads when work happens under `tests/cli/`; everything in `playwright/
     ahead of the rest, so it can be another copy than the one a shell finds. A `fleetctl` in the home
     directory's `node_modules` ran in place of the global one, two minors behind, while `fleetctl --version`
     in a shell looked current.
-  - **Which version:** what CI installs. The server's own release when it is published (`GET
-    /api/latest/fleet/version`, without its `-rc…` suffix), else the latest (`npm view fleetctl version`): an
-    RC server has no published client, and a client one minor behind is a pairing Fleet supports.
+  - **Which version:** what CI installs (`.github/install-fleetctl`). The server's own release when it is
+    published (`GET /api/latest/fleet/version`, without its `-rc…` suffix); otherwise, for a server on Fleet's
+    `main` (`0.0.0-SNAPSHOT-<sha>`) or an RC whose release isn't out, a fleetctl built from the `revision` the
+    server reports. The latest release is no stand-in across a major version: fleetctl 4 against Fleet 5 fails
+    on the routes and names Fleet 5 removed.
   - **How:** `npm i -g fleetctl@<version>` for the global copy, `npm i fleetctl@<version> --prefix <dir>` for
-    one in a `node_modules` above the suite. Update every copy the check can resolve, not only the first.
+    one in a `node_modules` above the suite. Update every copy the check can resolve, not only the first. For a
+    build, from a checkout of `fleetdm/fleet` at the server's revision: `CGO_ENABLED=0 go build -trimpath
+    -ldflags "-X github.com/fleetdm/fleet/v4/server/version.version=<server version>" -o <dir>/fleetctl
+    ./cmd/fleetctl`, then run the specs with `FLEETCTL_BIN=<dir>/fleetctl`, which wins over every copy on
+    `PATH`.
   - **What a stale one looks like:** a client more than a minor behind fails. 4.92.1's `generate-gitops`
     exits 1 on free, and its dry-run of the premium config stops on `unknown key …
     notify_before_patching`, a key the config has long carried.

@@ -64,29 +64,11 @@ jobs:
 
       - run: npm ci
 
-      # Mirrors the install step in .github/gitops-action/action.yml. A client
-      # older than the server still runs, but prints a version-mismatch banner on
-      # every command and can lag behind new output keys, so match the server.
+      # The fleetctl that matches the server: its npm release, else one built
+      # from the server's revision (.github/install-fleetctl/action.yml).
+      # FLEET_URL and FLEET_API_TOKEN come from the job's env.
       - name: Install fleetctl matching the server
-        run: |
-          set -e
-          SERVER_VERSION="$(
-            curl -fsSL "$FLEET_URL/api/v1/fleet/version" \
-              --header "Authorization: Bearer $FLEET_API_TOKEN" \
-              | jq -r '.version' || true
-          )"
-          # An RC server ("4.93.0-rc.…") has no published client of its own: take its
-          # release's client once that is published, else the latest release, which is
-          # at most a minor behind — a pairing Fleet supports.
-          BASE="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' <<< "$SERVER_VERSION" || true)"
-          if [ -n "$BASE" ] && npm view "fleetctl@$BASE" version >/dev/null 2>&1; then
-            INSTALL_VERSION="$BASE"
-          else
-            INSTALL_VERSION="latest"
-          fi
-          echo "Installing fleetctl@$INSTALL_VERSION (server reported: ${SERVER_VERSION:-unknown})"
-          npm install -g "fleetctl@$INSTALL_VERSION" || npm install -g fleetctl@latest
-          fleetctl --version
+        uses: ./.github/install-fleetctl
 
       - name: Run nightly gitops CLI checks
         env:
