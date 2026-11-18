@@ -8,10 +8,10 @@
  * Only declared keys are compared (`expectSubset`): Fleet fills defaults and
  * adds read-only fields, and a key the YAML doesn't manage can't drift from
  * it. A few values need a known translation first: `$VAR` references are
- * already expanded by the loader; the ABM and VPP token mappings are matched
- * by organization name and location, since the lists are unordered; and
- * `enable_analytics` on premium is whatever the YAML says only because Fleet
- * forces it on for a premium license, so the YAML has to say true.
+ * already expanded by the loader; the ABM token mapping is matched by
+ * organization name, since the list is unordered; and `enable_analytics` on
+ * premium is whatever the YAML says only because Fleet forces it on for a
+ * premium license, so the YAML has to say true.
  *
  * The ABM list `GET /config` returns is the list the apply sent, so the tokens
  * themselves are read from `GET /ab_tokens` too: every token there has to be
@@ -20,11 +20,18 @@
  * token, and a token added by hand that the config doesn't name would go
  * unnoticed.
  *
+ * `GET /config` has no VPP list at all: the apply's
+ * `mdm.volume_purchasing_program` assigns fleets to the tokens and Fleet keeps
+ * the assignment on each token only (fleetdm/fleet#58523, Fleet 5). So the VPP
+ * check reads `GET /vpp_tokens`, matched by location, both ways: every token
+ * there is declared, every declared token is there, and each serves exactly
+ * the fleets the config gives it.
+ *
  * Enroll secrets are compared as sets and never printed: the messages carry
  * counts only.
  */
 import { test, expect } from '@playwright/test';
-import { gitopsConfig, gitopsLabel, resolveTeamId, getJson, expectSubset } from './_config';
+import { gitopsConfig, gitopsLabel, resolveTeamId, getJson, expectSubset, expectExactNames } from './_config';
 
 const isNoTeam = gitopsConfig.scope === 'no-team';
 
@@ -84,16 +91,6 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
       }
       expect.soft(liveAbm, 'ABM token count').toHaveLength(abm.length);
     }
-    const vpp = mdm.volume_purchasing_program;
-    if (vpp) {
-      const liveVpp = (config.mdm?.volume_purchasing_program ?? []) as Array<Record<string, unknown>>;
-      for (const declared of vpp) {
-        const token = liveVpp.find((t) => t.location === declared.location);
-        expect.soft(token, `VPP token "${declared.location}" is configured`).toBeTruthy();
-        expectSubset(`VPP token "${declared.location}"`, token, declared);
-      }
-      expect.soft(liveVpp, 'VPP token count').toHaveLength(vpp.length);
-    }
   });
 
   test('every ABM token on the instance is declared, with its default and fleets', async ({ request }) => {
@@ -115,6 +112,30 @@ test.describe(`GitOps verify · org settings · ${gitopsLabel}`, () => {
         expect.soft(live, `ABM token "${name}" ${key}`).toBe(want);
       }
     }
+  });
+
+  test('the VPP tokens on the instance are the declared ones, each with its fleets', async ({ request }) => {
+    const vpp = (org().mdm ?? {}).volume_purchasing_program as
+      | Array<{ location: string; fleets?: string[] }>
+      | undefined;
+    test.skip(!vpp, 'the config declares no VPP tokens');
+    const tokens = ((await getJson(request, 'vpp_tokens')).vpp_tokens ?? []) as Array<{
+      location: string;
+      fleets: unknown;
+    }>;
+    for (const declared of vpp!) {
+      const token = tokens.find((t) => t.location === declared.location);
+      // A declared token missing from the instance is reported by the location check below.
+      if (!token) continue;
+      expect
+        .soft(liveVppFleets(token.fleets), `VPP token "${declared.location}" fleets`)
+        .toEqual(declaredVppFleets(declared.fleets));
+    }
+    expectExactNames(
+      'VPP tokens (by location)',
+      tokens.map((t) => t.location),
+      vpp!.map((d) => d.location),
+    );
   });
 
   test('the global MDM flags under controls match gitops', async () => {
@@ -172,4 +193,28 @@ test.describe(`GitOps verify · fleet settings · ${gitopsLabel}`, () => {
 
 function trimSlash(url: unknown): unknown {
   return typeof url === 'string' ? url.replace(/\/+$/, '') : url;
+}
+
+const ALL_FLEETS = 'All fleets';
+
+/**
+ * A VPP token's fleets from `GET /vpp_tokens`, as the YAML names them, sorted.
+ * Fleet answers `[]` for a token on every fleet, `null` for a token on none,
+ * and `No team` for Unassigned (fleet 0), the name the YAML uses too
+ * (`validateVPPAssignments` and the datastore's `ListVPPTokens` in Fleet's server). Anything
+ * else (the key missing or renamed) is an error, never an empty list that could
+ * match a declaration of no fleets.
+ */
+function liveVppFleets(fleets: unknown): string[] {
+  if (fleets === null) return [];
+  if (!Array.isArray(fleets)) {
+    throw new Error(`GET /vpp_tokens gave a token no fleets list (got ${JSON.stringify(fleets)})`);
+  }
+  if (fleets.length === 0) return [ALL_FLEETS];
+  return fleets.map((f: { name: string }) => f.name).sort();
+}
+
+/** A declared token's fleets, sorted, with `All teams` (the name Fleet 4 used, which Fleet still accepts) as `All fleets`. */
+function declaredVppFleets(fleets: string[] | undefined): string[] {
+  return (fleets ?? []).map((name) => (name === 'All teams' ? ALL_FLEETS : name)).sort();
 }
