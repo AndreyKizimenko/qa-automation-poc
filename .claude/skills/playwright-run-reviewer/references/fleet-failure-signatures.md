@@ -183,9 +183,12 @@ Each of these looked like something else at first.
   runs) → `infra-env`, **one row** with its count; check the host's `seen_time`, then
   re-run once it's back.
 - **A per-OS smoke is red** (`premium/matrix/os-smokes.spec.ts`, one describe per OS version; its own
-  job, `playwright-os-smokes`, and its own report, `playwright-report-os-smokes`). "is online on its fleet…" red with the rest of that OS skipped is the
+  job, `playwright-os-smokes`, and its own report, `playwright-report-os-smokes`; free's are
+  `free/matrix/os-smokes.spec.ts`, a step of free's job, in `playwright-report-free`). "is online on its fleet…" red with the rest of that OS skipped is the
   host, not Fleet: the error is `labHostProblem`'s (offline since when, on another fleet, not
-  enrolled) → `infra-env`, the lab owner's. Any other smoke red on **one** OS is that flavour's own
+  enrolled) → `infra-env`, the lab owner's. A ChromeOS Flex host (`chromeos-flex`) offline is
+  usually nobody signed in to it (a restart, or an update applied at one): the extension runs only
+  in the signed-in session, and only the lab's owner can sign in again. Any other smoke red on **one** OS is that flavour's own
   behaviour (its package manager, its inventory source, what Fleet shows for its OS): read the
   install's or script's recorded output before calling it a flake (an install smoke red at "inventory
   never listed" or "never dropped" had its install or uninstall succeed: the host's next collection

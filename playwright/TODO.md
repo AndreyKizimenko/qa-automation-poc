@@ -32,8 +32,8 @@ Product-defect skips live in
 
 Known gaps nobody has scheduled. Each row says where the test would go and what it needs.
 
-**Beyond the per-OS smokes.** `premium/matrix/os-smokes.spec.ts` gives each OS version one pass of a few
-checks on one host. What it leaves for a spec of its own:
+**Beyond the per-OS smokes.** `premium/matrix/os-smokes.spec.ts` and `free/matrix/os-smokes.spec.ts` give
+each OS version one pass of a few checks on one host. What it leaves for a spec of its own:
 
 | Gap | What to do |
 |---|---|

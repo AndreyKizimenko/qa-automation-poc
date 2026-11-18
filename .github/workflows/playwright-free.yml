@@ -1,6 +1,8 @@
 name: Playwright — Free
 
-# Runs the Playwright free project (tests/e2e/free + tests/e2e/shared + tests/api outside premium-only trees) against the free Fleet instance.
+# Runs the Playwright free project (tests/e2e/free + tests/e2e/shared + tests/api outside premium-only trees) against the free Fleet instance,
+# then its exclusive specs and its per-OS smokes (free-matrix), each as a step
+# of its own, into one report.
 # Nightly as the last step of its tier in `QA — Nightly` (qa-nightly.yml), after
 # the free gitops chain.
 
@@ -42,9 +44,10 @@ permissions:
 jobs:
   test:
     # A guard against a hung run, with room for growth: Playwright's own
-    # globalTimeout stops the suite at 100 min in CI, so a long run still
-    # finishes with its report before this limit is reached.
-    timeout-minutes: 120
+    # globalTimeout stops the suite at 100 min in CI, the exclusive step at 15
+    # and the smokes at 15, so a long run still finishes with its report before
+    # this limit is reached.
+    timeout-minutes: 140
     runs-on: ubuntu-26.04
     # Browsers are pre-installed in the image, so we skip `playwright install`
     # entirely — the CDN download from cdn.playwright.dev stalls on hosted runners.
@@ -93,15 +96,16 @@ jobs:
           FLEET_URL: ${{ secrets.FLEET_FREE_URL }}
           FLEET_API_TOKEN: ${{ secrets.FLEET_FREE_API_TOKEN }}
 
-      # The main project and the exclusive one run as two steps. The exclusive
-      # specs flip global switches, so they must run after every parallel spec
-      # has finished — but not only when those specs passed: as a Playwright
-      # dependency, one unrelated failure would skip them all. Each step writes a
-      # blob report to its own directory (the blob reporter clears its directory
+      # The main project, the exclusive one and the per-OS smokes run as three
+      # steps. The exclusive specs flip global switches, so they must run after
+      # every parallel spec has finished — but not only when those specs passed:
+      # as a Playwright dependency, one unrelated failure would skip them all.
+      # The smokes work the same VMs, so they come last. Each step writes a blob
+      # report to its own directory (the blob reporter clears its directory
       # first), and the last step merges them into the one HTML report. The
-      # suite stops itself at 100 min (globalTimeout) and the exclusive step at
-      # 15, so even a run that uses all of it merges and uploads its report
-      # inside the job's 120.
+      # suite stops itself at 100 min (globalTimeout) and the exclusive and
+      # smoke steps at 15 each, so even a run that uses all of it merges and
+      # uploads its report inside the job's 140.
       - name: Run the suite
         id: suite
         env:
@@ -117,6 +121,17 @@ jobs:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/exclusive
         run: SUITE=free npx playwright test --project=free-exclusive --reporter=github,blob --global-timeout=900000
 
+      # The per-OS smokes (tests/e2e/free/matrix): each of free's lab hosts, its
+      # three VMs and its ChromeOS host, through the same few checks. At the
+      # tier's worker count, so two hosts walk their smokes at a time. Free's
+      # chain ends long before premium's, so this step adds nothing to a run's
+      # length; unlike premium's smokes it runs in every branch run.
+      - name: Run the per-OS smokes
+        if: ${{ !cancelled() && steps.suite.outcome != 'skipped' }}
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/os-smokes
+        run: SUITE=free npx playwright test --project=free-matrix --reporter=github,blob --global-timeout=900000
+
       # The merge writes the run twice: the HTML report, and `results.json`, the
       # same run as data. The run-reviewer's run_history.py builds each test's
       # history from it. The JSON is written beside the report and then copied
@@ -128,7 +143,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: blob-report/results.json
         run: |
           mkdir -p blob-report/all
-          find blob-report/suite blob-report/exclusive -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
+          find blob-report/suite blob-report/exclusive blob-report/os-smokes -name '*.zip' -exec cp {} blob-report/all/ \; 2>/dev/null || true
           npx playwright merge-reports --reporter html,json blob-report/all
           cp blob-report/results.json playwright-report/results.json
 

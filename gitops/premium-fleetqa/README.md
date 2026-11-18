@@ -215,8 +215,8 @@ specs compare the fleet against empty lists, its controls spec asserts encryptio
 fails the file itself if it ever declares an entity or an OS-update or setup-experience setting
 (`EMPTY_FLEETS` in `playwright/tests/api/gitops-verify/_config.ts`). The one thing that puts anything there is
 the suite's per-OS smokes (`playwright/tests/e2e/premium/matrix/os-smokes.spec.ts`), for the length of a test:
-a `pw-*` script, a `fleet-pw-*` package or the smoke `.msi`, and a `pw-*` policy held to one host by a label,
-each deleted by the test, and by the suite's cleanup after a killed run. The gitops chain runs before the
+a `pw-*` script, a `fleet-pw-*` package or the smoke `.msi`, a `pw-*` policy held to one host by a label, and
+two `pw-*` policies for ChromeOS alone, which no other host here is sent, each deleted by the test, and by the suite's cleanup after a killed run. The gitops chain runs before the
 suite, so a verify never meets them. The suite's disk-encryption tests (`playwright/tests/e2e/premium/encryption/`)
 change nothing here: they move one host at a time off this fleet, onto a throwaway `pw-*` fleet with one
 disk-encryption setting on, and back.

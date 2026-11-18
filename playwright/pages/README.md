@@ -22,7 +22,9 @@ pages/
 ├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage, MyDevicePage
 │                       #   (MyDevicePage: the end user's page, opened from Host details)
 │                       #   (HostDetailsPage has Controls/Software/Reports/Policies tabs,
-│                       #   but hosts is its primary nav context)
+│                       #   but hosts is its primary nav context; its vitals, Agent
+│                       #   options card and `tooltip` read a Chromebook's page too,
+│                       #   and `openInventory` works on free, which has no Library tab)
 ├── software/           # Titles/Library/Versions/OS/Vulnerabilities lists, their
 │                       #   detail pages, CVE detail, FMA, and the add-software forms
 ├── controls/           # ControlsPage, OsUpdates, OsSettings, DiskEncryption, profiles,

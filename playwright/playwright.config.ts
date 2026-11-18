@@ -19,6 +19,7 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   'premium-encryption': 'premium',
   free: 'free',
   'free-exclusive': 'free',
+  'free-matrix': 'free',
   'free-setup': 'free',
   loadtest: 'loadtest',
   'loadtest-setup': 'loadtest',
@@ -114,13 +115,15 @@ function resolveSuite(): Suite {
     }
   }
   // The per-OS smokes run on the pool's VMs too, and like the exclusive specs
-  // depend only on login setup: beside either project they would share those
-  // VMs' queues with it.
-  const besideMatrix = named.filter((n) => n === 'premium' || n === 'premium-exclusive');
-  if (named.includes('premium-matrix') && besideMatrix.length) {
-    fail(
-      `--project=premium-matrix can't run in one invocation with --project=${besideMatrix.join(', ')} — the smokes would queue on the same VMs. Run it on its own, after them (npm run test:premium:matrix).`,
-    );
+  // depend only on login setup: beside either project of their tier they would
+  // share those VMs' queues with it.
+  for (const tier of ['premium', 'free']) {
+    const besideMatrix = named.filter((n) => n === tier || n === `${tier}-exclusive`);
+    if (named.includes(`${tier}-matrix`) && besideMatrix.length) {
+      fail(
+        `--project=${tier}-matrix can't run in one invocation with --project=${besideMatrix.join(', ')} — the smokes would queue on the same VMs. Run it on its own, after them (npm run test:${tier}:matrix).`,
+      );
+    }
   }
   // The disk-encryption tests move OS matrix hosts onto throwaway fleets, where
   // the smokes would find them gone, and they share the hosts' queues with them.
@@ -411,6 +414,8 @@ export default defineConfig({
         '**/loadtest/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
+        // The per-OS smokes; see free-matrix.
+        '**/matrix/**',
       ],
       use: {
         ...devices['Desktop Chrome'],
@@ -425,6 +430,22 @@ export default defineConfig({
       testMatch: ['**/shared/exclusive/**/*.spec.ts', '**/free/exclusive/**/*.spec.ts'],
       workers: 1,
       fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/free-admin.json',
+      },
+      dependencies: ['free-setup'],
+      teardown: 'cleanup-teardown',
+    },
+    // ── OS smokes on free (its own invocation after the exclusive specs) ──────
+    // The checks of premium-matrix that free has, on each of free's lab hosts:
+    // its pool VMs and its ChromeOS host, all in Unassigned. Its own invocation
+    // for premium-matrix's reasons; in CI a step of free's job, after the
+    // exclusive specs, merged into free's report. Depends only on login setup
+    // and shares cleanup-teardown, which sweeps what a dead run left.
+    {
+      name: 'free-matrix',
+      testDir: './tests/e2e/free/matrix',
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/free-admin.json',

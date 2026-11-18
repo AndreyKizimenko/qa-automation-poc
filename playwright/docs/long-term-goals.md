@@ -41,7 +41,9 @@ does every OS version of the pool (`premium/matrix/os-smokes.spec.ts`, the `prem
 and agent versions Fleet shows, the machine's vitals and users, its platform's built-in label, the inventory
 by package type, a live report answered with the host's own data, a script, an `.rpm`, `.deb`, `.msi` or
 tarball installed and uninstalled with the inventory following both, an install by a policy automation, Fleet
-Desktop, and the OS's vulnerabilities.
+Desktop, and the OS's vulnerabilities. The ChromeOS Flex host on each tier gets the checks that need no
+script or package, plus a Chromebook's own page and the extension's answers to policies, and free's lab hosts
+get free's share of all this (`free/matrix/os-smokes.spec.ts`).
 A smoke is one pass of each on one host: what a flavour would need beyond it is in
 [`../TODO.md`](../TODO.md) › *Coverage backlog*, and disk encryption on those hosts is
 [`device-lab-plan.md`](device-lab-plan.md)'s step E.

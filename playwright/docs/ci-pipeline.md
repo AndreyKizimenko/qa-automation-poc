@@ -18,7 +18,7 @@ a gitops chain            apply baseline → verify → apply min → verify →
 a suite job (premium)     main project (4 workers) → exclusive specs (1 worker) → gitops-mode (1 worker) → merge reports
 the per-OS smokes job     after premium's suite job: the premium-matrix project (6 workers), with a report of its own
 the disk-encryption job   after the smokes: the premium-encryption project (6 workers), with a report of its own
-a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → merge reports
+a suite job (free)        main project (2 workers) → exclusive specs (1 worker) → per-OS smokes (2 workers) → merge reports
 
 QA — Branch run           the same two tier chains without the redeploy, against a branch, on demand
 Playwright — Check        tsc + eslint, on every PR; the only thing a PR runs
@@ -118,6 +118,16 @@ Windows turn, declared first so it starts with the run, is the floor: more worke
 runs it after premium's suite, whatever that did; a branch run leaves it out unless dispatched with `-f
 os-smokes=true`, which a branch that touches the smokes, the lab manifest or what they stand on should be.
 
+**Free's per-OS smokes are a step of free's job instead.** `free-matrix` (`tests/e2e/free/matrix/`) runs the
+checks of premium's smokes that free has (everything but a custom package's install and a policy's
+automation) on free's four lab hosts: its three pool VMs and its ChromeOS host. Its reasons for an invocation
+of its own are premium's: it works the VMs the main project and the exclusive specs queue on, so it runs
+after both, whatever they did. But it is a step, not a workflow: free's chain ends long before premium's, so
+its two minutes cost a run nothing, and so it runs in every branch run, with no input to ask for it, inside
+free's concurrency group and into free's report. It runs at free's two workers, two of the four hosts at a
+time; more would shorten nothing a run waits for. Its checks, and what Fleet shows for each OS, are the same
+code as premium's (`helpers/os-smokes.ts`); each tier's spec declares its own tests.
+
 **The disk-encryption tests are a workflow of their own too, chained after the smokes.** `premium-encryption`
 (`tests/e2e/premium/encryption/`) moves one of the lab's encrypted hosts at a time off OS matrix onto a
 throwaway `pw-*` fleet with one disk-encryption setting on, drives the flow in the browser, and moves it back,
@@ -156,7 +166,7 @@ shows its real spread.
 
 **The run stops itself before the job does.** Playwright's `globalTimeout` ends the main project at 100
 minutes with its report written; premium's exclusive step at 60 (13 min measured: two VM tests, each retried once in CI), the
-gitops-mode step and free's exclusive step at 15; the job limit sits above the sum. The per-OS smokes stop at 45, in a job limited to 60, and so do the disk-encryption tests.
+gitops-mode step, free's exclusive step and free's per-OS smokes at 15; the job limit sits above the sum (free's 140). Premium's per-OS smokes stop at 45, in a job limited to 60, and so do the disk-encryption tests.
 A job killed by its own limit uploads no report, and a run that grows too long should end with tests marked
 "did not run", not with nothing.
 
@@ -221,10 +231,11 @@ there is to read. A failed one uploads its report, named for the job, and keeps 
 list reads as what there is to look at: Premium, Free, and whatever in gitops went red.
 
 **The run page's annotations work the same way.** The suites run with the `github` reporter, which adds one
-"Run Summary" annotation per invocation (free two, premium three: its main project, exclusive specs and
-gitops-mode; the per-OS smokes and the disk-encryption tests one more each) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
+"Run Summary" annotation per invocation (free three: its main project, exclusive specs and per-OS smokes;
+premium three: its main project, exclusive specs and gitops-mode; premium's per-OS smokes and the
+disk-encryption tests one more each) with the counts and the flaky tests, and an annotation for each failure. The gitops jobs run with
 `list` instead (the config's CI reporter), so a green one adds none, and `reportSlowTests` is off, since the
-slow files are slow by design. A green nightly's page carries those seven summaries and nothing else.
+slow files are slow by design. A green nightly's page carries those eight summaries and nothing else.
 
 **One job reads reports in CI, and prints only what is safe to print.** `run-history`, the last job of the
 nightly and of a branch run, writes into the run's summary how each failed or flaky test fared in the 14
