@@ -182,11 +182,22 @@ export class HostDetailsPage {
    */
   readonly vitalsDiskEncryption: Locator;
   /**
-   * The Agent vital's tooltip, shown by {@link hoverAgentVersion}: "osquery: …",
-   * "Orbit: …" and, where fleetd has it, "Fleet Desktop: …". The only tooltip
-   * open while the Agent value is hovered.
+   * The tooltip a hover opened: the only one open at a time, leaving out one
+   * still fading from the hover before. After
+   * {@link hoverAgentVersion}, "osquery: …", "Orbit: …" and, where fleetd has
+   * it, "Fleet Desktop: …"; after {@link hoverVital} or
+   * {@link hoverAgentOptionsHeading}, that element's explanation.
    */
-  readonly agentTooltip: Locator;
+  readonly tooltip: Locator;
+  /**
+   * The Details tab's "Agent options" card: Config TLS refresh, Logger TLS
+   * period and Distributed interval, as the host's agent runs them. On a
+   * Chromebook they are the extension's fixed values, and the heading carries
+   * a tooltip saying so (`AgentOptions.tsx`). Fleet's `Card` is a role-less div,
+   * so the card's own class is the scope.
+   */
+  readonly agentOptionsCard: Locator;
+  readonly agentOptions: DataSet;
 
   /**
    * The Details tab's Activity card: Past and Upcoming tabs of host activities.
@@ -299,7 +310,12 @@ export class HostDetailsPage {
     this.vitalsDiskSpace = page.getByText('Disk space available');
     this.vitalsOperatingSystem = page.getByText('Operating system');
     this.vitalsDiskEncryption = this.vitals.value('Disk encryption');
-    this.agentTooltip = page.getByRole('tooltip');
+    // react-tooltip keeps the tooltip it is closing in the DOM, under this
+    // class, for its fade-out: right after a second hover the page holds two,
+    // and the one just opened is the other.
+    this.tooltip = page.getByRole('tooltip').and(page.locator(':not(.react-tooltip__closing)'));
+    this.agentOptionsCard = page.locator('.agent-options-card');
+    this.agentOptions = new DataSet(this.agentOptionsCard);
 
     this.activityCard = page.locator('.host-activity-card');
     this.pastActivityTab = this.activityCard.getByRole('tab', { name: 'Past' });
@@ -313,9 +329,13 @@ export class HostDetailsPage {
     this.activityEmptyState = page.getByRole('heading', { level: 3, name: 'No activity' });
   }
 
+  /**
+   * Opens the host's page and waits for its vitals. The anchor is the Operating
+   * system vital, which every platform has: a Chromebook has no Disk space vital.
+   */
   async goto(hostId: number): Promise<void> {
     await this.page.goto(`/hosts/${hostId}`);
-    await expect(this.vitalsDiskSpace).toBeVisible();
+    await expect(this.vitals.value('Operating system')).toBeVisible();
   }
 
   /**
@@ -411,11 +431,13 @@ export class HostDetailsPage {
 
   /**
    * Software → Inventory, filtered to one title — what the host last reported
-   * installed, as opposed to what the Library offers it.
+   * installed, as opposed to what the Library offers it. Free has no Library,
+   * and so no sub-tabs: its Software tab is the inventory (`HostDetailsPage.tsx`,
+   * `showSoftwareLibraryTab`).
    */
   async openInventory(title: string): Promise<void> {
     await this.softwareTab.click();
-    await this.inventoryTab.click();
+    if (process.env.SUITE === 'premium') await this.inventoryTab.click();
     await expect(this.softwareSearch).toBeVisible();
     await this.searchSoftware(title);
   }
@@ -781,9 +803,21 @@ export class HostDetailsPage {
    * itself spans padding that doesn't trigger the tooltip.
    */
   async hoverAgentVersion(): Promise<void> {
-    await this.vitals
-      .value('Agent')
-      .locator('.component__tooltip-wrapper__element')
-      .hover();
+    await this.hoverVital('Agent');
+  }
+
+  /**
+   * Hovers a vital's value to open the tooltip Fleet wraps it in ("Always on"
+   * under Disk encryption on a Chromebook, the Agent's versions on a fleetd
+   * host), read with {@link tooltip}. The target is the tooltip wrapper's inner
+   * element, since the `<dd>` itself spans padding that doesn't trigger it.
+   */
+  async hoverVital(title: string): Promise<void> {
+    await this.vitals.value(title).locator('.component__tooltip-wrapper__element').hover();
+  }
+
+  /** Hovers the Agent options card's heading, which carries a tooltip on a Chromebook only. */
+  async hoverAgentOptionsHeading(): Promise<void> {
+    await this.agentOptionsCard.getByText('Agent options', { exact: true }).hover();
   }
 }

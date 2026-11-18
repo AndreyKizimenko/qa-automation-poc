@@ -23,6 +23,14 @@ approval, four hosts the lab built for it, the experiments, and the `premium-enc
 workflow, `Playwright — Disk encryption`, which the nightly runs after the smokes (PR #150). Every test ran on
 the lab, the ones on smoke hosts after that day's nightly, and branch run 43911713665 had the job green.
 
+**Since, 2026-11-18.** The lab added a ChromeOS Flex VM on each tier (`prem-chromeosflex-01`,
+`free-chromeosflex-01`, PR #153), enrolled through the fleetd Chrome extension, and the free tier's four lab
+hosts got smokes of their own. Both tiers' smokes now take the ChromeOS host as the one host of its OS: the
+checks that need no script or package, a Chromebook's own page, and the extension's answers to two policies.
+Free's smokes (`free-matrix`, `tests/e2e/free/matrix/`) are premium's minus a custom package's install and a
+policy's automation, which free doesn't have, and run as a step of free's job; the checks both tiers make are
+one helper, `helpers/os-smokes.ts`. The dashboard's ChromeOS view joined `platform-cards.spec.ts`.
+
 ## What the suite has to work with
 
 The three UTM VMs per tier (macOS 26.6, Windows 11 and Ubuntu 26.04, all ARM) went offline on 2026-11-14.
@@ -30,12 +38,14 @@ The lab replaced them. Its Linux and Windows VMs are x86_64; its Macs are Apple 
 
 | Tier | Hosts | Role | Where |
 |---|---|---|---|
-| Free | `free-ubu2404d-01`, `free-win11-01`, `free-macos26-01` | pool | Unassigned (free has no fleets) |
+| Free | `free-ubu2404d-01`, `free-win11-01`, `free-macos26-01` | pool | Unassigned (free has no fleets). Free's per-OS smokes run on them |
+| Free | `free-chromeosflex-01` (ChromeOS Flex, since 2026-11-18) | special | Unassigned. Free's per-OS smokes run on it |
 | Premium | `prem-ubu2404d-01` to `-04` (Ubuntu 24.04), `prem-win11-01` and `-02` (Windows 11), `prem-macos15-01` (macOS 15.7) and `prem-macos26-01` (macOS 26.6) | pool | **VMs** fleet, all eight since 2026-11-14 |
 | Premium | One VM per OS flavour: Ubuntu 22.04, 26.04 and 24.04 server, Debian 13, RHEL 9 and 10, Amazon Linux 2023, Fedora 45, openSUSE Leap 16.1, Kubuntu 24.04, Zorin OS 18, Omarchy 4.5, Windows 10, Windows Server 2022 and 2025 | matrix | **OS matrix** fleet. The per-OS smokes run on them (step D). Four are LUKS-encrypted |
 | Premium | `prem-ubu2404-luks` (the LUKS escrow control) and, since 2026-11-16, `prem-ubu2604-tpm` (Ubuntu 26.04 with TPM-backed encryption), `prem-win11-bde` (Windows 11 in its stock BitLocker state), and `prem-ubu2404-luks-02` and `prem-omarchy-02` (LUKS hosts whose passphrase prompt a test answers) | special | **OS matrix** fleet. Step E's tests run on them |
+| Premium | `prem-chromeosflex-01` (ChromeOS Flex, since 2026-11-16) | special | **OS matrix** fleet. The per-OS smokes run on it |
 
-Every lab host runs fleetd 1.63.0. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
+Every lab host but the two ChromeOS ones runs fleetd 1.63.0; those run the fleetd Chrome extension (1.3.6 on 2026-11-18), in its developer form. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
 says what each is for; `helpers/lab-hosts.ts` reads it. A host the manifest doesn't list yet is still kept out
 of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`, or the vendor `QEMU`).
 

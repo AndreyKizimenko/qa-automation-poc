@@ -14,7 +14,16 @@ const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
 const outDir = path.join(root, 'docs/test-catalogue');
-const PROJECTS = ['premium', 'premium-exclusive', 'gitops-mode', 'free', 'free-exclusive'];
+const PROJECTS = [
+  'premium',
+  'premium-exclusive',
+  'gitops-mode',
+  'premium-matrix',
+  'premium-encryption',
+  'free',
+  'free-exclusive',
+  'free-matrix',
+];
 
 /** Every test of `project`, as Playwright lists it. */
 function listProject(project) {

@@ -3,7 +3,7 @@
 Automated browser, API and `fleetctl` tests for Fleet. The projects:
 
 - **premium** — Fleet Premium instance (default browser suite), with **premium-exclusive**, **gitops-mode**, **premium-matrix** (a smoke per OS version of the device lab) and **premium-encryption** (disk encryption on the lab's encrypted hosts) run after it.
-- **free** — Fleet Free instance (browser suite), with **free-exclusive** run after it.
+- **free** — Fleet Free instance (browser suite), with **free-exclusive** and **free-matrix** (the per-OS smokes on free's lab hosts) run after it.
 - **loadtest** / **loadtest-api** — high-scale instance for page-load and API timing (local only).
 - **gitops-verify** — pure-API checks that a gitops target matches the live instance. Driven by the nightly orchestrators.
 - **gitops-nightly** — `fleetctl` checks of the applied min config (`tests/cli/nightly/`), run by the nightly gitops chain.
@@ -102,10 +102,10 @@ From `playwright/`:
 | `npm run test:premium:headed` | Premium suite, browser visible — the same three invocations |
 | `npm run test:premium:ui` | Premium main project, Playwright UI |
 | `npm run test:premium:exclusive` | Premium's exclusive specs alone (`premium-exclusive`) |
-| `npm run test:premium:matrix` | The per-OS smokes alone (`premium-matrix`): one describe per OS version in `lab-hosts.json`; `-- -g "rhel-9 \("` for one |
+| `npm run test:premium:matrix` | Premium's per-OS smokes alone (`premium-matrix`): one describe per OS version in `lab-hosts.json`; `-- -g "rhel-9 \("` for one |
 | `npm run test:premium:encryption` | The disk-encryption tests alone (`premium-encryption`): each moves one lab host onto a throwaway fleet and back; `-- linux-escrow.spec.ts` for one spec |
-| `npm run test:free` | Free suite, headless — two invocations in sequence: the main project, the exclusive specs |
-| `npm run test:free:headed` | Free suite, browser visible — the same two invocations |
+| `npm run test:free` | Free suite, headless — three invocations in sequence: the main project, the exclusive specs, the per-OS smokes |
+| `npm run test:free:headed` | Free suite, browser visible — the same three invocations |
 | `npm run test:free:ui` | Free main project, Playwright UI |
 | `npm run test:free:exclusive` | Free's exclusive specs alone (`free-exclusive`) |
 | `npm run test:gitops-mode` | The gitops-mode specs alone: login, the specs on one worker, teardown |
@@ -169,7 +169,7 @@ playwright/
 │   ├── e2e/                      # Browser specs
 │   │   ├── shared/               # Tier-agnostic (both projects), plus exclusive/
 │   │   ├── premium/              # Premium-only, plus exclusive/, gitops-mode/, matrix/ (the per-OS smokes) and encryption/
-│   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs
+│   │   └── free/                 # Free-only — paywalls + free-tier variants of the premium specs, plus matrix/ (free's per-OS smokes)
 │   ├── api/                      # Pure-API specs (no browser): root contracts, premium/, free/, role-access/, gitops-verify/
 │   ├── cli/                      # fleetctl specs: shared/, premium/, free/, plus nightly/ (gitops-nightly project only)
 │   └── loadtest/                 # Page-load timing (loadtest project only)
@@ -268,9 +268,10 @@ Worker counts are per tier in CI, and 4 by default locally; the current numbers 
 live in [CLAUDE.md's facts table](CLAUDE.md#ci-and-the-shared-instances--current-facts) and
 [docs/ci-pipeline.md](docs/ci-pipeline.md). Override either with `WORKERS=N` or `--workers=N`.
 
-Five more projects run **alone, in their own invocation after the main project**: `premium-exclusive` and
+Six more projects run **alone, in their own invocation after the main project**: `premium-exclusive` and
 `free-exclusive` (specs that turn a global switch off), `gitops-mode` (specs that turn gitops mode on),
-`premium-matrix` (the same few smokes on every OS version the device lab holds, `tests/e2e/premium/matrix/`)
+`premium-matrix` and `free-matrix` (the same few smokes on every OS version the device lab holds, each tier's,
+`tests/e2e/{premium,free}/matrix/`)
 and `premium-encryption` (disk encryption on the lab's encrypted hosts, each moved onto a throwaway fleet for
 its test, `tests/e2e/premium/encryption/`).
 Each depends only on the tier's login setup, and the config refuses to name one beside another browser
@@ -351,15 +352,15 @@ Browser specs run via per-tier workflows
 (`.github/workflows/playwright-free.yml`,
 `.github/workflows/playwright-premium.yml`) — run nightly by `QA — Nightly`
 (`qa-nightly.yml`) after each tier's gitops chain, and runnable on demand via `workflow_dispatch`. Each
-job runs the main project, then the exclusive specs and (premium) gitops-mode as separate
-steps, and merges the reports. The per-OS smokes are a workflow of their own
+job runs the main project, then the exclusive specs and (premium) gitops-mode or (free) the per-OS smokes as
+separate steps, and merges the reports. Premium's per-OS smokes are a workflow of their own
 (`.github/workflows/playwright-os-smokes.yml`), which the nightly runs after premium's suite and
 `gh workflow run "Playwright — OS smokes"` runs alone; so are the disk-encryption tests
 (`.github/workflows/playwright-encryption.yml`), which the nightly runs after the smokes and
 `gh workflow run "Playwright — Disk encryption"` runs alone. To run a branch the way the nightly does — its gitops chain first, then the suite, on both
 tiers — use `qa-branch-run.yml`: `gh workflow run "QA — Branch run" -f branch=<branch>`, with
-`-f workers=N` for a trial of premium's worker count (free keeps its own), `-f os-smokes=true` to include the
-per-OS smokes and `-f encryption=true` the disk-encryption tests (a branch run leaves both out otherwise), and
+`-f workers=N` for a trial of premium's worker count (free keeps its own), `-f os-smokes=true` to include
+premium's per-OS smokes and `-f encryption=true` the disk-encryption tests (a branch run leaves both out otherwise), and
 `--ref <branch>` as well when the branch changes a workflow file.
 
 Why the flow is shaped this way — the constraints, what bounds a run, how to change it safely — is in

@@ -41,7 +41,7 @@ tests/
 │   │   ├── gitops-mode/      # specs that turn gitops mode on (gitops-mode project only)
 │   │   ├── matrix/           # a smoke per OS version of the device lab (premium-matrix project only)
 │   │   └── encryption/       # disk encryption on the lab's encrypted hosts (premium-encryption project only)
-│   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs
+│   └── free/                 # Free-tier counterparts (no dropdown) + paywall specs, plus matrix/ (free's per-OS smokes, free-matrix project only)
 ├── api/                      # Pure-API specs (no browser)
 │   ├── config.spec.ts        # Agnostic config-shape checks
 │   ├── activity-copy.spec.ts # Activity-feed copy contract
@@ -203,6 +203,7 @@ Routing is purely by folder — no tags. Each browser project's `testIgnore` in
 | `tests/e2e/{shared,premium,free}/exclusive/**` | no — `premium-exclusive` runs shared + premium | no — `free-exclusive` runs shared + free |
 | `tests/e2e/premium/gitops-mode/**` | no — gitops-mode project only | no |
 | `tests/e2e/premium/matrix/**` | no — premium-matrix project only | no |
+| `tests/e2e/free/matrix/**` | no | no — free-matrix project only |
 | `tests/e2e/premium/encryption/**` | no — premium-encryption project only | no |
 | `tests/cli/shared/**` | yes | yes |
 | `tests/cli/premium/**` | yes | no |

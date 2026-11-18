@@ -5,6 +5,7 @@ node_modules/
 /playwright-report/
 /playwright-report-exclusive/
 /playwright-report-gitops-mode/
+/playwright-report-os-smokes/
 /blob-report/
 /playwright/.cache/
 .auth/

@@ -17,8 +17,10 @@
  *  - `matrix`: the one host of an OS flavour. No pool spec touches it; a spec
  *    asks for it by its `os`.
  *  - `special`: a host with a single purpose, asked for by that purpose.
- *    A ChromeOS host is always one: no pool spec and no per-OS smoke can run
- *    on it, since it takes no script and no custom package.
+ *    A ChromeOS host is always one: it takes no script and no custom
+ *    package, so no pool or matrix code may be handed one. The per-OS smokes
+ *    take it as the one host of its OS, with the checks that need neither
+ *    (`helpers/os-smokes.ts`).
  *  - `physical`: a bare-metal machine, which can't be rolled back or rebuilt
  *    from here. Never a pool target, and never the subject of anything that
  *    needs a reset to recover from.

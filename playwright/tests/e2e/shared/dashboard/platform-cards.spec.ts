@@ -2,11 +2,17 @@
  * Dashboard • platform cards. Two behaviours, identical on both tiers:
  *
  *  1. the "Platform:" filter routes the dashboard to that platform's view —
- *     /dashboard/mac | /dashboard/windows | /dashboard/linux — where the
- *     aggregate "Total hosts" card gives way to the platform's "Operating
- *     systems" card;
+ *     /dashboard/mac | /dashboard/windows | /dashboard/linux |
+ *     /dashboard/chrome — where the aggregate "Total hosts" card gives way to
+ *     the platform's "Operating systems" card, which says who updates the OS:
+ *     the vendor, or for ChromeOS, Google on every Chromebook by itself;
  *  2. a platform row in the "Hosts enrolled" chart links to the hosts list
  *     filtered by that platform's built-in label, enrolled hosts only.
+ *
+ * ChromeOS is covered because each instance carries a ChromeOS host, the
+ * device lab's ChromeOS Flex VM (`lab-hosts.json`): its row in Hosts enrolled
+ * is a link only while the instance has one. iOS, iPadOS and Android have no
+ * host on either instance, so their rows are inert text and aren't covered.
  *
  * Shared rather than tier-split because nothing here is fleet-scoped or
  * paywalled: premium adds a "Low disk space hosts" card and a fleet dropdown,
@@ -22,7 +28,8 @@
  * clicked.
  *
  * Grounded in frontend/pages/DashboardPage (PLATFORM_DROPDOWN_OPTIONS,
- * MetricsHostCounts) and cards/HostsEnrolledCard (ClickableYAxisTick, which
+ * MetricsHostCounts, the per-platform layouts), cards/OperatingSystems
+ * (renderDescription) and cards/HostsEnrolledCard (ClickableYAxisTick, which
  * names each clickable tick "<platform> hosts" and pushes
  * MANAGE_HOSTS_LABEL(labelId) with status=enrolled).
  */
@@ -32,16 +39,24 @@ import type { DashboardPlatformLabel } from '@pages';
 interface PlatformCase {
   label: Exclude<DashboardPlatformLabel, 'All'>;
   path: string;
-  /** Vendor sentence on the "Operating systems" card; Linux has no vendor. */
-  osVendor?: string;
+  /** The "Operating systems" card's sentence on who updates the OS; Linux has no vendor, and none. */
+  osUpdates?: string;
 }
 
-// The three platforms both QA instances carry hosts for. ChromeOS/iOS/iPadOS/
-// Android have none, so their rows render as inert text rather than links.
+// The four platforms both QA instances carry hosts for (the header).
 const PLATFORMS: PlatformCase[] = [
-  { label: 'macOS', path: '/dashboard/mac', osVendor: 'Apple' },
-  { label: 'Windows', path: '/dashboard/windows', osVendor: 'Microsoft' },
+  { label: 'macOS', path: '/dashboard/mac', osUpdates: 'Apple releases updates and fixes for supported operating systems.' },
+  {
+    label: 'Windows',
+    path: '/dashboard/windows',
+    osUpdates: 'Microsoft releases updates and fixes for supported operating systems.',
+  },
   { label: 'Linux', path: '/dashboard/linux' },
+  {
+    label: 'ChromeOS',
+    path: '/dashboard/chrome',
+    osUpdates: 'Chromebooks automatically receive updates from Google until their auto-update expiration date.',
+  },
 ];
 
 test.describe('Dashboard • platform cards', () => {
@@ -52,7 +67,7 @@ test.describe('Dashboard • platform cards', () => {
     await expect(dashboard.platformFilterValue).toHaveText('All');
     await expect(dashboard.hostCountCard('Total hosts')).toBeVisible();
 
-    for (const { label, path, osVendor } of PLATFORMS) {
+    for (const { label, path, osUpdates } of PLATFORMS) {
       await dashboard.selectPlatform(label);
       await expect(dashboard.page).toHaveURL(new RegExp(`${path}(\\?|$)`));
 
@@ -60,13 +75,7 @@ test.describe('Dashboard • platform cards', () => {
       // platform view; "Operating systems" only appears on one.
       await expect(dashboard.hostCountCard('Total hosts')).toHaveCount(0);
       await expect(dashboard.cardHeading('Operating systems')).toBeVisible();
-      if (osVendor) {
-        await expect(
-          dashboard.page.getByText(
-            `${osVendor} releases updates and fixes for supported operating systems.`,
-          ),
-        ).toBeVisible();
-      }
+      if (osUpdates) await expect(dashboard.page.getByText(osUpdates)).toBeVisible();
     }
 
     await dashboard.selectPlatform('All');
