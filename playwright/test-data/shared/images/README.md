@@ -2,7 +2,7 @@
 
 Cross-platform PNGs the suite uploads: software **custom icons**
 (`premium/software/custom-icons.spec.ts`) and the **organization logo**
-(`shared/settings/organization/custom-logo.spec.ts`).
+(the logo tests in `shared/settings/organization/organization-info.spec.ts`).
 
 They are generated rather than downloaded, because what each one is *for* is a
 number — a byte count or a pixel dimension that sits on one side of a Fleet

@@ -145,7 +145,7 @@ items 6, 12 and 13 (§9), and fleetctl 4.93.0 fixed the free half of item 11.
 
 10. **Specs that depend on today's values** (agent sweep of `tests/`, `helpers/`, `setup/`):
     `free|premium/policies/policy-automations.spec.ts` assert no Jira/Zendesk integration (never declare
-    `integrations`); `shared/settings/organization/custom-logo.spec.ts` skips when a logo is set (keep
+    `integrations`); the logo tests in `shared/settings/organization/organization-info.spec.ts` skip when a logo is set (keep
     `org_logo_url*: ""`); `premium/dashboard/historical-data-collection.spec.ts` and `fleet-scoped-cards`
     need `features.historical_data` on (declare `true`/`true`; `false` **deletes history irreversibly**);
     `shared/auth/sso-login.spec.ts` needs SSO on with `idp_name` matching /okta/i; `software/library.spec.ts`
@@ -260,7 +260,7 @@ The coverage-branch column says whether its example is the starting point.
 
 | key | decision | note | coverage branch |
 |---|---|---|---|
-| `org_info` (all four) | **1** verify | `org_logo_url*` stay `""` (custom-logo skips otherwise) | — |
+| `org_info` (all four) | **1** verify | `org_logo_url*` stay `""` (the logo tests skip otherwise) | — |
 | `server_settings` (all documented keys) | **1** declare + verify | premium `enable_analytics: true` (item 5); `live_reporting_disabled`, `ai_features_disabled` stay `false` (specs need them); min changes nothing here (a forced key can't carry a delta, and `report_cap` stays 0 in both) | yes |
 | `features.enable_*` | **1** verify | — | — |
 | `features.historical_data` | **1** declare `true`/`true` + verify | matches live on both tiers; never `false` | — |
@@ -271,7 +271,7 @@ The coverage-branch column says whether its example is the starting point.
 | `activity_expiry_settings` (3 keys) | **1** declare + verify | live `false`/30/`true`; min window 31 | yes |
 | `webhook_settings` (interval + 4 webhooks) | **1** declare + verify | all `enable_*: false`, `https://example.com/…` URLs; **no `policy_ids`** (it conflicts with a policy's `webhooks_and_tickets_enabled`, and the policy-automations specs snapshot and restore the live list); min changes a URL path | yes |
 | `mdm.windows_automatic_enrollment.default_fleet` | **2** premium | points Autopilot enrollments at the new fleet (hostless), never Workstations | — |
-| `org_info.org_logo_path_*` (gitops-only logo upload) | **—** | a logo set makes `custom-logo.spec.ts` skip | — |
+| `org_info.org_logo_path_*` (gitops-only logo upload) | **—** | a logo set makes `organization-info.spec.ts`'s logo tests skip | — |
 | `features.detail_query_overrides` | **—** | rewrites the detail queries every host runs | — |
 | `gitops` (`gitops_mode_enabled`, `repository_url`) | **1** premium | `false` + the live URL (the gitops-mode specs read it, never write it); same in min | yes |
 | `secrets` | free: already **1** verify via `GET /spec/enroll_secret`; premium **—** | excepted on premium | — |

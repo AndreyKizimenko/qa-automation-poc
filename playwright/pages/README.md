@@ -31,7 +31,8 @@ pages/
 │                       #   certificates, Passwords (Recovery Lock), scripts, variables,
 │                       #   and the setup-experience pages
 │                       #   (DiskEncryptionPage: the settings, and the fleet's status
-│                       #   table with its counts and its link to the Hosts list)
+│                       #   table with its counts and its link to the Hosts list,
+│                       #   which needs the page opened with gotoStatusTable)
 ├── reports/            # ReportsListPage, ReportEditPage, ReportDetailsPage, ReportLivePage
 ├── policies/           # PoliciesListPage, PolicyEditPage, PolicyDetailsPage, PolicyLivePage (a ReportLivePage for a policy's run, plus its Yes / No summary)
 ├── labels/             # LabelsPage

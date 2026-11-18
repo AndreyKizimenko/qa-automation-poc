@@ -1119,12 +1119,10 @@
       "count": 1
     }
   },
-  "tests/e2e/shared/settings/organization/custom-logo.spec.ts": {
+  "tests/e2e/shared/settings/organization/organization-info.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
       "count": 1
-    }
-  },
-  "tests/e2e/shared/settings/organization/organization-info.spec.ts": {
+    },
     "suite/no-date-now-in-name": {
       "count": 1
     }

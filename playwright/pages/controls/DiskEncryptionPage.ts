@@ -89,6 +89,29 @@ export class DiskEncryptionPage {
     await this.expectPlatform(opts.platform ?? 'macos');
   }
 
+  /**
+   * `goto()` for a tab whose setting is on, resolving once its status table can
+   * link its rows. A row's click opens the Hosts list on the platform's built-in
+   * label, whose id comes from the table's own `GET /labels/summary`; until that
+   * has answered, Fleet sends the click to the unfiltered Hosts list instead, on
+   * purpose (`DiskEncryptionTable.tsx`: it falls back "rather than dropping the
+   * click"). The wait starts before the page loads, so an early answer isn't
+   * missed, and a summary that fails fails here rather than as a wrong URL
+   * after the click. Only for a tab whose setting is on: the table, and its
+   * request, exist only then.
+   */
+  async gotoStatusTable(opts: { fleetId: number; platform: DiskEncryptionPlatform }): Promise<void> {
+    const [labelsSummary] = await Promise.all([
+      this.page.waitForResponse(
+        (r) => r.request().method() === 'GET' && new URL(r.url()).pathname.endsWith('/fleet/labels/summary'),
+        { timeout: 30_000 },
+      ),
+      this.goto(opts),
+    ]);
+    expect(labelsSummary.ok(), `the labels summary answered ${labelsSummary.status()}`).toBe(true);
+    await labelsSummary.finished();
+  }
+
   async selectPlatform(platform: DiskEncryptionPlatform): Promise<void> {
     await this.tab(platform).click();
     await this.expectPlatform(platform);
@@ -135,8 +158,11 @@ export class DiskEncryptionPage {
   /**
    * Clicks a status's row, which opens the Hosts list on the platform's built-in
    * label, filtered to the fleet and the status, and waits for that list.
+   * Private: it is right only on a page opened with `gotoStatusTable()`, as
+   * `expectOneHost()` opens it; after a bare `goto()` the click can come before
+   * the row knows its label.
    */
-  async openHostsWith(status: DiskEncryptionStatus, fleetId: number): Promise<HostsListPage> {
+  private async openHostsWith(status: DiskEncryptionStatus, fleetId: number): Promise<HostsListPage> {
     await this.statusRow(status).click();
     await expect(this.page).toHaveURL(
       new RegExp(
@@ -160,7 +186,7 @@ export class DiskEncryptionPage {
     status: DiskEncryptionStatus | null;
     hostName: string;
   }): Promise<void> {
-    await this.goto({ fleetId: opts.fleetId, platform: opts.platform });
+    await this.gotoStatusTable({ fleetId: opts.fleetId, platform: opts.platform });
     await this.expectHostCounts(opts.status ? { [opts.status]: 1 } : {});
     if (!opts.status) return;
     const hosts = await this.openHostsWith(opts.status, opts.fleetId);

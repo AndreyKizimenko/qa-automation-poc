@@ -233,9 +233,19 @@ Each of these looked like something else at first.
 - **The premium gitops apply fails on a Fleet-maintained app's SHA.** Fleet's catalog
   listed a hash the server never computed; it has cleared the same day each time →
   `infra-env`, re-check with a gitops-only dispatch.
+- **A gitops-verify value is `undefined`, or a list is empty, in what `GET /config` or
+  `GET /fleets/{id}` returns, on a build that just changed.** Fleet moved the key to its own
+  endpoint: Fleet 5 keeps profiles, scripts, setup-experience items and VPP assignments only
+  there (fleetdm/fleet#58523), and its PR names where each now lives. Read that endpoint on the
+  instance: if the setting holds (the VPP token still served all fleets), it's a `test-bug`, and
+  the verify reads the new endpoint. Seen 2026-11-18 (nightly 44296963399: every premium chain red
+  on the VPP check, skipping apply-min, the min verifies and the CLI checks).
 - **The navbar, then a bare spinner for 10 s, and no page heading.** A lazy JavaScript
   chunk hadn't arrived: the QA instances' edge doesn't cache Fleet's bundles, so a cold
-  context fetches them from origin → `flaky` (infra), not a locator problem.
+  context fetches them from origin → `flaky` (infra), not a locator problem. A Cloudflare
+  `520` on `/assets/*.js` in the trace's network is the same cause, the chunk failing
+  rather than stalling: one row for the window (2026-11-18, two per-OS smokes three minutes
+  apart).
 - **A toast that never came, on a settled page.** Fleet moved the message somewhere
   else on purpose (an unsupported upload now reads "File type isn't supported" inline)
   or stopped raising it → `test-bug`, the test is stale. The same goes for a Save or
@@ -252,6 +262,19 @@ Each of these looked like something else at first.
   when the page re-rendered. It surfaces under a different test each time, so search
   the history by the component's frame (`TeamDropdown`, `LabelFilter`), not the test
   name → `flaky`, with the fix owed in the component.
+- **A global setting reads back its old value right after the test's own save**, the
+  save's toast green. Fleet's settings forms send every field they hold as they loaded it,
+  changed or not, so a test in another file that saved the same form, loaded earlier, put
+  the old value back:
+  find it on the report's clock (`run_timeline.py`, or each result's start time and worker)
+  → `test-bug`, and every test that saves that form moves into one file, run in order.
+  Seen 2026-11-18 (organization-info against the custom-logo tests' `org_info`).
+- **A click lands on the right page with one filter missing** (the Hosts list without
+  `/labels/<id>`, the other parameters right). The link is built from a second query
+  that hadn't answered when the test clicked, and Fleet falls back on purpose
+  (`DiskEncryptionTable.tsx`) → `test-bug`: wait for that query's response before the
+  click (`DiskEncryptionPage.gotoStatusTable`), never loosen the URL check. Seen
+  2026-11-18 (encryption, Kubuntu).
 - **An activity or a title the test can't find by name.** A vendor renamed the app
   and Fleet kept the title's first name → `test-bug`: match by id.
 - **A value that is older or staler than the test allows, on a build that just
