@@ -69,7 +69,9 @@ regenerate both on every restart.
   **role**. `pool` is above. `matrix` is the one host of an OS flavour and `special` a host with a single
   purpose: both live on premium's **OS matrix** fleet, no worker is handed one, and a spec asks for one by its
   `os` or purpose (`requireLabHost(request, matrixHostOfRun('rhel-9'))`). `physical` is a bare-metal machine,
-  which can't be rolled back: never the subject of anything that needs a reset to recover from. A Fleet host
+  which can't be rolled back: never the subject of anything that needs a reset to recover from. A ChromeOS
+  host (platform `chrome`, package `none`) is always `special`, since it takes no script and no package
+  (`VmLabHost` / `isVmLabHost` narrow an entry to the others). A Fleet host
   is matched to its entry by display name, lower-cased (Windows reports upper case). An entry also says what
   the lab knows of the OS: the `platform` Fleet reports for it, its package type and package manager, its
   desktop (`none`: headless, no Fleet Desktop) and whether it is in MDM. This file is the manifest's only

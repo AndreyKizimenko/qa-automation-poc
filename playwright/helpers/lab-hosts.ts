@@ -17,6 +17,8 @@
  *  - `matrix`: the one host of an OS flavour. No pool spec touches it; a spec
  *    asks for it by its `os`.
  *  - `special`: a host with a single purpose, asked for by that purpose.
+ *    A ChromeOS host is always one: no pool spec and no per-OS smoke can run
+ *    on it, since it takes no script and no custom package.
  *  - `physical`: a bare-metal machine, which can't be rolled back or rebuilt
  *    from here. Never a pool target, and never the subject of anything that
  *    needs a reset to recover from.
@@ -34,11 +36,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { VMS_FLEET } from './api/static-users';
 
-export type LabPlatform = 'darwin' | 'windows' | 'linux';
+/** A VM's platform: what every pool and matrix host runs. ChromeOS is only ever a special host. */
+export type VmPlatform = 'darwin' | 'windows' | 'linux';
+export type LabPlatform = VmPlatform | 'chrome';
 export type LabRole = 'pool' | 'matrix' | 'special' | 'physical';
 export type LabTier = 'free' | 'premium';
-/** `pkg.tar.zst` is Arch's own format, which Fleet takes no custom package of. */
-export type LabPackage = 'deb' | 'rpm' | 'msi' | 'pkg' | 'pkg.tar.zst';
+/** `pkg.tar.zst` is Arch's own format, which Fleet takes no custom package of; `none` is ChromeOS, which takes none at all. */
+export type LabPackage = 'deb' | 'rpm' | 'msi' | 'pkg' | 'pkg.tar.zst' | 'none';
 
 export interface LabHost {
   /** The host's display name in Fleet, lower-cased. */
@@ -72,6 +76,13 @@ export interface LabHost {
   mdm: boolean;
 }
 
+/** A host that isn't ChromeOS, as every pool and matrix host is: the manifest refuses a ChromeOS one there. */
+export type VmLabHost = LabHost & { platform: VmPlatform; package: Exclude<LabPackage, 'none'> };
+
+export function isVmLabHost(host: LabHost): host is VmLabHost {
+  return host.platform !== 'chrome';
+}
+
 /** Premium's fleet for the hosts no pool spec touches: one per OS flavour, and the special ones. */
 export const OS_MATRIX_FLEET = 'OS matrix';
 
@@ -91,10 +102,10 @@ interface ManifestEntry {
   desktop?: string;
   mdm?: boolean;
 }
-const PLATFORMS: readonly string[] = ['darwin', 'windows', 'linux'];
+const PLATFORMS: readonly string[] = ['darwin', 'windows', 'linux', 'chrome'];
 const ROLES: readonly string[] = ['pool', 'matrix', 'special', 'physical'];
 const TIERS: readonly string[] = ['free', 'premium'];
-const PACKAGES: readonly string[] = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst'];
+const PACKAGES: readonly string[] = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst', 'none'];
 
 /**
  * Reads the manifest, refusing an entry the suite can't place: a host with an
@@ -117,6 +128,9 @@ function loadManifest(): LabHost[] {
       !raw.fleet_platform && 'no fleet_platform',
       !PACKAGES.includes(raw.package ?? '') && `package "${raw.package}"`,
       !raw.desktop && 'no desktop ("none" for a headless host)',
+      raw.platform === 'chrome' && raw.role !== 'special' && `role "${raw.role}" (a ChromeOS host is special: nothing in the pool or the matrix runs on it)`,
+      raw.platform === 'chrome' && raw.package !== 'none' && `package "${raw.package}" (ChromeOS takes no package: "none")`,
+      raw.platform !== 'chrome' && raw.package === 'none' && 'package "none", which only a ChromeOS host has',
     ].filter(Boolean);
     if (problems.length) {
       throw new Error(`[lab-hosts] ${MANIFEST}: host "${raw.name}" has ${problems.join(', ')}`);
@@ -169,8 +183,9 @@ export function labHostsOfRun(): LabHost[] {
 }
 
 /** This tier's pool hosts of a platform, and of one `os` when given, by name. */
-export function poolHostsOfRun(platform: LabPlatform, os?: string): LabHost[] {
+export function poolHostsOfRun(platform: VmPlatform, os?: string): VmLabHost[] {
   return labHostsOfRun()
+    .filter(isVmLabHost)
     .filter((host) => host.role === 'pool' && host.platform === platform && (!os || host.os === os))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

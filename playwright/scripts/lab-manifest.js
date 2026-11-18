@@ -14,9 +14,9 @@ const path = require('path');
 const manifest = path.join(path.resolve(__dirname, '..'), 'lab-hosts.json');
 
 const TIERS = ['free', 'premium'];
-const PLATFORMS = ['darwin', 'windows', 'linux'];
+const PLATFORMS = ['darwin', 'windows', 'linux', 'chrome'];
 const ROLES = ['pool', 'matrix', 'special', 'physical'];
-const PACKAGES = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst'];
+const PACKAGES = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst', 'none'];
 
 /** The fleet a host's role puts it on, as helpers/lab-hosts.ts' labHostFleet decides; undefined where the role names none. */
 function fleetOfRole(host) {
@@ -43,6 +43,9 @@ function shapeProblems(hosts) {
       !host.fleet_platform && 'no fleet_platform',
       !PACKAGES.includes(host.package) && `package "${host.package}"`,
       !host.desktop && 'no desktop ("none" for a headless host)',
+      host.platform === 'chrome' && host.role !== 'special' && `role "${host.role}" (a ChromeOS host is special: nothing in the pool or the matrix runs on it)`,
+      host.platform === 'chrome' && host.package !== 'none' && `package "${host.package}" (ChromeOS takes no package: "none")`,
+      host.platform !== 'chrome' && host.package === 'none' && 'package "none", which only a ChromeOS host has',
       fleet && host.fleet !== fleet && `fleet "${host.fleet}" where its role puts it on "${fleet}"`,
     ].filter(Boolean);
     if (wrong.length) problems.push(`"${host.name}" has ${wrong.join(', ')}`);
