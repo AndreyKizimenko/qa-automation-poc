@@ -138,10 +138,11 @@ import { inertDeb } from '@helpers/deb';
 import {
   labHostFleet,
   labHostsOfRun,
+  isVmLabHost,
   poolHostsOfRun,
   type LabHost,
-  type LabPackage,
-  type LabPlatform,
+  type VmLabHost,
+  type VmPlatform,
 } from '@helpers/lab-hosts';
 import { ownName } from '@helpers/own-name';
 import { runNonce } from '@helpers/profiles';
@@ -192,7 +193,7 @@ const OS_WITH_POLICY_INSTALL = ['debian-13', 'rhel-9'];
  * lists it as: fleetd's own package, which is what enrolled the host, and on
  * macOS, where fleetd is no app, Safari.
  */
-const KNOWN_PACKAGE: Record<LabPackage, { name: string; type: string }> = {
+const KNOWN_PACKAGE: Record<VmLabHost['package'], { name: string; type: string }> = {
   deb: { name: 'fleet-osquery', type: 'Package (deb)' },
   rpm: { name: 'fleet-osquery', type: 'Package (RPM)' },
   'pkg.tar.zst': { name: 'fleet-osquery', type: 'Package (pacman)' },
@@ -223,7 +224,7 @@ const VITALS: Array<[vital: string, shape: RegExp]> = [
  * macOS and Windows queries read `os_version`; the Linux one reads osquery's
  * own build, so it holds whatever the distribution.
  */
-const PLATFORM_FILTER: Record<LabPlatform, string> = { linux: 'Linux', windows: 'Windows', darwin: 'macOS' };
+const PLATFORM_FILTER: Record<VmPlatform, string> = { linux: 'Linux', windows: 'Windows', darwin: 'macOS' };
 
 /**
  * One row from the host: the platform osquery reports, which the manifest
@@ -258,11 +259,12 @@ interface Subject {
    * The matrix host of the OS, or, for a pool version, any pool host of it: the
    * pool's hosts of one version are alike in everything the smokes read here.
    */
-  entry: LabHost;
+  entry: VmLabHost;
 }
 
-const lab = labHostsOfRun();
-const poolVersions = new Map<string, LabHost>();
+// A ChromeOS host is always special (helpers/lab-hosts.ts), so none is a subject here.
+const lab = labHostsOfRun().filter(isVmLabHost);
+const poolVersions = new Map<string, VmLabHost>();
 for (const host of lab) {
   if (host.role === 'pool' && !poolVersions.has(host.os)) poolVersions.set(host.os, host);
 }

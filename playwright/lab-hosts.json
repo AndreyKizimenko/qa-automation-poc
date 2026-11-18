@@ -6,9 +6,10 @@
     "fleet": "the fleet the host sits on: Unassigned on free, VMs for the pool, OS matrix for matrix and special hosts. The suite places hosts by role, not by this field; `lint:lab` fails when the two disagree",
     "legacy_real": "reports the hardware model `QEMU Virtual Machine` or `VirtualMac2,1`: one host per platform per tier was made to look like the old UTM VMs before the suite read this file. Kept as a fact about the machine; nothing reads it",
     "dialog_tool": "what fleetd can use for the LUKS passphrase prompt; null means escrow fails (fleetdm/fleet#58776)",
-    "package_manager": "only where it differs from the package type's usual one (openSUSE installs rpm with zypper, not dnf)"
+    "package_manager": "only where it differs from the package type's usual one (openSUSE installs rpm with zypper, not dnf)",
+    "package": "the package type the host's OS installs; `none` on ChromeOS, which takes no custom package"
   },
-  "updated": "2026-11-16",
+  "updated": "2026-11-18",
   "hosts": [
     {
       "name": "free-ubu2404d-01",
@@ -47,6 +48,18 @@
       "fleet": "Unassigned",
       "mdm": true,
       "legacy_real": true
+    },
+    {
+      "name": "free-chromeosflex-01",
+      "tier": "free",
+      "platform": "chrome",
+      "os": "chromeos-flex",
+      "fleet_platform": "chrome",
+      "role": "special",
+      "package": "none",
+      "desktop": "chromeos",
+      "fleet": "Unassigned",
+      "purpose": "ChromeOS, through the fleetd Chrome extension (developer form: no serial, placeholder hardware, no network interfaces)"
     },
     {
       "name": "prem-ubu2404d-01",
@@ -387,6 +400,18 @@
       "fleet": "OS matrix",
       "luks": true,
       "dialog_tool": "zenity"
+    },
+    {
+      "name": "prem-chromeosflex-01",
+      "tier": "premium",
+      "platform": "chrome",
+      "os": "chromeos-flex",
+      "fleet_platform": "chrome",
+      "role": "special",
+      "package": "none",
+      "desktop": "chromeos",
+      "fleet": "OS matrix",
+      "purpose": "ChromeOS, through the fleetd Chrome extension (developer form: no serial, placeholder hardware, no network interfaces)"
     }
   ]
 }

@@ -35,10 +35,10 @@ import {
   recordVmOnReport,
   vmTag,
 } from '@helpers/api';
-import { labHostFleet, labHostsOfRun } from '@helpers/lab-hosts';
+import { isVmLabHost, labHostFleet, labHostsOfRun } from '@helpers/lab-hosts';
 
 const hosts = labHostsOfRun();
-const pool = hosts.filter((host) => host.role === 'pool');
+const pool = hosts.filter(isVmLabHost).filter((host) => host.role === 'pool');
 const others = hosts.filter((host) => host.role !== 'pool');
 
 test.describe('API • device lab hosts', () => {
