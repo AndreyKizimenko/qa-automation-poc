@@ -57,6 +57,7 @@ export type { GitOpsDisabledStyle, GitOpsGateOptions } from './components/gitops
 // Auth
 export { LoginPage } from './auth/LoginPage';
 export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
+export { RegistrationPage } from './auth/RegistrationPage';
 
 // Account
 export { MyAccountPage } from './account';

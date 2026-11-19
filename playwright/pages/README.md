@@ -17,7 +17,7 @@ pages/
 ├── components/         # Reusable widgets used across pages (DataTable, Navbar, etc.)
 ├── index.ts            # Re-exports every page and every component
 ├── DashboardPage.ts    # Top-level nav entries live at root
-├── auth/               # LoginPage, ForgotPasswordPage
+├── auth/               # LoginPage, ForgotPasswordPage, RegistrationPage (a brand-new server's /setup)
 ├── account/            # MyAccountPage
 ├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage, MyDevicePage
 │                       #   (MyDevicePage: the end user's page, opened from Host details: its tabs,

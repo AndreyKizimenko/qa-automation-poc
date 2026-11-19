@@ -110,6 +110,16 @@ export interface GlobalPolicy extends PolicyRef {
 }
 
 /** One global policy, read back after a UI write. */
+/** The global policy of that exact name; throws when there is none. */
+export async function findGlobalPolicyByName(request: APIRequestContext, name: string): Promise<GlobalPolicy> {
+  const res = await request.get(apiUrl('global/policies'), { headers: authHeaders() });
+  await expectOk(res, 'Failed to list the global policies');
+  const policies = ((await res.json()).policies ?? []) as Array<{ id: number; name: string; query: string; platform?: string }>;
+  const policy = policies.find((p) => p.name === name);
+  if (!policy) throw new Error(`No global policy named "${name}"`);
+  return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
+}
+
 export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
   const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read global policy ${id}`);

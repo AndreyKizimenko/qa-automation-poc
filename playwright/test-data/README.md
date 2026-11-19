@@ -37,7 +37,8 @@ test-data/
 └── shared/
     ├── images/                  # PNG icons + org logo (README)
     ├── setup-experience/        # script-only package (.sh) run during macOS and Linux setup
-    └── software/                # script-only package (.sh — macOS & Linux)
+    ├── software/                # script-only package (.sh — macOS & Linux)
+    └── throwaway/               # seed.json: what the throwaway instance is seeded with and enrolls
 ```
 
 ## Naming conventions

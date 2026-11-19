@@ -1,0 +1,46 @@
+{
+  "orgName": "Throwaway QA",
+  "simulations": [
+    { "template": "macos_14.1.2", "platform": "darwin" },
+    { "template": "windows_11", "platform": "windows" },
+    { "template": "ubuntu_22.04", "platform": "ubuntu" },
+    { "template": "rhel_9", "platform": "rhel" }
+  ],
+  "report": {
+    "name": "pw-throwaway-uptime",
+    "description": "Seeded on the throwaway instance: stored every minute and sent to the log destination.",
+    "query": "SELECT days, hours, minutes FROM uptime;",
+    "interval": 60,
+    "automations_enabled": true,
+    "logging": "snapshot"
+  },
+  "policies": [
+    {
+      "name": "pw-throwaway-passing",
+      "description": "Seeded on the throwaway instance: every simulated host passes it.",
+      "query": "SELECT 1;",
+      "response": "passing"
+    },
+    {
+      "name": "pw-throwaway-failing",
+      "description": "Seeded on the throwaway instance: every simulated host fails it.",
+      "query": "SELECT 0;",
+      "response": "failing"
+    }
+  ],
+  "label": {
+    "name": "pw-throwaway-every-host",
+    "description": "Seeded on the throwaway instance: every simulated host is a member.",
+    "query": "SELECT 1;"
+  },
+  "observer": {
+    "name": "Throwaway observer",
+    "email": "pw-throwaway-observer@example.com"
+  },
+  "pack": {
+    "name": "pw-throwaway-pack",
+    "report": "pw-throwaway-pack-report",
+    "query": "SELECT version FROM osquery_info;",
+    "interval": 60
+  }
+}
