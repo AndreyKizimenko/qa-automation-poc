@@ -1,0 +1,9 @@
+# Inert fixture: one marker file at /usr/share/fleet-playwright-self-service/,
+# no maintainer scripts, Architecture: all. Built by playwright/test-data/linux/
+# software/make-deb.py fleet-playwright-self-service 1.0.0 all. Offered in
+# self-service on the VMs fleet: premium/software/self-service-on-host.spec.ts
+# installs it from My device and leaves it uninstalled. URL pinned to a commit;
+# the hash skips the download.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/86b7b4f89c98a4b0dac8af3a01ac89aa65a71311/playwright/test-data/linux/software/fleet-playwright-self-service_1.0.0_all.deb
+  hash_sha256: 6280aeb4f28d10bae4d73b9503a1390f267376f4a25d4d9b741938e404b4f744
+  self_service: true

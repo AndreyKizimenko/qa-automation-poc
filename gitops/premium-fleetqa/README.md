@@ -85,8 +85,8 @@ The flag is opt-in and off by default, so the command above is safe as written.
 |---|---:|---:|---:|---:|---:|---:|---|
 | No team (default.yml) | 23 | 29 | 32 | 28 | 11 | 3 | — |
 | Workstations (fleets/workstations.yml) | 23 | 23 | 5 | — | 6 | — | — |
-| QA (fleets/qa.yml) | — | — | — | — | — | — | 20 Fleet-maintained apps |
-| VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 4 custom packages, 4 Fleet-maintained apps |
+| QA (fleets/qa.yml) | — | — | — | — | — | — | 22 Fleet-maintained apps |
+| VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 7 custom packages (3 of them self-service), 4 Fleet-maintained apps |
 | OS matrix (fleets/os-matrix.yml) | — | — | — | — | — | — | — |
 | Compliance (fleets/compliance.yml) | 6 | 7 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
 
@@ -221,12 +221,32 @@ suite, so a verify never meets them. The suite's disk-encryption tests (`playwri
 change nothing here: they move one host at a time off this fleet, onto a throwaway `pw-*` fleet with one
 disk-encryption setting on, and back.
 
-Its agent options and features are the VMs fleet's, which are also what the fleet had when it was created by
-hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reason the VMs fleet's is.
+Its agent options and features are the VMs fleet's, and its host expiry is its own 30 days, for the reason the
+VMs fleet's is.
+
+## fleetd's edge channel on the lab's fleets
+
+VMs and OS matrix take their agent options from `lib/agent-options-edge.yml`: the global osquery config, with
+`update_channels` set to `edge` for orbit, osqueryd and Fleet Desktop. Every premium lab host so runs fleetd's
+pre-release build, and the nightly's suite, per-OS smokes and disk-encryption tests are its smoke test on
+every OS the lab has, before the build reaches `stable` (since 2026-11-18; edge was fleetd 1.64.0 that day,
+`stable` 1.63.0). Three facts about it:
+
+- **It is premium's alone.** Fleet refuses `update_channels` without a Premium license
+  (`server/fleet/agent_options.go`), so free's global options can't carry it.
+- **A host that leaves these fleets stays on edge.** A fleet that declares no channels (a throwaway `pw-*` fleet,
+  which copies the global options, Workstations, Unassigned) sends orbit none, and orbit keeps the last ones it
+  was sent (`serverOverridesRunner` in `orbit/cmd/orbit/orbit.go`). Only a fleet declaring `stable` moves a host
+  back, and the one that does, Compliance, holds no hosts.
+- **A channel change restarts orbit on every host of the fleet**, which then updates to that channel's build
+  within minutes. Change it when no run is going.
+
+A failure that follows a new edge build is fleetd's until shown otherwise: the host's `orbit_version` names the
+build, and `https://updates.fleetdm.com/targets.json` lists what each channel holds.
 
 ## The QA fleet's Fleet-maintained-app shelf
 
-`fleets/qa.yml` parks 10 popular apps — each on both macOS and Windows, 20 catalog entries — on the QA fleet **permanently**. They exist to be listed, never installed.
+`fleets/qa.yml` parks 11 apps — each on both macOS and Windows, 22 catalog entries — on the QA fleet **permanently**. They exist to be listed, never installed.
 
 **What it solves.** Fleet caches installer versions **per fleet** (`software_installers.global_or_team_id`), and a freshly added app caches exactly one version. Any test that needs "pin to an *older* version" therefore has nothing to pin to. Fleet's `maintained_apps_auto_update` cron runs hourly: for every app in latest/caret mode it downloads the newest published version, keeps the previous one (n-1, briefly n-2), and drops the rest. An app that lives on a fleet permanently accumulates a version history on its own — which is why this shelf is provisioned rather than seeded per test.
 
@@ -245,7 +265,13 @@ hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reaso
 | Slack | `slack/darwin` | `slack/windows` |
 | Zed | `zed/darwin` | `zed/windows` |
 | Microsoft Visual Studio Code | `visual-studio-code/darwin` | `visual-studio-code/windows` |
+| RealVNC Connect Viewer | `vnc-viewer/darwin` | `vnc-viewer/windows` |
 | Zoom | `zoom/darwin` | `zoom/windows` |
+
+RealVNC Connect Viewer is the eleventh for a count, not for its updates: Setup experience's Install software
+page shows 10 titles at a time, and the shelf's macOS entries are the list
+`playwright/tests/e2e/premium/controls/setup-experience/install-software.spec.ts` pages through. It is small
+(37 MB on macOS, 21 on Windows, 2026-11-19), so the shelf grows by little.
 
 **Rules for anyone editing this list.**
 
@@ -253,11 +279,12 @@ hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reaso
 - No `version:` pin. A literal pin stops the hourly cron from downloading anything new (`ee/server/service/maintained_apps_auto_update.go`), which defeats the whole point of the shelf.
 - An exact `version:` on any durable app is a re-provisioning trap: the version must already be cached on the fleet when the file is applied, and a fresh instance caches only the newest build. A caret pin would survive a rebuild; add one only when a spec needs it.
 - Removing an app resets its accumulated version history to zero the next time it's added back. Add freely; remove only with a reason.
+- **Keep more than 10 macOS entries.** The setup-experience pagination test pages through them, and checks the count through the API before it starts, so a shorter list fails it there.
 - **Watch the installer size.** premium-fleetqa is a 2 GB Render box, and Docker Desktop for Windows (~1.7 GB) 502'd it mid-apply — taking the instance down for every other spec running at the time. Zed replaced it. Nothing on this list should need more than a few hundred MB.
-- Applying this file downloads all 20 installers on a fresh instance and runs for many minutes. **A software batch is all-or-nothing** — a 502 on the last app discards every download before it, so an interrupted apply starts over from zero. On a fresh instance, apply the macOS half first and widen to the full list once those are in storage; a re-run then reports `skipped downloading the software package (already in storage)` for everything it already has.
+- Applying this file downloads all 22 installers on a fresh instance and runs for many minutes. **A software batch is all-or-nothing** — a 502 on the last app discards every download before it, so an interrupted apply starts over from zero. On a fresh instance, apply the macOS half first and widen to the full list once those are in storage; a re-run then reports `skipped downloading the software package (already in storage)` for everything it already has.
 - Windows titles come back with the installer's own name (`Mozilla Firefox (x64 en-US)`, `Notion 6.1.0`) until Fleet's `reconcile_windows_maintained_app_titles` cron merges them. Anything keying on a title name should key on the macOS entry.
 
-Consumed by `playwright/tests/e2e/premium/software/version-pinning.spec.ts`, which fails loud with recreation instructions if the shelf is missing.
+Consumed by `playwright/tests/e2e/premium/software/version-pinning.spec.ts`, which fails loud with recreation instructions if the shelf is missing, and by `playwright/tests/e2e/premium/controls/setup-experience/install-software.spec.ts`'s pagination test, which needs more than 10 macOS entries and never selects one.
 
 ## The VMs fleet's durable fixtures
 
@@ -282,6 +309,11 @@ platform, so whichever VM a worker is handed has the same:
   changes and Fleet skips the download once it holds the file. Their resting state is **uninstalled** — the
   opposite of Claude's — and because the titles never leave the fleet, Fleet always knows whether each is on
   its VM. `playwright/helpers/vm-fixtures.ts` lists the same entries for the specs; the two change together.
+- **The self-service subjects** of `playwright/tests/e2e/premium/software/self-service-on-host.spec.ts`: the
+  same inert `.pkg`, `.msi` and `.deb` builds under a title of their own, "Fleet Playwright Self-service"
+  (`fleet-playwright-self-service` on Linux), declared `self_service: true`, so each pool VM's My device page
+  offers the one of its platform. That spec installs it from My device and uninstalls it again; no other spec
+  touches it (`VM_SELF_SERVICE_FIXTURES` in `playwright/helpers/vm-fixtures.ts`). Resting state: uninstalled.
 
 Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`): specs whose test changes the title itself add
 it and delete it. `playwright/setup/cleanup.steps.ts`, at the start and end of every run, sweeps the ones a

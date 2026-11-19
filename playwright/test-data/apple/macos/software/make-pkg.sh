@@ -5,6 +5,8 @@
 #
 #   ./make-pkg.sh install 1.0.0     # the VMs fleet's durable fixture
 #                                   #   (gitops/premium-fleetqa/fleets/vms.yml, helpers/vm-fixtures.ts)
+#   ./make-pkg.sh self-service 1.0.0  # the VMs fleet's self-service fixture, installed from My device
+#                                     #   (vms.yml, VM_SELF_SERVICE_FIXTURES in helpers/vm-fixtures.ts)
 #
 # Each role is its own title, because a premium title can hold several packages:
 # two specs uploading the same title to the VMs fleet would share one Library row.

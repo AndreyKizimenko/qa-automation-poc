@@ -40,8 +40,11 @@
  * run left on it. A key reaches the page in these tests, so the project keeps no trace, screenshot or video,
  * and the key's format is checked in code, never by a matcher that would print it.
  *
- * The Omarchy row is written and skipped: on fleetd 1.63.0, which the lab runs, the server refuses *Create
- * key* on Omarchy, and the dialog can't open on Hyprland (fleetdm/fleet#55069, fixed for fleetd 1.64.0).
+ * The Omarchy row is written and skipped. Below fleetd 1.64.0 the server refuses *Create key* on Omarchy, and the
+ * dialog can't open on Hyprland (fleetdm/fleet#55069). On 1.64.0, which premium's lab hosts get from fleetd's edge
+ * channel, the dialog opens, the helper answers it and Fleet stores the key (2026-11-19). But the helper never
+ * sees fleetd's *Disk encryption* notice after the escrow, within its four minutes, so the row's step that reads
+ * the notice fails (TODO.md).
  *
  * Grounded in: `DeviceUserBanners.tsx`, `CreateLinuxKeyModal.tsx`, `User.tsx` (the *My device* button),
  * `DiskEncryptionKeyModal.tsx`, `cards/Controls/statusDisplayConfig.tsx`, `server/service/linux_mdm.go`
@@ -94,8 +97,8 @@ const CASES: Case[] = [
     purpose: 'Test-driven LUKS escrow on Omarchy',
     prompt: true,
     keyFormat: PASSPHRASE_KEY,
-    // TODO(fleetdm/fleet#55069): fleetd 1.63.0 can't open the dialog on Hyprland, and the server refuses Create key on Omarchy below 1.64.0.
-    skip: 'fleetdm/fleet#55069: Omarchy escrow needs fleetd 1.64.0',
+    // TODO.md: on fleetd 1.64.0 the escrow succeeds on Hyprland, but the helper never sees fleetd's notice after it.
+    skip: "Omarchy: fleetd's notice after the escrow is never seen (TODO.md)",
   },
 ];
 

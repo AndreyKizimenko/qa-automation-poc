@@ -5,12 +5,16 @@
  * (fleetdm/fleet#52717, #54821, #55701, #58776). Each host here is asked once and left unanswered, which
  * changes nothing on its disk:
  *
- *   | host | what fleetd 1.63.0 does | what Fleet shows |
+ *   | host | what fleetd does (1.63.0 and 1.64.0 share the prompt code) | what Fleet shows |
  *   |---|---|---|
  *   | Ubuntu 24.04 (the control), Zorin OS 18 | zenity's passphrase prompt, closed after a minute | Action required, before and after |
  *   | Kubuntu 24.04 | kdialog's, the same way | Action required |
  *   | Fedora 45, which ships no dialog tool | nothing it can show | Failed: "No supported dialog tool found" (fleetdm/fleet#58776) |
  *   | Omarchy, on fleetd below 1.64.0 | not asked: the server refuses the click | Failed, and My device says it couldn't |
+ *   | Omarchy, on fleetd 1.64.0 or later | nothing it can show, as on Fedora | Failed: "No supported dialog tool found" |
+ *
+ * The case is read off the fleetd the host runs: premium's lab hosts take fleetd's edge channel, so the
+ * version moves ahead of the release.
  *
  * The prompt's evidence is fleetd's own log on the host (`fleetdEscrowLogScript`): fleetd 1.63.0 tells Fleet
  * nothing about a prompt nobody answers. A Failed host goes back to OS matrix, which clears the failure, the

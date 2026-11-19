@@ -45,7 +45,7 @@ The lab replaced them. Its Linux and Windows VMs are x86_64; its Macs are Apple 
 | Premium | `prem-ubu2404-luks` (the LUKS escrow control) and, since 2026-11-16, `prem-ubu2604-tpm` (Ubuntu 26.04 with TPM-backed encryption), `prem-win11-bde` (Windows 11 in its stock BitLocker state), and `prem-ubu2404-luks-02` and `prem-omarchy-02` (LUKS hosts whose passphrase prompt a test answers) | special | **OS matrix** fleet. Step E's tests run on them |
 | Premium | `prem-chromeosflex-01` (ChromeOS Flex, since 2026-11-16) | special | **OS matrix** fleet. The per-OS smokes run on it |
 
-Every lab host but the two ChromeOS ones runs fleetd 1.63.0; those run the fleetd Chrome extension (1.3.6 on 2026-11-18), in its developer form. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
+Every lab host but the two ChromeOS ones runs fleetd: premium's on its `edge` channel since 2026-11-18 (1.64.0 that day; `gitops/lib/agent-options-edge.yml`), free's on `stable` (1.63.0). The ChromeOS ones run the fleetd Chrome extension (1.3.6 on 2026-11-18), in its developer form. [`lab-hosts.json`](../lab-hosts.json) lists them all, with the role that
 says what each is for; `helpers/lab-hosts.ts` reads it. A host the manifest doesn't list yet is still kept out
 of the simulation pickers by its virtualized hardware (the model `VirtualMac2,1`, or the vendor `QEMU`).
 
@@ -322,7 +322,7 @@ host moved.
 `premium-encryption` project (`tests/e2e/premium/encryption/`) moves one host off OS matrix onto a `pw-*`
 fleet with one setting on, drives the flow in the browser, checks each status on the host's page and in the
 fleet's Disk encryption table, and moves the host back, which clears what Fleet recorded. Linux escrow on the
-TPM-backed and the script-answered Ubuntu hosts (Omarchy's skipped behind fleetdm/fleet#55069); Create key
+TPM-backed and the script-answered Ubuntu hosts (Omarchy's is skipped: fleetdm/fleet#55069 is fixed in fleetd 1.64.0 and its key escrows, but the helper doesn't see fleetd's notice after the escrow on Hyprland; `TODO.md`); Create key
 left unanswered on each passphrase desktop (Fedora's failure is fleetdm/fleet#58776); BitLocker from Windows
 11's stock state and from a decrypted disk on `prem-win11-bde`; a Windows Server left alone on an enforcing
 fleet. FileVault is set aside. The analysis has the reasoning and the experiments; what follows is the plan

@@ -54,6 +54,16 @@
 #    and the preflight in `cleanup.steps.ts` uninstalls any a dead run left
 #    behind, on every pool VM, before the next run starts.
 #
+# 4. The self-service subjects of
+#    `playwright/tests/e2e/premium/software/self-service-on-host.spec.ts`: the
+#    same inert builds as item 3's custom packages under a title of their own,
+#    "Fleet Playwright Self-service" (`fleet-playwright-self-service` on Linux),
+#    declared `self_service: true`, so each pool VM's My device page offers the
+#    one of its platform. That spec installs it from My device and uninstalls it
+#    again, and no other spec touches it (`VM_SELF_SERVICE_FIXTURES` in
+#    `playwright/helpers/vm-fixtures.ts`). Resting state: uninstalled, which the
+#    cleanup's preflight sees to after a dead run, as for item 3.
+#
 # Everything else on this fleet is per-run: specs whose test changes the title
 # itself (a version swap, a failing uninstall script, an install policy) upload
 # their own `fleet-pw-*` package and delete it in the same test, and the cleanup
@@ -68,6 +78,9 @@
 # Unassigned by that spec, and by the cleanup's sweep after a dead run, so none
 # stays long enough for the window to matter.
 #
+# fleetd runs its `edge` channel here and on OS matrix (lib/agent-options-edge.yml),
+# so every real-host spec runs against fleetd's next build before it is released.
+#
 # Applied before every nightly premium run, in both the baseline and the min
 # pass, by `.github/workflows/gitops-premium{,-min}.yml`.
 #
@@ -75,7 +88,7 @@
 name: VMs
 
 agent_options:
-  path: ../../lib/agent-options.yml
+  path: ../../lib/agent-options-edge.yml
 
 settings:
   features:
@@ -122,6 +135,9 @@ software:
     - path: ../../lib/platforms/windows/software/fleet-playwright-install.package.yml
     - path: ../../lib/platforms/windows/software/7-zip.package.yml
     - path: ../../lib/platforms/linux/software/fleet-playwright-install.package.yml
+    - path: ../../lib/platforms/macos/software/fleet-playwright-self-service.package.yml
+    - path: ../../lib/platforms/windows/software/fleet-playwright-self-service.package.yml
+    - path: ../../lib/platforms/linux/software/fleet-playwright-self-service.package.yml
   fleet_maintained_apps:
     - slug: claude/darwin # Claude
     - slug: claude/windows # Claude

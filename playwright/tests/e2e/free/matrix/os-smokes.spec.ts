@@ -17,9 +17,12 @@
  *   | The inventory lists a package known to be on it, as its package type | every OS (ChromeOS: the fleetd extension) |
  *   | A live report comes back with the host's own platform, and finds Fleet Desktop running | every OS; the fleetd extension on ChromeOS |
  *   | A script runs and its output comes back | every VM |
+ *   | A script that exits 3 reads as an error: "Error", its exit code, its output and fleetd's line about it, also from the host's Activity card | every VM |
+ *   | Its My device page opens from Host details on Details; every value on it, and its Software count, equal Host details'; the tier's tabs (free: Details and Software, no Self service or Policies), and the known package on its Software tab | every VM with Fleet Desktop |
  *   | Vulnerabilities are listed for the OS | Ubuntu 24.04 |
  *   | Its page is a Chromebook's: disk encryption always on, the extension's agent options, its Chrome profile, no Reports tab, no script | ChromeOS |
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
+ *   | fleetd, killed, is started again by its service manager; a script runs under the new process, and the host stays enrolled and online | every VM |
  *
  * Premium's smokes (`tests/e2e/premium/matrix/os-smokes.spec.ts`) also install
  * a custom package and run a policy's automation: both are premium features,
@@ -60,6 +63,7 @@ import {
   smokeDetails,
   smokeSubjects,
   takesScripts,
+  hasMyDevice,
   type Subject,
 } from '@helpers/os-smokes';
 
@@ -93,6 +97,14 @@ function smokesOf(subject: Subject): void {
     if (takesScripts(subject)) {
       test('runs a script, and its output comes back', ({ hostDetails, seed, request }) =>
         smoke.script({ hostDetails, seed, request }, subject));
+
+      test('runs a failing script, which reads as an error, here and in its Activity', ({ hostDetails, seed, request }) =>
+        smoke.failingScript({ hostDetails, seed, request }, subject));
+    }
+
+    if (hasMyDevice(subject)) {
+      test("opens its My device page from Host details, which shows what the admin sees, the tier's tabs and its software", ({ hostDetails, request }) =>
+        smoke.myDevice({ hostDetails, request }, subject, { shown: ['Details', 'Software'], absent: ['Self service', 'Policies'] }));
     }
 
     if (OS_WITH_VULNERABILITIES.includes(subject.os)) {
@@ -108,6 +120,11 @@ function smokesOf(subject: Subject): void {
 
       test('answers a passing and a failing policy, and its Policies tab shows both', ({ hostDetails, seed, request }) =>
         smoke.policies({ hostDetails, seed, request }, subject));
+    }
+    if (takesScripts(subject)) {
+      // Last: the restart is this host's alone, and no smoke after it meets it.
+      test('fleetd comes back by itself after it is killed, and the host stays enrolled', ({ hostDetails, request }) =>
+        smoke.selfHealing({ hostDetails, request }, subject));
     }
   });
 }

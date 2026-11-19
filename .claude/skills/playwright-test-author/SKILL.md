@@ -48,7 +48,8 @@ Each has happened, or nearly happened, and none can be undone from a test.
   deleted (Workstations, VMs, QA, OS matrix and Compliance from gitops; Mobile by hand), a host moved onto
   Compliance, a lab host moved between fleets (only the cleanup returns each to its role's fleet, and the
   `premium-encryption` project moves its own host onto a throwaway fleet and back, approved by Andrey on
-  2026-11-16; nothing goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
+  2026-11-16, as does premium's per-OS smoke of fleetd's downgrade with a pool VM of each version, approved on
+  2026-11-19; nothing goes on OS matrix but the per-OS smokes' one-host, per-test things), gitops config, static users (their tokens can't be re-minted). A global gitops file a
   spec dry-runs or applies on premium must declare the IdP (`carryLiveEndUserAuth` in
   `helpers/fleetctl.ts`): Compliance depends on it, and fleetctl refuses a global file that would clear it.
 - **The Fleet web address or the global end-user authentication (IdP) settings, saved changed.** Either

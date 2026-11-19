@@ -461,11 +461,6 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/controls/setup-experience/install-software.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    }
-  },
   "tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts": {
     "suite/no-toast-copy-in-spec": {
       "count": 1
@@ -1039,13 +1034,13 @@
   },
   "tests/e2e/shared/hosts/host-run-script.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
-      "count": 3
+      "count": 2
     },
     "suite/no-date-now-in-name": {
       "count": 1
     },
     "suite/use-own-name": {
-      "count": 4
+      "count": 3
     }
   },
   "tests/e2e/shared/hosts/host-software.spec.ts": {

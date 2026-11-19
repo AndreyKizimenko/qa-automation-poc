@@ -2,8 +2,8 @@
 # can apply to a host, on a fleet that has none.
 #
 # Why a fleet of its own: OS-update deadlines, disk encryption, Recovery Lock,
-# a host name template, setup experience, agent command-line flags and update
-# channels all act on the hosts that receive them. Workstations can't carry
+# a host name template, setup experience and agent command-line flags all act
+# on the hosts that receive them. Workstations can't carry
 # them — specs assert it enforces nothing (`exclusive/os-updates/*`) and the
 # cleanup resets its OS updates and setup experience every run — and nothing
 # on the real VMs may change what they run. This fleet holds no host, no spec
@@ -17,8 +17,10 @@
 #
 # What it exercises, section by section: fleet `settings` (features with
 # historical data, host expiry, the two fleet webhooks fleetctl manages), `agent_options` with
-# `command_line_flags` and `update_channels` (the only place they are declared:
-# anywhere else they reach real hosts), a fleet-scoped label, per-platform
+# `command_line_flags` (the only place it is declared: anywhere else it reaches
+# real hosts) and `update_channels` on `stable` (VMs and OS matrix declare
+# `edge`, so the lab runs fleetd's pre-release builds; lib/agent-options-edge.yml),
+# a fleet-scoped label, per-platform
 # `controls` (disk encryption and key escrow, BitLocker PIN, managed local
 # account, OS updates for all four platforms, Recovery Lock, a name template,
 # label-targeted profiles on three platforms, scripts of all three kinds via

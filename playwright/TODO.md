@@ -22,6 +22,7 @@ lab's, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-
 
 | Test | Why | Unblock |
 |---|---|---|
+| `premium/encryption/linux-escrow.spec.ts`: Omarchy, its prompt answered by script | On fleetd 1.64.0 (2026-11-19, `prem-omarchy-02`): the passphrase dialog opened on Hyprland, the helper answered it at once, and Fleet stored the key. Then the helper found no *Disk encryption* notice within 240 s (`no notice within 240s` in `/tmp/pw-luks-answer.log`). fleetd logged no failure to show it, so either the notice opened and the helper couldn't see it (AT-SPI on Hyprland, GTK4 zenity `--info`), or it never appeared. Not known which, so no Fleet issue yet | Watch the notice open on the host, through the lab's console, during an escrow. If it opens, fix the helper's lookup; if not, file it against fleetd. On 1.64.0 the Ubuntu row passes, notice included (branch run 44431593981), so it is Hyprland's |
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md).
@@ -97,7 +98,7 @@ each OS version one pass of a few checks on one host. What it leaves for a spec 
 | What | Note |
 |---|---|
 | No static-user provisioning script | Day-to-day this doesn't bite — the credentials are shared and come from 1Password. It only matters when an instance is rebuilt from scratch, which means creating the 12 API-only users by hand via `POST /users/api_only` and capturing each one-shot token, creating the 8 human users via `POST /users/admin`, and updating 1Password plus the GitHub secrets. The registry in `helpers/api/static-users.ts` already holds everything a script would need (email, name, role, tier). Low priority until the next rebuild. |
-| The lab preflight doesn't check a host's fleetd version | `inventory-reflects-install` fails an install on a pool VM in the main project, which costs that VM only the attempts on fleetd 1.63.0 or later. An older orbit backs off after a failed install script (fleetdm/fleet#54607), and everything else queued on the VM waits, with nothing pointing at the cause. Every lab host runs 1.63.0 today; a VM rebuilt from an older baseline would not. `tests/api/lab-hosts.spec.ts` could hold each pool host's orbit version to that minimum. |
+| The lab preflight doesn't check a host's fleetd version | `inventory-reflects-install` fails an install on a pool VM in the main project, which costs that VM only the attempts on fleetd 1.63.0 or later. An older orbit backs off after a failed install script (fleetdm/fleet#54607), and everything else queued on the VM waits, with nothing pointing at the cause. Every lab host runs 1.63.0 or later today (premium's take fleetd's `edge` channel from their fleets' agent options; free's stay on their package's `stable`), but a free VM rebuilt from an older baseline would not. `tests/api/lab-hosts.spec.ts` could hold each pool host's orbit version to that minimum. Premium's per-OS smoke of fleetd's downgrade already holds one pool VM of each version to edge's build each night (`helpers/fleetd-releases.ts`); the matrix hosts and free's VMs aren't checked. |
 
 ---
 

@@ -43,6 +43,7 @@ import type {
   SoftwareOsPage,
   SoftwareTitlesPage,
 } from '@pages';
+import type { MyDeviceTab } from '@pages/hosts/MyDevicePage';
 import {
   getHostAgentReport,
   getHostPolicyResponses,
@@ -53,11 +54,14 @@ import {
   recordVmOnReport,
   requestHostRefetch,
   requireRealHost,
+  runAdHocScript,
   vmTag,
   waitForNoPendingRefetch,
 } from './api';
-import { isVmLabHost, labHostFleet, labHostsOfRun, poolHostsOfRun, type LabHost, type LabPackage } from './lab-hosts';
+import { isVmLabHost, labHostFleet, labHostsOfRun, poolHostsOfRun, type LabHost, type LabPackage, type VmPlatform } from './lab-hosts';
 import { runNonce } from './profiles';
+import { activityCopy } from './activity-copy';
+import { expectDetailsMatchHostDetails, expectSoftwareCountMatchesHostDetails } from './my-device';
 
 /**
  * The OS name Fleet shows for each manifest `os`, and the major version the
@@ -255,9 +259,15 @@ export interface SmokeHost {
 /**
  * The OS's host, online where its role puts it. When it isn't, the first smoke
  * of the OS (`gate`) fails with the reason and every other one skips, naming
- * that smoke.
+ * that smoke. `exclude` leaves named pool hosts (manifest names) out, for a
+ * smoke one of them can't take; a matrix or ChromeOS subject has one host only.
  */
-export async function hostOf(request: APIRequestContext, { os, entry }: Subject, gate = false): Promise<SmokeHost> {
+export async function hostOf(
+  request: APIRequestContext,
+  { os, entry }: Subject,
+  gate = false,
+  { exclude = [] }: { exclude?: readonly string[] } = {},
+): Promise<SmokeHost> {
   const candidates = entry.role === 'pool' && isVmLabHost(entry) ? poolHostsOfRun(entry.platform, os) : [entry];
   const records = await listLabHostRecords(request, candidates);
   const problems = candidates.map((candidate) => labHostProblem(candidate, records));
@@ -270,7 +280,7 @@ export async function hostOf(request: APIRequestContext, { os, entry }: Subject,
   if (fleet === undefined) throw new Error(`[os-smokes] ${entry.name} (${entry.role}, ${entry.tier}) has no fleet of its own`);
   const fleetName = fleet ?? undefined;
   if (entry.role === 'pool' && isVmLabHost(entry)) {
-    const vm = await requireRealHost(request, entry.platform, { os });
+    const vm = await requireRealHost(request, entry.platform, { os, exclude });
     return { id: vm.id, displayName: vm.displayName, fleetId: fleetName ? vm.fleetId : undefined, fleetName };
   }
   const record = recordVmOnReport(newestRecord(entry, records)!);
@@ -484,6 +494,193 @@ async function script(
   await expect(details.output).toHaveText(new RegExp(`^${marker} on ${escapeRegExp(host.displayName)}`, 'i'));
 }
 
+/** Whether a host has a My device page: a VM with Fleet Desktop (`canShowMyDeviceButton` wants its version). */
+export function hasMyDevice(subject: Subject): boolean {
+  return takesScripts(subject) && subject.entry.desktop !== 'none';
+}
+
+/**
+ * Its My device page opens from Host details' link, on Details, and what it shows is what the admin sees: every
+ * value on its Details tab equals Host details' value under the same title, and its Software tab counts as many
+ * titles as Host details' Inventory (`helpers/my-device.ts`). It shows the tier's tabs, and on its Software tab
+ * the package known to be on the host, as its package type. Each tier's spec passes the tabs it expects: a tab
+ * listed as absent is checked only after the shown ones, so the absence isn't read off a page that never
+ * rendered its tabs. Only for a host with Fleet Desktop ({@link hasMyDevice}).
+ */
+async function myDevice(
+  { hostDetails, request }: { hostDetails: HostDetailsPage; request: APIRequestContext },
+  subject: Subject,
+  tabs: { shown: MyDeviceTab[]; absent: MyDeviceTab[] },
+): Promise<void> {
+  test.setTimeout(300_000);
+  const host = await hostOf(request, subject);
+  const known = KNOWN_PACKAGE[subject.entry.package];
+
+  await hostDetails.goto(host.id);
+  const device = await hostDetails.openMyDevice();
+  await device.expectLoaded();
+  for (const tab of tabs.shown) await expect(device.tab(tab)).toBeVisible();
+  for (const tab of tabs.absent) await expect(device.tab(tab)).toHaveCount(0);
+  await expectDetailsMatchHostDetails(hostDetails, device);
+  await expectSoftwareCountMatchesHostDetails(hostDetails, device);
+
+  const row = await device.findInSoftware(known.name);
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('cell', { name: known.type, exact: true })).toBeVisible();
+}
+
+/**
+ * A script that exits 3 reads as an error. The Run script modal shows "Error". Its details read "Exit code: 3
+ * (Script failed.)", with what it printed and the line fleetd appends to a failed run on every platform
+ * (`script execution error: exit status 3`, `orbit/pkg/scripts/scripts.go`). The host's Activity card lists
+ * the run and opens the same failure. Not for ChromeOS ({@link takesScripts}).
+ */
+async function failingScript(
+  { hostDetails, seed, request }: { hostDetails: HostDetailsPage; seed: Seed; request: APIRequestContext },
+  subject: Subject,
+): Promise<void> {
+  // Upload, the host's next check-in, the run, and the result's way back.
+  test.setTimeout(300_000);
+  const host = await hostOf(request, subject);
+  const marker = `failing on purpose ${runNonce()}`;
+  const windows = subject.entry.platform === 'windows';
+  const script = await seed.script('os-smoke-fails', {
+    fleetId: host.fleetId ?? 0,
+    extension: windows ? '.ps1' : '.sh',
+    content: windows ? `Write-Output "${marker}"\nexit 3\n` : `#!/bin/sh\necho "${marker}"\nexit 3\n`,
+  });
+  const modal = hostDetails.runScriptModal;
+  const details = hostDetails.scriptDetailsModal;
+  const failed = 'Exit code: 3 (Script failed.)';
+
+  await hostDetails.goto(host.id);
+  await hostDetails.openRunScript();
+  await expect(modal.status(script.name)).toHaveText('---');
+  await modal.run(script.name, host.displayName);
+  await expect
+    .poll(async () => (await getHostScriptLastExecution(request, host.id, script.name))?.status, {
+      message: `${script.name} never finished on ${host.displayName}`,
+      timeout: 180_000,
+      intervals: [3_000],
+    })
+    .toBe('error');
+
+  // The modal reads its list only when it opens.
+  await modal.close();
+  await hostDetails.openRunScript();
+  await expect(modal.status(script.name)).toHaveText('Error');
+  await modal.showRunDetails(script.name);
+  await details.expectOpen();
+  await expect(details.statusMessage).toHaveText(failed);
+  await expect(details.output).toHaveText(`${marker} script execution error: exit status 3`);
+  await details.close();
+  await modal.close();
+
+  // A failed run is still a run: the Activity card lists it, and opens the same failure.
+  await hostDetails.goto(host.id);
+  await hostDetails.showPastActivities();
+  await hostDetails.activityItem(activityCopy.script.ranOnThisHost({ name: script.name })).click();
+  await details.expectOpen();
+  await expect(details.statusMessage).toHaveText(failed);
+  await details.close();
+}
+
+/**
+ * How a script finds fleetd's own process: the main process of the service its package installed
+ * (`orbit/pkg/packaging/`). Each prints `orbit pid: <n>`.
+ */
+const ORBIT_PID_SH: Record<'linux' | 'darwin', string> = {
+  linux: 'systemctl show -p MainPID --value orbit.service',
+  darwin: `launchctl print system/com.fleetdm.orbit | awk '$1 == "pid" { print $3; exit }'`,
+};
+const ORBIT_PID_PS = `(Get-CimInstance Win32_Service -Filter "Name='Fleet osquery'").ProcessId`;
+
+const orbitPidScript = (platform: VmPlatform): string =>
+  platform === 'windows'
+    ? `$orbit = ${ORBIT_PID_PS}\nWrite-Output "orbit pid: $orbit"\n`
+    : `#!/bin/sh\necho "orbit pid: $(${ORBIT_PID_SH[platform]})"\n`;
+
+/**
+ * Kills fleetd's process ten seconds after the script ends, from a process of the script's own that outlives
+ * it: by then fleetd has sent the script's result. The process writes nowhere, so fleetd isn't left waiting on
+ * its output. On Linux and macOS it is a subshell that ignores SIGHUP: a background `nohup` didn't outlive the
+ * script on macOS 26, and a subshell did (2026-11-19). Prints the PID it will kill, as {@link orbitPidScript} does.
+ */
+const killOrbitScript = (platform: VmPlatform): string =>
+  platform === 'windows'
+    ? [
+        `$orbit = ${ORBIT_PID_PS}`,
+        `if (-not $orbit) { Write-Output 'no running Fleet osquery service'; exit 1 }`,
+        `Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList '-NoProfile', '-Command', "Start-Sleep -Seconds 10; Stop-Process -Id $orbit -Force"`,
+        `Write-Output "orbit pid: $orbit"`,
+        '',
+      ].join('\n')
+    : [
+        '#!/bin/sh',
+        `orbit=$(${ORBIT_PID_SH[platform]})`,
+        `[ "\${orbit:-0}" -gt 0 ] || { echo "no running orbit service"; exit 1; }`,
+        `( trap '' HUP; sleep 10; kill -9 "$orbit" ) </dev/null >/dev/null 2>&1 &`,
+        `echo "orbit pid: $orbit"`,
+        '',
+      ].join('\n');
+
+/** The PID an orbit script printed. Throws when it printed none, or 0 (no process). */
+function parseOrbitPid(output: string): number {
+  const pid = Number(/orbit pid: (\d+)/.exec(output)?.[1] ?? 0);
+  if (!pid) throw new Error(`[parseOrbitPid] no orbit PID in the script's output: ${output.slice(0, 200)}`);
+  return pid;
+}
+
+async function orbitPid(request: APIRequestContext, hostId: number, platform: VmPlatform): Promise<number> {
+  const { exitCode, output } = await runAdHocScript(request, hostId, orbitPidScript(platform), { timeout: 180_000 });
+  if (exitCode !== 0) throw new Error(`[orbitPid] host ${hostId}: exit ${exitCode}: ${output.slice(0, 200)}`);
+  return parseOrbitPid(output);
+}
+
+/**
+ * fleetd comes back by itself after its process is killed. The service manager its package set up restarts
+ * it: systemd (`Restart=always`, after a second), launchd (`KeepAlive`, within ten) or the Windows service's
+ * recovery actions (after a second). A script reads orbit's PID, a second kills orbit ten seconds after it
+ * ends, and the test then runs the first again until it reads another PID. That it runs at all says the new
+ * process takes scripts and sends their results. Both tiers' specs declare it last of a host's smokes, so the
+ * restart reaches none of the others. Not for ChromeOS ({@link takesScripts}).
+ */
+async function selfHealing(
+  { hostDetails, request }: { hostDetails: HostDetailsPage; request: APIRequestContext },
+  subject: Subject,
+): Promise<void> {
+  // Two script round trips, then the poll across the restart: its five minutes, plus one attempt of up to
+  // three that started just before they ran out, so a host that never comes back fails with the poll's message.
+  test.setTimeout(600_000);
+  const { entry } = subject;
+  if (!isVmLabHost(entry)) throw new Error(`[os-smokes] ${entry.name} runs no fleetd to restart`);
+  const host = await hostOf(request, subject);
+  const before = await orbitPid(request, host.id, entry.platform);
+
+  await test.step('a script kills fleetd, ten seconds after it has ended', async () => {
+    const { exitCode, output } = await runAdHocScript(request, host.id, killOrbitScript(entry.platform));
+    expect(exitCode, output).toBe(0);
+    expect(parseOrbitPid(output), 'the PID the kill script read').toBe(before);
+  });
+
+  await test.step('fleetd is back, under another process, and runs a script', async () => {
+    // A script that reaches the host before the kill reads the old PID; the next one waits out the restart.
+    await expect
+      .poll(() => orbitPid(request, host.id, entry.platform), {
+        message: `fleetd on ${host.displayName} never came back under another process`,
+        timeout: 300_000,
+        intervals: [5_000],
+      })
+      .not.toBe(before);
+  });
+
+  await test.step('the host is still enrolled, and online', async () => {
+    await hostDetails.goto(host.id);
+    await expect(hostDetails.hostHeading).toHaveText(host.displayName);
+    await expect(hostDetails.vitals.value('Status')).toContainText('Online');
+  });
+}
+
 /** Vulnerabilities are listed for its OS, on its kernels: Linux only ({@link requireLinuxSubjects}). */
 async function osVulnerabilities(
   {
@@ -621,4 +818,4 @@ async function policies(
  * The checks, one per test. Each takes the fixtures it uses, as the test
  * destructured them, and the subject: `smoke.gate({ hostDetails, request }, subject)`.
  */
-export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, osVulnerabilities, chromebookPage, policies };
+export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, myDevice, osVulnerabilities, chromebookPage, policies, selfHealing };

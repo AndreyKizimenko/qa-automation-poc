@@ -8,9 +8,12 @@
  *     report run by that same device reads the change back. One flow covers
  *     script execution, the Run script modal, the host's Activity card, the
  *     dashboard feed and the host's stored report results.
- *   - **Failure** — a non-zero exit reads "Error" in the modal and "Script
- *     failed." with the recorded output in the details.
  *   - **Interpreters** — zsh, bash, Python and PowerShell, one row each.
+ *
+ * A failing script is a per-OS smoke (`smoke.failingScript` in
+ * `helpers/os-smokes.ts`), run on every VM of both tiers: a non-zero exit
+ * reads "Error" in the modal, "Script failed." with the recorded output in the
+ * details, and the same from the host's Activity card.
  *
  * A script Fleet stops at the agent's timeout is
  * `shared/exclusive/script-execution-timeout.spec.ts`'s: it lowers the timeout
@@ -190,51 +193,6 @@ test.describe('Shared • Hosts • Run script', () => {
       await deleteScript(request, scriptId);
       await deleteReport(request, report.id);
       await queueAdHocScript(request, host.id, `#!/bin/sh\nrm -f ${marker}\n`);
-    }
-  });
-
-  test('a script that exits non-zero reads as an error, with the output it recorded', { tag: '@vm-linux' }, async ({
-    hostDetails,
-    request,
-  }) => {
-    test.setTimeout(300_000);
-
-    const host = await requireRealHost(request, 'linux');
-    const id = nonce();
-    const scriptName = `pw-run-script-fails-${id}.sh`;
-    const scriptId = await uploadScript(
-      request,
-      host.fleetId,
-      scriptName,
-      `#!/bin/bash\necho "failing on purpose ${id}"\nexit 3\n`,
-    );
-
-    try {
-      await runFromModal(hostDetails, request, host, scriptName, 'error');
-      const modal = hostDetails.runScriptModal;
-      const details = hostDetails.scriptDetailsModal;
-
-      await expect(modal.status(scriptName)).toHaveText('Error');
-      await modal.showRunDetails(scriptName);
-      await details.expectOpen();
-      await expect(details.statusMessage).toHaveText('Exit code: 3 (Script failed.)');
-      // Orbit appends its own line naming the exit status to whatever the script printed.
-      await expect(details.output).toHaveText(
-        `failing on purpose ${id} script execution error: exit status 3`,
-      );
-      await details.close();
-      await modal.close();
-
-      // A failed run is still a run: the Activity card lists it and opens the
-      // same failure.
-      await hostDetails.goto(host.id);
-      await hostDetails.showPastActivities();
-      await hostDetails.activityItem(activityCopy.script.ranOnThisHost({ name: scriptName })).click();
-      await details.expectOpen();
-      await expect(details.statusMessage).toHaveText('Exit code: 3 (Script failed.)');
-      await details.close();
-    } finally {
-      await deleteScript(request, scriptId);
     }
   });
 

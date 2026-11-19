@@ -16,19 +16,35 @@
  *   | The inventory lists a package known to be on it, as its package type | every OS (ChromeOS: the fleetd extension) |
  *   | A live report comes back with the host's own platform, and finds Fleet Desktop running | every OS; Fleet Desktop on VMs with a desktop, the fleetd extension on ChromeOS |
  *   | A script runs and its output comes back | every VM |
+ *   | A script that exits 3 reads as an error: "Error", its exit code, its output and fleetd's line about it, also from the host's Activity card | every VM |
+ *   | Its My device page opens from Host details on Details; every value on it, and its Software count, equal Host details'; the tier's tabs (premium: Details, Software and Policies), and the known package on its Software tab | every VM with Fleet Desktop |
  *   | Vulnerabilities are listed for the OS | the Ubuntu LTS versions, RHEL 9 and 10 |
  *   | Its page is a Chromebook's: disk encryption always on, the extension's agent options, its Chrome profile, no Reports tab, no script | ChromeOS |
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
  *   | A custom package installs and the inventory lists it; it uninstalls and the inventory drops it | every VM (a tarball has no inventory) |
  *   | A policy's automation installs a package on a host that fails it | one `.deb` host, one `.rpm` host |
+ *   | It runs fleetd's edge build; on a fleet that pins the release before it, fleetd goes back to that release, runs a script and Fleet shows it; back on its own fleet it returns to edge | a pool VM of each version |
+ *   | fleetd, killed, is started again by its service manager; a script runs under the new process, and the host stays enrolled and online | every VM |
  *
  * Premium only, in the `premium-matrix` project: its own invocation after the
  * main project (`npm run test:premium:matrix`), since it works the pool's VMs
  * too. Free's lab hosts get the checks free has in
- * `tests/e2e/free/matrix/os-smokes.spec.ts`; everything but the last two rows,
- * which are premium's. The checks both tiers make, and what Fleet shows for
- * each OS, are `helpers/os-smokes.ts`'s, so a rename in Fleet's UI is one edit;
- * this file declares the tests and keeps what only premium does.
+ * `tests/e2e/free/matrix/os-smokes.spec.ts`; everything but the two install rows
+ * and fleetd's downgrade, which are premium's (free takes no `update_channels`).
+ * The checks both tiers make, and what Fleet shows for each OS, are
+ * `helpers/os-smokes.ts`'s, so a rename in Fleet's UI is one edit; this file
+ * declares the tests and keeps what only premium does.
+ *
+ * **fleetd's downgrade moves a pool VM off its fleet for one test** (approved by
+ * Andrey 2026-11-19, the downgrade check of fleetd's release QA). Premium's lab
+ * fleets run fleetd's edge build. The test moves the VM onto a throwaway `pw-*`
+ * fleet whose `update_channels` pin orbit and Fleet Desktop to the release
+ * before edge, waits until fleetd runs it, runs a script under it, and has Fleet
+ * show it after a detail refresh. Then it moves the VM back and waits for edge
+ * again (`helpers/fleetd-releases.ts`). A test that dies leaves the VM on
+ * Unassigned at worst, where fleetd keeps the pinned release, since Fleet sends
+ * no channels for a fleet that declares none. The cleanup's return of each lab
+ * host to its fleet then brings it back to edge.
  *
  * **Asked for by `os`, never by name or id.** A matrix or ChromeOS host is the
  * manifest's entry for its `os`; a pool version is the worker's own VM of that
@@ -124,10 +140,14 @@ import {
   createFleetPolicy,
   deleteFleetPolicies,
   deleteSoftwareTitle,
+  getAgentOptions,
   getHostCollectedAt,
   getHostSoftwareState,
   lastSoftwareActionOutput,
   listHostActivities,
+  runAdHocScript,
+  setAgentOptions,
+  transferHosts,
   uninstallSoftwareOnHost,
   uploadSoftwarePackageBuffer,
   waitForHostRefetch,
@@ -138,6 +158,7 @@ import {
   type PackageScripts,
 } from '@helpers/api';
 import { inertDeb } from '@helpers/deb';
+import { fleetdOnHost, fleetdReleases } from '@helpers/fleetd-releases';
 import { isVmLabHost, type LabHost } from '@helpers/lab-hosts';
 import {
   GATE,
@@ -148,6 +169,7 @@ import {
   smokeDetails,
   smokeSubjects,
   takesScripts,
+  hasMyDevice,
   hostOf,
   type SmokeHost,
   type Subject,
@@ -395,6 +417,14 @@ function smokesOf(subject: Subject): void {
     if (takesScripts(subject)) {
       test('runs a script, and its output comes back', ({ hostDetails, seed, request }) =>
         smoke.script({ hostDetails, seed, request }, subject));
+
+      test('runs a failing script, which reads as an error, here and in its Activity', ({ hostDetails, seed, request }) =>
+        smoke.failingScript({ hostDetails, seed, request }, subject));
+    }
+
+    if (hasMyDevice(subject)) {
+      test("opens its My device page from Host details, which shows what the admin sees, the tier's tabs and its software", ({ hostDetails, request }) =>
+        smoke.myDevice({ hostDetails, request }, subject, { shown: ['Details', 'Software', 'Policies'], absent: [] }));
     }
 
     if (OS_WITH_VULNERABILITIES.includes(os)) {
@@ -543,8 +573,98 @@ function smokesOf(subject: Subject): void {
         await expect(activity).toHaveAccessibleName(/^Fleet installed/);
       });
     }
+    if (entry.role === 'pool' && isVmLabHost(entry)) {
+      test("runs fleetd's edge build, goes back a release when its fleet pins one, and returns", async ({
+        hostDetails,
+        throwawayFleet,
+        cleanup,
+        request,
+      }) => {
+        // Two restarts of fleetd, each with its download, a script, and a detail refresh.
+        test.setTimeout(900_000);
+        const host = await hostOf(request, subject, false, { exclude: FLEETD_NOT_UPDATING });
+        const home = host.fleetId!;
+        const { edge, previous } = await fleetdReleases(request, entry.platform);
+        // A headless host has no Fleet Desktop to ask.
+        const desktop = entry.desktop !== 'none';
+        // fleetd restarts more than once on a channel change (orbit, then the components it updates), and
+        // between restarts osquery can be up before fleetd's extension has registered `orbit_info`: a read
+        // that fails then is "not there yet", and the poll asks again.
+        const running = async (): Promise<string> => {
+          const fleetd = await fleetdOnHost(request, host.id).catch(() => null);
+          if (!fleetd) return 'fleetd unreadable';
+          return desktop ? `orbit ${fleetd.orbit}, Fleet Desktop ${fleetd.desktop}` : `orbit ${fleetd.orbit}`;
+        };
+        const runs = async (version: string): Promise<void> => {
+          await expect
+            .poll(running, {
+              message: `fleetd on ${host.displayName} never ran ${version}`,
+              timeout: 420_000,
+              intervals: [10_000],
+            })
+            .toBe(desktop ? `orbit ${version}, Fleet Desktop ${version}` : `orbit ${version}`);
+        };
+
+        const atStart = await fleetdOnHost(request, host.id);
+
+        await test.step(`it runs fleetd's edge build, ${edge}, which its fleet declares`, async () => {
+          expect(atStart.orbit, `${host.displayName} isn't on edge's build`).toBe(edge);
+          expect(atStart.channel).toBe('edge');
+          if (desktop) expect(atStart.desktop, 'Fleet Desktop').toBe(edge);
+        });
+
+        const fleet = await throwawayFleet('fleetd-pin');
+        // A new fleet takes the global agent options, which name no channel.
+        await setAgentOptions(
+          request,
+          { ...(await getAgentOptions(request, fleet.id)), update_channels: { orbit: previous, osqueryd: 'edge', desktop: previous } },
+          fleet.id,
+        );
+        // Registered after the fleet, so undone before its delete, which would leave the host on Unassigned.
+        cleanup.add(`return ${host.displayName} to its fleet`, (r) => transferHosts(r, home, [host.id]));
+
+        await test.step(`on a fleet that pins ${previous}, fleetd goes back to it and runs a script`, async () => {
+          await transferHosts(request, fleet.id, [host.id]);
+          await runs(previous);
+          const windows = entry.platform === 'windows';
+          const { exitCode, output } = await runAdHocScript(request, host.id, windows ? 'Write-Output "fleetd $env:COMPUTERNAME"\n' : '#!/bin/sh\necho "fleetd $(uname -n)"\n');
+          expect(exitCode, output).toBe(0);
+          expect(output.toLowerCase()).toContain(`fleetd ${host.displayName.toLowerCase().split('.')[0]}`);
+        });
+
+        await test.step(`Fleet shows ${previous} on the host's page, online`, async () => {
+          await waitForNoPendingRefetch(request, host.id);
+          const since = await getHostCollectedAt(request, host.id, 'detail_updated_at');
+          await waitForHostRefetch(request, host.id, { since, refetch: true });
+          await hostDetails.goto(host.id);
+          await expect(hostDetails.vitals.value('Status')).toContainText('Online');
+          await expect(hostDetails.vitals.value('Agent')).toContainText(previous);
+        });
+
+        await test.step(`back on its own fleet, fleetd returns to ${edge}`, async () => {
+          await transferHosts(request, home, [host.id]);
+          await runs(edge);
+        });
+      });
+    }
+
+    if (takesScripts(subject)) {
+      // Last: the restart is this host's alone, and no smoke after it meets it.
+      test('fleetd comes back by itself after it is killed, and the host stays enrolled', ({ hostDetails, request }) =>
+        smoke.selfHealing({ hostDetails, request }, subject));
+    }
   });
 }
+
+/**
+ * Pool hosts the fleetd downgrade leaves out: a host it can't downgrade, because its fleetd takes no update.
+ * Another VM of the same version runs it instead.
+ *
+ * TODO(fleetdm/fleet#59221): `prem-win11-02`'s fleetd holds a timestamp whose snapshot it never fetched, so it
+ * takes no update and stays on 1.63.0 until Fleet's update server publishes a newer timestamp. Remove it once
+ * #59221 is fixed, or once the host has run edge's build for a few nights.
+ */
+const FLEETD_NOT_UPDATING: readonly string[] = ['prem-win11-02'];
 
 /** A fixed-title package (the `.msi`) on a fleet shared with others of its kind: these take turns. */
 const takesTurns = ({ entry }: Subject): boolean => entry.role === 'matrix' && entry.package === 'msi';

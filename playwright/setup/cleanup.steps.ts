@@ -70,7 +70,7 @@ import {
 import { OS_MATRIX_FLEET, labHostFleet, labHostsOfRun, type LabPackage } from '@helpers/lab-hosts';
 import {
   OS_SMOKE_MSI,
-  VM_SOFTWARE_FIXTURES,
+  VM_DURABLE_FIXTURES,
   ensureVmFixtureUninstalled,
   findVmFixtureTitle,
   type VmPlatform,
@@ -392,7 +392,7 @@ const OWN_QUEUED = (a: UpcomingActivity): boolean =>
   !!a.scriptName?.startsWith('pw-') ||
   !!a.softwarePackage?.startsWith('fleet-pw-') ||
   a.softwarePackage === OS_SMOKE_MSI.packageName ||
-  VM_SOFTWARE_FIXTURES.some(
+  VM_DURABLE_FIXTURES.some(
     (f) => (f.packageName && f.packageName === a.softwarePackage) || f.fleetMaintainedName === a.softwareTitle,
   );
 
@@ -462,7 +462,7 @@ test('bring the real VMs to their resting state', async ({ request }) => {
     await setFleetRecoveryLock(request, vms.id, false);
   }
   await Promise.all(
-    VM_SOFTWARE_FIXTURES.map(async (fixture) => {
+    VM_DURABLE_FIXTURES.map(async (fixture) => {
       const members = pool.get(fixture.platform) ?? [];
       if (!members.length) return;
       const title = await findVmFixtureTitle(request, vms.id, fixture);

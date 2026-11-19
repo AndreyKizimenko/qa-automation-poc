@@ -18,8 +18,8 @@
  * so its dpkg refuses the package before unpacking anything: Fleet's install
  * script runs on the host and exits non-zero on every attempt, and nothing is
  * left behind. The failures don't hold up the VM's other installs and scripts:
- * fleetd 1.63.0, which the lab's VMs run, doesn't back its config loop off
- * after a failed install script (fleetdm/fleet#54607).
+ * fleetd from 1.63.0 on, which the lab's VMs run, doesn't back its config
+ * loop off after a failed install script (fleetdm/fleet#54607).
  *
  * Premium only (installing software is premium), on the VMs fleet; see
  * `install-on-host.spec.ts`.
