@@ -71,6 +71,15 @@ Each of these cost a try while the workflow was built (2026-11-19, Fleet 4.95.0 
   the browser's and the hosts' connections over both pods.
 - **`fleetctl setup` and the setup page leave usage statistics on**: `fleet-data.mjs prepare` turns them off
   before any host enrolls, so a run never reports a new instance to Fleet.
+- **The runner's AppArmor profile for `mysqld`** (found on the first CI run, 2026-11-19). GitHub's Ubuntu images
+  ship a MySQL server, and its `usr.sbin.mysqld` profile attaches to any `/usr/sbin/mysqld` the host kernel
+  runs unconfined, kind's pods included. It denies the chart's MySQL (Oracle Linux paths) its `/etc/my.cnf`
+  and message files: the kernel logs `apparmor="DENIED" operation="open" profile="/usr/sbin/mysqld"`, mysqld
+  falls back to `/var/lib/mysql/mysql.sock`, and the chart's `mysqladmin ping` probes, which use
+  `/var/run/mysqld/mysqld.sock`, fail until Kubernetes restarts it, so `helm install --wait` times out with
+  `fleet-mysql` at `0/1`. The Helm job unloads the profile before the install. Docker containers run under
+  `docker-default` and never attach it, which is why the Update flow's MySQL was never affected, and a Mac
+  has no such profile.
 - **Fleet's images are amd64 only**: native on the runner; on an Apple-silicon Mac, kind and Compose run them
   emulated (the chart's install took about 100 s there).
 

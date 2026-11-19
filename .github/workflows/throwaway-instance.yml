@@ -55,7 +55,6 @@ env:
 jobs:
   helm:
     name: Helm chart (kind)
-    if: ${{ false }}  # TEMPORARY: off while the runner A/B below runs
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     steps:
@@ -72,16 +71,21 @@ jobs:
       - name: Create the kind cluster
         run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
 
-      # TEMPORARY diagnostic: mysqld's file system calls while it reads its options, traced in a pod on
-      # the kind node and in the runner's Docker; stops the job.
-      - name: Trace mysqld's option reading in kind and in Docker
+      # The runner image's preinstalled MySQL loads an AppArmor profile for /usr/sbin/mysqld, and the host
+      # kernel attaches it to every process that runs that path unconfined, kind's pods among them. It
+      # refuses the chart's MySQL its /etc/my.cnf and /usr/share/mysql-8.4, so mysqld listens on its
+      # built-in socket, the chart's probes look for the configured one, and Kubernetes restarts it until
+      # the install times out. The profile belongs to the runner, not to the cluster under test.
+      - name: Unload the runner's AppArmor profile for mysqld
         run: |
-          trace='microdnf -y install strace > /dev/null 2>&1 || dnf -y install strace > /dev/null 2>&1; env | grep -v -E "TOKEN|SECRET|PASSWORD" | sort | tr "\n" " "; echo; strace -f -s 160 -e trace=%file,openat,open,read,close,fcntl mysqld --verbose --help 2>&1 >/dev/null | grep -v -E "glibc-hwcaps|/private/|/tls|\.so|/proc/self|ld\.so" | grep -E "my\.cnf|mysql/|mysql-8|/etc/|errmsg|E[A-Z]+ \(" | head -60'
-          kubectl run mysql-trace --image=mysql:8.4 --restart=Never --command -- sh -c "$trace" > /dev/null
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-trace --timeout=240s > /dev/null || true
-          echo '--- in a pod on the kind node'; kubectl logs mysql-trace
-          echo "--- in the runner's Docker"; docker run --rm mysql:8.4 sh -c "$trace" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status|Unable to find'
-          exit 1
+          set -euo pipefail
+          if sudo aa-status 2>/dev/null | grep -q '/usr/sbin/mysqld'; then
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+          if sudo aa-status 2>/dev/null | grep -q '/usr/sbin/mysqld'; then
+            echo "::error::the runner still confines /usr/sbin/mysqld"
+            exit 1
+          fi
 
       # With the chart's own MySQL the migration Job is not a Helm hook: it runs beside the Fleet pods,
       # which exit on "missing migrations" until it has finished, so a few restarts are expected.
@@ -206,30 +210,6 @@ jobs:
             echo "--- $pod"; kubectl -n fleet logs "$pod" --tail 40 || true
           done
           echo '--- osquery-perf'; grep -v '^ ' "$RUNNER_TEMP/osquery-perf.log" | tail -20 || true
-          # The chart's MySQL image, looked at from inside the kind node (as a plain pod, with seccomp
-          # off, and privileged) and from the runner's Docker: the process's seccomp and AppArmor
-          # confinement, its option file, mysqld's own warnings, and the socket it resolves.
-          look='grep -E "^(Seccomp|NoNewPrivs):" /proc/self/status; echo "apparmor: $(cat /proc/self/attr/current 2>&1)"; echo "open files: soft $(ulimit -Sn), hard $(ulimit -Hn)"; stat -c "%A %U:%G %n" /etc/my.cnf; echo "read: $(head -c 40 /etc/my.cnf | tr "\n" " ")"; mysqld --verbose --help 2>&1 | grep -E "^(socket|lc-messages-dir) |Warning|ERROR" | head -8; echo "with open files at 1048576:"; (ulimit -n 1048576; mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | head -3)'
-          image="$(kubectl -n fleet get statefulset fleet-mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo mysql:8.4)"
-          # In the kind node: mysqld's socket under lower open-files limits, then its file and rlimit
-          # system calls traced (strace from the image's package manager), then older MySQL images.
-          trace='for n in 65536 1024; do echo "open files $n: $( (ulimit -n $n; mysqld --verbose --help 2>&1 | grep -E "^socket " | tr -s " ") )"; done; microdnf -y install strace > /dev/null 2>&1 || dnf -y install strace > /dev/null 2>&1; strace -f -e trace=%file,getrlimit,prlimit64 mysqld --verbose --help 2>&1 | grep -E "my\.cnf|errmsg|rlimit|E[A-Z]+ \(" | grep -v -E "ld\.so|\.so\." | head -25'
-          echo "--- $image in the kind node, traced"
-          kubectl run mysql-trace --image="$image" --restart=Never --command -- sh -c "$trace" > /dev/null 2>&1 || true
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-trace --timeout=240s > /dev/null 2>&1 || true
-          kubectl logs mysql-trace 2>&1 || true
-          for other in mysql:8.4.11 mysql:8.0; do
-            name="mysql-$(echo "$other" | tr -c 'a-z0-9\n' '-')"
-            echo "--- $other in the kind node"
-            kubectl run "$name" --image="$other" --restart=Never --command -- sh -c 'mysqld --version; mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | tr -s " "' > /dev/null 2>&1 || true
-            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded "pod/$name" --timeout=180s > /dev/null 2>&1 || true
-            kubectl logs "$name" 2>&1 || true
-          done
-          echo "--- the kind node's runtime"
-          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1; echo "containerd open files: $(grep -i "open files" /proc/$(pidof containerd)/limits)"; grep -rn -i -E "seccomp|apparmor|rlimit|nofile" /etc/containerd/config.toml /var/lib/kubelet/config.yaml /etc/systemd/system/containerd.service.d 2>/dev/null | head' || true
-          echo "runner Docker open files: $(docker run --rm busybox sh -c 'ulimit -Sn; ulimit -Hn' 2>/dev/null | tr '\n' ' ')"
-          echo "--- $image in the runner's Docker"
-          docker run --rm "$image" sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status' || true
 
       - name: Merge the reports
         if: ${{ !cancelled() && steps.first-run.outcome != 'skipped' }}
@@ -245,7 +225,6 @@ jobs:
 
   update:
     name: Update flow (Docker Compose)
-    if: ${{ false }}  # TEMPORARY: off while the runner A/B below runs
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     env:
@@ -421,45 +400,3 @@ jobs:
         if: ${{ always() }}
         with:
           name: playwright-report-throwaway-update
-
-  # TEMPORARY diagnostic: whether mysqld in a kind pod can open its own option file, per runner image.
-  mysql-in-kind:
-    name: MySQL in kind (${{ matrix.snapshotter }})
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        snapshotter: [overlayfs]
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install kind, Helm and kubectl
-        run: .github/throwaway-instance/install-k8s-tools.sh
-      - name: Create the kind cluster
-        run: |
-          cp .github/throwaway-instance/kind.yaml "$RUNNER_TEMP/kind.yaml"
-          if [ '${{ matrix.snapshotter }}' = native ]; then
-            printf '%s\n' 'containerdConfigPatches:' '  - |-' '    [plugins."io.containerd.grpc.v1.cri".containerd]' '      snapshotter = "native"' >> "$RUNNER_TEMP/kind.yaml"
-          fi
-          cat "$RUNNER_TEMP/kind.yaml" | tail -6
-          kind create cluster --name throwaway --config "$RUNNER_TEMP/kind.yaml" --wait 2m
-          docker exec throwaway-control-plane sh -c 'head -3 /etc/containerd/config.toml; grep -n -A2 snapshotter /etc/containerd/config.toml | head -8'
-      - name: mysqld's option file in kind, before and after unloading the runner's mysqld AppArmor profile
-        run: |
-          echo "--- the runner's AppArmor profiles for mysqld"
-          sudo aa-status 2>/dev/null | grep -i mysql || echo '(none loaded)'
-          ls /etc/apparmor.d/ | grep -i mysql || true
-          look='echo "mysqld as shipped: $(mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"'
-          kubectl run mysql-before --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-before --timeout=240s > /dev/null || true
-          echo '--- in a kind pod, profile loaded'; kubectl logs mysql-before
-          echo "--- the kernel's AppArmor denials for mysqld"
-          sudo dmesg 2>/dev/null | grep 'apparmor="DENIED"' | grep -i mysqld | sed -E 's/.*(apparmor=.*)/\1/' | cut -c1-220 | sort -u | head -6
-          echo "--- unloading the runner's mysqld profile"
-          for f in /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/*mysql*; do
-            [ -f "$f" ] && sudo apparmor_parser -R "$f" 2>&1 | head -2 && echo "unloaded $f"
-          done
-          sudo aa-status 2>/dev/null | grep -i mysql || echo '(none loaded now)'
-          kubectl run mysql-after --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-after --timeout=240s > /dev/null || true
-          echo '--- in a kind pod, profile unloaded'; kubectl logs mysql-after
