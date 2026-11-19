@@ -9,6 +9,8 @@
 #                                   #   (gitops/premium-fleetqa/fleets/vms.yml, helpers/vm-fixtures.ts)
 #   ./make-msi.sh smoke 1.0.0       # what the per-OS smokes upload to the OS matrix fleet
 #                                   #   for a Windows matrix host (premium/matrix/os-smokes.spec.ts)
+#   ./make-msi.sh self-service 1.0.0  # the VMs fleet's self-service fixture, installed from My device
+#                                     #   (vms.yml, VM_SELF_SERVICE_FIXTURES in helpers/vm-fixtures.ts)
 #
 # Each role is its own title, for the reason make-pkg.sh gives: a premium title
 # can hold several packages, and two specs sharing one would share a Library row.

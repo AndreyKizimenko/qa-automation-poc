@@ -101,6 +101,14 @@ matters* on a real VM. The macOS package installs an app bundle because Fleet's
 macOS inventory lists `.app` bundles only. **Rebuilding one changes its hash**:
 commit it, then point its `*.package.yml` at the new commit and hash, and re-apply.
 
+The `fleet-playwright-self-service` `.pkg`, `.msi` and `.deb` (`make-pkg.sh self-service`,
+`make-msi.sh self-service`, `make-deb.py fleet-playwright-self-service 1.0.0 all`) are the same inert
+builds under a title of their own, "Fleet Playwright Self-service" (`fleet-playwright-self-service` on
+Linux). The VMs fleet declares them `self_service: true`, so each pool VM's My device page lists the one
+of its platform, and only `premium/software/self-service-on-host.spec.ts` installs them, from that page.
+They are listed apart from the install fixtures (`VM_SELF_SERVICE_FIXTURES` in `helpers/vm-fixtures.ts`),
+so no other spec's install meets them on a VM, and the cleanup returns them to rest, uninstalled.
+
 `windows/software/fleet-playwright-smoke-1.0.0.msi` (`make-msi.sh smoke`) is the
 same inert `.msi` under a title of its own, "Fleet Playwright Smoke": the per-OS
 smokes (`premium/matrix/os-smokes.spec.ts`) upload it to the OS matrix fleet for
