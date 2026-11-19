@@ -444,13 +444,22 @@ jobs:
           cat "$RUNNER_TEMP/kind.yaml" | tail -6
           kind create cluster --name throwaway --config "$RUNNER_TEMP/kind.yaml" --wait 2m
           docker exec throwaway-control-plane sh -c 'head -3 /etc/containerd/config.toml; grep -n -A2 snapshotter /etc/containerd/config.toml | head -8'
-      - name: mysqld's option file, in a pod and in Docker
+      - name: mysqld's option file in kind, before and after unloading the runner's mysqld AppArmor profile
         run: |
-          uname -r
-          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1'
-          look='microdnf -y install attr libcap > /dev/null 2>&1; echo "xattrs of /usr/sbin/mysqld:"; getfattr -d -m - -e hex /usr/sbin/mysqld 2>&1 | sed -n "2,\$p"; echo "getcap: [$(getcap /usr/sbin/mysqld 2>&1)]"; echo "xattrs of /usr/bin/cat: [$(getfattr -d -m - /usr/bin/cat 2>&1 | sed -n 2p)]"; grep -E "^Cap(Prm|Eff|Bnd)" /proc/self/status | tr "\n" " "; echo; echo "mysqld as shipped: $(mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"'
-          kubectl run mysql-look --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-look --timeout=240s > /dev/null || true
-          echo '--- in a pod on the kind node'; kubectl logs mysql-look
-          docker exec throwaway-control-plane sh -c 'grep -E " / .*(overlay|native)|/run/containerd/io.containerd.runtime.v2.task/k8s.io/[^ ]+/rootfs" /proc/mounts | grep -c overlay; ls /var/lib/containerd/ | tr "\\n" " "; du -sh /var/lib/containerd/io.containerd.snapshotter.v1.native 2>/dev/null'
-          echo "--- in the runner's Docker"; docker run --rm mysql:8.4 sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status|Unable to find'
+          echo "--- the runner's AppArmor profiles for mysqld"
+          sudo aa-status 2>/dev/null | grep -i mysql || echo '(none loaded)'
+          ls /etc/apparmor.d/ | grep -i mysql || true
+          look='echo "mysqld as shipped: $(mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"'
+          kubectl run mysql-before --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-before --timeout=240s > /dev/null || true
+          echo '--- in a kind pod, profile loaded'; kubectl logs mysql-before
+          echo "--- the kernel's AppArmor denials for mysqld"
+          sudo dmesg 2>/dev/null | grep 'apparmor="DENIED"' | grep -i mysqld | sed -E 's/.*(apparmor=.*)/\1/' | cut -c1-220 | sort -u | head -6
+          echo "--- unloading the runner's mysqld profile"
+          for f in /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/*mysql*; do
+            [ -f "$f" ] && sudo apparmor_parser -R "$f" 2>&1 | head -2 && echo "unloaded $f"
+          done
+          sudo aa-status 2>/dev/null | grep -i mysql || echo '(none loaded now)'
+          kubectl run mysql-after --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-after --timeout=240s > /dev/null || true
+          echo '--- in a kind pod, profile unloaded'; kubectl logs mysql-after
