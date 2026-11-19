@@ -3,7 +3,7 @@
  * declare, plus the ones gitops deliberately leaves alone. The nightly applies
  * the baseline's QA, VMs and OS matrix files in both passes, so the expected
  * set is the union of the baseline and min directories' fleet files, and
- * `Mobile` is hand-kept (gitops/premium-fleetqa/README.md). A fleet the suite's
+ * `Mobile` and `Lab experiments` are hand-kept (gitops/premium-fleetqa/README.md). A fleet the suite's
  * cleanup would sweep (`pw-*`, a throwaway a dead run left) is reported, not
  * failed on: the chain runs before that sweep.
  *

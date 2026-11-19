@@ -45,7 +45,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, OS matrix, Compliance and Mobile (free has no fleets).
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, OS matrix, Compliance, Mobile and Lab experiments (free has no fleets).
 
 ### Keep the client within a minor of the server
 
@@ -67,14 +67,15 @@ reason, and the `gitops-verify` project asserts each fleet's software set exactl
 
 ### Do not pass `--delete-other-fleets`
 
-`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has a fleet that is not under gitops**, and that flag would destroy it:
+`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has fleets that are not under gitops**, and that flag would destroy them:
 
 | fleet | why it is not in gitops |
 |---|---|
 | **Mobile** (104) | Holds ABM/VPP-enrolled mobile state that isn't reproducible from this repo. |
+| **Lab experiments** (884) | The device lab's own VMs for Lock, Unlock and Wipe (phase 2 of `playwright/docs/release-smokes-plan.md`), enrolled with this fleet's enroll secret and kept out of `lab-hosts.json`. The lab owns it; the suite never touches it. |
 
 `playwright/tests/api/gitops-verify/fleets.spec.ts` checks the instance holds exactly the declared fleets plus
-that one (`HAND_KEPT_FLEETS`). A run that names only some of the fleet files would, with the flag, delete the
+those (`HAND_KEPT_FLEETS`). A run that names only some of the fleet files would, with the flag, delete the
 fleets of the others too: OS matrix among them, which would drop the lab's hosts into Unassigned.
 
 A run that names only some fleet files also leaves the others alone without the flag — so applying
