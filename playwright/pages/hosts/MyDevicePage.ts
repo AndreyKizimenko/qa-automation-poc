@@ -64,6 +64,12 @@ export class MyDevicePage {
    */
   readonly selfServiceTable: Locator;
   readonly selfServiceRows: Locator;
+  /**
+   * The Self service tab's **Updates** card: the self-service titles whose library build is newer than the one
+   * installed, each with its own Update, plus "Update all" (`UpdatesCard.tsx`). Fleet renders no card at all
+   * while nothing is behind.
+   */
+  readonly updatesCard: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -91,6 +97,8 @@ export class MyDevicePage {
       .getByRole('table')
       .filter({ has: page.getByRole('columnheader', { name: /^Install status/ }) });
     this.selfServiceRows = this.selfServiceTable.locator('tbody').getByRole('row');
+    // Fleet's own test id on the card's wrapper; the card has no role or heading level of its own.
+    this.updatesCard = page.getByTestId('updates-card');
   }
 
   /** A tab by its label; a count after the label ("Policies 1") still matches. */
@@ -204,6 +212,19 @@ export class MyDevicePage {
     const index = (await headers.allInnerTexts()).map((t) => t.trim()).indexOf('Install status');
     if (index < 0) throw new Error('[MyDevicePage] the Self service table has no "Install status" column');
     return this.selfServiceRow(name).getByRole('cell').nth(index);
+  }
+
+  /** One title's item on the Updates card, by its exact name. */
+  updatesItem(name: string): Locator {
+    // Each item is a role-less Card (`UpdateSoftwareItem.tsx`); its class is all that marks one item apart.
+    return this.updatesCard
+      .locator('.update-software-item__item')
+      .filter({ has: this.page.getByText(name, { exact: true }) });
+  }
+
+  /** A Self service row's install-side button: Install, Reinstall or Update, by `label`. */
+  selfServiceAction(name: string, label: 'Install' | 'Reinstall' | 'Update'): Locator {
+    return this.selfServiceRow(name).getByRole('button', { name: label, exact: true });
   }
 
   /** Clicks a Self service row's Install. Fleet sends the request at once: there is no confirmation. */

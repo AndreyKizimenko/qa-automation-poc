@@ -23,8 +23,8 @@
  *
  * **Claude**, kept installed on the macOS and Windows VMs by
  * `gitops/premium-fleetqa/fleets/vms.yml`, is the durable subject — a real
- * Fleet-maintained app whose library version moves when its vendor ships. Two
- * tests use it:
+ * Fleet-maintained app whose library version moves when its vendor ships. Its tests,
+ * in three groups:
  *
  *   - the contract holds for whatever state the fleet is in right now, on both
  *     platforms: an installed build below the library's must offer Update and
@@ -38,6 +38,12 @@
  *     shipped one since the fleet was provisioned — so it skips, saying why,
  *     until then. Windows doesn't take this walk: Claude for Windows is an MSIX,
  *     and Windows refuses to provision an older MSIX over a newer one.
+ *   - on macOS, the same walk as the end user takes it: Claude offered in
+ *     self-service for the test, reinstalled from My device's Self service tab
+ *     at the pinned previous build, then, unpinned, listed on the tab's
+ *     **Updates** card and updated from there (`UpdatesCard.tsx`). Fleet keeps
+ *     the self-service flag per cached build, so the test sets it on each build
+ *     while that build is the active one, and clears it on both.
  *
  * **Restore the pin.** An exact pin stops the cron for that title, which freezes
  * the version history the second test depends on. The test unpins in a
@@ -58,6 +64,7 @@ import {
   requireRealHost,
   vmTag,
   setPinnedVersion,
+  setSelfService,
   uploadSoftwarePackageBuffer,
   waitForSoftwareSettled,
   type HostSoftwareState,
@@ -251,6 +258,69 @@ test.describe('Premium • Software • Update on host', () => {
       } finally {
         await setPinnedVersion(request, vmsFleetId, claude.titleId, '');
       }
+    });
+
+    test('Claude on the macOS VM, offered in self-service: reinstalled from My device at the previous build, then updated from its Updates card', { tag: '@vm-macos' }, async ({
+      hostDetails,
+      vmsFleetId,
+      request,
+      cleanup,
+    }) => {
+      const { host, claude } = await claudeOn(request, vmsFleetId, 'darwin');
+      test.skip(
+        claude.versions.length < 2,
+        `the VMs fleet has cached one Claude build (${claude.versions.join(', ')}); the walk needs the previous one too`,
+      );
+      const [newest, previous] = claude.versions;
+      const pkg = await getSoftwarePackage(request, vmsFleetId, claude.titleId);
+      expect(pkg?.pinnedVersion, 'Claude arrived pinned — an earlier run died before restoring it').toBe('');
+      expect(pkg?.selfService, 'Claude arrived in self-service — an earlier run died before restoring it').toBe(false);
+      // Fleet keeps the self-service flag per cached build, not per title: a save writes the active build's
+      // installer row only, and a pin makes another build's row the active one, with whatever that row says
+      // (`UpdateInstallerSelfServiceFlag`, `SetFleetMaintainedAppActiveInstaller`). So the flag is set on each
+      // build while it is the active one, and cleared on each the same way: the newest, then the pinned one.
+      // TODO(release-smokes P1.5): per-build self-service reported to Andrey on 2026-11-19, not yet filed.
+      cleanup.add('take Claude out of self-service on both builds, unpinned', async (r) => {
+        await setPinnedVersion(r, vmsFleetId, claude.titleId, previous);
+        await setSelfService(r, vmsFleetId, claude.titleId, false);
+        await setPinnedVersion(r, vmsFleetId, claude.titleId, '');
+        await setSelfService(r, vmsFleetId, claude.titleId, false);
+      });
+      await setSelfService(request, vmsFleetId, claude.titleId, true);
+      await setPinnedVersion(request, vmsFleetId, claude.titleId, previous);
+      await setSelfService(request, vmsFleetId, claude.titleId, true);
+
+      await hostDetails.goto(host.id);
+      const device = await hostDetails.openMyDevice();
+      await device.expectLoaded();
+
+      await test.step(`My device's Self service reinstalls the pinned build, ${previous}`, async () => {
+        await device.openTab('Self service');
+        await expect(await device.selfServiceStatus('Claude')).toHaveText(/^Installed/);
+        // Ahead of the library: nothing to update.
+        await expect(device.updatesItem('Claude')).toHaveCount(0);
+        await device.selfServiceAction('Claude', 'Reinstall').click();
+        const level = await waitForSoftwareSettled(request, host.id, claude.titleId, 'installed', { version: previous });
+        expect(level.installedVersions).toEqual([previous]);
+      });
+
+      await test.step(`unpinned, the Updates card offers ${newest}, and its Update installs it`, async () => {
+        await setPinnedVersion(request, vmsFleetId, claude.titleId, '');
+        await device.gotoDetails();
+        await device.openTab('Self service');
+        const item = device.updatesItem('Claude');
+        await expect(item).toBeVisible();
+        await expect(item).toContainText(newest);
+        await item.getByRole('button', { name: 'Update' }).click();
+        await expect(item).toContainText(/Updating\.\.\.|Updated/);
+        const after = await waitForSoftwareSettled(request, host.id, claude.titleId, 'installed', { version: newest });
+        expect(after.installedVersions).toEqual([newest]);
+
+        await device.gotoDetails();
+        await device.openTab('Self service');
+        await expect(device.selfServiceAction('Claude', 'Reinstall')).toBeVisible();
+        await expect(device.updatesItem('Claude')).toHaveCount(0);
+      });
     });
   });
 });
