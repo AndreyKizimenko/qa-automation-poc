@@ -194,6 +194,16 @@ jobs:
             echo "--- $pod"; kubectl -n fleet logs "$pod" --tail 40 || true
           done
           echo '--- osquery-perf'; grep -v '^ ' "$RUNNER_TEMP/osquery-perf.log" | tail -20 || true
+          # The chart's MySQL image, looked at from inside the kind node and from the runner's Docker:
+          # its option file and message files, and the socket and messages directory mysqld resolves.
+          look='ls -la /etc/my.cnf /usr/share/mysql-8.4/english/errmsg.sys 2>&1; mysqld --verbose --help 2>/dev/null | grep -E "^(socket|lc-messages-dir|datadir) "'
+          image="$(kubectl -n fleet get statefulset fleet-mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo mysql:8.4)"
+          echo "--- $image in the kind node"
+          kubectl run mysql-files --image="$image" --restart=Never --command -- sh -c "$look" > /dev/null 2>&1 || true
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-files --timeout=120s > /dev/null 2>&1 || true
+          kubectl logs mysql-files 2>&1 || true
+          echo "--- $image in the runner's Docker"
+          docker run --rm "$image" sh -c "$look" 2>&1 || true
 
       - name: Merge the reports
         if: ${{ !cancelled() && steps.first-run.outcome != 'skipped' }}
