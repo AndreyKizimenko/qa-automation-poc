@@ -17,11 +17,12 @@ pages/
 ├── components/         # Reusable widgets used across pages (DataTable, Navbar, etc.)
 ├── index.ts            # Re-exports every page and every component
 ├── DashboardPage.ts    # Top-level nav entries live at root
-├── auth/               # LoginPage, ForgotPasswordPage
+├── auth/               # LoginPage, ForgotPasswordPage, RegistrationPage (a brand-new server's /setup)
 ├── account/            # MyAccountPage
 ├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage, MyDevicePage
 │                       #   (MyDevicePage: the end user's page, opened from Host details: its tabs,
-│                       #   vitals, Refetch, Software inventory, Policies and Self service install/uninstall)
+│                       #   vitals, Refetch, Software inventory searched by name or CVE, Policies,
+│                       #   Self service install/uninstall/actions and its Updates card)
 │                       #   (HostDetailsPage has Controls/Software/Reports/Policies tabs,
 │                       #   but hosts is its primary nav context; its vitals, Agent
 │                       #   options card and `tooltip` read a Chromebook's page too,

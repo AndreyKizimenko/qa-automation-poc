@@ -8,7 +8,7 @@ premium-fleetqa/
 └── fleets/
     ├── workstations.yml     # fleet "Workstations" — full scope
     ├── qa.yml               # fleet "QA" — the durable Fleet-maintained-app shelf
-    ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, the install/uninstall packages and apps, a report)
+    ├── vms.yml              # fleet "VMs" — the real VMs' durable fixtures (Claude, the install/uninstall packages and apps, the patch apps, a report)
     ├── os-matrix.yml        # fleet "OS matrix" — the lab's OS-flavour and special-purpose hosts; declared empty, disk encryption off
     └── compliance.yml       # fleet "Compliance" — every host-affecting control, on a fleet with no hosts
 ```

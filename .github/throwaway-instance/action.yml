@@ -1,0 +1,82 @@
+name: Prepare the throwaway instance's tools
+description: >-
+  Reads which Fleet revision an image was built from, checks Fleet out at that revision and builds
+  osquery-perf and fleetctl from it, sets up Node, and installs the Playwright suite's packages in the
+  Playwright image. The one checkout gives the Helm chart, the simulations and the CLI the image's own
+  revision, so all three match the server they meet.
+
+# Exports to the job's environment: IMAGE (the tag), FLEET_VERSION and FLEET_REVISION (what the image
+# reports), and puts osquery-perf and fleetctl on PATH. Fleet's source is left in .fleet-src: the Helm
+# job installs its chart, and osquery-perf runs from its cmd/osquery-perf (it builds its software
+# inventory from the software-library folder beside it).
+
+inputs:
+  image:
+    description: The fleetdm/fleet image tag
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Read the image's revision
+      shell: bash
+      env:
+        TAG: ${{ inputs.image }}
+      run: |
+        set -euo pipefail
+        docker pull --quiet "fleetdm/fleet:$TAG"
+        full="$(docker run --rm "fleetdm/fleet:$TAG" fleet version --full)"
+        field() { sed -nE "s/^ *$1:[[:space:]]*//p" <<< "$full" | head -1; }
+        version="$(sed -nE 's/^fleet - version //p' <<< "$full")"
+        revision="$(field revision)"
+        branch="$(field branch)"
+        if [ -z "$version" ] || [ -z "$revision" ] || [ "$revision" = unknown ]; then
+          echo "::error::fleetdm/fleet:$TAG reports no version or revision:"$'\n'"$full"
+          exit 1
+        fi
+        echo "fleetdm/fleet:$TAG is Fleet $version, revision $revision ($branch)"
+        {
+          echo "IMAGE=$TAG"
+          echo "FLEET_VERSION=$version"
+          echo "FLEET_REVISION=$revision"
+          echo "FLEET_BRANCH=$branch"
+        } >> "$GITHUB_ENV"
+
+    - name: Check out Fleet at the image's revision
+      uses: actions/checkout@v5
+      with:
+        repository: fleetdm/fleet
+        ref: ${{ env.FLEET_REVISION }}
+        path: .fleet-src
+        fetch-depth: 1
+        persist-credentials: false
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: .fleet-src/go.mod
+        cache-dependency-path: .fleet-src/go.sum
+
+    # fleetctl carries the image's version and revision, as Fleet's own build does, so `fleetctl
+    # --version` matches the server and it prints no version-mismatch warning.
+    - name: Build osquery-perf and fleetctl
+      shell: bash
+      run: |
+        set -euo pipefail
+        out="$GITHUB_WORKSPACE/.throwaway-bin"
+        mkdir -p "$out"
+        cd "$GITHUB_WORKSPACE/.fleet-src"
+        pkg=github.com/fleetdm/fleet/v4/server/version
+        CGO_ENABLED=0 go build -trimpath \
+          -ldflags "-X $pkg.appName=fleetctl -X $pkg.version=$FLEET_VERSION -X $pkg.revision=$FLEET_REVISION -X $pkg.branch=$FLEET_BRANCH" \
+          -o "$out/fleetctl" ./cmd/fleetctl
+        go build -o "$out/osquery-perf" ./cmd/osquery-perf
+        echo "$out" >> "$GITHUB_PATH"
+        "$out/fleetctl" --version
+
+    - uses: actions/setup-node@v5
+      with:
+        node-version: lts/*
+
+    - name: Install the Playwright suite's packages
+      shell: bash
+      run: .github/throwaway-instance/playwright.sh npm ci

@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-type Suite = 'free' | 'premium' | 'loadtest';
-const VALID_SUITES: readonly Suite[] = ['free', 'premium', 'loadtest'] as const;
+type Suite = 'free' | 'premium' | 'loadtest' | 'throwaway';
+const VALID_SUITES: readonly Suite[] = ['free', 'premium', 'loadtest', 'throwaway'] as const;
 
 // Projects that uniquely target one tier. Setup projects map to the suite
 // of the browser project they support. Anything not in this map (cleanup
@@ -24,6 +24,9 @@ const PROJECT_TO_SUITE: Readonly<Record<string, Suite>> = {
   loadtest: 'loadtest',
   'loadtest-setup': 'loadtest',
   'loadtest-api': 'loadtest',
+  throwaway: 'throwaway',
+  'throwaway-setup': 'throwaway',
+  'throwaway-first-run': 'throwaway',
 };
 
 const SUITE_AMBIGUOUS_PROJECTS: ReadonlySet<string> = new Set([
@@ -268,6 +271,8 @@ export default defineConfig({
         '**/cli/nightly/**',
         '**/free/**',
         '**/loadtest/**',
+        // The throwaway instance's own specs; see the throwaway projects.
+        '**/throwaway/**',
         // Enabling gitops mode is a global config write that disables the
         // controls every other mutating spec depends on. It gets its own
         // single-worker project, run in its own invocation after this one's.
@@ -412,6 +417,8 @@ export default defineConfig({
         '**/cli/nightly/**',
         '**/premium/**',
         '**/loadtest/**',
+        // The throwaway instance's own specs; see the throwaway projects.
+        '**/throwaway/**',
         // Specs that hold a global lock of their own; see premium-exclusive.
         '**/exclusive/**',
         // The per-OS smokes; see free-matrix.
@@ -523,6 +530,37 @@ export default defineConfig({
       fullyParallel: false,
       timeout: 0,
       retries: 0,
+    },
+
+    // ── Throwaway instance (QA — Throwaway instance workflow) ──────────────────
+    // A free Fleet the workflow brings up on its own runner, seeds, and drops with
+    // the runner: none of the standing instances' state (static users, gitops,
+    // lab VMs) exists there, and nothing is left behind to clean, so these
+    // projects have no cleanup chain. The workflow passes FLEET_URL and the
+    // admin it made in the environment (.env.throwaway.example).
+    //
+    // `throwaway-first-run` drives Fleet's first-run setup page, so it runs once,
+    // first, and only against a brand-new server (the workflow's Helm job).
+    {
+      name: 'throwaway-first-run',
+      testDir: './tests/e2e/throwaway/first-run',
+      use: { ...devices['Desktop Chrome'] },
+      retries: 0,
+    },
+    {
+      name: 'throwaway-setup',
+      testDir: './setup',
+      testMatch: /throwaway\.setup\.ts/,
+    },
+    {
+      name: 'throwaway',
+      testDir: './tests/e2e/throwaway',
+      testIgnore: ['**/first-run/**'],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.auth/throwaway-admin.json',
+      },
+      dependencies: ['throwaway-setup'],
     },
   ],
 });

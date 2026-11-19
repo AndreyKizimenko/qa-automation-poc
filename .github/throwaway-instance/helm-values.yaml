@@ -1,0 +1,45 @@
+# Values for Fleet's Helm chart (fleetdm/fleet charts/fleet) on the throwaway kind cluster: a free Fleet
+# with the chart's own MySQL and Valkey subcharts, the way a person tests the chart on a laptop. The
+# release must be named `fleet`: the database and cache addresses below are the subcharts' Services,
+# which take the release's name. The image tag comes from the workflow (`--set imageTag=`).
+#
+# Two replicas, so a live report's results have to cross pods through Valkey: the host answers
+# whichever pod its request lands on, and the browser listens on whichever pod its websocket did.
+replicas: 2
+imagePullPolicy: IfNotPresent
+
+fleet:
+  # Plain HTTP, as the runbook's port-forward does: nothing here crosses the runner.
+  tls:
+    enabled: false
+
+osquery:
+  # The chart's default of 30 min would leave a label's membership and the hosts' details unread for
+  # the whole run.
+  labelUpdateInterval: 1m
+  detailUpdateInterval: 1m
+  logging:
+    statusPlugin: filesystem
+    resultPlugin: filesystem
+    filesystem:
+      volumeSize: 1Gi
+
+database:
+  address: fleet-mysql:3306
+  secretName: fleet-mysql
+
+cache:
+  address: fleet-valkey:6379
+
+mysql:
+  enabled: true
+  primary:
+    persistence:
+      size: 2Gi
+
+redis:
+  enabled: true
+
+environments:
+  # Hosts run a new policy at the next policy interval (default 1 h).
+  FLEET_OSQUERY_POLICY_UPDATE_INTERVAL: 1m

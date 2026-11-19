@@ -55,17 +55,21 @@ export async function deletePolicies(request: APIRequestContext, ids: number[]):
   await expectOk(res, `Failed to delete global policies ${ids.join(', ')}`);
 }
 
-/** A fleet's own policies (not inherited global ones). */
+/**
+ * A fleet's own policies (not inherited global ones). `type` is Fleet's: `dynamic` for a policy someone wrote,
+ * `patch` for one Fleet made for a Fleet-maintained app (Deploy → Patch), which Fleet names itself.
+ */
 export async function listFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
-): Promise<Array<PolicyRef & { query: string }>> {
+): Promise<Array<PolicyRef & { query: string; type: string }>> {
   const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
   if (!res.ok()) throw new Error(`[listFleetPolicies] ${res.status()}: ${await res.text()}`);
-  return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string }) => ({
+  return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string; type?: string }) => ({
     id: p.id,
     name: p.name,
     query: p.query,
+    type: p.type ?? 'dynamic',
   }));
 }
 
@@ -110,6 +114,16 @@ export interface GlobalPolicy extends PolicyRef {
 }
 
 /** One global policy, read back after a UI write. */
+/** The global policy of that exact name; throws when there is none. */
+export async function findGlobalPolicyByName(request: APIRequestContext, name: string): Promise<GlobalPolicy> {
+  const res = await request.get(apiUrl('global/policies'), { headers: authHeaders() });
+  await expectOk(res, 'Failed to list the global policies');
+  const policies = ((await res.json()).policies ?? []) as Array<{ id: number; name: string; query: string; platform?: string }>;
+  const policy = policies.find((p) => p.name === name);
+  if (!policy) throw new Error(`No global policy named "${name}"`);
+  return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
+}
+
 export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
   const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read global policy ${id}`);

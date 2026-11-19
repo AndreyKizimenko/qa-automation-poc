@@ -225,3 +225,26 @@ export async function setPinnedVersion(
     `title ${titleId}'s pin on fleet ${fleetId} after setting it to "${version}"`,
   ).toBe(version);
 }
+
+/**
+ * Offers (or stops offering) a fleet's title in self-service, as Edit software's "Self-service" box does: a
+ * multipart PATCH of the title's package carrying only `self_service`, so nothing else about the installer
+ * changes. Read back, since a field Fleet ignored would answer 200 all the same.
+ */
+export async function setSelfService(
+  request: APIRequestContext,
+  fleetId: number,
+  titleId: number,
+  on: boolean,
+): Promise<void> {
+  const res = await request.patch(apiUrl(`software/titles/${titleId}/package`), {
+    headers: authHeaders(),
+    multipart: { fleet_id: String(fleetId), self_service: String(on) },
+    timeout: 60_000,
+  });
+  await expectOk(res, `Failed to set self-service on title ${titleId}`);
+  expect(
+    (await getSoftwarePackage(request, fleetId, titleId))?.selfService,
+    `title ${titleId}'s self-service on fleet ${fleetId} after setting it to ${on}`,
+  ).toBe(on);
+}

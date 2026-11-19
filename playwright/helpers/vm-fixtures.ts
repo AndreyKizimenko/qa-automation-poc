@@ -72,8 +72,24 @@ export const VM_SELF_SERVICE_FIXTURES: readonly VmSoftwareFixture[] = [
   { label: 'Linux .deb', platform: 'linux', packageName: 'fleet-playwright-self-service_1.0.0_all.deb' },
 ];
 
+/**
+ * The Fleet-maintained apps the VMs fleet keeps for `premium/exclusive/software/fma-patch-policy.spec.ts`, two per
+ * platform: apps whose vendors ship often, so Fleet's hourly auto-update keeps a previous build of each to pin back
+ * to (vms.yml, item 5). In the order the spec tries them, after Itsycal on macOS. Resting state: uninstalled.
+ */
+export const VM_PATCH_FIXTURES: readonly VmSoftwareFixture[] = [
+  { label: 'macOS Visual Studio Code', platform: 'darwin', fleetMaintainedName: 'Microsoft Visual Studio Code' },
+  { label: 'macOS Google Chrome', platform: 'darwin', fleetMaintainedName: 'Google Chrome' },
+  { label: 'Windows Visual Studio Code', platform: 'windows', fleetMaintainedName: 'Microsoft Visual Studio Code' },
+  { label: 'Windows Google Chrome', platform: 'windows', fleetMaintainedName: 'Google Chrome' },
+];
+
 /** Every durable fixture on the VMs fleet, whichever spec installs it: what the cleanup returns to rest. */
-export const VM_DURABLE_FIXTURES: readonly VmSoftwareFixture[] = [...VM_SOFTWARE_FIXTURES, ...VM_SELF_SERVICE_FIXTURES];
+export const VM_DURABLE_FIXTURES: readonly VmSoftwareFixture[] = [
+  ...VM_SOFTWARE_FIXTURES,
+  ...VM_SELF_SERVICE_FIXTURES,
+  ...VM_PATCH_FIXTURES,
+];
 
 /**
  * The `.msi` the per-OS smokes upload to the OS matrix fleet for a Windows

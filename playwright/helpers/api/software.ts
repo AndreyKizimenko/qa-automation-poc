@@ -471,6 +471,40 @@ export async function listHostCves(request: APIRequestContext, hostId: number): 
   return rows.flatMap((r) => (r.installed_versions ?? []).flatMap((v) => v.vulnerabilities ?? []));
 }
 
+/** A title on a host that Fleet has matched CVEs to, as its inventory names it. */
+export interface HostVulnerableTitle {
+  /** What the host's tables show: the display name when the title has one. */
+  shownAs: string;
+  /** Every CVE of every installed version, once each, in Fleet's order: what a Vulnerabilities cell counts. */
+  cves: string[];
+}
+
+/**
+ * The host's vulnerable software (`GET /hosts/:id/software?vulnerable=true`), by title, in the order Fleet
+ * lists it: what Host details' Inventory and My device's Software tab show in their Vulnerabilities column.
+ */
+export async function listHostVulnerableTitles(
+  request: APIRequestContext,
+  hostId: number,
+): Promise<HostVulnerableTitle[]> {
+  const res = await request.get(apiUrl(`hosts/${hostId}/software`), {
+    headers: authHeaders(),
+    params: { vulnerable: 'true', per_page: '100' },
+  });
+  await expectOk(res, `Failed to list the vulnerable software on host ${hostId}`);
+  const rows = ((await res.json()).software ?? []) as Array<{
+    name: string;
+    display_name?: string;
+    installed_versions: Array<{ vulnerabilities: string[] | null }> | null;
+  }>;
+  return rows
+    .map((r) => ({
+      shownAs: r.display_name || r.name,
+      cves: [...new Set((r.installed_versions ?? []).flatMap((v) => v.vulnerabilities ?? []))],
+    }))
+    .filter((t) => t.cves.length > 0);
+}
+
 export async function listVulnerabilityHosts(
   request: APIRequestContext,
   cve: string,

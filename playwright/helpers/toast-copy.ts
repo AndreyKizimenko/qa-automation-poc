@@ -18,6 +18,8 @@ export const toastCopy = {
   software: {
     /** frontend/pages/SoftwarePage/SoftwarePage.tsx, after the vulnerability automations modal saves. */
     vulnerabilityAutomationsUpdated: 'Successfully updated vulnerability automations.',
+    /** frontend/pages/SoftwarePage/SoftwareTitleDetailsPage/DeployModal, after Deploy's Save (install and patch choices). */
+    deployUpdated: 'Successfully updated deploy options.',
   },
   scripts: {
     /** The scripts library's upload modal, on a script Fleet accepted. */
@@ -31,6 +33,10 @@ export const toastCopy = {
     /** The server's refusal (409) to delete a variable a library script on Unassigned uses, relayed by the delete modal. */
     usedByUnassignedScript: (name: string, script: string) =>
       `Couldn't delete. ${name} is used by the "${script}" script in the "Unassigned" fleet. Please edit or delete the script and try again.`,
+  },
+  osUpdates: {
+    /** frontend/pages/ManageControlsPage/OSUpdates/components/WindowsTargetForm/WindowsTargetForm.tsx, after a save. */
+    windowsUpdated: 'Successfully updated Windows OS update options.',
   },
   diskEncryption: {
     /** frontend/pages/hosts/details/DeviceUserPage/DeviceUserPage.tsx, when the server refuses My device's *Create key* (anything but a 409). */
