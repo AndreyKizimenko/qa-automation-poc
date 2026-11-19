@@ -32,6 +32,10 @@ export const toastCopy = {
     usedByUnassignedScript: (name: string, script: string) =>
       `Couldn't delete. ${name} is used by the "${script}" script in the "Unassigned" fleet. Please edit or delete the script and try again.`,
   },
+  osUpdates: {
+    /** frontend/pages/ManageControlsPage/OSUpdates/components/WindowsTargetForm/WindowsTargetForm.tsx, after a save. */
+    windowsUpdated: 'Successfully updated Windows OS update options.',
+  },
   diskEncryption: {
     /** frontend/pages/hosts/details/DeviceUserPage/DeviceUserPage.tsx, when the server refuses My device's *Create key* (anything but a 409). */
     createKeyRefused: 'Failed to trigger key creation.',

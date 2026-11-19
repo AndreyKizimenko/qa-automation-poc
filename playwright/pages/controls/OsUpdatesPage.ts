@@ -122,18 +122,30 @@ export class OsUpdatesPage {
   /**
    * The Windows inputs carry no `name`, so Fleet's labels aren't associated with
    * them and they have no accessible name at all; each is reached through the
-   * form field that holds its label text (`FormField`'s wrapper has no role).
+   * form field that holds its help text (`FormField`'s wrapper has no role). Not
+   * its label: a validation error takes the label's place, while the help text
+   * stays (`FormField.tsx`).
    */
-  private windowsField(label: string): Locator {
-    return this.panel('Windows').locator('.form-field').filter({ hasText: label }).getByRole('textbox');
+  private windowsField(helpText: string): Locator {
+    return this.panel('Windows').locator('.form-field').filter({ hasText: helpText }).getByRole('textbox');
   }
 
+  /** "Days after release": `WindowsTargetForm.tsx`'s help text, "Number of days from 0 to 30." */
   windowsDeadlineDaysInput(): Locator {
-    return this.windowsField('Days after release');
+    return this.windowsField('Number of days from 0 to 30.');
   }
 
+  /** "Grace period": help text "Number of days from 0 to 7." */
   windowsGracePeriodInput(): Locator {
-    return this.windowsField('Grace period');
+    return this.windowsField('Number of days from 0 to 7.');
+  }
+
+  /**
+   * A Windows field's validation error. Fleet puts it in place of the field's label, as on the Apple form, but
+   * the Windows inputs aren't tied to their labels (above), so the error is matched as the panel's text.
+   */
+  windowsFieldError(message: string): Locator {
+    return this.panel('Windows').getByText(message, { exact: true });
   }
 
   // ── Both ───────────────────────────────────────────────────────────────────
