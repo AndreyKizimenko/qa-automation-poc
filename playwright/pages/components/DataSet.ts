@@ -19,6 +19,21 @@ export class DataSet {
    * "Added to Fleet", and a substring match resolves to both. A horizontal
    * DataSet appends a colon to its term, so one is tolerated.
    */
+  /**
+   * Every term and value in scope, in page order, as each renders: the term without a horizontal set's colon,
+   * whitespace in the value collapsed. A term shown twice is listed twice.
+   */
+  async entries(): Promise<Array<[title: string, value: string]>> {
+    const sets = this.scope.locator('.data-set');
+    return sets.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const title = node.querySelector('dt')?.innerText.trim().replace(/:$/, '') ?? '';
+        const value = node.querySelector('dd')?.innerText.trim().replace(/\s+/g, ' ') ?? '';
+        return [title, value] as [string, string];
+      }),
+    );
+  }
+
   value(title: string): Locator {
     // Expressed as one selector rather than a `filter({ has })`: a `has` locator
     // keeps the chain of whatever root built it, so a DataSet scoped to a

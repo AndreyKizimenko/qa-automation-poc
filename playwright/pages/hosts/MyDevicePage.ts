@@ -100,9 +100,30 @@ export class MyDevicePage {
     await expect(this.vitals.value('Operating system')).toBeVisible();
   }
 
+  /**
+   * Loads the page afresh on its Details tab. Each tab is a path under the device's URL (`/device/:token/software`,
+   * …) and a reload stays on it, so this loads the device's own URL instead.
+   */
+  async gotoDetails(): Promise<void> {
+    await this.page.goto(this.page.url().replace(/\/(self-service|controls|software|policies)([?#].*)?$/, ''));
+    await this.expectLoaded();
+  }
+
   async openTab(label: MyDeviceTab): Promise<void> {
     await this.tab(label).click();
     await expect(this.tab(label)).toHaveAttribute('aria-selected', 'true');
+  }
+
+  /**
+   * Software tab, unsearched, as it opens (a macOS host on the "App (macOS)" type, like Host details' Inventory):
+   * the "N items" above the table, as a number. Fleet localises it past a thousand ("1,401 items").
+   */
+  async softwareItemCount(): Promise<number> {
+    await this.openTab('Software');
+    // The same table component as Host details' Inventory, and the count is its own class there too.
+    const count = this.page.locator('.host-software-table .table-container__results-count');
+    await expect(count).toHaveText(/^[\d,]+ items?$/);
+    return Number((await count.innerText()).replace(/[^\d]/g, ''));
   }
 
   /** Software tab, searched for one title: its inventory row, matched on the title's exact text. */

@@ -7,9 +7,12 @@
  * the parts every tier has:
  *
  *   - **The link** lands on the page's Details tab, and the activity names the host.
- *   - **Details** shows this host's vitals: the page names no host (its heading is "My device" for every
- *     host), so it is told apart by the private IP and MAC address Host details shows for the same host.
- *   - **Software** is the host's inventory: fleetd's own package is on it.
+ *   - **Details** shows what the admin sees: every value on it equals Host details' value under the same
+ *     title (`expectDetailsMatchHostDetails`, `helpers/my-device.ts`). The end user sees less (no custom
+ *     host vitals, MDM server URL or status, patch deadline or agent options), but nothing different. The
+ *     page names no host (its heading is "My device" for every host), so the values are what tell it apart.
+ *   - **Software** is the host's inventory: as many titles as Host details' Inventory, and fleetd's own
+ *     package among them.
  *   - **Refetch** collects the host's vitals again, and the page says so while it does.
  *
  * Premium's tabs (Self service, Policies) are `premium/software/self-service-on-host.spec.ts`'s and
@@ -33,6 +36,7 @@ import {
   waitForHostRefetch,
   waitForNoPendingRefetch,
 } from '@helpers/api';
+import { expectDetailsMatchHostDetails, expectSoftwareCountMatchesHostDetails } from '@helpers/my-device';
 
 /** fleetd's own package on the Linux pool VMs (`fleet-osquery`, a `.deb`). */
 const FLEETD_PACKAGE = { name: 'fleet-osquery', type: 'Package (deb)' };
@@ -41,7 +45,7 @@ test.describe('Shared • Hosts • My device', () => {
   // Opening the page, and on the refetch's test a host collection (70–120 s on a VM).
   test.describe.configure({ timeout: 300_000, retries: HOST_RETRIES });
 
-  test("the admin's link opens the host's My device page on its Details, with its vitals", { tag: '@vm-linux' }, async ({
+  test("the admin's link opens the host's My device page on its Details, showing what the admin sees", { tag: '@vm-linux' }, async ({
     hostDetails,
     request,
   }) => {
@@ -49,27 +53,24 @@ test.describe('Shared • Hosts • My device', () => {
     const before = await latestActivityId(request);
 
     await hostDetails.goto(host.id);
-    const ip = (await hostDetails.vitals.value('Private IP address').innerText()).trim();
-    const mac = (await hostDetails.vitals.value('MAC address').innerText()).trim();
     const device = await hostDetails.openMyDevice();
     await device.expectLoaded();
     await expect(device.page).toHaveURL(/\/device\/[^/]+$/);
 
-    await test.step('Details: the vitals are this host’s', async () => {
-      await expect(device.vitals.value('Private IP address')).toHaveText(ip);
-      await expect(device.vitals.value('MAC address')).toHaveText(mac);
-    });
+    await test.step('Details: every value is the one Host details shows', () => expectDetailsMatchHostDetails(hostDetails, device));
 
     await test.step('the activity says the admin asked for this host’s link', () =>
       assertActivityAfter(request, 'retrieved_host_my_device_url', before, (d) => d.host_id === host.id),
     );
   });
 
-  test("its Software tab lists the host's inventory", { tag: '@vm-linux' }, async ({ hostDetails, request }) => {
+  test("its Software tab lists the host's inventory, as Host details does", { tag: '@vm-linux' }, async ({ hostDetails, request }) => {
     const host = await requireRealHost(request, 'linux');
     await hostDetails.goto(host.id);
     const device = await hostDetails.openMyDevice();
     await device.expectLoaded();
+
+    await test.step("as many titles as Host details' Inventory", () => expectSoftwareCountMatchesHostDetails(hostDetails, device));
 
     const row = await device.findInSoftware(FLEETD_PACKAGE.name);
     await expect(row).toBeVisible();

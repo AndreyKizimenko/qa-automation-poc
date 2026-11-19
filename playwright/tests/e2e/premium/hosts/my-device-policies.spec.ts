@@ -3,7 +3,9 @@
  *
  * Premium's My device page has a Policies tab (`DeviceUserPage.tsx`): the policies that reach the host, each
  * with its answer ("Pass", "Fail"), and a count of the failing ones on the tab. Clicking a policy opens its
- * details under its name. Free's page has no such tab (the per-OS smokes check the tabs of each tier).
+ * details under its name. What the end user sees is what the admin sees: the tab's count is Host details'
+ * Policies tab's, and each answer is the one Host details shows. Free's page has no such tab (the per-OS
+ * smokes check the tabs of each tier).
  *
  * **The policies.** Two per run on the VMs fleet, both Linux only, with no automation: one every host passes
  * and one every host fails. They reach the other Linux pool VMs too, which answer them and nothing more, so
@@ -17,6 +19,7 @@
  * Grounded in: `DeviceUserPage.tsx` (the tab and its count), `cards/Policies/HostPolicies.tsx` (the table) and
  * `components/policies/helpers.ts` (the status words).
  */
+import type { Locator } from '@playwright/test';
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import { getHostPolicyResponses, requestHostRefetch, requireRealHost, waitForNoPendingRefetch } from '@helpers/api';
 
@@ -64,7 +67,23 @@ test.describe('Premium • Hosts • My device policies', () => {
       await expect(device.policyRow(failing.name)).toContainText('Fail');
     });
 
+    await test.step("what the end user sees is what Host details shows: the count, and each answer", async () => {
+      // Read in pairs until they agree: another spec's policy can be answered between two reads.
+      await expect(async () => {
+        await hostDetails.goto(host.id);
+        await device.gotoDetails();
+        const tabText = async (tab: Locator) => (await tab.innerText()).replace(/\s+/g, ' ').trim();
+        expect(await tabText(device.tab('Policies')), "My device's Policies tab against Host details'").toBe(
+          await tabText(hostDetails.policiesTab),
+        );
+      }).toPass({ timeout: 60_000, intervals: [5_000] });
+      await hostDetails.openPoliciesTab();
+      await expect(hostDetails.policyRow(passing.name)).toContainText('Pass');
+      await expect(hostDetails.policyRow(failing.name)).toContainText('Fail');
+    });
+
     await test.step('a policy opens its details, under its name', async () => {
+      await device.openTab('Policies');
       const details = await device.openPolicy(failing.name);
       await details.getByRole('button', { name: 'Close' }).click();
       await expect(details).toBeHidden();

@@ -442,6 +442,17 @@ export class HostDetailsPage {
     await this.searchSoftware(title);
   }
 
+  /**
+   * Software → Inventory with no search, as the page opens it: a macOS host on the "App (macOS)" type, every
+   * other platform on every type. Waits for the table to settle.
+   */
+  async openInventoryUnsearched(): Promise<void> {
+    await this.softwareTab.click();
+    if (process.env.SUITE === 'premium') await this.inventoryTab.click();
+    await expect(this.softwareRowOrEmpty()).toBeVisible();
+    await expect(this.softwareCount).toBeVisible();
+  }
+
   /** First inventory row, or the table's empty state — the tab has settled either way. */
   softwareRowOrEmpty(): Locator {
     return this.softwareRows.first().or(this.softwareEmptyState);

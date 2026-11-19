@@ -61,6 +61,7 @@ import {
 import { isVmLabHost, labHostFleet, labHostsOfRun, poolHostsOfRun, type LabHost, type LabPackage, type VmPlatform } from './lab-hosts';
 import { runNonce } from './profiles';
 import { activityCopy } from './activity-copy';
+import { expectDetailsMatchHostDetails, expectSoftwareCountMatchesHostDetails } from './my-device';
 
 /**
  * The OS name Fleet shows for each manifest `os`, and the major version the
@@ -493,28 +494,29 @@ export function hasMyDevice(subject: Subject): boolean {
 }
 
 /**
- * Its My device page opens from Host details' link, on Details, showing this host's vitals (the page names no
- * host, so its private IP address is compared with Host details'), the tier's tabs, and on its Software tab the
- * package known to be on it, as its package type. Each tier's spec passes the tabs it expects: a tab listed as
- * absent is checked only after the shown ones, so the absence isn't read off a page that never rendered its
- * tabs. Only for a host with Fleet Desktop ({@link hasMyDevice}).
+ * Its My device page opens from Host details' link, on Details, and what it shows is what the admin sees: every
+ * value on its Details tab equals Host details' value under the same title, and its Software tab counts as many
+ * titles as Host details' Inventory (`helpers/my-device.ts`). It shows the tier's tabs, and on its Software tab
+ * the package known to be on the host, as its package type. Each tier's spec passes the tabs it expects: a tab
+ * listed as absent is checked only after the shown ones, so the absence isn't read off a page that never
+ * rendered its tabs. Only for a host with Fleet Desktop ({@link hasMyDevice}).
  */
 async function myDevice(
   { hostDetails, request }: { hostDetails: HostDetailsPage; request: APIRequestContext },
   subject: Subject,
   tabs: { shown: MyDeviceTab[]; absent: MyDeviceTab[] },
 ): Promise<void> {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const host = await hostOf(request, subject);
   const known = KNOWN_PACKAGE[subject.entry.package];
 
   await hostDetails.goto(host.id);
-  const ip = (await hostDetails.vitals.value('Private IP address').innerText()).trim();
   const device = await hostDetails.openMyDevice();
   await device.expectLoaded();
-  await expect(device.vitals.value('Private IP address')).toHaveText(ip);
   for (const tab of tabs.shown) await expect(device.tab(tab)).toBeVisible();
   for (const tab of tabs.absent) await expect(device.tab(tab)).toHaveCount(0);
+  await expectDetailsMatchHostDetails(hostDetails, device);
+  await expectSoftwareCountMatchesHostDetails(hostDetails, device);
 
   const row = await device.findInSoftware(known.name);
   await expect(row).toBeVisible();
