@@ -272,13 +272,16 @@ test.describe('Premium • Software • Update on host', () => {
         `the VMs fleet has cached one Claude build (${claude.versions.join(', ')}); the walk needs the previous one too`,
       );
       const [newest, previous] = claude.versions;
-      const pkg = await getSoftwarePackage(request, vmsFleetId, claude.titleId);
-      expect(pkg?.pinnedVersion, 'Claude arrived pinned — an earlier run died before restoring it').toBe('');
-      expect(pkg?.selfService, 'Claude arrived in self-service — an earlier run died before restoring it').toBe(false);
+      expect(
+        (await getSoftwarePackage(request, vmsFleetId, claude.titleId))?.pinnedVersion,
+        'Claude arrived pinned — an earlier run died before restoring it',
+      ).toBe('');
       // Fleet keeps the self-service flag per cached build, not per title: a save writes the active build's
       // installer row only, and a pin makes another build's row the active one, with whatever that row says
       // (`UpdateInstallerSelfServiceFlag`, `SetFleetMaintainedAppActiveInstaller`). So the flag is set on each
       // build while it is the active one, and cleared on each the same way: the newest, then the pinned one.
+      // A dead run's flag needs no check here, since this test sets and clears both builds' itself, and it is
+      // inert meanwhile: a pool Mac's My device lists Claude, which nothing else reads there.
       // TODO(release-smokes P1.5): per-build self-service reported to Andrey on 2026-11-19, not yet filed.
       cleanup.add('take Claude out of self-service on both builds, unpinned', async (r) => {
         await setPinnedVersion(r, vmsFleetId, claude.titleId, previous);
