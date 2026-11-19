@@ -18,6 +18,13 @@
 # offered on both macOS and Windows, which doubles the chances that at least one
 # entry has moved by the time a test runs.
 #
+# The macOS block is also the list Setup experience's Install software page
+# pages through in `tests/e2e/premium/controls/setup-experience/
+# install-software.spec.ts`: the page shows 10 titles at a time, so the test
+# needs more than 10 macOS entries here (11, with RealVNC Connect Viewer, a
+# small installer that is there for that count). Removing a macOS entry fails
+# that test before it pages, with a message naming this file.
+#
 # Installer size is a constraint, not a detail: the premium QA instance is a
 # 2 GB Render box and a ~1.7 GB Windows installer (Docker Desktop) 502'd it
 # mid-apply. Keep every entry on this list small enough to download without
@@ -53,6 +60,7 @@ software:
     - slug: postman/darwin # Postman
     - slug: slack/darwin # Slack
     - slug: visual-studio-code/darwin # Microsoft Visual Studio Code
+    - slug: vnc-viewer/darwin # RealVNC Connect Viewer
     - slug: zed/darwin # Zed
     - slug: zoom/darwin # Zoom
     # Windows
@@ -64,5 +72,6 @@ software:
     - slug: postman/windows # Postman
     - slug: slack/windows # Slack
     - slug: visual-studio-code/windows # Microsoft Visual Studio Code
+    - slug: vnc-viewer/windows # RealVNC Connect Viewer
     - slug: zed/windows # Zed
     - slug: zoom/windows # Zoom

@@ -33,7 +33,7 @@ host_expiry, server_settings, sso; free adds `secrets`; premium adds the `mdm` b
 token mapped to Workstations and the VPP token on all fleets), no-team `controls` (Windows and, on premium,
 Android MDM flags, 11 scripts, 11 macOS + 10 Windows + 2 Android profiles), 25 labels, 27 policies, 30
 reports. Premium adds `fleets/workstations.yml` (23 profiles, 23 policies, 6 scripts, 5 reports, team
-settings), `fleets/qa.yml` (20 Fleet-maintained apps, the version-history shelf) and `fleets/vms.yml`
+settings), `fleets/qa.yml` (22 Fleet-maintained apps, the version-history shelf) and `fleets/vms.yml`
 (4 packages, 4 FMAs, 2 install-software policies, 1 report — the real VMs' durable fixtures).
 
 **What is verified.** For no-team and Workstations only: label, policy, report, script and profile
