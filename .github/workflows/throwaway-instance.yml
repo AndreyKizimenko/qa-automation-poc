@@ -55,6 +55,7 @@ env:
 jobs:
   helm:
     name: Helm chart (kind)
+    if: ${{ false }}  # TEMPORARY: off while the runner A/B below runs
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     steps:
@@ -244,6 +245,7 @@ jobs:
 
   update:
     name: Update flow (Docker Compose)
+    if: ${{ false }}  # TEMPORARY: off while the runner A/B below runs
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     env:
@@ -419,3 +421,28 @@ jobs:
         if: ${{ always() }}
         with:
           name: playwright-report-throwaway-update
+
+  # TEMPORARY diagnostic: whether mysqld in a kind pod can open its own option file, per runner image.
+  mysql-in-kind:
+    name: MySQL in kind (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install kind, Helm and kubectl
+        run: .github/throwaway-instance/install-k8s-tools.sh
+      - name: Create the kind cluster
+        run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
+      - name: mysqld's option file, in a pod and in Docker
+        run: |
+          uname -r
+          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1'
+          look='mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | tr -s " "; microdnf -y install strace > /dev/null 2>&1; strace -e trace=openat mysqld --verbose --help 2>&1 >/dev/null | grep -E "my\.cnf|errmsg"'
+          kubectl run mysql-look --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-look --timeout=240s > /dev/null || true
+          echo '--- in a pod on the kind node'; kubectl logs mysql-look
+          echo "--- in the runner's Docker"; docker run --rm mysql:8.4 sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status|Unable to find'
