@@ -38,7 +38,7 @@ let live: ApiQuery[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
-  live = await getAll<ApiQuery>(request, `queries?fleet_id=${teamId}&merge_inherited=false`, 'queries');
+  live = await getAll<ApiQuery>(request, `queries?fleet_id=${teamId}&merge_inherited=false`, 'reports');
 });
 
 test.describe(`GitOps verify · reports · ${gitopsLabel}`, () => {
