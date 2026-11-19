@@ -17,7 +17,9 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
   });
   await expectOk(res, '[cleanup queries] failed to list the global reports');
   const body = await res.json();
-  const queries = (body.queries ?? []) as Array<{ id: number; name: string }>;
+  // A missing list throws rather than reading as nothing to delete (see listReports).
+  if (!('reports' in body)) throw new Error('[cleanup queries] the response has no "reports" list');
+  const queries = (body.reports ?? []) as Array<{ id: number; name: string }>;
   await deleteEach('cleanup queries', queries, (q) => `report ${q.id} "${q.name}"`, (q) =>
     request.delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() }),
   );
