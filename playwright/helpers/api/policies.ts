@@ -55,17 +55,21 @@ export async function deletePolicies(request: APIRequestContext, ids: number[]):
   await expectOk(res, `Failed to delete global policies ${ids.join(', ')}`);
 }
 
-/** A fleet's own policies (not inherited global ones). */
+/**
+ * A fleet's own policies (not inherited global ones). `type` is Fleet's: `dynamic` for a policy someone wrote,
+ * `patch` for one Fleet made for a Fleet-maintained app (Deploy → Patch), which Fleet names itself.
+ */
 export async function listFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
-): Promise<Array<PolicyRef & { query: string }>> {
+): Promise<Array<PolicyRef & { query: string; type: string }>> {
   const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
   if (!res.ok()) throw new Error(`[listFleetPolicies] ${res.status()}: ${await res.text()}`);
-  return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string }) => ({
+  return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string; type?: string }) => ({
     id: p.id,
     name: p.name,
     query: p.query,
+    type: p.type ?? 'dynamic',
   }));
 }
 

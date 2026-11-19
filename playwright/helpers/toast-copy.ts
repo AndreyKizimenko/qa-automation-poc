@@ -18,6 +18,8 @@ export const toastCopy = {
   software: {
     /** frontend/pages/SoftwarePage/SoftwarePage.tsx, after the vulnerability automations modal saves. */
     vulnerabilityAutomationsUpdated: 'Successfully updated vulnerability automations.',
+    /** frontend/pages/SoftwarePage/SoftwareTitleDetailsPage/DeployModal, after Deploy's Save (install and patch choices). */
+    deployUpdated: 'Successfully updated deploy options.',
   },
   scripts: {
     /** The scripts library's upload modal, on a script Fleet accepted. */

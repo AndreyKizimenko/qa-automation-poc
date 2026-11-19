@@ -252,12 +252,16 @@ premiumStep('sweep host-execution leftovers from the VMs fleet', async ({ reques
   const reports = await listReports(request, vms.id);
   const borrowed = (await listFleetHosts(request, vms.id)).filter((h) => !h.real).map((h) => h.id);
   // The policies first: Fleet refuses to delete a script a policy automation
-  // still runs, and a title an install policy points at (below).
+  // still runs, and a title an install policy points at (below). Every patch
+  // policy goes too: gitops declares none here, and Fleet names one itself
+  // ("macOS - Itsycal up to date"), so a dead run of
+  // `premium/exclusive/software/fma-patch-policy.spec.ts` leaves one no prefix
+  // matches. Left behind, it would update a pool VM's durable app behind a test's back.
   await deleteFleetPolicies(
     request,
     vms.id,
     policies
-      .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-'))
+      .filter((p) => p.name.startsWith('[Install software] fleet-pw-') || p.name.startsWith('pw-') || p.type === 'patch')
       .map((p) => p.id),
   );
   await Promise.all([
