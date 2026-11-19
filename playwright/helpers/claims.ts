@@ -192,17 +192,6 @@ export const CATALOG_CLAIMS = {
   '7-zip/windows': { spec: 'e2e/premium/software/library', fleets: ['Unassigned', 'Workstations'], how: 'ui' },
   '1password/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
   '1password/windows': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  '010-editor/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'apparency/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'appcleaner/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'bbedit/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'bitwarden/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'box-drive/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'brave-browser/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'coteditor/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'cyberduck/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'discord/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
-  'drawio/darwin': { spec: 'e2e/premium/controls/setup-experience/install-software', fleets: ['Unassigned', 'Workstations'], how: 'api' },
 } as const satisfies Record<string, CatalogClaim>;
 
 export type CatalogSlug = keyof typeof CATALOG_CLAIMS;

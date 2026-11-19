@@ -282,6 +282,25 @@ export async function setSetupExperienceSoftware(
 }
 
 /**
+ * How many titles a fleet's Install software card lists on one platform tab: every title the fleet can
+ * install there, selected for setup or not (`GET /setup_experience/software`, whose `count` is the total
+ * over all pages).
+ */
+export async function countSetupExperienceSoftware(
+  request: APIRequestContext,
+  fleetId: number,
+  platform: 'macos' | 'windows' | 'linux' | 'ios' | 'ipados' | 'android',
+): Promise<number> {
+  const res = await request.get(apiUrl('setup_experience/software'), {
+    headers: authHeaders(),
+    params: { fleet_id: fleetId, platform, per_page: 1 },
+  });
+  await expectOk(res, `[setup-exp software] list fleet ${fleetId} ${platform}`);
+  const body = (await res.json()) as { count: number };
+  return body.count;
+}
+
+/**
  * One-shot reset of every setup-experience field a test can touch:
  * bootstrap package, setup-assistant DEP profile, setup-experience script,
  * the install-software selection, the end-user authentication and

@@ -461,11 +461,6 @@
       "count": 1
     }
   },
-  "tests/e2e/premium/controls/setup-experience/install-software.spec.ts": {
-    "suite/no-api-cleanup-in-finally": {
-      "count": 1
-    }
-  },
   "tests/e2e/premium/controls/setup-experience/setup-assistant.spec.ts": {
     "suite/no-toast-copy-in-spec": {
       "count": 1

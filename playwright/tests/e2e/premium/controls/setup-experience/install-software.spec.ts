@@ -5,6 +5,15 @@
  * setup-experience-specific selection/save flow. Runs once per scope
  * (Unassigned + Workstations).
  *
+ * Pagination runs once, on the QA fleet, because it needs more than 10 macOS
+ * titles and QA has them for good: its gitops shelf of Fleet-maintained apps
+ * (`gitops/premium-fleetqa/fleets/qa.yml`, 11 macOS entries), which no cleanup
+ * wipes. Adding 11 apps per run made Fleet download 11 vendor installers inside
+ * the test, up to 350 MB each against a 60 s request limit, and one vendor's
+ * slow night failed it (Discord, 2026-11-19). The table is the same component
+ * in every fleet. The test only reads the page: it never selects a title, since
+ * QA is also where the host-transfer specs move hosts.
+ *
  * A script-only `.sh` package is a case on the macOS and the Linux tab: it is
  * how Fleet 5 runs a script during setup, in place of the Run script step it
  * deprecated (fleetdm/fleet#53274; `run-script.spec.ts` covers that page while
@@ -22,6 +31,7 @@ import {
   uploadSoftwarePackage,
   addFmaToFleet,
   addAppStoreApp,
+  countSetupExperienceSoftware,
   deleteSoftwareTitle,
   getSoftwareTitle,
   type AppStorePlatform,
@@ -181,61 +191,34 @@ for (const scope of SCOPES) {
       });
     }
 
-    test('macOS tab — pagination enables once more than 10 titles are listed', async ({
-      dashboard,
-      controls,
-      setupExperience,
-      installSoftware,
-      workstationsFleetId,
-      request,
-    }) => {
-      const fleetId = scope === 'Unassigned' ? 0 : workstationsFleetId;
-      test.setTimeout(300_000);
-
-      // 11 macOS FMA slugs — none overlapping the single-case test above
-      // (1password) or the library spec macOS FMA case (airtame).
-      const slugs: CatalogSlug[] = [
-        '010-editor/darwin', 'apparency/darwin', 'appcleaner/darwin',
-        'bbedit/darwin', 'bitwarden/darwin', 'box-drive/darwin',
-        'brave-browser/darwin', 'coteditor/darwin', 'cyberduck/darwin',
-        'discord/darwin', 'drawio/darwin',
-      ];
-
-      const titleIds: number[] = [];
-      try {
-        // Each add makes Fleet download the installer, so eleven at once puts
-        // eleven fetches in flight and the instance times out its own POST
-        // before any of them return. Adding one at a time keeps each request
-        // inside its budget.
-        for (const slug of slugs) {
-          const { titleId } = await addFmaToFleet(request, fleetId, slug);
-          titleIds.push(titleId);
-        }
-
-        await dashboard.goto();
-        await dashboard.navbar.goToControls();
-        await controls.teamDropdown.select(scope);
-        await controls.goToSetupExperience();
-        await setupExperience.goToInstallSoftware();
-        await installSoftware.switchPlatform('macos');
-
-        await expect(installSoftware.nextButton).toBeEnabled();
-
-        const page1FirstName = await installSoftware.firstRowName();
-        await installSoftware.nextButton.click();
-        await expect.poll(() => installSoftware.firstRowName()).not.toBe(page1FirstName);
-
-        await installSoftware.previousButton.click();
-        await expect.poll(() => installSoftware.firstRowName()).toBe(page1FirstName);
-      } finally {
-        await Promise.all(
-          titleIds.map((id) =>
-            deleteSoftwareTitle(request, fleetId, id).catch((err) => {
-              console.warn(`[pagination cleanup] failed to delete title ${id}:`, err);
-            }),
-          ),
-        );
-      }
-    });
   });
 }
+
+test.describe('MDM • Setup Experience — Install software (QA)', () => {
+  test("macOS tab — pagination enables once more than 10 titles are listed (the QA fleet's shelf)", async ({
+    controls,
+    installSoftware,
+    qaFleetId,
+    request,
+  }) => {
+    // The page shows 10 titles at a time, and the shelf's macOS entries are what it lists.
+    const listed = await countSetupExperienceSoftware(request, qaFleetId, 'macos');
+    expect(
+      listed,
+      `the QA fleet lists ${listed} macOS titles for setup, and pagination needs more than 10: ` +
+        "re-apply gitops/premium-fleetqa/fleets/qa.yml, whose macOS block is the shelf this test pages through",
+    ).toBeGreaterThan(10);
+
+    await installSoftware.goto('macos', { fleetId: qaFleetId });
+    await controls.teamDropdown.selectByLabel('QA');
+
+    await expect(installSoftware.nextButton).toBeEnabled();
+
+    const page1FirstName = await installSoftware.firstRowName();
+    await installSoftware.nextButton.click();
+    await expect.poll(() => installSoftware.firstRowName()).not.toBe(page1FirstName);
+
+    await installSoftware.previousButton.click();
+    await expect.poll(() => installSoftware.firstRowName()).toBe(page1FirstName);
+  });
+});
