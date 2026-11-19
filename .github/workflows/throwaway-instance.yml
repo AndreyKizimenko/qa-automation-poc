@@ -71,6 +71,17 @@ jobs:
       - name: Create the kind cluster
         run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
 
+      # TEMPORARY diagnostic: mysqld's file system calls while it reads its options, traced in a pod on
+      # the kind node and in the runner's Docker; stops the job.
+      - name: Trace mysqld's option reading in kind and in Docker
+        run: |
+          trace='microdnf -y install strace > /dev/null 2>&1 || dnf -y install strace > /dev/null 2>&1; env | grep -v -E "TOKEN|SECRET|PASSWORD" | sort | tr "\n" " "; echo; strace -f -s 160 -e trace=%file,openat,open,read,close,fcntl mysqld --verbose --help 2>&1 >/dev/null | grep -v -E "glibc-hwcaps|/private/|/tls|\.so|/proc/self|ld\.so" | grep -E "my\.cnf|mysql/|mysql-8|/etc/|errmsg|E[A-Z]+ \(" | head -60'
+          kubectl run mysql-trace --image=mysql:8.4 --restart=Never --command -- sh -c "$trace" > /dev/null
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-trace --timeout=240s > /dev/null || true
+          echo '--- in a pod on the kind node'; kubectl logs mysql-trace
+          echo "--- in the runner's Docker"; docker run --rm mysql:8.4 sh -c "$trace" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status|Unable to find'
+          exit 1
+
       # With the chart's own MySQL the migration Job is not a Helm hook: it runs beside the Fleet pods,
       # which exit on "missing migrations" until it has finished, so a few restarts are expected.
       - name: Install Fleet with its Helm chart
