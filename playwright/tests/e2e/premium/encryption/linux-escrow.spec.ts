@@ -40,8 +40,9 @@
  * run left on it. A key reaches the page in these tests, so the project keeps no trace, screenshot or video,
  * and the key's format is checked in code, never by a matcher that would print it.
  *
- * The Omarchy row is written and skipped: on fleetd 1.63.0, which the lab runs, the server refuses *Create
- * key* on Omarchy, and the dialog can't open on Hyprland (fleetdm/fleet#55069, fixed for fleetd 1.64.0).
+ * The Omarchy row is written and skipped: below fleetd 1.64.0 the server refuses *Create key* on Omarchy, and
+ * the dialog can't open on Hyprland (fleetdm/fleet#55069, fixed in fleetd 1.64.0). Premium's lab hosts get
+ * 1.64.0 from fleetd's edge channel since 2026-11-18, so the row is un-skipped once it passes there.
  *
  * Grounded in: `DeviceUserBanners.tsx`, `CreateLinuxKeyModal.tsx`, `User.tsx` (the *My device* button),
  * `DiskEncryptionKeyModal.tsx`, `cards/Controls/statusDisplayConfig.tsx`, `server/service/linux_mdm.go`

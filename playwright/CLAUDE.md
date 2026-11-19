@@ -136,8 +136,8 @@ regenerate both on every restart.
   changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
   `fleet-pw-*` package, and deletes it in the same test.
 - **A failed install costs its VM only the attempts.** Fleet tries a failed install three times, half a
-  minute to a minute apart, before the failure sticks, and fleetd 1.63.0, which every lab host runs, doesn't
-  back its config loop off after one (fleetdm/fleet#54607), so nothing else queued on the VM waits. To make an
+  minute to a minute apart, before the failure sticks, and fleetd from 1.63.0 on, which every lab host runs,
+  doesn't back its config loop off after one (fleetdm/fleet#54607), so nothing else queued on the VM waits. To make an
   install fail on the host, build the package for the architecture the VM isn't (`foreignDebArch`,
   `inventory-reflects-install.spec.ts`): its dpkg refuses the package before unpacking, so nothing is left
   behind. To stop one before it reaches the host, give it a pre-install query that returns no rows
@@ -413,6 +413,7 @@ how to change it safely — is [`docs/ci-pipeline.md`](docs/ci-pipeline.md).
 | **a failure in the main project** | doesn't skip the exclusive or gitops-mode specs: each runs as its own step afterwards, pass or fail. Nor the per-OS smokes: premium's are a job of their own after premium's, whatever it did, and free's a step of free's job after its exclusive one, pass or fail |
 | **the instances' gitops state** | every gitops chain (the nightly, a branch run) applies the full config, verifies it, then applies the **min** config (`gitops/premium-fleetqa-min`, `free-fleetqa-min`) and ends there; the suite's cleanup then wipes every global report, policy, script and profile and Workstations' policies, profiles, scripts and software. So between runs an instance holds **min's org settings, labels and custom host vitals, Workstations' reports (3 of its 5), everything on QA, VMs and Compliance (min's version of it), and OS matrix declared empty**, and none of the rest until the next chain. Before calling a declared item missing, check which of those it is; a spec reads an item both configs declare and the cleanup keeps ("Collect default browser on macOS") |
 | **the instances' build** | both run Fleet 5 from Fleet's `main` since 2026-11-17 and redeploy it every night, so each night's build is that day's `main` (it reports `0.0.0-SNAPSHOT-<sha>`) and a Fleet PR merged during the day reaches the suite that night. A failed deploy is silent: Render keeps the old instance serving, and Fleet 5 refuses to start on a removed config key or env var. `GET /api/latest/fleet/version` gives the `revision`; `GET /debug/migrations` (admin token) gives `status_code`, where 2 means every migration is applied |
+| **the lab's fleetd** | premium's lab hosts run fleetd's **`edge`** channel since 2026-11-18 (orbit, osqueryd and Fleet Desktop; VMs and OS matrix declare it in `gitops/lib/agent-options-edge.yml`), so the suite, the per-OS smokes and the disk-encryption tests meet each fleetd build before it is released; a host moved to a `pw-*` fleet stays on edge. Free's run the channel their package was built with, `stable`: Fleet takes `update_channels` only on Premium. So a host's fleetd version is read off the host (`orbit_version`), never assumed; a failure that follows a new edge build is fleetd's until shown otherwise (`gitops/premium-fleetqa/README.md`) |
 
 ## Pre-PR check
 
