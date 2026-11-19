@@ -56,7 +56,7 @@ gains one row:
 | Power to PC › Manual enrollment | the enrollment itself (the CLI MDM command on Windows lands in P1.2) |
 | Power to PC › Disk encryption | the BitLocker PIN, steps 3–5 |
 | Apple at Work, Power to PC › Fleet Free | enrollment and APNs renewal; the paywalls run nightly |
-| Orchestration › Log destination flow | Splunk, once phase 3 sends results to the filesystem and a webhook |
+| Orchestration › Log destination flow | Splunk, and status logs to the filesystem and an external destination (Andrey, 2026-11-19): phase 3 sends report results to the filesystem and a webhook, and nothing else, since osquery-perf sends no status logs and audit logs are premium |
 | Orchestration › IdP Provisioning (SCIM) | connecting each IdP and the device enrollments, once phase 2 checks Fleet's side |
 | Supply Chain › Lock & Wipe | whatever phase 2 can't run on the lab |
 
@@ -70,10 +70,10 @@ its Software step 1 included; it is the first row to revisit when they arrive.
 | | What | Where |
 |---|---|---|
 | P1.1 | `fleetctl run-script` on a pool VM of each platform: a passing and a failing script, the exit code and output fleetctl prints, the run in the host's activity | a CLI spec on the pool VMs |
-| P1.2 | a read-only Windows MDM command from the CLI: a SyncML `Get` the Windows VM answers, through `fleetctl mdm run-command`, and Fleet's record of it | beside `shared/hosts/mdm-commands.spec.ts`'s macOS command |
+| P1.2 | a Windows MDM command from the CLI, through `fleetctl mdm run-command`, and Fleet's record of it. **Parked:** Fleet takes only a single `<Exec>` as a custom Windows command (`ParseWindowsMDMCommand`: "You can run only <Exec> command type."), so a read-only `Get` is refused; the gentlest `<Exec>` in Fleet's catalogue is Defender's `UpdateSignature`, and sending it to a pool VM waits on Andrey's word | beside `shared/hosts/mdm-commands.spec.ts`'s macOS command |
 | P1.3 | My device lists the host's vulnerable software with its CVEs, on every OS that has any; an OS with none is noted, not failed | a per-OS smoke (`helpers/os-smokes.ts`), both tiers |
 | P1.4 | an FMA brought up to date by its patch policy: the host runs an older version (an older build of the app, a pinned version, or a move to a fleet that offers a newer one: whichever the instance's FMAs allow), the patch policy fails on it, and its automation installs the update | `premium/exclusive/`: a policy's install runs below every user-requested one |
-| P1.5 | an FMA offered in self-service: installed from My device, and, once the library moves ahead of it, offered on My device's **Updates** card and updated from there | beside `premium/software/self-service-on-host.spec.ts` |
+| P1.5 | an FMA offered in self-service: installed from My device, and, once the library moves ahead of it, offered on My device's **Updates** card and updated from there. Claude on a pool Mac, beside update-on-host's other Claude tests, which pin the same title. It found that Fleet keeps the self-service flag per cached build (a pin activates another build with its own flag), which the test works around until Andrey decides on filing it | `premium/software/update-on-host.spec.ts` |
 | P1.6 | the Windows OS-update deadline and grace period: set, kept across a reload, cleared. Settings only: nothing on a host is asserted | `premium/exclusive/os-updates/`, on Workstations |
 
 ## Phase 2 — one PR, with the device lab
