@@ -1,13 +1,13 @@
 /**
  * Premium • Policies • what each role is shown. One test per role over the
  * Policies list (Add policy, Manage automations, row checkboxes, the
- * Automations cell as a button or plain text) and a policy's details page
+ * Automation cell as a button or plain text) and a policy's details page
  * (Run policy, Edit policy), plus the 403 a role gets on `/policies/new`.
  *
  * The cells come from Fleet's gating, and every absence is read on a page shown
  * to have rendered:
  *   - `ManagePoliciesPage`: Add policy and row checkboxes for GA, GM, TA, TM;
- *     Manage automations for GA and TA; the Automations cell is a button only
+ *     Manage automations for GA and TA; the Automation cell is a button only
  *     for a role that can open its modal (`PoliciesTableConfig`), and an
  *     inherited row on a fleet's list has a tag and no checkbox.
  *   - `PolicyDetailsPage`: Edit for GA and GM, and for TA and TM on their own
@@ -20,7 +20,7 @@
  * carry the fleet — as a user would. A global role reads All fleets.
  *
  * Every absence is anchored on something the same role is shown on the same
- * screen — the seeded row, its Automations cell, the details page's Show query
+ * screen — the seeded row, its Automation cell, the details page's Show query
  * — so a page that never rendered can't pass as a withheld control.
  *
  * The policies are this spec's own, created through the API per test and
@@ -56,7 +56,7 @@ interface RoleCase {
   scope: 'All fleets' | 'Workstations';
   /** A role on a single fleet gets no fleet picker, only the fleet's name as the page title. */
   singleFleet?: boolean;
-  /** Add policy, row checkboxes and an Automations cell that opens its modal. */
+  /** Add policy, row checkboxes and an Automation cell that opens its modal. */
   author: boolean;
   manageAutomations: boolean;
   /** Edit policy on a policy of `scope` (never on an inherited one for a team role). */
@@ -136,14 +136,14 @@ async function openList(page: Page, role: RoleCase, workstationsFleetId: number)
 }
 
 /**
- * The row's own controls: a checkbox and an Automations cell that's a button for
- * a role that can write, neither for one that can't. The Automations cell is
+ * The row's own controls: a checkbox and an Automation cell that's a button for
+ * a role that can write, neither for one that can't. The Automation cell is
  * read by column either way, so a role without the button is still shown to
  * have the cell.
  */
 async function expectRowControls(list: PoliciesListPage, name: string, author: boolean): Promise<void> {
   const row = await list.narrowTo(name);
-  const automations = await list.table.cellByColumn(row, 'Automations');
+  const automations = await list.automationColumnCell(row);
   await expect(automations).toBeVisible();
   if (author) {
     await expect(row.getByRole('checkbox')).toHaveCount(1);

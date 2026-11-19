@@ -4,7 +4,7 @@
  * non-admin roles free has. Free has no fleets, so there's no picker, no
  * inherited row and nothing team-scoped: the list holds the global policies.
  *
- *   - global maintainer: Add policy, a row checkbox and an Automations cell that
+ *   - global maintainer: Add policy, a row checkbox and an Automation cell that
  *     opens its modal, but not Manage automations (a global admin's); the
  *     details page offers Run policy and Edit policy.
  *   - global observer: none of those, Run policy included; `/policies/new` is
@@ -12,7 +12,7 @@
  *
  * Grounded in `ManagePoliciesPage` / `PoliciesTableConfig`, `PolicyDetailsPage`
  * and the router's `AuthAnyMaintainerAnyAdminRoutes`. Every absence is anchored
- * on the seeded row, its Automations cell or the details page's Show query.
+ * on the seeded row, its Automation cell or the details page's Show query.
  * The policy is this spec's, made through the API and deleted in an
  * `afterEach`.
  */
@@ -24,7 +24,7 @@ import { AccessDenied, PoliciesListPage, PolicyDetailsPage } from '@pages';
 
 interface RoleCase {
   key: StaticUserKey;
-  /** Add policy, row checkboxes, an Automations cell that opens its modal, Edit and Run. */
+  /** Add policy, row checkboxes, an Automation cell that opens its modal, Edit and Run. */
   author: boolean;
 }
 
@@ -51,7 +51,7 @@ test.describe('Free • Policies • role access', () => {
         await list.goto();
 
         const row = await list.narrowTo(name);
-        const automations = await list.table.cellByColumn(row, 'Automations');
+        const automations = await list.automationColumnCell(row);
         await expect(automations).toBeVisible();
         await expect(row.getByRole('checkbox')).toHaveCount(role.author ? 1 : 0);
         await expect(automations.getByRole('button')).toHaveCount(role.author ? 1 : 0);
