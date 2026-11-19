@@ -33,6 +33,19 @@
  *
  * **Real VM only.** The command has to reach a device that answers it; an
  * MDM-enrolled osquery-perf simulation never acknowledges anything.
+ *
+ * **Windows takes an `<Exec>`.** A custom Windows command must be a single
+ * `<Exec>` (`ParseWindowsMDMCommand`: "You can run only <Exec> command type."),
+ * so there is no read-only `<Get>` to send. The second test sends Defender's
+ * `UpdateSignature`, from Fleet's own command catalogue (`docs/mdm-commands.yml`):
+ * a signature update Windows also runs by itself, which changes nothing else on
+ * the VM (approved by Andrey, 2026-11-19). Fleet reports a Windows command by
+ * its target (the LocURI) and the device's status code, 200 for a command it
+ * ran, where Apple's say Acknowledged; Fleet shows 101 until the device answers,
+ * on its next MDM sync. The activity feeds name it by the target's last segment
+ * (".../UpdateSignature"), and a Windows host's Activity card has no "Show MDM
+ * commands" switch, so the command's own status is read from the CLI. The device's answer is a whole SyncML message whose
+ * header carries its MDM credential, so the test reads it without printing it.
  */
 import * as fs from 'fs';
 import { test, expect } from '@fixtures';
@@ -160,6 +173,106 @@ test('a custom MDM command is acknowledged by the host and reported everywhere F
   await expect(dashboard.mdmCommandDetailsModal.statusMessage).toContainText(
     `ran ${REQUEST_TYPE} as a custom MDM command on ${hostname}.`,
   );
+  await carriesThisCommand(dashboard.mdmCommandDetailsModal);
+  await dashboard.mdmCommandDetailsModal.close();
+});
+
+const WINDOWS_TARGET = './Device/Vendor/MSFT/Defender/UpdateSignature';
+/** How the activity feeds name a Windows command: the target's last segment (`getMdmCommandDisplayName`). */
+const WINDOWS_TARGET_SHOWN = '.../UpdateSignature';
+
+/** Fleet's catalogue entry for UpdateSignature, as a bare `<Exec>`. Fleet replaces the CmdID with the command's UUID. */
+const UPDATE_SIGNATURE_PAYLOAD = `<Exec>
+  <CmdID>pw-update-signature</CmdID>
+  <Item>
+    <Target>
+      <LocURI>${WINDOWS_TARGET}</LocURI>
+    </Target>
+    <Meta>
+      <Format xmlns="syncml:metinf">chr</Format>
+      <Type>text/plain</Type>
+    </Meta>
+  </Item>
+</Exec>
+`;
+
+/** One field of `fleetctl get mdm-command-results`, which prints each as `NAME:` with its value on the next line. */
+const resultField = (out: string, name: string): string | undefined =>
+  out.match(new RegExp(`${name}:\\s*\\n\\s*(\\S+)`))?.[1];
+
+test('a custom Windows MDM command is run by the host and reported everywhere Fleet shows it', { tag: '@vm-windows' }, async ({
+  hostDetails,
+  dashboard,
+  request,
+}, testInfo) => {
+  // The VM answers on its next MDM sync: about two minutes on 2026-11-19.
+  test.setTimeout(420_000);
+
+  const host = await requireRealHost(request, 'windows');
+  const { hostname, enrollmentStatus } = await getHostMdmIdentity(request, host.id);
+  expect(enrollmentStatus, `${host.displayName} must be MDM-enrolled to take a command`).toMatch(/^On/);
+
+  const payloadPath = testInfo.outputPath('update-signature.xml');
+  fs.writeFileSync(payloadPath, UPDATE_SIGNATURE_PAYLOAD);
+
+  const sent = await fleetctl(['mdm', 'run-command', '--payload', payloadPath, '--hosts', hostname]);
+  expect(sent.code, output(sent)).toBe(0);
+  const commandUuid = sent.stdout.match(/fleetctl get mdm-command-results --id=([0-9a-f-]{36})/)?.[1];
+  expect(commandUuid, `fleetctl printed no results hint:\n${sent.stdout}`).toBeDefined();
+
+  // The CLI's view: one host, this target, status 200. Only the fields are read, never printed whole.
+  let results = '';
+  await expect
+    .poll(
+      async () => {
+        results = (await fleetctl(['get', 'mdm-command-results', `--id=${commandUuid}`])).stdout;
+        return resultField(results, 'STATUS');
+      },
+      { message: `${hostname} never ran ${commandUuid}`, timeout: 360_000, intervals: [10_000] },
+    )
+    .toBe('200');
+  expect(resultField(results, 'TYPE')).toBe(WINDOWS_TARGET);
+  expect(resultField(results, 'HOSTNAME')?.toLowerCase()).toBe(hostname.toLowerCase());
+
+  const details = hostDetails.mdmCommandDetailsModal;
+  // The request carries this command's UUID, and the device's answer holds a Status element for it, 200. Read
+  // as a yes or no: the answer's header carries the device's MDM credential, which a failure must not print.
+  const ranThisCommand = new RegExp(`<CmdRef>${commandUuid}</CmdRef>\\s*<Cmd>Exec</Cmd>\\s*<Data>200</Data>`);
+  const carriesThisCommand = async (modal: MdmCommandDetailsModal = details) => {
+    await expect(modal.requestPayload).toHaveValue(
+      new RegExp(`<CmdID>${commandUuid}</CmdID>.*<LocURI>${WINDOWS_TARGET.replace(/\./g, '\\.')}</LocURI>`, 's'),
+    );
+    await expect
+      .poll(async () => ranThisCommand.test(await modal.response.inputValue()), {
+        message: `the response from ${hostname} has no status 200 for ${commandUuid}`,
+      })
+      .toBe(true);
+  };
+
+  // The activity, on the host's Activity card. A Windows host's card has no "Show MDM commands" switch (Host
+  // details offers it to Apple hosts only, `canGetMDMCommands`), so the command's own status is the CLI's above.
+  await hostDetails.goto(host.id);
+  await hostDetails.showPastActivities();
+  const ranOnThisHost = activityCopy.mdmCommand.ranOnThisHost({ requestType: WINDOWS_TARGET_SHOWN });
+  await hostDetails.activityItem(ranOnThisHost).first().click();
+  await details.expectOpen();
+  await expect(details.statusMessage).toHaveText(ranOnThisHost);
+  await carriesThisCommand();
+  await details.close();
+
+  // The global feed, filtered to custom commands, tied to this command by its UUID first.
+  expect(
+    await findActivity(request, 'ran_custom_mdm_command', (d) => d.command_uuid === commandUuid),
+    `no ran_custom_mdm_command activity for ${commandUuid}`,
+  ).toBeDefined();
+  await dashboard.goto();
+  await dashboard.selectActivityType('Ran custom MDM command');
+  const feedRow = dashboard
+    .activityRows(activityCopy.mdmCommand.ran({ requestType: WINDOWS_TARGET_SHOWN, host: host.displayName }))
+    .first();
+  await expect(feedRow).toBeVisible();
+  await feedRow.click();
+  await dashboard.mdmCommandDetailsModal.expectOpen();
   await carriesThisCommand(dashboard.mdmCommandDetailsModal);
   await dashboard.mdmCommandDetailsModal.close();
 });
