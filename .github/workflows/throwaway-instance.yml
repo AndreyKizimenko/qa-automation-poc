@@ -71,6 +71,22 @@ jobs:
       - name: Create the kind cluster
         run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
 
+      # The runner image's preinstalled MySQL loads an AppArmor profile for /usr/sbin/mysqld, and the host
+      # kernel attaches it to every process that runs that path unconfined, kind's pods among them. It
+      # refuses the chart's MySQL its /etc/my.cnf and /usr/share/mysql-8.4, so mysqld listens on its
+      # built-in socket, the chart's probes look for the configured one, and Kubernetes restarts it until
+      # the install times out. The profile belongs to the runner, not to the cluster under test.
+      - name: Unload the runner's AppArmor profile for mysqld
+        run: |
+          set -euo pipefail
+          if sudo aa-status 2>/dev/null | grep -q '/usr/sbin/mysqld'; then
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+          if sudo aa-status 2>/dev/null | grep -q '/usr/sbin/mysqld'; then
+            echo "::error::the runner still confines /usr/sbin/mysqld"
+            exit 1
+          fi
+
       # With the chart's own MySQL the migration Job is not a Helm hook: it runs beside the Fleet pods,
       # which exit on "missing migrations" until it has finished, so a few restarts are expected.
       - name: Install Fleet with its Helm chart
