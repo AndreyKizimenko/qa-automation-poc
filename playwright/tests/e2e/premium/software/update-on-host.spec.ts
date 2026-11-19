@@ -282,7 +282,8 @@ test.describe('Premium • Software • Update on host', () => {
       // build while it is the active one, and cleared on each the same way: the newest, then the pinned one.
       // A dead run's flag needs no check here, since this test sets and clears both builds' itself, and it is
       // inert meanwhile: a pool Mac's My device lists Claude, which nothing else reads there.
-      // TODO(release-smokes P1.5): per-build self-service reported to Andrey on 2026-11-19, not yet filed.
+      // TODO(fleetdm/fleet#59238): with the fix, the flag set once holds across the pin, and the second
+      // setSelfService below and the cleanup's pinned half can go.
       cleanup.add('take Claude out of self-service on both builds, unpinned', async (r) => {
         await setPinnedVersion(r, vmsFleetId, claude.titleId, previous);
         await setSelfService(r, vmsFleetId, claude.titleId, false);
