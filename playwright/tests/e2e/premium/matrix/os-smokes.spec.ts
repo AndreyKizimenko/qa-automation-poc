@@ -426,6 +426,7 @@ function smokesOf(subject: Subject): void {
     if (hasMyDevice(subject)) {
       test("opens its My device page from Host details, which shows what the admin sees, the tier's tabs and its software", ({ hostDetails, request }) =>
         smoke.myDevice({ hostDetails, request }, subject, { shown: ['Details', 'Software', 'Policies'], absent: [] }));
+
       test('lists its vulnerable software on My device, found by a CVE', ({ hostDetails, request }) =>
         smoke.myDeviceVulnerabilities({ hostDetails, request }, subject));
     }
