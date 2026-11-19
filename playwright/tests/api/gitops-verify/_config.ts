@@ -40,10 +40,10 @@ export const gitopsConfig = loadAnyConfig(target);
  * (the nightly applies the baseline's QA, VMs and OS matrix files in both
  * passes), so the fleet set the instance should hold is the union of both
  * directories' fleet files. `HAND_KEPT_FLEETS` are the fleets gitops doesn't
- * declare: Mobile — see gitops/premium-fleetqa/README.md › "Do not pass
- * --delete-other-fleets".
+ * declare: Mobile and Lab experiments — see gitops/premium-fleetqa/README.md ›
+ * "Do not pass --delete-other-fleets".
  */
-export const HAND_KEPT_FLEETS = ['Mobile'];
+export const HAND_KEPT_FLEETS = ['Mobile', 'Lab experiments'];
 
 /**
  * Fleets whose file declares nothing on purpose, and must keep declaring

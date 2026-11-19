@@ -18,7 +18,7 @@ References files in `../lib/` like the baseline. Each scope (no-team, Workstatio
 | Workstations | policies | 23 | 21 | ✓ both |
 | Workstations | scripts | 6 | 5 | n/a |
 | Compliance | profiles | 6 | 4 | n/a |
-| Compliance | policies | 7 | 6 | n/a |
+| Compliance | policies | 8 | 7 | n/a |
 | Compliance | reports | 2 | 1 | n/a |
 | Compliance | scripts | 12 | 6 | n/a |
 | Compliance | custom packages | 5 | 3 | n/a |

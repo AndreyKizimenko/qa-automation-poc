@@ -14,6 +14,9 @@ premium-fleetqa/
 ```
 
 All `path:` references resolve to `../lib/` (or `../../lib/` from `fleets/`) — same source of truth as the free configs.
+A policy file with an automation only a fleet can carry is a fleet copy of its own: Fleet refuses a calendar event
+on an "All fleets" policy, so `default.yml` references `lib/platforms/*/policies/update-*.yml` and Workstations
+their `*-calendar.yml` copies, which add the calendar event.
 
 ## Apply
 
@@ -42,7 +45,7 @@ From 4.93, `fleetctl gitops` skips scripts and software that haven't changed, an
 
 **`fleetctl gitops` ignores `FLEET_URL` and `FLEET_API_TOKEN`.** It resolves the server from `~/.fleet/config`, and the `default` context on a Fleet developer's machine usually points at their own dev instance. Sourcing `.env.premium` therefore does *not* aim the command at premium-fleetqa; without `--context qa-premium` the whole config lands on whatever `default` points at, and the run still prints `gitops succeeded`.
 
-Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, OS matrix, Compliance and Mobile (free has no fleets).
+Two ways to catch it: the `Server Version:` line in the output must match `GET /api/v1/fleet/version` on premium-fleetqa — which tells a QA instance from your dev one, not premium from free, since both QA instances redeploy the same RC build every night — and `fleetctl get fleets --context qa-premium` must list Workstations, QA, VMs, OS matrix, Compliance, Mobile and Lab experiments (free has no fleets).
 
 ### Keep the client within a minor of the server
 
@@ -64,14 +67,15 @@ reason, and the `gitops-verify` project asserts each fleet's software set exactl
 
 ### Do not pass `--delete-other-fleets`
 
-`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has a fleet that is not under gitops**, and that flag would destroy it:
+`--delete-other-fleets` makes gitops the source of truth for which fleets exist, deleting any fleet not named in the run. **The premium instance has fleets that are not under gitops**, and that flag would destroy them:
 
 | fleet | why it is not in gitops |
 |---|---|
 | **Mobile** (104) | Holds ABM/VPP-enrolled mobile state that isn't reproducible from this repo. |
+| **Lab experiments** (884) | The device lab's own VMs for Lock, Unlock and Wipe (phase 2 of `playwright/docs/release-smokes-plan.md`), enrolled with this fleet's enroll secret and kept out of `lab-hosts.json`. The lab owns it; the suite never touches it. |
 
 `playwright/tests/api/gitops-verify/fleets.spec.ts` checks the instance holds exactly the declared fleets plus
-that one (`HAND_KEPT_FLEETS`). A run that names only some of the fleet files would, with the flag, delete the
+those (`HAND_KEPT_FLEETS`). A run that names only some of the fleet files would, with the flag, delete the
 fleets of the others too: OS matrix among them, which would drop the lab's hosts into Unassigned.
 
 A run that names only some fleet files also leaves the others alone without the flag — so applying
@@ -88,7 +92,7 @@ The flag is opt-in and off by default, so the command above is safe as written.
 | QA (fleets/qa.yml) | — | — | — | — | — | — | 22 Fleet-maintained apps |
 | VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 7 custom packages (3 of them self-service), 4 Fleet-maintained apps |
 | OS matrix (fleets/os-matrix.yml) | — | — | — | — | — | — | — |
-| Compliance (fleets/compliance.yml) | 6 | 7 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
+| Compliance (fleets/compliance.yml) | 6 | 8 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
 
 Label and report counts expand from multi-entry lib files, and the no-team numbers include the entities
 `default.yml` declares inline (below). Compliance's label is fleet-scoped, and its scripts come from three
@@ -160,7 +164,8 @@ all three kinds through `paths:` globs, custom packages by `hash_sha256` with ev
 categories, label targets, a display name, an icon, a pre-install query and the three scripts), script-only
 packages, Fleet-maintained apps with options and a caret pin, policies with every automation and targeting key
 (`resend_configuration_profile`, `run_script`, `install_software` by package path, by hash and by slug,
-`webhooks_and_tickets_enabled` against the fleet's own failing-policies webhook, two patch policies), and
+`webhooks_and_tickets_enabled` against the fleet's own failing-policies webhook, two patch policies; one
+automation per policy, which is all Fleet 5 takes), and
 label-targeted reports. The min variant changes one value in every section but the fleet label, and drops one
 entry from every list but the label, the single Android profile and the two Fleet-maintained apps.
 

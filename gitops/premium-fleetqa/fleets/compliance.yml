@@ -219,6 +219,7 @@ software:
 # Every automation and targeting key a fleet policy can carry. Each automation
 # references something this file declares: the resent profile, the script
 # (through its glob), the packages by file and by hash, the apps by slug.
+# A policy has at most one automation (Fleet 5), so each is on a policy of its own.
 policies:
   - name: Compliance - FileVault is on
     query: SELECT 1 FROM disk_encryption WHERE encrypted = 1;
@@ -253,6 +254,11 @@ policies:
     resolution: Fleet installs it, matched by the package's hash.
     install_software:
       hash_sha256: 18993c1e4fbdfb926896902d994dd8e2315e20ac728cca0e466b3ad1f63fbb2b
+  - name: Compliance - Fleet Playwright Install is reported (Windows)
+    query: SELECT 1 FROM programs WHERE name = 'Fleet Playwright Install';
+    platform: windows
+    description: The inert package is installed.
+    resolution: A failing host is sent to the fleet's failing-policies webhook.
     webhooks_and_tickets_enabled: true
   - name: Compliance - Itsycal is installed
     query: SELECT 1 FROM apps WHERE bundle_identifier = 'com.mowglii.ItsycalApp';

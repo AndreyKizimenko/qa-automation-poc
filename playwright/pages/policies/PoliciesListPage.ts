@@ -47,7 +47,7 @@ export class PoliciesListPage {
   readonly noIntegrationsMessage: Locator;
   readonly addIntegrationButton: Locator;
 
-  // One policy's automations (a row's Automations cell → "Manage automations"
+  // One policy's automations (a row's Automation cell → "Manage automations"
   // modal, Fleet's ManageAutomationsModal), as opposed to the scope-wide
   // webhook modal above.
   readonly policyAutomationsModal: Locator;
@@ -105,15 +105,21 @@ export class PoliciesListPage {
   }
 
   /**
-   * A policy row's Automations cell. It's a `role="button"` div whose name says
-   * what it holds: "Add automation" when empty, "Edit automation: <name>" with
-   * one, "Edit automations" (showing "N automations") with more. Read-only roles
-   * get a plain span instead, with no button at all.
+   * A policy row's Automation cell, as the button a role that can write gets.
+   * It's a `role="button"` div whose name says what it holds: "Add automation"
+   * when empty, "Edit automation: <name>" with one, "Edit automations" (showing
+   * "N automations") for a policy saved with more before Fleet allowed one.
+   * Read-only roles get a plain span instead, with no button at all.
    */
   automationsCell(policyName: string): Locator {
     return this.table
       .rowWith(policyName)
       .getByRole('button', { name: /^(Add automation|Edit automations?\b)/ });
+  }
+
+  /** A row's Automation column cell, whatever the role: the button for a role that can write, a plain span otherwise. */
+  async automationColumnCell(row: Locator): Promise<Locator> {
+    return this.table.cellByColumn(row, 'Automation');
   }
 
   /** An open automation filter's option, by its label (its help text follows it). */
@@ -152,7 +158,7 @@ export class PoliciesListPage {
 
   /**
    * Narrows the list to `policyName` and opens its Manage automations modal from
-   * the row's Automations cell. Searching first keeps a row past the first page
+   * the row's Automation cell. Searching first keeps a row past the first page
    * reachable.
    */
   async openPolicyAutomations(policyName: string): Promise<void> {

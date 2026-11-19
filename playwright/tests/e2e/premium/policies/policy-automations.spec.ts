@@ -3,16 +3,17 @@
  *
  *   - **Scope-wide** — the "Manage automations" button's modal enables the
  *     global failing-policies webhook with a destination URL, a global policy's
- *     own modal ticks "Send webhook" for it (stored in the webhook's
- *     `policy_ids`, and the row's cell reads "Webhook"), and the scope-wide
- *     modal turns it off again — keeping the URL and the policy, while the cell
- *     goes back to "Add automation" because Fleet labels the cell from the
- *     webhook's state. This mutates GLOBAL config
- *     (webhook_settings.failing_policies_webhook): the original, `policy_ids`
- *     included, is snapshotted and restored via the config helper, and a global
- *     policy is seeded so the button is enabled (it's disabled until the scope
- *     has ≥1 policy). With no ticket integration on the instance, choosing
- *     Ticket offers "Add integration", which leads to Settings › Integrations.
+ *     own modal chooses "Send webhook" as its automation (stored on the policy as
+ *     its `automation_type`, and the row's cell reads "Webhook"), and the
+ *     scope-wide modal turns it off again — keeping the URL and the policy's
+ *     automation, which the cell goes on naming: Fleet labels the cell from the
+ *     policy's `automation_type`, and the scope's settings only choose "Webhook"
+ *     or "Ticket". This mutates GLOBAL config
+ *     (webhook_settings.failing_policies_webhook): the original is snapshotted
+ *     and restored via the config helper, and a global policy is seeded so the
+ *     button is enabled (it's disabled until the scope has ≥1 policy). With no
+ *     ticket integration on the instance, choosing Ticket offers "Add
+ *     integration", which leads to Settings › Integrations.
  *   - **A fleet's own** — the same modal at a fleet's scope saves the fleet's
  *     failing-policies webhook through the fleet, not global config, and leaves
  *     the fleet's other webhooks as they were: the save carries only the
@@ -20,15 +21,15 @@
  *     carries. On a throwaway fleet, where the test can turn the fleet's
  *     host-status webhook on first and nothing else writes the fleet's settings;
  *     on Workstations `team-host-status-webhook.spec.ts` writes that webhook.
- *   - **One policy's** — a row's Automations cell opens that policy's own
+ *   - **One policy's** — a row's Automation cell opens that policy's own
  *     "Manage automations" modal (Fleet's ManageAutomationsModal, around
- *     PolicyAutomationsFields): Install software, Run script and Continuous
- *     saved together, all three
- *     stored, the row summarised as "2 automations", and the modal reopening on
- *     them. On **Workstations**, which has no hosts, with a script and a package
- *     made for the run — so nothing the automations point at ever runs. Whether
- *     they *run* is `policy-automation-runs.spec.ts` and `install-on-host.spec.ts`,
- *     on the Ubuntu VM.
+ *     PolicyAutomationsFields), where an **Automation** dropdown chooses the
+ *     policy's one automation (fleetdm/fleet#52900). Install software with
+ *     Continuous is saved, stored and reopened; then Run script replaces it, and
+ *     the policy holds only the script. On **Workstations**, which has no hosts,
+ *     with a script and a package made for the run — so nothing the automations
+ *     point at ever runs. Whether they *run* is `policy-automation-runs.spec.ts`
+ *     and `install-on-host.spec.ts`, on the Ubuntu VM.
  *
  * Grounded in frontend/pages/policies/ManagePoliciesPage — AutomationsModal /
  * OtherWorkflowsModal, ManageAutomationsModal, PoliciesTableConfig's
@@ -37,20 +38,19 @@
 import { test, expect } from '@fixtures';
 import { withStaticUser } from '@helpers/auth';
 import { inertDeb } from '@helpers/deb';
+import { ownName } from '@helpers/own-name';
 import { runNonce } from '@helpers/profiles';
+import { toastCopy } from '@helpers/toast-copy';
 import {
-  createFleetPolicy,
   createPolicy,
-  deleteFleetPolicies,
   deletePolicies,
-  deleteScript,
   deleteSoftwareTitle,
   getAppConfig,
   getFleetPolicy,
   getFleetWebhookSettings,
+  getGlobalPolicy,
   patchAppConfig,
   setFleetWebhookSettings,
-  uploadScript,
   uploadSoftwarePackageBuffer,
   type FailingPoliciesWebhook,
 } from '@helpers/api';
@@ -73,13 +73,14 @@ test.describe('Premium • Policies • automations', () => {
     ({ id: policyId } = await createPolicy(request, { name: policyName }));
   });
 
+  // The policy's own webhook choice goes with the policy, which this hook
+  // deletes, so only the scope's switch and URL are restored.
   test.afterEach(async ({ request }) => {
     await patchAppConfig(request, {
       webhook_settings: {
         failing_policies_webhook: {
           enable_failing_policies_webhook: original.enable_failing_policies_webhook ?? false,
           destination_url: original.destination_url ?? '',
-          policy_ids: original.policy_ids ?? [],
         },
       },
     });
@@ -103,36 +104,41 @@ test.describe('Premium • Policies • automations', () => {
       await policiesList.selectWebhookWorkflow();
       await policiesList.policyWebhookUrlInput.fill(webhookUrl);
       await policiesList.saveAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+      await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
 
       const webhook = await stored();
       expect(webhook.enable_failing_policies_webhook).toBe(true);
       expect(webhook.destination_url).toBe(webhookUrl);
     });
 
-    await test.step("tick Send webhook in the policy's own modal", async () => {
+    await test.step("choose Send webhook as the policy's automation in its own modal", async () => {
       // `SELECT 1;` passes on every host, so the webhook never has a failure to send.
       await policiesList.openPolicyAutomations(policyName);
       await expect(policiesList.policyAutomationsModal).toContainText(
         `Manage automations for the ${policyName} policy on All fleets.`,
       );
-      await policiesList.policyAutomations.setAutomation('ticket_webhook', true);
+      await policiesList.policyAutomations.chooseAutomation('webhook_or_ticket');
       await policiesList.savePolicyAutomations();
       // The previous save's toast can still be showing, so poll the stored state.
-      await expect.poll(async () => (await stored()).policy_ids).toContain(policyId);
+      await expect.poll(async () => (await getGlobalPolicy(request, policyId)).automationType).toBe('webhook_or_ticket');
       await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
 
-    await test.step('turn it off, keeping the URL and the policy', async () => {
+    await test.step("turn it off, keeping the URL and the policy's automation", async () => {
       await policiesList.openAutomations();
       await policiesList.setPolicyAutomations(false);
       await policiesList.saveAutomations();
       await expect.poll(async () => (await stored()).enable_failing_policies_webhook).toBe(false);
-      const webhook = await stored();
-      expect(webhook.destination_url).toBe(webhookUrl);
-      expect(webhook.policy_ids).toContain(policyId);
-      // The cell names the webhook only while the webhook is on.
-      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
+      expect((await stored()).destination_url).toBe(webhookUrl);
+      expect((await getGlobalPolicy(request, policyId)).automationType).toBe('webhook_or_ticket');
+      // The cell names the policy's automation whether or not the scope's
+      // webhook is on: the switch decides only whether failures are sent. Read
+      // on a freshly loaded list, so the cell is what Fleet renders from the
+      // stored state, not the one drawn before the switch.
+      await policiesList.goto();
+      await policiesList.teamDropdown.select('All fleets');
+      await policiesList.narrowTo(policyName);
+      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
   });
 
@@ -176,14 +182,14 @@ test.describe('Premium • Policies • automations', () => {
 
     release();
     await expect(policiesList.automationsModal).toBeHidden();
-    await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+    await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
   });
 
-  // TODO(fleetdm/fleet#54623): on a fleet's list, a fleet admin can tick Send
-  // webhook on an inherited (All fleets) policy. That membership lives in global
-  // config, so Save answers 403 and the modal stays open with no error. Fleet's
-  // role table reserves All fleets policy automations for global admins, so the
-  // checkbox should be disabled for them. It needs the global webhook on, which
+  // TODO(fleetdm/fleet#54623): on a fleet's list, a fleet admin can choose Send
+  // webhook for an inherited (All fleets) policy. Saving it is a global write,
+  // so Save answers 403 and the modal stays open with no error. Fleet's role
+  // table reserves All fleets policy automations for global admins, so the
+  // option should be disabled for them. It needs the global webhook on, which
   // the tests above own, hence this describe. Un-skip once the fix ships.
   test.skip("a fleet admin can't add an inherited policy to the global webhook", async ({
     browser,
@@ -208,7 +214,8 @@ test.describe('Premium • Policies • automations', () => {
       await expect(list.policyAutomationsModal).toContainText(
         `Manage automations for the ${policyName} policy on All fleets.`,
       );
-      await expect(list.policyAutomations.checkbox('ticket_webhook')).toBeDisabled();
+      await list.policyAutomations.openAutomationMenu();
+      await list.policyAutomations.expectOptionDisabled('webhook_or_ticket', true);
     });
   });
 });
@@ -266,77 +273,84 @@ test.describe('Premium • Policies • the automation filter by scope', () => {
   });
 });
 
-test.describe("Premium • Policies • one policy's automations", () => {
-  test('install software, run script and continuous, saved together from the row, are stored and reopen', async ({
+test.describe("Premium • Policies • one policy's automation", () => {
+  test('install software with continuous, chosen from the row, is stored and reopens, and run script then replaces it', async ({
     dashboard,
     policiesList,
     workstationsFleetId,
     request,
+    seed,
+    cleanup,
   }) => {
-    const n = runNonce();
-    const policyName = `pw-policy-automations-${n}`;
-    const scriptName = `pw-policy-automations-${n}.sh`;
-    const packageName = `fleet-pw-policy-automations-${n}`;
-    const policy = await createFleetPolicy(request, workstationsFleetId, {
-      name: policyName,
+    const script = await seed.script('policy-automation', {
+      fleetId: workstationsFleetId,
+      content: '#!/bin/sh\necho "pw: never runs"\n',
+    });
+    const packageName = `fleet-${ownName('policy-automation')}`;
+    const { titleId } = await uploadSoftwarePackageBuffer(
+      request,
+      workstationsFleetId,
+      `${packageName}_1.0.0_all.deb`,
+      inertDeb(packageName, '1.0.0'),
+    );
+    cleanup.add(`delete title ${packageName}`, (r) => deleteSoftwareTitle(r, workstationsFleetId, titleId));
+    // Seeded last, so its cleanup runs first: Fleet won't delete a title an install policy points at.
+    const policy = await seed.policy('policy-automation', {
+      fleetId: workstationsFleetId,
       query: 'SELECT 1;',
       platform: 'linux',
     });
-    let scriptId: number | undefined;
-    let titleId: number | undefined;
+    const fields = policiesList.policyAutomations;
+    const stored = () => getFleetPolicy(request, workstationsFleetId, policy.id);
 
-    try {
-      scriptId = await uploadScript(request, workstationsFleetId, scriptName, '#!/bin/sh\necho "pw: never runs"\n');
-      ({ titleId } = await uploadSoftwarePackageBuffer(
-        request,
-        workstationsFleetId,
-        `${packageName}_1.0.0_all.deb`,
-        inertDeb(packageName, '1.0.0'),
-      ));
-
+    await test.step('Install software, with Continuous, is stored on the policy', async () => {
       await dashboard.goto();
       await dashboard.navbar.goToPolicies();
       await policiesList.teamDropdown.select('Workstations');
       // Narrowed first: Workstations lists inherited global policies too, and the list pages at 20.
-      await policiesList.search.fill(policyName);
-      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
+      await policiesList.search.fill(policy.name);
+      await expect(policiesList.automationsCell(policy.name)).toHaveAccessibleName('Add automation');
 
-      await policiesList.openPolicyAutomations(policyName);
+      await policiesList.openPolicyAutomations(policy.name);
       await expect(policiesList.policyAutomationsModal).toContainText(
-        `Manage automations for the ${policyName} policy on Workstations.`,
+        `Manage automations for the ${policy.name} policy on Workstations.`,
       );
-      await policiesList.policyAutomations.installSoftware(packageName);
-      await policiesList.policyAutomations.runScript(scriptName);
-      await policiesList.policyAutomations.setContinuous(true);
+      await fields.installSoftware(packageName);
+      await fields.setContinuous(true);
       await policiesList.savePolicyAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+      await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
 
-      // All three stored, on the policy itself.
-      const stored = await getFleetPolicy(request, workstationsFleetId, policy.id);
-      expect(stored.installSoftwareTitleId).toBe(titleId);
-      expect(stored.runScript?.id).toBe(scriptId);
-      expect(stored.continuousAutomationsEnabled).toBe(true);
+      const saved = await stored();
+      expect(saved.automationType).toBe('software');
+      expect(saved.installSoftwareTitleId).toBe(titleId);
+      expect(saved.runScript).toBeNull();
+      expect(saved.continuousAutomationsEnabled).toBe(true);
+      await expect(policiesList.automationsCell(policy.name)).toHaveAccessibleName(`Edit automation: ${packageName}`);
+    });
 
-      // The row summarises two automations — Continuous is a setting, not one.
-      const cell = policiesList.automationsCell(policyName);
-      await expect(cell).toHaveAccessibleName('Edit automations');
-      await expect(cell).toHaveText('2 automations');
-
-      // And the modal reopens on what was saved.
-      await policiesList.openPolicyAutomations(policyName);
-      const fields = policiesList.policyAutomations;
-      await expect(fields.checkbox('install_software')).toHaveAttribute('aria-checked', 'true');
-      await expect(fields.selectedValue('install_software')).toHaveText(packageName);
-      await expect(fields.checkbox('run_script')).toHaveAttribute('aria-checked', 'true');
-      await expect(fields.selectedValue('run_script')).toHaveText(scriptName);
+    await test.step('the modal reopens on it', async () => {
+      await policiesList.openPolicyAutomations(policy.name);
+      await fields.expectAutomation('software');
+      await expect(fields.selectedValue('software')).toHaveText(packageName);
       await expect(fields.continuousCheckbox).toHaveAttribute('aria-checked', 'true');
+    });
+
+    await test.step("Run script replaces it: the policy keeps one automation, and Continuous, a setting, stays", async () => {
+      await fields.runScript(script.name);
+      await policiesList.savePolicyAutomations();
+      // The first save's toast can still be showing, so poll the stored state.
+      await expect.poll(async () => (await stored()).automationType).toBe('script');
+      const saved = await stored();
+      expect(saved.runScript?.id).toBe(script.id);
+      expect(saved.installSoftwareTitleId).toBeNull();
+      expect(saved.continuousAutomationsEnabled).toBe(true);
+      await expect(policiesList.automationsCell(policy.name)).toHaveAccessibleName(`Edit automation: ${script.name}`);
+
+      await policiesList.openPolicyAutomations(policy.name);
+      await fields.expectAutomation('script');
+      await expect(fields.selectedValue('script')).toHaveText(script.name);
       await policiesList.cancelPolicyAutomations();
-    } finally {
-      // The policy first: Fleet won't delete a title an install policy points at.
-      await deleteFleetPolicies(request, workstationsFleetId, [policy.id]);
-      if (titleId !== undefined) await deleteSoftwareTitle(request, workstationsFleetId, titleId);
-      if (scriptId !== undefined) await deleteScript(request, scriptId);
-    }
+    });
   });
 });
 
@@ -411,7 +425,7 @@ test.describe("Premium • Policies • a fleet's failing-policies webhook", () 
     await policiesList.selectWebhookWorkflow();
     await policiesList.policyWebhookUrlInput.fill(webhookUrl);
     await policiesList.saveAutomations();
-    await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+    await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
 
     const settings = await getFleetWebhookSettings(request, fleet.id);
     const stored = settings.failing_policies_webhook as FailingPoliciesWebhook | undefined;

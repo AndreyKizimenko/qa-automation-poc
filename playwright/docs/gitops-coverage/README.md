@@ -243,7 +243,7 @@ automations, `self_service`, `categories`, pins). `tests/api/gitops-verify/` get
 helper (count + declared-exists + no-extra, with a non-empty guard and a `has_next_results` check), the
 existing six specs rewritten on it, and new specs: `settings` (org and fleet), `software`, `controls`
 (flags, disk encryption, OS updates, Recovery Lock, setup experience), `fleets` (the live fleet set equals the
-declared fleet files plus the hand-kept list, today `Mobile`), `host-vitals`. Content checks follow the
+declared fleet files plus the hand-kept list, today `Mobile` and `Lab experiments`), `host-vitals`. Content checks follow the
 precedent the audit asked for: script body and profile payload hashes, policy and report SQL.
 
 The nightly CLI checks: `appliedFiles()` lists every file the tier's apply passes (premium: the min
