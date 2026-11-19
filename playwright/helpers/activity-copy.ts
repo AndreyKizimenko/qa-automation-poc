@@ -31,7 +31,7 @@ function esc(s: string): string {
  * @see frontend/.../GlobalActivityItem.tsx createdPolicy ~1723, createdSavedQuery ~1657
  */
 function fleetSuffix(
-  scope: TeamScope,
+  scope: TeamScope | 'VMs',
   opts: { unassignedFallsThrough?: boolean } = {},
 ): string {
   switch (scope) {
@@ -61,19 +61,20 @@ function scriptScope(scope: TeamScope): string {
 
 /**
  * Scope-suffix for app-store apps. The Fleet *renderer* is symmetric for
- * add/delete (team_name → "the X fleet", otherwise → "unassigned"), but
+ * add/delete (fleet_name → "the X fleet", otherwise → "unassigned"), but
  * the activity *details* are asymmetric on the Unassigned scope: Fleet's
- * API populates team_name="No team" on the add activity, leaving
- * team_name=null on the delete activity. That maps to:
- *   add    on Unassigned → "the No team fleet"
+ * API populates fleet_name="Unassigned" on the add activity
+ * (fleetdm/fleet#59160 named it so), leaving fleet_name=null on the delete
+ * activity. That maps to:
+ *   add    on Unassigned → "the Unassigned fleet"
  *   delete on Unassigned → "unassigned"
- * Named teams (Workstations, etc.) stay symmetric: "the X fleet".
+ * Named fleets (Workstations, etc.) stay symmetric: "the X fleet".
  *
- * @see frontend/.../GlobalActivityItem.tsx addedAppStoreApp ~1480
+ * @see frontend/.../GlobalActivityItem.tsx addedAppStoreApp ~1864
  */
 function appStoreAppScope(scope: TeamScope, action: 'add' | 'delete'): string {
   if (scope !== 'Unassigned' && scope !== 'All fleets') return `the ${scope} fleet`;
-  return action === 'add' ? 'the No team fleet' : 'unassigned';
+  return action === 'add' ? 'the Unassigned fleet' : 'unassigned';
 }
 
 interface AppStoreAppActivity {
@@ -110,8 +111,11 @@ function profileSuffix(hostsPhrase: string, scope?: TeamScope): string {
 
 export const activityCopy = {
   policy: {
-    /** @see frontend/.../GlobalActivityItem.tsx:1748 — `created a policy <b>NAME</b><scope>.` */
-    created: ({ name, scope }: { name: string; scope: TeamScope }) =>
+    /**
+     * @see frontend/.../GlobalActivityItem.tsx createdPolicy — `created a policy <b>NAME</b><scope>.` Also the
+     * install policy *Deploy* creates, which names its fleet (fleetdm/fleet#58032): on the VMs fleet for a VM.
+     */
+    created: ({ name, scope }: { name: string; scope: TeamScope | 'VMs' }) =>
       new RegExp(`created a policy ${esc(name)}${fleetSuffix(scope)}\\.`),
     /** @see frontend/.../GlobalActivityItem.tsx:1778 */
     edited: ({ name, scope }: { name: string; scope: TeamScope }) =>

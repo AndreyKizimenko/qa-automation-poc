@@ -22,6 +22,8 @@ test.describe('activityCopy', () => {
       .test(`created a policy ${NAME} for Unassigned.`)).toBe(true);
     expect(activityCopy.policy.created({ name: NAME, scope: 'Workstations' })
       .test(`created a policy ${NAME} on the Workstations fleet.`)).toBe(true);
+    expect(activityCopy.policy.created({ name: NAME, scope: 'VMs' })
+      .test(`created a policy ${NAME} on the VMs fleet.`)).toBe(true);
   });
 
   test('policy.edited / policy.deleted use "the policy" article', () => {
@@ -122,10 +124,10 @@ test.describe('activityCopy', () => {
   });
 
   test('appStoreApp.* — (Platform) suffix + asymmetric Unassigned scope', () => {
-    // Add on Unassigned uses "the No team fleet" (team_name="No team" in the
-    // activity); delete on Unassigned uses "unassigned" (team_name=null).
+    // Add on Unassigned uses "the Unassigned fleet" (fleet_name="Unassigned" in
+    // the activity); delete on Unassigned uses "unassigned" (fleet_name=null).
     expect(activityCopy.appStoreApp.added({ name: 'Bear', platform: 'iOS', scope: 'Unassigned' })
-      .test('added Bear (iOS) to the No team fleet.')).toBe(true);
+      .test('added Bear (iOS) to the Unassigned fleet.')).toBe(true);
     expect(activityCopy.appStoreApp.deleted({ name: 'Bear', platform: 'iOS', scope: 'Unassigned' })
       .test('deleted Bear (iOS) from unassigned.')).toBe(true);
     // Named teams stay symmetric.
