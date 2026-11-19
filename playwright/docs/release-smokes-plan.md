@@ -95,6 +95,22 @@ survive it, and the filesystem and webhook log destinations. **Free only:** ther
 is Andrey's call, not a test's). It replaces the Helm chart and Update flow rows and most of Log destination.
 The session doing it keeps its own notes and branch; this file records the outcome.
 
+**Where it stands (2026-11-19):** explored and prototyped locally, design proposed to Andrey, nothing built.
+The design: `QA — Throwaway instance`, one `ubuntu-latest` job, no secrets, about 20–25 minutes, kind with the
+chart's MySQL and Valkey subcharts, TLS off, free. Part A is a brand-new server on the build under test (install,
+Ready, clean logs; first-run setup and login in Playwright; `generate-gitops`, an apply, and `generate-gitops`
+again with no diff). Part B is the Update flow from the last release: osquery-perf hosts and seeded data (a
+report with results logged, policies, a label, a user, and from Fleet 4 a 2017 pack and `fleetctl upgrade-packs`),
+`helm upgrade`, the data compared before and after, and every main page walked. Result logs go to the filesystem,
+then to a webhook in the cluster. Playwright gets a `throwaway` project of its own (`tests/e2e/throwaway/`), with
+no cleanup chain. Proven locally: 4.95.0 → `main` with the data intact, the pack dropped by the migration,
+`/packs` answering 410, and both log destinations. Still manual from Log destination: Splunk and status logs
+(osquery-perf sends none; audit logs are premium). Findings for Andrey to file or drop: with `mysql.enabled`
+the chart's `fleet-migration` is a plain Job with a fixed name and a 100 s TTL, so a `helm upgrade` inside that
+window fails with `field is immutable`; fleetctl 4.95's `upgrade-packs` says Fleet 5 will convert packs
+automatically, while Fleet 5's migration drops them; and Fleet 5 refuses a webhook destination on a private
+network unless `allow_private_network_integrations` is set (by design).
+
 ## Phase 4 — the checklist PR
 
 Against `fleetdm/fleet`'s `.github/ISSUE_TEMPLATE/release-qa.md`, after phases 1–3: delete and cut the rows
