@@ -194,16 +194,26 @@ jobs:
             echo "--- $pod"; kubectl -n fleet logs "$pod" --tail 40 || true
           done
           echo '--- osquery-perf'; grep -v '^ ' "$RUNNER_TEMP/osquery-perf.log" | tail -20 || true
-          # The chart's MySQL image, looked at from inside the kind node and from the runner's Docker:
-          # its option file and message files, and the socket and messages directory mysqld resolves.
-          look='ls -la /etc/my.cnf /usr/share/mysql-8.4/english/errmsg.sys 2>&1; mysqld --verbose --help 2>/dev/null | grep -E "^(socket|lc-messages-dir|datadir) "'
+          # The chart's MySQL image, looked at from inside the kind node (as a plain pod, with seccomp
+          # off, and privileged) and from the runner's Docker: the process's seccomp and AppArmor
+          # confinement, its option file, mysqld's own warnings, and the socket it resolves.
+          look='grep -E "^(Seccomp|NoNewPrivs):" /proc/self/status; echo "apparmor: $(cat /proc/self/attr/current 2>&1)"; stat -c "%A %U:%G %n" /etc/my.cnf; mysqld --verbose --help 2>&1 | grep -E "^(socket|lc-messages-dir) |Warning|ERROR" | head -8'
           image="$(kubectl -n fleet get statefulset fleet-mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo mysql:8.4)"
-          echo "--- $image in the kind node"
-          kubectl run mysql-files --image="$image" --restart=Never --command -- sh -c "$look" > /dev/null 2>&1 || true
-          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-files --timeout=120s > /dev/null 2>&1 || true
-          kubectl logs mysql-files 2>&1 || true
+          for variant in plain unconfined privileged; do
+            case "$variant" in
+              plain) overrides='{}' ;;
+              unconfined) overrides='{"spec":{"securityContext":{"seccompProfile":{"type":"Unconfined"}}}}' ;;
+              privileged) overrides='{"spec":{"containers":[{"name":"mysql-'"$variant"'","image":"'"$image"'","command":["sh","-c"],"args":["'"${look//\"/\\\"}"'"],"securityContext":{"privileged":true}}]}}' ;;
+            esac
+            echo "--- $image in the kind node, $variant"
+            kubectl run "mysql-$variant" --image="$image" --restart=Never --overrides="$overrides" --command -- sh -c "$look" > /dev/null 2>&1 || true
+            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded "pod/mysql-$variant" --timeout=120s > /dev/null 2>&1 || true
+            kubectl logs "mysql-$variant" 2>&1 || true
+          done
+          echo "--- the kind node's runtime"
+          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1; grep -rn -i -E "seccomp|apparmor" /etc/containerd/config.toml /var/lib/kubelet/config.yaml 2>/dev/null | head' || true
           echo "--- $image in the runner's Docker"
-          docker run --rm "$image" sh -c "$look" 2>&1 || true
+          docker run --rm "$image" sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status' || true
 
       - name: Merge the reports
         if: ${{ !cancelled() && steps.first-run.outcome != 'skipped' }}
