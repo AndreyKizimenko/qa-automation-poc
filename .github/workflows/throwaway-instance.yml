@@ -439,11 +439,11 @@ jobs:
         run: |
           cp .github/throwaway-instance/kind.yaml "$RUNNER_TEMP/kind.yaml"
           if [ '${{ matrix.snapshotter }}' = native ]; then
-            printf '%s\n' 'containerdConfigPatches:' '  - |-' '    [plugins."io.containerd.cri.v1.images"]' '      snapshotter = "native"' >> "$RUNNER_TEMP/kind.yaml"
+            printf '%s\n' 'containerdConfigPatches:' '  - |-' '    [plugins."io.containerd.grpc.v1.cri".containerd]' '      snapshotter = "native"' >> "$RUNNER_TEMP/kind.yaml"
           fi
           cat "$RUNNER_TEMP/kind.yaml" | tail -6
           kind create cluster --name throwaway --config "$RUNNER_TEMP/kind.yaml" --wait 2m
-          docker exec throwaway-control-plane sh -c 'head -3 /etc/containerd/config.toml; ctr --namespace k8s.io plugins ls 2>/dev/null | grep -E "snapshotter.*(overlayfs|native)"'
+          docker exec throwaway-control-plane sh -c 'head -3 /etc/containerd/config.toml; grep -n -A2 snapshotter /etc/containerd/config.toml | head -8'
       - name: mysqld's option file, in a pod and in Docker
         run: |
           uname -r
@@ -452,4 +452,5 @@ jobs:
           kubectl run mysql-look --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
           kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-look --timeout=240s > /dev/null || true
           echo '--- in a pod on the kind node'; kubectl logs mysql-look
+          docker exec throwaway-control-plane sh -c 'grep -E " / .*(overlay|native)|/run/containerd/io.containerd.runtime.v2.task/k8s.io/[^ ]+/rootfs" /proc/mounts | grep -c overlay; ls /var/lib/containerd/ | tr "\\n" " "; du -sh /var/lib/containerd/io.containerd.snapshotter.v1.native 2>/dev/null'
           echo "--- in the runner's Docker"; docker run --rm mysql:8.4 sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status|Unable to find'
