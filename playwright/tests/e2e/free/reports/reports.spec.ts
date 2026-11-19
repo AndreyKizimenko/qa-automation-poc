@@ -48,7 +48,7 @@ test.describe('Reports CRUD', () => {
     await reportsList.addReport();
     await reportEdit.setSql(createSql);
     reportId = await reportEdit.saveNew(created);
-    await assertActivity(request, 'created_saved_query', (d) => d.query_name === reportName);
+    await assertActivity(request, 'created_saved_query', (d) => d.report_name === reportName);
 
     await reportDetails.expectValues({ name: created.name, description: created.description });
     // Automations send the report's results to the log destination on its interval.
@@ -90,7 +90,7 @@ test.describe('Reports CRUD', () => {
       { ignoreCase: true },
     );
     await reportEdit.saveExisting();
-    await assertActivity(request, 'edited_saved_query', (d) => d.query_name === editedName);
+    await assertActivity(request, 'edited_saved_query', (d) => d.report_name === editedName);
 
     // saveExisting() lands on the report details page, so assert there directly.
     await reportDetails.expectValues({ name: edited.name, description: edited.description });
@@ -113,7 +113,7 @@ test.describe('Reports CRUD', () => {
 
     await expect(reportsList.table.rowOrEmpty()).toBeVisible();
     await expect(reportsList.table.rowWith(editedName)).toHaveCount(0);
-    await assertActivity(request, 'deleted_saved_query', (d) => d.query_name === editedName);
+    await assertActivity(request, 'deleted_saved_query', (d) => d.report_name === editedName);
   });
 
   test('activity feed shows create → edit → delete', async ({ dashboard }) => {

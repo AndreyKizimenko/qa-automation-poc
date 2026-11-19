@@ -59,8 +59,8 @@ export async function createReport(
   if (!res.ok()) {
     throw new Error(`[createReport] ${res.status()} creating "${opts.name}": ${await res.text()}`);
   }
-  const { query } = await res.json();
-  return { id: query.id, name: query.name };
+  const { report } = await res.json();
+  return { id: report.id, name: report.name };
 }
 
 /**
@@ -78,7 +78,10 @@ export async function listReports(
   });
   await expectOk(res, `Failed to list the reports of ${fleetId === undefined ? 'the global scope' : `fleet ${fleetId}`}`);
   const body = await res.json();
-  return ((body.queries ?? []) as ReportRef[]).map((q) => ({
+  // Fleet 5 lists reports under `reports` only (fleetdm/fleet#59035 dropped `queries`). A missing key
+  // throws rather than reading as no reports, so the next rename fails here instead of passing silently.
+  if (!('reports' in body)) throw new Error('[listReports] the response has no "reports" list');
+  return ((body.reports ?? []) as ReportRef[]).map((q) => ({
     id: q.id,
     name: q.name,
     automations_enabled: q.automations_enabled,
@@ -114,7 +117,7 @@ export interface ReportDetails {
 export async function getReport(request: APIRequestContext, id: number): Promise<ReportDetails> {
   const res = await request.get(apiUrl(`queries/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read report ${id}`);
-  const q = (await res.json()).query;
+  const q = (await res.json()).report;
   return {
     id: q.id,
     name: q.name,
