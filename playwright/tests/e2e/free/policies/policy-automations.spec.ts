@@ -3,20 +3,20 @@
  *
  *   - **Scope-wide** — the same failing-policies webhook lifecycle as premium
  *     (webhook automations exist on free; free has no team dropdown): enabled
- *     with a destination URL, ticked for one policy in that policy's own modal
- *     (stored in `policy_ids`, the cell reading "Webhook"), and turned off
- *     again, keeping the URL and the policy while the cell goes back to "Add
- *     automation". This mutates GLOBAL config
- *     (webhook_settings.failing_policies_webhook): the original, `policy_ids`
- *     included, is snapshotted and restored via the config helper, and a global
+ *     with a destination URL, chosen as one policy's automation in that
+ *     policy's own modal (stored on the policy as its `automation_type`, the
+ *     cell reading "Webhook"), and turned off again, keeping the URL and the
+ *     policy's automation, which the cell goes on naming. This
+ *     mutates GLOBAL config (webhook_settings.failing_policies_webhook): the
+ *     original is snapshotted and restored via the config helper, and a global
  *     policy is seeded so the "Automations" button is enabled. With no ticket
  *     integration, choosing Ticket offers "Add integration", which leads to
  *     Settings › Integrations.
- *   - **One policy's** — a row's Automations cell opens the same "Manage
+ *   - **One policy's** — a row's Automation cell opens the same "Manage
  *     automations" modal premium's fleet policies have, but every policy on free
- *     is global, and `PolicyAutomationsFields` gives a global policy only *Send
- *     webhook or create ticket*: no Install software, Run script, Resend
- *     configuration profile, Calendar event or Conditional access, and no
+ *     is global, and `PolicyAutomationsFields` offers a global policy only None
+ *     and *Send webhook or create ticket*: no Install software, Run script,
+ *     Resend configuration profile, Calendar event or Conditional access, and no
  *     Continuous checkbox (they need a fleet policy, and their API fields are
  *     `premium:"true"`). The premium twin is in
  *     `premium/policies/policy-automations.spec.ts`.
@@ -26,12 +26,14 @@
  * "Filter by automation" dropdown renders on premium only).
  */
 import { test, expect } from '@fixtures';
-import { FLEET_POLICY_AUTOMATION_KEYS } from '@pages';
+import { FLEET_POLICY_AUTOMATION_OPTIONS } from '@pages';
 import { runNonce } from '@helpers/profiles';
+import { toastCopy } from '@helpers/toast-copy';
 import {
   createPolicy,
   deletePolicies,
   getAppConfig,
+  getGlobalPolicy,
   patchAppConfig,
   type FailingPoliciesWebhook,
 } from '@helpers/api';
@@ -53,13 +55,14 @@ test.describe('Free • Policies • automations', () => {
     ({ id: policyId } = await createPolicy(request, { name: policyName }));
   });
 
+  // The policy's own webhook choice goes with the policy, which this hook
+  // deletes, so only the scope's switch and URL are restored.
   test.afterEach(async ({ request }) => {
     await patchAppConfig(request, {
       webhook_settings: {
         failing_policies_webhook: {
           enable_failing_policies_webhook: original.enable_failing_policies_webhook ?? false,
           destination_url: original.destination_url ?? '',
-          policy_ids: original.policy_ids ?? [],
         },
       },
     });
@@ -82,36 +85,36 @@ test.describe('Free • Policies • automations', () => {
       await policiesList.selectWebhookWorkflow();
       await policiesList.policyWebhookUrlInput.fill(webhookUrl);
       await policiesList.saveAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+      await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
 
       const webhook = await stored();
       expect(webhook.enable_failing_policies_webhook).toBe(true);
       expect(webhook.destination_url).toBe(webhookUrl);
     });
 
-    await test.step("tick Send webhook in the policy's own modal", async () => {
+    await test.step("choose Send webhook as the policy's automation in its own modal", async () => {
       // `SELECT 1;` passes on every host, so the webhook never has a failure to send.
       await policiesList.openPolicyAutomations(policyName);
       await expect(policiesList.policyAutomationsModal).toContainText(
         `Manage automations for the ${policyName} policy`,
       );
-      await policiesList.policyAutomations.setAutomation('ticket_webhook', true);
+      await policiesList.policyAutomations.chooseAutomation('webhook_or_ticket');
       await policiesList.savePolicyAutomations();
       // The previous save's toast can still be showing, so poll the stored state.
-      await expect.poll(async () => (await stored()).policy_ids).toContain(policyId);
+      await expect.poll(async () => (await getGlobalPolicy(request, policyId)).automationType).toBe('webhook_or_ticket');
       await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
 
-    await test.step('turn it off, keeping the URL and the policy', async () => {
+    await test.step("turn it off, keeping the URL and the policy's automation", async () => {
       await policiesList.openAutomations();
       await policiesList.setPolicyAutomations(false);
       await policiesList.saveAutomations();
       await expect.poll(async () => (await stored()).enable_failing_policies_webhook).toBe(false);
-      const webhook = await stored();
-      expect(webhook.destination_url).toBe(webhookUrl);
-      expect(webhook.policy_ids).toContain(policyId);
-      // The cell names the webhook only while the webhook is on.
-      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Add automation');
+      expect((await stored()).destination_url).toBe(webhookUrl);
+      expect((await getGlobalPolicy(request, policyId)).automationType).toBe('webhook_or_ticket');
+      // The cell names the policy's automation whether or not the scope's
+      // webhook is on: the switch decides only whether failures are sent.
+      await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
   });
 
@@ -154,39 +157,38 @@ test.describe('Free • Policies • automations', () => {
 
     release();
     await expect(policiesList.automationsModal).toBeHidden();
-    await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+    await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
   });
 });
 
-test.describe("Free • Policies • one policy's automations", () => {
-  test("a policy's automations modal offers webhooks or tickets, and nothing a fleet policy adds", async ({
+test.describe("Free • Policies • one policy's automation", () => {
+  test("a policy's Automation dropdown offers only webhooks or tickets, nothing a fleet policy adds", async ({
     dashboard,
     policiesList,
     page,
-    request,
+    seed,
   }) => {
-    const policyName = `pw-policy-automations-${runNonce()}`;
-    const { id: policyId } = await createPolicy(request, { name: policyName });
+    const policy = await seed.policy('policy-automation');
 
-    try {
-      await dashboard.goto();
-      await dashboard.navbar.goToPolicies();
-      // The automation filter beside the platform one is premium's alone.
-      await expect(page.getByRole('combobox', { name: 'Filter by platform', exact: true })).toBeVisible();
-      await expect(page.getByRole('combobox', { name: 'Filter by automation' })).toHaveCount(0);
+    await dashboard.goto();
+    await dashboard.navbar.goToPolicies();
+    // The automation filter beside the platform one is premium's alone.
+    await expect(page.getByRole('combobox', { name: 'Filter by platform', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Filter by automation' })).toHaveCount(0);
 
-      await policiesList.openPolicyAutomations(policyName);
-      const fields = policiesList.policyAutomations;
-      await expect(fields.checkbox('ticket_webhook')).toBeVisible();
-      await expect(fields.allCheckboxes()).toHaveCount(1);
-      for (const key of FLEET_POLICY_AUTOMATION_KEYS.filter((k) => k !== 'ticket_webhook')) {
-        await expect(fields.checkbox(key), `${key} is a fleet policy's automation`).toHaveCount(0);
-      }
-      await expect(fields.continuousCheckbox).toHaveCount(0);
-      await policiesList.cancelPolicyAutomations();
-    } finally {
-      await deletePolicies(request, [policyId]);
+    await policiesList.openPolicyAutomations(policy.name);
+    const fields = policiesList.policyAutomations;
+    await fields.expectAutomation('none');
+    await fields.openAutomationMenu();
+    // Read off the open menu: None (which opening it waits for) and the webhook or ticket option, nothing else.
+    await expect(fields.option('webhook_or_ticket')).toBeVisible();
+    await expect(fields.options).toHaveCount(2);
+    for (const type of FLEET_POLICY_AUTOMATION_OPTIONS.filter((t) => t !== 'none' && t !== 'webhook_or_ticket')) {
+      await expect(fields.option(type), `${type} is a fleet policy's automation`).toHaveCount(0);
     }
+    await fields.closeAutomationMenu();
+    await expect(fields.continuousCheckbox).toHaveCount(0);
+    await policiesList.cancelPolicyAutomations();
   });
 });
 

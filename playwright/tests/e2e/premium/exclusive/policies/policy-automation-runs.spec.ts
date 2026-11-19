@@ -61,6 +61,7 @@
 import { test, expect, HOST_RETRIES } from '@fixtures';
 import { activityCopy } from '@helpers/activity-copy';
 import { runNonce } from '@helpers/profiles';
+import { toastCopy } from '@helpers/toast-copy';
 import {
   cancelUpcomingActivity,
   createFleetPolicy,
@@ -216,11 +217,11 @@ test.describe('Premium • Policies • automation runs', () => {
       await dashboard.navbar.goToPolicies();
       await policiesList.teamDropdown.selectByLabel('VMs');
       await policiesList.openPolicyAutomations(name);
-      await expect(policiesList.policyAutomations.checkbox('run_script')).toHaveAttribute('aria-checked', 'true');
-      await expect(policiesList.policyAutomations.selectedValue('run_script')).toHaveText(scriptName);
+      await policiesList.policyAutomations.expectAutomation('script');
+      await expect(policiesList.policyAutomations.selectedValue('script')).toHaveText(scriptName);
       await policiesList.policyAutomations.setContinuous(true);
       await policiesList.savePolicyAutomations();
-      await policiesList.toast.expectSuccess('Successfully updated policy automations.');
+      await policiesList.toast.expectSuccess(toastCopy.policies.automationsUpdated);
       expect((await getFleetPolicy(request, vmsFleetId, policy.id)).continuousAutomationsEnabled).toBe(true);
 
       await refetchPolicies();

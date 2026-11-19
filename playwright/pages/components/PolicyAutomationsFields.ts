@@ -1,124 +1,160 @@
 import { Locator, expect } from '@playwright/test';
-
-/**
- * The rows of Fleet's `PolicyAutomationsFields`, by the `name` Fleet gives each
- * row's checkbox — which is also the checkbox's accessible name (Fleet's
- * `Checkbox` sets `aria-label={name}`), so the names are snake_case, not the
- * visible labels.
- */
-export type PolicyAutomationKey =
-  | 'ticket_webhook'
-  | 'install_software'
-  | 'run_script'
-  | 'resend_configuration_profile'
-  | 'calendar_event'
-  | 'conditional_access';
-
-/** What a fleet policy's modal lists, in order. A global policy (and every policy on free) lists only the first. */
-export const FLEET_POLICY_AUTOMATION_KEYS: readonly PolicyAutomationKey[] = [
-  'ticket_webhook',
-  'install_software',
-  'run_script',
-  'resend_configuration_profile',
-  'calendar_event',
-  'conditional_access',
-];
+import type { PolicyAutomationType } from '@helpers/api/policies';
+import { ReactSelect } from './dropdowns';
 
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * A policy's automations — one checkbox row per automation type, a picker beside
- * Install software and Run script, and the "Continuous software & script
- * automations" checkbox. Fleet renders the same component
- * (`pages/policies/components/PolicyAutomationsFields`) in the policies list's
- * per-policy **Manage automations** modal, the policy form and the save-new-policy
- * modal, so it's constructed on whichever container holds it.
+ * Each Automation option's label, matched whole. The webhook or ticket option is
+ * named after the scope's settings (`getTicketOrWebhookLabel`,
+ * `pages/policies/helpers.ts`): "Send webhook" while the scope's failing-policies
+ * webhook is on, "Create ticket" while a ticket integration is, and "Send webhook
+ * or create ticket" while neither is.
+ */
+const OPTION_LABELS: Record<PolicyAutomationType | 'none', RegExp> = {
+  none: /^None$/,
+  webhook_or_ticket: /^(Send webhook or create ticket|Send webhook|Create ticket)$/,
+  software: /^Install software$/,
+  script: /^Run script$/,
+  configuration_profile: /^Resend configuration profile$/,
+  calendar: /^Calendar event$/,
+  conditional_access: /^Conditional access$/,
+};
+
+/** What a fleet policy's Automation dropdown offers, in order. A global policy (and every policy on free) offers only the first two. */
+export const FLEET_POLICY_AUTOMATION_OPTIONS: readonly (PolicyAutomationType | 'none')[] = [
+  'none',
+  'webhook_or_ticket',
+  'software',
+  'script',
+  'configuration_profile',
+  'calendar',
+  'conditional_access',
+];
+
+/**
+ * A policy's automation: Fleet's `PolicyAutomationsFields`, one **Automation**
+ * dropdown choosing the policy's single automation, then the picker the choice
+ * needs (Software, Script or Configuration profile), and for software and script
+ * the "Continuous software & script automations" checkbox. Fleet renders it in
+ * the policies list's per-policy **Manage automations** modal, the policy form
+ * and the save-new-policy modal, so it's constructed on whichever container holds
+ * it.
  *
- * Which rows render is decided by the policy, not the tier: a fleet policy lists
- * all six; a global one — and every policy on free — lists only *Send webhook or
- * create ticket*, with no Continuous checkbox.
+ * Which options the dropdown offers is decided by the policy, not the tier: a
+ * fleet policy's offers every type (Unassigned's all but Calendar event), a global
+ * one's, and every policy's on free, only None and the webhook or ticket option.
  *
- * The rows are a role-less `<table>`, and a row's accessible name starts with its
- * checkbox's name and goes on with the picker's selected value, so rows are
- * matched by that prefix.
+ * Each dropdown is a `DropdownWrapper` (react-select), whose combobox is a hidden
+ * input that never takes a click, so each is found as the wrapper holding a
+ * combobox of its accessible name: `Automation` for the type, the placeholder
+ * for a picker. `DropdownWrapper` gives its FormField the `dropdown-wrapper`
+ * class and nothing else names it.
  */
 export class PolicyAutomationsFields {
   readonly root: Locator;
+  /** The Automation dropdown: its `control` opens the menu, its `value` reads the chosen type. */
+  readonly automation: ReactSelect;
+  /** The open menu's options. Only one menu is open at a time. */
+  readonly options: Locator;
   readonly continuousCheckbox: Locator;
+  private readonly pickers: Record<'software' | 'script', ReactSelect>;
 
   constructor(container: Locator) {
     this.root = container;
+    const page = container.page();
+    const wrapperOf = (combobox: string): Locator =>
+      container
+        .locator('.dropdown-wrapper')
+        .filter({ has: page.getByRole('combobox', { name: combobox, exact: true }) });
+    this.automation = new ReactSelect(wrapperOf('Automation'));
+    this.pickers = {
+      software: new ReactSelect(wrapperOf('Select software')),
+      script: new ReactSelect(wrapperOf('Select script')),
+    };
+    this.options = page.getByTestId('dropdown-option');
     this.continuousCheckbox = container.getByRole('checkbox', { name: 'continuous-automations-enabled', exact: true });
   }
 
-  row(key: PolicyAutomationKey): Locator {
-    return this.root.getByRole('row', { name: new RegExp(`^${key}\\b`) });
-  }
-
-  checkbox(key: PolicyAutomationKey): Locator {
-    return this.root.getByRole('checkbox', { name: key, exact: true });
-  }
-
-  /** Every automation checkbox the fields render, Continuous excluded. */
-  allCheckboxes(): Locator {
-    return this.root.getByRole('row').getByRole('checkbox');
+  /** The open menu's option for `type`. */
+  option(type: PolicyAutomationType | 'none'): Locator {
+    return this.options.filter({ hasText: OPTION_LABELS[type] });
   }
 
   /**
-   * The picker's chosen value — the title for Install software, the script for
-   * Run script. react-select renders it in a role-less div; the class is all that
-   * marks it.
+   * Asserts the open menu's option for `type` is offered but can't be chosen, or
+   * can. react-select 5.4 gives an option no role and no `aria-disabled`: only a
+   * modifier class on the option's wrapper marks a disabled one.
    */
-  selectedValue(key: 'install_software' | 'run_script'): Locator {
-    return this.row(key).locator('.react-select__single-value');
+  async expectOptionDisabled(type: PolicyAutomationType, disabled: boolean): Promise<void> {
+    const wrapper = this.root.page().locator('.react-select__option').filter({ has: this.option(type) });
+    await expect(wrapper).toHaveCount(1);
+    if (disabled) await expect(wrapper).toHaveClass(/react-select__option--is-disabled/);
+    else await expect(wrapper).not.toHaveClass(/react-select__option--is-disabled/);
   }
 
-  /** Ticks or unticks `checkbox` and asserts it took. Fleet's checkbox is a `role="checkbox"` div carrying `aria-checked`. */
-  private async setChecked(checkbox: Locator, on: boolean): Promise<void> {
-    await expect(checkbox).toBeVisible();
-    if ((await checkbox.getAttribute('aria-checked')) !== String(on)) await checkbox.click();
-    await expect(checkbox).toHaveAttribute('aria-checked', String(on));
+  /** Opens the Automation dropdown's menu and waits for its first option. */
+  async openAutomationMenu(): Promise<void> {
+    await expect(this.automation.control).toBeVisible();
+    await this.automation.control.click();
+    await expect(this.option('none')).toBeVisible();
   }
 
-  async setAutomation(key: PolicyAutomationKey, on: boolean): Promise<void> {
-    await this.setChecked(this.checkbox(key), on);
+  /** Closes the open menu by toggling its control, choosing nothing. Escape would also close the modal around it. */
+  async closeAutomationMenu(): Promise<void> {
+    await this.automation.control.click();
+    await expect(this.options).toHaveCount(0);
   }
 
-  async setContinuous(on: boolean): Promise<void> {
-    await this.setChecked(this.continuousCheckbox, on);
+  /** Asserts the Automation dropdown shows `type` as the policy's automation. */
+  async expectAutomation(type: PolicyAutomationType | 'none'): Promise<void> {
+    await expect(this.automation.value).toHaveText(OPTION_LABELS[type]);
+  }
+
+  /** Chooses `type` as the policy's automation, which replaces any it had. */
+  async chooseAutomation(type: PolicyAutomationType | 'none'): Promise<void> {
+    await this.openAutomationMenu();
+    await this.option(type).click();
+    await this.expectAutomation(type);
+  }
+
+  /** The picker's chosen value: the title for Install software, the script for Run script. */
+  selectedValue(picker: 'software' | 'script'): Locator {
+    return this.pickers[picker].value;
   }
 
   /**
-   * Opens the row's picker and chooses `value`. The picker is react-select: its
-   * `combobox` input sits under the control and never takes a click, so the
-   * control's class is the click target, and the options carry Fleet's
-   * `dropdown-option` test id. An option is its label as a bare text node, then —
-   * for software — a help-text span ("Linux (.deb) • 1.0.0") whose text runs
-   * straight on from it, so the label is matched as a prefix and the match must be
-   * unique: give what you pick a name no other option starts with.
+   * Opens the picker and chooses `value`. A software option is its label, then a
+   * help text ("Linux (.deb) • 1.0.0") that runs straight on from it, so the label
+   * is matched as a prefix and the match must be unique: give what you pick a name
+   * no other option starts with.
    */
-  private async pick(key: 'install_software' | 'run_script', value: string): Promise<void> {
-    const control = this.row(key).locator('.react-select__control');
+  private async pick(picker: 'software' | 'script', value: string): Promise<void> {
+    const { control } = this.pickers[picker];
     await expect(control).toBeVisible();
     await control.click();
-    const option = this.root
-      .page()
-      .getByTestId('dropdown-option')
-      .filter({ hasText: new RegExp(`^${esc(value)}`) });
+    const option = this.options.filter({ hasText: new RegExp(`^${esc(value)}`) });
     await expect(option).toHaveCount(1);
     await option.click();
-    await expect(this.selectedValue(key)).toHaveText(value);
+    await expect(this.selectedValue(picker)).toHaveText(value);
   }
 
-  /** Ticks Install software and picks the title the automation installs. */
+  /** Chooses Install software and picks the title the automation installs. */
   async installSoftware(title: string): Promise<void> {
-    await this.setAutomation('install_software', true);
-    await this.pick('install_software', title);
+    await this.chooseAutomation('software');
+    await this.pick('software', title);
   }
 
-  /** Ticks Run script and picks the script the automation runs. */
+  /** Chooses Run script and picks the script the automation runs. */
   async runScript(scriptName: string): Promise<void> {
-    await this.setAutomation('run_script', true);
-    await this.pick('run_script', scriptName);
+    await this.chooseAutomation('script');
+    await this.pick('script', scriptName);
+  }
+
+  /** Ticks or unticks Continuous and asserts it took. Fleet's checkbox is a `role="checkbox"` div carrying `aria-checked`. */
+  async setContinuous(on: boolean): Promise<void> {
+    await expect(this.continuousCheckbox).toBeVisible();
+    if ((await this.continuousCheckbox.getAttribute('aria-checked')) !== String(on)) await this.continuousCheckbox.click();
+    await expect(this.continuousCheckbox).toHaveAttribute('aria-checked', String(on));
   }
 }

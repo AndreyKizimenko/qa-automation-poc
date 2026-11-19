@@ -39,7 +39,7 @@
   },
   "pages/components/PolicyAutomationsFields.ts": {
     "suite/react-select-in-component": {
-      "count": 2
+      "count": 1
     }
   },
   "pages/components/RunScriptModal.ts": {
@@ -274,7 +274,7 @@
   },
   "tests/e2e/free/policies/policy-automations.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
-      "count": 2
+      "count": 1
     },
     "suite/no-class-locator-in-spec": {
       "count": 1
@@ -282,11 +282,8 @@
     "suite/no-page-locator-in-spec": {
       "count": 2
     },
-    "suite/no-toast-copy-in-spec": {
-      "count": 2
-    },
     "suite/use-own-name": {
-      "count": 3
+      "count": 2
     }
   },
   "tests/e2e/free/policies/role-access.spec.ts": {
@@ -493,9 +490,6 @@
     }
   },
   "tests/e2e/premium/exclusive/policies/policy-automation-runs.spec.ts": {
-    "suite/no-toast-copy-in-spec": {
-      "count": 1
-    },
     "suite/use-own-name": {
       "count": 1
     }
@@ -614,16 +608,13 @@
   },
   "tests/e2e/premium/policies/policy-automations.spec.ts": {
     "suite/no-api-cleanup-in-finally": {
-      "count": 2
+      "count": 1
     },
     "suite/no-class-locator-in-spec": {
       "count": 1
     },
-    "suite/no-toast-copy-in-spec": {
-      "count": 4
-    },
     "suite/use-own-name": {
-      "count": 5
+      "count": 3
     }
   },
   "tests/e2e/premium/policies/role-access.spec.ts": {

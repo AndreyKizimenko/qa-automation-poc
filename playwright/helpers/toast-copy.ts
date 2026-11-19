@@ -11,6 +11,13 @@
  * writes and the frontend relays is marked as such.
  */
 export const toastCopy = {
+  policies: {
+    /**
+     * frontend/pages/policies/ManagePoliciesPage: the scope-wide AutomationsModal and a
+     * policy's own ManageAutomationsModal, after either saves.
+     */
+    automationsUpdated: 'Successfully updated policy automations.',
+  },
   reports: {
     /** frontend/pages/queries/ManageQueriesPage/ManageQueriesPage.tsx, after the automations modal saves. */
     automationsUpdated: 'Successfully updated report automations.',
