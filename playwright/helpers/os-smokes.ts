@@ -43,6 +43,7 @@ import type {
   SoftwareOsPage,
   SoftwareTitlesPage,
 } from '@pages';
+import type { MyDeviceTab } from '@pages/hosts/MyDevicePage';
 import {
   getHostAgentReport,
   getHostPolicyResponses,
@@ -486,6 +487,40 @@ async function script(
   await expect(details.output).toHaveText(new RegExp(`^${marker} on ${escapeRegExp(host.displayName)}`, 'i'));
 }
 
+/** Whether a host has a My device page: a VM with Fleet Desktop (`canShowMyDeviceButton` wants its version). */
+export function hasMyDevice(subject: Subject): boolean {
+  return takesScripts(subject) && subject.entry.desktop !== 'none';
+}
+
+/**
+ * Its My device page opens from Host details' link, on Details, showing this host's vitals (the page names no
+ * host, so its private IP address is compared with Host details'), the tier's tabs, and on its Software tab the
+ * package known to be on it, as its package type. Each tier's spec passes the tabs it expects: a tab listed as
+ * absent is checked only after the shown ones, so the absence isn't read off a page that never rendered its
+ * tabs. Only for a host with Fleet Desktop ({@link hasMyDevice}).
+ */
+async function myDevice(
+  { hostDetails, request }: { hostDetails: HostDetailsPage; request: APIRequestContext },
+  subject: Subject,
+  tabs: { shown: MyDeviceTab[]; absent: MyDeviceTab[] },
+): Promise<void> {
+  test.setTimeout(180_000);
+  const host = await hostOf(request, subject);
+  const known = KNOWN_PACKAGE[subject.entry.package];
+
+  await hostDetails.goto(host.id);
+  const ip = (await hostDetails.vitals.value('Private IP address').innerText()).trim();
+  const device = await hostDetails.openMyDevice();
+  await device.expectLoaded();
+  await expect(device.vitals.value('Private IP address')).toHaveText(ip);
+  for (const tab of tabs.shown) await expect(device.tab(tab)).toBeVisible();
+  for (const tab of tabs.absent) await expect(device.tab(tab)).toHaveCount(0);
+
+  const row = await device.findInSoftware(known.name);
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('cell', { name: known.type, exact: true })).toBeVisible();
+}
+
 /**
  * A script that exits 3 reads as an error. The Run script modal shows "Error". Its details read "Exit code: 3
  * (Script failed.)", with what it printed and the line fleetd appends to a failed run on every platform
@@ -775,4 +810,4 @@ async function policies(
  * The checks, one per test. Each takes the fixtures it uses, as the test
  * destructured them, and the subject: `smoke.gate({ hostDetails, request }, subject)`.
  */
-export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, osVulnerabilities, chromebookPage, policies, selfHealing };
+export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, myDevice, osVulnerabilities, chromebookPage, policies, selfHealing };

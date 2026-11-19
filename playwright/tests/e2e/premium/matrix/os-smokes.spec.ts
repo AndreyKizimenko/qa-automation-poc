@@ -17,6 +17,7 @@
  *   | A live report comes back with the host's own platform, and finds Fleet Desktop running | every OS; Fleet Desktop on VMs with a desktop, the fleetd extension on ChromeOS |
  *   | A script runs and its output comes back | every VM |
  *   | A script that exits 3 reads as an error: "Error", its exit code, its output and fleetd's line about it, also from the host's Activity card | every VM |
+ *   | Its My device page opens from Host details on Details, with its own vitals, the tier's tabs (premium: Details, Software and Policies), and the known package on its Software tab | every VM with Fleet Desktop |
  *   | Vulnerabilities are listed for the OS | the Ubuntu LTS versions, RHEL 9 and 10 |
  *   | Its page is a Chromebook's: disk encryption always on, the extension's agent options, its Chrome profile, no Reports tab, no script | ChromeOS |
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
@@ -168,6 +169,7 @@ import {
   smokeDetails,
   smokeSubjects,
   takesScripts,
+  hasMyDevice,
   hostOf,
   type SmokeHost,
   type Subject,
@@ -418,6 +420,11 @@ function smokesOf(subject: Subject): void {
 
       test('runs a failing script, which reads as an error, here and in its Activity', ({ hostDetails, seed, request }) =>
         smoke.failingScript({ hostDetails, seed, request }, subject));
+    }
+
+    if (hasMyDevice(subject)) {
+      test("opens its My device page from Host details: its vitals, the tier's tabs, and its software", ({ hostDetails, request }) =>
+        smoke.myDevice({ hostDetails, request }, subject, { shown: ['Details', 'Software', 'Policies'], absent: [] }));
     }
 
     if (OS_WITH_VULNERABILITIES.includes(os)) {

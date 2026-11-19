@@ -110,7 +110,7 @@ regenerate both on every restart.
   flavour, on a pool VM of each version the pool holds and on the ChromeOS host (the `premium-matrix` project;
   in CI the `Playwright — OS smokes` workflow, after premium's suite), and on free's three VMs and its
   ChromeOS host (the `free-matrix` project, a step of free's job). They are where a flavour's own behaviour is asserted: what Fleet shows for its OS and reads of the machine, its inventory's
-  package type, its answer to a live report, its package manager's install and uninstall and the inventory that follows each (premium only: free has no custom packages), that fleetd comes back by itself after it is killed (last of each VM's smokes), on premium that fleetd runs edge's build and goes back a release on a fleet that pins one and returns (a pool VM of each version, moved onto a throwaway `pw-*` fleet for the test and back; approved by Andrey 2026-11-19), and for ChromeOS, a Chromebook's own page and the extension's policy answers. The checks both tiers make are `helpers/os-smokes.ts`'s; each tier's spec declares its tests. A spec in the main project that needs one OS
+  package type, its answer to a live report, a passing and a failing script, its My device page (opened through Host details' link, with the tier's tabs; on VMs with Fleet Desktop), its package manager's install and uninstall and the inventory that follows each (premium only: free has no custom packages), that fleetd comes back by itself after it is killed (last of each VM's smokes), on premium that fleetd runs edge's build and goes back a release on a fleet that pins one and returns (a pool VM of each version, moved onto a throwaway `pw-*` fleet for the test and back; approved by Andrey 2026-11-19), and for ChromeOS, a Chromebook's own page and the extension's policy answers. The checks both tiers make are `helpers/os-smokes.ts`'s; each tier's spec declares its tests. A spec in the main project that needs one OS
   version of the pool still asks `requireRealHost` for it by `os`.
 - **The lab preflight** (`tests/api/lab-hosts.spec.ts`) is one test per pool host. One that is offline, on the
   wrong fleet or no longer enrolled is a red row naming it and saying which, while the workers go on with the
@@ -132,7 +132,10 @@ regenerate both on every restart.
 - **Software on the real VMs is durable.** The VMs fleet keeps one inert custom package per platform (plus
   7-Zip's `.exe` on Windows) and one Fleet-maintained app each for macOS and Windows, declared in
   `gitops/premium-fleetqa/fleets/vms.yml` and listed in `helpers/vm-fixtures.ts`, so every pool VM has the same. A spec that installs or
-  uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Only a spec that
+  uninstalls on a VM uses one of those and leaves it **uninstalled** — never deletes it. Beside them it keeps one
+  self-service package per platform ("Fleet Playwright Self-service", `VM_SELF_SERVICE_FIXTURES`), which only
+  `premium/software/self-service-on-host.spec.ts` installs, from the host's My device page, so no other spec's
+  install meets it on a VM. Only a spec that
   changes the title itself (a version swap, its own scripts, an install policy) uploads a per-run
   `fleet-pw-*` package, and deletes it in the same test.
 - **A failed install costs its VM only the attempts.** Fleet tries a failed install three times, half a
