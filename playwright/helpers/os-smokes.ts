@@ -49,6 +49,7 @@ import {
   getHostPolicyResponses,
   getHostScriptLastExecution,
   labHostProblem,
+  listHostVulnerableTitles,
   listLabHostRecords,
   newestRecord,
   recordVmOnReport,
@@ -530,6 +531,38 @@ async function myDevice(
 }
 
 /**
+ * Its My device page lists its vulnerable software: a CVE Fleet has matched to software on the host, searched
+ * for on the Software tab, finds the title it was matched to, and the title's row shows its vulnerabilities as
+ * Host details does: the CVE itself when it has one, "N vulnerabilities" when it has more
+ * (`VulnerabilitiesCell.tsx`). The CVE is the host's own, from Fleet's list of its vulnerable software, so the
+ * check follows whatever the host runs today. A title with exactly one CVE is preferred, since its cell names
+ * the CVE.
+ *
+ * A host Fleet has matched nothing on skips, saying so: on 2026-11-18 that was two Windows 11 VMs, Windows
+ * Server 2025 and Fedora 45, while every other host had at least one title (`prem-win10-01` and
+ * `prem-ws2022-01` one each, Windows Defender). Only for a host with Fleet Desktop ({@link hasMyDevice}).
+ */
+async function myDeviceVulnerabilities(
+  { hostDetails, request }: { hostDetails: HostDetailsPage; request: APIRequestContext },
+  subject: Subject,
+): Promise<void> {
+  test.setTimeout(240_000);
+  const host = await hostOf(request, subject);
+  const vulnerable = await listHostVulnerableTitles(request, host.id);
+  test.skip(vulnerable.length === 0, `Fleet lists no vulnerable software on ${host.displayName}`);
+  const title = vulnerable.find((t) => t.cves.length === 1) ?? vulnerable[0];
+  const cve = title.cves[0];
+  test.info().annotations.push({ type: 'cve', description: `${cve} on ${title.shownAs} (${title.cves.length} in all)` });
+
+  await hostDetails.goto(host.id);
+  const device = await hostDetails.openMyDevice();
+  await device.expectLoaded();
+  const row = await device.findInSoftwareByCve(cve, title.shownAs);
+  await expect(row, `My device finds no ${title.shownAs} for ${cve}`).toBeVisible();
+  await expect(row).toContainText(title.cves.length === 1 ? cve : `${title.cves.length.toLocaleString('en-US')} vulnerabilities`);
+}
+
+/**
  * A script that exits 3 reads as an error. The Run script modal shows "Error". Its details read "Exit code: 3
  * (Script failed.)", with what it printed and the line fleetd appends to a failed run on every platform
  * (`script execution error: exit status 3`, `orbit/pkg/scripts/scripts.go`). The host's Activity card lists
@@ -818,4 +851,4 @@ async function policies(
  * The checks, one per test. Each takes the fixtures it uses, as the test
  * destructured them, and the subject: `smoke.gate({ hostDetails, request }, subject)`.
  */
-export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, myDevice, osVulnerabilities, chromebookPage, policies, selfHealing };
+export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, myDevice, myDeviceVulnerabilities, osVulnerabilities, chromebookPage, policies, selfHealing };

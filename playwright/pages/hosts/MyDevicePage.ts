@@ -1,6 +1,8 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataSet } from '../components/DataSet';
+import { waitForTableSettled } from '../components/DataTable';
 import { ActionsMenu } from '../components/dropdowns';
+import { FilterModal } from '../components/FilterModal';
 import { fleetModal } from '../components/Modal';
 import { Toast } from '../components/Toast';
 
@@ -49,6 +51,8 @@ export class MyDevicePage {
   /** The Software tab: the host's inventory, the same table as Host details' (`HostSoftwareTable`). */
   readonly softwareSearch: Locator;
   readonly softwareRows: Locator;
+  /** The Software tab's filters: the same "Add filters" modal as Host details' Inventory. */
+  readonly filter: FilterModal;
 
   /** The Policies tab's table: Name and Status ("Pass", "Fail", "Action required" or "---"). */
   readonly policyRows: Locator;
@@ -78,6 +82,7 @@ export class MyDevicePage {
     this.softwareSearch = page.getByPlaceholder('Search by name or vulnerability (CVE)');
     // The inventory table's own class, as on Host details: HostSoftwareTable renders as a role-less wrapper.
     this.softwareRows = page.locator('.host-software-table').locator('tbody').getByRole('row');
+    this.filter = new FilterModal(page);
 
     this.policyRows = page.getByRole('tabpanel').getByRole('table').locator('tbody').getByRole('row');
 
@@ -132,6 +137,36 @@ export class MyDevicePage {
     await expect(this.softwareSearch).toBeVisible();
     await this.softwareSearch.fill(name);
     return this.softwareRows.filter({ has: this.page.getByText(name, { exact: true }) });
+  }
+
+  /**
+   * Software tab, searched for a CVE (the search box takes a name or a CVE): the row of the title named `name`
+   * among what the search finds. One CVE can be matched to several titles (a kernel and its modules), so the row
+   * is picked by the title's exact text.
+   */
+  async findInSoftwareByCve(cve: string, name: string): Promise<Locator> {
+    await this.openTab('Software');
+    await this.showFullInventory();
+    await this.softwareSearch.fill(cve);
+    return this.softwareRows.filter({ has: this.page.getByText(name, { exact: true }) });
+  }
+
+  /**
+   * Software tab: lists every software type. A macOS host opens it on the "App (macOS)" type, as Host details'
+   * Inventory does (`HostSoftware.tsx` writes `types=macos_app` into the URL), which hides packages and
+   * extensions; other platforms open on every type, so this is a no-op there. The URL is read once the search
+   * field shows: Fleet renders a spinner, not the table, until the default type is in the URL.
+   */
+  async showFullInventory(): Promise<void> {
+    await expect(this.softwareSearch).toBeVisible();
+    const types = new URL(this.page.url()).searchParams.get('types');
+    if (types === null || types === 'none') return;
+    await this.filter.open();
+    await this.filter.selectTypes([]);
+    await this.filter.applyButton.click();
+    await expect(this.filter.modal).toBeHidden();
+    await expect(this.page).not.toHaveURL(/[?&]types=(?!none)/);
+    await waitForTableSettled(this.page);
   }
 
   /** A policy's row on the Policies tab, by its exact name. */
