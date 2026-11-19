@@ -170,10 +170,26 @@ jobs:
           fi
           echo "Uninstalled; the namespace is gone." >> "$GITHUB_STEP_SUMMARY"
 
+      # Pods, jobs and claims are listed apart from the events: `--sort-by` on a mixed list fails on the
+      # kinds that lack the field and prints nothing. Each pod that isn't a Fleet server (MySQL, Valkey,
+      # the migration Job's) gets its state, restarts and probe results from `describe`, then its logs,
+      # and its previous container's logs when it restarted. Secrets reach the pods by reference, so
+      # `describe` names them without their values.
       - name: What the cluster looked like
         if: ${{ failure() }}
         run: |
-          kubectl get pods,jobs,events --all-namespaces --sort-by=.lastTimestamp | tail -60 || true
+          kubectl get nodes -o wide || true
+          kubectl get pods,jobs,pvc --all-namespaces -o wide || true
+          echo '--- events'
+          kubectl get events --all-namespaces --sort-by=.metadata.creationTimestamp | tail -60 || true
+          for pod in $(kubectl -n fleet get pods -o name 2>/dev/null); do
+            if kubectl -n fleet get "$pod" -o jsonpath='{.metadata.labels.component}' | grep -q '^fleet-server$'; then
+              continue
+            fi
+            echo "--- $pod: describe"; kubectl -n fleet describe "$pod" | sed -n '/^Containers:/,$p' | head -70 || true
+            echo "--- $pod: logs"; kubectl -n fleet logs "$pod" --all-containers --tail 60 || true
+            echo "--- $pod: previous container's logs"; kubectl -n fleet logs "$pod" --all-containers --previous --tail 60 2>&1 || true
+          done
           for pod in $(kubectl -n fleet get pods -l component=fleet-server -o name 2>/dev/null); do
             echo "--- $pod"; kubectl -n fleet logs "$pod" --tail 40 || true
           done
