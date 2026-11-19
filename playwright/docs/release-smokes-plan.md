@@ -95,14 +95,15 @@ wait on its lab access. Verdicts so far:
   validates and proxies it): proposed as a Render private service. Proven on the local instance with micromdm's
   scepserver and a stub of Smallstep's challenge webhook. DigiCert and Okta Dynamic SCEP need accounts (Andrey's
   call); NDES stays manual. Delivering a certificate to a lab host waits for Andrey's approval.
-- **P2.3 Lock and Wipe, Linux and Windows: automatable** on VMs of their own, on the premium fleet "Lab
-  experiments" (created for it, empty). A snapshot rollback alone leaves Fleet saying Locked or Wiped; a
-  re-enroll clears it and keeps the host's id, so the VMs' baselines are taken without a node key. The VM is
-  checked through Fleet (scripts and live queries still run on a locked host), plus its power state and a
-  screenshot from the lab. CI reaches the lab through a webhook behind a tunnel with fixed actions and an
-  allowlist, plus a watcher in the lab: no self-hosted runner. About 10–12 minutes as a workflow of its own after
-  the smokes. macOS waits for the January Macs. Two suspected Fleet bugs to confirm on the VMs: Windows unlock
-  enables every disabled local account, and Linux unlock doesn't restore autologin.
+- **P2.3 Lock and Wipe, Linux and Windows: automatable**, measured on two VMs of their own on the premium fleet
+  "Lab experiments" (2026-11-19). A snapshot rollback alone leaves Fleet saying Locked or Wiped; a re-enroll
+  clears it and keeps the host's id, so the VMs' baselines are taken without a node key: every reset (4 s)
+  came back Unlocked as the same host. Fleet's state follows each action within 40 s. The VM is checked
+  through Fleet (scripts and live queries still run on a locked host), plus its power state and a screenshot
+  from the lab. CI reaches the lab through a webhook behind a tunnel with fixed actions and an allowlist, plus a
+  watcher in the lab: no self-hosted runner. About 10 minutes as a workflow of its own after the smokes (about
+  5 once the Ubuntu VMs' 2-minute network wait at boot is fixed). macOS waits for the January Macs. The run's
+  product findings are tracked outside this repo.
 
 ## Phase 3 — a throwaway instance (separate session)
 
