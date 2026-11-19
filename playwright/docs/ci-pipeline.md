@@ -140,6 +140,17 @@ the project keeps no trace, screenshot or video. It runs at 6 workers for the sm
 about 37 test-minutes are 11 or 12 minutes, the BitLocker test and the Server's ten minutes each the floor.
 A branch run leaves it out unless dispatched with `-f encryption=true`.
 
+**The throwaway instance stands outside the chain.** `QA — Throwaway instance` (`throwaway-instance.yml`)
+brings up a free Fleet of its own on each of its two runners (the Helm chart on kind; the Update flow on
+Docker Compose), seeds it, runs the `throwaway-first-run` and `throwaway` projects against it, and drops it
+with the runner. It reaches no standing instance and no lab host, so it holds no concurrency group and needs no
+secret, and nothing in the nightly calls it: it answers release-checklist rows for one image, dispatched by
+hand with that image. It can't be a container job like the suites' workflows, because it drives Docker on the
+runner, so its Playwright steps run the same Playwright image through `docker run` on the runner's network
+(`.github/throwaway-instance/playwright.sh`). Its reports are encrypted like the rest,
+`playwright-report-throwaway-{helm,update}`. [`.github/throwaway-instance/README.md`](../../.github/throwaway-instance/README.md)
+has what each job proves and what it leaves to a person.
+
 **The gitops-mode exceptions are restored before every premium apply, not by the suite.** Unlike the mode flag,
 the exceptions act outside gitops mode: `fleetctl gitops` reads them on every apply, so a stuck `secrets: false`
 makes it delete every enroll secret (premium's YAML declares none) and a stuck `labels` or `software: true` makes

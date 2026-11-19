@@ -1,0 +1,87 @@
+# The Update flow's throwaway Fleet, without Kubernetes: MySQL, Valkey and one Fleet server, the way a
+# Docker deployment runs it, plus a webhook receiver for the log-destination check. `FLEET_TAG` picks
+# the image (the last release first, then the build under test); the upgrade stops `fleet`, runs
+# `migrate` on the new image and starts `fleet` again, as Fleet's upgrade guide says to.
+#
+# Credentials are throwaway: the database lives and dies with the runner, and only these containers
+# can reach it.
+name: throwaway
+
+x-fleet-env: &fleet-env
+  FLEET_MYSQL_ADDRESS: mysql:3306
+  FLEET_MYSQL_DATABASE: fleet
+  FLEET_MYSQL_USERNAME: fleet
+  FLEET_MYSQL_PASSWORD: throwaway
+  FLEET_REDIS_ADDRESS: valkey:6379
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: throwaway
+      MYSQL_DATABASE: fleet
+      MYSQL_USER: fleet
+      MYSQL_PASSWORD: throwaway
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pthrowaway"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:8.1
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    image: fleetdm/fleet:${FLEET_TAG:?set FLEET_TAG to a fleetdm/fleet image tag}
+    command: ["fleet", "prepare", "db", "--no-prompt"]
+    environment: *fleet-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  fleet:
+    image: fleetdm/fleet:${FLEET_TAG}
+    command: ["fleet", "serve"]
+    environment:
+      <<: *fleet-env
+      FLEET_SERVER_ADDRESS: 0.0.0.0:8080
+      FLEET_SERVER_TLS: "false"
+      # The chart's defaults are 30 min (labels, details) and 1 h (policies): far longer than a run.
+      FLEET_OSQUERY_LABEL_UPDATE_INTERVAL: 1m
+      FLEET_OSQUERY_DETAIL_UPDATE_INTERVAL: 1m
+      FLEET_OSQUERY_POLICY_UPDATE_INTERVAL: 1m
+      # Result logs go to the plugin the workflow names: `filesystem` (into ./logs) until the log check
+      # switches to `webhook`. The receiver is on this Compose network's private address, which Fleet
+      # 5 refuses to post to unless private-network integrations are allowed.
+      FLEET_OSQUERY_RESULT_LOG_PLUGIN: ${RESULT_LOG_PLUGIN:-filesystem}
+      FLEET_OSQUERY_STATUS_LOG_PLUGIN: filesystem
+      FLEET_FILESYSTEM_RESULT_LOG_FILE: /logs/osquery_result
+      FLEET_FILESYSTEM_STATUS_LOG_FILE: /logs/osquery_status
+      FLEET_WEBHOOK_RESULT_URL: http://log-receiver:8000/result
+      FLEET_SERVER_ALLOW_PRIVATE_NETWORK_INTEGRATIONS: "true"
+    volumes:
+      # A folder outside the checkout, writable by the image's `fleet` user (uid 100): the workflow
+      # makes it, and a local run names its own.
+      - ${LOGS_DIR:?set LOGS_DIR to a folder for the filesystem logs}:/logs
+    ports:
+      # 8080 in CI; a local run beside a dev server on 8080 picks another.
+      - 127.0.0.1:${FLEET_PORT:-8080}:8080
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      retries: 30
+
+  log-receiver:
+    image: python:3.13-alpine
+    command: ["python", "-u", "/receiver.py"]
+    volumes:
+      - ./log-receiver.py:/receiver.py:ro
