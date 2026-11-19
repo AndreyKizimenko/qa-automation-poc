@@ -7,15 +7,20 @@
  * is ignored. An automation is reported by what it resolved to (a title id and
  * name, a script name), so the declared slug or package is mapped through the
  * fleet's software before comparing.
+ *
+ * A policy has at most one automation, and Fleet reports which as its
+ * `automation_type`. That is also the only place a policy's calendar event,
+ * conditional access and webhook or ticket automation show: the policy carries
+ * no target for them.
  */
 import { test, expect } from '@playwright/test';
+import type { PolicyAutomationType } from '@helpers/api/policies';
 import {
   gitopsConfig,
   gitopsLabel,
   isPremium,
   resolveTeamId,
   getAll,
-  getJson,
   expectExactNames,
   expectSubset,
   declaredTargets,
@@ -32,8 +37,7 @@ interface ApiPolicy {
   platform: string;
   critical: boolean;
   type?: string;
-  calendar_events_enabled: boolean;
-  conditional_access_enabled: boolean;
+  automation_type: PolicyAutomationType | null;
   continuous_automations_enabled: boolean;
   patch_when_closed?: boolean;
   notify_before_patching?: boolean;
@@ -48,8 +52,6 @@ interface ApiPolicy {
 let teamId = 0;
 let live: ApiPolicy[] = [];
 let software: FleetSoftware | undefined;
-/** The scope's failing-policies webhook `policy_ids`: where a policy's `webhooks_and_tickets_enabled` is recorded. */
-let webhookPolicyIds: number[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
@@ -57,11 +59,6 @@ test.beforeAll(async ({ request }) => {
   // The automation targets: the title an install policy installs, and the one a patch policy patches.
   if (gitopsConfig.policies.some((p) => p.installSoftware || p.type === 'patch')) {
     software = await resolveFleetSoftware(request, teamId);
-  }
-  if (gitopsConfig.policies.some((p) => p.webhooksAndTicketsEnabled !== undefined)) {
-    const settings =
-      teamId === 0 ? await getJson(request, 'config') : (await getJson(request, `fleets/${teamId}`)).fleet;
-    webhookPolicyIds = settings?.webhook_settings?.failing_policies_webhook?.policy_ids ?? [];
   }
 });
 
@@ -88,9 +85,8 @@ test.describe(`GitOps verify · policies · ${gitopsLabel}`, () => {
       // license stores false whatever the YAML says, and the lib policies the tiers share
       // declare it. On free the instance is held to that, not to the declaration.
       expect.soft(policy.critical, `${at} critical`).toBe(isPremium ? (declared.critical ?? false) : false);
+      expect.soft(policy.automation_type, `${at} automation_type`).toBe(declaredAutomationType(declared));
       expectSubset(at, policy, {
-        calendar_events_enabled: declared.calendarEventsEnabled,
-        conditional_access_enabled: declared.conditionalAccessEnabled,
         continuous_automations_enabled: declared.continuousAutomationsEnabled,
         patch_when_closed: declared.patchWhenClosed,
         notify_before_patching: declared.notifyBeforePatching,
@@ -116,14 +112,25 @@ test.describe(`GitOps verify · policies · ${gitopsLabel}`, () => {
           software?.addedSlugs.get(declared.fleetMaintainedAppSlug ?? ''),
         );
       }
-      if (declared.webhooksAndTicketsEnabled !== undefined) {
-        expect.soft(webhookPolicyIds.includes(policy.id), `${at} webhooks_and_tickets_enabled`).toBe(
-          declared.webhooksAndTicketsEnabled,
-        );
-      }
     }
   });
 });
+
+/**
+ * The automation the YAML gives a policy, as Fleet names it, or null for none.
+ * fleetctl refuses a policy that declares two, so the order only decides which
+ * key is read first. A patch policy's `install_software: true` is its software
+ * automation.
+ */
+function declaredAutomationType(declared: (typeof gitopsConfig.policies)[number]): PolicyAutomationType | null {
+  if (declared.conditionalAccessEnabled) return 'conditional_access';
+  if (declared.installSoftware) return 'software';
+  if (declared.runScript) return 'script';
+  if (declared.resendConfigurationProfile) return 'configuration_profile';
+  if (declared.calendarEventsEnabled) return 'calendar';
+  if (declared.webhooksAndTicketsEnabled) return 'webhook_or_ticket';
+  return null;
+}
 
 /** The software title id the declared automation should have resolved to on this fleet. */
 function expectedTitleId(

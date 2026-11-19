@@ -106,11 +106,26 @@ export async function listHostPolicyIds(request: APIRequestContext, hostId: numb
   return (((await res.json()).host?.policies ?? []) as Array<{ id: number }>).map((p) => p.id).sort((a, b) => a - b);
 }
 
+/**
+ * A policy's automation, as Fleet's `automation_type` names it. A policy has at
+ * most one; a global policy (and every policy on free) can have only
+ * `webhook_or_ticket`.
+ */
+export type PolicyAutomationType =
+  | 'webhook_or_ticket'
+  | 'software'
+  | 'script'
+  | 'configuration_profile'
+  | 'calendar'
+  | 'conditional_access';
+
 /** A global policy as Fleet stores it — the fields the specs read back. */
 export interface GlobalPolicy extends PolicyRef {
   query: string;
   /** Comma-separated platforms, `''` when the policy targets every platform. */
   platform: string;
+  /** Its automation, or null. */
+  automationType: PolicyAutomationType | null;
 }
 
 /** One global policy, read back after a UI write. */
@@ -118,17 +133,28 @@ export interface GlobalPolicy extends PolicyRef {
 export async function findGlobalPolicyByName(request: APIRequestContext, name: string): Promise<GlobalPolicy> {
   const res = await request.get(apiUrl('global/policies'), { headers: authHeaders() });
   await expectOk(res, 'Failed to list the global policies');
-  const policies = ((await res.json()).policies ?? []) as Array<{ id: number; name: string; query: string; platform?: string }>;
+  const policies = ((await res.json()).policies ?? []) as RawGlobalPolicy[];
   const policy = policies.find((p) => p.name === name);
   if (!policy) throw new Error(`No global policy named "${name}"`);
-  return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
+  return toGlobalPolicy(policy);
 }
 
 export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
   const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read global policy ${id}`);
-  const { policy } = await res.json();
-  return { id: policy.id, name: policy.name, query: policy.query, platform: policy.platform ?? '' };
+  return toGlobalPolicy((await res.json()).policy);
+}
+
+interface RawGlobalPolicy {
+  id: number;
+  name: string;
+  query: string;
+  platform?: string;
+  automation_type?: PolicyAutomationType | null;
+}
+
+function toGlobalPolicy(p: RawGlobalPolicy): GlobalPolicy {
+  return { id: p.id, name: p.name, query: p.query, platform: p.platform ?? '', automationType: p.automation_type ?? null };
 }
 
 /**
@@ -205,6 +231,8 @@ export interface FleetPolicy {
   authorEmail: string;
   platform: string;
   type: string;
+  /** Its automation, or null. */
+  automationType: PolicyAutomationType | null;
   continuousAutomationsEnabled: boolean;
   patchWhenClosed: boolean;
   notifyBeforePatching: boolean;
@@ -225,6 +253,7 @@ interface RawFleetPolicy {
   author_email?: string;
   platform?: string;
   type?: string;
+  automation_type?: PolicyAutomationType | null;
   continuous_automations_enabled?: boolean;
   patch_when_closed?: boolean;
   notify_before_patching?: boolean;
@@ -243,6 +272,7 @@ function toFleetPolicy(p: RawFleetPolicy): FleetPolicy {
     authorEmail: p.author_email ?? '',
     platform: p.platform ?? '',
     type: p.type ?? 'dynamic',
+    automationType: p.automation_type ?? null,
     continuousAutomationsEnabled: p.continuous_automations_enabled ?? false,
     patchWhenClosed: p.patch_when_closed ?? false,
     notifyBeforePatching: p.notify_before_patching ?? false,
