@@ -322,7 +322,7 @@ host moved.
 `premium-encryption` project (`tests/e2e/premium/encryption/`) moves one host off OS matrix onto a `pw-*`
 fleet with one setting on, drives the flow in the browser, checks each status on the host's page and in the
 fleet's Disk encryption table, and moves the host back, which clears what Fleet recorded. Linux escrow on the
-TPM-backed and the script-answered Ubuntu hosts (Omarchy's skipped behind fleetdm/fleet#55069); Create key
+TPM-backed and the script-answered Ubuntu hosts (Omarchy's is skipped: fleetdm/fleet#55069 is fixed in fleetd 1.64.0 and its key escrows, but the helper doesn't see fleetd's notice after the escrow on Hyprland; `TODO.md`); Create key
 left unanswered on each passphrase desktop (Fedora's failure is fleetdm/fleet#58776); BitLocker from Windows
 11's stock state and from a decrypted disk on `prem-win11-bde`; a Windows Server left alone on an enforcing
 fleet. FileVault is set aside. The analysis has the reasoning and the experiments; what follows is the plan

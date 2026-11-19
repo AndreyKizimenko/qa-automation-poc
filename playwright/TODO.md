@@ -22,6 +22,7 @@ lab's, a readable mailbox — is tracked in [docs/long-term-goals.md](docs/long-
 
 | Test | Why | Unblock |
 |---|---|---|
+| `premium/encryption/linux-escrow.spec.ts`: Omarchy, its prompt answered by script | On fleetd 1.64.0 (2026-11-19, `prem-omarchy-02`): the passphrase dialog opened on Hyprland, the helper answered it at once, and Fleet stored the key. Then the helper found no *Disk encryption* notice within 240 s (`no notice within 240s` in `/tmp/pw-luks-answer.log`). fleetd logged no failure to show it, so either the notice opened and the helper couldn't see it (AT-SPI on Hyprland, GTK4 zenity `--info`), or it never appeared. Not known which, so no Fleet issue yet | Watch the notice open on the host, through the lab's console, during an escrow. If it opens, fix the helper's lookup; if not, file it against fleetd. The Ubuntu row on 1.64.0 tells whether the notice changed for every desktop |
 
 Product-defect skips live in
 [docs/blocked-by-product-bugs.md](docs/blocked-by-product-bugs.md).
