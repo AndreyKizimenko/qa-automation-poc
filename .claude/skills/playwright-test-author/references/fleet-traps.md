@@ -84,7 +84,7 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   is left behind; Fleet tries three times, half a minute to a minute apart, before the failure sticks.
   Before it reaches the host: a pre-install query that returns no rows (`preInstallQuery` on
   `uploadSoftwarePackageBuffer`). A failed install script doesn't hold up the VM's other work: fleetd
-  1.63.0, which the lab's hosts run, doesn't back its config loop off after one (fleetdm/fleet#54607). A
+  from 1.63.0 on, which the lab's hosts run, doesn't back its config loop off after one (fleetdm/fleet#54607). A
   *policy's* failing install still goes in `exclusive/`: Fleet queues it below every user-requested one.
 - **Budget VM time:** a round trip is 1–5 min, and a retried VM test costs 5–15. Give VM specs their own
   timeout, and keep every wait inside it.

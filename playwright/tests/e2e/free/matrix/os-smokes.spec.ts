@@ -20,6 +20,7 @@
  *   | Vulnerabilities are listed for the OS | Ubuntu 24.04 |
  *   | Its page is a Chromebook's: disk encryption always on, the extension's agent options, its Chrome profile, no Reports tab, no script | ChromeOS |
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
+ *   | fleetd, killed, is started again by its service manager; a script runs under the new process, and the host stays enrolled and online | every VM |
  *
  * Premium's smokes (`tests/e2e/premium/matrix/os-smokes.spec.ts`) also install
  * a custom package and run a policy's automation: both are premium features,
@@ -108,6 +109,11 @@ function smokesOf(subject: Subject): void {
 
       test('answers a passing and a failing policy, and its Policies tab shows both', ({ hostDetails, seed, request }) =>
         smoke.policies({ hostDetails, seed, request }, subject));
+    }
+    if (takesScripts(subject)) {
+      // Last: the restart is this host's alone, and no smoke after it meets it.
+      test('fleetd comes back by itself after it is killed, and the host stays enrolled', ({ hostDetails, request }) =>
+        smoke.selfHealing({ hostDetails, request }, subject));
     }
   });
 }

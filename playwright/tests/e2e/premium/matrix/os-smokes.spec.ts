@@ -21,11 +21,12 @@
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
  *   | A custom package installs and the inventory lists it; it uninstalls and the inventory drops it | every VM (a tarball has no inventory) |
  *   | A policy's automation installs a package on a host that fails it | one `.deb` host, one `.rpm` host |
+ *   | fleetd, killed, is started again by its service manager; a script runs under the new process, and the host stays enrolled and online | every VM |
  *
  * Premium only, in the `premium-matrix` project: its own invocation after the
  * main project (`npm run test:premium:matrix`), since it works the pool's VMs
  * too. Free's lab hosts get the checks free has in
- * `tests/e2e/free/matrix/os-smokes.spec.ts`; everything but the last two rows,
+ * `tests/e2e/free/matrix/os-smokes.spec.ts`; everything but the two install rows,
  * which are premium's. The checks both tiers make, and what Fleet shows for
  * each OS, are `helpers/os-smokes.ts`'s, so a rename in Fleet's UI is one edit;
  * this file declares the tests and keeps what only premium does.
@@ -542,6 +543,11 @@ function smokesOf(subject: Subject): void {
         await expect(activity).toBeVisible();
         await expect(activity).toHaveAccessibleName(/^Fleet installed/);
       });
+    }
+    if (takesScripts(subject)) {
+      // Last: the restart is this host's alone, and no smoke after it meets it.
+      test('fleetd comes back by itself after it is killed, and the host stays enrolled', ({ hostDetails, request }) =>
+        smoke.selfHealing({ hostDetails, request }, subject));
     }
   });
 }
