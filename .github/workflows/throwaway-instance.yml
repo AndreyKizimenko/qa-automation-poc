@@ -430,7 +430,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        snapshotter: [overlayfs, native]
+        snapshotter: [overlayfs]
     steps:
       - uses: actions/checkout@v5
       - name: Install kind, Helm and kubectl
@@ -448,7 +448,7 @@ jobs:
         run: |
           uname -r
           docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1'
-          look='echo "cat: $(cat /etc/my.cnf 2>&1 | head -c 30 | tr "\n" " ")"; cp /usr/bin/cat /tmp/mysqld; echo "cat named mysqld: $(/tmp/mysqld /etc/my.cnf 2>&1 | head -c 60 | tr "\n" " ")"; echo "mysqld as shipped: $(mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"; cp /usr/sbin/mysqld /tmp/dbserver; echo "mysqld named dbserver: $(/tmp/dbserver --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"; cp /usr/sbin/mysqld /tmp/mysqld; echo "mysqld copied as /tmp/mysqld: $(/tmp/mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"'
+          look='microdnf -y install attr libcap > /dev/null 2>&1; echo "xattrs of /usr/sbin/mysqld:"; getfattr -d -m - -e hex /usr/sbin/mysqld 2>&1 | sed -n "2,\$p"; echo "getcap: [$(getcap /usr/sbin/mysqld 2>&1)]"; echo "xattrs of /usr/bin/cat: [$(getfattr -d -m - /usr/bin/cat 2>&1 | sed -n 2p)]"; grep -E "^Cap(Prm|Eff|Bnd)" /proc/self/status | tr "\n" " "; echo; echo "mysqld as shipped: $(mysqld --verbose --help 2>/dev/null | grep -E "^socket " | tr -s " ")"'
           kubectl run mysql-look --image=mysql:8.4 --restart=Never --command -- sh -c "$look" > /dev/null
           kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-look --timeout=240s > /dev/null || true
           echo '--- in a pod on the kind node'; kubectl logs mysql-look
