@@ -580,15 +580,22 @@ function smokesOf(subject: Subject): void {
         const { edge, previous } = await fleetdReleases(request, entry.platform);
         // A headless host has no Fleet Desktop to ask.
         const desktop = entry.desktop !== 'none';
+        // fleetd restarts more than once on a channel change (orbit, then the components it updates), and
+        // between restarts osquery can be up before fleetd's extension has registered `orbit_info`: a read
+        // that fails then is "not there yet", and the poll asks again.
+        const running = async (): Promise<string> => {
+          const fleetd = await fleetdOnHost(request, host.id).catch(() => null);
+          if (!fleetd) return 'fleetd unreadable';
+          return desktop ? `orbit ${fleetd.orbit}, Fleet Desktop ${fleetd.desktop}` : `orbit ${fleetd.orbit}`;
+        };
         const runs = async (version: string): Promise<void> => {
           await expect
-            .poll(async () => (await fleetdOnHost(request, host.id)).orbit, {
+            .poll(running, {
               message: `fleetd on ${host.displayName} never ran ${version}`,
               timeout: 420_000,
               intervals: [10_000],
             })
-            .toBe(version);
-          if (desktop) expect((await fleetdOnHost(request, host.id)).desktop, 'Fleet Desktop').toBe(version);
+            .toBe(desktop ? `orbit ${version}, Fleet Desktop ${version}` : `orbit ${version}`);
         };
 
         await test.step(`it runs fleetd's edge build, ${edge}, which its fleet declares`, async () => {
