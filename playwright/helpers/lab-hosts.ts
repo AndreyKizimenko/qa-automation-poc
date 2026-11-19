@@ -41,7 +41,7 @@ import { VMS_FLEET } from './api/static-users';
 /** A VM's platform: what every pool and matrix host runs. ChromeOS is only ever a special host. */
 export type VmPlatform = 'darwin' | 'windows' | 'linux';
 export type LabPlatform = VmPlatform | 'chrome';
-export type LabRole = 'pool' | 'matrix' | 'special' | 'physical';
+export type LabRole = 'pool' | 'matrix' | 'special' | 'physical' | 'experiment';
 export type LabTier = 'free' | 'premium';
 /** `pkg.tar.zst` is Arch's own format, which Fleet takes no custom package of; `none` is ChromeOS, which takes none at all. */
 export type LabPackage = 'deb' | 'rpm' | 'msi' | 'pkg' | 'pkg.tar.zst' | 'none';
@@ -57,7 +57,7 @@ export interface LabHost {
    */
   os: string;
   role: LabRole;
-  /** A `special` host's one purpose, as the manifest words it. */
+  /** A `special` host's one purpose, as the manifest words it; an `experiment` host's exploration. */
   purpose?: string;
   /**
    * The host's `platform` in Fleet's API (`ubuntu`, `rhel`, `amzn`), which is
@@ -105,7 +105,7 @@ interface ManifestEntry {
   mdm?: boolean;
 }
 const PLATFORMS: readonly string[] = ['darwin', 'windows', 'linux', 'chrome'];
-const ROLES: readonly string[] = ['pool', 'matrix', 'special', 'physical'];
+const ROLES: readonly string[] = ['pool', 'matrix', 'special', 'physical', 'experiment'];
 const TIERS: readonly string[] = ['free', 'premium'];
 const PACKAGES: readonly string[] = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst', 'none'];
 
@@ -127,6 +127,7 @@ function loadManifest(): LabHost[] {
       !ROLES.includes(raw.role ?? '') && `role "${raw.role}"`,
       !raw.os && 'no os',
       raw.role === 'special' && !raw.purpose && 'no purpose (a special host is asked for by it)',
+      raw.role === 'experiment' && !raw.purpose && 'no purpose (say which exploration the host is for)',
       !raw.fleet_platform && 'no fleet_platform',
       !PACKAGES.includes(raw.package ?? '') && `package "${raw.package}"`,
       !raw.desktop && 'no desktop ("none" for a headless host)',
@@ -170,12 +171,13 @@ export function labHostNamed(displayName: string | null | undefined): LabHost | 
  * The fleet a lab host belongs on, by its role: the pool on VMs, the matrix and
  * special hosts on OS matrix. `null` is Unassigned, which is every free host's
  * place, free having no fleets. `undefined` means the role names no fleet: a
- * physical machine stays where the lab enrolled it.
+ * physical machine stays where the lab enrolled it, and an experiment host on
+ * the fleet its exploration made for it.
  */
 export function labHostFleet(host: LabHost): string | null | undefined {
   if (host.tier === 'free') return null;
   if (host.role === 'pool') return VMS_FLEET;
-  if (host.role === 'physical') return undefined;
+  if (host.role === 'physical' || host.role === 'experiment') return undefined;
   return OS_MATRIX_FLEET;
 }
 

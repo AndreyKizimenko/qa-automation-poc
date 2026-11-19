@@ -70,7 +70,9 @@ regenerate both on every restart.
   **role**. `pool` is above. `matrix` is the one host of an OS flavour and `special` a host with a single
   purpose: both live on premium's **OS matrix** fleet, no worker is handed one, and a spec asks for one by its
   `os` or purpose (`requireLabHost(request, matrixHostOfRun('rhel-9'))`). `physical` is a bare-metal machine,
-  which can't be rolled back: never the subject of anything that needs a reset to recover from. A ChromeOS
+  which can't be rolled back: never the subject of anything that needs a reset to recover from. `experiment`
+  is a host an exploration set up on its own fleet (Lock & Wipe): no spec targets it, the cleanup never moves it,
+  and the lab preflight only notes it when it's offline. A ChromeOS
   host (platform `chrome`, package `none`) is always `special`, since it takes no script and no package
   (`VmLabHost` / `isVmLabHost` narrow an entry to the others); the per-OS smokes take it all the same, as the
   one host of its OS, with the checks that need neither. A Fleet host

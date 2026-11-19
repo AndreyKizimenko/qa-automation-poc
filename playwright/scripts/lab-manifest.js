@@ -15,7 +15,7 @@ const manifest = path.join(path.resolve(__dirname, '..'), 'lab-hosts.json');
 
 const TIERS = ['free', 'premium'];
 const PLATFORMS = ['darwin', 'windows', 'linux', 'chrome'];
-const ROLES = ['pool', 'matrix', 'special', 'physical'];
+const ROLES = ['pool', 'matrix', 'special', 'physical', 'experiment'];
 const PACKAGES = ['deb', 'rpm', 'msi', 'pkg', 'pkg.tar.zst', 'none'];
 
 /** The fleet a host's role puts it on, as helpers/lab-hosts.ts' labHostFleet decides; undefined where the role names none. */
@@ -40,6 +40,7 @@ function shapeProblems(hosts) {
       !ROLES.includes(host.role) && `role "${host.role}"`,
       !host.os && 'no os',
       host.role === 'special' && !host.purpose && 'no purpose (a special host is asked for by it)',
+      host.role === 'experiment' && !host.purpose && 'no purpose (say which exploration the host is for)',
       !host.fleet_platform && 'no fleet_platform',
       !PACKAGES.includes(host.package) && `package "${host.package}"`,
       !host.desktop && 'no desktop ("none" for a headless host)',

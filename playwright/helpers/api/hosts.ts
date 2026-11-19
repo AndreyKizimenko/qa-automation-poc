@@ -451,7 +451,7 @@ export function labHostProblem(entry: LabHost, records: readonly LabHostRecord[]
  * The records of the given manifest hosts that sit on another fleet than the
  * one their role puts them on, each with the fleet it belongs on. Every lab
  * host carries the VMs fleet's enroll secret, so that is where one that
- * re-enrolled turns up. A host whose role names no fleet (a physical machine)
+ * re-enrolled turns up. A host whose role names no fleet (a physical machine, an experiment host)
  * is never astray, and neither is anything on free, which has no fleets. The
  * cleanup moves what this returns; an older record a re-enrollment left behind
  * is listed too, and goes with its host.

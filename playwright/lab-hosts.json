@@ -1,15 +1,15 @@
 {
   "_about": "The device lab's manifest: every real host on the Free and Premium QA instances, and what each is for. This is its only copy. The lab's owner edits it here, in a PR, whenever a host is added, removed, renamed or moved (the `device-lab` skill does it after a scan of the lab), and `npm run lint:lab` checks it. Match a Fleet host by its display name, lower-cased: Windows reports it upper-case, and the RHEL hosts' `hostname` is an FQDN ending .px.lan. Names are stable; Fleet ids are not.",
   "_fields": {
-    "role": "pool = interchangeable suite target; matrix = one per OS flavor; special = single-purpose",
+    "role": "pool = interchangeable suite target; matrix = one per OS flavor; special = single-purpose; physical = bare metal, never reset; experiment = an exploration's host on its own fleet, which no spec targets and the cleanup never moves",
     "fleet_platform": "the host's `platform` value in Fleet's API",
-    "fleet": "the fleet the host sits on: Unassigned on free, VMs for the pool, OS matrix for matrix and special hosts. The suite places hosts by role, not by this field; `lint:lab` fails when the two disagree",
+    "fleet": "the fleet the host sits on: Unassigned on free, VMs for the pool, OS matrix for matrix and special hosts, the exploration's own fleet for an experiment host. The suite places hosts by role, not by this field; `lint:lab` fails when the two disagree",
     "legacy_real": "reports the hardware model `QEMU Virtual Machine` or `VirtualMac2,1`: one host per platform per tier was made to look like the old UTM VMs before the suite read this file. Kept as a fact about the machine; nothing reads it",
     "dialog_tool": "what fleetd can use for the LUKS passphrase prompt; null means escrow fails (fleetdm/fleet#58776)",
     "package_manager": "only where it differs from the package type's usual one (openSUSE installs rpm with zypper, not dnf)",
     "package": "the package type the host's OS installs; `none` on ChromeOS, which takes no custom package"
   },
-  "updated": "2026-11-18",
+  "updated": "2026-11-19",
   "hosts": [
     {
       "name": "free-ubu2404d-01",
@@ -412,6 +412,31 @@
       "desktop": "chromeos",
       "fleet": "OS matrix",
       "purpose": "ChromeOS, through the fleetd Chrome extension (developer form: no serial, placeholder hardware, no network interfaces)"
+    },
+    {
+      "name": "prem-ubu2404d-lw",
+      "tier": "premium",
+      "platform": "linux",
+      "os": "ubuntu-24.04",
+      "fleet_platform": "ubuntu",
+      "role": "experiment",
+      "package": "deb",
+      "desktop": "gnome",
+      "fleet": "Lab experiments",
+      "purpose": "Lock & Wipe exploration: Fleet's Lock, Unlock and Wipe on a real host. Lives on its own fleet, which the suite leaves alone"
+    },
+    {
+      "name": "prem-win11-lw",
+      "tier": "premium",
+      "platform": "windows",
+      "os": "windows-11",
+      "fleet_platform": "windows",
+      "role": "experiment",
+      "package": "msi",
+      "desktop": "windows",
+      "fleet": "Lab experiments",
+      "mdm": true,
+      "purpose": "Lock & Wipe exploration: Fleet's Lock, Unlock and Wipe on a real host. Lives on its own fleet, which the suite leaves alone"
     }
   ]
 }
