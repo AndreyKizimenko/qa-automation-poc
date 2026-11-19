@@ -548,13 +548,18 @@ const leases = new Map<string, number>();
  *
  * `parallelIndex` is the worker's slot (0 to workers - 1): unlike the worker
  * index, it stays the same when Playwright replaces a worker after a failure.
+ *
+ * `exclude` leaves named pool hosts (manifest names) out of the pool for one
+ * lease, which is held apart from the worker's ordinary one, so the worker's
+ * other tests keep their host.
  */
 async function leasePoolHost(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
   os?: string,
+  exclude: readonly string[] = [],
 ): Promise<RealHostRef | null> {
-  const key = `${platform}/${os ?? 'any'}`;
+  const key = `${platform}/${os ?? 'any'}${exclude.length ? ` without ${[...exclude].sort().join(',')}` : ''}`;
   const held = leases.get(key);
   if (held !== undefined) {
     const host = await readPoolHost(request, held);
@@ -562,7 +567,7 @@ async function leasePoolHost(
     leases.delete(key);
   }
 
-  const pool = await listPoolHosts(request, platform, { os });
+  const pool = (await listPoolHosts(request, platform, { os })).filter((member) => !exclude.includes(member.entry.name));
   const slot = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
   // From the worker's own member on: one that left the pool since the listing gives way to the next.
   for (let i = 0; i < pool.length; i++) {
@@ -1259,7 +1264,8 @@ export function assertVmTagged(platform: 'darwin' | 'windows' | 'linux', asker: 
  * The worker's online real VM of `platform` (its pool host, see
  * {@link leasePoolHost}), with its fleet: VMs on premium, 0 for Unassigned on
  * free. With `os`, the pool is only the hosts of that manifest `os`, for a spec
- * that depends on the OS version. Throws rather than returning null: a spec
+ * that depends on the OS version; with `exclude`, it is without the named hosts
+ * (manifest names), for a test one of them can't take. Throws rather than returning null: a spec
  * that needs a real device has nothing to test without one, and the message
  * says what to check. The calling test must carry the platform's
  * {@link VM_TAGS} tag, and its report notes the VM it was handed.
@@ -1267,13 +1273,14 @@ export function assertVmTagged(platform: 'darwin' | 'windows' | 'linux', asker: 
 export async function requireRealHost(
   request: APIRequestContext,
   platform: 'darwin' | 'windows' | 'linux',
-  opts: { os?: string } = {},
+  opts: { os?: string; exclude?: readonly string[] } = {},
 ): Promise<RealHostRef> {
   assertVmTagged(platform, 'requireRealHost');
-  const host = await leasePoolHost(request, platform, opts.os);
+  const host = await leasePoolHost(request, platform, opts.os, opts.exclude);
   if (!host) {
+    const excluded = opts.exclude?.length ? ` (left out: ${opts.exclude.join(', ')})` : '';
     throw new Error(
-      `no online real ${platform} VM on ${process.env.FLEET_URL}: ${await missingRealHostReason(request, platform, opts.os)}. ` +
+      `no online real ${platform} VM on ${process.env.FLEET_URL}${excluded}: ${await missingRealHostReason(request, platform, opts.os)}. ` +
         'Scripts, installs and MDM commands only reach a real device.',
     );
   }

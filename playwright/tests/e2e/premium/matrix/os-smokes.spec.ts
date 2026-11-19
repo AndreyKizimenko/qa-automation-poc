@@ -582,7 +582,7 @@ function smokesOf(subject: Subject): void {
       }) => {
         // Two restarts of fleetd, each with its download, a script, and a detail refresh.
         test.setTimeout(900_000);
-        const host = await hostOf(request, subject);
+        const host = await hostOf(request, subject, false, { exclude: FLEETD_NOT_UPDATING });
         const home = host.fleetId!;
         const { edge, previous } = await fleetdReleases(request, entry.platform);
         // A headless host has no Fleet Desktop to ask.
@@ -606,13 +606,6 @@ function smokesOf(subject: Subject): void {
         };
 
         const atStart = await fleetdOnHost(request, host.id);
-        // TODO(fleetdm/fleet#59221): this VM's fleetd holds a timestamp whose snapshot it never fetched, so it
-        // takes no update until Fleet's update server publishes a newer timestamp. Skipped on that VM only while
-        // it isn't on edge's build: there is nothing to downgrade from. It runs there again by itself once it is.
-        test.skip(
-          host.displayName.toLowerCase() === 'prem-win11-02' && atStart.orbit !== edge,
-          `fleetdm/fleet#59221: ${host.displayName} is stuck on fleetd ${atStart.orbit}, not edge's ${edge}`,
-        );
 
         await test.step(`it runs fleetd's edge build, ${edge}, which its fleet declares`, async () => {
           expect(atStart.orbit, `${host.displayName} isn't on edge's build`).toBe(edge);
@@ -662,6 +655,16 @@ function smokesOf(subject: Subject): void {
     }
   });
 }
+
+/**
+ * Pool hosts the fleetd downgrade leaves out: a host it can't downgrade, because its fleetd takes no update.
+ * Another VM of the same version runs it instead.
+ *
+ * TODO(fleetdm/fleet#59221): `prem-win11-02`'s fleetd holds a timestamp whose snapshot it never fetched, so it
+ * takes no update and stays on 1.63.0 until Fleet's update server publishes a newer timestamp. Remove it once
+ * #59221 is fixed, or once the host has run edge's build for a few nights.
+ */
+const FLEETD_NOT_UPDATING: readonly string[] = ['prem-win11-02'];
 
 /** A fixed-title package (the `.msi`) on a fleet shared with others of its kind: these take turns. */
 const takesTurns = ({ entry }: Subject): boolean => entry.role === 'matrix' && entry.package === 'msi';

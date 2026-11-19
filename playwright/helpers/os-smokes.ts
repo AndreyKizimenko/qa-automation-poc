@@ -259,9 +259,15 @@ export interface SmokeHost {
 /**
  * The OS's host, online where its role puts it. When it isn't, the first smoke
  * of the OS (`gate`) fails with the reason and every other one skips, naming
- * that smoke.
+ * that smoke. `exclude` leaves named pool hosts (manifest names) out, for a
+ * smoke one of them can't take; a matrix or ChromeOS subject has one host only.
  */
-export async function hostOf(request: APIRequestContext, { os, entry }: Subject, gate = false): Promise<SmokeHost> {
+export async function hostOf(
+  request: APIRequestContext,
+  { os, entry }: Subject,
+  gate = false,
+  { exclude = [] }: { exclude?: readonly string[] } = {},
+): Promise<SmokeHost> {
   const candidates = entry.role === 'pool' && isVmLabHost(entry) ? poolHostsOfRun(entry.platform, os) : [entry];
   const records = await listLabHostRecords(request, candidates);
   const problems = candidates.map((candidate) => labHostProblem(candidate, records));
@@ -274,7 +280,7 @@ export async function hostOf(request: APIRequestContext, { os, entry }: Subject,
   if (fleet === undefined) throw new Error(`[os-smokes] ${entry.name} (${entry.role}, ${entry.tier}) has no fleet of its own`);
   const fleetName = fleet ?? undefined;
   if (entry.role === 'pool' && isVmLabHost(entry)) {
-    const vm = await requireRealHost(request, entry.platform, { os });
+    const vm = await requireRealHost(request, entry.platform, { os, exclude });
     return { id: vm.id, displayName: vm.displayName, fleetId: fleetName ? vm.fleetId : undefined, fleetName };
   }
   const record = recordVmOnReport(newestRecord(entry, records)!);
