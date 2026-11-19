@@ -424,19 +424,26 @@ jobs:
 
   # TEMPORARY diagnostic: whether mysqld in a kind pod can open its own option file, per runner image.
   mysql-in-kind:
-    name: MySQL in kind (${{ matrix.runner }})
-    runs-on: ${{ matrix.runner }}
+    name: MySQL in kind (${{ matrix.snapshotter }})
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-26.04]
+        snapshotter: [overlayfs, native]
     steps:
       - uses: actions/checkout@v5
       - name: Install kind, Helm and kubectl
         run: .github/throwaway-instance/install-k8s-tools.sh
       - name: Create the kind cluster
-        run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
+        run: |
+          cp .github/throwaway-instance/kind.yaml "$RUNNER_TEMP/kind.yaml"
+          if [ '${{ matrix.snapshotter }}' = native ]; then
+            printf '%s\n' 'containerdConfigPatches:' '  - |-' '    [plugins."io.containerd.cri.v1.images"]' '      snapshotter = "native"' >> "$RUNNER_TEMP/kind.yaml"
+          fi
+          cat "$RUNNER_TEMP/kind.yaml" | tail -6
+          kind create cluster --name throwaway --config "$RUNNER_TEMP/kind.yaml" --wait 2m
+          docker exec throwaway-control-plane sh -c 'head -3 /etc/containerd/config.toml; ctr --namespace k8s.io plugins ls 2>/dev/null | grep -E "snapshotter.*(overlayfs|native)"'
       - name: mysqld's option file, in a pod and in Docker
         run: |
           uname -r
