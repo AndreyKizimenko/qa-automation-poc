@@ -18,3 +18,19 @@ import { Locator, Page } from '@playwright/test';
 export function fleetModal(page: Page, title: string | RegExp): Locator {
   return page.locator('.modal__modal_container').filter({ has: page.locator('.modal__header', { hasText: title }) });
 }
+
+/**
+ * A modal's own Close button: the one its content renders, usually in its
+ * footer. `Modal` names the ✕ in its header "Close" as well
+ * (fleetdm/fleet#59282), so a button found by that name anywhere in the modal
+ * matches both. `.modal__content` wraps whatever the modal renders, and is the
+ * only thing that tells it from the header.
+ */
+export function modalCloseButton(modal: Locator): Locator {
+  return modal.locator('.modal__content').getByRole('button', { name: 'Close', exact: true });
+}
+
+/** The ✕ in a modal's header, which every closable `Modal` renders, whatever its content offers. */
+export function modalDismissButton(modal: Locator): Locator {
+  return modal.locator('.modal__header').getByRole('button', { name: 'Close', exact: true });
+}

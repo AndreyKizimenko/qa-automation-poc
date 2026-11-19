@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { modalCloseButton } from './Modal';
 
 /**
  * The result of one software install or uninstall on a host — raised by the
@@ -24,7 +25,7 @@ class SoftwareActionDetailsModal {
     this.modal = page.locator(`.${modalClass}`);
     this.statusMessage = this.modal.locator('.icon-status-message__content');
     this.detailsButton = this.modal.getByRole('button', { name: 'Details' });
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
+    this.closeButton = modalCloseButton(this.modal);
   }
 
   async expectOpen(): Promise<void> {

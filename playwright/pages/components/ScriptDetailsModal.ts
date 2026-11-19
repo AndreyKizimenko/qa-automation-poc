@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { modalCloseButton } from './Modal';
 
 /**
  * "Script details" — one script execution's result. Fleet raises the same
@@ -35,7 +36,7 @@ export class ScriptDetailsModal {
     // Scoped to the result block: an ad-hoc run also renders its script content
     // in a code box of the same class above it.
     this.output = this.modal.locator('.run-script-details-modal__script-result .textarea--code');
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
+    this.closeButton = modalCloseButton(this.modal);
   }
 
   async expectOpen(): Promise<void> {

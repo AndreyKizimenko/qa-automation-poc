@@ -85,8 +85,7 @@ test.describe('Premium • Hosts • My device policies', () => {
     await test.step('a policy opens its details, under its name', async () => {
       await device.openTab('Policies');
       const details = await device.openPolicy(failing.name);
-      await details.getByRole('button', { name: 'Close' }).click();
-      await expect(details).toBeHidden();
+      await device.closePolicy(details);
     });
   });
 });

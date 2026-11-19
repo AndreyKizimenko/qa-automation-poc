@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { modalCloseButton } from './Modal';
 
 /**
  * "MDM command details" — one MDM command's request and the host's answer.
@@ -34,7 +35,7 @@ export class MdmCommandDetailsModal {
       .locator('.form-field')
       .filter({ hasText: 'Response from' })
       .getByRole('textbox');
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
+    this.closeButton = modalCloseButton(this.modal);
   }
 
   async expectOpen(): Promise<void> {

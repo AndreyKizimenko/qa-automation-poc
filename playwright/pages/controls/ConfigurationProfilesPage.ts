@@ -1,7 +1,7 @@
 import { Page, Locator, expect, Download } from '@playwright/test';
 import { clickHoverAction } from '../components/clickHoverAction';
 import { ContentList } from '../components/ContentList';
-import { fleetModal } from '../components/Modal';
+import { fleetModal, modalCloseButton } from '../components/Modal';
 import { Navbar } from '../components/Navbar';
 import { TargetLabelSelector, type LabelMode } from '../components/TargetLabelSelector';
 import { TeamDropdown } from '../components/TeamDropdown';
@@ -261,7 +261,7 @@ export class ConfigurationProfilesPage {
   /** Closes a profile's status modal with its Close button. */
   async closeStatus(name: string): Promise<void> {
     const modal = this.statusModal(name);
-    await modal.getByRole('button', { name: 'Close', exact: true }).click();
+    await modalCloseButton(modal).click();
     await expect(modal).toBeHidden();
   }
 
