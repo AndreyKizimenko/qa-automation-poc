@@ -86,7 +86,7 @@ The flag is opt-in and off by default, so the command above is safe as written.
 | No team (default.yml) | 23 | 29 | 32 | 28 | 11 | 3 | — |
 | Workstations (fleets/workstations.yml) | 23 | 23 | 5 | — | 6 | — | — |
 | QA (fleets/qa.yml) | — | — | — | — | — | — | 20 Fleet-maintained apps |
-| VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 4 custom packages, 4 Fleet-maintained apps |
+| VMs (fleets/vms.yml) | — | 2 | 1 | — | — | — | 7 custom packages (3 of them self-service), 4 Fleet-maintained apps |
 | OS matrix (fleets/os-matrix.yml) | — | — | — | — | — | — | — |
 | Compliance (fleets/compliance.yml) | 6 | 7 | 2 | 1 | 12 | — | 5 custom packages (2 script-only), 2 Fleet-maintained apps |
 
@@ -302,6 +302,11 @@ platform, so whichever VM a worker is handed has the same:
   changes and Fleet skips the download once it holds the file. Their resting state is **uninstalled** — the
   opposite of Claude's — and because the titles never leave the fleet, Fleet always knows whether each is on
   its VM. `playwright/helpers/vm-fixtures.ts` lists the same entries for the specs; the two change together.
+- **The self-service subjects** of `playwright/tests/e2e/premium/software/self-service-on-host.spec.ts`: the
+  same inert `.pkg`, `.msi` and `.deb` builds under a title of their own, "Fleet Playwright Self-service"
+  (`fleet-playwright-self-service` on Linux), declared `self_service: true`, so each pool VM's My device page
+  offers the one of its platform. That spec installs it from My device and uninstalls it again; no other spec
+  touches it (`VM_SELF_SERVICE_FIXTURES` in `playwright/helpers/vm-fixtures.ts`). Resting state: uninstalled.
 
 Everything else on the fleet is per-run (`fleet-pw-*` / `pw-*`): specs whose test changes the title itself add
 it and delete it. `playwright/setup/cleanup.steps.ts`, at the start and end of every run, sweeps the ones a

@@ -1,0 +1,9 @@
+# Inert fixture: installs an empty "Fleet Playwright Self-service.app" into
+# /Applications and nothing else. Built by playwright/test-data/apple/macos/
+# software/make-pkg.sh self-service. Offered in self-service on the VMs fleet:
+# premium/software/self-service-on-host.spec.ts installs it from My device and
+# leaves it uninstalled. The URL is pinned to a commit so it never changes; the
+# hash lets Fleet skip the download when it already holds the package.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/86b7b4f89c98a4b0dac8af3a01ac89aa65a71311/playwright/test-data/apple/macos/software/fleet-playwright-self-service-1.0.0.pkg
+  hash_sha256: 43e10b0ca50cceaf4cfebc25a1bda3eb2ffefb120f1803ea9fbb523453a34eae
+  self_service: true

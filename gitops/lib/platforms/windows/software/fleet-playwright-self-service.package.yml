@@ -1,0 +1,8 @@
+# Inert fixture: one marker file under "C:\Program Files\Fleet Playwright
+# Self-service\", no custom actions. Built by playwright/test-data/windows/
+# software/make-msi.sh self-service. Offered in self-service on the VMs fleet:
+# premium/software/self-service-on-host.spec.ts installs it from My device and
+# leaves it uninstalled. URL pinned to a commit; the hash skips the download.
+- url: https://raw.githubusercontent.com/AndreyKizimenko/qa-automation-poc/86b7b4f89c98a4b0dac8af3a01ac89aa65a71311/playwright/test-data/windows/software/fleet-playwright-self-service-1.0.0.msi
+  hash_sha256: 0174b5ae2f493fba24d12fa6c299e1a8f17418c3d5664c62222ebdec64f236ba
+  self_service: true

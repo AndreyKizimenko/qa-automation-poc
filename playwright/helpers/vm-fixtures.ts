@@ -59,6 +59,23 @@ export const VM_SOFTWARE_FIXTURES: readonly VmSoftwareFixture[] = [
 ];
 
 /**
+ * The software the VMs fleet offers in self-service, one per platform: the install fixtures' inert builds
+ * under a title of their own ("Fleet Playwright Self-service", `fleet-playwright-self-service` on Linux),
+ * declared `self_service: true` in vms.yml, so each pool VM's My device page lists the one of its platform.
+ * Only `premium/software/self-service-on-host.spec.ts` installs them, from that page. They are kept apart from
+ * {@link VM_SOFTWARE_FIXTURES} so no other spec's install meets them on a VM; the cleanup returns both lists to
+ * the same resting state, uninstalled.
+ */
+export const VM_SELF_SERVICE_FIXTURES: readonly VmSoftwareFixture[] = [
+  { label: 'macOS .pkg', platform: 'darwin', packageName: 'fleet-playwright-self-service-1.0.0.pkg' },
+  { label: 'Windows .msi', platform: 'windows', packageName: 'fleet-playwright-self-service-1.0.0.msi' },
+  { label: 'Linux .deb', platform: 'linux', packageName: 'fleet-playwright-self-service_1.0.0_all.deb' },
+];
+
+/** Every durable fixture on the VMs fleet, whichever spec installs it: what the cleanup returns to rest. */
+export const VM_DURABLE_FIXTURES: readonly VmSoftwareFixture[] = [...VM_SOFTWARE_FIXTURES, ...VM_SELF_SERVICE_FIXTURES];
+
+/**
  * The `.msi` the per-OS smokes upload to the OS matrix fleet for a Windows
  * matrix host, for the length of a test (`premium/matrix/os-smokes.spec.ts`).
  * Not one of the fixtures above: no gitops file declares it, and the cleanup's
