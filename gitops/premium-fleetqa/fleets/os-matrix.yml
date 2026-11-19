@@ -23,8 +23,10 @@
 #     only once Create key is clicked on a host's My device page
 #     (playwright/docs/device-lab-step-e-analysis.md). The fleet holds no Mac,
 #     so the macOS settings reach nothing today.
-#   - The same agent options and features as the VMs fleet, which are also what
-#     the fleet had when it was created by hand.
+#   - The same agent options and features as the VMs fleet: the global osquery
+#     config, with fleetd on its `edge` channel (lib/agent-options-edge.yml), so
+#     the per-OS smokes and the disk-encryption tests run each fleetd build on
+#     every OS flavour before it is released.
 #
 # Host expiry is this fleet's own, like the VMs fleet's. A fleet with expiry off
 # falls under the global window, which is one day on this instance (it is what
@@ -38,7 +40,7 @@
 name: OS matrix
 
 agent_options:
-  path: ../../lib/agent-options.yml
+  path: ../../lib/agent-options-edge.yml
 
 settings:
   features:

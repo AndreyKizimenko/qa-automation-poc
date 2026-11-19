@@ -221,8 +221,28 @@ suite, so a verify never meets them. The suite's disk-encryption tests (`playwri
 change nothing here: they move one host at a time off this fleet, onto a throwaway `pw-*` fleet with one
 disk-encryption setting on, and back.
 
-Its agent options and features are the VMs fleet's, which are also what the fleet had when it was created by
-hand (2026-11-14, id 621), and its host expiry is its own 30 days, for the reason the VMs fleet's is.
+Its agent options and features are the VMs fleet's, and its host expiry is its own 30 days, for the reason the
+VMs fleet's is.
+
+## fleetd's edge channel on the lab's fleets
+
+VMs and OS matrix take their agent options from `lib/agent-options-edge.yml`: the global osquery config, with
+`update_channels` set to `edge` for orbit, osqueryd and Fleet Desktop. Every premium lab host so runs fleetd's
+pre-release build, and the nightly's suite, per-OS smokes and disk-encryption tests are its smoke test on
+every OS the lab has, before the build reaches `stable` (since 2026-11-18; edge was fleetd 1.64.0 that day,
+`stable` 1.63.0). Three facts about it:
+
+- **It is premium's alone.** Fleet refuses `update_channels` without a Premium license
+  (`server/fleet/agent_options.go`), so free's global options can't carry it.
+- **A host that leaves these fleets stays on edge.** A fleet that declares no channels (a throwaway `pw-*` fleet,
+  which copies the global options, Workstations, Unassigned) sends orbit none, and orbit keeps the last ones it
+  was sent (`serverOverridesRunner` in `orbit/cmd/orbit/orbit.go`). Only a fleet declaring `stable` moves a host
+  back, and the one that does, Compliance, holds no hosts.
+- **A channel change restarts orbit on every host of the fleet**, which then updates to that channel's build
+  within minutes. Change it when no run is going.
+
+A failure that follows a new edge build is fleetd's until shown otherwise: the host's `orbit_version` names the
+build, and `https://updates.fleetdm.com/targets.json` lists what each channel holds.
 
 ## The QA fleet's Fleet-maintained-app shelf
 

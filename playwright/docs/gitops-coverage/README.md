@@ -290,7 +290,7 @@ The coverage-branch column says whether its example is the starting point.
 | key | decision | note | coverage branch |
 |---|---|---|---|
 | `agent_options` (existing content) | **1** verify | `GET /config → agent_options`, `GET /fleets/{id}` | — |
-| `agent_options.command_line_flags`, `update_channels` | **2** on the new fleet only | reach real hosts anywhere else (channels change TUF) | yes |
+| `agent_options.command_line_flags`, `update_channels` | **2** on the new fleet only | reach real hosts anywhere else (channels change TUF); since 2026-11-18 VMs and OS matrix also declare `update_channels: edge`, on purpose, so the lab runs fleetd's pre-release builds (`gitops/premium-fleetqa/README.md`) | yes |
 | `custom_host_vitals` | **1** both | no license check anywhere in the code; three names, min two; omitting the key deletes all vitals, so both configs carry it; an apply fails if a vital is still referenced; `global` only (errors in a fleet file) | — |
 | `labels` dynamic | already | — | — |
 | `labels` manual (`hosts: []`) | **1** both | lib file; min keeps it (the label-scoped policy and report, and Compliance's targets, reference it) | yes |
@@ -311,7 +311,7 @@ The coverage-branch column says whether its example is the starting point.
 | `settings.features` incl. `historical_data` | `true`/`true` |
 | `settings.host_expiry_settings` | on, 30 days; min 31 |
 | `settings.webhook_settings`: `failing_policies_webhook` (enabled, the target of `webhooks_and_tickets_enabled`), `host_activities_webhook` (disabled) | example URLs; min changes a path; no `host_status_webhook` (fleetctl doesn't manage a fleet's, §10) |
-| `agent_options` with `command_line_flags`, `update_channels` | the only place these are declared |
+| `agent_options` with `command_line_flags`, `update_channels` | the only place `command_line_flags` is declared; `update_channels` is `stable` here, `edge` on VMs and OS matrix |
 | `apple_settings.enable_disk_encryption`, `enable_escrow_disk_encryption_key` | min turns escrow off |
 | `windows_settings.enable_disk_encryption`, `require_bitlocker_pin` | min turns the PIN off |
 | `setup_experience.macos_managed_local_account_enabled`, `macos_end_user_local_account_type`, `windows_managed_local_account_enabled` (Fleet 5's names; Fleet 4's `enable_create_local_admin_account`, `end_user_local_account_type` and `windows_settings.enable_managed_local_account` are refused) | min flips the account type |

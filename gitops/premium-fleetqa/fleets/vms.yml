@@ -68,6 +68,9 @@
 # Unassigned by that spec, and by the cleanup's sweep after a dead run, so none
 # stays long enough for the window to matter.
 #
+# fleetd runs its `edge` channel here and on OS matrix (lib/agent-options-edge.yml),
+# so every real-host spec runs against fleetd's next build before it is released.
+#
 # Applied before every nightly premium run, in both the baseline and the min
 # pass, by `.github/workflows/gitops-premium{,-min}.yml`.
 #
@@ -75,7 +78,7 @@
 name: VMs
 
 agent_options:
-  path: ../../lib/agent-options.yml
+  path: ../../lib/agent-options-edge.yml
 
 settings:
   features:
