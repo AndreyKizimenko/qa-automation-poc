@@ -197,9 +197,9 @@ jobs:
           # The chart's MySQL image, looked at from inside the kind node (as a plain pod, with seccomp
           # off, and privileged) and from the runner's Docker: the process's seccomp and AppArmor
           # confinement, its option file, mysqld's own warnings, and the socket it resolves.
-          look='grep -E "^(Seccomp|NoNewPrivs):" /proc/self/status; echo "apparmor: $(cat /proc/self/attr/current 2>&1)"; stat -c "%A %U:%G %n" /etc/my.cnf; mysqld --verbose --help 2>&1 | grep -E "^(socket|lc-messages-dir) |Warning|ERROR" | head -8'
+          look='grep -E "^(Seccomp|NoNewPrivs):" /proc/self/status; echo "apparmor: $(cat /proc/self/attr/current 2>&1)"; echo "open files: soft $(ulimit -Sn), hard $(ulimit -Hn)"; stat -c "%A %U:%G %n" /etc/my.cnf; echo "read: $(head -c 40 /etc/my.cnf | tr "\n" " ")"; mysqld --verbose --help 2>&1 | grep -E "^(socket|lc-messages-dir) |Warning|ERROR" | head -8; echo "with open files at 1048576:"; (ulimit -n 1048576; mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | head -3)'
           image="$(kubectl -n fleet get statefulset fleet-mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo mysql:8.4)"
-          for variant in plain unconfined privileged; do
+          for variant in plain; do
             case "$variant" in
               plain) overrides='{}' ;;
               unconfined) overrides='{"spec":{"securityContext":{"seccompProfile":{"type":"Unconfined"}}}}' ;;
@@ -211,7 +211,8 @@ jobs:
             kubectl logs "mysql-$variant" 2>&1 || true
           done
           echo "--- the kind node's runtime"
-          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1; grep -rn -i -E "seccomp|apparmor" /etc/containerd/config.toml /var/lib/kubelet/config.yaml 2>/dev/null | head' || true
+          docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1; echo "containerd open files: $(grep -i "open files" /proc/$(pidof containerd)/limits)"; grep -rn -i -E "seccomp|apparmor|rlimit|nofile" /etc/containerd/config.toml /var/lib/kubelet/config.yaml /etc/systemd/system/containerd.service.d 2>/dev/null | head' || true
+          echo "runner Docker open files: $(docker run --rm busybox sh -c 'ulimit -Sn; ulimit -Hn' 2>/dev/null | tr '\n' ' ')"
           echo "--- $image in the runner's Docker"
           docker run --rm "$image" sh -c "$look" 2>&1 | grep -v -E 'Pulling|Download|Pull complete|Digest|Status' || true
 
