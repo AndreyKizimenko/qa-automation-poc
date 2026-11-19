@@ -224,6 +224,15 @@ export const activityCopy = {
       new RegExp(`failed to uninstall ${esc(title)} on this host\\.`),
     toldToUninstall: ({ title }: { title: string }) =>
       new RegExp(`told Fleet to uninstall ${esc(title)} on this host\\.`),
+    /**
+     * An install or uninstall from My device, in the passive voice with no actor, since anyone who opens the
+     * page could have started it: `<b>TITLE</b> was installed on this host (self service).`
+     * (`InstalledSoftwareActivityItem.tsx`, `getInstallUninstallStatusPredicatePassive`).
+     */
+    selfServiceInstalled: ({ title }: { title: string }) =>
+      new RegExp(`^${esc(title)}.* was installed on this host \\(self service\\)\\.`),
+    selfServiceUninstalled: ({ title }: { title: string }) =>
+      new RegExp(`^${esc(title)}.* was uninstalled on this host \\(self service\\)\\.`),
     /** A script-only package's run: `INSTALL_STATUS_PREDICATES.ran_script` — `ran <b>TITLE</b> on this host.` */
     ranScriptPackage: ({ title }: { title: string }) => new RegExp(`\\bran ${esc(title)} on this host\\.`),
   },

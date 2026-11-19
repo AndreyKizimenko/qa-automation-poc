@@ -20,7 +20,8 @@ pages/
 ├── auth/               # LoginPage, ForgotPasswordPage
 ├── account/            # MyAccountPage
 ├── hosts/              # HostsListPage, HostDetailsPage, HostQueryReportPage, MyDevicePage
-│                       #   (MyDevicePage: the end user's page, opened from Host details)
+│                       #   (MyDevicePage: the end user's page, opened from Host details: its tabs,
+│                       #   vitals, Refetch, Software inventory, Policies and Self service install/uninstall)
 │                       #   (HostDetailsPage has Controls/Software/Reports/Policies tabs,
 │                       #   but hosts is its primary nav context; its vitals, Agent
 │                       #   options card and `tooltip` read a Chromebook's page too,
