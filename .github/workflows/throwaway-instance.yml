@@ -199,16 +199,19 @@ jobs:
           # confinement, its option file, mysqld's own warnings, and the socket it resolves.
           look='grep -E "^(Seccomp|NoNewPrivs):" /proc/self/status; echo "apparmor: $(cat /proc/self/attr/current 2>&1)"; echo "open files: soft $(ulimit -Sn), hard $(ulimit -Hn)"; stat -c "%A %U:%G %n" /etc/my.cnf; echo "read: $(head -c 40 /etc/my.cnf | tr "\n" " ")"; mysqld --verbose --help 2>&1 | grep -E "^(socket|lc-messages-dir) |Warning|ERROR" | head -8; echo "with open files at 1048576:"; (ulimit -n 1048576; mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | head -3)'
           image="$(kubectl -n fleet get statefulset fleet-mysql -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo mysql:8.4)"
-          for variant in plain; do
-            case "$variant" in
-              plain) overrides='{}' ;;
-              unconfined) overrides='{"spec":{"securityContext":{"seccompProfile":{"type":"Unconfined"}}}}' ;;
-              privileged) overrides='{"spec":{"containers":[{"name":"mysql-'"$variant"'","image":"'"$image"'","command":["sh","-c"],"args":["'"${look//\"/\\\"}"'"],"securityContext":{"privileged":true}}]}}' ;;
-            esac
-            echo "--- $image in the kind node, $variant"
-            kubectl run "mysql-$variant" --image="$image" --restart=Never --overrides="$overrides" --command -- sh -c "$look" > /dev/null 2>&1 || true
-            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded "pod/mysql-$variant" --timeout=120s > /dev/null 2>&1 || true
-            kubectl logs "mysql-$variant" 2>&1 || true
+          # In the kind node: mysqld's socket under lower open-files limits, then its file and rlimit
+          # system calls traced (strace from the image's package manager), then older MySQL images.
+          trace='for n in 65536 1024; do echo "open files $n: $( (ulimit -n $n; mysqld --verbose --help 2>&1 | grep -E "^socket " | tr -s " ") )"; done; microdnf -y install strace > /dev/null 2>&1 || dnf -y install strace > /dev/null 2>&1; strace -f -e trace=%file,getrlimit,prlimit64 mysqld --verbose --help 2>&1 | grep -E "my\.cnf|errmsg|rlimit|E[A-Z]+ \(" | grep -v -E "ld\.so|\.so\." | head -25'
+          echo "--- $image in the kind node, traced"
+          kubectl run mysql-trace --image="$image" --restart=Never --command -- sh -c "$trace" > /dev/null 2>&1 || true
+          kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/mysql-trace --timeout=240s > /dev/null 2>&1 || true
+          kubectl logs mysql-trace 2>&1 || true
+          for other in mysql:8.4.11 mysql:8.0; do
+            name="mysql-$(echo "$other" | tr -c 'a-z0-9\n' '-')"
+            echo "--- $other in the kind node"
+            kubectl run "$name" --image="$other" --restart=Never --command -- sh -c 'mysqld --version; mysqld --verbose --help 2>&1 | grep -E "^socket |ERROR" | tr -s " "' > /dev/null 2>&1 || true
+            kubectl wait --for=jsonpath='{.status.phase}'=Succeeded "pod/$name" --timeout=180s > /dev/null 2>&1 || true
+            kubectl logs "$name" 2>&1 || true
           done
           echo "--- the kind node's runtime"
           docker exec throwaway-control-plane sh -c 'containerd --version; runc --version | head -1; echo "containerd open files: $(grep -i "open files" /proc/$(pidof containerd)/limits)"; grep -rn -i -E "seccomp|apparmor|rlimit|nofile" /etc/containerd/config.toml /var/lib/kubelet/config.yaml /etc/systemd/system/containerd.service.d 2>/dev/null | head' || true
