@@ -57,6 +57,7 @@ import {
   CommandPalette,
   LoginPage,
   ForgotPasswordPage,
+  RegistrationPage,
   DashboardPage,
   HostsListPage,
   HostDetailsPage,
@@ -277,6 +278,7 @@ type FleetFixtures = {
   // Auth
   loginPage: LoginPage;
   forgotPasswordPage: ForgotPasswordPage;
+  registrationPage: RegistrationPage;
 
   // Core
   dashboard: DashboardPage;
@@ -577,6 +579,9 @@ export const test = apiTest.extend<FleetFixtures, BrowserWorkerFixtures>({
   }, { box: true }],
   forgotPasswordPage: [async ({ page }, use) => {
     await use(new ForgotPasswordPage(page));
+  }, { box: true }],
+  registrationPage: [async ({ page }, use) => {
+    await use(new RegistrationPage(page));
   }, { box: true }],
   dashboard: [async ({ page }, use) => {
     await use(new DashboardPage(page));

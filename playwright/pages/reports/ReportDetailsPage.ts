@@ -36,6 +36,11 @@ export class ReportDetailsPage {
   readonly emptyStateInfo: Locator;
   /** The stored-results table's rows (header excluded). */
   readonly resultRows: Locator;
+  /**
+   * The stored results' total ("30 results"), counted by the server, so it covers rows past the
+   * table's first page of 50.
+   */
+  readonly resultsCount: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -69,6 +74,8 @@ export class ReportDetailsPage {
     this.emptyStateHeading = emptyState.getByRole('heading', { level: 3 });
     this.emptyStateInfo = emptyState.locator('.empty-state__info');
     this.resultRows = container.locator('table tbody tr');
+    // TableCount renders a role-less div, as on the Hosts list (`HostsListPage.resultsCount`).
+    this.resultsCount = container.locator('.table-container__results-count');
   }
 
   /**

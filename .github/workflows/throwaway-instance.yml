@@ -1,0 +1,370 @@
+name: QA — Throwaway instance
+
+# A Fleet of its own on the runner, worked and dropped with the runner: the release checklist's rows that
+# need a server nobody else uses (release-smokes plan, phase 3; .github/throwaway-instance/README.md).
+# Free only, plain HTTP, osquery-perf simulations; touches neither the standing QA instances nor the lab.
+#
+#   - helm: Fleet's Helm chart on a kind cluster, brand-new, on the image under test. The chart's own
+#     MySQL and Valkey, two Fleet pods; Ready with no error logged; first-run setup in the browser;
+#     generate-gitops → gitops → generate-gitops on the brand-new server; the simulations and the basic
+#     checks (Playwright `throwaway`); uninstall. The checklist's *Helm chart* row and its
+#     *GitOps and generate-gitops* row's brand-new server.
+#   - update: the Update flow without Kubernetes, on Docker Compose. The last release with the
+#     simulations and seeded data (and on Fleet 4 a 2017 pack, converted with `fleetctl upgrade-packs`
+#     before an upgrade to Fleet 5); the upgrade (stop, `fleet prepare db` on the new image, start); every
+#     host checking in again, everything seeded still there, the basic checks; then report results
+#     reaching the filesystem log and a webhook. The *Update flow* row, and *Log destination* but for
+#     Splunk and status logs (osquery-perf sends none), which stay manual.
+#
+# Dispatched by hand (on a branch: `gh workflow run "QA — Throwaway instance" --ref <branch>`). The two
+# jobs run side by side, each on its own runner, and pass or fail apart.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: The fleetdm/fleet image under test (main, or an RC's tag such as rc-minor-fleet-v4.96.0)
+        required: true
+        type: string
+        default: main
+      from:
+        description: The release image the Update flow upgrades from (blank — Fleet's latest release)
+        required: false
+        type: string
+        default: ''
+      hosts:
+        description: How many osquery-perf hosts each instance enrolls (at least 4, one per simulated OS)
+        required: false
+        type: string
+        default: '30'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Both jobs publish Fleet on the runner's localhost:8080 (kind's NodePort, Compose's port).
+  FLEET_URL: http://localhost:8080
+  FLEET_ADMIN_EMAIL: admin@example.com
+  THROWAWAY_HOSTS: ${{ inputs.hosts }}
+  DATA: .github/throwaway-instance/fleet-data.mjs
+
+jobs:
+  helm:
+    name: Helm chart (kind)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare the tools for the image under test
+        uses: ./.github/throwaway-instance
+        with:
+          image: ${{ inputs.image }}
+
+      - name: Install kind, Helm and kubectl
+        run: .github/throwaway-instance/install-k8s-tools.sh
+
+      - name: Create the kind cluster
+        run: kind create cluster --name throwaway --config .github/throwaway-instance/kind.yaml --wait 2m
+
+      # With the chart's own MySQL the migration Job is not a Helm hook: it runs beside the Fleet pods,
+      # which exit on "missing migrations" until it has finished, so a few restarts are expected.
+      - name: Install Fleet with its Helm chart
+        run: |
+          set -euo pipefail
+          helm repo add valkey https://valkey.io/valkey-helm/
+          helm dependency build .fleet-src/charts/fleet
+          start=$(date +%s)
+          helm install fleet .fleet-src/charts/fleet --namespace fleet --create-namespace \
+            --values .github/throwaway-instance/helm-values.yaml --set imageTag="$IMAGE" \
+            --wait --timeout 10m
+          kubectl apply -f .github/throwaway-instance/nodeport.yaml
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null "$FLEET_URL/healthz" && break
+            sleep 2
+          done
+          curl -fsS -o /dev/null "$FLEET_URL/healthz"
+          echo "INSTALL_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+
+      # Read before any host enrolls: the simulations' answers make Fleet log errors of their own.
+      - name: The pods are Ready and Fleet logged no errors
+        run: |
+          set -euo pipefail
+          kubectl -n fleet get pods
+          # The Job deletes itself 100 s after it finishes, so it may be gone already; the pods being
+          # Ready says it ran, since Fleet refuses to serve with migrations missing.
+          echo '--- the migration Job'
+          kubectl -n fleet logs job/fleet-migration 2>/dev/null | tail -3 || echo '(already cleaned up)'
+          errors=0
+          for pod in $(kubectl -n fleet get pods -l component=fleet-server -o name); do
+            found="$(kubectl -n fleet logs "$pod" | grep 'level=error' || true)"
+            if [ -n "$found" ]; then
+              echo "::error::$pod logged errors:"$'\n'"$found"
+              errors=1
+            fi
+          done
+          {
+            echo "## Helm chart: fleetdm/fleet:$IMAGE"
+            echo "Fleet $FLEET_VERSION, revision \`$FLEET_REVISION\`; installed and Ready in ${INSTALL_SECONDS} s."
+            echo '```'
+            kubectl -n fleet get pods
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$errors"
+
+      - name: Make up the run's admin password
+        run: |
+          password="Pw-$(openssl rand -hex 12)-1!"
+          echo "::add-mask::$password"
+          echo "FLEET_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+
+      - name: First-run setup in the browser
+        id: first-run
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/first-run
+        run: .github/throwaway-instance/playwright.sh npx playwright test --project=throwaway-first-run --reporter=github,blob
+
+      - name: Sign in and turn usage statistics off
+        run: |
+          set -euo pipefail
+          token="$(node "$DATA" login)"
+          echo "::add-mask::$token"
+          echo "FLEET_API_TOKEN=$token" >> "$GITHUB_ENV"
+          secret="$(FLEET_API_TOKEN="$token" node "$DATA" prepare)"
+          echo "::add-mask::$secret"
+          echo "ENROLL_SECRET=$secret" >> "$GITHUB_ENV"
+          fleetctl config set --address "$FLEET_URL" --token "$token" > /dev/null
+
+      - name: generate-gitops on the brand-new server
+        run: .github/throwaway-instance/gitops-round-trip.sh "$RUNNER_TEMP/gitops"
+
+      - name: Seed, enroll the simulated hosts and wait for their answers
+        run: |
+          set -euo pipefail
+          node "$DATA" seed
+          .github/throwaway-instance/start-osquery-perf.sh
+          node "$DATA" wait "$THROWAWAY_HOSTS" 600
+
+      - name: Basic checks in the browser
+        id: checks
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/checks
+        run: .github/throwaway-instance/playwright.sh npx playwright test --project=throwaway --reporter=github,blob
+
+      # The runbook's teardown: the chart's MySQL keeps its volume claim past `helm uninstall`, which
+      # deleting the namespace removes.
+      - name: Uninstall Fleet
+        if: ${{ !cancelled() && steps.checks.outcome != 'skipped' }}
+        run: |
+          set -euo pipefail
+          helm uninstall fleet --namespace fleet --wait --timeout 5m
+          kubectl delete -f .github/throwaway-instance/nodeport.yaml
+          kubectl delete namespace fleet --wait --timeout 3m
+          if kubectl get namespace fleet > /dev/null 2>&1; then
+            echo "::error::the fleet namespace is still there after its deletion"
+            exit 1
+          fi
+          echo "Uninstalled; the namespace is gone." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: What the cluster looked like
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods,jobs,events --all-namespaces --sort-by=.lastTimestamp | tail -60 || true
+          for pod in $(kubectl -n fleet get pods -l component=fleet-server -o name 2>/dev/null); do
+            echo "--- $pod"; kubectl -n fleet logs "$pod" --tail 40 || true
+          done
+          echo '--- osquery-perf'; grep -v '^ ' "$RUNNER_TEMP/osquery-perf.log" | tail -20 || true
+
+      - name: Merge the reports
+        if: ${{ !cancelled() && steps.first-run.outcome != 'skipped' }}
+        run: |
+          mkdir -p playwright/blob-report/all
+          find playwright/blob-report -name '*.zip' -not -path '*/all/*' -exec cp {} playwright/blob-report/all/ \;
+          .github/throwaway-instance/playwright.sh npx playwright merge-reports --reporter html blob-report/all
+
+      - uses: ./.github/upload-report
+        if: ${{ always() }}
+        with:
+          name: playwright-report-throwaway-helm
+
+  update:
+    name: Update flow (Docker Compose)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_FILE: .github/throwaway-instance/compose.yaml
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare the tools for the image under test
+        uses: ./.github/throwaway-instance
+        with:
+          image: ${{ inputs.image }}
+
+      - name: Choose the release to upgrade from
+        id: versions
+        env:
+          FROM: ${{ inputs.from }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FROM" ]; then
+            FROM="$(gh release list --repo fleetdm/fleet --exclude-pre-releases --limit 30 --json tagName \
+              --jq '[.[].tagName | select(test("^fleet-v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] | sub("^fleet-"; "")')"
+          fi
+          from_version="$(docker run --rm "fleetdm/fleet:$FROM" fleet version | sed -nE 's/^fleet version //p')"
+          major() { case "$1" in 0.0.0-*) echo 99 ;; *) echo "${1%%.*}" ;; esac; }
+          echo "Upgrading from fleetdm/fleet:$FROM (Fleet $from_version) to fleetdm/fleet:$IMAGE (Fleet $FLEET_VERSION)"
+          # A Fleet 4 release has 2017 packs to seed; an upgrade from one to Fleet 5 converts them first.
+          has_packs=false
+          [ "$(major "$from_version")" -lt 5 ] && has_packs=true
+          converts_packs=false
+          [ "$has_packs" = true ] && [ "$(major "$FLEET_VERSION")" -ge 5 ] && converts_packs=true
+          {
+            echo "FROM_IMAGE=$FROM"
+            echo "FROM_VERSION=$from_version"
+            echo "HAS_PACKS=$has_packs"
+            echo "CONVERTS_PACKS=$converts_packs"
+            echo "LOGS_DIR=$RUNNER_TEMP/fleet-logs"
+          } >> "$GITHUB_ENV"
+          echo "converts_packs=$converts_packs" >> "$GITHUB_OUTPUT"
+
+      # FLEET_TAG is the image Compose runs: the release until the upgrade, the image under test after.
+      - name: Start the release
+        run: |
+          set -euo pipefail
+          mkdir -p "$LOGS_DIR"
+          chmod 777 "$LOGS_DIR"
+          echo "FLEET_TAG=$FROM_IMAGE" >> "$GITHUB_ENV"
+          FLEET_TAG="$FROM_IMAGE" docker compose up --detach --wait
+
+      - name: Make up the run's admin password
+        run: |
+          password="Pw-$(openssl rand -hex 12)-1!"
+          echo "::add-mask::$password"
+          echo "FLEET_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+
+      - name: Set it up and seed it
+        run: |
+          set -euo pipefail
+          token="$(node "$DATA" setup)"
+          echo "::add-mask::$token"
+          echo "FLEET_API_TOKEN=$token" >> "$GITHUB_ENV"
+          export FLEET_API_TOKEN="$token"
+          secret="$(node "$DATA" prepare)"
+          echo "::add-mask::$secret"
+          echo "ENROLL_SECRET=$secret" >> "$GITHUB_ENV"
+          node "$DATA" seed
+          if [ "$HAS_PACKS" = true ]; then node "$DATA" seed-pack; fi
+
+      - name: Enroll the simulated hosts and wait for their answers
+        run: |
+          set -euo pipefail
+          .github/throwaway-instance/start-osquery-perf.sh
+          node "$DATA" wait "$THROWAWAY_HOSTS" 600
+
+      # Fleet 5 drops 2017 packs; its upgrade guide says to run `fleetctl upgrade-packs` on Fleet 4 first
+      # and apply the reports it writes. That is done here with the release's own fleetctl.
+      - name: Convert the 2017 pack with fleetctl upgrade-packs
+        if: ${{ steps.versions.outputs.converts_packs == 'true' }}
+        run: |
+          set -euo pipefail
+          export CONFIG="$RUNNER_TEMP/fleetctl-from"
+          npx --yes "fleetctl@$FROM_VERSION" config set --address "$FLEET_URL" --token "$FLEET_API_TOKEN" > /dev/null
+          npx --yes "fleetctl@$FROM_VERSION" upgrade-packs -o "$RUNNER_TEMP/packs-to-reports.yml"
+          npx --yes "fleetctl@$FROM_VERSION" apply -f "$RUNNER_TEMP/packs-to-reports.yml"
+
+      - name: Snapshot what the upgrade must keep
+        run: |
+          set -euo pipefail
+          node "$DATA" snapshot "$RUNNER_TEMP/before.json"
+          report="$(node -p "require('./playwright/test-data/shared/throwaway/seed.json').report.name")"
+          echo "REPORT=$report" >> "$GITHUB_ENV"
+          rows="$(grep -cE "\"name\": ?\"pack/Global/$report\"" "$LOGS_DIR/osquery_result" || true)"
+          echo "ROWS_BEFORE=${rows:-0}" >> "$GITHUB_ENV"
+
+      # Fleet's upgrade guide: stop Fleet, run `fleet prepare db` with the new version, start it.
+      - name: Upgrade to the image under test
+        run: |
+          set -euo pipefail
+          echo "UPGRADE_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          docker compose stop fleet
+          export FLEET_TAG="$IMAGE"
+          echo "FLEET_TAG=$IMAGE" >> "$GITHUB_ENV"
+          docker compose run --rm migrate 2>&1 | tee "$RUNNER_TEMP/migrate.log"
+          docker compose up --detach --wait fleet
+          if [ "$CONVERTS_PACKS" = true ]; then
+            pack="$(node -p "require('./playwright/test-data/shared/throwaway/seed.json').pack.name")"
+            grep -F "dropping 1 2017 packs: $pack" "$RUNNER_TEMP/migrate.log" \
+              || { echo "::error::the migration didn't log dropping the 2017 pack $pack"; exit 1; }
+          fi
+
+      - name: Every host checks in again
+        run: node "$DATA" wait "$THROWAWAY_HOSTS" 600 "$UPGRADE_AT"
+
+      - name: Everything from before the upgrade is still there
+        run: node "$DATA" compare "$RUNNER_TEMP/before.json"
+
+      - name: Basic checks in the browser
+        id: checks
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report/checks
+        run: .github/throwaway-instance/playwright.sh npx playwright test --project=throwaway --reporter=github,blob
+
+      # The report runs every minute on every host and has automations on, so the build under test
+      # writes new rows for it: to the filesystem first, then, restarted with the webhook plugin, to the
+      # receiver on the Compose network.
+      - name: Report results reach the filesystem log and a webhook
+        if: ${{ !cancelled() && steps.checks.outcome != 'skipped' }}
+        run: |
+          set -euo pipefail
+          pattern="\"name\": ?\"pack/Global/$REPORT\""
+          rows=0
+          for _ in $(seq 1 18); do
+            rows=$(grep -cE "$pattern" "$LOGS_DIR/osquery_result" || true)
+            [ "$rows" -gt "$ROWS_BEFORE" ] && break
+            sleep 10
+          done
+          [ "$rows" -gt "$ROWS_BEFORE" ] \
+            || { echo "::error::no new rows for $REPORT in the filesystem log after the upgrade ($rows, $ROWS_BEFORE before)"; exit 1; }
+          echo "filesystem: $rows rows for $REPORT ($ROWS_BEFORE before the upgrade)"
+
+          RESULT_LOG_PLUGIN=webhook docker compose up --detach --wait fleet
+          posted=0
+          for _ in $(seq 1 18); do
+            posted=$(docker compose logs --no-log-prefix log-receiver | grep -cE "$pattern" || true)
+            [ "$posted" -gt 0 ] && break
+            sleep 10
+          done
+          [ "$posted" -gt 0 ] \
+            || { echo "::error::no posts for $REPORT reached the webhook receiver"; docker compose logs fleet --tail 20; exit 1; }
+          echo "webhook: $posted posts carried $REPORT"
+          {
+            echo "## Update flow: fleetdm/fleet:$FROM_IMAGE → fleetdm/fleet:$IMAGE"
+            echo "Fleet $FROM_VERSION → $FLEET_VERSION (revision \`$FLEET_REVISION\`), $THROWAWAY_HOSTS simulated hosts."
+            echo "Result logs for \`$REPORT\`: $rows rows in the filesystem log, $posted webhook posts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: What Compose looked like
+        if: ${{ failure() }}
+        run: |
+          docker compose ps --all || true
+          docker compose logs fleet --tail 60 || true
+          echo '--- migrate'; cat "$RUNNER_TEMP/migrate.log" 2>/dev/null | tail -20 || true
+          echo '--- osquery-perf'; grep -v '^ ' "$RUNNER_TEMP/osquery-perf.log" | tail -20 || true
+
+      - name: Merge the reports
+        if: ${{ !cancelled() && steps.checks.outcome != 'skipped' }}
+        run: |
+          mkdir -p playwright/blob-report/all
+          find playwright/blob-report -name '*.zip' -not -path '*/all/*' -exec cp {} playwright/blob-report/all/ \;
+          .github/throwaway-instance/playwright.sh npx playwright merge-reports --reporter html blob-report/all
+
+      - uses: ./.github/upload-report
+        if: ${{ always() }}
+        with:
+          name: playwright-report-throwaway-update

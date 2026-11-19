@@ -1,0 +1,12 @@
+# The throwaway instance's Kubernetes cluster: one kind node, with the node's port 30080 (the NodePort
+# Service in nodeport.yaml) published on the runner as localhost:8080. The runner's browser, fleetctl and
+# osquery-perf reach Fleet there, and the NodePort spreads their connections over both Fleet pods,
+# which a `kubectl port-forward` would not: it pins every connection to one pod and dies on a rollout.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        listenAddress: 127.0.0.1

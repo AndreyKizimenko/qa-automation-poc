@@ -1,0 +1,18 @@
+# Publishes the chart's Fleet pods on the kind node's port 30080, which kind.yaml maps to the runner's
+# localhost:8080. The chart's own Service is a NodePort only with its GKE ingress values, so this one sits
+# beside it, selecting the same pods by the labels the chart gives them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fleet-nodeport
+  namespace: fleet
+spec:
+  type: NodePort
+  selector:
+    app: fleet
+    component: fleet-server
+  ports:
+    - name: fleet
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080

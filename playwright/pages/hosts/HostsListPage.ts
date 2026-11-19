@@ -164,15 +164,28 @@ export class HostsListPage {
    * `mayBeEmpty` is for a fleet that can hold no hosts (Workstations): Fleet then
    * shows an empty screen in place of the table, so the page is anchored on
    * Export hosts, which renders either way (disabled when there's nothing).
+   *
+   * `policy` opens the hosts that gave one answer to a policy, the list a
+   * policy's Pass / Fail count links to. Fleet answers it live, while the counts
+   * on the policies list wait for an hourly job, so a spec reaches it by URL.
    */
   async goto(
-    opts: { fleetId?: number; sort?: { key: string; direction: 'asc' | 'desc' }; mayBeEmpty?: boolean } = {},
+    opts: {
+      fleetId?: number;
+      sort?: { key: string; direction: 'asc' | 'desc' };
+      mayBeEmpty?: boolean;
+      policy?: { id: number; response: 'passing' | 'failing' };
+    } = {},
   ) {
     const params = new URLSearchParams();
     if (opts.fleetId !== undefined) params.set('fleet_id', String(opts.fleetId));
     if (opts.sort) {
       params.set('order_key', opts.sort.key);
       params.set('order_direction', opts.sort.direction);
+    }
+    if (opts.policy) {
+      params.set('policy_id', String(opts.policy.id));
+      params.set('policy_response', opts.policy.response);
     }
     const qs = params.toString();
     await this.page.goto(`/hosts/manage${qs ? '?' + qs : ''}`);

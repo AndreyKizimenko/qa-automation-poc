@@ -38,3 +38,4 @@ docs/upgrade-preflight/
 .env.premium
 .env.free
 .env.loadtest
+.env.throwaway

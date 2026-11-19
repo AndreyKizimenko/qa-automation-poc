@@ -80,3 +80,9 @@ tools/loglab/sinks/
 
 # What .github/upload-report writes before uploading (CI only).
 encrypted-report/
+
+# What .github/throwaway-instance/action.yml checks out and builds (Fleet's source and its tools), and
+# .github/install-fleetctl's build. CI writes them into the workspace; a local run may too.
+.fleet-src/
+.throwaway-bin/
+.fleetctl-bin/
