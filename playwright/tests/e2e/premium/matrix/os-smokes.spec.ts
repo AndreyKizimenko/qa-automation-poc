@@ -16,6 +16,7 @@
  *   | The inventory lists a package known to be on it, as its package type | every OS (ChromeOS: the fleetd extension) |
  *   | A live report comes back with the host's own platform, and finds Fleet Desktop running | every OS; Fleet Desktop on VMs with a desktop, the fleetd extension on ChromeOS |
  *   | A script runs and its output comes back | every VM |
+ *   | A script that exits 3 reads as an error: "Error", its exit code, its output and fleetd's line about it, also from the host's Activity card | every VM |
  *   | Vulnerabilities are listed for the OS | the Ubuntu LTS versions, RHEL 9 and 10 |
  *   | Its page is a Chromebook's: disk encryption always on, the extension's agent options, its Chrome profile, no Reports tab, no script | ChromeOS |
  *   | It answers a passing and a failing policy, and its Policies tab shows both | ChromeOS |
@@ -414,6 +415,9 @@ function smokesOf(subject: Subject): void {
     if (takesScripts(subject)) {
       test('runs a script, and its output comes back', ({ hostDetails, seed, request }) =>
         smoke.script({ hostDetails, seed, request }, subject));
+
+      test('runs a failing script, which reads as an error, here and in its Activity', ({ hostDetails, seed, request }) =>
+        smoke.failingScript({ hostDetails, seed, request }, subject));
     }
 
     if (OS_WITH_VULNERABILITIES.includes(os)) {

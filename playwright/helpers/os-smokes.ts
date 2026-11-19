@@ -59,6 +59,7 @@ import {
 } from './api';
 import { isVmLabHost, labHostFleet, labHostsOfRun, poolHostsOfRun, type LabHost, type LabPackage, type VmPlatform } from './lab-hosts';
 import { runNonce } from './profiles';
+import { activityCopy } from './activity-copy';
 
 /**
  * The OS name Fleet shows for each manifest `os`, and the major version the
@@ -486,6 +487,62 @@ async function script(
 }
 
 /**
+ * A script that exits 3 reads as an error. The Run script modal shows "Error". Its details read "Exit code: 3
+ * (Script failed.)", with what it printed and the line fleetd appends to a failed run on every platform
+ * (`script execution error: exit status 3`, `orbit/pkg/scripts/scripts.go`). The host's Activity card lists
+ * the run and opens the same failure. Not for ChromeOS ({@link takesScripts}).
+ */
+async function failingScript(
+  { hostDetails, seed, request }: { hostDetails: HostDetailsPage; seed: Seed; request: APIRequestContext },
+  subject: Subject,
+): Promise<void> {
+  // Upload, the host's next check-in, the run, and the result's way back.
+  test.setTimeout(300_000);
+  const host = await hostOf(request, subject);
+  const marker = `failing on purpose ${runNonce()}`;
+  const windows = subject.entry.platform === 'windows';
+  const script = await seed.script('os-smoke-fails', {
+    fleetId: host.fleetId ?? 0,
+    extension: windows ? '.ps1' : '.sh',
+    content: windows ? `Write-Output "${marker}"\nexit 3\n` : `#!/bin/sh\necho "${marker}"\nexit 3\n`,
+  });
+  const modal = hostDetails.runScriptModal;
+  const details = hostDetails.scriptDetailsModal;
+  const failed = 'Exit code: 3 (Script failed.)';
+
+  await hostDetails.goto(host.id);
+  await hostDetails.openRunScript();
+  await expect(modal.status(script.name)).toHaveText('---');
+  await modal.run(script.name, host.displayName);
+  await expect
+    .poll(async () => (await getHostScriptLastExecution(request, host.id, script.name))?.status, {
+      message: `${script.name} never finished on ${host.displayName}`,
+      timeout: 180_000,
+      intervals: [3_000],
+    })
+    .toBe('error');
+
+  // The modal reads its list only when it opens.
+  await modal.close();
+  await hostDetails.openRunScript();
+  await expect(modal.status(script.name)).toHaveText('Error');
+  await modal.showRunDetails(script.name);
+  await details.expectOpen();
+  await expect(details.statusMessage).toHaveText(failed);
+  await expect(details.output).toHaveText(`${marker} script execution error: exit status 3`);
+  await details.close();
+  await modal.close();
+
+  // A failed run is still a run: the Activity card lists it, and opens the same failure.
+  await hostDetails.goto(host.id);
+  await hostDetails.showPastActivities();
+  await hostDetails.activityItem(activityCopy.script.ranOnThisHost({ name: script.name })).click();
+  await details.expectOpen();
+  await expect(details.statusMessage).toHaveText(failed);
+  await details.close();
+}
+
+/**
  * How a script finds fleetd's own process: the main process of the service its package installed
  * (`orbit/pkg/packaging/`). Each prints `orbit pid: <n>`.
  */
@@ -718,4 +775,4 @@ async function policies(
  * The checks, one per test. Each takes the fixtures it uses, as the test
  * destructured them, and the subject: `smoke.gate({ hostDetails, request }, subject)`.
  */
-export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, osVulnerabilities, chromebookPage, policies, selfHealing };
+export const smoke = { gate, vitalsAndUsers, platformLabel, knownPackage, liveReport, script, failingScript, osVulnerabilities, chromebookPage, policies, selfHealing };
