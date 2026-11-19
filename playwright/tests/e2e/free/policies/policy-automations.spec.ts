@@ -113,7 +113,11 @@ test.describe('Free • Policies • automations', () => {
       expect((await stored()).destination_url).toBe(webhookUrl);
       expect((await getGlobalPolicy(request, policyId)).automationType).toBe('webhook_or_ticket');
       // The cell names the policy's automation whether or not the scope's
-      // webhook is on: the switch decides only whether failures are sent.
+      // webhook is on: the switch decides only whether failures are sent. Read
+      // on a freshly loaded list, so the cell is what Fleet renders from the
+      // stored state, not the one drawn before the switch.
+      await policiesList.goto();
+      await policiesList.narrowTo(policyName);
       await expect(policiesList.automationsCell(policyName)).toHaveAccessibleName('Edit automation: Webhook');
     });
   });
