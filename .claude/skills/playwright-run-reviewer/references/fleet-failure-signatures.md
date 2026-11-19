@@ -233,6 +233,13 @@ Each of these looked like something else at first.
 - **The premium gitops apply fails on a Fleet-maintained app's SHA.** Fleet's catalog
   listed a hash the server never computed; it has cleared the same day each time →
   `infra-env`, re-check with a gitops-only dispatch.
+- **`POST /software/fleet_maintained_apps` times out at the helper's 60 s on one app, every attempt,
+  while the adds before it took seconds.** Fleet downloads the vendor's installer inside every FMA add
+  (its own limit is 15 min), so a large installer on a slow vendor night outlasts the request → `infra-env`
+  (the vendor's server), not Fleet. Time the add alone with a long client timeout (`curl --max-time 300`),
+  and compare a big installer of another vendor's: Discord's 234 MB took 9–56 s on 2026-11-19 while
+  Bitwarden's 350 MB took 8. A spec that needs titles only to list them reads a durable shelf (the QA
+  fleet's `qa.yml`) instead of adding them per run.
 - **A gitops-verify value is `undefined`, or a list is empty, in what `GET /config` or
   `GET /fleets/{id}` returns, on a build that just changed.** Fleet moved the key to its own
   endpoint: Fleet 5 keeps profiles, scripts, setup-experience items and VPP assignments only
