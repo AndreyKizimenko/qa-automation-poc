@@ -3,7 +3,7 @@ import { DataSet } from '../components/DataSet';
 import { waitForTableSettled } from '../components/DataTable';
 import { ActionsMenu } from '../components/dropdowns';
 import { FilterModal } from '../components/FilterModal';
-import { fleetModal } from '../components/Modal';
+import { fleetModal, modalCloseButton } from '../components/Modal';
 import { Toast } from '../components/Toast';
 
 /** The page's tabs, in Fleet's order (`DeviceUserPage.tsx`). Which of them show depends on the tier and the host. */
@@ -196,6 +196,12 @@ export class MyDevicePage {
     return details;
   }
 
+  /** Closes a policy's details modal, opened by `openPolicy`, with its Close button. */
+  async closePolicy(details: Locator): Promise<void> {
+    await modalCloseButton(details).click();
+    await expect(details).toBeHidden();
+  }
+
   /** A title's row on the Self service tab, by its exact name. */
   selfServiceRow(name: string): Locator {
     return this.selfServiceRows.filter({ has: this.page.getByText(name, { exact: true }) });
@@ -260,7 +266,7 @@ export class MyDevicePage {
    */
   async createKey(): Promise<void> {
     await this.createKeyButton.click();
-    const close = this.createKeyModal.getByRole('button', { name: 'Close' });
+    const close = modalCloseButton(this.createKeyModal);
     await expect(close.or(this.toast.error)).toBeVisible();
     if (await this.toast.error.isVisible()) {
       throw new Error(`[MyDevicePage.createKey] the server refused Create key: ${await this.toast.error.innerText()}`);
@@ -268,7 +274,7 @@ export class MyDevicePage {
   }
 
   async closeCreateKeyModal(): Promise<void> {
-    await this.createKeyModal.getByRole('button', { name: 'Close' }).click();
+    await modalCloseButton(this.createKeyModal).click();
     await expect(this.createKeyModal).toBeHidden();
   }
 }

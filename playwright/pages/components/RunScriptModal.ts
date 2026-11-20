@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Toast } from './Toast';
+import { modalDismissButton } from './Modal';
 
 /** What the modal's Status column shows for a script's latest run on this host. */
 export type RunScriptStatus = 'Ran' | 'Pending' | 'Error';
@@ -23,11 +24,7 @@ export class RunScriptModal {
   readonly page: Page;
   readonly toast: Toast;
   readonly modal: Locator;
-  /**
-   * The header's ✕, the modal's only close control (it has no footer). Fleet's
-   * `Modal` renders it as an icon-only button with no accessible name, inside
-   * its `modal__ex` wrapper, so the wrapper class is the handle.
-   */
+  /** The header's ✕, the modal's only close control (it has no footer). */
   readonly closeButton: Locator;
   /** The "Run script?" confirmation raised by a row's Run action. */
   readonly confirmForm: Locator;
@@ -37,7 +34,7 @@ export class RunScriptModal {
     this.page = page;
     this.toast = new Toast(page);
     this.modal = page.locator('.run-script-modal');
-    this.closeButton = this.modal.locator('.modal__ex').getByRole('button');
+    this.closeButton = modalDismissButton(this.modal);
     this.confirmForm = page.locator('.confirm-run-script-modal__form');
     this.confirmRunButton = this.confirmForm.getByRole('button', { name: 'Run', exact: true });
   }

@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { modalCloseButton } from './Modal';
 
 /**
  * The **Recovery Lock password** modal, from a Mac's Actions → *Show Recovery
@@ -32,7 +33,7 @@ export class RecoveryLockPasswordModal {
     this.showSecretButton = this.modal.getByRole('button', { name: 'Show secret' });
     this.autoRotateBanner = this.modal.getByText(/^Password rotates automatically after /);
     this.rotateButton = this.modal.getByRole('button', { name: /Rotate password$/ });
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
+    this.closeButton = modalCloseButton(this.modal);
   }
 
   /** Reveals the password and returns it, checking it's really shown unmasked. */

@@ -31,6 +31,9 @@ Contents: Locators and UI state · Waiting · Data and state · API helpers · T
   by its content instead (`ReportsListPage.automationsCell`).
 - **An absence check on a menu passes when the menu never opened.** Assert one option that should be there
   before asserting the one that shouldn't.
+- **Every modal's ✕ is a button named "Close"** (fleetdm/fleet#59282), so `modal.getByRole('button', { name:
+  'Close' })` also matches a footer's Close and fails in strict mode. Close with `modalCloseButton(modal)` or
+  `modalDismissButton(modal)` (`pages/components/Modal.ts`).
 - **The report edit form fills itself twice:** from report state that survives client-side navigation, then
   again when its own fetch returns. An edit made right after *Edit report* can be overwritten and save nothing,
   with no prompt. Load `/reports/:id/edit` with `gotoEdit()` and wait for the saved values, or use `fillAll()`.

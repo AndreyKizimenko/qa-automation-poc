@@ -214,7 +214,7 @@ function liveVppFleets(fleets: unknown): string[] {
   return fleets.map((f: { name: string }) => f.name).sort();
 }
 
-/** A declared token's fleets, sorted, with `All teams` (the name Fleet 4 used, which Fleet still accepts) as `All fleets`. */
+/** A declared token's fleets, sorted. Fleet 5 refuses Fleet 4's `All teams` (fleetdm/fleet#59160), so a config names `All fleets`. */
 function declaredVppFleets(fleets: string[] | undefined): string[] {
-  return (fleets ?? []).map((name) => (name === 'All teams' ? ALL_FLEETS : name)).sort();
+  return [...(fleets ?? [])].sort();
 }

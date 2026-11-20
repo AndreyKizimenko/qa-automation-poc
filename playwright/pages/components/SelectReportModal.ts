@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { modalCloseButton } from './Modal';
 
 /**
  * The "Select a report" modal opened from a host's Actions → Live report.
@@ -23,7 +24,7 @@ export class SelectReportModal {
     this.modal = page.locator('.select-report-modal');
     this.filterInput = this.modal.getByPlaceholder('Filter reports');
     this.createReportLink = this.modal.getByRole('button', { name: 'create a report' });
-    this.closeButton = this.modal.getByRole('button', { name: 'Close', exact: true });
+    this.closeButton = modalCloseButton(this.modal);
     this.emptyState = this.modal.getByText('No saved reports');
   }
 

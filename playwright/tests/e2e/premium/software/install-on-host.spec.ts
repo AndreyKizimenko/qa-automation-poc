@@ -40,8 +40,6 @@ import {
 } from '@helpers/api';
 import type { DashboardPage, SoftwareTitlesPage } from '@pages';
 
-const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /** Dashboard → Software → the VMs fleet → Add software. */
 async function openAddSoftware(dashboard: DashboardPage, softwareTitles: SoftwareTitlesPage) {
   await dashboard.goto();
@@ -79,13 +77,12 @@ test.describe('Premium • Software • Install on host', () => {
       await expect(softwareTitleDetail.displayHeading).toHaveText(name);
 
       // Fleet wrote the policy that does the deploying, on this fleet, and says so
-      // in the feed. The activity carries no fleet (the automatic-install path
-      // logs `created_policy` without `team_id`), so it reads without the "on
-      // the VMs fleet" a hand-made fleet policy's does.
+      // in the feed, naming the fleet as a hand-made fleet policy's activity does
+      // (fleetdm/fleet#58032).
       const policy = (await listFleetPolicies(request, vmsFleetId)).find((p) => p.name === policyName);
       expect(policy, `no "${policyName}" policy on the VMs fleet`).toBeDefined();
       await dashboard.goto();
-      await dashboard.expectActivity(new RegExp(`created a policy ${escapeRegExp(policyName)}\\.`));
+      await dashboard.expectActivity(activityCopy.policy.created({ name: policyName, scope: 'VMs' }));
 
       // The VM fails the policy at its next policy run — asked for now rather
       // than waited out — and the policy's automation installs the package.

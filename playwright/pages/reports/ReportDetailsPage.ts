@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { Navbar } from '../components/Navbar';
+import { modalCloseButton } from '../components/Modal';
 
 /**
  * `/reports/:id` — the report results / details page. Rendered when a
@@ -62,7 +63,7 @@ export class ReportDetailsPage {
     this.backToReportsButton = page.getByRole('button', { name: 'Back to reports' });
 
     this.queryModal = page.locator('.modal__modal_container').filter({ hasText: 'Query' });
-    this.queryModalCloseButton = this.queryModal.getByRole('button', { name: 'Close' });
+    this.queryModalCloseButton = modalCloseButton(this.queryModal);
 
     // Each is a role-less div holding a tooltip-wrapped label and a status
     // component, with nothing to name it by, so the containers' classes are

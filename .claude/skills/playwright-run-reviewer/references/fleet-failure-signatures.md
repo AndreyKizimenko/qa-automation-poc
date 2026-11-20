@@ -298,6 +298,18 @@ Each of these looked like something else at first.
 - **VM-spec timeouts that grow with concurrency** — installs or scripts waiting in a
   real VM's single queue behind other specs' work → `flaky` or `infra-env`, not a
   product defect. Check what else the VM was running in the host's Activity.
+- **A strict-mode violation on a modal's Close** — `getByRole('button', { name: 'Close' })
+  resolved to 2 elements`, one of them `aria-label="Close" … button--icon-only`. Fleet names
+  the header's ✕ "Close" since fleetdm/fleet#59282 (about 82 failures across every job of
+  nightly 44598641742), so a page object that looks the button up anywhere in the modal
+  finds the ✕ and the footer's → `test-bug`, one row; close through `modalCloseButton` /
+  `modalDismissButton` (`pages/components/Modal.ts`).
+- **A GitOps apply refused on a Fleet 5 rule** — `"All teams" was removed in Fleet 5. Use
+  "All fleets" instead` (#59160, "No team" likewise), or `"All fleets" policies can only have
+  automation_type "webhook_or_ticket"` and one automation per policy (#58974). The config is
+  stale → `test-bug`, one row. Every verify, the min apply and the CLI checks after it are
+  skipped, and the suite runs on whatever the instance held. The dry-run passes the policy
+  rules (only the apply checks them), so a dry-run proves only that a fix parses.
 
 ## Known-legitimate noise (don't over-report)
 

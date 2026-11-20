@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { DataSet } from '../components/DataSet';
 import { Navbar } from '../components/Navbar';
+import { modalCloseButton } from '../components/Modal';
 
 /**
  * `/policies/:id` — the policy results / details page. Rendered when a
@@ -59,7 +60,7 @@ export class PolicyDetailsPage {
     this.backToPoliciesButton = page.getByRole('button', { name: 'Back to policies' });
 
     this.queryModal = page.locator('.modal__modal_container').filter({ hasText: 'Query' });
-    this.queryModalCloseButton = this.queryModal.getByRole('button', { name: 'Close' });
+    this.queryModalCloseButton = modalCloseButton(this.queryModal);
   }
 
   /**

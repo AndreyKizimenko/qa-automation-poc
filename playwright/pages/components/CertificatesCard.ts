@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { clickHoverAction } from './clickHoverAction';
 import { DataSet } from './DataSet';
+import { modalCloseButton } from './Modal';
 
 /**
  * The "Certificates" card on `/hosts/:id/details` (and the end user's My device
@@ -94,7 +95,7 @@ export class CertificatesCard {
 
   /** Closes the certificate details modal and waits for it to unmount. */
   async closeDetails(): Promise<void> {
-    await this.detailsModal.getByRole('button', { name: 'Close', exact: true }).click();
+    await modalCloseButton(this.detailsModal).click();
     await expect(this.detailsModal).toBeHidden();
   }
 
