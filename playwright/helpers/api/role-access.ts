@@ -42,7 +42,7 @@ async function sendProbe(
   request: APIRequestContext,
   headers: Record<string, string>,
   probe: Probe,
-): Promise<{ status: number }> {
+): Promise<{ status: number; body: string }> {
   // Write probes always carry a JSON body — Fleet rejects bodyless POST/PATCH
   // with 400 "Expected JSON Body" before running auth, which would erase the
   // allow/deny signal. An empty object is enough since validation happens
@@ -57,7 +57,7 @@ async function sendProbe(
   if (NOT_SERVED_STATUSES.has(res.status())) {
     throw new Error(`[role-access] ${probe.label} answered ${res.status()}: Fleet doesn't serve the probed endpoint`);
   }
-  return { status: res.status() };
+  return { status: res.status(), body: await res.text() };
 }
 
 export async function expectAllow(
@@ -82,6 +82,24 @@ export async function expectDeny(
     AUTH_REJECT_STATUSES.has(status),
     `Expected ${probe.label} to be denied (status ∈ {401,403}), got ${status}`,
   ).toBe(true);
+}
+
+/**
+ * Asserts Fleet refuses `probe` with `status` and a reason matching `reason`:
+ * for a refusal Fleet words as a validation error rather than a 401/403. A
+ * user with only fleet roles creating an "All fleets" policy gets 422, "fleet_id
+ * is required for users who only have fleet roles" (Fleet 5, `NewPolicy`).
+ */
+export async function expectRefused(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  probe: Probe,
+  status: number,
+  reason: RegExp,
+): Promise<void> {
+  const res = await sendProbe(request, headers, probe);
+  expect(res.status, `Expected ${probe.label} to be refused with ${status}`).toBe(status);
+  expect(res.body, `${probe.label}'s refusal`).toMatch(reason);
 }
 
 // ── Probe catalog ────────────────────────────────────────────────────────────
