@@ -55,7 +55,8 @@ let software: FleetSoftware | undefined;
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
-  live = await getAll<ApiPolicy>(request, teamId === 0 ? 'policies' : `fleets/${teamId}/policies`, 'policies');
+  // Without `fleet_id`, `/policies` lists the "All fleets" policies; with it, that fleet's own.
+  live = await getAll<ApiPolicy>(request, teamId === 0 ? 'policies' : `policies?fleet_id=${teamId}`, 'policies');
   // The automation targets: the title an install policy installs, and the one a patch policy patches.
   if (gitopsConfig.policies.some((p) => p.installSoftware || p.type === 'patch')) {
     software = await resolveFleetSoftware(request, teamId);

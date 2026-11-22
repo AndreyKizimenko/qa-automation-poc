@@ -109,7 +109,7 @@ test.describe('Premium • Controls • OS updates — macOS', () => {
       // The End user experience preview.
       const preview = osUpdates.endUserPreview('macOS');
       await expect(preview.heading).toBeVisible();
-      await expect(preview.learnMore).toHaveAttribute('href', 'https://fleetdm.com/learn-more-about/os-updates');
+      await expect(preview.learnMore).toHaveAttribute('href', 'https://fleetdm.com/learn-more-about/os-updates-apple');
       await expect(preview.learnMore).toHaveAttribute('target', '_blank');
       await expect(preview.image).toBeVisible();
 

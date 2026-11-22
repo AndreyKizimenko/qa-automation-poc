@@ -62,10 +62,10 @@ test.describe('Dashboard • activity feed filters', () => {
       const login = await apiLogin(api, email, qaTestPassword());
       await expectOk(login, `Failed to log in as ${email}`);
       const headers = { Authorization: `Bearer ${(await login.json()).token as string}` };
-      const created = await api.post(apiUrl('queries'), { headers, data: { name: reportName, query: 'SELECT 1;' } });
+      const created = await api.post(apiUrl('reports'), { headers, data: { name: reportName, query: 'SELECT 1;' } });
       await expectOk(created, `Failed to create the report ${reportName}`);
       reportId = (await created.json()).report.id as number;
-      await expectOk(await api.delete(apiUrl(`queries/id/${reportId}`), { headers }), `Failed to delete report ${reportId}`);
+      await expectOk(await api.delete(apiUrl(`reports/${reportId}`), { headers }), `Failed to delete report ${reportId}`);
       reportId = undefined;
     } finally {
       await api.dispose();

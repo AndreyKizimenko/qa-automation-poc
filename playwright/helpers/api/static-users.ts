@@ -243,9 +243,11 @@ export const STATIC_USERS: Readonly<Record<StaticUserKey, StaticUserSpec>> = {
     name: 'QA Static API Specific Endpoints (Global)',
     apiOnly: true,
     role: { kind: 'global', role: 'admin' },
+    // Fleet 5 serves every scope's policies from `/policies` and carries no grant over from the
+    // removed routes (fleetdm/fleet#58574): the instance's copy was moved by hand on 2026-11-22.
     apiEndpoints: [
       { method: 'GET', path: '/api/v1/fleet/hosts' },
-      { method: 'GET', path: '/api/v1/fleet/global/policies' },
+      { method: 'GET', path: '/api/v1/fleet/policies' },
     ],
     tiers: PREMIUM_ONLY,
   },
@@ -254,11 +256,11 @@ export const STATIC_USERS: Readonly<Record<StaticUserKey, StaticUserSpec>> = {
     name: 'QA Static API Specific Endpoints (Workstations)',
     apiOnly: true,
     role: { kind: 'fleets', assignments: [{ fleet: WORKSTATIONS_FLEET, role: 'maintainer' }] },
-    // Path templates use `:id` placeholders to match Fleet's api_endpoints
-    // catalog — concrete fleet ids are rejected by the catalog validator.
+    // `/policies` takes the fleet as `fleet_id`, so one grant covers every scope's
+    // policies and the role decides which fleets'. Moved by hand on 2026-11-22, as above.
     apiEndpoints: [
       { method: 'GET', path: '/api/v1/fleet/hosts' },
-      { method: 'GET', path: '/api/v1/fleet/fleets/:id/policies' },
+      { method: 'GET', path: '/api/v1/fleet/policies' },
     ],
     tiers: PREMIUM_ONLY,
   },

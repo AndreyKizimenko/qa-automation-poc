@@ -11,7 +11,7 @@ import { apiLatestUrl, apiUrl, authHeaders, deleteEach, expectOk } from './core'
 
 /** Deletes every global saved query (report); a fleet's own reports aren't listed, so they stay. */
 export async function deleteAllQueries(request: APIRequestContext): Promise<void> {
-  const res = await request.get(apiUrl('queries'), {
+  const res = await request.get(apiUrl('reports'), {
     headers: authHeaders(),
     params: { per_page: '500' },
   });
@@ -21,20 +21,16 @@ export async function deleteAllQueries(request: APIRequestContext): Promise<void
   if (!('reports' in body)) throw new Error('[cleanup queries] the response has no "reports" list');
   const queries = (body.reports ?? []) as Array<{ id: number; name: string }>;
   await deleteEach('cleanup queries', queries, (q) => `report ${q.id} "${q.name}"`, (q) =>
-    request.delete(apiUrl(`queries/id/${q.id}`), { headers: authHeaders() }),
+    request.delete(apiUrl(`reports/${q.id}`), { headers: authHeaders() }),
   );
 }
 
 /**
- * Deletes every global (no-team) policy in a single bulk call. Both calls go
- * to the current API version: Fleet serves the global policy listing and its
- * bulk delete as `/api/latest/fleet/policies` and `/policies/delete` (routes
- * that start at the 2022-04 version), while `/api/v1` still answers the old
- * `global/policies` listing but 404s the delete — a 404 that a `.catch` never
- * sees, which is how this wipe once deleted nothing for weeks. A non-OK answer
- * from either call throws, so a wipe that stops working fails the run instead
- * of leaving the gitops-provisioned global policies in place while every doc
- * says they are gone.
+ * Deletes every global (no-team) policy in a single bulk call: `/policies`
+ * without a `fleet_id` lists the "All fleets" policies. A non-OK answer from
+ * either call throws, so a wipe that stops working fails the run instead of
+ * leaving the gitops-provisioned global policies in place while every doc says
+ * they are gone (a swallowed 404 once made this wipe delete nothing for weeks).
  */
 export async function deleteAllGlobalPolicies(request: APIRequestContext): Promise<void> {
   const res = await request.get(apiLatestUrl('policies'), {
@@ -72,11 +68,15 @@ export async function deleteAllFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<void> {
-  const url = apiUrl(`fleets/${fleetId}/policies`);
+  // `fleet_id` without `merge_inherited` lists the fleet's own policies only.
+  const url = apiUrl('policies');
   const res = await request.get(url, {
     headers: authHeaders(),
-    params: { per_page: '500' },
+    params: { fleet_id: String(fleetId), per_page: '500' },
   });
+  // Fleet Free has no fleets, so no Unassigned policies either: every policy is
+  // global, and a list scoped by `fleet_id` answers 402.
+  if (res.status() === 402 && process.env.SUITE === 'free') return;
   if (!res.ok()) {
     throw new Error(`[cleanup fleet ${fleetId} policies] GET ${url} → HTTP ${res.status()}: ${await res.text()}`);
   }

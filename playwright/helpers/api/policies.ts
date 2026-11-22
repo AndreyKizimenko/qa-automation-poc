@@ -1,4 +1,9 @@
 // Policy API helpers for seeding/tearing down preconditions.
+//
+// Every scope's policies are served from `/policies` (Fleet 5, fleetdm/fleet#58995; the old
+// `/global/policies` and `/fleets/:id/policies` routes answer 410 since #59255). The scope is
+// `fleet_id`: absent for "All fleets", `0` for Unassigned, a fleet's id otherwise; a policy's own
+// routes (`/policies/:id`) take no scope.
 import type { APIRequestContext } from '@playwright/test';
 import { apiUrl, authHeaders, expectOk } from './core';
 
@@ -22,7 +27,7 @@ export async function createPolicy(
     platform?: string;
   },
 ): Promise<PolicyRef> {
-  const res = await request.post(apiUrl('global/policies'), {
+  const res = await request.post(apiUrl('policies'), {
     headers: authHeaders(),
     data: {
       name: opts.name,
@@ -47,7 +52,7 @@ export async function createPolicy(
  */
 export async function deletePolicies(request: APIRequestContext, ids: number[]): Promise<void> {
   if (ids.length === 0) return;
-  const res = await request.post(apiUrl('global/policies/delete'), { headers: authHeaders(), data: { ids } });
+  const res = await request.post(apiUrl('policies/delete'), { headers: authHeaders(), data: { ids } });
   if (res.status() === 404) {
     if (ids.length > 1) for (const id of ids) await deletePolicies(request, [id]);
     return;
@@ -63,7 +68,10 @@ export async function listFleetPolicies(
   request: APIRequestContext,
   fleetId: number,
 ): Promise<Array<PolicyRef & { query: string; type: string }>> {
-  const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
+  const res = await request.get(apiUrl('policies'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId), per_page: '1000' },
+  });
   if (!res.ok()) throw new Error(`[listFleetPolicies] ${res.status()}: ${await res.text()}`);
   return ((await res.json()).policies ?? []).map((p: { id: number; name: string; query: string; type?: string }) => ({
     id: p.id,
@@ -74,9 +82,11 @@ export async function listFleetPolicies(
 }
 
 /**
- * Deletes a fleet's policies by id; an id already gone is not an error. As
- * with {@link deletePolicies}, Fleet refuses the whole batch with a 404 when
- * any one id is missing, so such a batch is sent again an id at a time.
+ * Deletes a fleet's policies by id; an id already gone is not an error. Fleet
+ * deletes by id whatever the policy's scope, so `fleetId` names the fleet the
+ * caller made them on, for the reader and the error. As with
+ * {@link deletePolicies}, Fleet refuses the whole batch with a 404 when any one
+ * id is missing, so such a batch is sent again an id at a time.
  */
 export async function deleteFleetPolicies(
   request: APIRequestContext,
@@ -84,15 +94,12 @@ export async function deleteFleetPolicies(
   ids: number[],
 ): Promise<void> {
   if (ids.length === 0) return;
-  const res = await request.post(apiUrl(`fleets/${fleetId}/policies/delete`), {
-    headers: authHeaders(),
-    data: { ids },
-  });
+  const res = await request.post(apiUrl('policies/delete'), { headers: authHeaders(), data: { ids } });
   if (res.status() === 404) {
     if (ids.length > 1) for (const id of ids) await deleteFleetPolicies(request, fleetId, [id]);
     return;
   }
-  if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()}: ${await res.text()}`);
+  if (!res.ok()) throw new Error(`[deleteFleetPolicies] ${res.status()} on fleet ${fleetId}: ${await res.text()}`);
 }
 
 /**
@@ -128,10 +135,9 @@ export interface GlobalPolicy extends PolicyRef {
   automationType: PolicyAutomationType | null;
 }
 
-/** One global policy, read back after a UI write. */
 /** The global policy of that exact name; throws when there is none. */
 export async function findGlobalPolicyByName(request: APIRequestContext, name: string): Promise<GlobalPolicy> {
-  const res = await request.get(apiUrl('global/policies'), { headers: authHeaders() });
+  const res = await request.get(apiUrl('policies'), { headers: authHeaders(), params: { per_page: '1000' } });
   await expectOk(res, 'Failed to list the global policies');
   const policies = ((await res.json()).policies ?? []) as RawGlobalPolicy[];
   const policy = policies.find((p) => p.name === name);
@@ -139,8 +145,9 @@ export async function findGlobalPolicyByName(request: APIRequestContext, name: s
   return toGlobalPolicy(policy);
 }
 
+/** One global policy, read back after a UI write. */
 export async function getGlobalPolicy(request: APIRequestContext, id: number): Promise<GlobalPolicy> {
-  const res = await request.get(apiUrl(`global/policies/${id}`), { headers: authHeaders() });
+  const res = await request.get(apiUrl(`policies/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read global policy ${id}`);
   return toGlobalPolicy((await res.json()).policy);
 }
@@ -207,14 +214,18 @@ export interface FleetPolicyFields {
   platform?: string;
   /** Label names: the policy runs only on hosts in any of them. */
   labels_include_any?: string[];
+  /**
+   * The policy's one automation. Fleet refuses a create that names an automation's target
+   * (`script_id`, a non-patch `software_title_id`) without it ("script_id requires automation_type").
+   */
+  automation_type?: PolicyAutomationType | null;
   /** The library script the policy runs on a failing host; `null` removes the automation. */
   script_id?: number | null;
   /** The title the policy installs on a failing host; `null` removes the automation. */
   software_title_id?: number | null;
   continuous_automations_enabled?: boolean;
-  /** `patch` ties the policy to `patch_software_title_id`, a Fleet-maintained app. */
+  /** `patch` ties the policy to the Fleet-maintained app `software_title_id` names. */
   type?: 'dynamic' | 'patch';
-  patch_software_title_id?: number;
   patch_when_closed?: boolean;
   notify_before_patching?: boolean;
   patch_deadline?: boolean;
@@ -289,11 +300,19 @@ export async function createFleetPolicy(
   fleetId: number,
   fields: FleetPolicyFields & { name: string },
 ): Promise<FleetPolicy> {
-  const res = await request.post(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders(), data: fields });
+  const res = await request.post(apiUrl('policies'), { headers: authHeaders(), data: { ...fields, fleet_id: fleetId } });
   if (!res.ok()) {
     throw new Error(`[createFleetPolicy] ${res.status()} creating "${fields.name}": ${await res.text()}`);
   }
   return toFleetPolicy((await res.json()).policy);
+}
+
+/** A policy read through its own route, which takes no scope: throws when it isn't on `fleetId`. */
+function onFleet(what: string, policy: FleetPolicy, fleetId: number): FleetPolicy {
+  if (policy.teamId !== fleetId) {
+    throw new Error(`[${what}] policy ${policy.id} is on fleet ${policy.teamId}, not ${fleetId}`);
+  }
+  return policy;
 }
 
 /** Changes a fleet policy's fields; anything not passed stays as it was. */
@@ -303,12 +322,9 @@ export async function updateFleetPolicy(
   policyId: number,
   fields: FleetPolicyFields,
 ): Promise<FleetPolicy> {
-  const res = await request.patch(apiUrl(`fleets/${fleetId}/policies/${policyId}`), {
-    headers: authHeaders(),
-    data: fields,
-  });
+  const res = await request.patch(apiUrl(`policies/${policyId}`), { headers: authHeaders(), data: fields });
   if (!res.ok()) throw new Error(`[updateFleetPolicy] ${res.status()} on policy ${policyId}: ${await res.text()}`);
-  return toFleetPolicy((await res.json()).policy);
+  return onFleet('updateFleetPolicy', toFleetPolicy((await res.json()).policy), fleetId);
 }
 
 /** A fleet policy as Fleet stores it now. */
@@ -317,9 +333,9 @@ export async function getFleetPolicy(
   fleetId: number,
   policyId: number,
 ): Promise<FleetPolicy> {
-  const res = await request.get(apiUrl(`fleets/${fleetId}/policies/${policyId}`), { headers: authHeaders() });
+  const res = await request.get(apiUrl(`policies/${policyId}`), { headers: authHeaders() });
   if (!res.ok()) throw new Error(`[getFleetPolicy] ${res.status()} on policy ${policyId}: ${await res.text()}`);
-  return toFleetPolicy((await res.json()).policy);
+  return onFleet('getFleetPolicy', toFleetPolicy((await res.json()).policy), fleetId);
 }
 
 /**
@@ -331,7 +347,10 @@ export async function findPatchPolicy(
   fleetId: number,
   titleId: number,
 ): Promise<FleetPolicy | null> {
-  const res = await request.get(apiUrl(`fleets/${fleetId}/policies`), { headers: authHeaders() });
+  const res = await request.get(apiUrl('policies'), {
+    headers: authHeaders(),
+    params: { fleet_id: String(fleetId), type: 'patch', per_page: '1000' },
+  });
   if (!res.ok()) throw new Error(`[findPatchPolicy] ${res.status()}: ${await res.text()}`);
   const raw = ((await res.json()).policies ?? []) as RawFleetPolicy[];
   const found = raw.find((p) => p.type === 'patch' && p.patch_software?.software_title_id === titleId);

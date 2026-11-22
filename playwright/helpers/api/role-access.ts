@@ -5,6 +5,8 @@
  *
  *   - denied  = status is 401 or 403
  *   - allowed = anything else (including 400/422 validation errors)
+ *   - neither = 404 or 410: the endpoint isn't served (Fleet 5 answers 410 on a
+ *     route it removed), so the probe fails outright rather than read as allowed
  *
  * Probes here are chosen so the auth check runs *before* request-body
  * validation — sending an empty body to a write endpoint produces 403
@@ -33,12 +35,14 @@ export interface Probe {
 }
 
 const AUTH_REJECT_STATUSES = new Set([401, 403]);
+/** A route Fleet doesn't serve: the probe tests nothing, whatever the actor. */
+const NOT_SERVED_STATUSES = new Set([404, 410]);
 
 async function sendProbe(
   request: APIRequestContext,
   headers: Record<string, string>,
   probe: Probe,
-): Promise<{ status: number }> {
+): Promise<{ status: number; body: string }> {
   // Write probes always carry a JSON body — Fleet rejects bodyless POST/PATCH
   // with 400 "Expected JSON Body" before running auth, which would erase the
   // allow/deny signal. An empty object is enough since validation happens
@@ -50,7 +54,10 @@ async function sendProbe(
     probe.method === 'POST' ? await request.post(probe.path, opts) :
     probe.method === 'PATCH' ? await request.patch(probe.path, opts) :
     await request.delete(probe.path, { headers });
-  return { status: res.status() };
+  if (NOT_SERVED_STATUSES.has(res.status())) {
+    throw new Error(`[role-access] ${probe.label} answered ${res.status()}: Fleet doesn't serve the probed endpoint`);
+  }
+  return { status: res.status(), body: await res.text() };
 }
 
 export async function expectAllow(
@@ -77,6 +84,24 @@ export async function expectDeny(
   ).toBe(true);
 }
 
+/**
+ * Asserts Fleet refuses `probe` with `status` and a reason matching `reason`:
+ * for a refusal Fleet words as a validation error rather than a 401/403. A
+ * user with only fleet roles creating an "All fleets" policy gets 422, "fleet_id
+ * is required for users who only have fleet roles" (Fleet 5, `NewPolicy`).
+ */
+export async function expectRefused(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  probe: Probe,
+  status: number,
+  reason: RegExp,
+): Promise<void> {
+  const res = await sendProbe(request, headers, probe);
+  expect(res.status, `Expected ${probe.label} to be refused with ${status}`).toBe(status);
+  expect(res.body, `${probe.label}'s refusal`).toMatch(reason);
+}
+
 // ── Probe catalog ────────────────────────────────────────────────────────────
 
 // Admin-only writes — denied to maintainer and below with a clean 403.
@@ -96,9 +121,9 @@ export const PROBES_ADMIN_ONLY = {
 // Maintainer-or-higher writes — denied to technician / observer_plus / observer.
 export const PROBES_MAINTAINER = {
   createPolicy: {
-    label: 'POST /global/policies (create global policy)',
+    label: 'POST /policies (create global policy)',
     method: 'POST',
-    path: apiUrl('global/policies'),
+    path: apiUrl('policies'),
   },
   createReport: {
     label: 'POST /reports (create report)',
@@ -115,9 +140,9 @@ export const PROBES_OBSERVER = {
     path: apiUrl('hosts'),
   },
   listGlobalPolicies: {
-    label: 'GET /global/policies (list global policies)',
+    label: 'GET /policies (list global policies)',
     method: 'GET',
-    path: apiUrl('global/policies'),
+    path: apiUrl('policies'),
   },
 } as const satisfies Record<string, Probe>;
 
@@ -130,21 +155,27 @@ export const PROBES_GITOPS = {
   },
 } as const satisfies Record<string, Probe>;
 
-// Fleet-scoped probes for the given fleet id. Uses the path-style endpoints
-// `/fleets/{id}/policies` rather than the flat `/policies?team_id=...`, since
-// only the path-style form yields a clean 403 for cross-fleet denial; the
-// query-param form returns 404 from the router instead.
+// Fleet-scoped probes for the given fleet id, on the flat `/policies` routes
+// Fleet 5 serves every scope from: a read names the fleet in `fleet_id`, a
+// create in its body. Fleet authorizes the scope before it validates the rest
+// of the body, so another fleet's answers 403.
 export function fleetScopedProbes(fleetId: number) {
   return {
     listPolicies: {
-      label: `GET /fleets/${fleetId}/policies (fleet-scoped policy list)`,
+      label: `GET /policies?fleet_id=${fleetId} (fleet-scoped policy list)`,
       method: 'GET',
-      path: apiUrl(`fleets/${fleetId}/policies`),
+      path: apiUrl(`policies?fleet_id=${fleetId}`),
     } satisfies Probe,
     createPolicy: {
-      label: `POST /fleets/${fleetId}/policies (fleet-scoped policy create)`,
+      label: `POST /policies {fleet_id: ${fleetId}} (fleet-scoped policy create)`,
       method: 'POST',
-      path: apiUrl(`fleets/${fleetId}/policies`),
+      path: apiUrl('policies'),
+      body: { fleet_id: fleetId },
+    } satisfies Probe,
+    listReports: {
+      label: `GET /reports?fleet_id=${fleetId} (fleet-scoped report list)`,
+      method: 'GET',
+      path: apiUrl(`reports?fleet_id=${fleetId}`),
     } satisfies Probe,
   };
 }

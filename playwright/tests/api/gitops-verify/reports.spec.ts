@@ -2,8 +2,9 @@
  * Reports: the scope's reports are exactly the declared ones, and each carries
  * the declared query, schedule and options.
  *
- * Fleet's REST route is still `/queries`; `merge_inherited=false` keeps a
- * fleet's listing to its own reports rather than the global ones it inherits.
+ * `/reports` lists the global reports for `fleet_id=0`, as when it is left
+ * out; `merge_inherited=false` keeps a fleet's listing to its own reports
+ * rather than the global ones it inherits.
  */
 import { test, expect } from '@playwright/test';
 import {
@@ -38,7 +39,7 @@ let live: ApiQuery[] = [];
 
 test.beforeAll(async ({ request }) => {
   teamId = await resolveTeamId(request);
-  live = await getAll<ApiQuery>(request, `queries?fleet_id=${teamId}&merge_inherited=false`, 'reports');
+  live = await getAll<ApiQuery>(request, `reports?fleet_id=${teamId}&merge_inherited=false`, 'reports');
 });
 
 test.describe(`GitOps verify · reports · ${gitopsLabel}`, () => {

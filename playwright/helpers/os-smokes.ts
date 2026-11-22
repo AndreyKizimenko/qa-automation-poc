@@ -757,7 +757,8 @@ async function osVulnerabilities(
 /**
  * ChromeOS only: its page is a Chromebook's. Disk encryption reads "Always
  * on", with Fleet's reason for not checking it; the vitals Fleet doesn't read
- * of a Chromebook aren't there; Agent options are the fixed values every
+ * of a Chromebook aren't there, and Last restarted is when Chrome last started
+ * for the signed-in user (fleetdm/fleet#59317); Agent options are the fixed values every
  * Chromebook runs; the signed-in profile is the host's Google Chrome profile;
  * there is no Reports tab (a Chromebook runs no scheduled report); and the
  * Actions menu offers a live report but no script.
@@ -778,7 +779,9 @@ async function chromebookPage(
   // Asserted beside a vital that is there, so the absences are of a loaded card.
   await expect(hostDetails.vitals.value('Memory')).toBeVisible();
   await expect(hostDetails.vitals.value('Disk space available')).toHaveCount(0);
-  await expect(hostDetails.vitals.value('Last restarted')).toHaveCount(0);
+  // The extension records Chrome's start (`chrome.runtime.onStartup`), so it reads "Never" until Chrome
+  // has started with the extension running, and a time ago after.
+  await expect(hostDetails.vitals.value('Last restarted')).toHaveText(/^(Never|.+ ago)$/);
 
   await expect(hostDetails.agentOptions.value('Config TLS refresh')).toHaveText('Not supported');
   await expect(hostDetails.agentOptions.value('Logger TLS period')).toHaveText('Not supported');
