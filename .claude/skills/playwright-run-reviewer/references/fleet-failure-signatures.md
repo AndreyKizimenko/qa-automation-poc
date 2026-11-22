@@ -311,6 +311,13 @@ Each of these looked like something else at first.
   skipped, and the suite runs on whatever the instance held. The dry-run passes the policy
   rules (only the apply checks them), so a dry-run proves only that a fix parses.
 
+- **A helper's 410 `The "GET /…" endpoint is not available anymore`** — Fleet 5 retired the route
+  (`pkg/removednames` in Fleet's checkout lists every one, with its replacement): the old policy routes
+  went to `/policies` and `/queries` to `/reports` (nightly 45017158337). One row, `test-bug`. When the
+  cleanup's helpers hit it, `cleanup-setup` fails and most of the run reads "did not run", so the red
+  count says little about what else broke. A route's API-only grants don't follow it unless Fleet ships
+  a migration for them: a restricted static user answers 403 on the new route.
+
 ## Known-legitimate noise (don't over-report)
 
 - **Skipped tests** are usually intentional: `test.skip(!hostByOS[osKey], ...)`
