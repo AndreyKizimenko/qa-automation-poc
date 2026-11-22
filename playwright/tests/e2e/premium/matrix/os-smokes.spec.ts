@@ -553,6 +553,7 @@ function smokesOf(subject: Subject): void {
           query: `SELECT 1 FROM ${entry.package}_packages WHERE name = '${pkg.title}';`,
           platform: 'linux',
           labels_include_any: [label.name],
+          automation_type: 'software',
           software_title_id: pkg.titleId,
         });
         // Registered last, so undone first: Fleet won't delete a title a policy installs.

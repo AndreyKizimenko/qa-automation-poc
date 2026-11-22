@@ -214,6 +214,11 @@ export interface FleetPolicyFields {
   platform?: string;
   /** Label names: the policy runs only on hosts in any of them. */
   labels_include_any?: string[];
+  /**
+   * The policy's one automation. Fleet refuses a create that names an automation's target
+   * (`script_id`, a non-patch `software_title_id`) without it ("script_id requires automation_type").
+   */
+  automation_type?: PolicyAutomationType | null;
   /** The library script the policy runs on a failing host; `null` removes the automation. */
   script_id?: number | null;
   /** The title the policy installs on a failing host; `null` removes the automation. */

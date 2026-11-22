@@ -180,6 +180,7 @@ test.describe('Premium • Policies • automation runs', () => {
       query: 'SELECT 1 WHERE 0 > 1;',
       platform: 'linux',
       labels_include_any: [name],
+      automation_type: 'script',
       script_id: scriptId,
     });
     made.policyId = policyId = policy.id;
