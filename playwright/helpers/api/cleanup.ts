@@ -74,6 +74,9 @@ export async function deleteAllFleetPolicies(
     headers: authHeaders(),
     params: { fleet_id: String(fleetId), per_page: '500' },
   });
+  // Fleet Free has no fleets, so no Unassigned policies either: every policy is
+  // global, and a list scoped by `fleet_id` answers 402.
+  if (res.status() === 402 && process.env.SUITE === 'free') return;
   if (!res.ok()) {
     throw new Error(`[cleanup fleet ${fleetId} policies] GET ${url} → HTTP ${res.status()}: ${await res.text()}`);
   }
