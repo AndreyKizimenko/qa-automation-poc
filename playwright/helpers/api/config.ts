@@ -27,10 +27,10 @@ export interface VulnerabilitiesWebhook {
   [key: string]: unknown;
 }
 
+/** A scope's failing-policies webhook. Which policies it sends is each policy's own automation (`automation_type`). */
 export interface FailingPoliciesWebhook {
   enable_failing_policies_webhook?: boolean;
   destination_url?: string;
-  policy_ids?: number[];
   [key: string]: unknown;
 }
 

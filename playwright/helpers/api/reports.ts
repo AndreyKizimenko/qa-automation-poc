@@ -1,6 +1,6 @@
 // Report (a.k.a. saved query) API helpers for seeding and tearing down
-// preconditions. Fleet's UI calls these "reports"; the REST API keeps the
-// legacy `queries` path.
+// preconditions. Fleet 5 serves them from `/reports` (the `/queries` routes answer
+// 410 since fleetdm/fleet#59306), and a host's from `/hosts/:id/reports`.
 import type { APIRequestContext } from '@playwright/test';
 import { apiUrl, authHeaders, expectOk } from './core';
 
@@ -41,7 +41,7 @@ export async function createReport(
     observerCanRun?: boolean;
   },
 ): Promise<ReportRef> {
-  const res = await request.post(apiUrl('queries'), {
+  const res = await request.post(apiUrl('reports'), {
     headers: authHeaders(),
     data: {
       name: opts.name,
@@ -72,7 +72,7 @@ export async function listReports(
   request: APIRequestContext,
   fleetId?: number,
 ): Promise<ReportRef[]> {
-  const res = await request.get(apiUrl('queries'), {
+  const res = await request.get(apiUrl('reports'), {
     headers: authHeaders(),
     params: { per_page: '500', ...(fleetId !== undefined ? { fleet_id: String(fleetId) } : {}) },
   });
@@ -96,7 +96,7 @@ export async function findReportById(
   return (await listReports(request)).find((r) => r.id === id) ?? null;
 }
 
-/** A report's stored settings, as `GET /queries/:id` returns them. */
+/** A report's stored settings, as `GET /reports/:id` returns them. */
 export interface ReportDetails {
   id: number;
   name: string;
@@ -115,7 +115,7 @@ export interface ReportDetails {
 
 /** Reads one report by id, global or fleet-owned. Throws when Fleet can't return it. */
 export async function getReport(request: APIRequestContext, id: number): Promise<ReportDetails> {
-  const res = await request.get(apiUrl(`queries/${id}`), { headers: authHeaders() });
+  const res = await request.get(apiUrl(`reports/${id}`), { headers: authHeaders() });
   await expectOk(res, `Failed to read report ${id}`);
   const q = (await res.json()).report;
   return {
@@ -152,7 +152,7 @@ export async function getHostReportLastFetched(
   hostId: number,
   reportName: string,
 ): Promise<string | null> {
-  const res = await request.get(apiUrl(`hosts/${hostId}/queries`), {
+  const res = await request.get(apiUrl(`hosts/${hostId}/reports`), {
     headers: authHeaders(),
     params: { per_page: '100' },
   });
@@ -185,7 +185,7 @@ export async function getHostReportRows(
 
 /** Deletes a report by id; one already gone (404) is not an error. */
 export async function deleteReport(request: APIRequestContext, id: number): Promise<void> {
-  const res = await request.delete(apiUrl(`queries/id/${id}`), { headers: authHeaders() });
+  const res = await request.delete(apiUrl(`reports/${id}`), { headers: authHeaders() });
   if (res.status() === 404) return;
   await expectOk(res, `Failed to delete report ${id}`);
 }
@@ -226,7 +226,7 @@ export async function listHostReportIds(request: APIRequestContext, hostId: numb
  * lands a real VM's first stored row in about a minute.
  */
 export async function setReportInterval(request: APIRequestContext, reportId: number, seconds: number): Promise<void> {
-  const res = await request.patch(apiUrl(`queries/${reportId}`), {
+  const res = await request.patch(apiUrl(`reports/${reportId}`), {
     headers: authHeaders(),
     data: { interval: seconds },
   });

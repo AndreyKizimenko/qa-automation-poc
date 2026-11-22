@@ -201,7 +201,6 @@ test.describe('Premium • Policies • automations', () => {
         failing_policies_webhook: {
           enable_failing_policies_webhook: true,
           destination_url: 'https://example.com/pw-policy-webhook-fleet-admin',
-          policy_ids: original.policy_ids ?? [],
         },
       },
     });
