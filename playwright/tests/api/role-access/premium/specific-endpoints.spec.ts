@@ -6,11 +6,17 @@
  *
  * Two static users exercise the feature:
  *   - api-specific-endpoints-global  → Admin globally, restricted to
- *     `GET /hosts` + `GET /global/policies`. Even admin-level writes are
+ *     `GET /hosts` + `GET /policies`. Even admin-level writes are
  *     denied because the endpoint isn't on the list.
  *   - api-specific-endpoints-ws  → Maintainer on Workstations, restricted
- *     to `GET /hosts` + `GET /fleets/:id/policies`. Allow-listed reads
- *     still honor the fleet-scope filter on top.
+ *     to `GET /hosts` + `GET /policies`. Allow-listed reads still honor the
+ *     fleet-scope filter on top.
+ *
+ * `GET /policies` serves every scope, the fleet named by `fleet_id` (Fleet 5),
+ * so one grant covers a fleet's policies and the global ones alike; the role
+ * still decides which fleets'. Fleet carries no grant over from the removed
+ * `/global/policies` and `/fleets/:id/policies` routes (fleetdm/fleet#58574):
+ * both users' grants were moved by hand, as `helpers/api/static-users.ts` says.
  */
 import { apiTest as test } from '@fixtures';
 import {
@@ -24,7 +30,7 @@ import {
 } from '@helpers/api';
 
 test.describe('Premium • API specific-endpoints restriction', () => {
-  test('global admin restricted to GET /hosts + GET /global/policies', async ({ request }) => {
+  test('global admin restricted to GET /hosts + GET /policies', async ({ request }) => {
     const headers = staticUserBearerHeaders('api-specific-endpoints-global');
     await expectAllow(request, headers, PROBES_OBSERVER.listHosts);
     await expectAllow(request, headers, PROBES_OBSERVER.listGlobalPolicies);
@@ -47,8 +53,10 @@ test.describe('Premium • API specific-endpoints restriction', () => {
     await expectAllow(request, headers, ws.listPolicies);
     await expectAllow(request, headers, PROBES_OBSERVER.listHosts);
     await expectDeny(request, headers, qa.listPolicies);
-    // Non-allow-listed endpoints reject regardless of fleet.
-    await expectDeny(request, headers, PROBES_OBSERVER.listGlobalPolicies);
+    // The same grant reads the global policies, which a fleet maintainer may (its fleet inherits them).
+    await expectAllow(request, headers, PROBES_OBSERVER.listGlobalPolicies);
+    // Endpoints off the list reject even where the role grants them on Workstations.
+    await expectDeny(request, headers, ws.listReports);
     await expectDeny(request, headers, ws.createPolicy);
   });
 });
