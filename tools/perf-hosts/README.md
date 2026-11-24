@@ -38,6 +38,33 @@ gives the tests *stable* host IDs between reboots.
    `install.sh` does the build for you.
 2. A daily kill/restart isn't needed to keep hosts online — see above.
 
+## Which osquery-perf to build: pinned, don't pull `main`
+
+The daemons run osquery-perf from fleetdm/fleet `8d2a2d1647` (2026-07-27) plus
+[`osquery-perf-no-version-check.patch`](osquery-perf-no-version-check.patch).
+The clone `install.sh` builds from carries that patch as an uncommitted change,
+so re-running `install.sh` rebuilds the same binary.
+
+- **Why the patch:** this osquery-perf calls `GET /version` before every batch
+  of scheduled-query results. Fleet 5 removed that endpoint (fleetdm/fleet#59311)
+  and answers 410, so no batch is ever sent: every simulation retries every 10s
+  for as long as a scheduled report targets it, and Fleet logs
+  `request to a removed path … uri=/version` from `Go-http-client/2.0` about 30
+  times a second per instance. The patch is #59311's own change to
+  `cmd/osquery-perf/agent.go`: the check is removed and nothing else changes.
+  If the clone is ever reset, `git apply` the patch again before `install.sh`.
+- **Why not `main`:** since fleetdm/fleet#51130 (2026-08-16), osquery-perf won't
+  start with `--mdm_prob` above 0 unless `--mdm_apns_url` points at a mock APNs
+  server, and its simulated Macs check in with MDM only when that server pings
+  them. These instances push through Apple's real APNs, so there is no URL to
+  give it: the daemons crash-loop at startup (tried 2026-11-24), and a dummy URL
+  would leave the MDM-enrolled sims (see *MDM enrollment*) enrolled but never
+  answering a command.
+
+The pin lasts until a mock APNs server is in place (planned with the move to
+AWS). Then build from `main`, add `--mdm_apns_url`, drop the patch, and check
+`--mdm_apns_topic` (osquery-perf's README).
+
 ## Prerequisites (on the VM)
 
 - macOS (MacStadium VM), admin/sudo.
